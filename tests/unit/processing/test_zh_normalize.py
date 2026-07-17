@@ -1,8 +1,9 @@
-"""Tests for full-width/half-width normalization with offset preservation."""
+"""Tests for Chinese normalization with offset preservation."""
 
 from __future__ import annotations
 
 import re
+import warnings
 
 import pytest
 
@@ -11,13 +12,25 @@ from openmed.core.config import OpenMedConfig
 from openmed.core.decoding.spans import trim_span_whitespace
 from openmed.core.pii_entity_merger import find_semantic_units
 from openmed.core.pii_i18n import get_patterns_for_language
-from openmed.core.script_detect import normalize_for_pii_detection
-from openmed.processing.outputs import PredictionResult
+from openmed.core.script_detect import (
+    TRADITIONAL_VARIANT_CHARS,
+    ChineseScriptVariant,
+    detect_chinese_script,
+    normalize_for_pii_detection,
+)
+from openmed.processing.outputs import EntityPrediction, PredictionResult
 from openmed.processing.zh_normalize import (
     CJK_CONVENTION,
     STRICT_NFKC,
+    ChineseTargetScript,
+    OpenCCConfig,
+    OpenCCUnavailableWarning,
+    ScriptConversion,
     WidthNormalization,
+    convert_script,
+    detect_variant_normalized,
     detect_width_normalized,
+    normalize_chinese_variants,
     normalize_width,
 )
 
@@ -201,3 +214,228 @@ def test_config_from_dict_preserves_width_convention():
     config = OpenMedConfig.from_dict({"cjk_width_convention": "nfkc"})
     assert config.cjk_width_convention == "nfkc"
     assert config.to_dict()["cjk_width_convention"] == "nfkc"
+
+
+# --------------------------------------------------------------------------
+# Simplified/Traditional conversion and offset alignment
+# --------------------------------------------------------------------------
+
+
+def test_opencc_round_trip_is_exact_with_identity_alignment():
+    original = "患者头痛，服用药物。"
+
+    traditional = convert_script(original, OpenCCConfig.S2T)
+    simplified = convert_script(traditional.text, OpenCCConfig.T2S)
+
+    assert isinstance(traditional, ScriptConversion)
+    assert traditional.text == "患者頭痛，服用藥物。"
+    assert simplified.text == original
+    identity = tuple((index, index + 1) for index in range(len(original)))
+    assert traditional.char_origins == identity
+    assert simplified.char_origins == identity
+
+
+def test_phrase_conversion_maps_unchanged_phi_name_to_exact_source_span():
+    original = "患者王明使用互联网挂号。"
+    converted = convert_script(original, OpenCCConfig.S2TWP)
+
+    assert "網際網路" in converted.text
+    assert len(converted.text) != len(original)
+    start = converted.text.index("王明")
+    original_start, original_end = converted.to_original_span(start, start + 2)
+
+    assert original[original_start:original_end] == "王明"
+
+
+def test_length_changing_phrase_alignment_covers_the_complete_source_phrase():
+    original = "互联网鼠标"
+    converted = convert_script(original, OpenCCConfig.S2TWP)
+
+    assert converted.text == "網際網路滑鼠"
+    assert converted.to_original_span(0, len(converted.text)) == (
+        0,
+        len(original),
+    )
+    assert converted.offset_map == converted.alignment == converted.char_origins
+
+
+@pytest.mark.parametrize("config", list(OpenCCConfig))
+def test_all_supported_opencc_configs_load(config):
+    result = convert_script("患者头痛", config)
+
+    assert result.opencc_available is True
+    assert len(result.char_origins) == len(result.text)
+
+
+def test_conversion_result_supports_text_alignment_unpacking():
+    converted_text, alignment = convert_script("头痛", "s2t.json")
+
+    assert converted_text == "頭痛"
+    assert alignment == ((0, 1), (1, 2))
+
+
+def test_mixed_variant_detection_and_target_normalization():
+    mixed = "患者头痛并服用藥物，病歷记录检查與休息。"
+    estimate = detect_chinese_script(mixed)
+
+    assert estimate.variant is ChineseScriptVariant.MIXED
+    assert estimate.simplified_ratio == pytest.approx(0.5)
+    assert estimate.traditional_ratio == pytest.approx(0.5)
+
+    normalized = normalize_chinese_variants(
+        mixed,
+        ChineseTargetScript.SIMPLIFIED,
+    )
+    assert not (set(normalized.text) & TRADITIONAL_VARIANT_CHARS)
+    assert "药物" in normalized.text
+    assert "病历" in normalized.text
+    assert "与休息" in normalized.text
+
+
+def test_detection_helper_reports_predominant_variant():
+    estimate = detect_chinese_script("头痛用药记录完整，病歷已核对。")
+
+    assert estimate.variant is ChineseScriptVariant.SIMPLIFIED
+    assert estimate.mixed is True
+    assert estimate.simplified_ratio > estimate.traditional_ratio
+
+
+def test_missing_opencc_warns_once_and_returns_identity(monkeypatch):
+    import openmed.processing.zh_normalize as zh_normalize
+
+    def missing_converter(_config):
+        raise ModuleNotFoundError("No module named 'opencc'")
+
+    monkeypatch.setattr(zh_normalize, "_opencc_converter", missing_converter)
+    monkeypatch.setattr(zh_normalize, "_OPENCC_NOTICE_EMITTED", False)
+
+    with pytest.warns(OpenCCUnavailableWarning, match="openmed\\[zh\\]"):
+        first = convert_script("患者头痛", OpenCCConfig.S2T)
+    with warnings.catch_warnings(record=True) as repeated:
+        warnings.simplefilter("always")
+        second = convert_script("患者头痛", OpenCCConfig.S2T)
+
+    assert not repeated
+    assert first.text == second.text == "患者头痛"
+    assert (
+        first.char_origins
+        == second.char_origins
+        == tuple((index, index + 1) for index in range(4))
+    )
+    assert first.opencc_available is second.opencc_available is False
+
+
+def test_region_configs_produce_taiwan_and_hong_kong_variants():
+    assert convert_script("里面", OpenCCConfig.S2TW).text == "裡面"
+    assert convert_script("里面", OpenCCConfig.S2HK).text == "裏面"
+
+
+def test_variant_normalized_matcher_restores_original_offsets():
+    original = "患者王明使用互联网挂号。"
+
+    def matcher(normalized: str):
+        start = normalized.index("王明")
+        return [(start, start + 2, "PERSON")]
+
+    results = detect_variant_normalized(
+        original,
+        matcher,
+        target=ChineseTargetScript.TRADITIONAL,
+    )
+
+    start, end, label = results[0]
+    assert label == "PERSON"
+    assert original[start:end] == "王明"
+
+
+def test_detection_normalization_composes_phrase_alignment():
+    original = "患者王明使用互联网挂号。"
+    normalized = normalize_for_pii_detection(
+        original,
+        chinese_target_script="traditional",
+    )
+
+    start = normalized.text.index("王明")
+    original_start, original_end = normalized.remap_span(start, start + 2)
+    assert original[original_start:original_end] == "王明"
+    assert normalized.chinese_variant_normalized is True
+    assert normalized.opencc_available is True
+
+
+def test_extract_pii_maps_chinese_normalized_entity_to_original(monkeypatch):
+    original = "患者王明服用藥物。"
+    observed_inputs = []
+
+    def fake_analyze_text(text, **_kwargs):
+        observed_inputs.append(text)
+        start = text.index("王明")
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text="王明",
+                    label="NAME",
+                    start=start,
+                    end=start + 2,
+                    confidence=0.99,
+                )
+            ],
+            model_name="fixture-pii-model",
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze_text)
+    result = openmed.extract_pii(
+        original,
+        model_name="fixture-pii-model",
+        config=OpenMedConfig(chinese_target_script="simplified"),
+        use_smart_merging=False,
+    )
+
+    assert observed_inputs == ["患者王明服用药物。"]
+    assert [(entity.text, entity.start, entity.end) for entity in result.entities] == [
+        ("王明", 2, 4)
+    ]
+
+
+def test_pipeline_redacts_original_name_after_variant_conversion():
+    from openmed.core.pipeline import Pipeline
+
+    original = "患者王明使用互联网挂号。"
+
+    def model_detector(text, **kwargs):
+        start = text.index("王明")
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text="王明",
+                    label="NAME",
+                    start=start,
+                    end=start + 2,
+                    confidence=0.99,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    result = Pipeline(
+        config=OpenMedConfig(chinese_target_script="traditional"),
+        model_detector=model_detector,
+        use_safety_sweep=False,
+    ).run(original, method="mask")
+
+    entity = result.deidentification_result.pii_entities[0]
+    assert result.normalized_text == "患者王明使用互聯網掛號。"
+    assert original[entity.start : entity.end] == entity.text == "王明"
+    assert "王明" not in result.redacted_text
+
+
+def test_config_exposes_optional_chinese_target_script():
+    assert OpenMedConfig().chinese_target_script is None
+    config = OpenMedConfig.from_dict({"chinese_target_script": "traditional"})
+    assert config.chinese_target_script == "traditional"
+    assert config.to_dict()["chinese_target_script"] == "traditional"
+    with pytest.raises(ValueError, match="chinese_target_script"):
+        OpenMedConfig(chinese_target_script="mixed")

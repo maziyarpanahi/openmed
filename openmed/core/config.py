@@ -144,6 +144,10 @@ class OpenMedConfig:
     # half-width, Han left as-is) or "nfkc" (strict per-character NFKC).
     cjk_width_convention: str = "cjk"
 
+    # Optional OpenCC pre-pass for Chinese text. None disables conversion;
+    # otherwise mixed variants are canonicalized before model inference.
+    chinese_target_script: Optional[str] = None
+
     # Active profile name (if any)
     profile: Optional[str] = None
 
@@ -180,6 +184,11 @@ class OpenMedConfig:
             and self.onnx_intra_op_num_threads <= 0
         ):
             raise ValueError("onnx_intra_op_num_threads must be positive")
+        if self.chinese_target_script not in {None, "simplified", "traditional"}:
+            raise ValueError(
+                "chinese_target_script must be None, 'simplified', or "
+                f"'traditional', got {self.chinese_target_script!r}"
+            )
 
         if self.hf_token is None:
             self.hf_token = os.getenv("HF_TOKEN")
@@ -300,6 +309,7 @@ class OpenMedConfig:
             "bnb_4bit_use_double_quant",
             "local_only",
             "cjk_width_convention",
+            "chinese_target_script",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
@@ -372,6 +382,7 @@ class OpenMedConfig:
             "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
             "local_only": self.local_only,
             "cjk_width_convention": self.cjk_width_convention,
+            "chinese_target_script": self.chinese_target_script,
             "profile": self.profile,
         }
 

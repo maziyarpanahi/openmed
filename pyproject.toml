@@ -46,6 +46,7 @@ dev = [
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
   "mypy==2.3.0",
+  "opencc>=1.4.1,<2",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "fastapi>=0.110",
@@ -122,7 +123,7 @@ spacy = [
 
 zh = [
   "jieba>=0.42",
-  "opencc>=1.1",
+  "opencc>=1.4.1,<2",
   "pypinyin>=0.51",
 ]
 

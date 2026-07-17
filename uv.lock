@@ -4937,6 +4937,9 @@ agents = [
 awq = [
     { name = "autoawq" },
 ]
+chinese = [
+    { name = "opencc" },
+]
 cli = [
     { name = "rich" },
     { name = "typer" },
@@ -4972,6 +4975,7 @@ dev = [
     { name = "jsonschema" },
     { name = "mypy" },
     { name = "numpy" },
+    { name = "opencc" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
@@ -5197,7 +5201,8 @@ requires-dist = [
     { name = "onnxruntime", marker = "extra == 'onnx-runtime'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'openvino'", specifier = ">=1.16" },
     { name = "onnxscript", marker = "extra == 'onnx'", specifier = ">=0.1.0" },
-    { name = "opencc", marker = "extra == 'zh'", specifier = ">=1.1" },
+    { name = "opencc", marker = "extra == 'dev'", specifier = ">=1.4.1,<2" },
+    { name = "opencc", marker = "extra == 'zh'", specifier = ">=1.4.1,<2" },
     { name = "opentelemetry-api", marker = "extra == 'dev'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-api", marker = "extra == 'service'", specifier = ">=1.26,<2" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'dev'", specifier = ">=1.26,<2" },
