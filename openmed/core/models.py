@@ -237,14 +237,30 @@ class ModelLoader:
                 **kwargs,
             )
 
+        full_model_name = self._resolve_model_name(model_name)
+        cache_key = (
+            "backend",
+            type(backend).__name__,
+            full_model_name,
+            task,
+            aggregation_strategy,
+            use_fast_tokenizer,
+            self._freeze_cache_value(kwargs),
+        )
+        if cache_key in self._pipelines:
+            logger.info("Using cached pipeline for %s", full_model_name)
+            return self._pipelines[cache_key]
+
         try:
-            return backend.create_pipeline(
+            created_pipeline = backend.create_pipeline(
                 model_name,
                 task=task,
                 aggregation_strategy=aggregation_strategy,
                 use_fast_tokenizer=use_fast_tokenizer,
                 **kwargs,
             )
+            self._pipelines[cache_key] = created_pipeline
+            return created_pipeline
         except Exception:
             if getattr(self.config, "backend", None) is not None:
                 raise
@@ -692,6 +708,8 @@ class ModelLoader:
     def _release_cached_memory(self) -> None:
         """Nudge Python and torch runtimes after cache references are dropped."""
         gc.collect()
+        if getattr(self.config, "backend", None) == "onnx":
+            return
         try:
             import torch
         except Exception:

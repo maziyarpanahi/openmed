@@ -10,6 +10,7 @@ from openmed.core.backends import (
     _BACKENDS,
     HuggingFaceBackend,
     MLXBackend,
+    OnnxBackend,
     get_backend,
 )
 
@@ -73,7 +74,8 @@ class TestGetBackend:
 
     @patch.object(HuggingFaceBackend, "is_available", return_value=False)
     @patch.object(MLXBackend, "is_available", return_value=False)
-    def test_no_backends_available_raises(self, _, __):
+    @patch.object(OnnxBackend, "is_available", return_value=False)
+    def test_no_backends_available_raises(self, _, __, ___):
         with pytest.raises(RuntimeError, match="No inference backend"):
             get_backend(None)
 
@@ -84,6 +86,9 @@ class TestBackendRegistry:
 
     def test_mlx_in_registry(self):
         assert "mlx" in _BACKENDS
+
+    def test_onnx_in_registry(self):
+        assert "onnx" in _BACKENDS
 
 
 class TestOpenMedConfigBackendField:

@@ -24,6 +24,7 @@ def test_required_checks_present():
     assert "python_version" in names
     assert "python_arch" in names
     assert "openmed_version" in names
+    assert "low_resource_memory" in names
     assert "hf_token" in names
     assert "openmed_offline" in names
     assert "manifest_exists" in names
@@ -132,6 +133,28 @@ def test_optional_dependencies_are_warn_or_pass():
             "PASS",
             "WARN",
         }
+
+
+def test_doctor_suggests_low_resource_profile_below_8gb(monkeypatch):
+    monkeypatch.setattr(doctor_module, "_effective_memory_bytes", lambda: 6 * 1024**3)
+
+    results = run_diagnostics()
+
+    memory = next(item for item in results if item["name"] == "low_resource_memory")
+    assert memory["status"] == "PASS"
+    assert memory["fits_low_resource"] is True
+    assert memory["profile_suggested"] is True
+    assert "OPENMED_PROFILE=low_resource" in memory["hint"]
+
+
+def test_doctor_warns_when_below_4gb(monkeypatch):
+    monkeypatch.setattr(doctor_module, "_effective_memory_bytes", lambda: 3 * 1024**3)
+
+    results = run_diagnostics()
+
+    memory = next(item for item in results if item["name"] == "low_resource_memory")
+    assert memory["status"] == "WARN"
+    assert memory["fits_low_resource"] is False
 
 
 def test_doctor_warns_when_optional_dependencies_are_missing(monkeypatch, capsys):

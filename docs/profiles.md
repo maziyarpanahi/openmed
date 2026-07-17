@@ -4,14 +4,21 @@ OpenMed supports configuration profiles to quickly switch between different sett
 
 ## Built-in Profiles
 
-OpenMed ships with four built-in profiles:
+OpenMed ships with five built-in profiles:
 
-| Profile | log_level | timeout | use_medical_tokenizer | Use Case |
-|---------|-----------|---------|----------------------|----------|
-| `dev` | DEBUG | 600s | True | Development & debugging |
-| `prod` | WARNING | 300s | True | Production deployments |
-| `test` | DEBUG | 60s | False | Testing & CI |
-| `fast` | WARNING | 120s | False | Quick experiments |
+| Profile | Backend | Batch size | Timeout | Use case |
+|---------|---------|------------|---------|----------|
+| `dev` | Auto | Backend default | 600s | Development and debugging |
+| `prod` | Auto | Backend default | 300s | Production deployments |
+| `test` | Auto | Backend default | 60s | Testing and CI |
+| `fast` | Auto | Backend default | 120s | Quick experiments |
+| `low_resource` | CPU ONNX INT8 | 1 | 900s | CPU-only machines with 4-8 GiB RAM |
+
+The `low_resource` profile lazily loads the official small PII model, caps
+inference at one note per batch and one worker, and never falls back to the
+Torch backend. Install its runtime with `pip install "openmed[onnx-runtime]"`.
+See the [low-resource benchmark](benchmarks/low-resource.md) for the memory
+envelope and reproduction commands.
 
 ## Using Profiles
 
@@ -84,7 +91,7 @@ from openmed.core.config import delete_profile
 delete_profile("myproject")
 ```
 
-Note: Built-in profiles (dev, prod, test, fast) cannot be deleted.
+Note: Built-in profiles (dev, prod, test, fast, low_resource) cannot be deleted.
 
 ## Profile Storage
 

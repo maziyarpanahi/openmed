@@ -17,6 +17,9 @@ CONFIG_ENV_VAR = "OPENMED_CONFIG"
 # Environment variable for active profile
 PROFILE_ENV_VAR = "OPENMED_PROFILE"
 
+# Official CPU-oriented INT8 artifact used by the low-resource profile.
+LOW_RESOURCE_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android"
+
 # Environment variable for the PyTorch/Transformers attention backend.
 TORCH_ATTENTION_BACKEND_ENV_VAR = "OPENMED_TORCH_ATTENTION_BACKEND"
 
@@ -54,6 +57,19 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
     "fast": {
         "log_level": "WARNING",
         "timeout": 120,
+        "use_medical_tokenizer": False,
+    },
+    "low_resource": {
+        "backend": "onnx",
+        "batch_size": 1,
+        "device": "cpu",
+        "lazy_model_loading": True,
+        "log_level": "WARNING",
+        "num_workers": 1,
+        "onnx_intra_op_num_threads": 2,
+        "onnx_variant": "int8",
+        "pii_model": LOW_RESOURCE_PII_MODEL,
+        "timeout": 900,
         "use_medical_tokenizer": False,
     },
 }
@@ -98,8 +114,18 @@ class OpenMedConfig:
     clinical_protect_terms: Optional[List[str]] = None
     clinical_protect_use_builtin: bool = True
 
-    # Inference backend: None (auto-detect), "hf" (HuggingFace/PyTorch), "mlx" (Apple MLX)
+    # Inference backend: None (auto-detect), "hf", "mlx", or CPU-only "onnx"
     backend: Optional[str] = None
+
+    # Runtime resource controls. None preserves backend-specific defaults.
+    batch_size: Optional[int] = None
+    num_workers: Optional[int] = None
+    lazy_model_loading: bool = True
+
+    # Optional profile-selected PII model and ONNX Runtime tuning.
+    pii_model: Optional[str] = None
+    onnx_variant: str = "auto"
+    onnx_intra_op_num_threads: Optional[int] = None
 
     # PyTorch/Transformers attention backend: auto, flash_attention_2, sdpa, or eager
     torch_attention_backend: str = "auto"
@@ -123,11 +149,34 @@ class OpenMedConfig:
         if self.cache_dir is None:
             self.cache_dir = os.path.expanduser("~/.cache/openmed")
 
+        # An environment-selected built-in profile must affect runtime settings,
+        # not merely record its name. Apply it before field-specific environment
+        # overrides so those overrides retain their existing precedence.
+        env_profile = os.getenv(PROFILE_ENV_VAR)
+        if env_profile and self.profile is None:
+            profile_data = PROFILE_PRESETS.get(env_profile)
+            if profile_data is not None:
+                for key, value in profile_data.items():
+                    setattr(self, key, value)
+            self.profile = env_profile
+
         if self.cjk_width_convention not in {"cjk", "nfkc"}:
             raise ValueError(
                 "cjk_width_convention must be 'cjk' or 'nfkc', got "
                 f"{self.cjk_width_convention!r}"
             )
+
+        if self.batch_size is not None and self.batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if self.num_workers is not None and self.num_workers < 0:
+            raise ValueError("num_workers must be non-negative")
+        if self.onnx_variant not in {"auto", "int8", "fp16", "fp32"}:
+            raise ValueError("onnx_variant must be auto, int8, fp16, or fp32")
+        if (
+            self.onnx_intra_op_num_threads is not None
+            and self.onnx_intra_op_num_threads <= 0
+        ):
+            raise ValueError("onnx_intra_op_num_threads must be positive")
 
         if self.hf_token is None:
             self.hf_token = os.getenv("HF_TOKEN")
@@ -216,11 +265,6 @@ class OpenMedConfig:
 
         configure_offline_mode(self)
 
-        # Check for profile environment variable
-        env_profile = os.getenv(PROFILE_ENV_VAR)
-        if env_profile and self.profile is None:
-            self.profile = env_profile
-
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "OpenMedConfig":
         """Create config from dictionary."""
@@ -241,6 +285,12 @@ class OpenMedConfig:
             "clinical_protect_terms",
             "clinical_protect_use_builtin",
             "backend",
+            "batch_size",
+            "num_workers",
+            "lazy_model_loading",
+            "pii_model",
+            "onnx_variant",
+            "onnx_intra_op_num_threads",
             "torch_attention_backend",
             "load_in_4bit",
             "bnb_4bit_use_double_quant",
@@ -256,7 +306,7 @@ class OpenMedConfig:
         """Create config from a named profile.
 
         Args:
-            profile_name: Name of the profile (dev, prod, test, fast, or custom).
+            profile_name: Name of a built-in or custom profile.
             **overrides: Additional config values to override.
 
         Returns:
@@ -306,6 +356,12 @@ class OpenMedConfig:
             "clinical_protect_terms": self.clinical_protect_terms,
             "clinical_protect_use_builtin": self.clinical_protect_use_builtin,
             "backend": self.backend,
+            "batch_size": self.batch_size,
+            "num_workers": self.num_workers,
+            "lazy_model_loading": self.lazy_model_loading,
+            "pii_model": self.pii_model,
+            "onnx_variant": self.onnx_variant,
+            "onnx_intra_op_num_threads": self.onnx_intra_op_num_threads,
             "torch_attention_backend": self.torch_attention_backend,
             "load_in_4bit": self.load_in_4bit,
             "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,

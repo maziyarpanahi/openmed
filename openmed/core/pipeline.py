@@ -277,6 +277,13 @@ class Pipeline:
             )
 
         self.policy = resolved_policy
+        if config is None:
+            from .config import get_config
+
+            config = get_config()
+        configured_pii_model = getattr(config, "pii_model", None)
+        if configured_pii_model and model_name in {None, pii._DEFAULT_EN_MODEL}:
+            model_name = configured_pii_model
         self.model_name = model_name or pii._DEFAULT_EN_MODEL
         self.confidence_threshold = confidence_threshold
         self.config = config
@@ -953,6 +960,8 @@ class Pipeline:
             lang=route.lang,
             normalize_accents=self.normalize_accents,
             loader=self.loader,
+            batch_size=getattr(self.config, "batch_size", None),
+            num_workers=getattr(self.config, "num_workers", None),
         )
 
     def stage6_clinical_phi_model(

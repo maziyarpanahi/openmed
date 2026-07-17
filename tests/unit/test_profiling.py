@@ -14,8 +14,10 @@ from openmed.utils.profiling import (
     TimingResult,
     disable_profiling,
     enable_profiling,
+    get_peak_rss_bytes,
     get_profile_report,
     get_profiler,
+    measure_peak_rss,
     profile,
     timed,
 )
@@ -50,6 +52,22 @@ class TestTimingResult:
         assert data["name"] == "test_op"
         assert data["duration_ms"] == 500.0
         assert data["duration_s"] == 0.5
+
+
+def test_peak_rss_helper_returns_process_high_water_mark():
+    assert get_peak_rss_bytes() > 0
+
+
+def test_peak_rss_context_records_absolute_and_delta_values():
+    with patch(
+        "openmed.utils.profiling.get_peak_rss_bytes",
+        side_effect=[100 * 1024**2, 125 * 1024**2],
+    ):
+        with measure_peak_rss() as measurement:
+            pass
+
+    assert measurement.peak_mib == 125
+    assert measurement.delta_bytes == 25 * 1024**2
 
 
 class TestProfileReport:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import platform
 import warnings
+from importlib.util import find_spec
 from typing import (
     Any,
     Callable,
@@ -118,11 +119,109 @@ class MLXBackend:
         )
 
 
+class OnnxTokenClassificationPipeline:
+    """Transform :class:`OnnxModel` output into the standard pipeline schema."""
+
+    def __init__(self, model: Any) -> None:
+        self.model = model
+        self.tokenizer = model.tokenizer
+        self.variant = model.variant
+
+    def __call__(self, inputs: Any, **kwargs: Any) -> Any:
+        """Run one or more inputs without importing a Torch runtime."""
+        threshold = float(kwargs.pop("threshold", 0.0))
+        max_length = kwargs.pop("max_length", None)
+        kwargs.pop("batch_size", None)
+        kwargs.pop("num_workers", None)
+        if kwargs:
+            logger.debug(
+                "Ignoring unsupported ONNX pipeline options: %s", sorted(kwargs)
+            )
+
+        single = isinstance(inputs, str)
+        texts = [inputs] if single else list(inputs)
+        predictions = [
+            [
+                {
+                    "entity_group": entity.label,
+                    "score": entity.score,
+                    "word": entity.text,
+                    "start": entity.start,
+                    "end": entity.end,
+                }
+                for entity in self.model.predict(
+                    text,
+                    threshold=threshold,
+                    max_length=max_length,
+                )
+            ]
+            for text in texts
+        ]
+        return predictions[0] if single else predictions
+
+
+class OnnxBackend:
+    """CPU-only ONNX Runtime backend with an INT8-capable model loader."""
+
+    _RUNTIME_MODULES = ("huggingface_hub", "numpy", "onnxruntime", "transformers")
+
+    def __init__(self, config: Any = None) -> None:
+        self._config = config
+
+    def is_available(self) -> bool:
+        return all(
+            find_spec(module_name) is not None for module_name in self._RUNTIME_MODULES
+        )
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Callable:
+        """Create a CPU ONNX token-classification pipeline."""
+        del aggregation_strategy
+        if task not in {"ner", "token-classification"}:
+            raise ValueError(
+                "The ONNX backend supports only token-classification tasks"
+            )
+
+        from openmed.onnx.inference import load_onnx_model
+
+        kwargs.pop("use_fast_tokenizer", None)
+        variant = getattr(self._config, "onnx_variant", "auto")
+        threads = getattr(self._config, "onnx_intra_op_num_threads", None)
+        session_options = None
+        if threads is not None:
+            import onnxruntime as ort
+
+            session_options = ort.SessionOptions()
+            session_options.intra_op_num_threads = int(threads)
+            session_options.inter_op_num_threads = 1
+
+        model = load_onnx_model(
+            model_name,
+            variant=variant,
+            cache_dir=getattr(self._config, "cache_dir", None),
+            token=getattr(self._config, "hf_token", None),
+            local_files_only=is_local_only(self._config),
+            providers=("CPUExecutionProvider",),
+            session_options=session_options,
+        )
+        if variant == "int8" and model.variant != "int8":
+            raise RuntimeError(
+                f"Low-resource profile requires model_int8.onnx; got {model.variant!r}"
+            )
+        return OnnxTokenClassificationPipeline(model)
+
+
 # -- Backend registry and auto-detection ------------------------------------
 
 _BACKENDS: Dict[str, type] = {
     "hf": HuggingFaceBackend,
     "mlx": MLXBackend,
+    "onnx": OnnxBackend,
 }
 
 
@@ -133,13 +232,18 @@ def get_backend(
     """Return the requested backend, or auto-detect the best available one.
 
     Args:
-        name: ``"hf"``, ``"mlx"``, or ``None`` for auto-detect.
+        name: ``"hf"``, ``"mlx"``, ``"onnx"``, or ``None`` for auto-detect.
         config: OpenMedConfig to pass to the backend.
 
     Auto-detection order:
         1. MLX — if on Apple Silicon *and* ``mlx`` is importable.
         2. HuggingFace — default fallback.
+        3. ONNX Runtime — CPU fallback when only ``onnx-runtime`` is installed.
     """
+    configured_name = getattr(config, "backend", None)
+    if name is None and configured_name is not None:
+        name = configured_name
+
     if name is not None:
         if name not in _BACKENDS:
             raise ValueError(
@@ -147,13 +251,19 @@ def get_backend(
             )
         backend = _BACKENDS[name](config)
         if not backend.is_available():
+            if name == "onnx":
+                raise RuntimeError(
+                    "Backend 'onnx' is not available. Install the CPU runtime "
+                    "with: pip install 'openmed[onnx-runtime]'. The low_resource "
+                    "profile does not fall back to a Torch backend."
+                )
             raise RuntimeError(
                 f"Backend {name!r} is not available. Install its dependencies first."
             )
         return backend
 
     # Auto-detect: prefer MLX on Apple Silicon
-    for candidate_name in ("mlx", "hf"):
+    for candidate_name in ("mlx", "hf", "onnx"):
         candidate = _BACKENDS[candidate_name](config)
         if candidate.is_available():
             logger.info("Auto-selected inference backend: %s", candidate_name)
@@ -161,7 +271,8 @@ def get_backend(
 
     raise RuntimeError(
         "No inference backend available. "
-        "Install at least one: pip install openmed[hf] or pip install openmed[mlx]"
+        "Install at least one: pip install openmed[hf], openmed[mlx], "
+        "or openmed[onnx-runtime]"
     )
 
 

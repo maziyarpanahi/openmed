@@ -1,0 +1,18 @@
+{
+  "backend": "onnx",
+  "cgroup_memory_limit_gib": null,
+  "duration_seconds": 3.377,
+  "entity_count": 579,
+  "measured_at": "2026-07-17",
+  "model": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android",
+  "note_count": 100,
+  "onnx_variant": "int8",
+  "peak_rss_growth_mib": 1523.875,
+  "peak_rss_mib": 1620.875,
+  "platform": "macOS-26.5.2-arm64-i386-64bit",
+  "profile": "low_resource",
+  "python": "3.11.10",
+  "schema_version": 1,
+  "throughput_notes_per_second": 29.609,
+  "torch_imported": false
+}

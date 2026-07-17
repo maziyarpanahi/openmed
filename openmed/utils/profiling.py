@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import functools
 import logging
+import os
+import platform
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -16,6 +18,82 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, TypeVar
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+@dataclass
+class PeakRSSMeasurement:
+    """Process peak resident-set-size measurement in bytes."""
+
+    start_bytes: int
+    peak_bytes: int = 0
+
+    @property
+    def delta_bytes(self) -> int:
+        """Return peak growth observed after the measurement started."""
+        return max(0, self.peak_bytes - self.start_bytes)
+
+    @property
+    def peak_mib(self) -> float:
+        """Return the absolute process high-water mark in MiB."""
+        return self.peak_bytes / (1024 * 1024)
+
+
+def get_peak_rss_bytes() -> int:
+    """Return this process's peak resident set size in bytes.
+
+    Linux reports ``ru_maxrss`` in KiB while macOS reports bytes. Windows uses
+    the native ``PeakWorkingSetSize`` counter. The helper has no third-party
+    dependency and never records document contents.
+    """
+    if os.name == "nt":  # pragma: no cover - exercised on Windows CI
+        return _windows_peak_rss_bytes()
+
+    import resource
+
+    peak = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    return peak if platform.system() == "Darwin" else peak * 1024
+
+
+@contextmanager
+def measure_peak_rss() -> Iterator[PeakRSSMeasurement]:
+    """Measure the process peak RSS over a block.
+
+    Peak RSS is a process-lifetime high-water mark, so benchmarks should call
+    this helper from a fresh process when they need an isolated baseline.
+    """
+    measurement = PeakRSSMeasurement(start_bytes=get_peak_rss_bytes())
+    try:
+        yield measurement
+    finally:
+        measurement.peak_bytes = get_peak_rss_bytes()
+
+
+def _windows_peak_rss_bytes() -> int:  # pragma: no cover - Windows-only
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessMemoryCounters(ctypes.Structure):
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("PageFaultCount", wintypes.DWORD),
+            ("PeakWorkingSetSize", ctypes.c_size_t),
+            ("WorkingSetSize", ctypes.c_size_t),
+            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+            ("PagefileUsage", ctypes.c_size_t),
+            ("PeakPagefileUsage", ctypes.c_size_t),
+        ]
+
+    counters = ProcessMemoryCounters()
+    counters.cb = ctypes.sizeof(counters)
+    process = ctypes.windll.kernel32.GetCurrentProcess()
+    if not ctypes.windll.psapi.GetProcessMemoryInfo(
+        process, ctypes.byref(counters), counters.cb
+    ):
+        raise OSError("GetProcessMemoryInfo failed")
+    return int(counters.PeakWorkingSetSize)
 
 
 @dataclass
