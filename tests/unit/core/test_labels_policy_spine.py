@@ -6,6 +6,7 @@ from openmed.core.labels import (
     AGE,
     CANONICAL_LABELS,
     CLINICAL_CONCEPT,
+    CLINICAL_SYSTEM_HINTS,
     DIRECT_IDENTIFIER,
     HIPAA_SAFE_HARBOR_CLASSES,
     LABEL_METADATA,
@@ -22,7 +23,7 @@ from openmed.core.labels import (
     system_hints_for,
 )
 
-ALLOWED_SYSTEM_HINTS = {"RxNorm", "LOINC", "ICD-10-CM", "HPO", "SNOMED"}
+ALLOWED_SYSTEM_HINTS = set(CLINICAL_SYSTEM_HINTS)
 
 
 def test_metadata_tables_cover_canonical_labels_exactly():
