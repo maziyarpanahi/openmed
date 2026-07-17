@@ -704,12 +704,12 @@ def _add_audit_command(subparsers: argparse._SubParsersAction) -> None:
 
     verify_parser = audit_sub.add_parser(
         "verify",
-        help="Verify an audit report's reproducibility hash and signature.",
+        help="Verify an audit report or tamper-evident audit chain.",
     )
     verify_parser.add_argument(
         "report",
         type=Path,
-        help="Path to a signed audit report JSON file.",
+        help="Path to an audit report or audit-chain JSON file.",
     )
     verify_parser.add_argument(
         "--key",
@@ -717,6 +717,28 @@ def _add_audit_command(subparsers: argparse._SubParsersAction) -> None:
         help=f"HMAC key for signed reports. Defaults to {_AUDIT_KEY_ENV}.",
     )
     verify_parser.set_defaults(handler=_handle_audit_verify)
+
+    chain_parser = audit_sub.add_parser(
+        "verify-chain",
+        help="Verify an audit chain and optionally a report committed to it.",
+    )
+    chain_parser.add_argument(
+        "chain",
+        type=Path,
+        help="Path to a tamper-evident audit-chain JSON file.",
+    )
+    chain_parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="Also verify this audit report and confirm chain membership.",
+    )
+    chain_parser.add_argument(
+        "--key",
+        default=None,
+        help=f"HMAC key for signed reports. Defaults to {_AUDIT_KEY_ENV}.",
+    )
+    chain_parser.set_defaults(handler=_handle_audit_chain_verify)
 
     show_parser = audit_sub.add_parser(
         "show",
@@ -1587,20 +1609,34 @@ def _handle_redact_dataset(args: argparse.Namespace) -> int:
 
 def _handle_audit_verify(args: argparse.Namespace) -> int:
     try:
-        report = _load_audit_report(args.report)
-    except (OSError, TypeError, ValueError) as exc:
+        artifact = _load_audit_artifact(args.report)
+    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         raise CliError(
-            f"Failed to load audit report: {exc}",
+            f"Failed to load audit artifact: {exc}",
             code="load_failed",
             exit_code=EXIT_ERROR,
         )
 
+    from ..core.audit_chain import AuditChain
+
+    if isinstance(artifact, AuditChain):
+        payload, human = _audit_chain_verification(artifact)
+    else:
+        payload, human = _audit_report_verification(artifact, args.key)
+    emit(args, payload, human=human)
+    return 0 if payload["verified"] else 1
+
+
+def _audit_report_verification(
+    report: Any,
+    key_override: str | None,
+) -> tuple[dict[str, Any], str]:
     repro_ok = report.repro_hash_matches()
     signature_status = "SKIPPED (report is unsigned)"
     signature_ok = True
 
     if report.signature is not None:
-        key = args.key or os.environ.get(_AUDIT_KEY_ENV)
+        key = key_override or os.environ.get(_AUDIT_KEY_ENV)
         if not key:
             signature_status = f"FAIL (set --key or {_AUDIT_KEY_ENV})"
             signature_ok = False
@@ -1625,8 +1661,77 @@ def _handle_audit_verify(args: argparse.Namespace) -> int:
         f"Reproducibility hash: {_pass_fail(repro_ok)}\n"
         f"HMAC signature: {signature_status}"
     )
-    emit(args, payload, human=human)
-    return 0 if verified else 1
+    return payload, human
+
+
+def _audit_chain_verification(chain: Any) -> tuple[dict[str, Any], str]:
+    result = chain.verify()
+    payload = {
+        "verified": result.valid,
+        "entries_checked": result.checked_entries,
+        "reason": result.reason,
+    }
+    lines = [
+        f"Audit chain verification: {_pass_fail(result.valid)}",
+        f"Entries checked: {result.checked_entries}",
+    ]
+    if not result.valid:
+        lines.append(f"Reason: {result.reason}")
+    return payload, "\n".join(lines)
+
+
+def _handle_audit_chain_verify(args: argparse.Namespace) -> int:
+    from ..core.audit_chain import AuditChain
+
+    try:
+        chain = AuditChain.load(args.chain)
+    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to load audit chain: {exc}",
+            code="load_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    chain_payload, chain_human = _audit_chain_verification(chain)
+    payload: dict[str, Any] = {
+        "verified": chain_payload["verified"],
+        "chain": chain_payload,
+    }
+    human_parts = [chain_human]
+    if args.report is None:
+        emit(args, payload, human="\n".join(human_parts))
+        return 0 if payload["verified"] else 1
+
+    try:
+        report = _load_audit_report(args.report)
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to load audit report: {exc}",
+            code="load_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    report_payload, report_human = _audit_report_verification(report, args.key)
+    membership_ok = chain.contains_report(report)
+    payload.update(
+        {
+            "verified": bool(
+                chain_payload["verified"]
+                and report_payload["verified"]
+                and membership_ok
+            ),
+            "report": report_payload,
+            "report_membership": membership_ok,
+        }
+    )
+    human_parts.extend(
+        [
+            report_human,
+            f"Audit report chain membership: {_pass_fail(membership_ok)}",
+        ]
+    )
+    emit(args, payload, human="\n".join(human_parts))
+    return 0 if payload["verified"] else 1
 
 
 def _handle_audit_show(args: argparse.Namespace) -> int:
@@ -1667,6 +1772,18 @@ def _load_audit_report(path: Path):
     from ..core.audit import AuditReport
 
     return AuditReport.from_json(path.read_text(encoding="utf-8"))
+
+
+def _load_audit_artifact(path: Path):
+    from ..core.audit import AuditReport
+    from ..core.audit_chain import CHAIN_FORMAT, AuditChain
+
+    parsed = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(parsed, MappingABC):
+        raise ValueError("audit artifact JSON must contain an object")
+    if parsed.get("format") == CHAIN_FORMAT or "entries" in parsed:
+        return AuditChain.from_dict(parsed)
+    return AuditReport.from_dict(parsed)
 
 
 def _format_audit_summary(report: Any) -> str:
