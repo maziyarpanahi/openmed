@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a release evidence job that keylessly signs each wheel and source
+  distribution with Sigstore and attaches the SLSA provenance bundle, the
+  release artifact digest manifest, and the Sigstore bundles to the tagged
+  GitHub release, so a release can be verified offline without the GitHub
+  attestation API. Evidence generation stays best effort and cannot gate the
+  PyPI upload, but evidence that is produced must verify against the signing
+  workflow identity and the release commit before it is attached (#1540).
 - Added a Hungarian (`hu`) national-ID-only PII pack with validator-backed TAJ
   detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
   address, and postcode patterns, and an offline synthetic golden fixture
