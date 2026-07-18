@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
   installed Faker fall back to `ar_EG` with a one-time warning, and
   `list_regional_locales('ar')` enumerates the supported tags (#483).
+- Added curated conceptual surrogate locales for Senegal, Côte d’Ivoire,
+  Cameroon, Mozambique, and Angola (`fr_SN`, `fr_CI`, `fr_CM`, `pt_MZ`, and
+  `pt_AO`), including in-country names, addresses, cities, phone formats, and
+  context-only Senegal CNI and Angola BI detection. Arabic regional overrides
+  now also document `ar-DZ` and `ar-MA`; unavailable Faker backends retain the
+  existing one-time-warning fallback to `ar_EG` (#1443).
 - Added a release evidence job that keylessly signs each wheel and source
   distribution with Sigstore and attaches the SLSA provenance bundle, the
   release artifact digest manifest, and the Sigstore bundles to the tagged

@@ -7914,6 +7914,126 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ur": _URDU_PII_PATTERNS,
 }
 
+
+AFRICAN_FR_PT_PHONE_PREFIXES: Dict[str, str] = {
+    "fr_sn": "+221",
+    "fr_ci": "+225",
+    "fr_cm": "+237",
+    "pt_mz": "+258",
+    "pt_ao": "+244",
+}
+
+_AFRICAN_FR_PT_PHONE_CONTEXT = [
+    "téléphone",
+    "telephone",
+    "tél",
+    "tel",
+    "portable",
+    "contact",
+    "telefone",
+    "telemóvel",
+    "telemovel",
+    "contacto",
+]
+
+_AFRICAN_FR_PT_PHONE_PII_PATTERNS: Dict[str, PIIPattern] = {
+    # International and 00-prefix renderings are intentionally required. The
+    # existing fr/pt language patterns retain responsibility for national-only
+    # numbers, while these country overlays make the calling code unambiguous.
+    "fr_sn": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)221[\s.-]?[378](?:[\s.-]?[0-9]){8}"
+        r"(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "fr_ci": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)225[\s.-]?(?:0[157]|2[157])"
+        r"(?:[\s.-]?[0-9]){8}(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "fr_cm": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)237[\s.-]?[26](?:[\s.-]?[0-9]){8}"
+        r"(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "pt_mz": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)258[\s.-]?(?:2[1-9]|8[234567])"
+        r"(?:[\s.-]?[0-9]){7}(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "pt_ao": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)244[\s.-]?[29](?:[\s.-]?[0-9]){8}"
+        r"(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+}
+
+_SENEGAL_CNI_PII_PATTERN = PIIPattern(
+    # ECOWAS CNI NIN: sex digit + 3-digit civil centre + 4-digit birth year +
+    # 5-digit register sequence. No public checksum is claimed.
+    r"(?<![0-9])[12][0-9]{3}(?:19|20)[0-9]{2}[0-9]{5}(?![0-9])",
+    "national_id",
+    priority=12,
+    base_score=0.35,
+    context_words=[
+        "cni",
+        "carte nationale d'identité",
+        "carte nationale d’identite",
+        "numéro d'identification national",
+        "numéro d’identification national",
+        "nin",
+    ],
+    context_boost=0.6,
+    safety_sweep_requires_context=True,
+    flags=re.IGNORECASE,
+)
+
+_ANGOLA_BI_PII_PATTERN = PIIPattern(
+    # Current BI/NIF examples use nine digits, a two-letter issuing series,
+    # and three trailing digits. No public checksum is claimed.
+    r"(?<![A-Za-z0-9])0[0-9]{8}[A-Z]{2}[0-9]{3}(?![A-Za-z0-9])",
+    "national_id",
+    priority=12,
+    base_score=0.35,
+    context_words=[
+        "bilhete de identidade",
+        "número do bilhete",
+        "numero do bilhete",
+        "número de identificação civil",
+        "numero de identificacao civil",
+        "nº do bi",
+        "n.º do bi",
+        "bi:",
+    ],
+    context_boost=0.6,
+    safety_sweep_requires_context=True,
+    flags=re.IGNORECASE,
+)
+
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "am": _ETHIOPIA_FAYDA_PII_PATTERNS,
     "zh_cn": _CHINESE_IDENTIFIER_PII_PATTERNS,
@@ -7940,6 +8060,17 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_sn": [
+        _AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_sn"],
+        _SENEGAL_CNI_PII_PATTERN,
+    ],
+    "fr_ci": [_AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_ci"]],
+    "fr_cm": [_AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_cm"]],
+    "pt_mz": [_AFRICAN_FR_PT_PHONE_PII_PATTERNS["pt_mz"]],
+    "pt_ao": [
+        _AFRICAN_FR_PT_PHONE_PII_PATTERNS["pt_ao"],
+        _ANGOLA_BI_PII_PATTERN,
+    ],
 }
 
 for _country, _plan in AFRICAN_MOBILE_PLANS.items():
@@ -7980,6 +8111,104 @@ if _NIGERIA_HEALTH_FACILITY_PII_PATTERNS[0] not in _NIGERIAN_PII_PATTERNS:
 # ---------------------------------------------------------------------------
 # Language-specific fake data
 # ---------------------------------------------------------------------------
+
+# Curated supplements for conceptual locales that Faker does not ship. These
+# values cover only the culturally sensitive methods; every other generator is
+# delegated to the installed backend in ``FAKER_BACKEND_LOCALE``. Keeping this
+# separate from ``LANGUAGE_FAKE_DATA`` ensures the default ``fr`` and ``pt``
+# code paths remain unchanged unless the caller explicitly passes ``locale=``.
+LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "fr_SN": {
+        "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],
+        "FIRST_NAME": ["Awa", "Mamadou", "Fatou", "Ibrahima"],
+        "LAST_NAME": ["Ndiaye", "Diop", "Sarr", "Fall"],
+        "PHONE": [
+            "+221 77 642 18 35",
+            "+221 76 315 42 87",
+            "+221 70 824 53 16",
+        ],
+        "STREET_ADDRESS": [
+            "12 avenue Cheikh Anta Diop, Dakar",
+            "48 rue Carnot, Saint-Louis",
+            "7 avenue Léopold Sédar Senghor, Thiès",
+        ],
+        "LOCATION": ["Dakar", "Thiès", "Saint-Louis", "Kaolack"],
+    },
+    "fr_CI": {
+        "NAME": ["Aïcha Koné", "Kouadio Yao", "Aminata Traoré", "Koffi N'Guessan"],
+        "FIRST_NAME": ["Aïcha", "Kouadio", "Aminata", "Koffi"],
+        "LAST_NAME": ["Koné", "Yao", "Traoré", "N'Guessan"],
+        "PHONE": [
+            "+225 07 48 26 15 39",
+            "+225 05 31 74 82 60",
+            "+225 01 62 93 47 18",
+        ],
+        "STREET_ADDRESS": [
+            "17 boulevard Latrille, Abidjan",
+            "8 rue des Jardins, Bouaké",
+            "23 avenue Houphouët-Boigny, Yamoussoukro",
+        ],
+        "LOCATION": ["Abidjan", "Bouaké", "Yamoussoukro", "San-Pédro"],
+    },
+    "fr_CM": {
+        "NAME": ["Mireille Ngono", "Alain Njoya", "Chantal Mbarga", "Samuel Tchinda"],
+        "FIRST_NAME": ["Mireille", "Alain", "Chantal", "Samuel"],
+        "LAST_NAME": ["Ngono", "Njoya", "Mbarga", "Tchinda"],
+        "PHONE": [
+            "+237 6 71 24 83 59",
+            "+237 6 96 35 72 18",
+            "+237 6 52 81 46 30",
+        ],
+        "STREET_ADDRESS": [
+            "25 avenue Kennedy, Yaoundé",
+            "10 rue Joss, Douala",
+            "6 avenue des Banques, Bafoussam",
+        ],
+        "LOCATION": ["Yaoundé", "Douala", "Bafoussam", "Garoua"],
+    },
+    "pt_MZ": {
+        "NAME": [
+            "Amélia Mucavele",
+            "Ernesto Mondlane",
+            "Celina Nhantumbo",
+            "Luís Mabote",
+        ],
+        "FIRST_NAME": ["Amélia", "Ernesto", "Celina", "Luís"],
+        "LAST_NAME": ["Mucavele", "Mondlane", "Nhantumbo", "Mabote"],
+        "PHONE": [
+            "+258 84 362 7185",
+            "+258 82 715 4369",
+            "+258 87 246 5913",
+        ],
+        "STREET_ADDRESS": [
+            "24 Avenida Julius Nyerere, Maputo",
+            "16 Avenida Eduardo Mondlane, Beira",
+            "9 Rua dos Continuadores, Nampula",
+        ],
+        "LOCATION": ["Maputo", "Beira", "Nampula", "Quelimane"],
+    },
+    "pt_AO": {
+        "NAME": [
+            "Ana Domingos",
+            "Manuel Mateus",
+            "Teresa Chissola",
+            "Paulo Cassoma",
+        ],
+        "FIRST_NAME": ["Ana", "Manuel", "Teresa", "Paulo"],
+        "LAST_NAME": ["Domingos", "Mateus", "Chissola", "Cassoma"],
+        "PHONE": [
+            "+244 923 461 785",
+            "+244 934 725 816",
+            "+244 951 284 639",
+        ],
+        "STREET_ADDRESS": [
+            "31 Rua Rainha Ginga, Luanda",
+            "14 Avenida da Independência, Benguela",
+            "8 Rua do Comércio, Huambo",
+        ],
+        "LOCATION": ["Luanda", "Benguela", "Huambo", "Lubango"],
+    },
+}
 
 LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
     "en": {
