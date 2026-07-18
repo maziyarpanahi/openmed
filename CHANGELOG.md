@@ -82,6 +82,10 @@ surfaces delivered after `v1.8.1`.
 - Added an offline immunization zero-shot domain with FHIR-aligned display
   labels, canonical policy metadata, synthetic per-label fixtures, and
   exporter-alignment documentation (#1159).
+- Added an offline pediatrics-growth zero-shot domain with growth-parameter,
+  percentile, z-score, developmental-milestone, feeding-history, and finding
+  display labels, canonical policy metadata, and synthetic per-label fixture
+  coverage (#1611).
 - Added relation metrics, a synthetic gold loader, strict and relaxed clinical
   relation-extraction scoring, an RE release gate, and a dataframe API for
   clinical extraction results (#1211, #1212, #1224).
@@ -139,11 +143,6 @@ surfaces delivered after `v1.8.1`.
   clinical extraction, alongside the redactor threat model, de-identification
   fuzz harness, and synthetic burned-in-PHI DICOM benchmark (#1213, #1214,
   #1350, #1352, #1388).
-- Added an offline pediatrics-growth zero-shot domain with growth-parameter,
-  percentile, z-score, developmental-milestone, feeding-history, and finding
-  display labels, canonical policy metadata, and synthetic per-label fixture
-  coverage (OM-896).
-
 ## [1.8.1] - 2026-07-10
 
 ### Fixed
