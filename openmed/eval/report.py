@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
+from openmed.core.audit import stable_hash
 from openmed.core.baseline import baseline_key, get_baseline, load_baseline_store
 from openmed.core.model_registry import MANIFEST_PATH, load_manifest_rows
+from openmed.eval.metrics import inter_annotator_agreement
+
+if TYPE_CHECKING:
+    from openmed.eval.golden.loader import ConsensusDocument
 
 
 @dataclass(frozen=True)
@@ -110,6 +116,157 @@ class BenchmarkReport:
 
 
 DEFAULT_COMPETITORS = ("SHIELD", "Declared competitors")
+
+
+@dataclass(frozen=True)
+class GoldCorpusQualityReport:
+    """Agreement and adjudication quality of a multi-annotator gold corpus.
+
+    Low-agreement examples reference offsets, labels, document ids, and content
+    hashes only -- never raw clinical text -- so reviewers can triage before
+    promotion without handling PHI.
+    """
+
+    n_documents: int
+    overall_agreement: float
+    per_label: Mapping[str, float]
+    relation_types: Mapping[str, int]
+    adjudication_coverage: float
+    low_agreement_examples: tuple[Mapping[str, Any], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "n_documents": self.n_documents,
+            "overall_agreement": self.overall_agreement,
+            "per_label": dict(self.per_label),
+            "relation_types": dict(self.relation_types),
+            "adjudication_coverage": self.adjudication_coverage,
+            "low_agreement_examples": [
+                {
+                    "document_id": example["document_id"],
+                    "offset": list(example["offset"]),
+                    "labels": list(example["labels"]),
+                    "resolved": example["resolved"],
+                    "hash": example["hash"],
+                }
+                for example in self.low_agreement_examples
+            ],
+        }
+
+    def to_markdown(self) -> str:
+        lines = [
+            "# Gold Corpus Quality Report",
+            "",
+            f"- Documents: {self.n_documents}",
+            f"- Overall agreement: {self.overall_agreement:.4f}",
+            f"- Adjudication coverage: {self.adjudication_coverage:.4f}",
+            "",
+            "## Agreement by label",
+            "",
+            "| Label | Agreement |",
+            "| --- | --- |",
+        ]
+        for label, score in self.per_label.items():
+            lines.append(f"| {label} | {score:.4f} |")
+        lines.extend(["", "## Consensus relations by type", ""])
+        if self.relation_types:
+            lines.append("| Relation type | Count |")
+            lines.append("| --- | --- |")
+            for relation_type, count in self.relation_types.items():
+                lines.append(f"| {relation_type} | {count} |")
+        else:
+            lines.append("_None._")
+        lines.extend(
+            ["", f"## Low-agreement examples ({len(self.low_agreement_examples)})", ""]
+        )
+        for example in self.low_agreement_examples:
+            offset = tuple(example["offset"])
+            labels = ", ".join(example["labels"])
+            resolved = "resolved" if example["resolved"] else "unresolved"
+            lines.append(
+                f"- {example['document_id']} {offset} [{labels}] "
+                f"({resolved}, {example['hash']})"
+            )
+        return "\n".join(lines) + "\n"
+
+
+def gold_corpus_quality_report(
+    documents: Sequence["ConsensusDocument"],
+) -> GoldCorpusQualityReport:
+    """Build a quality report from a multi-annotator consensus corpus.
+
+    Agreement is computed per document from the annotator span sets (Cohen or
+    Fleiss kappa, and per-label agreement), relation types are counted from the
+    adjudicated consensus, and adjudication coverage is the fraction of
+    annotator disagreements represented in the consensus view.
+    """
+
+    kappas: list[float] = []
+    label_scores: dict[str, list[float]] = defaultdict(list)
+    relation_counts: dict[str, int] = defaultdict(int)
+    low_agreement: list[Mapping[str, Any]] = []
+    resolved_count = 0
+    disagreement_count = 0
+
+    for document in documents:
+        annotator_spans = [
+            [(span.start, span.end, span.label) for span in spans]
+            for spans in document.annotators.values()
+        ]
+        agreement = inter_annotator_agreement(annotator_spans)
+        kappa = (
+            agreement.cohen_kappa
+            if agreement.cohen_kappa is not None
+            else agreement.fleiss_kappa
+        )
+        if kappa is not None:
+            kappas.append(kappa)
+        for label, score in agreement.per_label.items():
+            label_scores[label].append(score)
+        for relation in document.consensus_relations:
+            relation_counts[relation.relation_type] += 1
+
+        consensus_offsets = {
+            (span.start, span.end) for span in document.consensus_spans
+        }
+        for item in agreement.disagreements:
+            disagreement_count += 1
+            offset = tuple(item["offset"])
+            labels = tuple(item["labels"])
+            resolved = offset in consensus_offsets
+            if resolved:
+                resolved_count += 1
+            low_agreement.append(
+                {
+                    "document_id": document.doc_id,
+                    "offset": offset,
+                    "labels": labels,
+                    "resolved": resolved,
+                    "hash": stable_hash(
+                        {
+                            "document_id": document.doc_id,
+                            "offset": list(offset),
+                            "labels": list(labels),
+                        }
+                    ),
+                }
+            )
+
+    overall = sum(kappas) / len(kappas) if kappas else 1.0
+    per_label = {
+        label: sum(scores) / len(scores)
+        for label, scores in sorted(label_scores.items())
+    }
+    coverage = resolved_count / disagreement_count if disagreement_count else 1.0
+
+    return GoldCorpusQualityReport(
+        n_documents=len(documents),
+        overall_agreement=overall,
+        per_label=per_label,
+        relation_types=dict(sorted(relation_counts.items())),
+        adjudication_coverage=coverage,
+        low_agreement_examples=tuple(low_agreement),
+    )
 
 
 def render_benchmark_card(
@@ -459,6 +616,8 @@ def _slug(value: str) -> str:
 __all__ = [
     "BenchmarkReport",
     "DEFAULT_COMPETITORS",
+    "GoldCorpusQualityReport",
+    "gold_corpus_quality_report",
     "read_reports",
     "render_benchmark_card",
     "render_leaderboard",
