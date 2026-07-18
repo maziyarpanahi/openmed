@@ -51,6 +51,7 @@ DEFAULT_ROUTE_SCOPES = {
     ("POST", "/analyze"): ("analyze:write",),
     ("POST", "/pii/extract"): ("pii:read",),
     ("POST", "/pii/deidentify"): ("pii:write",),
+    ("POST", "/pii/deidentify/stream"): ("pii:write",),
 }
 
 _BOOLEAN_TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}

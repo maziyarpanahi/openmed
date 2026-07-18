@@ -33,8 +33,8 @@ const DefaultBaseURL = "http://localhost:8080"
 // responses are read incrementally and are not subject to this total limit.
 const DefaultMaxResponseBodyBytes int64 = 64 << 20
 
-// DefaultMaxStreamEventBytes bounds one NDJSON event returned by
-// /pii/extract/stream. The total stream remains unbounded and is consumed
+// DefaultMaxStreamEventBytes bounds one NDJSON event returned by a streaming
+// PII endpoint. The total stream remains unbounded and is consumed
 // incrementally.
 const DefaultMaxStreamEventBytes = 4 << 20
 
@@ -191,6 +191,26 @@ type PIIDeidentifyRequest struct {
 	KeepAlive           any                    `json:"keep_alive,omitempty"`
 }
 
+// PIIDeidentifyStreamRequest is the request body for
+// POST /pii/deidentify/stream.
+type PIIDeidentifyStreamRequest struct {
+	Text                string                 `json:"text"`
+	Method              DeidentificationMethod `json:"method,omitempty"`
+	ModelName           string                 `json:"model_name,omitempty"`
+	ConfidenceThreshold *float64               `json:"confidence_threshold,omitempty"`
+	KeepYear            bool                   `json:"keep_year,omitempty"`
+	ShiftDates          *bool                  `json:"shift_dates,omitempty"`
+	DateShiftDays       *int                   `json:"date_shift_days,omitempty"`
+	KeepMapping         bool                   `json:"keep_mapping,omitempty"`
+	Policy              PrivacyPolicy          `json:"policy,omitempty"`
+	UseSmartMerging     *bool                  `json:"use_smart_merging,omitempty"`
+	UseSafetySweep      *bool                  `json:"use_safety_sweep,omitempty"`
+	Lang                PIILanguage            `json:"lang,omitempty"`
+	NormalizeAccents    *bool                  `json:"normalize_accents,omitempty"`
+	KeepAlive           any                    `json:"keep_alive,omitempty"`
+	ChunkSize           int                    `json:"chunk_size,omitempty"`
+}
+
 // PrivacyGatewayRequest is the request body for POST /privacy-gateway/complete.
 type PrivacyGatewayRequest struct {
 	Text                       string        `json:"text"`
@@ -228,6 +248,19 @@ type PIIExtractStreamEvent struct {
 	LatencyMS   *float64               `json:"latency_ms,omitempty"`
 	WindowChars *int                   `json:"window_chars,omitempty"`
 	Audit       JSONObject             `json:"audit"`
+}
+
+// PIIDeidentifyStreamEvent is one NDJSON object returned by
+// POST /pii/deidentify/stream. Mapping is present only when reversible mapping
+// was explicitly requested and must be handled as PHI.
+type PIIDeidentifyStreamEvent struct {
+	Type         string            `json:"type"`
+	Index        *int              `json:"index,omitempty"`
+	RedactedText string            `json:"redacted_text,omitempty"`
+	Audit        JSONObject        `json:"audit,omitempty"`
+	Spans        []JSONObject      `json:"spans,omitempty"`
+	Mapping      map[string]string `json:"mapping,omitempty"`
+	Error        *ErrorBody        `json:"error,omitempty"`
 }
 
 // ModelUnloadRequest is the request body for POST /models/unload. Provide a
@@ -585,6 +618,16 @@ type PIIExtractStream struct {
 	closed  bool
 }
 
+// PIIDeidentifyStream incrementally decodes the NDJSON response from
+// /pii/deidentify/stream. Callers must close the stream, normally with defer.
+type PIIDeidentifyStream struct {
+	body    io.ReadCloser
+	scanner *bufio.Scanner
+	event   PIIDeidentifyStreamEvent
+	err     error
+	closed  bool
+}
+
 // Next advances to the next event. It returns false at EOF or after an error.
 func (s *PIIExtractStream) Next() bool {
 	if s == nil || s.closed || s.err != nil {
@@ -642,6 +685,71 @@ func (s *PIIExtractStream) Close() error {
 }
 
 func (s *PIIExtractStream) closeBody() error {
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	return s.body.Close()
+}
+
+// Next advances to the next de-identification event. It returns false at EOF
+// or after an error.
+func (s *PIIDeidentifyStream) Next() bool {
+	if s == nil || s.closed || s.err != nil {
+		return false
+	}
+	if !s.scanner.Scan() {
+		if err := s.scanner.Err(); err != nil {
+			s.err = fmt.Errorf("openmed: read /pii/deidentify/stream event: %w", err)
+		}
+		_ = s.closeBody()
+		return false
+	}
+
+	var event PIIDeidentifyStreamEvent
+	if err := decodeJSONObject(
+		"/pii/deidentify/stream event",
+		s.scanner.Bytes(),
+		&event,
+	); err != nil {
+		s.err = err
+		_ = s.closeBody()
+		return false
+	}
+	if strings.TrimSpace(event.Type) == "" {
+		s.err = errors.New("openmed: /pii/deidentify/stream event has no type")
+		_ = s.closeBody()
+		return false
+	}
+	s.event = event
+	return true
+}
+
+// Event returns the event decoded by the most recent successful Next call.
+func (s *PIIDeidentifyStream) Event() PIIDeidentifyStreamEvent {
+	if s == nil {
+		return PIIDeidentifyStreamEvent{}
+	}
+	return s.event
+}
+
+// Err returns the first stream scanning or JSON decoding error, if any.
+func (s *PIIDeidentifyStream) Err() error {
+	if s == nil {
+		return nil
+	}
+	return s.err
+}
+
+// Close closes the response body. It is safe to call more than once.
+func (s *PIIDeidentifyStream) Close() error {
+	if s == nil {
+		return nil
+	}
+	return s.closeBody()
+}
+
+func (s *PIIDeidentifyStream) closeBody() error {
 	if s.closed {
 		return nil
 	}
@@ -841,6 +949,40 @@ func (c *Client) Deidentify(ctx context.Context, req PIIDeidentifyRequest) (*PII
 		return nil, err
 	}
 	return &out, nil
+}
+
+// DeidentifyStream calls POST /pii/deidentify/stream and returns an
+// incremental, bounded-per-event NDJSON decoder. The caller must close the
+// returned stream.
+func (c *Client) DeidentifyStream(ctx context.Context, req PIIDeidentifyStreamRequest) (*PIIDeidentifyStream, error) {
+	resp, err := c.do(
+		ctx,
+		http.MethodPost,
+		"/pii/deidentify/stream",
+		req,
+		"application/x-ndjson",
+	)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, apiErrorFromResponse(resp)
+	}
+	if !isNDJSONContentType(resp.Header.Get("Content-Type")) {
+		_ = resp.Body.Close()
+		return nil, errors.New(
+			"openmed: /pii/deidentify/stream returned a non-NDJSON response",
+		)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	initialBufferSize := 64 << 10
+	if c.maxStreamEventBytes < initialBufferSize {
+		initialBufferSize = c.maxStreamEventBytes
+	}
+	scanner.Buffer(make([]byte, initialBufferSize), c.maxStreamEventBytes)
+	return &PIIDeidentifyStream{body: resp.Body, scanner: scanner}, nil
 }
 
 // PrivacyGateway calls POST /privacy-gateway/complete.

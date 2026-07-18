@@ -88,6 +88,10 @@ export interface PIIDeidentifyRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface PIIDeidentifyStreamRequest extends PIIDeidentifyRequest {
+  chunk_size?: number;
+}
+
 export interface PrivacyGatewayRequest {
   text: string;
   model_name?: string;
@@ -220,6 +224,8 @@ export type AnalyzeResponse = PredictionResult;
 export type PIIExtractResponse = PredictionResult;
 
 export type PIIExtractStreamResponse = string;
+
+export type PIIDeidentifyStreamResponse = string;
 
 export interface HealthResponse {
   status: string;
@@ -421,13 +427,19 @@ export class OpenMedClient {
   async extractPiiStream(
     request: PIIExtractStreamRequest,
   ): Promise<PIIExtractStreamResponse> {
-    return this.post("/pii/extract/stream", request);
+    return this.postNDJSON("/pii/extract/stream", request);
   }
 
   async deidentify(
     request: PIIDeidentifyRequest,
   ): Promise<PIIDeidentifyResponse> {
     return this.post("/pii/deidentify", request);
+  }
+
+  async deidentifyStream(
+    request: PIIDeidentifyStreamRequest,
+  ): Promise<PIIDeidentifyStreamResponse> {
+    return this.postNDJSON("/pii/deidentify/stream", request);
   }
 
   async privacyGateway(
@@ -504,6 +516,29 @@ export class OpenMedClient {
     });
   }
 
+  private async postNDJSON(path: string, body: unknown): Promise<string> {
+    const response = await this.fetchImpl(this.url(path), {
+      method: "POST",
+      headers: {
+        accept: "application/x-ndjson",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new OpenMedApiError(
+        response.status,
+        toOpenMedErrorEnvelope(parsePayloadText(text), response.status),
+      );
+    }
+    if (!isNDJSONContentType(response.headers.get("content-type"))) {
+      throw new Error(`OpenMed stream ${path} returned a non-NDJSON response.`);
+    }
+    return text;
+  }
+
   private async request<T>(path: string, init: RequestInit): Promise<T> {
     const response = await this.fetchImpl(this.url(path), {
       ...init,
@@ -555,6 +590,10 @@ function smartBackendJobPath(template: string, jobId: string): string {
 
 async function readPayload(response: Response): Promise<unknown> {
   const text = await response.text();
+  return parsePayloadText(text);
+}
+
+function parsePayloadText(text: string): unknown {
   if (!text) {
     return null;
   }
@@ -564,6 +603,17 @@ async function readPayload(response: Response): Promise<unknown> {
   } catch {
     return text;
   }
+}
+
+function isNDJSONContentType(contentType: string | null): boolean {
+  if (!contentType) {
+    return false;
+  }
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === "application/x-ndjson" ||
+    mediaType === "application/ndjson"
+  );
 }
 
 function toOpenMedErrorEnvelope(
