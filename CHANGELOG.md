@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an opt-in, offline FHIR R4 profile checker for locally supplied WHO
+  SMART Guidelines implementation-guide packages, including cardinality,
+  fixed-value, locally enumerable binding, identifier/category slice, and
+  post-de-identification conformance checks (#1451).
 - Added local, structure-preserving de-identification for ODK Central,
   CommCare HQ, and KoBoToolbox JSON/CSV form exports, including XForm path
   semantics, repeat fidelity, safe unknown-text handling, geopoint

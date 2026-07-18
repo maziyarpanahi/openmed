@@ -98,6 +98,7 @@ nav:
       - FHIR Interop Helpers: fhir-interop.md
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
+      - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
