@@ -1,0 +1,13 @@
+{
+  "name": "raspberry-pi-5-8gb-sms-int8",
+  "reference": {
+    "cpu": "4-core Arm Cortex-A76",
+    "device": "Raspberry Pi 5 8GB",
+    "model_id": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android",
+    "model_revision": "79f7db205869b1be4be23ac4f42aa95bdedc5aee",
+    "p95_latency_ms": 1500.0,
+    "quantization": "int8"
+  },
+  "regression_tolerance": 0.2,
+  "schema_version": 1
+}

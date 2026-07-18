@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 
 import pytest
 
 from openmed.cli import main_module
+from openmed.core.offline import HF_OFFLINE_ENV_VARS, OfflineModeError
 from openmed.eval import harness
 from openmed.eval.report import BenchmarkReport
+from openmed.onnx.inference import OnnxModel
 
 
 def test_benchmark_pii_golden_writes_report_from_committed_fixtures(
@@ -202,3 +205,62 @@ def test_mobile_command_default_workload_writes_report_to_stdout(
     assert payload["tier"] == "base"
     assert payload["canonical_tier"] == "Base"
     assert payload["slo_results"]["p95_latency_ms"]["passed"] is True
+
+
+def test_latency_command_emits_offline_int8_json_and_blocks_sockets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeModel:
+        variant = "int8"
+        model_path = Path("model_int8.onnx")
+
+        def predict(self, text: str) -> list[object]:
+            return []
+
+    socket_guard_seen = False
+
+    def fake_from_pretrained(cls, model_id, **kwargs):
+        nonlocal socket_guard_seen
+        assert kwargs["variant"] == "int8"
+        assert kwargs["local_files_only"] is True
+        with pytest.raises(OfflineModeError, match="socket connection"):
+            socket.create_connection(("example.invalid", 443))
+        socket_guard_seen = True
+        return FakeModel()
+
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+    for name in HF_OFFLINE_ENV_VARS:
+        monkeypatch.setenv(name, "0")
+    monkeypatch.setattr(OnnxModel, "from_pretrained", classmethod(fake_from_pretrained))
+    output_path = tmp_path / "arm-latency.json"
+
+    result = main_module.main(
+        [
+            "benchmark",
+            "latency",
+            "--model",
+            str(tmp_path / "cached-model"),
+            "--warmup-runs",
+            "0",
+            "--repeat",
+            "1",
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert result == 0
+    assert socket_guard_seen is True
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["benchmark"] == "sms_arm_latency"
+    assert payload["offline"] is True
+    assert payload["model"]["artifact"] == "model_int8.onnx"
+    assert payload["model"]["quantization"] == "int8"
+    assert payload["latency_ms"]["p50"] >= 0.0
+    assert "throughput_texts_per_second" in payload
+    assert "peak_rss_mib" in payload
+    assert json.loads(output_path.read_text(encoding="utf-8")) == payload

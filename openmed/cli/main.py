@@ -1368,6 +1368,60 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     mobile_parser.set_defaults(handler=_handle_benchmark_mobile)
 
+    from openmed.eval import arm_latency as arm_latency_module
+
+    latency_parser = benchmark_sub.add_parser(
+        "latency",
+        help="Gate cached INT8 ONNX latency over synthetic SMS-scale text.",
+    )
+    latency_parser.add_argument(
+        "--model",
+        default=arm_latency_module.DEFAULT_ARM_LATENCY_MODEL,
+        help="Cached model repository id or local ONNX artifact directory.",
+    )
+    latency_parser.add_argument(
+        "--revision",
+        default=arm_latency_module.DEFAULT_ARM_LATENCY_MODEL_REVISION,
+        help="Pinned model revision recorded in the report.",
+    )
+    latency_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Optional pre-populated Hugging Face cache directory.",
+    )
+    latency_parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=arm_latency_module.DEFAULT_ARM_LATENCY_CORPUS,
+        help="Synthetic SMS-scale JSONL corpus.",
+    )
+    latency_parser.add_argument(
+        "--budget",
+        type=Path,
+        default=arm_latency_module.DEFAULT_ARM_LATENCY_BUDGET,
+        help="Committed ARM p95 budget JSON.",
+    )
+    latency_parser.add_argument(
+        "--warmup-runs",
+        type=int,
+        default=1,
+        help="Warm-up inferences excluded from the latency distribution.",
+    )
+    latency_parser.add_argument(
+        "--repeat",
+        type=int,
+        default=3,
+        help="Measured repetitions of the committed corpus.",
+    )
+    latency_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the JSON report; JSON is always emitted to stdout.",
+    )
+    latency_parser.set_defaults(handler=_handle_benchmark_latency)
+
     false_negatives_parser = benchmark_sub.add_parser(
         "false-negatives",
         help="Explore missed gold PHI spans from an error-analysis report.",
@@ -2454,6 +2508,50 @@ def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
         payload = {"reports": [report.to_dict() for report in reports]}
         human = json.dumps(payload, indent=2, sort_keys=True)
     return emit(args, payload, human=human)
+
+
+def _handle_benchmark_latency(args: argparse.Namespace) -> int:
+    from openmed.core.offline import network_blocked_if_offline
+    from openmed.eval import arm_latency as arm_latency_module
+    from openmed.onnx.inference import OnnxModel
+
+    try:
+        budget = arm_latency_module.load_arm_latency_budget(args.budget)
+        documents = arm_latency_module.load_latency_documents(args.corpus)
+        with network_blocked_if_offline(local_only=True):
+            model = OnnxModel.from_pretrained(
+                args.model,
+                variant="int8",
+                revision=str(args.revision),
+                cache_dir=args.cache_dir,
+                local_files_only=True,
+            )
+            report = arm_latency_module.run_arm_latency_benchmark(
+                model,
+                model_id=str(args.model),
+                model_revision=str(args.revision),
+                documents=documents,
+                budget=budget,
+                corpus_path=args.corpus,
+                warmup_runs=args.warmup_runs,
+                repeat=args.repeat,
+                metadata={"execution_provider": "CPUExecutionProvider"},
+            )
+        if args.output is not None:
+            report.write_json(args.output)
+    except (ImportError, OSError, RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"ARM latency benchmark failed: {exc}\n")
+        return 1
+
+    sys.stdout.write(report.to_json() + "\n")
+    if not report.passed:
+        sys.stderr.write(
+            "ARM latency budget exceeded: "
+            f"p95 {report.p95_ms:.3f} ms > "
+            f"{report.verdict.maximum_p95_ms:.3f} ms\n"
+        )
+        return 1
+    return 0
 
 
 def _handle_profile_memory(args: argparse.Namespace) -> int:

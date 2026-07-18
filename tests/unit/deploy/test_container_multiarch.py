@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DEPLOY_DOCKERFILE = ROOT / "deploy" / "docker" / "Dockerfile"
 ROOT_DOCKERFILE = ROOT / "Dockerfile"
 WORKFLOW = ROOT / ".github" / "workflows" / "container-multiarch.yml"
+ARM_LATENCY_DOCS = ROOT / "docs" / "benchmarks" / "arm-latency.md"
 DOCS = ROOT / "docs" / "deploy" / "multi-arch.md"
 MKDOCS = ROOT / "mkdocs.yml"
 
@@ -43,6 +44,31 @@ def test_multiarch_workflow_builds_manifest_and_smokes_each_platform():
     assert "openmed.deidentify" in content
     assert "linux/amd64" in content
     assert "linux/arm64" in content
+
+
+def test_multiarch_workflow_gates_native_arm_sms_latency_offline():
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "runs-on: ubuntu-24.04-arm" in content
+    assert 'test "$(uname -m)" = "aarch64"' in content
+    assert "test_intentionally_slowed_fixture_trips_gate" in content
+    assert 'OPENMED_OFFLINE: "1"' in content
+    assert "openmed benchmark latency" in content
+    assert "--output arm-latency-report.json" in content
+    assert "name: arm-latency-report" in content
+    assert "- arm-latency" in content
+
+
+def test_arm_latency_docs_record_budget_and_reproduction_commands():
+    content = ARM_LATENCY_DOCS.read_text(encoding="utf-8")
+
+    assert "Raspberry Pi 5 with 8 GB RAM" in content
+    assert "1,500 ms" in content
+    assert "1,800 ms" in content
+    assert "OPENMED_OFFLINE=1 openmed benchmark latency" in content
+    assert "model_int8.onnx" in content
+    assert "test_intentionally_slowed_fixture_trips_gate" in content
+    assert "test_latency_command_emits_offline_int8_json_and_blocks_sockets" in content
 
 
 def test_multiarch_docs_cover_supported_platforms_and_pull_commands():
