@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import builtins
 import importlib.util
+import subprocess
 import sys
 import time
 from pathlib import Path, PurePosixPath
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "release" / "api_surface_diff.py"
@@ -159,6 +162,23 @@ def test_full_package_extraction_is_ast_only_and_under_thirty_seconds(monkeypatc
 
 
 def test_real_migration_guide_covers_every_detected_break(tmp_path):
+    baseline = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            "v1.8.0^{commit}",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if baseline.returncode != 0:
+        pytest.skip(
+            "v1.8.0 is unavailable in this shallow checkout; tag builds fetch history"
+        )
     diff = api_surface_diff.compare_refs(ROOT, "v1.8.0", "WORKTREE")
     guide = ROOT / "docs" / "migration" / "1.8-to-1.9.md"
     text = guide.read_text(encoding="utf-8")
