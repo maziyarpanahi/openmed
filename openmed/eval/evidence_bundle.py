@@ -17,6 +17,9 @@ SCHEMA_VERSION = "openmed.gate_evidence_bundle.v1"
 MANIFEST_FILENAME = "manifest.json"
 SUMMARY_FILENAME = "summary.txt"
 
+#: Artifact id for the gold-corpus quality report attached to the bundle.
+GOLD_QUALITY_REPORT_ARTIFACT = "gold_quality_report"
+
 G1_G8 = ("G1a", "G1b", "G2", "G3", "G4", "G5", "G6", "G7", "G8")
 _GATE_ORDER = (
     "policy_profile",
