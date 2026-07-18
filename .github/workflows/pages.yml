@@ -4,25 +4,29 @@ on:
   push:
     branches: ["master"]
     tags: ["v*"]
+  pull_request:
+    branches: ["master"]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
+  group: "pages-${{ github.workflow }}-${{ github.ref }}"
   # Pages deployments should finish once started; cancelling them can leave
   # the final deploy-pages handoff in a failed state during merge bursts.
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -31,7 +35,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install documentation tooling
-        run: pip install ".[docs]"
+        run: python -m pip install ".[docs]"
       - name: Render public benchmark leaderboard
         shell: bash
         run: |
@@ -51,14 +55,35 @@ jobs:
           mkdocs build --strict
           test -s site/docs/llms.txt
           test -s site/docs/llms-full.txt
+      - name: Verify localized documentation trees
+        run: |
+          test -f site/docs/index.html
+          test -f site/docs/zh/index.html
+          test -f site/docs/zh/getting-started/index.html
+          test -f site/docs/zh/mlx-backend/index.html
+          test -f site/docs/hi/index.html
+          test -f site/docs/hi/getting-started/index.html
+          test -f site/docs/hi/mlx-backend/index.html
       - name: Bundle marketing site
         run: rsync -av docs/website/ site/
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
-      - name: Upload site/ as Pages artifact
+      - name: Upload site artifact
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./site
-      - name: Deploy to GitHub Pages
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+      - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v5
