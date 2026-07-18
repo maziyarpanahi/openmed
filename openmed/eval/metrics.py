@@ -2583,7 +2583,7 @@ def _mean_pairwise_span_f1(annotators: Sequence[Iterable[Any]]) -> float:
     scores: list[float] = []
     for i in range(len(coerced)):
         for j in range(i + 1, len(coerced)):
-            scores.append(compute_exact_span_f1(coerced[i], coerced[j]).f1)
+            scores.append(compute_relaxed_span_f1(coerced[i], coerced[j]).f1)
     return sum(scores) / len(scores) if scores else 1.0
 
 
@@ -2595,7 +2595,9 @@ def _label_agreement(items: Sequence[tuple[int, int]], rows: Sequence[Sequence[s
         agreed = all(category == row[0] for category in row)
         for label in set(row) - {_UNLABELED}:
             involved[label].append(1.0 if agreed else 0.0)
-    return {label: sum(values) / len(values) for label, values in involved.items()}
+    return {
+        label: sum(involved[label]) / len(involved[label]) for label in sorted(involved)
+    }
 
 
 def inter_annotator_agreement(
@@ -2613,12 +2615,15 @@ def inter_annotator_agreement(
 
     if len(annotators) < 2:
         raise ValueError("inter_annotator_agreement requires at least two annotators")
+    if relations is not None and len(relations) != len(annotators):
+        raise ValueError("relations must contain one mapping per annotator")
 
-    items, rows = _aligned_categories(annotators)
-    n_annotators = len(annotators)
+    materialized = [tuple(annotator) for annotator in annotators]
+    items, rows = _aligned_categories(materialized)
+    n_annotators = len(materialized)
 
-    cohen = cohen_kappa_agreement(*annotators) if n_annotators == 2 else None
-    fleiss = fleiss_kappa_agreement(annotators) if n_annotators >= 3 else None
+    cohen = cohen_kappa_agreement(*materialized) if n_annotators == 2 else None
+    fleiss = fleiss_kappa_agreement(materialized) if n_annotators >= 3 else None
 
     disagreements = tuple(
         {"offset": item, "labels": tuple(sorted(set(row) - {_UNLABELED}))}
@@ -2644,7 +2649,7 @@ def inter_annotator_agreement(
         n_items=len(items),
         cohen_kappa=cohen,
         fleiss_kappa=fleiss,
-        mean_span_f1=_mean_pairwise_span_f1(annotators),
+        mean_span_f1=_mean_pairwise_span_f1(materialized),
         per_label=_label_agreement(items, rows),
         per_relation=per_relation,
         disagreements=disagreements,

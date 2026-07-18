@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from examples import clinical_ner_families, gradio_deid_app
+from examples import clinical_ner_families, datasets_walkthrough, gradio_deid_app
 
 
 def test_clinical_ner_families_example_is_syntactically_valid():
@@ -160,3 +160,24 @@ def test_gradio_deid_app_missing_gradio_prints_hint(monkeypatch):
         gradio_deid_app.build_demo()
 
     assert "pip install gradio" in str(excinfo.value)
+
+
+def test_datasets_walkthrough_import_and_fixture_load_are_network_safe():
+    fixture = datasets_walkthrough.load_fixture()
+
+    assert datasets_walkthrough.fixture_path().is_file()
+    assert fixture["id"] == datasets_walkthrough.FIXTURE_ID
+    assert fixture["metadata"]["synthetic"] is True
+    assert fixture["text"]
+
+
+def test_datasets_walkthrough_reports_offline_unavailable(capsys, monkeypatch):
+    def unavailable_extractor(*args, **kwargs):
+        raise OSError("cached files not found")
+
+    monkeypatch.setattr(datasets_walkthrough, "extract_pii", unavailable_extractor)
+    datasets_walkthrough.run_walkthrough()
+
+    captured = capsys.readouterr().out
+    assert "Synthetic data: yes" in captured
+    assert "model unavailable offline" in captured
