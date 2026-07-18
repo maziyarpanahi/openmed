@@ -431,7 +431,12 @@ def canonical_policy_name(name: str | PolicyName) -> str:
 
     if isinstance(name, PolicyName):
         return name.value
-    normalized = str(name or "").strip().lower().replace("-", "_")
+    if not isinstance(name, str):
+        raise TypeError(
+            "policy must be a profile name string or a PolicyProfile object, "
+            f"got {type(name).__name__}"
+        )
+    normalized = name.strip().lower().replace("-", "_")
     if not normalized:
         raise ValueError("policy must not be blank")
     normalized = POLICY_ALIASES.get(normalized, normalized)
