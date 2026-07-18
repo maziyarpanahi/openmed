@@ -5,9 +5,9 @@ resolves OpenMed's ISO 639-1 codes (used everywhere else in the library) to
 the most appropriate Faker locale.
 
 Notes:
-- Telugu (``te``) has no Faker locale; we fall back to ``en_IN`` so generated
-  surrogates stay culturally adjacent. This is documented and surfaced to
-  callers as a ``UserWarning`` the first time it's used.
+- Telugu (``te``) has no Faker locale; non-script-specific values fall back to
+  ``en_IN`` and surface a one-time ``UserWarning``. Native Telugu name
+  surrogates bypass that approximate path and therefore do not warn.
 - Amharic (``am``) has no Faker locale; the conceptual ``am_ET`` locale uses
   ``en_KE`` as its runtime backend while curated Ethiopic surrogate data stays
   available through the language pack.
@@ -120,13 +120,21 @@ def _resolve_arabic_region(tag: str) -> str:
     return LANG_TO_LOCALE["ar"]
 
 
-def resolve_locale(lang: str, locale_override: str | None = None) -> str:
+def resolve_locale(
+    lang: str,
+    locale_override: str | None = None,
+    *,
+    warn_approximation: bool = True,
+) -> str:
     """Resolve a Faker locale for ``lang``.
 
     Args:
         lang: ISO 639-1 language code (``en``, ``fr``, ``de``, ...).
         locale_override: Caller-supplied Faker locale (e.g. ``pt_BR``) or
             documented region tag (e.g. ``ar-SA``); takes precedence.
+        warn_approximation: Emit the documented one-time warning when the
+            resolved Faker locale approximates ``lang``. Script-specific
+            providers set this false because they do not use Faker's name data.
 
     Returns:
         A Faker locale string.
@@ -146,7 +154,7 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
     if locale is None:
         return LANG_TO_LOCALE["en"]
 
-    if lang in _APPROXIMATE_LOCALES and lang not in _warned:
+    if warn_approximation and lang in _APPROXIMATE_LOCALES and lang not in _warned:
         backend = FAKER_BACKEND_LOCALE.get(locale)
         backend_note = f" backed by {backend!r}" if backend else ""
         warnings.warn(

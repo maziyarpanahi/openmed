@@ -25,6 +25,7 @@ Typical usage::
 
 from typing import Any
 
+from ..language_pack import LanguagePack, register_language_pack
 from .engine import Anonymizer, AnonymizerConfig
 from .locales import LANG_TO_LOCALE, resolve_locale
 from .providers.clinical_ids import IndiaSurrogateProvider
@@ -52,7 +53,9 @@ __all__ = [
     "IndiaSurrogateProvider",
     "LABEL_GENERATORS",
     "LANG_TO_LOCALE",
+    "LanguagePack",
     "register_clinical_provider",
+    "register_language_pack",
     "register_label_generator",
     "resolve_locale",
 ]
