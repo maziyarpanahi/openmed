@@ -59,7 +59,23 @@ from .object_storage import (
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
 from .text import TextProcessor, postprocess_text, preprocess_text
-from .tokenization import TokenizationHelper, infer_tokenizer_max_length
+from .tokenization import (
+    DEFAULT_DICTIONARY_LIMITS,
+    DictionaryArchiveError,
+    DictionaryEncodingError,
+    DictionaryEntryLimitError,
+    DictionaryEntryValidationError,
+    DictionaryExpansionLimitError,
+    DictionaryIngestionError,
+    DictionaryLimits,
+    DictionarySizeLimitError,
+    DictionarySourceError,
+    TokenizationHelper,
+    UserDictionaryEntry,
+    infer_tokenizer_max_length,
+    load_user_dictionary,
+    validate_user_dictionary_entry,
+)
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
 
 __all__ = [
@@ -68,6 +84,19 @@ __all__ = [
     "postprocess_text",
     "TokenizationHelper",
     "infer_tokenizer_max_length",
+    "DEFAULT_DICTIONARY_LIMITS",
+    "DictionaryArchiveError",
+    "DictionaryEncodingError",
+    "DictionaryEntryLimitError",
+    "DictionaryEntryValidationError",
+    "DictionaryExpansionLimitError",
+    "DictionaryIngestionError",
+    "DictionaryLimits",
+    "DictionarySizeLimitError",
+    "DictionarySourceError",
+    "UserDictionaryEntry",
+    "load_user_dictionary",
+    "validate_user_dictionary_entry",
     "get_tokenizer",
     "clear_tokenizer_cache",
     "OutputFormatter",
