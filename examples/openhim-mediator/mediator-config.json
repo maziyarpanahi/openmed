@@ -1,0 +1,40 @@
+{
+  "urn": "urn:openhim-mediator:openmed-deidentification",
+  "version": "1.9.1",
+  "name": "OpenMed De-identification Mediator",
+  "description": "Local-first FHIR and clinical free-text de-identification for OpenHIM",
+  "defaultChannelConfig": [
+    {
+      "name": "OpenMed De-identification",
+      "description": "De-identify clinical payloads inside the HIE boundary",
+      "urlPattern": "^/openmed/deidentify$",
+      "routes": [
+        {
+          "name": "OpenMed de-identification route",
+          "host": "openmed-mediator",
+          "path": "/openhim/deidentify",
+          "port": 8080,
+          "primary": true,
+          "type": "http"
+        }
+      ],
+      "allow": [
+        "admin"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "type": "http"
+    }
+  ],
+  "endpoints": [
+    {
+      "name": "OpenMed de-identification endpoint",
+      "host": "openmed-mediator",
+      "path": "/openhim/deidentify",
+      "port": 8080,
+      "primary": true,
+      "type": "http"
+    }
+  ]
+}
