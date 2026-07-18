@@ -44,6 +44,45 @@ jobs:
       working-directory: android
       run: ./gradlew :openmedkit:testDebugUnitTest --stacktrace
 
+    - name: Verify Android library budgets
+      working-directory: android
+      run: ./gradlew :openmedkit:verifyAndroidBudgets --continue --stacktrace
+
+    - name: Publish Android budget summary
+      if: always()
+      shell: bash
+      run: |
+        read_budget_value() {
+          awk -F= -v key="$2" '$1 == key { print $2 }' "$1"
+        }
+
+        aar_report="android/openmedkit/build/reports/budgets/release-aar-size.properties"
+        cold_start_report="android/openmedkit/build/reports/budgets/testDebugUnitTest-cold-start.properties"
+        aar_measured="not measured"
+        aar_budget="$(read_budget_value android/gradle/budgets.properties aar.maxBytes)"
+        aar_status="NOT RUN"
+        cold_start_measured="not measured"
+        cold_start_budget="$(read_budget_value android/gradle/budgets.properties coldStart.maxMillis)"
+        cold_start_status="NOT RUN"
+
+        if [[ -f "$aar_report" ]]; then
+          aar_measured="$(read_budget_value "$aar_report" measuredBytes)"
+          aar_status="$(read_budget_value "$aar_report" status)"
+        fi
+        if [[ -f "$cold_start_report" ]]; then
+          cold_start_measured="$(read_budget_value "$cold_start_report" measuredMillis)"
+          cold_start_status="$(read_budget_value "$cold_start_report" status)"
+        fi
+
+        {
+          echo "### Android library budgets"
+          echo
+          echo "| Gate | Measured | Budget | Status |"
+          echo "| --- | ---: | ---: | :---: |"
+          echo "| Release AAR size | ${aar_measured} bytes | ${aar_budget} bytes | ${aar_status} |"
+          echo "| Cold-start initialization | ${cold_start_measured} ms | ${cold_start_budget} ms | ${cold_start_status} |"
+        } >> "$GITHUB_STEP_SUMMARY"
+
     - name: Upload unit test report
       if: failure()
       uses: actions/upload-artifact@v7
