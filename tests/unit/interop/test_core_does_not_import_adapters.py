@@ -12,6 +12,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "presidio",
     "philter_ucsf",
     "polars",
+    "prefect",
     "pyDeid",
     "pydeid",
     "gliner",
@@ -59,6 +60,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "pandas",
         "philter",
         "polars",
+        "prefect",
         "presidio",
         "pydeid",
         "spacy",
@@ -75,6 +77,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("presidio").extra == "presidio"
     assert adapter_spec("philter").extra == "philter"
     assert adapter_spec("polars").extra == "polars"
+    assert adapter_spec("prefect").extra == "prefect"
     assert adapter_spec("pydeid").extra == "pydeid"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"

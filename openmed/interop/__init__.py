@@ -83,6 +83,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="polars",
         description="Polars DataFrame de-identification helpers",
     ),
+    "prefect": AdapterSpec(
+        name="prefect",
+        module="openmed.interop.prefect_tasks",
+        extra="prefect",
+        description="Prefect task and flow for batch de-identification",
+    ),
     "pydeid": AdapterSpec(
         name="pydeid",
         module="openmed.interop.pydeid",
