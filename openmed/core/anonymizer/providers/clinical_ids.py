@@ -585,6 +585,35 @@ class SpanishNIEProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Portuguese NIF / NIPC (9 digits with weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+# Leading digits and two-digit prefixes the generator may draw from; kept in
+# sync with ``validate_portuguese_nif`` so surrogates round-trip.
+_PORTUGUESE_NIF_LEADING = ("1", "2", "3", "5", "6", "8", "9")
+
+
+def generate_portuguese_nif(*, rng: random.Random | None = None) -> str:
+    """Generate a Portuguese NIF accepted by :func:`validate_portuguese_nif`."""
+    source = rng or random.Random()
+
+    first = source.choice(_PORTUGUESE_NIF_LEADING)
+    body = first + "".join(str(source.randint(0, 9)) for _ in range(7))
+    total = sum(int(body[index]) * (9 - index) for index in range(8))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return body + str(check)
+
+
+class PortugueseNIFProvider(BaseProvider):
+    """Generates Portuguese NIF values using Faker's instance RNG."""
+
+    def nif(self) -> str:
+        return generate_portuguese_nif(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -1117,6 +1146,47 @@ class IndonesianNIKProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Vietnamese CCCD / legacy CMND
+# ---------------------------------------------------------------------------
+
+
+def generate_vietnamese_cccd(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic CCCD accepted by its structural validator."""
+    from openmed.core.pii_i18n import validate_vietnamese_cccd
+
+    source = rng or random.Random()
+    for _ in range(20):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(12))
+        if len(set(candidate)) > 1 and validate_vietnamese_cccd(candidate):
+            return candidate
+    return "001203123456"
+
+
+def generate_vietnamese_cmnd(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic legacy CMND accepted by its structural validator."""
+    from openmed.core.pii_i18n import validate_vietnamese_cmnd
+
+    source = rng or random.Random()
+    for _ in range(20):
+        candidate = str(source.randint(1, 9)) + "".join(
+            str(source.randint(0, 9)) for _ in range(8)
+        )
+        if validate_vietnamese_cmnd(candidate):
+            return candidate
+    return "123456789"
+
+
+class VietnameseIdProvider(BaseProvider):
+    """Generates synthetic Vietnamese CCCD and legacy CMND values."""
+
+    def vietnamese_cccd(self) -> str:
+        return generate_vietnamese_cccd(rng=self.generator.random)
+
+    def vietnamese_cmnd(self) -> str:
+        return generate_vietnamese_cmnd(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Malaysian MyKad / NRIC (YYMMDD-PB-XXXX with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -1333,12 +1403,12 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
-# Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
+# Czech/Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
 # ---------------------------------------------------------------------------
 
 
 def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
-    """Generate a Slovak rodne cislo accepted by its checksum validator."""
+    """Generate a Czech/Slovak rodne cislo accepted by its checksum validator."""
     import calendar
 
     source = rng or random.Random()
@@ -1371,7 +1441,7 @@ def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
 
 
 class RodneCisloProvider(BaseProvider):
-    """Generates valid Slovak rodne cislo birth numbers."""
+    """Generates valid Czech/Slovak rodne cislo birth numbers."""
 
     def rodne_cislo(self) -> str:
         return generate_rodne_cislo(rng=self.generator.random)
@@ -1872,7 +1942,9 @@ __all__ = [
     "RodneCisloProvider",
     "SerbianJmbgProvider",
     "ThaiNationalIdProvider",
+    "VietnameseIdProvider",
     "SpanishDNIProvider",
+    "PortugueseNIFProvider",
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
@@ -1900,9 +1972,12 @@ __all__ = [
     "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_romanian_cnp",
+    "generate_portuguese_nif",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
+    "generate_vietnamese_cccd",
+    "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
