@@ -17,11 +17,13 @@ from openmed.core.anonymizer.providers import (
     generate_hungarian_taj,
 )
 from openmed.core.anonymizer.providers.clinical_ids import (
+    generate_belgian_rrn,
     generate_bulgarian_egn,
     generate_estonian_isikukood,
     generate_jmbg,
     generate_philhealth_pin,
     generate_portuguese_nif,
+    generate_swiss_ahv,
     generate_vietnamese_cccd,
     generate_vietnamese_cmnd,
 )
@@ -38,6 +40,7 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
     get_patterns_for_language,
+    validate_belgian_rrn,
     validate_bic,
     validate_bulgarian_egn,
     validate_croatian_oib,
@@ -66,6 +69,7 @@ from openmed.core.pii_i18n import (
     validate_portuguese_nif,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_swiss_ahv,
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_vietnamese_cccd,
@@ -341,6 +345,204 @@ class TestValidateDutchBSN:
 
     def test_invalid_bsn_wrong_length(self):
         assert validate_dutch_bsn("1234567") is False
+
+
+# ---------------------------------------------------------------------------
+# Belgian RRN and Swiss AHV Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateBelgianRRN:
+    """Tests for validate_belgian_rrn()."""
+
+    def test_valid_pre_2000_rrn(self):
+        assert validate_belgian_rrn("42.01.22-051.81") is True
+
+    def test_valid_post_2000_rrn_uses_prefixed_checksum(self):
+        assert validate_belgian_rrn("00.01.01-001.05") is True
+        assert validate_belgian_rrn("00010100105") is True
+
+    def test_invalid_rrn_wrong_checksum(self):
+        assert validate_belgian_rrn("42.01.22-051.82") is False
+        assert validate_belgian_rrn("00.01.01-001.06") is False
+
+    def test_invalid_rrn_embedded_date_or_sequence(self):
+        assert validate_belgian_rrn("00.02.30-001.15") is False
+        assert validate_belgian_rrn("42.01.22-000.35") is False
+
+    def test_generated_rrns_round_trip_both_century_paths(self):
+        generated = {
+            generate_belgian_rrn(rng=random.Random(seed)) for seed in range(80)
+        }
+        assert all(validate_belgian_rrn(value) for value in generated)
+        checksum_paths = set()
+        for value in generated:
+            digits = re.sub(r"\D", "", value)
+            body = digits[:9]
+            control = int(digits[9:])
+            if control == 97 - (int(body) % 97):
+                checksum_paths.add("pre_2000")
+            if control == 97 - (int(f"2{body}") % 97):
+                checksum_paths.add("post_2000")
+        assert checksum_paths == {"pre_2000", "post_2000"}
+
+
+class TestValidateSwissAHV:
+    """Tests for validate_swiss_ahv()."""
+
+    def test_valid_ahv_plain_and_formatted(self):
+        assert validate_swiss_ahv("7561234567897") is True
+        assert validate_swiss_ahv("756.1234.5678.97") is True
+
+    def test_invalid_ahv_wrong_checksum(self):
+        assert validate_swiss_ahv("756.1234.5678.96") is False
+
+    def test_invalid_ahv_wrong_prefix_even_with_valid_ean_check(self):
+        assert validate_swiss_ahv("7571234567896") is False
+
+    def test_generated_ahv_round_trips(self):
+        for seed in range(40):
+            assert validate_swiss_ahv(generate_swiss_ahv(rng=random.Random(seed)))
+
+
+@pytest.mark.parametrize(
+    ("language", "locale", "context", "value", "validator"),
+    [
+        (
+            "fr",
+            "fr_BE",
+            "Numéro de registre national",
+            "42.01.22-051.81",
+            validate_belgian_rrn,
+        ),
+        ("nl", "nl_BE", "Rijksregisternummer", "42.01.22-051.81", validate_belgian_rrn),
+        (
+            "de",
+            "de_BE",
+            "Nationalregisternummer",
+            "42.01.22-051.81",
+            validate_belgian_rrn,
+        ),
+        ("fr", "fr_CH", "Numéro AVS", "756.1234.5678.97", validate_swiss_ahv),
+        ("de", "de_CH", "AHV-Nummer", "756.1234.5678.97", validate_swiss_ahv),
+        ("it", "it_CH", "Numero AVS", "756.1234.5678.97", validate_swiss_ahv),
+    ],
+)
+def test_belgian_and_swiss_locale_patterns_require_context_and_validate(
+    language,
+    locale,
+    context,
+    value,
+    validator,
+):
+    from openmed.core.safety_sweep import safety_sweep
+
+    locale_patterns = [
+        pattern
+        for pattern in get_patterns_for_language(language, locale=locale)
+        if pattern.entity_type == "national_id" and pattern.validator is validator
+    ]
+    assert locale_patterns
+    assert all(pattern.safety_sweep_requires_context for pattern in locale_patterns)
+
+    contextual = f"{context}: {value}"
+    entities = safety_sweep(contextual, [], lang=language, locale=locale)
+    assert any(entity.text == value for entity in entities)
+
+    no_context = safety_sweep(value, [], lang=language, locale=locale)
+    assert not any(entity.text == value for entity in no_context)
+
+
+@pytest.mark.parametrize(
+    ("language", "locale", "text"),
+    [
+        ("nl", "nl_BE", "Rijksregisternummer: 42.01.22-051.82"),
+        ("de", "de_CH", "AHV-Nummer: 756.1234.5678.96"),
+    ],
+)
+def test_belgian_and_swiss_locale_patterns_reject_bad_checksums(
+    language,
+    locale,
+    text,
+):
+    from openmed.core.safety_sweep import safety_sweep
+
+    entities = safety_sweep(text, [], lang=language, locale=locale)
+    assert not any(entity.label == "national_id" for entity in entities)
+
+
+@pytest.mark.parametrize(
+    ("language", "locale", "validator"),
+    [
+        ("fr", "fr_BE", validate_belgian_rrn),
+        ("nl", "nl_BE", validate_belgian_rrn),
+        ("de", "de_BE", validate_belgian_rrn),
+        ("fr", "fr_CH", validate_swiss_ahv),
+        ("de", "de_CH", validate_swiss_ahv),
+        ("it", "it_CH", validate_swiss_ahv),
+    ],
+)
+def test_belgian_and_swiss_locale_dispatch_generates_valid_surrogates(
+    language,
+    locale,
+    validator,
+):
+    anon = Anonymizer(lang=language, consistent=True, seed=42)
+
+    surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
+
+    assert validator(surrogate)
+
+
+@pytest.mark.parametrize("country", ["be", "ch"])
+def test_belgian_and_swiss_golden_fixtures_deidentify_without_leakage_offline(
+    country,
+):
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.golden import GoldenFixture
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path(f"openmed/eval/golden/{country}.jsonl")
+    fixture = GoldenFixture.from_mapping(
+        json.loads(fixture_path.read_text(encoding="utf-8").strip())
+    )
+    locale = fixture.metadata["locale"]
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-19T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+        locale=locale,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=locale,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    assert result.deidentified_text == fixture.expected_output["text"]
+    for span in fixture.gold_spans:
+        assert fixture.text[span.start : span.end] == span.text
+        assert span.text not in result.deidentified_text
 
 
 # ---------------------------------------------------------------------------
