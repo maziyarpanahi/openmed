@@ -10,7 +10,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from examples import clinical_ner_families, datasets_walkthrough, gradio_deid_app
+from examples import (
+    clinical_ner_families,
+    datasets_walkthrough,
+    gradio_deid_app,
+    onboarding_china_mirrors,
+)
 
 
 def test_clinical_ner_families_example_is_syntactically_valid():
@@ -181,3 +186,84 @@ def test_datasets_walkthrough_reports_offline_unavailable(capsys, monkeypatch):
     captured = capsys.readouterr().out
     assert "Synthetic data: yes" in captured
     assert "model unavailable offline" in captured
+
+
+def test_onboarding_china_mirrors_example_is_syntactically_valid():
+    source = Path("examples/onboarding_china_mirrors.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
+def test_onboarding_china_mirrors_configures_download_endpoint(monkeypatch):
+    calls = []
+
+    def fake_snapshot_download(**kwargs):
+        assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
+        assert "HF_HUB_OFFLINE" not in os.environ
+        assert "TRANSFORMERS_OFFLINE" not in os.environ
+        calls.append(kwargs)
+        return "/cache/downloaded-snapshot"
+
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+    path = onboarding_china_mirrors.predownload_model(loader=fake_snapshot_download)
+
+    assert path == Path("/cache/downloaded-snapshot")
+    assert calls == [
+        {
+            "repo_id": onboarding_china_mirrors.DEFAULT_MODEL_ID,
+            "repo_type": "model",
+            "local_files_only": False,
+        }
+    ]
+    assert os.environ["HF_HUB_OFFLINE"] == "1"
+    assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+
+
+def test_onboarding_china_mirrors_loads_cache_without_network(monkeypatch):
+    calls = []
+
+    def fake_snapshot_download(**kwargs):
+        assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        calls.append(kwargs)
+        return "/cache/offline-snapshot"
+
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+
+    path = onboarding_china_mirrors.load_cached_model(loader=fake_snapshot_download)
+
+    assert path == Path("/cache/offline-snapshot")
+    assert calls == [
+        {
+            "repo_id": onboarding_china_mirrors.DEFAULT_MODEL_ID,
+            "repo_type": "model",
+            "local_files_only": True,
+        }
+    ]
+    assert "HF_ENDPOINT" not in os.environ
+    assert "HF_HUB_OFFLINE" not in os.environ
+    assert "TRANSFORMERS_OFFLINE" not in os.environ
+
+
+def test_onboarding_china_mirrors_run_defaults_to_offline_cache(
+    capsys,
+    monkeypatch,
+):
+    def fake_snapshot_download(**kwargs):
+        assert kwargs["local_files_only"] is True
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        return "/cache/offline-snapshot"
+
+    monkeypatch.delenv(onboarding_china_mirrors.ALLOW_DOWNLOAD_ENV, raising=False)
+
+    path = onboarding_china_mirrors.run(loader=fake_snapshot_download)
+
+    assert path == Path("/cache/offline-snapshot")
+    captured = capsys.readouterr().out
+    assert "Offline cache-only mode" in captured
+    assert "Resolved cached model" in captured

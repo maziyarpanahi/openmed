@@ -18,6 +18,8 @@ nav:
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - Persona Quickstarts: quickstarts.md
+      - China Onboarding: onboarding-china.md
+      - 中国用户上手指南: onboarding-china.zh.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
