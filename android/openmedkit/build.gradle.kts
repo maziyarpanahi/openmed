@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -65,6 +67,7 @@ android {
         // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
         targetSdk = 33
+        consumerProguardFiles("consumer-rules.pro")
     }
 
     compileOptions {
@@ -108,6 +111,44 @@ tasks.matching { it.name.endsWith("Assets") }.configureEach {
 
 tasks.matching { it.name.startsWith("test") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
+}
+
+val verifyReleaseConsumerRules by tasks.registering {
+    group = "verification"
+    description = "Verifies that the release AAR contains OpenMedKit consumer rules."
+    dependsOn("bundleReleaseAar")
+
+    val releaseAar = layout.buildDirectory.file("outputs/aar/openmedkit-release.aar")
+    inputs.file(layout.projectDirectory.file("consumer-rules.pro"))
+    inputs.file(releaseAar)
+
+    doLast {
+        val aarFile = releaseAar.get().asFile
+        check(aarFile.isFile) {
+            "Release AAR was not created at ${aarFile.absolutePath}"
+        }
+
+        val packagedRules = ZipFile(aarFile).use { archive ->
+            val rulesEntry = archive.getEntry("proguard.txt")
+                ?: throw GradleException(
+                    "Release AAR does not contain the packaged consumer rules at proguard.txt.",
+                )
+            archive.getInputStream(rulesEntry).bufferedReader().use { it.readText() }
+        }
+        listOf(
+            "com.openmed.openmedkit.BackendOnnxTokenClassifier",
+            "ai.onnxruntime.**",
+            "com.openmed.openmedkit.catalog.ModelCatalogEntry",
+        ).forEach { requiredRule ->
+            check(requiredRule in packagedRules) {
+                "Release AAR consumer rules are missing $requiredRule"
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy(verifyReleaseConsumerRules)
 }
 
 val verifyReleasePublicationVersion by tasks.registering {
