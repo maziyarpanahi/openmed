@@ -12,6 +12,7 @@ transition biases consumed by the OpenAI privacy-filter family.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Final, Sequence
 
 # ---------------------------------------------------------------------------
@@ -70,6 +71,15 @@ class TokenLabelInfo:
             self.token_boundary_tags[index] = boundary
 
 
+@dataclass(frozen=True)
+class IncrementalViterbiState:
+    """Resumable Viterbi score state at a committed token boundary."""
+
+    token_count: int
+    scores: tuple[float, ...]
+    last_backpointer: tuple[int, ...] = ()
+
+
 def build_label_info(id2label: dict[int, str]) -> TokenLabelInfo:
     """Construct a ``TokenLabelInfo`` from a ``{id: label_string}`` map."""
     class_names = [id2label[index] for index in sorted(id2label)]
@@ -79,6 +89,15 @@ def build_label_info(id2label: dict[int, str]) -> TokenLabelInfo:
 def zero_viterbi_biases() -> dict[str, float]:
     """Return a zero-initialized bias dict keyed by ``VITERBI_BIAS_KEYS``."""
     return {key: 0.0 for key in VITERBI_BIAS_KEYS}
+
+
+def resolve_viterbi_biases(biases: dict[str, float]) -> dict[str, float]:
+    """Return only supported Viterbi biases with missing keys filled as zero."""
+    resolved_biases = zero_viterbi_biases()
+    resolved_biases.update(
+        {key: float(value) for key, value in biases.items() if key in resolved_biases}
+    )
+    return resolved_biases
 
 
 # ---------------------------------------------------------------------------
@@ -235,27 +254,73 @@ def viterbi_decode(
         likely BIOES-valid path. Falls back to a per-token argmax when
         no finite-score path exists (e.g. degenerate label space).
     """
-    if not token_logprobs:
-        return []
-
-    resolved_biases = zero_viterbi_biases()
-    resolved_biases.update(
-        {key: float(value) for key, value in biases.items() if key in resolved_biases}
+    decoded, _ = viterbi_decode_incremental(
+        token_logprobs,
+        label_info=label_info,
+        biases=biases,
     )
+    return decoded
+
+
+def viterbi_decode_incremental(
+    token_logprobs: list[list[float]],
+    *,
+    label_info: TokenLabelInfo,
+    biases: dict[str, float],
+    state: IncrementalViterbiState | None = None,
+) -> tuple[list[int], IncrementalViterbiState]:
+    """Decode a suffix and return Viterbi state for the new boundary.
+
+    ``state`` is the dynamic-programming score vector at the previously
+    committed token boundary. Supplying it lets callers decode only the newly
+    affected suffix instead of replaying tokens from zero. The returned path
+    contains labels only for ``token_logprobs``.
+    """
+    resolved_biases = resolve_viterbi_biases(biases)
     start_scores, end_scores, transition_scores = _build_viterbi_scores(
         label_info,
         resolved_biases,
     )
 
     num_classes = len(label_info.token_to_span_label)
+    if state is not None and len(state.scores) != num_classes:
+        raise ValueError("incremental Viterbi state does not match label space")
+
+    if not token_logprobs:
+        if state is not None:
+            return [], state
+        return [], IncrementalViterbiState(
+            token_count=0,
+            scores=tuple(start_scores),
+            last_backpointer=(),
+        )
+
     if any(len(row) < num_classes for row in token_logprobs):
         raise ValueError(
             "token_logprobs has fewer classes than the configured label space"
         )
-    scores = [token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)]
+
+    if state is None:
+        scores = [
+            token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)
+        ]
+        start_index = 1
+        token_count = 1
+    else:
+        scores = []
+        for next_idx in range(num_classes):
+            best_score = -math.inf
+            for previous_idx, previous_score in enumerate(state.scores):
+                score = previous_score + transition_scores[previous_idx][next_idx]
+                if score > best_score:
+                    best_score = score
+            scores.append(best_score + token_logprobs[0][next_idx])
+        start_index = 1
+        token_count = state.token_count + 1
+
     backpointers: list[list[int]] = []
 
-    for token_scores in token_logprobs[1:]:
+    for token_scores in token_logprobs[start_index:]:
         next_scores: list[float] = []
         paths: list[int] = []
         for next_idx in range(num_classes):
@@ -270,12 +335,22 @@ def viterbi_decode(
             paths.append(best_idx)
         scores = next_scores
         backpointers.append(paths)
+        token_count += 1
 
     final_scores = [score + end_scores[idx] for idx, score in enumerate(scores)]
+    next_state = IncrementalViterbiState(
+        token_count=token_count,
+        scores=tuple(scores),
+        last_backpointer=tuple(backpointers[-1]) if backpointers else (),
+    )
     if not any(math.isfinite(score) for score in final_scores):
-        return [
-            max(range(num_classes), key=lambda idx: row[idx]) for row in token_logprobs
-        ]
+        return (
+            [
+                max(range(num_classes), key=lambda idx: row[idx])
+                for row in token_logprobs
+            ],
+            next_state,
+        )
 
     last_label = max(range(num_classes), key=lambda idx: final_scores[idx])
     path = [last_label]
@@ -283,7 +358,7 @@ def viterbi_decode(
         last_label = paths[last_label]
         path.append(last_label)
     path.reverse()
-    return path
+    return path, next_state
 
 
 def labels_to_token_spans(

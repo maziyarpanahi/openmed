@@ -12,21 +12,12 @@ Key Features:
     - Integration with OpenMed's existing NER infrastructure
 
 Example:
-    >>> from openmed import extract_pii, deidentify
-    >>>
-    >>> # Extract PII entities
-    >>> result = extract_pii("Dr. Smith called John Doe at 555-1234")
-    >>> len(result.entities) > 0
-    True
-
-    >>> # De-identify with masking
-    >>> deid = deidentify(
-    ...     "Patient John Doe (DOB: 01/15/1970) at 555-123-4567",
-    ...     method="mask",
-    ...     keep_year=True
+    >>> from openmed import reidentify
+    >>> reidentify(
+    ...     "Patient [NAME] called [PHONE]",
+    ...     {"[NAME]": "Casey Example", "[PHONE]": "555-0100"},
     ... )
-    >>> print(deid.deidentified_text)
-    Patient [NAME] (DOB: [DATE]/1970) at [PHONE]
+    'Patient Casey Example called 555-0100'
 """
 
 from __future__ import annotations
@@ -37,19 +28,27 @@ import random
 import re
 import unicodedata
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
+from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
+from .date_shift import (
+    DEFAULT_DATE_SHIFT_MAX_DAYS,
+    stable_offset_for,
+)
+from .offline import network_blocked_if_offline
+from .script_detect import DetectionNormalization, normalize_for_pii_detection
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
     from .models import ModelLoader
+    from .surrogate_vault import SurrogateVault
 
 from .result_cache import (
     get_result_cache,
@@ -57,7 +56,90 @@ from .result_cache import (
 )
 
 # Type alias for de-identification methods
-DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
+DEIDENTIFICATION_METHODS = (
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+)
+DeidentificationMethod = Literal[
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
+
+
+class MissingOptionalDependencyError(ImportError):
+    """Raised when a requested optional capability needs an unavailable package."""
+
+    def __init__(
+        self,
+        *,
+        package: str,
+        feature: str,
+        extra: str | None = None,
+    ) -> None:
+        instruction = _optional_dependency_install_instruction(package, extra)
+        super().__init__(
+            f"{feature} requires optional dependency '{package}'. {instruction}"
+        )
+        self.package = package
+        self.feature = feature
+        self.extra = extra
+
+
+def _optional_dependency_install_instruction(
+    package: str,
+    extra: str | None = None,
+) -> str:
+    if extra:
+        return (
+            f"Install it with `pip install openmed[{extra}]` "
+            f"or `pip install {package}`."
+        )
+    return f"Install it with `pip install {package}`."
+
+
+def _optional_dependency_status(
+    *,
+    package: str,
+    feature: str,
+    available: bool,
+    skipped: bool,
+    extra: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    status: dict[str, Any] = {
+        "feature": feature,
+        "dependency": package,
+        "available": available,
+        "skipped": skipped,
+        "install": _optional_dependency_install_instruction(package, extra),
+    }
+    if extra is not None:
+        status["extra"] = extra
+    if reason is not None:
+        status["reason"] = reason
+    return status
+
+
+def _raise_missing_optional_dependency(
+    *,
+    package: str,
+    feature: str,
+    extra: str | None = None,
+    cause: ImportError | None = None,
+) -> NoReturn:
+    raise MissingOptionalDependencyError(
+        package=package,
+        feature=feature,
+        extra=extra,
+    ) from cause
 
 
 @dataclass
@@ -159,6 +241,25 @@ class DeidentificationResult:
             ),
         }
 
+    def _repr_html_(self) -> str:
+        """Render a highlighted-span HTML view for Jupyter/IPython notebooks.
+
+        IPython calls this automatically to display the result inline,
+        highlighting each detected PII span over the original text. Confidence
+        values are suppressed for this implicit representation; callers can opt
+        into them explicitly with :func:`openmed.processing.show`. The helper is
+        imported lazily so importing this module never requires display
+        dependencies.
+        """
+        from ..processing.display import render_spans_html
+
+        return render_spans_html(
+            self.original_text,
+            self.pii_entities,
+            title=f"deidentify · {self.method}",
+            show_confidence=False,
+        )
+
     def to_dataframe(self) -> Any:
         """Convert detected PII entities to a pandas DataFrame.
 
@@ -226,7 +327,7 @@ _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset(
-    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"}
+    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr", "cs"}
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
@@ -278,7 +379,7 @@ def _is_privacy_filter_artifact_path(model_name: str) -> bool:
             continue
 
         try:
-            payload = json.loads(candidate.read_text())
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
 
@@ -402,6 +503,7 @@ def _extract_pii_via_privacy_filter(
     original_text: str,
     do_normalize: bool,
     pipeline: Optional[Any] = None,
+    config: Optional[OpenMedConfig] = None,
 ):
     """Run privacy-filter inference via the MLX/Torch backend dispatcher.
 
@@ -412,9 +514,13 @@ def _extract_pii_via_privacy_filter(
     if pipeline is None:
         from .backends import create_privacy_filter_pipeline
 
-        pipeline = create_privacy_filter_pipeline(model_name)
+        if config is None:
+            pipeline = create_privacy_filter_pipeline(model_name)
+        else:
+            pipeline = create_privacy_filter_pipeline(model_name, config=config)
 
-    raw = pipeline(text)
+    with network_blocked_if_offline(config):
+        raw = pipeline(text)
     return _prediction_result_from_privacy_filter_raw(
         raw,
         text,
@@ -464,12 +570,21 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     return model_name
 
 
+@dataclass(frozen=True)
+class _PreparedPIIText:
+    original_text: str
+    inference_text: str
+    do_normalize: bool
+    detection_normalization: DetectionNormalization
+
+
 def _prepare_pii_text(
     text: str,
     *,
     lang: str,
     normalize_accents: Optional[bool],
-) -> tuple[str, str, bool]:
+    config: Optional[OpenMedConfig] = None,
+) -> _PreparedPIIText:
     """Return original stripped text, inference text, and normalization flag."""
     do_normalize = (
         normalize_accents
@@ -478,17 +593,105 @@ def _prepare_pii_text(
     )
 
     original_text = text.strip()
-    inference_text = _strip_accents(original_text) if do_normalize else original_text
-    return original_text, inference_text, do_normalize
+    width_convention = config.cjk_width_convention if config is not None else "cjk"
+    detection_normalization = normalize_for_pii_detection(
+        original_text,
+        width_convention=width_convention,
+    )
+    inference_text = detection_normalization.text
+    if do_normalize:
+        inference_text = _strip_accents(inference_text)
+    return _PreparedPIIText(
+        original_text=original_text,
+        inference_text=inference_text,
+        do_normalize=bool(do_normalize)
+        or detection_normalization.changed
+        or detection_normalization.mixed_script,
+        detection_normalization=detection_normalization,
+    )
 
 
-def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> None:
-    """Apply semantic-unit PII merging in place."""
+def _replace_analysis_result(result: Any, **updates: Any) -> Any:
+    """Return ``result`` with analysis-result updates applied compatibly."""
+    from .results import AnalyzeResult
+
+    if isinstance(result, AnalyzeResult):
+        return replace(result, **updates)
+
+    for key, value in updates.items():
+        setattr(result, key, value)
+    if "entities" in updates:
+        result.num_entities = len(updates["entities"])
+    return result
+
+
+def _mutable_prediction_result(result: Any) -> Any:
+    """Return a mutable prediction result for internal PII post-processing."""
+    from .results import AnalyzeResult
+
+    if not isinstance(result, AnalyzeResult):
+        return result
+    return PredictionResult(
+        text=result.text,
+        entities=list(result.entities),
+        model_name=result.model_name,
+        timestamp=result.timestamp,
+        processing_time=result.processing_time,
+        metadata=dict(result.metadata) if result.metadata is not None else None,
+    )
+
+
+def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
+    """Map normalized inference spans back to the original input text."""
+    normalization = prepared.detection_normalization
+    if (
+        result.text == prepared.original_text
+        and not normalization.changed
+        and not normalization.mixed_script
+    ):
+        return result
+
+    entities: list[EntityPrediction] = []
+    for entity in result.entities:
+        start = int(entity.start or 0)
+        end = int(entity.end or start)
+        original_start, original_end = normalization.remap_span(start, end)
+        metadata = dict(entity.metadata or {})
+        metadata.setdefault("unicode_defense", normalization.to_metadata())
+        entities.append(
+            EntityPrediction(
+                text=prepared.original_text[original_start:original_end],
+                label=entity.label,
+                start=original_start,
+                end=original_end,
+                confidence=entity.confidence,
+                metadata=metadata,
+            )
+        )
+
+    metadata = dict(getattr(result, "metadata", None) or {})
+    metadata["unicode_defense"] = normalization.to_metadata()
+    return _replace_analysis_result(
+        result,
+        text=prepared.original_text,
+        entities=entities,
+        metadata=metadata,
+    )
+
+
+def _apply_pii_smart_merging(
+    result: Any,
+    effective_model: str,
+    lang: str,
+    *,
+    locale: Optional[str] = None,
+) -> Any:
+    """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
     from .pii_i18n import get_patterns_for_language
 
-    lang_patterns = get_patterns_for_language(lang)
+    lang_patterns = get_patterns_for_language(lang, locale=locale)
     entity_dicts = [
         {
             "entity_type": e.label,
@@ -515,17 +718,27 @@ def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> No
         allow_label_expansion=not model_led_merging,
     )
 
-    result.entities = [
+    merged_entities = [
         EntityPrediction(
             text=e["word"],
             label=e["entity_type"],
             start=e["start"],
             end=e["end"],
             confidence=e["score"],
+            metadata=(
+                {
+                    "semantic_merge": {
+                        "source_labels": list(e.get("source_labels", ())),
+                        "mixed_label_union": bool(e.get("mixed_label_union", False)),
+                    }
+                }
+                if e.get("source_labels")
+                else None
+            ),
         )
         for e in merged_dicts
     ]
-    result.num_entities = len(result.entities)
+    return _replace_analysis_result(result, entities=merged_entities)
 
 
 def _extract_pii_batch(
@@ -536,7 +749,9 @@ def _extract_pii_batch(
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
+    custom_recognizer: Any = None,
     *,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -548,6 +763,7 @@ def _extract_pii_batch(
             text,
             lang=lang,
             normalize_accents=normalize_accents,
+            config=config,
         )
         for text in texts
     ]
@@ -562,29 +778,31 @@ def _extract_pii_batch(
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
 
-        pipeline = privacy_filter_pipeline or create_privacy_filter_pipeline(
-            effective_model
-        )
-        inference_texts = [item[1] for item in prepared]
+        if privacy_filter_pipeline is not None:
+            pipeline = privacy_filter_pipeline
+        elif config is None:
+            pipeline = create_privacy_filter_pipeline(effective_model)
+        else:
+            pipeline = create_privacy_filter_pipeline(effective_model, config=config)
+        inference_texts = [item.inference_text for item in prepared]
         privacy_call_kwargs = {
             key: pipeline_kwargs[key]
             for key in ("batch_size", "num_workers")
             if key in pipeline_kwargs and pipeline_kwargs[key] is not None
         }
-        raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
+        with network_blocked_if_offline(config):
+            raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
             _prediction_result_from_privacy_filter_raw(
                 raw,
-                inference_text,
+                item.inference_text,
                 model_name=effective_model,
                 confidence_threshold=confidence_threshold,
-                original_text=original_text,
-                do_normalize=do_normalize,
+                original_text=item.inference_text,
+                do_normalize=False,
             )
-            for raw, (original_text, inference_text, do_normalize) in zip(
-                batched_raw, prepared
-            )
+            for raw, item in zip(batched_raw, prepared)
         ]
     else:
         from .. import analyze_text
@@ -594,9 +812,9 @@ def _extract_pii_batch(
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
-        for original_text, inference_text, do_normalize in prepared:
+        for item in prepared:
             result = analyze_text(
-                inference_text,
+                item.inference_text,
                 model_name=effective_model,
                 confidence_threshold=confidence_threshold,
                 config=config,
@@ -604,25 +822,24 @@ def _extract_pii_batch(
                 group_entities=True,
                 **pipeline_kwargs,
             )
-
-            if do_normalize and original_text != inference_text:
-                result.text = original_text
-                result.entities = [
-                    EntityPrediction(
-                        text=original_text[e.start : e.end],
-                        label=e.label,
-                        start=e.start,
-                        end=e.end,
-                        confidence=e.confidence,
-                    )
-                    for e in result.entities
-                ]
-
+            result = _mutable_prediction_result(result)
             results.append(result)
 
     if use_smart_merging and not uses_privacy_filter:
+        results = [
+            _apply_pii_smart_merging(result, effective_model, lang, locale=locale)
+            for result in results
+        ]
+
+    results = [
+        _remap_prepared_pii_result(result, item)
+        for result, item in zip(results, prepared)
+    ]
+
+    recognizer = coerce_custom_recognizer(custom_recognizer)
+    if recognizer is not None:
         for result in results:
-            _apply_pii_smart_merging(result, effective_model, lang)
+            recognizer.apply_to_prediction_result(result)
 
     for result in results:
         _apply_clinical_protection_to_result(
@@ -651,7 +868,9 @@ def extract_pii(
     max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
+    custom_recognizer: Any = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -680,19 +899,43 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
-        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        custom_recognizer: Optional deny-list/allow-list recognizer config,
+            ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
+            matches are added with ``custom:deny`` provenance; allow-list
+            matches suppress overlapping spans from any detector.
+        cache_results: Whether to cache this result in the in-process LRU
+            cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
 
     Returns:
         PredictionResult with detected PII entities
 
     Example:
-        >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
-        >>> len(result.entities) > 0
-        True
-
-        >>> # French PII detection
-        >>> result = extract_pii("Né le 15/01/1970", lang="fr")
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import extract_pii
+        >>> from openmed.processing.outputs import EntityPrediction, PredictionResult
+        >>> fake_result = PredictionResult(
+        ...     text="Patient Casey Example called.",
+        ...     entities=[
+        ...         EntityPrediction(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             confidence=0.98,
+        ...             start=8,
+        ...             end=21,
+        ...         )
+        ...     ],
+        ...     model_name="fixture-pii-model",
+        ...     timestamp="2026-01-01T00:00:00",
+        ... )
+        >>> with patch("openmed.analyze_text", return_value=fake_result):
+        ...     result = extract_pii(
+        ...         "Patient Casey Example called.",
+        ...         model_name="fixture-pii-model",
+        ...         use_smart_merging=False,
+        ...     )
+        >>> next((entity.text, entity.label) for entity in result.entities)
+        ('Casey Example', 'NAME')
     """
     if cache_results:
         params = dict(locals())
@@ -709,7 +952,9 @@ def extract_pii(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        locale=locale,
         loader=loader,
+        custom_recognizer=custom_recognizer,
     )[0]
     if cache_results:
         cache.set(cache_key, final_result)
@@ -720,6 +965,10 @@ def _resolve_deidentification_method(
     method: DeidentificationMethod,
     shift_dates: Optional[bool],
     date_shift_days: Optional[int],
+    *,
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
 ) -> DeidentificationMethod:
     """Resolve method aliases and validate date-shift-only parameters."""
     effective_method = method
@@ -730,6 +979,18 @@ def _resolve_deidentification_method(
 
     if date_shift_days is not None and effective_method != "shift_dates":
         raise ValueError("date_shift_days requires method='shift_dates'")
+    if patient_key is not None and effective_method != "shift_dates":
+        raise ValueError("patient_key requires method='shift_dates'")
+    if date_shift_max_days is not None and effective_method != "shift_dates":
+        raise ValueError("date_shift_max_days requires method='shift_dates'")
+    if date_shift_secret is not None and effective_method != "shift_dates":
+        raise ValueError("date_shift_secret requires method='shift_dates'")
+    if date_shift_secret is not None and patient_key is None:
+        raise ValueError("date_shift_secret requires patient_key")
+    if patient_key is not None and date_shift_secret is None:
+        raise ValueError("patient_key requires date_shift_secret")
+    if effective_method not in DEIDENTIFICATION_METHODS:
+        raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
 
     return effective_method
 
@@ -745,7 +1006,8 @@ def _apply_safety_sweep_to_result(
     pii_result: Any,
     *,
     lang: str,
-) -> int:
+    locale: Optional[str] = None,
+) -> tuple[Any, int]:
     """Run the deterministic sweep and record its net span contribution."""
     from .quality_gates import validate_entity_spans
     from .safety_sweep import (
@@ -755,8 +1017,8 @@ def _apply_safety_sweep_to_result(
     )
 
     before_count = len(pii_result.entities)
-    pii_result.entities = safety_sweep(text, pii_result.entities, lang=lang)
-    added_count = len(pii_result.entities) - before_count
+    entities = safety_sweep(text, pii_result.entities, lang=lang, locale=locale)
+    added_count = len(entities) - before_count
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
     metadata["safety_sweep"] = {
@@ -764,10 +1026,13 @@ def _apply_safety_sweep_to_result(
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
         "spans_added": added_count,
     }
-    pii_result.metadata = metadata
-    pii_result.num_entities = len(pii_result.entities)
+    pii_result = _replace_analysis_result(
+        pii_result,
+        entities=entities,
+        metadata=metadata,
+    )
     validate_entity_spans(pii_result.entities, text)
-    return added_count
+    return pii_result, added_count
 
 
 _AUDIT_TEXT_KEYS = {
@@ -800,6 +1065,9 @@ def _sanitize_audit_evidence(value: Any) -> Any:
 def _entity_sources(entity: Any) -> list[str]:
     metadata = getattr(entity, "metadata", None) or {}
     source = str(metadata.get("source", "")).strip()
+    detector = str(metadata.get("detector", "")).strip()
+    if source == CUSTOM_DENY_DETECTOR or detector == CUSTOM_DENY_DETECTOR:
+        return [CUSTOM_DENY_DETECTOR]
     if source == "safety_sweep":
         return ["safety_sweep"]
     if source == "locale_rule":
@@ -867,7 +1135,59 @@ def _detector_infos(
                 metadata={"patterns_version": SAFETY_SWEEP_PATTERNS_VERSION},
             )
         )
+    custom_metadata = metadata.get("custom_recognizer")
+    if isinstance(custom_metadata, Mapping):
+        detectors.append(
+            DetectorInfo(
+                source=CUSTOM_DENY_DETECTOR,
+                model_id="custom_recognizer",
+                model_format="rules",
+                commit=None,
+                metadata=dict(custom_metadata),
+            )
+        )
     return detectors
+
+
+def _add_custom_recognizer_metadata(
+    pii_result: Any,
+    *,
+    allow_spans: int,
+    suppressed: int,
+) -> None:
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    custom_metadata = dict(metadata.get("custom_recognizer") or {})
+    custom_metadata.setdefault("detector", CUSTOM_DENY_DETECTOR)
+    custom_metadata["allow_spans"] = allow_spans
+    custom_metadata["spans_suppressed_by_allow"] = (
+        int(custom_metadata.get("spans_suppressed_by_allow", 0)) + suppressed
+    )
+    metadata["custom_recognizer"] = custom_metadata
+    pii_result.metadata = metadata
+
+
+def _suppress_custom_allowed_entities(
+    text: str,
+    pii_result: Any,
+    custom_recognizer: Any,
+) -> int:
+    recognizer = coerce_custom_recognizer(custom_recognizer)
+    if recognizer is None:
+        return 0
+    retained, suppressed = recognizer.suppress_entities(
+        text,
+        list(getattr(pii_result, "entities", ()) or ()),
+    )
+    if suppressed:
+        pii_result.entities = retained
+        if hasattr(pii_result, "num_entities"):
+            pii_result.num_entities = len(retained)
+    _add_custom_recognizer_metadata(
+        pii_result,
+        allow_spans=len(recognizer.allow_matches(text)),
+        suppressed=suppressed,
+    )
+    return suppressed
 
 
 def _apply_clinical_protection_to_result(
@@ -915,10 +1235,26 @@ def _apply_clinical_protection_to_result(
 
 def _context_window(
     text: str, start: int, end: int, *, size: int = 32
-) -> dict[str, str]:
+) -> dict[str, dict[str, int | str]]:
+    from .audit import hash_text
+
+    before_start = max(0, start - size)
+    after_end = min(len(text), end + size)
+    before = text[before_start:start]
+    after = text[end:after_end]
     return {
-        "before": text[max(0, start - size) : start],
-        "after": text[end : min(len(text), end + size)],
+        "before": {
+            "start": before_start,
+            "end": start,
+            "length": len(before),
+            "text_hash": hash_text(before),
+        },
+        "after": {
+            "start": end,
+            "end": after_end,
+            "length": len(after),
+            "text_hash": hash_text(after),
+        },
     }
 
 
@@ -1140,11 +1476,15 @@ def _build_deidentification_result(
     effective_method: DeidentificationMethod,
     keep_year: bool,
     date_shift_days: Optional[int],
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
     keep_mapping: bool,
     lang: str,
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    surrogate_vault: Optional["SurrogateVault"] = None,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
     normalize_accents: Optional[bool] = None,
@@ -1160,9 +1500,7 @@ def _build_deidentification_result(
     from .quality_gates import resolve_overlapping_entities
 
     resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
-    pii_result.entities = resolved_entities
-    if hasattr(pii_result, "num_entities"):
-        pii_result.num_entities = len(resolved_entities)
+    pii_result = _replace_analysis_result(pii_result, entities=resolved_entities)
 
     active_thresholds = _active_calibration_thresholds(pii_result, lang=lang)
     pii_entities = []
@@ -1197,12 +1535,18 @@ def _build_deidentification_result(
 
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
-    if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = _random_nonzero_shift()
+    if effective_method == "shift_dates":
+        date_shift_days = _resolve_date_shift_days(
+            date_shift_days=date_shift_days,
+            patient_key=patient_key,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
+        )
 
     anonymizer = None
-    if effective_method == "replace" or any(
-        _entity_policy_action(entity) == "replace" for entity in pii_entities
+    if effective_method in {"replace", "format_preserve"} or any(
+        _entity_policy_action(entity) in {"replace", "format_preserve"}
+        for entity in pii_entities
     ):
         from .anonymizer import Anonymizer
 
@@ -1221,8 +1565,15 @@ def _build_deidentification_result(
         entity_type_counts: dict[str, int] = {}
         for entity in sorted(pii_entities, key=lambda e: e.start):
             entity_method = _entity_redaction_method(entity, effective_method)
-            if entity_method in {"mask", "remove"} or (
-                entity_method == "shift_dates" and not _is_date_entity(entity, lang)
+            if (
+                entity_method in {"mask", "remove"}
+                or (
+                    entity_method == "shift_dates" and not _is_date_entity(entity, lang)
+                )
+                or (
+                    entity_method == "format_preserve"
+                    and _format_preserve_uses_mask_fallback(entity, anonymizer, lang)
+                )
             ):
                 entity_type_counts[entity.entity_type] = (
                     entity_type_counts.get(entity.entity_type, 0) + 1
@@ -1233,18 +1584,29 @@ def _build_deidentification_result(
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
+        actual_entity_method = entity_method
+        if entity_method == "format_preserve" and _format_preserve_uses_mask_fallback(
+            entity,
+            anonymizer,
+            lang,
+        ):
+            actual_entity_method = "mask"
         redacted = _redact_entity(
             entity,
-            entity_method,
+            actual_entity_method,
             keep_year=keep_year,
             date_shift_days=(
-                date_shift_days if entity_method == "shift_dates" else None
+                date_shift_days if actual_entity_method == "shift_dates" else None
             ),
             lang=lang,
             anonymizer=anonymizer,
+            require_dateutil=effective_method == "shift_dates",
+            surrogate_vault=surrogate_vault,
         )
+        if entity_method == "format_preserve" and redacted == _mask_placeholder(entity):
+            actual_entity_method = "mask"
 
-        if keep_mapping and entity_method == "remove":
+        if keep_mapping and actual_entity_method == "remove":
             redacted = f"[{entity.entity_type}_REMOVED]"
 
         # Only make repeated placeholders unique for reversible mappings. Plain
@@ -1262,7 +1624,7 @@ def _build_deidentification_result(
                 entity,
                 policy_name=policy_name,
             )
-        entity.action = entity_method
+        entity.action = actual_entity_method
         entity.surrogate = redacted if redacted else None
 
         deidentified = (
@@ -1321,9 +1683,34 @@ def _entity_redaction_method(
         return "replace"
     if action == "hash":
         return "hash"
+    if action == "format_preserve":
+        return "format_preserve"
     if action in {"mask", "redact"}:
         return "mask"
     return fallback
+
+
+def _is_mixed_label_union(entity: PIIEntity) -> bool:
+    """Return whether smart merging joined distinct semantic label families."""
+    metadata = entity.metadata or {}
+    semantic_merge = metadata.get("semantic_merge")
+    return isinstance(semantic_merge, Mapping) and bool(
+        semantic_merge.get("mixed_label_union", False)
+    )
+
+
+def _format_preserve_uses_mask_fallback(
+    entity: PIIEntity,
+    anonymizer: Optional["Anonymizer"],
+    lang: str,
+) -> bool:
+    if anonymizer is None or _is_mixed_label_union(entity):
+        return True
+    return not anonymizer.can_format_preserve(
+        entity.original_text or entity.text,
+        entity.entity_type,
+        lang=lang,
+    )
 
 
 def _build_reversible_id(
@@ -1347,16 +1734,22 @@ def _deidentify_batch(
     keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
     keep_mapping: bool = False,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
+    custom_recognizer: Any = None,
+    policy: Optional[str] = None,
     *,
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -1366,8 +1759,12 @@ def _deidentify_batch(
         method,
         shift_dates,
         date_shift_days,
+        patient_key=patient_key,
+        date_shift_max_days=date_shift_max_days,
+        date_shift_secret=date_shift_secret,
     )
     stripped_texts = [text.strip() for text in texts]
+    recognizer = coerce_custom_recognizer(custom_recognizer)
     pii_results = _extract_pii_batch(
         stripped_texts,
         model_name=model_name,
@@ -1376,14 +1773,25 @@ def _deidentify_batch(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        locale=locale,
+        custom_recognizer=recognizer,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
     )
 
     if use_safety_sweep:
+        swept_results = []
         for stripped_text, pii_result in zip(stripped_texts, pii_results):
-            _apply_safety_sweep_to_result(stripped_text, pii_result, lang=lang)
+            pii_result, _ = _apply_safety_sweep_to_result(
+                stripped_text,
+                pii_result,
+                lang=lang,
+                locale=locale,
+            )
+            _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
+            swept_results.append(pii_result)
+        pii_results = swept_results
 
     return [
         _build_deidentification_result(
@@ -1394,6 +1802,9 @@ def _deidentify_batch(
             confidence_threshold=confidence_threshold,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
+            patient_key=patient_key,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
             keep_mapping=keep_mapping,
             lang=lang,
             normalize_accents=normalize_accents,
@@ -1402,7 +1813,8 @@ def _deidentify_batch(
             consistent=consistent,
             seed=seed,
             locale=locale,
-            policy="hipaa_safe_harbor",
+            surrogate_vault=surrogate_vault,
+            policy=policy or "hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
     ]
@@ -1416,6 +1828,9 @@ def deidentify(
     keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
     keep_mapping: bool = False,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
@@ -1426,9 +1841,11 @@ def deidentify(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
+    custom_recognizer: Any = None,
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
@@ -1441,6 +1858,8 @@ def deidentify(
     - **remove**: Remove PII text entirely (empty string)
     - **replace**: Replace with fake but realistic data
     - **hash**: Replace with consistent hashed values for entity linking
+    - **format_preserve**: Replace structured identifiers with synthetic
+      values that keep shape and separators, masking unsupported labels
     - **shift_dates**: Shift dates by random offset while preserving intervals
 
     Smart merging uses regex patterns to merge fragmented entities (e.g., dates
@@ -1448,12 +1867,25 @@ def deidentify(
 
     Args:
         text: Input text to de-identify
-        method: De-identification method (mask, remove, replace, hash, shift_dates)
+        method: De-identification method (mask, remove, replace, hash,
+            shift_dates, format_preserve)
         model_name: PII detection model
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random non-zero if None)
+        date_shift_days: Specific number of days to shift when ``patient_key``
+            is omitted. When ``patient_key`` is supplied, this is treated as a
+            legacy maximum absolute offset bound unless ``date_shift_max_days``
+            is also supplied.
+        patient_key: Optional stable patient identifier used only to derive a
+            deterministic HMAC date-shift offset. Raw keys are not logged,
+            persisted, or returned.
+        date_shift_max_days: Maximum absolute offset for random or
+            patient-keyed date shifting. Defaults to 365 when ``patient_key``
+            is supplied and neither this nor ``date_shift_days`` is set.
+        date_shift_secret: Required HMAC key material for patient-keyed
+            offsets. Reuse the same value across sessions to keep offsets
+            stable.
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1465,19 +1897,29 @@ def deidentify(
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
         loader: Optional shared model loader to reuse warmed pipelines.
-        consistent: When ``method="replace"``, generate stable surrogates
+        consistent: When ``method="replace"`` or
+            ``method="format_preserve"``, generate stable surrogates
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
         seed: Optional integer seed for cross-run reproducibility of
             ``consistent=True`` replacements. Implies ``consistent=True``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
-            ``method="replace"``. When ``None``, derived from ``lang``.
+            ``method="replace"`` and ``method="format_preserve"``. When
+            ``None``, derived from ``lang``.
+        surrogate_vault: Optional cross-document surrogate vault. When provided
+            with ``method="replace"``, OpenMed stores only HMAC source hashes
+            and reuses the same surrogate for the same label/language/source
+            identifier across calls.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path
             or artifact directory. When provided, per-label calibrated
             thresholds filter model detections and appear in audit output.
+        custom_recognizer: Optional deny-list/allow-list recognizer config,
+            ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
+            matches are redacted with ``custom:deny`` provenance; allow-list
+            matches suppress overlapping spans from any detector.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
@@ -1488,17 +1930,44 @@ def deidentify(
         AuditReport when ``audit=True``.
 
     Example:
-        >>> result = deidentify(
-        ...     "Patient John Doe (DOB: 01/15/1970) called from 555-1234",
-        ...     method="mask",
-        ...     keep_year=True
+        >>> from datetime import datetime
+        >>> from types import SimpleNamespace
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import (
+        ...     DeidentificationResult,
+        ...     PIIEntity,
+        ...     deidentify,
         ... )
-        >>> print(result.deidentified_text)
-        Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
-
-        >>> result = deidentify(text, method="replace", lang="de")
-        >>> result = deidentify(text, method="replace", lang="pt",
-        ...                    locale="pt_BR", consistent=True, seed=42)
+        >>> fixture = DeidentificationResult(
+        ...     original_text="Patient Casey Example",
+        ...     deidentified_text="Patient [NAME]",
+        ...     pii_entities=[
+        ...         PIIEntity(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             start=8,
+        ...             end=21,
+        ...             confidence=0.98,
+        ...             redacted_text="[NAME]",
+        ...         )
+        ...     ],
+        ...     method="mask",
+        ...     timestamp=datetime(2026, 1, 1, 0, 0, 0),
+        ...     mapping={"[NAME]": "Casey Example"},
+        ... )
+        >>> with patch("openmed.core.pipeline.Pipeline") as pipeline_cls:
+        ...     pipeline_cls.return_value.run.return_value = SimpleNamespace(
+        ...         deidentification_result=fixture
+        ...     )
+        ...     result = deidentify(
+        ...         "Patient Casey Example",
+        ...         method="mask",
+        ...         keep_mapping=True,
+        ...     )
+        >>> result.deidentified_text
+        'Patient [NAME]'
+        >>> result.mapping
+        {'[NAME]': 'Casey Example'}
     """
 
     if cache_results:
@@ -1525,6 +1994,7 @@ def deidentify(
             if calibration_thresholds_path is not None
             else None
         ),
+        custom_recognizer=custom_recognizer,
     )
     result = pipeline.run(
         text,
@@ -1532,10 +2002,14 @@ def deidentify(
         keep_year=keep_year,
         shift_dates=shift_dates,
         date_shift_days=date_shift_days,
+        patient_key=patient_key,
+        date_shift_max_days=date_shift_max_days,
+        date_shift_secret=date_shift_secret,
         keep_mapping=keep_mapping,
         consistent=consistent,
         seed=seed,
         locale=locale,
+        surrogate_vault=surrogate_vault,
         audit=audit,
     )
 
@@ -1570,6 +2044,8 @@ def _redact_entity(
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
+    require_dateutil: bool = False,
+    surrogate_vault: Optional["SurrogateVault"] = None,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -1579,16 +2055,20 @@ def _redact_entity(
         keep_year: Keep year in dates
         date_shift_days: Days to shift dates
         lang: Language code for fake data and date formatting
-        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
+        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``
+            or ``method="format_preserve"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
+        require_dateutil: Require python-dateutil instead of silently falling
+            back to the basic regex shifter.
+        surrogate_vault: Optional vault for stable cross-document replacements.
 
     Returns:
         Redacted text replacement
     """
     if method == "mask":
         # Replace with placeholder
-        return f"[{entity.entity_type}]"
+        return _mask_placeholder(entity)
 
     elif method == "remove":
         # Remove entirely (replace with empty string)
@@ -1596,12 +2076,50 @@ def _redact_entity(
 
     elif method == "replace":
         if anonymizer is not None:
+            original = entity.original_text or entity.text
+            surrogate_label = (
+                "OTHER" if _is_mixed_label_union(entity) else entity.entity_type
+            )
+            if surrogate_vault is not None:
+                label = (
+                    "OTHER"
+                    if _is_mixed_label_union(entity)
+                    else entity.canonical_label or entity.entity_type
+                )
+
+                def _create_surrogate(attempt: int) -> str:
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(
+                        source,
+                        surrogate_label,
+                        lang=lang,
+                    )
+
+                return surrogate_vault.get_or_create(
+                    original,
+                    label=label,
+                    lang=lang,
+                    create_surrogate=_create_surrogate,
+                )
             return anonymizer.surrogate(
+                original,
+                surrogate_label,
+                lang=lang,
+            )
+        return _generate_fake_pii(entity.entity_type, lang=lang)
+
+    elif method == "format_preserve":
+        if _is_mixed_label_union(entity):
+            return _mask_placeholder(entity)
+        if anonymizer is not None:
+            surrogate = anonymizer.format_preserving_surrogate(
                 entity.original_text or entity.text,
                 entity.entity_type,
                 lang=lang,
             )
-        return _generate_fake_pii(entity.entity_type, lang=lang)
+            if surrogate is not None:
+                return surrogate
+        return _mask_placeholder(entity)
 
     elif method == "hash":
         # Generate consistent hash
@@ -1611,13 +2129,25 @@ def _redact_entity(
 
     elif method == "shift_dates":
         # Shift dates by offset
+        if _is_mixed_label_union(entity):
+            return _mask_placeholder(entity)
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
+            return _shift_date(
+                entity.text,
+                date_shift_days,
+                keep_year,
+                lang=lang,
+                require_dateutil=require_dateutil,
+            )
         else:
             # Non-date entities get masked
-            return f"[{entity.entity_type}]"
+            return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _mask_placeholder(entity: PIIEntity) -> str:
+    return f"[{entity.entity_type}]"
 
 
 _LABEL_TO_FAKE_KEY: Dict[str, str] = {
@@ -1674,6 +2204,8 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "CPF": "ID_NUM",
     "cnpj": "ID_NUM",
     "CNPJ": "ID_NUM",
+    "teudat_zehut": "ID_NUM",
+    "TEUDAT_ZEHUT": "ID_NUM",
     "medical_record_number": "ID_NUM",
     "MEDICAL_RECORD_NUMBER": "ID_NUM",
     # Other
@@ -1894,11 +2426,68 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
             return shift_days
 
 
+def _validate_date_shift_max_days(max_days: int) -> int:
+    if isinstance(max_days, bool) or not isinstance(max_days, int):
+        raise TypeError("date_shift_max_days must be an integer")
+    if max_days <= 0:
+        raise ValueError("date_shift_max_days must be positive")
+    return max_days
+
+
+def _stable_date_shift_days(
+    patient_key: str | bytes,
+    *,
+    date_shift_days: Optional[int],
+    date_shift_max_days: Optional[int],
+    date_shift_secret: Optional[str | bytes],
+) -> int:
+    """Resolve a patient-keyed stable date shift without retaining the key."""
+    if date_shift_max_days is not None:
+        max_days = _validate_date_shift_max_days(date_shift_max_days)
+    elif date_shift_days is not None:
+        max_days = _validate_date_shift_max_days(abs(date_shift_days))
+    else:
+        max_days = DEFAULT_DATE_SHIFT_MAX_DAYS
+
+    return stable_offset_for(
+        patient_key,
+        max_days=max_days,
+        secret=date_shift_secret,
+    )
+
+
+def _resolve_date_shift_days(
+    *,
+    date_shift_days: Optional[int],
+    patient_key: Optional[str | bytes],
+    date_shift_max_days: Optional[int],
+    date_shift_secret: Optional[str | bytes],
+) -> int:
+    if patient_key is not None:
+        return _stable_date_shift_days(
+            patient_key,
+            date_shift_days=date_shift_days,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
+        )
+
+    if date_shift_days is not None:
+        return date_shift_days
+
+    if date_shift_max_days is not None:
+        max_days = _validate_date_shift_max_days(date_shift_max_days)
+        return _random_nonzero_shift(-max_days, max_days)
+
+    return _random_nonzero_shift()
+
+
 def _shift_date(
     date_str: str,
     shift_days: int,
     keep_year: bool = False,
     lang: str = "en",
+    *,
+    require_dateutil: bool = False,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -1914,6 +2503,9 @@ def _shift_date(
         shift_days: Number of days to shift (positive = future, negative = past)
         keep_year: Keep the year unchanged (only shift month/day)
         lang: Language code for date format conventions
+        require_dateutil: Raise a clear optional-dependency error when
+            python-dateutil is unavailable. When false, fall back to the basic
+            regex shifter.
 
     Returns:
         Shifted date string in the same format as input
@@ -1935,7 +2527,14 @@ def _shift_date(
     # Try to parse and shift using dateutil if available
     try:
         from dateutil import parser as date_parser
-    except ImportError:
+    except ImportError as exc:
+        if require_dateutil:
+            _raise_missing_optional_dependency(
+                package="python-dateutil",
+                extra="dev",
+                feature="method='shift_dates' date parsing",
+                cause=exc,
+            )
         # Fallback without dateutil - basic pattern matching
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
@@ -2134,7 +2733,7 @@ def _format_date_like_original(
 
 def reidentify(
     deidentified_text: str,
-    mapping: dict[str, str],
+    mapping: Mapping[str, str],
 ) -> str:
     """Re-identify text using stored mapping.
 
@@ -2149,9 +2748,12 @@ def reidentify(
         Re-identified text with original PII restored
 
     Example:
-        >>> result = deidentify(text, method="mask", keep_mapping=True)
-        >>> original = reidentify(result.deidentified_text, result.mapping)
-        >>> assert original == text
+        >>> from openmed.core.pii import reidentify
+        >>> reidentify(
+        ...     "Patient [NAME] has record [ID]",
+        ...     {"[NAME]": "Casey Example", "[ID]": "MRN-0001"},
+        ... )
+        'Patient Casey Example has record MRN-0001'
 
     Note:
         Only works if keep_mapping=True was used during de-identification.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.eval.harness import BenchmarkFixture
@@ -19,6 +19,9 @@ PUBLIC_DATASETS: tuple[str, ...] = (
     "medmentions",
     "ncbi_disease",
     "bc5cdr",
+    "jnlpba",
+    "species_800",
+    "bc2gm",
 )
 
 PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
@@ -57,6 +60,23 @@ PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
         "chemical": "OTHER",
         "disease": "OTHER",
         "relation": "OTHER",
+    },
+    "jnlpba": {
+        "cell_line": "OTHER",
+        "cell_type": "OTHER",
+        "dna": "OTHER",
+        "protein": "OTHER",
+        "rna": "OTHER",
+    },
+    "species_800": {
+        "organism": "MICROORGANISM",
+        "species": "MICROORGANISM",
+        "taxon": "MICROORGANISM",
+    },
+    "bc2gm": {
+        "gene": "OTHER",
+        "gene_mention": "OTHER",
+        "protein": "OTHER",
     },
 }
 

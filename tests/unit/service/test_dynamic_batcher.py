@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +15,13 @@ from openmed.core import pii as pii_core
 from openmed.processing.outputs import PredictionResult
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
-from openmed.service.batcher import DynamicBatcher
+from openmed.service.batcher import (
+    BackpressureError,
+    BatchPriorityHandle,
+    DynamicBatcher,
+)
+
+LOOPBACK_BASE_URL = "http://127.0.0.1"
 
 
 class FakeLoader:
@@ -68,10 +76,25 @@ def _prediction_result(text: str) -> PredictionResult:
     )
 
 
+def _p99(values: list[float]) -> float:
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, int(len(ordered) * 0.99))
+    return ordered[index]
+
+
 def _clear_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
 
 
 def _enable_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -79,9 +102,18 @@ def _enable_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
     monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "10")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "25")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", "64")
 
 
 def test_concurrent_jobs_within_wait_window_dispatch_once():
@@ -156,6 +188,164 @@ def test_per_request_error_result_does_not_fail_rest_of_batch():
     assert good == {"value": "good"}
 
 
+def test_priority_scheduler_prefers_interactive_without_starving_bulk():
+    calls: list[list[str]] = []
+
+    async def dispatch(items):
+        batch = list(items)
+        calls.append(batch)
+        return batch
+
+    async def scenario():
+        batcher = DynamicBatcher(dispatch, max_batch_size=5, max_wait_ms=1000)
+        jobs = [
+            batcher.submit("bulk-0", priority="bulk"),
+            batcher.submit("bulk-1", priority="bulk"),
+            batcher.submit("interactive-0", priority="interactive"),
+            batcher.submit("interactive-1", priority="interactive"),
+            batcher.submit("interactive-2", priority="interactive"),
+            batcher.submit("interactive-3", priority="interactive"),
+            batcher.submit("bulk-2", priority="bulk"),
+            batcher.submit("interactive-4", priority="interactive"),
+            batcher.submit("interactive-5", priority="interactive"),
+            batcher.submit("bulk-3", priority="bulk"),
+        ]
+        return await asyncio.gather(*jobs)
+
+    results = asyncio.run(scenario())
+
+    assert set(results) == {
+        "bulk-0",
+        "bulk-1",
+        "bulk-2",
+        "bulk-3",
+        "interactive-0",
+        "interactive-1",
+        "interactive-2",
+        "interactive-3",
+        "interactive-4",
+        "interactive-5",
+    }
+    assert calls[0][:3] == ["interactive-0", "interactive-1", "interactive-2"]
+    assert any(item.startswith("bulk-") for batch in calls for item in batch)
+
+
+def test_mixed_load_harness_keeps_interactive_latency_bounded_and_sheds_bulk():
+    async def run_load(*, interactive_count: int, bulk_count: int):
+        async def dispatch(items):
+            await asyncio.sleep(0.001)
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=64,
+            max_wait_ms=1,
+            max_queue_size_per_priority={"interactive": 64, "bulk": 8},
+        )
+
+        async def submit(name: str, priority: str):
+            start = time.perf_counter()
+            try:
+                await batcher.submit(name, priority=priority)
+            except BackpressureError:
+                return priority, time.perf_counter() - start, True
+            return priority, time.perf_counter() - start, False
+
+        tasks = []
+        for index in range(max(interactive_count, bulk_count)):
+            if index < bulk_count:
+                tasks.append(asyncio.create_task(submit(f"bulk-{index}", "bulk")))
+            if index < interactive_count:
+                tasks.append(
+                    asyncio.create_task(submit(f"interactive-{index}", "interactive"))
+                )
+        return await asyncio.gather(*tasks)
+
+    unloaded = asyncio.run(run_load(interactive_count=12, bulk_count=0))
+    mixed = asyncio.run(run_load(interactive_count=12, bulk_count=80))
+
+    unloaded_interactive = [
+        latency for priority, latency, shed in unloaded if priority == "interactive"
+    ]
+    mixed_interactive = [
+        latency
+        for priority, latency, shed in mixed
+        if priority == "interactive" and not shed
+    ]
+    bulk_completed = [
+        latency for priority, latency, shed in mixed if priority == "bulk" and not shed
+    ]
+    bulk_shed = [shed for priority, _, shed in mixed if priority == "bulk" and shed]
+
+    assert len(mixed_interactive) == 12
+    assert bulk_completed
+    assert bulk_shed
+    assert _p99(mixed_interactive) <= (_p99(unloaded_interactive) * 1.5) + 0.02
+
+
+def test_saturated_priority_queue_raises_backpressure():
+    async def dispatch(items):
+        return list(items)
+
+    async def scenario():
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=8,
+            max_wait_ms=1000,
+            max_queue_size_per_priority=1,
+        )
+        queued = asyncio.create_task(batcher.submit("held", priority="bulk"))
+        await asyncio.sleep(0)
+
+        with pytest.raises(BackpressureError) as error:
+            await batcher.submit("shed", priority="bulk")
+
+        queued.cancel()
+        with suppress(asyncio.CancelledError):
+            await queued
+        return error.value, await batcher.queue_depths()
+
+    error, depths = asyncio.run(scenario())
+
+    assert error.priority == "bulk"
+    assert error.queue_depth == 1
+    assert error.queue_capacity == 1
+    assert error.retry_after_seconds > 0
+    assert depths["bulk"] == 0
+
+
+def test_priority_handle_promotes_queued_bulk_job_and_flushes_promptly():
+    calls: list[list[str]] = []
+
+    async def dispatch(items):
+        batch = list(items)
+        calls.append(batch)
+        return batch
+
+    async def scenario():
+        handle = BatchPriorityHandle("bulk")
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=8,
+            max_wait_ms=500,
+            max_queue_size_per_priority=8,
+        )
+        queued = asyncio.create_task(
+            batcher.submit("same-request", priority="bulk", priority_handle=handle)
+        )
+        await asyncio.sleep(0)
+        start = time.perf_counter()
+        handle.promote("interactive")
+        result = await asyncio.wait_for(queued, timeout=0.2)
+        return result, time.perf_counter() - start
+
+    result, elapsed = asyncio.run(scenario())
+
+    assert result == "same-request"
+    assert elapsed < 0.2
+    assert calls == [["same-request"]]
+
+
 def test_service_batching_config_defaults_to_disabled(monkeypatch):
     _clear_batching_env(monkeypatch)
 
@@ -164,18 +354,21 @@ def test_service_batching_config_defaults_to_disabled(monkeypatch):
     assert config.enabled is False
     assert config.max_batch_size == service_runtime.DEFAULT_SERVICE_BATCH_MAX_SIZE
     assert config.max_wait_ms == service_runtime.DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
+    assert config.max_queue_size == service_runtime.DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
 
 
 def test_service_batching_config_reads_env(monkeypatch):
     monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "on")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "4")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "7.5")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", "9")
 
     config = service_runtime.parse_service_batching_config()
 
     assert config.enabled is True
     assert config.max_batch_size == 4
     assert config.max_wait_ms == 7.5
+    assert config.max_queue_size == 9
 
 
 def test_pii_extract_endpoint_batches_concurrent_requests(monkeypatch):
@@ -195,7 +388,7 @@ def test_pii_extract_endpoint_batches_concurrent_requests(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return await asyncio.gather(
                     client.post("/pii/extract", json={"text": "alpha"}),
@@ -225,7 +418,7 @@ def test_analyze_endpoint_batches_compatible_concurrent_requests(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 payload = {"sentence_detection": False}
                 return await asyncio.gather(
@@ -262,7 +455,7 @@ def test_pii_extract_batches_only_compatible_request_shapes(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return await asyncio.gather(
                     client.post("/pii/extract", json={"text": "alpha", "lang": "en"}),
@@ -297,7 +490,7 @@ def test_pii_extract_endpoint_isolates_one_failed_batched_input(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return await asyncio.gather(
                     client.post("/pii/extract", json={"text": "good"}),

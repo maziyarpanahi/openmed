@@ -6,16 +6,22 @@ as the MLX path. Use this when MLX is unavailable, or when you
 intentionally choose the Hugging Face/PyTorch backend.
 """
 
-from .calibration import load_awq_calibration_texts
+from .attention import select_attn_implementation
+from .calibration import load_awq_calibration_texts, load_quantization_calibration_texts
 from .device import apply_mps_tuning, resolve_torch_device
 from .privacy_filter import PrivacyFilterTorchPipeline
 from .quantize_awq import AwqQuantizationResult, quantize_awq
+from .quantize_gptq import GptqQuantizationResult, quantize_gptq
 
 __all__ = [
     "AwqQuantizationResult",
+    "GptqQuantizationResult",
     "PrivacyFilterTorchPipeline",
     "apply_mps_tuning",
     "load_awq_calibration_texts",
+    "load_quantization_calibration_texts",
     "quantize_awq",
+    "quantize_gptq",
     "resolve_torch_device",
+    "select_attn_implementation",
 ]

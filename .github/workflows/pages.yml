@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  # Pages deployments should finish once started; cancelling them can leave
+  # the final deploy-pages handoff in a failed state during merge bursts.
+  cancel-in-progress: false
 
 jobs:
   deploy:

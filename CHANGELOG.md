@@ -9,27 +9,376 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added CycloneDX 1.6 SBOM generation (`scripts/security/generate_sbom.py`,
-  `make sbom`) that inventories `openmed` and its runtime dependencies; a CI
-  `sbom` job uploads `sbom.cdx.json` on every push and pull request, and the
-  publish workflow attaches it as an asset on each tagged GitHub release
-  (fail-open).
-- Added an `openmed models recommend --task <task> --language <lang> --tier
-  phone|laptop|workstation|server` command that reuses the manifest search core
-  and ranks on-device models by device-tier fit (via `recommended_tier` and, when
-  present, `peak_ram_mb` budgets), then smallest parameter count and highest
-  benchmark recall/F1, with `--json` output and a non-zero exit when nothing fits.
-- Expanded lab reference-range parsing in `openmed.clinical.lab_values` with
-  tolerant separator/operator support and safer unknown explicit-flag handling.
-- Added a root `SECURITY.md` responsible-disclosure policy (private GitHub
-  vulnerability reporting, a severity matrix, supported versions, response targets
-  with a coordinated-disclosure CVE/advisory process, accidental-disclosure
-  containment, conduct/anti-abuse terms, and hardened safe-harbor protections), an
-  issue-template chooser that routes security reports to the private channel, and
-  security cross-links from the README and docs. Redaction-bypass / PHI leakage
-  (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
-  private-disclosure class.
-- Added LRU Cache implementation for analyze_text(), extract_pii(), and deidentify().
+- Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
+  and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
+  five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
+  fixture (#819).
+- Added region-qualified Arabic Faker locales (`ar-SA`, `ar-AE`, `ar-JO`,
+  `ar-PS`, and explicit `ar-EG`) so Gulf and Levant text receives in-region
+  surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
+  installed Faker fall back to `ar_EG` with a one-time warning, and
+  `list_regional_locales('ar')` enumerates the supported tags (#483).
+- Added a release evidence job that keylessly signs each wheel and source
+  distribution with Sigstore and attaches the SLSA provenance bundle, the
+  release artifact digest manifest, and the Sigstore bundles to the tagged
+  GitHub release, so a release can be verified offline without the GitHub
+  attestation API. Evidence generation stays best effort and cannot gate the
+  PyPI upload, but evidence that is produced must verify against the signing
+  workflow identity and the release commit before it is attached (#1540).
+- Added a Hungarian (`hu`) national-ID-only PII pack with validator-backed TAJ
+  detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
+  address, and postcode patterns, and an offline synthetic golden fixture
+  (#816).
+- Added a Czech (`cs`) national-ID-only PII pack with validator-backed rodné
+  číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
+  locale-aware synthetic surrogates, and an offline synthetic golden fixture
+  ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
+
+## [1.9.1] - 2026-07-14
+
+This patch completes the `1.9` distribution rollout without changing the
+public inference APIs introduced in `1.9.0`.
+
+### Fixed
+
+- Restored the documented root Swift Package Manager build by processing
+  OpenMedKit policy resources in the root package, and moved Swift CI to build
+  and test that public package entry point.
+- Kept tag-driven Android validation green when the optional Maven Central
+  signing credentials are absent while retaining the immutable JitPack release
+  path and guarded manual Central uploads.
+- Replaced placeholder model repository IDs in runtime and export documentation
+  with tested public token-classification and causal-model examples.
+
+### Security
+
+- Updated the locked `setuptools` build dependency to a non-vulnerable release
+  so the master and release `pip-audit` gates pass without a waiver.
+
+## [1.9.0] - 2026-07-14
+
+This release adds one model-repository contract for ONNX token-classification
+inference across Python, browsers, Node.js, and Android, then extends the
+clinical, multilingual privacy, evaluation, documentation, and developer
+surfaces delivered after `v1.8.1`.
+
+### Added
+
+- Added concise cross-platform ONNX inference APIs: `OnnxModel` for Python CPU,
+  `loadOnnxModel` for WebGPU/WebAssembly, and `OpenMedKit.fromDirectory` for
+  Android with Hugging Face tokenizer offset parity. The same exported model
+  repository can now serve every supported runtime without application-level
+  tokenizer or tensor plumbing (#1550).
+- Added a resumable Android ONNX batch rollout runner, Android/ORT model-card
+  format metadata, immutable Git-tag installation through JitPack, and runnable
+  MLX examples for token classification and GLiNER zero-shot NER (#1550).
+- Added the public `openmed` npm package for browser and Node.js inference, with
+  synchronized release versions, ESM/CommonJS exports, WebGPU/WebAssembly
+  examples, package tests, npm audit enforcement, and provenance-backed tag
+  publishing (#1550).
+- Added Hugging Face Hub model-pull convenience helpers and artifact-backed
+  model-card datasheets generated from provenance-hashed evaluation evidence
+  (#1339, #1228).
+- Added an offline immunization zero-shot domain with FHIR-aligned display
+  labels, canonical policy metadata, synthetic per-label fixtures, and
+  exporter-alignment documentation (#1159).
+- Added relation metrics, a synthetic gold loader, strict and relaxed clinical
+  relation-extraction scoring, an RE release gate, and a dataframe API for
+  clinical extraction results (#1211, #1212, #1224).
+- Added a Go REST client, a Postman collection, copy-paste REST recipes, and a
+  Jupyter/IPython rich display widget for de-identification results (#1379,
+  #1385, #1387, #1382).
+- Added full Korean (`ko`) and Romanian (`ro`) PII language packs, including
+  native identifier validation, locale-aware surrogates, synthetic fixtures,
+  and model/service wiring. The model-backed PII allow-list now covers 17
+  language codes (#1544, #1389).
+- Added Canadian SIN and provincial health-card validators, Australian Medicare
+  and TFN validators, CJK family-name-first honorific stripping, RTL-aware
+  redacted-output rendering, multilingual clinical section detection,
+  translation augmentation for low-resource NER, and multilingual surrogate
+  quality gates (#1340, #1342, #1346, #1384, #1226, #1221, #1225).
+- Added critical-finding recall and leakage-under-extraction safety gates, a
+  multilingual clinical NER benchmark aggregator, a false-negative explorer,
+  throughput-versus-accuracy frontier reporting, inference memory profiling,
+  property-based de-identification fuzzing, a burned-in-PHI DICOM benchmark,
+  and a redactor threat model with leakage-bypass abuse cases (#1213, #1214,
+  #1223, #1343, #1347, #1349, #1350, #1388, #1352).
+- Added a public-API docstring coverage check plus PEP 561 `py.typed` packaging
+  and scoped type-hint coverage for the expanded module surface (#1341, #1348).
+- Added persona quickstarts, hardened offline model loading, and a dedicated
+  troubleshooting and common-errors guide (#1386, #1380).
+
+### Changed
+
+- Consolidated OpenMed's brand and on-device clinical-AI messaging across the
+  repository, documentation, and website (#1415).
+- Bounded the ten-stage clinical pipeline on long notes and strengthened offline
+  loading paths used by the new runtime quickstarts (#1383, #1386).
+
+### Fixed
+
+- Hardened Android ONNX export and publishing for large external-data graphs,
+  Longformer tracing, fp16 metadata, dynamic INT8 graph ordering, optional ORT
+  conversion failures, existing Hub repositories, and models that require
+  zero-valued `token_type_ids` at runtime (#1550).
+- Made Android artifact reuse fail closed when runtime files or ONNX external
+  data are missing, required `tokenizer.json` before publication, and kept
+  resumable batch cleanup from deleting valid artifacts (#1550).
+- Made direct `OpenMed/...-mlx` repository IDs resolve as pre-converted MLX
+  artifacts and kept optional tokenizer loading lazy, avoiding unintended
+  PyTorch conversion and eager pandas imports (#1550).
+- Aligned Python, npm, Swift, Android, Helm, OpenAPI, container, and demo release
+  surfaces on `1.9.0` and immutable release coordinates (#1550).
+
+### Security
+
+- Replaced fixable vulnerability waivers with dependency and base-image
+  upgrades, and made the vulnerability gate reject waivers when a fixed version
+  is available (#1550).
+- Added explicit release gates for critical-finding recall and leakage under
+  clinical extraction, alongside the redactor threat model, de-identification
+  fuzz harness, and synthetic burned-in-PHI DICOM benchmark (#1213, #1214,
+  #1350, #1352, #1388).
+
+## [1.8.1] - 2026-07-10
+
+### Fixed
+
+- Fixed automatic PyTorch attention selection so `auto` no longer forces SDPA onto Transformers architectures that do not support it, including `DebertaV2ForTokenClassification`; explicit `eager`, `sdpa`, and `flash_attention_2` selections remain available.
+- Changed unavailable accelerated-attention fallbacks to use the architecture-independent eager implementation instead of selecting another accelerated backend from runtime capability alone.
+
+## [1.8.0] - 2026-07-09
+
+This release summarizes the cross-platform runtime, service hardening, multimodal privacy, clinical extraction, and release-evidence work merged after `v1.7.0`. The reviewed range is broad: 434 commits from `v1.7.0` through the final `release/openmed-180` branch tip prepared for the `v1.8.0` tag, covering Android, browser, and React Native runtimes, production service controls, structured health-data pipelines, and the privacy/evaluation gates that keep those surfaces aligned.
+
+### Added
+
+- Added the Android OpenMedKit surface: a Gradle project, Kotlin public API, token-classification decoder, ONNX and ORT Mobile paths, ML Kit OCR adapter, model catalog/download cache, document/image intake, Compose demo, scan demo, Python-to-Android span parity fixtures, Android CI, and guarded Maven Central publishing (#1114, #1115, #1116, #1117, #1118, #1119, #1120, #1121, #1122, #1123, #1124, #1146, #1148, #1149, #1150, #1155, #1156, #1161, #1162).
+- Added browser, mobile JavaScript, and cross-platform client runtimes, including a typed OpenMedKit web package for Transformers.js/ONNX Runtime Web, a React Native bridge, Swift-Kotlin parity checks, public API parity coverage, and a typed TypeScript service client surface (#1132, #1177, #1178, #1123).
+- Added production service and deployment capabilities: API-key/JWT auth, request correlation IDs, no-PHI JSON logging, OpenTelemetry tracing, gRPC, async jobs and webhooks, Helm deployment, multi-arch containers, circuit breakers, model-load retry/backoff, privacy-gateway redaction before external calls, SMART-on-FHIR bulk ingestion, object-storage batch runs, Spark/Dask/lakehouse/columnar redaction, DuckDB and pandas/polars accessors, agent/MCP tool orchestration, hardened distroless images, image signing, SLSA provenance, container SBOMs, and vulnerability scanning (#1080, #1081, #1082, #1084, #1109, #1110, #1126, #1127, #1129, #1130, #1131, #1133, #1136, #1138, #1139, #1140, #1141, #1143, #1144, #1152, #1153, #1154, #1175, #1176, #1179, #1180, #1185, #1189).
+- Added deeper clinical extraction and interoperability: normalized clinical timelines, document assertion graphs, clinical event frames, medication relation decoding, concept normalization, UCUM units, free vocabulary grounding, RxNorm/ICD-10-CM/HPO linkers, CodeableConcept export, deterministic CDM extraction, OMOP CDM loader foundation, GDPR DSAR export, and severity/laterality, clinical-genomics, gastroenterology, endocrinology, nutrition/diet, and anesthesia domain coverage (#1019, #1022, #1025, #1026, #1027, #1079, #1086, #1105, #1134, #1135, #1137, #1160, #1164, #1165, #1166, #1167, #1170, #1182, #1183, #1184, #1187, #1219, #1292, #1299).
+- Added multimodal and structured privacy coverage for DOCX offset extraction, plain-image redaction, DICOM header de-identification, burned-in DICOM pixel OCR redaction, redacted-PDF text-layer fidelity checks, EPUB extraction, vCard/iCalendar PHI redaction, UK health identifiers, IBAN/SWIFT/BIC identifiers, passport/MRZ validation, and additional validator-backed ID packs for Slovak, Latvian, Malay, Filipino, and Danish locales (#1093, #1098, #1106, #1107, #1108, #1112, #1128, #1142, #1163, #1171, #1173, #1186, #1188, #1406).
+- Added evaluation, model, and release evidence infrastructure: streaming token classification, speculative MLX PII decoding, QLoRA smoke recipes, leakage-weighted distillation, Core ML and ONNX optimization/parity gates, OpenVINO export, paged KV-cache attention, memory-budgeted model scheduling, benchmark ledgers, active-learning gate queues, hard-negative mining, cross-lingual transfer evaluation, model-card/datasheet generation, flakiness quarantine, conformal calibration and abstention, mobile performance benchmarking, comparator matrices, load-test harnesses, and training provenance reproducibility gates (#1002, #1003, #1009, #1014, #1015, #1016, #1017, #1018, #1036, #1054, #1055, #1056, #1062, #1063, #1064, #1065, #1066, #1097, #1113, #1147, #1151, #1172, #1220).
+- Added an endocrinology zero-shot domain for glycemic and thyroid-function
+  measures, hormone levels, insulin regimens, metabolic findings, and endocrine
+  glands, with canonical label normalization, keyword routing metadata, and
+  synthetic fixture coverage (#895).
+- Added `examples/gradio_deid_app.py`, an interactive Gradio demo that runs
+  `deidentify` over synthetic text with a `mask`/`replace`/`hash` method
+  selector and shows the redacted output alongside the detected PII entities.
+  `gradio` stays an optional, example-local dependency with a graceful install
+  hint, and the example is covered by import-safe smoke tests (#484).
+- Added an `OPENMED_MLX_MMAP` toggle to `openmed.mlx.models.load_model`:
+  safetensors weights load through MLX's memory-mapped, lazy path by default
+  (keeping cold-start peak RSS low on the phone/laptop tiers), with
+  `OPENMED_MLX_MMAP=0` forcing eager materialization as a documented fallback
+  for debugging (#296).
+
+### Changed
+
+- Extended OpenMed from a Python/Swift-centered toolkit into a coordinated Python, Swift, Kotlin/Android, TypeScript, React Native, browser, REST, gRPC, and deployment release, with parity tests and shared fixtures keeping the platform surfaces aligned.
+- Updated release engineering around guarded PyPI publishing, SLSA attestations, SBOMs, signed images, static OpenAPI regeneration, reproducible release metadata, baseline-aware secret scanning, and guarded mobile/container publishing so library, container, and mobile artifacts can be validated from the same source tree (#1104, #1144, #1153, #1154, #1405).
+
+### Fixed
+
+- Fixed optimizer-stripped assertions, explicit UTF-8 handling, JSON decoding failures, exception chaining, iOS MLX pinning, multilingual test span offsets, Pages deployment concurrency, HPO linker test adaptation, DSAR vault-key matching, and lint cleanup after the large v1.8 merge train (#1091, #1094, #1095, #1096, #1100, #1158, #1181, #1194, #1404).
+
+### Security
+
+- Added and strengthened no-raw-PHI logging, offline mode socket blocking, privacy-gateway redaction before external LLM calls, policy compiler coverage proofs, DP surrogate budgeting, k-anonymity/l-diversity/t-closeness enforcement, membership-inference defenses, adversarial de-identification robustness, federated leakage evaluation, secret scanning, pre-commit hook scanning, and vulnerability gates (#189, #190, #1034, #1035, #1037, #1043, #1047, #1082, #1127, #1141, #1405).
+
+## [1.7.0] - 2026-07-01
+
+This release summarizes 148 pull requests merged into
+`release/openmed-170` after `v1.6.0`. The diff is additive overall: 483 files
+changed, with no deleted or renamed files detected in the release range.
+
+### Added
+
+- Added lightweight multimodal document primitives, source spans, lazy handler
+  registration, `redact_document`, image redaction, PDF span coordinate
+  projection, Markdown/AsciiDoc offset-preserving extraction, audit-safe image,
+  PDF, and DOCX metadata scrubbing, and JSONL chat-log de-identification with
+  speaker pseudonymization (#555, #567, #726, #745, #755, #758).
+- Added OCR engine coverage for Tesseract, PaddleOCR, EasyOCR, docTR, and test
+  engines, including OCR language selection and available-engine discovery
+  (#567, #717, #749, #558).
+- Added CDA/C-CDA XML, HL7 v2, CSV/TSV, FHIR `$de-identify`, FHIR Bulk NDJSON,
+  deterministic FHIR Bundle, FHIR `OperationOutcome`, FHIR `Provenance` /
+  `AuditEvent`, deterministic `urn:uuid`, code-system provenance,
+  CodeableConcept checks, and flat-table clinical entity export helpers (#566,
+  #642, #631, #629, #626, #625, #553, #705, #737, #777, #784, #689, #690).
+- Added clinical extraction and normalization helpers for labs, vital signs,
+  medication sigs, problem lists, summary cards, microbiology labels,
+  dermatology and ophthalmology domains, clinical concept labels, and clinical
+  term protection, plus deterministic substance, employment, and living-status
+  normalization (#552, #410, #560, #718, #683, #773, #684, #691, #698, #767).
+- Added a nutrition and diet-order zero-shot domain, four canonical nutrition
+  policy labels, policy-profile coverage, routing metadata, and synthetic
+  fixture coverage for diet orders and feeding routes (#951).
+- Added language and locale capabilities for Indonesian, Thai, Hebrew RTL,
+  PESEL, Korean RRN, Unicode script detection, locale checksum registries,
+  deterministic locale PHI generation, and locale-aware date/number
+  normalization (#747, #746, #748, #709, #609, #610, #614, #766).
+- Added de-identification runtime features: `DeidentificationResult.to_dataframe`,
+  redaction preview diffs, cross-document surrogate vaults, patient-keyed date
+  shifting, format-preserving identifier redaction, minimum-necessary strength
+  selection, streaming incremental de-identification, typed analyze results,
+  pipeline explain traces, section stamping, and per-document risk budgets
+  (#706, #695, #729, #704, #778, #779, #731, #611, #727, #785, #733).
+- Added CLI surfaces for policy-aware `openmed deid`, `openmed fhir bundle`,
+  `openmed models recommend`, `openmed models diff`, `openmed policy diff`,
+  `openmed doctor`, `openmed gates preview`, `openmed gates bundle`,
+  `openmed audit`, `openmed risk`, and active-learning queue management (#741,
+  #777, #721, #780, #771, #772, #775, #735, #787, #613).
+- Added service features for model warm pools, dynamic batching, request
+  coalescing, rate and concurrency limits, readiness/liveness endpoints,
+  opt-in Prometheus metrics, and typed Python and TypeScript REST clients
+  (#632, #630, #750, #742, #722, #788, #789, #756).
+- Added an in-process ASGI load-test harness with configurable concurrency
+  that reports requests per second, p50/p95/p99 latency, and error rate (#461).
+- Added evaluation, release-gate, and risk tooling: DrugProt and public
+  biomedical NER suites, i2b2 loader, multilingual golden fixtures, dataset
+  cards, fixture coverage, per-section recall, result cache, leakage heatmaps,
+  membership-inference
+  probe, k-anonymity/l-diversity/t-closeness metrics, audit diffs, evidence
+  bundles, scorecards, threshold sweeps, flaky-run detection, paired
+  significance testing, calibration reliability data, utility-loss reports,
+  policy-compliance suite, cross-release benchmark history diffs, nano-tier
+  certification, and risk dashboard rendering (#617, #615, #743, #701, #688,
+  #703, #702, #708, #725, #680, #724, #723, #740, #735, #681, #682, #752,
+  #753, #754, #762, #765, #734, #764, #744, #786).
+- Added model, backend, and training support for Laneformer MLX-LM, MLX INT4
+  recall certification, Core ML INT8 palettized export, AWQ and GPTQ 4-bit
+  quantization recipes, bitsandbytes 4-bit loading, FlashAttention/SDPA/eager
+  attention selection, PyTorch MPS tuning, ONNX/WebGPU and Transformers.js
+  exports, tokenizer caching, Mode-A distillation, DAPT corpus assembly, and
+  ONNX/quantized artifact publishing metadata (#644, #620, #619, #627, #759,
+  #760, #761, #719, #736, #790, #751, #622, #612).
+- Added interop adapters for PHILTER, pyDeid, GLiNER-BioMed, LangChain, and the
+  optional spaCy `openmed_deid` pipeline component (#372, #624).
+- Added policy profiles and policy tooling for Australia Privacy Act, GDPR
+  Article 9 health, UK ICO anonymisation, policy config diffing, and Swift
+  OpenMedKit policy-driven de-identification (#769, #770, #768, #771, #685).
+- Added Swift/OpenMedKit de-identification result JSON export and bundled
+  policy resources for client-side policy workflows (#692, #685).
+- Added examples and documentation for a first-five-minutes redaction/extraction
+  to FHIR walkthrough, OpenAPI export, model manifest docs, REST clients, OCR,
+  multimodal redaction, quantization exports, policy workflows, security, SBOM,
+  reproducible dependencies, breach response, onboarding, community health, and
+  release status contracts (#628, #694, #647, #716, #720, #1021, #409, #697).
+
+### Changed
+
+- `analyze_text(..., output_format="dict")` now returns a frozen
+  `AnalyzeResult`; `to_dict()` and mapping access preserve the legacy dict shape
+  (#611).
+- PII extraction and the staged pipeline now apply clinical term protection by
+  default, suppressing ambiguous PERSON/LOCATION/ORG matches that exactly match
+  protected clinical vocabulary (#698).
+- ConText temporality, uncertainty, and negation now use sentence/clause-bounded
+  cue scope with section-aware priors and context offsets (#738, #739, #782).
+- Pipeline span output can include populated `section` metadata after section
+  stamping (#785).
+- Lab reference-range parsing now accepts broader separators/operators and treats
+  unknown explicit flags as `unknown` rather than deriving a normal/high/low
+  result (#560).
+- REST `/health` remains as a compatibility alias, while `/livez` and `/readyz`
+  expose split liveness/readiness state and shutdown drains in-flight
+  model-backed requests (#722).
+- REST CORS and trusted-host handling is now deny-by-default except for exact
+  configured origins and trusted hosts (#686).
+- OCR auto-selection can now pick installed EasyOCR or docTR adapters in
+  addition to Tesseract/PaddleOCR (#749, #558).
+- Evaluation defaults now include DrugProt and biomedical NER suites, and
+  leakage heatmaps now emit label-by-language matrices with totals and worst
+  cells (#617, #743, #680).
+- Model manifest rows now merge format lists for existing repositories and
+  recognize ONNX/WebGPU and Transformers.js export formats (#736, #790).
+- CI lint/test/security/build setup moved to `uv sync` / `uv run`, with GitHub
+  Actions refs validated and Dependabot Actions updates limited to minor/patch
+  bumps (#185, #700).
+- PyTorch/HF backends can auto-select MPS on Apple Silicon when no device is set
+  (#719).
+- AWQ and GPTQ export paths now share synthetic quantization calibration
+  metadata (#759).
+- `shift_dates` documentation now describes patient-keyed stable date shifting;
+  the legacy boolean remains accepted but deprecated in favor of
+  `method="shift_dates"` (#704).
+
+### Fixed
+
+- Fixed nondeterministic audit span ordering so report serialization, hashes, and
+  signatures are stable while preserving legacy verification (#645).
+- Fixed date-shift parity between `python-dateutil` and fallback paths,
+  including month-first English month-name dates, and aligned `uv.lock` with the
+  dev extra dependency set (#616, #649).
+- Fixed deterministic FHIR URN preservation during Bundle assembly (#553).
+- Fixed JSON loading paths in core, eval, NER, and risk modules so corrupt JSON
+  raises clearer errors or fails closed (#958).
+- Fixed optional-extra diagnostics for missing `ftfy`, section detection, and
+  date-shift capabilities (#781).
+- Reduced numeric false positives in safety-sweep postcode-style matches by
+  requiring stronger context (#783).
+- Added explicit UTF-8 encodings for subprocess/file I/O paths and preserved
+  exception chaining in model load failures (#1088).
+- Added timeouts to `subprocess.run` calls in reproducibility hash and
+  release-gate issue helpers (#1090).
+- Replaced eager f-string logging with lazy logging interpolation across model,
+  processing, batch, text, and utility modules (#1092).
+- Fixed PII method quickstart docs for `mask`, `remove`, `replace`, `hash`,
+  `shift_dates`, and `reidentify()` examples (#409).
+
+### Security
+
+- Added root `SECURITY.md`, private vulnerability disclosure guidance, security
+  issue-template routing, security docs, and README links (#648).
+- Added breach-notification runbook and breach report template with explicit
+  no-raw-PHI/PII handling guidance (#1021).
+- Added CycloneDX SBOM generation via `make sbom`, CI artifact upload, tagged
+  release SBOM attachment, and supply-chain docs (#720).
+- Added reproducible-lock GitHub Actions gate and contributing docs for pinned,
+  hash-verified installs (#1083).
+- Added lockfile drift, GitHub Actions ref, license-policy, and doctest-backed
+  public-example gates (#693, #700, #763).
+- Added PHI-safe defaults for progress callbacks, NDJSON error summaries,
+  active-learning records, hashed examples, explain traces, dataset cards, and
+  metadata scrubbing (#621, #737, #613, #765, #727, #701, #755).
+
+### Dependencies
+
+- Added optional extras and dependency policy entries for multimodal/OCR, spaCy,
+  AWQ, GPTQ, MLX-LM, Kafka, PHILTER/pyDeid, TypeScript client support, and
+  service clients (#555, #567, #624, #627, #644, #757, #759, #372, #756, #789).
+- Updated GitHub Actions refs and maintenance dependencies, including checkout
+  v7, setup-python v6, cache v6, upload-artifact v7, Ruff/pre-commit updates,
+  and LangChain Core 1.x compatibility for the optional LangChain extra (#607,
+  #710, #711, #712, #713, #714, #715).
+
+### Removed
+
+- No public files, modules, or APIs were removed in the reviewed release range.
+
+### Upgrade Notes
+
+- FHIR `OperationOutcome` output emits R4 `issue.expression`; legacy
+  `issue.location` is accepted on input but is not emitted, and non-R4
+  severities such as `info` are rejected (#566).
+- `ServiceRuntime.get_loader()` returns the warm-pool proxy; use
+  `get_model_loader()` when raw loader access is required (#632).
+- Unsupported Core ML architectures now fail before model loading/tracing, and
+  `--quantized-output` requires `--quantize int8` (#619).
+- Custom OCR engines should tolerate the keyword-only `languages` parameter
+  (#717).
+- The canonical label set expanded with clinical concepts, which can affect
+  callers enumerating exact label counts (#718).
+- `format_preserve` expands the action enum/schema surface and updates schema
+  fingerprints (#778).
+- REST deployments using custom Host headers must configure
+  `OPENMED_SERVICE_TRUSTED_HOSTS`; wildcard CORS/trusted-host settings are
+  rejected (#686).
+- OCR auto-selection order changed when optional EasyOCR or docTR engines are
+  installed (#749, #558).
 
 ## [1.6.0] - 2026-06-22
 
@@ -863,7 +1212,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...v1.9.1
+[1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
+[1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1
+[1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/maziyarpanahi/openmed/compare/v1.5.5...v1.6.0
 [0.6.1]: https://github.com/OpenMed/openmed/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/OpenMed/openmed/compare/v0.5.8...v0.6.0

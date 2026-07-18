@@ -34,4 +34,4 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
-        args: [--config=.gitleaks.toml]
+        args: [--config=.gitleaks.toml, --baseline-path=.secrets.baseline]

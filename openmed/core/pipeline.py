@@ -3,15 +3,31 @@
 from __future__ import annotations
 
 import copy
+import importlib
 import inspect
 import logging
 import unicodedata
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Mapping, Optional, Sequence
+from time import perf_counter
+from typing import Any, Callable, Iterator, Literal, Mapping, Optional, Sequence, cast
 
+from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
+
+# Keep this runtime alias aligned with ``pii.DeidentificationMethod``. Importing
+# ``pii`` here would eagerly load the heavier public de-identification module,
+# which otherwise imports ``Pipeline`` only when ``deidentify`` is called.
+DeidentificationMethod = Literal[
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
 
 STAGE_NAMES: tuple[str, ...] = (
     "normalize",
@@ -144,6 +160,8 @@ class PipelineResult:
     redacted_text: str
     audit_record: Mapping[str, Any]
     deidentification_result: Any = None
+    stage_durations_ms: Mapping[str, float] = field(default_factory=dict)
+    cascade_duration_ms: float | None = None
 
     def stage(self, name: str) -> PipelineStageResult:
         for result in self.stage_results:
@@ -151,13 +169,64 @@ class PipelineResult:
                 return result
         raise KeyError(name)
 
+    def stage_duration_ms(self, name: str) -> float:
+        """Return the measured wall-clock duration of ``name`` in milliseconds.
+
+        Durations are latency-only measurements: they never carry document text
+        and are safe for transient metrics or logs. They cover only work
+        explicitly attributed to that stage, not cross-stage orchestration or
+        audit serialization. They are deliberately kept off the reproducible
+        audit record because wall-clock time is non-deterministic.
+
+        In cascade mode, the router spans detection stages 4--6 and its total
+        duration is therefore reported separately as ``cascade_duration_ms``;
+        it is not charged to any one stage.
+        """
+        if name not in self.stage_durations_ms:
+            raise KeyError(name)
+        return self.stage_durations_ms[name]
+
+    def explain(self) -> Any:
+        """Return a reviewer-facing trace report for this pipeline result."""
+
+        from .explain import explain
+
+        return explain(self)
+
 
 SpanHook = Callable[[Sequence[OpenMedSpan], PipelineContext], Sequence[OpenMedSpan]]
 ModelDetector = Callable[..., Any]
 
 
 class Pipeline:
-    """Orchestrate the ten-stage privacy detection pipeline."""
+    """Orchestrate the ten-stage privacy detection pipeline.
+
+    Complexity for long inputs
+    --------------------------
+    Let ``n`` be the note length in characters and ``m`` the number of
+    candidate spans (typically ``m << n`` for clinical notes).
+
+    * Stage 1 (normalize) builds three character-indexed offset maps, so it is
+      ``O(n)`` in time and memory. Encoding repair (optional ``ftfy``) runs per
+      segment only when a real repairer is active; when it is unavailable the
+      per-segment call is skipped so stage 1 stays ``O(n)`` without a
+      per-character Python-call overhead.
+    * Stages 4 and 9 (deterministic detectors / safety sweep) scan the text
+      once per regex pattern, i.e. ``O(P * n)`` for a fixed pattern set ``P``
+      -- linear in ``n``.
+    * Stage 7 (arbitration) sorts and sweeps candidates in ``O(m log m)``.
+
+    The pipeline is therefore expected to scale roughly linearly with note
+    length. ``run`` measures explicitly attributed per-stage wall-clock work
+    (see :meth:`PipelineResult.stage_duration_ms`). Cross-stage setup, span
+    remapping, and audit serialization are excluded. When a cascade router is
+    configured, its shared detector/router work spans stages 4--6 and is
+    reported separately as :attr:`PipelineResult.cascade_duration_ms`; those
+    stage keys measure only their cascade-output projection and registered-hook
+    work. The latency-scaling regression tests in
+    ``tests/unit/core/test_pipeline_latency.py`` guard against a regression that
+    reintroduces super-linear behaviour.
+    """
 
     stage_names = STAGE_NAMES
 
@@ -189,6 +258,7 @@ class Pipeline:
         high_recall_label_floors: Mapping[str, float] | None = None,
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
+        custom_recognizer: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
         from . import pii
@@ -230,6 +300,7 @@ class Pipeline:
         self.high_recall_label_floors = high_recall_label_floors
         self.policy_actions = policy_actions
         self.section_detector = section_detector
+        self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
         self.hmac_secret = hmac_secret
         from .clinical_protect import protection_options_from_config
 
@@ -243,28 +314,49 @@ class Pipeline:
         keep_year: bool = False,
         shift_dates: Optional[bool] = None,
         date_shift_days: Optional[int] = None,
+        patient_key: Optional[str | bytes] = None,
+        date_shift_max_days: Optional[int] = None,
+        date_shift_secret: Optional[str | bytes] = None,
         keep_mapping: bool = False,
         consistent: bool = False,
         seed: Optional[int] = None,
         locale: Optional[str] = None,
+        surrogate_vault: Any = None,
         doc_id: str | None = None,
         audit: bool = False,
+        explain: bool = False,
     ) -> PipelineResult:
         from . import pii
 
         effective_method = pii._resolve_deidentification_method(
-            method,
+            cast("DeidentificationMethod", method),
             shift_dates,
             date_shift_days,
+            patient_key=patient_key,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
         )
+        stage_durations_ms: dict[str, float] = {
+            stage_name: 0.0 for stage_name in STAGE_NAMES
+        }
+        cascade_duration_ms: float | None = None
         original_text = text.strip()
-        normalized = self.stage1_normalize(original_text)
-        route = self.stage2_language_script(normalized.normalized_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
+            normalized = self.stage1_normalize(original_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
+            route = self.stage2_language_script(normalized.normalized_text)
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
         )
-        section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[2]):
+            section_metadata = _remap_section_metadata_to_normalized(
+                self.stage3_doc_type_section(
+                    normalized.original_text,
+                    language=route.lang,
+                ),
+                normalized,
+            )
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
@@ -299,6 +391,7 @@ class Pipeline:
 
         cascade_driven = self.cascade_router is not None
         if cascade_driven:
+            cascade_started = perf_counter()
             cascade_result = self.cascade_router.run(
                 normalized.normalized_text,
                 context=context,
@@ -306,113 +399,199 @@ class Pipeline:
                 language=route.lang,
                 policy_profile=self.policy_profile,
             )
-            deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
-            model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
-            clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
-            deterministic_spans = (
-                *deterministic_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[3],
-                ),
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
-            clinical_spans = (
-                *clinical_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[5],
-                ),
-            )
+            cascade_duration_ms = (perf_counter() - cascade_started) * 1000.0
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+                deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
+                deterministic_spans = (
+                    *deterministic_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[3],
+                    ),
+                )
+                deterministic_spans = _stamp_span_sections(
+                    deterministic_spans,
+                    context.section_metadata,
+                )
+                cascade_metadata = {
+                    "cascade_mode": cascade_result.mode,
+                    "routes": [
+                        {
+                            "route": stage.route,
+                            "name": stage.name,
+                            "reason": stage.reason,
+                            "span_count": len(stage.spans),
+                        }
+                        for stage in cascade_result.stage_results
+                    ],
+                    "timing_scope": (
+                        "R0 output projection and registered hooks only; shared "
+                        "cascade router time is reported separately"
+                    ),
+                }
+                stage_results.append(
+                    PipelineStageResult(
+                        4,
+                        STAGE_NAMES[3],
+                        spans=deterministic_spans,
+                        metadata=cascade_metadata,
+                    )
+                )
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+                model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+                model_spans = _stamp_span_sections(
+                    model_spans,
+                    context.section_metadata,
+                )
+                stage_results.append(
+                    PipelineStageResult(
+                        5,
+                        STAGE_NAMES[4],
+                        spans=model_spans,
+                        metadata={
+                            "timing_scope": (
+                                "R1/R2 output projection and registered hooks only; "
+                                "shared cascade router time is reported separately"
+                            )
+                        },
+                    )
+                )
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+                clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+                clinical_spans = (
+                    *clinical_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[5],
+                    ),
+                )
+                clinical_spans = _stamp_span_sections(
+                    clinical_spans,
+                    context.section_metadata,
+                )
+                stage_results.append(
+                    PipelineStageResult(
+                        6,
+                        STAGE_NAMES[5],
+                        spans=clinical_spans,
+                        metadata={
+                            "timing_scope": (
+                                "R3/R4 output projection and registered hooks only; "
+                                "shared cascade router time is reported separately"
+                            )
+                        },
+                    )
+                )
+
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
                 model_name="cascade",
             )
-            cascade_metadata = {
-                "cascade_mode": cascade_result.mode,
-                "routes": [
-                    {
-                        "route": stage.route,
-                        "name": stage.name,
-                        "reason": stage.reason,
-                        "span_count": len(stage.spans),
-                    }
-                    for stage in cascade_result.stage_results
-                ],
-            }
-            stage_results.append(
-                PipelineStageResult(
-                    4,
-                    STAGE_NAMES[3],
-                    spans=deterministic_spans,
-                    metadata=cascade_metadata,
-                )
-            )
-            stage_results.append(
-                PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
-            )
-            stage_results.append(
-                PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
-            )
         else:
-            deterministic_spans = self.stage4_deterministic_detectors(
-                normalized.normalized_text,
-                context,
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+                deterministic_spans = self.stage4_deterministic_detectors(
+                    normalized.normalized_text,
+                    context,
+                )
+            deterministic_spans = _stamp_span_sections(
+                deterministic_spans,
+                context.section_metadata,
             )
             stage_results.append(
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
-            pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
-            self._apply_calibration_thresholds(pii_result, route)
-            model_spans = self._entities_to_spans(
-                getattr(pii_result, "entities", ()),
-                normalized.normalized_text,
-                context,
-                default_detector=(
-                    f"model:{getattr(pii_result, 'model_name', route.model_name)}"
-                ),
-                stage=STAGE_NAMES[4],
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+                pii_result = self.stage5_fast_pii_model(
+                    normalized.normalized_text, route
+                )
+                self._apply_calibration_thresholds(pii_result, route)
+                model_spans = self._entities_to_spans(
+                    getattr(pii_result, "entities", ()),
                     normalized.normalized_text,
                     context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
+                    default_detector=(
+                        f"model:{getattr(pii_result, 'model_name', route.model_name)}"
+                    ),
+                    stage=STAGE_NAMES[4],
+                )
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+            model_spans = _stamp_span_sections(model_spans, context.section_metadata)
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
 
-            clinical_spans = self.stage6_clinical_phi_model(
-                normalized.normalized_text,
-                context,
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+                clinical_spans = self.stage6_clinical_phi_model(
+                    normalized.normalized_text,
+                    context,
+                )
+            clinical_spans = _stamp_span_sections(
+                clinical_spans,
+                context.section_metadata,
             )
             stage_results.append(
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
 
-        merged_spans = self.stage7_arbitration(
-            (*deterministic_spans, *model_spans, *clinical_spans),
-            context,
+        arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[6]):
+            merged_spans = self.stage7_arbitration(
+                arbitration_candidates,
+                context,
+            )
+        arbitration_trace_metadata = (
+            _arbitration_trace_metadata(
+                arbitration_candidates,
+                merged_spans,
+                mode=self.arbitration_mode,
+                strict_no_leak=self.strict_no_leak,
+                language=route.lang,
+                policy_profile=self.policy_profile,
+                label_floors=self.arbitration_label_floors,
+                high_recall_label_floors=self.high_recall_label_floors,
+                threshold_matrix=self.threshold_matrix,
+            )
+            if explain and self.arbitration is None
+            else None
+        )
+        merged_spans, allow_metadata = self._suppress_custom_allowed_spans(
+            normalized.normalized_text,
+            merged_spans,
         )
         merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
             normalized.normalized_text,
             merged_spans,
             context,
         )
+        merged_spans = _stamp_span_sections(merged_spans, context.section_metadata)
+        arbitration_metadata = {
+            **dict(allow_metadata),
+            **dict(clinical_protection_metadata),
+        }
+        if arbitration_trace_metadata is not None:
+            arbitration_metadata["arbitration_trace"] = arbitration_trace_metadata
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
@@ -431,11 +610,17 @@ class Pipeline:
                 7,
                 STAGE_NAMES[6],
                 spans=merged_spans,
-                metadata=clinical_protection_metadata,
+                metadata=arbitration_metadata,
             )
         )
 
-        policy_spans = self.stage8_policy_actions(merged_spans, context)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[7]):
+            policy_spans = self.stage8_policy_actions(
+                merged_spans,
+                context,
+                explain=explain,
+            )
+        policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
@@ -453,6 +638,11 @@ class Pipeline:
                 ]
                 pii_result.metadata = metadata
         else:
+            pii._suppress_custom_allowed_entities(
+                normalized.normalized_text,
+                pii_result,
+                self.custom_recognizer,
+            )
             pii_result = _append_span_predictions(
                 pii_result,
                 normalized.normalized_text,
@@ -460,15 +650,16 @@ class Pipeline:
                     span
                     for span in policy_spans
                     if span.action != ACTION_KEEP
-                    and str(span.detector or "").startswith("plugin:")
+                    and str(span.detector or "").startswith(("plugin:", "custom:"))
                 ],
             )
 
-        sweep_spans, sweep_metadata = self.stage9_safety_sweep(
-            normalized.normalized_text,
-            pii_result,
-            context,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[8]):
+            sweep_spans, sweep_metadata = self.stage9_safety_sweep(
+                normalized.normalized_text,
+                pii_result,
+                context,
+            )
         stage_results.append(
             PipelineStageResult(
                 9,
@@ -486,30 +677,40 @@ class Pipeline:
             normalized,
             self.hmac_secret,
         )
-        deidentified = self.stage10_emit(
-            normalized.original_text,
-            emission_pii_result,
-            effective_method=effective_method,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days,
-            keep_mapping=effective_keep_mapping,
-            lang=route.lang,
-            consistent=consistent,
-            seed=seed,
-            locale=locale,
-            model_name=route.model_name,
-            confidence_threshold=self.confidence_threshold,
-            normalize_accents=self.normalize_accents,
-            use_smart_merging=self.use_smart_merging,
-            use_safety_sweep=self.use_safety_sweep,
-            reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
-            policy_name=self.policy.name if self.policy is not None else None,
-            policy=self.policy.name if self.policy is not None else "hipaa_safe_harbor",
-            audit=audit,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
+            deidentified = self.stage10_emit(
+                normalized.original_text,
+                emission_pii_result,
+                effective_method=effective_method,
+                keep_year=keep_year,
+                date_shift_days=date_shift_days,
+                patient_key=patient_key,
+                date_shift_max_days=date_shift_max_days,
+                date_shift_secret=date_shift_secret,
+                keep_mapping=effective_keep_mapping,
+                lang=route.lang,
+                consistent=consistent,
+                seed=seed,
+                locale=locale,
+                surrogate_vault=surrogate_vault,
+                model_name=route.model_name,
+                confidence_threshold=self.confidence_threshold,
+                normalize_accents=self.normalize_accents,
+                use_smart_merging=self.use_smart_merging,
+                use_safety_sweep=self.use_safety_sweep,
+                reversible_ids=bool(
+                    self.policy is not None and self.policy.reversible_id
+                ),
+                policy_name=self.policy.name if self.policy is not None else None,
+                policy=(
+                    self.policy.name if self.policy is not None else "hipaa_safe_harbor"
+                ),
+                audit=audit,
+            )
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
+        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
         emission_spans = _remap_spans_to_original(
             final_spans,
             normalized,
@@ -546,9 +747,19 @@ class Pipeline:
             redacted_text=deidentified.deidentified_text,
             audit_record=audit_record,
             deidentification_result=deidentified,
+            stage_durations_ms=dict(stage_durations_ms),
+            cascade_duration_ms=cascade_duration_ms,
         )
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
+        repair_encoding, encoding_repair_metadata = _encoding_repairer()
+        # Encoding repair is an optional (ftfy) capability. When it is
+        # unavailable the repairer is the identity function, so calling it once
+        # per segment is pure overhead: on a long note stage 1 would make one
+        # no-op wrapper call per character. Detect the identity case once and
+        # skip the per-segment repair call, keeping stage 1 near-linear in note
+        # length without changing the normalized output.
+        repair_active = repair_encoding is not _identity_text
         normalized_parts: list[str] = []
         original_to_normalized: list[int | None] = [None] * len(text)
         normalized_to_original: list[int] = []
@@ -559,11 +770,13 @@ class Pipeline:
             normalized_start = normalized_length
             if is_whitespace:
                 normalized_segment = " "
-            else:
+            elif repair_active:
                 normalized_segment = unicodedata.normalize(
                     "NFC",
-                    _repair_encoding_segment(segment),
+                    repair_encoding(segment),
                 )
+            else:
+                normalized_segment = unicodedata.normalize("NFC", segment)
 
             if not normalized_segment:
                 continue
@@ -592,6 +805,7 @@ class Pipeline:
                 "whitespace_collapsed": normalized_text != text,
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
+                "encoding_repair": encoding_repair_metadata,
             },
         )
 
@@ -614,21 +828,47 @@ class Pipeline:
             metadata={"available_default_model": DEFAULT_PII_MODELS.get(lang)},
         )
 
-    def stage3_doc_type_section(self, text: str) -> Mapping[str, Any]:
+    def stage3_doc_type_section(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+    ) -> Mapping[str, Any]:
         if self.section_detector is not None:
-            return dict(self.section_detector(text))
+            return dict(_call_section_detector(self.section_detector, text, language))
 
         try:
-            from openmed.clinical import sections
-        except ImportError:
-            return {"section_hook": "unavailable", "sections": ()}
+            sections = importlib.import_module("openmed.clinical.sections")
+        except ImportError as exc:
+            return {
+                "section_hook": "unavailable",
+                "sections": (),
+                "section_detection": _section_detection_unavailable_metadata(exc),
+            }
 
         if hasattr(sections, "detect_sections"):
             return {
                 "section_hook": "detect_sections",
-                "sections": sections.detect_sections(text),
+                "sections": sections.detect_sections(text, language=language),
+                "section_detection": {
+                    "feature": "clinical section detection",
+                    "available": True,
+                    "skipped": False,
+                    "dependency": "openmed.clinical.sections",
+                    "language": language,
+                },
             }
-        return {"section_hook": "unavailable", "sections": ()}
+        return {
+            "section_hook": "unavailable",
+            "sections": (),
+            "section_detection": {
+                "feature": "clinical section detection",
+                "available": False,
+                "skipped": True,
+                "dependency": "openmed.clinical.sections.detect_sections",
+                "reason": "detect_sections hook is not registered",
+            },
+        }
 
     def stage4_deterministic_detectors(
         self,
@@ -643,16 +883,20 @@ class Pipeline:
             lang=context.route.lang,
             patterns=_deterministic_patterns(context.route.lang),
         )
-        return self._entities_to_spans(
-            entities,
-            text,
-            context,
-            default_detector="rules:regex",
-            stage=STAGE_NAMES[3],
-        ) + self._registered_detector_spans(
-            text,
-            context,
-            pipeline_stage=STAGE_NAMES[3],
+        return (
+            self._entities_to_spans(
+                entities,
+                text,
+                context,
+                default_detector="rules:regex",
+                stage=STAGE_NAMES[3],
+            )
+            + self._custom_deny_spans(text, context)
+            + self._registered_detector_spans(
+                text,
+                context,
+                pipeline_stage=STAGE_NAMES[3],
+            )
         )
 
     def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
@@ -715,6 +959,7 @@ class Pipeline:
             model_id=result_model,
             language=route.lang,
         )
+        defense = self.calibration_thresholds.membership_defense_policy
         retained = []
         filtered = 0
         for entity in getattr(pii_result, "entities", ()):
@@ -734,8 +979,21 @@ class Pipeline:
                 "model_id": result_model,
                 "language": route.lang,
             }
+            raw_confidence = float(getattr(entity, "confidence", 0.0) or 0.0)
+            defended_confidence = defense.apply_score(raw_confidence)
+            if defense.enabled:
+                metadata["membership_defense"] = {
+                    "enabled": True,
+                    "raw_confidence": raw_confidence,
+                    "defended_confidence": defended_confidence,
+                    "clip_min": defense.clip_min,
+                    "clip_max": defense.clip_max,
+                    "temperature": defense.temperature,
+                    "smoothing": defense.smoothing,
+                }
+                entity.confidence = defended_confidence
             entity.metadata = metadata
-            if float(getattr(entity, "confidence", 0.0) or 0.0) >= threshold:
+            if defended_confidence >= threshold:
                 retained.append(entity)
             else:
                 filtered += 1
@@ -751,6 +1009,7 @@ class Pipeline:
             "schema_version": self.calibration_thresholds.schema_version,
             "model_id": result_model,
             "suite": self.calibration_thresholds.suite,
+            "membership_defense": defense.to_dict(),
         }
         pii_result.metadata = metadata
 
@@ -779,6 +1038,8 @@ class Pipeline:
         self,
         spans: Sequence[OpenMedSpan],
         context: PipelineContext,
+        *,
+        explain: bool = False,
     ) -> tuple[OpenMedSpan, ...]:
         if self.policy_actions is not None:
             return tuple(self.policy_actions(spans, context))
@@ -794,6 +1055,7 @@ class Pipeline:
                 policy_profile=self.policy_profile,
                 strict_no_leak=self.strict_no_leak,
                 matrix=self.threshold_matrix,
+                explain=explain,
             )
             for span in spans
         )
@@ -809,7 +1071,7 @@ class Pipeline:
         if self.use_safety_sweep:
             from . import pii
 
-            spans_added = pii._apply_safety_sweep_to_result(
+            pii_result, spans_added = pii._apply_safety_sweep_to_result(
                 text,
                 pii_result,
                 lang=context.route.lang,
@@ -817,6 +1079,14 @@ class Pipeline:
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
             raise RuntimeError("safety sweep must not reduce redacted character count")
+        if self.custom_recognizer is not None:
+            from . import pii
+
+            pii._suppress_custom_allowed_entities(
+                text,
+                pii_result,
+                self.custom_recognizer,
+            )
 
         spans = self._entities_to_spans(
             getattr(pii_result, "entities", ()),
@@ -832,6 +1102,11 @@ class Pipeline:
             "spans_added": spans_added,
             "redacted_chars_before": before,
             "redacted_chars_after": after,
+            "custom_allow_spans": (
+                len(self.custom_recognizer.allow_matches(text))
+                if self.custom_recognizer is not None
+                else 0
+            ),
         }
 
     def _protect_clinical_spans(
@@ -857,14 +1132,18 @@ class Pipeline:
         text: str,
         pii_result: Any,
         *,
-        effective_method: str,
+        effective_method: DeidentificationMethod,
         keep_year: bool,
         date_shift_days: Optional[int],
+        patient_key: Optional[str | bytes],
+        date_shift_max_days: Optional[int],
+        date_shift_secret: Optional[str | bytes],
         keep_mapping: bool,
         lang: str,
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        surrogate_vault: Any = None,
         model_name: str,
         confidence_threshold: float,
         normalize_accents: Optional[bool],
@@ -883,11 +1162,15 @@ class Pipeline:
             effective_method=effective_method,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
+            patient_key=patient_key,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
             keep_mapping=keep_mapping,
             lang=lang,
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=model_name,
             confidence_threshold=confidence_threshold,
             normalize_accents=normalize_accents,
@@ -1011,6 +1294,38 @@ class Pipeline:
                 )
         return tuple(spans)
 
+    def _custom_deny_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> tuple[OpenMedSpan, ...]:
+        if self.custom_recognizer is None:
+            return ()
+        entities = self.custom_recognizer.detect_entities(
+            text,
+            hmac_secret=self.hmac_secret,
+        )
+        return self._entities_to_spans(
+            entities,
+            text,
+            context,
+            default_detector=CUSTOM_DENY_DETECTOR,
+            stage=STAGE_NAMES[3],
+        )
+
+    def _suppress_custom_allowed_spans(
+        self,
+        text: str,
+        spans: Sequence[OpenMedSpan],
+    ) -> tuple[tuple[OpenMedSpan, ...], Mapping[str, Any]]:
+        if self.custom_recognizer is None:
+            return tuple(spans), {}
+        filtered, suppressed = self.custom_recognizer.suppress_spans(text, spans)
+        return filtered, {
+            "custom_allow_spans": len(self.custom_recognizer.allow_matches(text)),
+            "custom_allow_suppressed_spans": suppressed,
+        }
+
     def _audit_record(
         self,
         context: PipelineContext,
@@ -1019,6 +1334,10 @@ class Pipeline:
         *,
         redacted_text: str,
     ) -> Mapping[str, Any]:
+        # The audit record is reproducible: it carries only offsets, hashes,
+        # counts, and provenance -- never wall-clock timings, which are
+        # non-deterministic. Per-stage and shared cascade latency live only on
+        # ``PipelineResult.stage_durations_ms`` and ``cascade_duration_ms``.
         record = {
             "doc_id": context.doc_id,
             "language": context.route.lang,
@@ -1051,6 +1370,25 @@ class Pipeline:
         return record
 
 
+@contextmanager
+def _stage_timer(
+    durations_ms: dict[str, float],
+    stage_name: str,
+) -> Iterator[None]:
+    """Record the wall-clock duration of a pipeline stage in milliseconds.
+
+    The recorded value is a latency measurement only; it carries no document
+    text and may be used for transient metrics or logs. It is deliberately not
+    persisted in the reproducible pipeline audit record.
+    """
+    start = perf_counter()
+    try:
+        yield
+    finally:
+        elapsed_ms = (perf_counter() - start) * 1000.0
+        durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
+
+
 def _iter_normalization_segments(text: str):
     index = 0
     while index < len(text):
@@ -1070,12 +1408,124 @@ def _iter_normalization_segments(text: str):
         yield start, index, text[start:index], False
 
 
-def _repair_encoding_segment(segment: str) -> str:
+def _identity_text(text: str) -> str:
+    return text
+
+
+def _encoding_repairer() -> tuple[Callable[[str], str], Mapping[str, Any]]:
+    from .pii import _optional_dependency_status
+
     try:
         from ftfy import fix_text
-    except ImportError:
-        return segment
-    return fix_text(segment)
+    except ImportError as exc:
+        return _identity_text, _optional_dependency_status(
+            package="ftfy",
+            feature="encoding repair",
+            available=False,
+            skipped=True,
+            reason=f"missing optional dependency: {exc.name or 'ftfy'}",
+        )
+    return fix_text, _optional_dependency_status(
+        package="ftfy",
+        feature="encoding repair",
+        available=True,
+        skipped=False,
+    )
+
+
+def _repair_encoding_segment(
+    segment: str,
+    *,
+    repair_encoding: Callable[[str], str] | None = None,
+) -> str:
+    if repair_encoding is None:
+        repair_encoding, _ = _encoding_repairer()
+    return repair_encoding(segment)
+
+
+def _section_detection_unavailable_metadata(exc: ImportError) -> dict[str, Any]:
+    dependency = exc.name or "openmed.clinical.sections"
+    return {
+        "feature": "clinical section detection",
+        "available": False,
+        "skipped": True,
+        "dependency": dependency,
+        "reason": f"missing optional capability: {dependency}",
+    }
+
+
+def _call_section_detector(
+    detector: Callable[..., Mapping[str, Any]],
+    text: str,
+    language: str | None,
+) -> Mapping[str, Any]:
+    if language is None:
+        return detector(text)
+    try:
+        signature = inspect.signature(detector)
+    except (TypeError, ValueError):
+        return detector(text)
+    accepts_language = "language" in signature.parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+    if accepts_language:
+        return detector(text, language=language)
+    return detector(text)
+
+
+def _remap_section_metadata_to_normalized(
+    section_metadata: Mapping[str, Any],
+    document: NormalizedDocument,
+) -> Mapping[str, Any]:
+    sections = section_metadata.get("sections")
+    if not sections:
+        return section_metadata
+    try:
+        section_iter = iter(sections)
+    except TypeError:
+        return section_metadata
+    remapped_sections = tuple(
+        _remap_section_to_normalized(section, document.offset_map)
+        for section in section_iter
+    )
+    return {**dict(section_metadata), "sections": remapped_sections}
+
+
+def _remap_section_to_normalized(section: Any, offset_map: OffsetMap) -> Any:
+    if isinstance(section, Mapping):
+        data = dict(section)
+    else:
+        label = _section_label(section)
+        section_start = getattr(section, "start", None)
+        section_end = getattr(section, "end", None)
+        if (
+            label is None
+            or not isinstance(section_start, int)
+            or not isinstance(section_end, int)
+        ):
+            return section
+        data = {"label": label, "start": section_start, "end": section_end}
+
+    start = data.get("start")
+    end = data.get("end")
+    if isinstance(start, int) and isinstance(end, int):
+        data["start"], data["end"] = offset_map.original_span_to_normalized(start, end)
+
+    header_start = data.get("header_start")
+    header_end = data.get("header_end")
+    if isinstance(header_start, int) and isinstance(header_end, int):
+        data["header_start"], data["header_end"] = (
+            offset_map.original_span_to_normalized(header_start, header_end)
+        )
+
+    content_start = data.get("content_start")
+    if isinstance(content_start, int):
+        data["content_start"] = offset_map.original_span_to_normalized(
+            content_start,
+            content_start,
+        )[0]
+    return data
 
 
 def _detect_script(text: str) -> str:
@@ -1143,7 +1593,9 @@ def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
 def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
-    if detector and str(detector).startswith(("rules:", "model:", "plugin:")):
+    if detector and str(detector).startswith(
+        ("rules:", "model:", "plugin:", "custom:")
+    ):
         return str(detector)
 
     sweep = metadata.get("safety_sweep") if isinstance(metadata, Mapping) else None
@@ -1173,25 +1625,99 @@ def _evidence_for_entity(entity: Any) -> Mapping[str, Any]:
         evidence["rule"] = metadata["safety_sweep"]
     if "patterns_version" in metadata:
         evidence["patterns_version"] = metadata["patterns_version"]
+    if "custom_recognizer" in metadata:
+        evidence["custom_recognizer"] = metadata["custom_recognizer"]
     return evidence
 
 
 def _section_for_span(
     start: int,
-    end: int,
+    _end: int,
     section_metadata: Mapping[str, Any],
 ) -> str | None:
+    """Return the section whose [start, end) range contains the span start."""
+    return _section_label_for_start(start, _section_ranges(section_metadata))
+
+
+def _stamp_span_sections(
+    spans: Sequence[OpenMedSpan],
+    section_metadata: Mapping[str, Any],
+) -> tuple[OpenMedSpan, ...]:
+    section_ranges = _section_ranges(section_metadata)
+    if not section_ranges:
+        return tuple(spans)
+
+    stamped: list[OpenMedSpan] = []
+    for span in spans:
+        section = _section_label_for_start(span.start, section_ranges)
+        if span.section == section:
+            stamped.append(span)
+        else:
+            stamped.append(replace(span, section=section))
+    return tuple(stamped)
+
+
+def _section_ranges(
+    section_metadata: Mapping[str, Any],
+) -> tuple[tuple[int, int, str], ...]:
     sections = section_metadata.get("sections")
     if not sections:
-        return None
-    for section in sections:
-        if not isinstance(section, Mapping):
+        return ()
+    try:
+        section_iter = iter(sections)
+    except TypeError:
+        return ()
+
+    ranges: list[tuple[int, int, str]] = []
+    for section in section_iter:
+        if isinstance(section, Mapping):
+            section_start = section.get("start")
+            section_end = section.get("end")
+            section_label = _section_label(section)
+        else:
+            section_start = getattr(section, "start", None)
+            section_end = getattr(section, "end", None)
+            section_label = _section_label(section)
+        if not (
+            isinstance(section_start, int)
+            and isinstance(section_end, int)
+            and section_start < section_end
+            and section_label is not None
+        ):
             continue
-        section_start = section.get("start")
-        section_end = section.get("end")
-        if isinstance(section_start, int) and isinstance(section_end, int):
-            if start >= section_start and end <= section_end:
-                return str(section.get("label") or section.get("name") or "")
+        if section_label == "unsectioned":
+            continue
+        ranges.append((section_start, section_end, section_label))
+    return tuple(sorted(ranges, key=lambda item: (item[0], item[1], item[2])))
+
+
+def _section_label(section: Any) -> str | None:
+    for field_name in (
+        "label",
+        "name",
+        "section",
+        "section_label",
+        "section_name",
+        "title",
+    ):
+        if isinstance(section, Mapping):
+            value = section.get(field_name)
+        else:
+            value = getattr(section, field_name, None)
+        if value is not None:
+            label = str(value).strip()
+            if label:
+                return label
+    return None
+
+
+def _section_label_for_start(
+    start: int,
+    section_ranges: Sequence[tuple[int, int, str]],
+) -> str | None:
+    for section_start, section_end, label in section_ranges:
+        if section_start <= start < section_end:
+            return label
     return None
 
 
@@ -1216,6 +1742,242 @@ def _redacted_char_count(entities: Sequence[Any]) -> int:
         current_start, current_end = start, end
     total += current_end - current_start
     return total
+
+
+def _arbitration_trace_metadata(
+    candidates: Sequence[OpenMedSpan],
+    winners: Sequence[OpenMedSpan],
+    *,
+    mode: str | None,
+    strict_no_leak: bool,
+    language: str,
+    policy_profile: str | None,
+    label_floors: Mapping[str, float] | None,
+    high_recall_label_floors: Mapping[str, float] | None,
+    threshold_matrix: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+    from .arbitration import (
+        DEFAULT_BALANCED_FLOOR,
+        DEFAULT_HIGH_RECALL_FLOOR,
+        MODE_HIGH_RECALL_UNION,
+        arbitration_mode,
+    )
+
+    selected_mode = arbitration_mode(strict_no_leak=strict_no_leak, mode=mode)
+    resolved_profile = _arbitration_profile(
+        selected_mode,
+        strict_no_leak=strict_no_leak,
+        policy_profile=policy_profile,
+    )
+    if selected_mode == MODE_HIGH_RECALL_UNION:
+        default_floor = DEFAULT_HIGH_RECALL_FLOOR
+        floors = high_recall_label_floors
+        floor_source = "custom_high_recall_label_floors"
+    else:
+        default_floor = DEFAULT_BALANCED_FLOOR
+        floors = label_floors
+        floor_source = "custom_label_floors"
+
+    winner_identities = {_span_identity(span) for span in winners}
+    losers_by_winner: dict[tuple[int, int, str], list[Mapping[str, Any]]] = {}
+    pending_decisions: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        span_ref = _span_trace_ref(candidate)
+        threshold = _arbitration_threshold_trace(
+            candidate,
+            language=language,
+            policy_profile=resolved_profile,
+            floors=floors,
+            floor_source=floor_source,
+            default_floor=default_floor,
+            matrix=threshold_matrix,
+        )
+        if _span_identity(candidate) in winner_identities:
+            decision: dict[str, Any] = {
+                "span": span_ref,
+                "outcome": "winner",
+                "rule": "selected",
+                "reason": "retained",
+                "threshold": threshold,
+            }
+            pending_decisions.append(decision)
+            continue
+
+        winning_span = _overlapping_winner(candidate, winners)
+        if winning_span is None:
+            decision = {
+                "span": span_ref,
+                "outcome": "loser",
+                "rule": "score_below_keep_floor",
+                "reason": "below_keep_floor",
+                "winning_span": None,
+                "threshold": threshold,
+            }
+        else:
+            winner_ref = _span_trace_ref(winning_span)
+            decision = {
+                "span": span_ref,
+                "outcome": "loser",
+                "rule": _arbitration_tie_break_rule(winning_span, candidate),
+                "reason": "overlap",
+                "winning_span": winner_ref,
+                "threshold": threshold,
+            }
+            losers_by_winner.setdefault(
+                _span_trace_key(winning_span),
+                [],
+            ).append(span_ref)
+        pending_decisions.append(decision)
+
+    decisions: list[Mapping[str, Any]] = []
+    for decision in pending_decisions:
+        if decision["outcome"] == "winner":
+            span_ref = decision["span"]
+            decision["losing_spans"] = tuple(
+                losers_by_winner.get(
+                    (span_ref["start"], span_ref["end"], span_ref["text_hash"]),
+                    (),
+                )
+            )
+        decisions.append(decision)
+
+    return {
+        "mode": selected_mode,
+        "policy_profile": resolved_profile,
+        "language": language,
+        "candidate_count": len(candidates),
+        "winner_count": len(winners),
+        "decisions": tuple(decisions),
+    }
+
+
+def _arbitration_profile(
+    mode: str,
+    *,
+    strict_no_leak: bool,
+    policy_profile: str | None,
+) -> str:
+    from .arbitration import MODE_HIGH_RECALL_UNION
+
+    if policy_profile is not None:
+        return policy_profile
+    if strict_no_leak or mode == MODE_HIGH_RECALL_UNION:
+        return "strict_no_leak"
+    return "balanced"
+
+
+def _arbitration_threshold_trace(
+    span: OpenMedSpan,
+    *,
+    language: str,
+    policy_profile: str,
+    floors: Mapping[str, float] | None,
+    floor_source: str,
+    default_floor: float,
+    matrix: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+    if floors is not None:
+        keep_floor = float(
+            floors.get(
+                span.canonical_label,
+                floors.get(span.entity_type, default_floor),
+            )
+        )
+        return {
+            "keep_floor": keep_floor,
+            "policy_profile": policy_profile,
+            "source": floor_source,
+            "canonical_label": span.canonical_label,
+            "language": language,
+        }
+
+    try:
+        from .thresholds import lookup_threshold
+
+        return lookup_threshold(
+            span.canonical_label,
+            language,
+            policy_profile,
+            matrix=matrix,
+        )
+    except Exception:
+        return {
+            "keep_floor": default_floor,
+            "policy_profile": policy_profile,
+            "source": "default_floor",
+            "canonical_label": span.canonical_label,
+            "language": language,
+        }
+
+
+def _overlapping_winner(
+    candidate: OpenMedSpan,
+    winners: Sequence[OpenMedSpan],
+) -> OpenMedSpan | None:
+    overlaps = [winner for winner in winners if _spans_overlap(candidate, winner)]
+    if not overlaps:
+        return None
+    return max(overlaps, key=lambda winner: _overlap_width(candidate, winner))
+
+
+def _spans_overlap(left: OpenMedSpan, right: OpenMedSpan) -> bool:
+    return left.start < right.end and right.start < left.end
+
+
+def _overlap_width(left: OpenMedSpan, right: OpenMedSpan) -> int:
+    return max(0, min(left.end, right.end) - max(left.start, right.start))
+
+
+def _arbitration_tie_break_rule(
+    winner: OpenMedSpan,
+    loser: OpenMedSpan,
+) -> str:
+    from .arbitration import specificity_rank
+
+    winner_is_rules = bool(winner.detector and winner.detector.startswith("rules:"))
+    loser_is_rules = bool(loser.detector and loser.detector.startswith("rules:"))
+    if winner_is_rules != loser_is_rules:
+        return "rules_detector_precedence"
+    if specificity_rank(winner.canonical_label) != specificity_rank(
+        loser.canonical_label
+    ):
+        return "label_specificity"
+    if (winner.end - winner.start) != (loser.end - loser.start):
+        return "span_length"
+    if float(winner.score or 0.0) != float(loser.score or 0.0):
+        return "score"
+    if winner.start != loser.start:
+        return "earlier_start"
+    return "detector_name"
+
+
+def _span_identity(span: OpenMedSpan) -> tuple[int, int, str, str, str | None, float]:
+    return (
+        span.start,
+        span.end,
+        span.text_hash,
+        span.canonical_label,
+        span.detector,
+        float(span.score or 0.0),
+    )
+
+
+def _span_trace_key(span: OpenMedSpan) -> tuple[int, int, str]:
+    return (span.start, span.end, span.text_hash)
+
+
+def _span_trace_ref(span: OpenMedSpan) -> Mapping[str, Any]:
+    return {
+        "start": span.start,
+        "end": span.end,
+        "text_hash": span.text_hash,
+        "entity_type": span.entity_type,
+        "canonical_label": span.canonical_label,
+        "policy_label": span.policy_label,
+        "detector": span.detector,
+        "score": span.score,
+    }
 
 
 def _cascade_stage_spans(
@@ -1494,6 +2256,7 @@ def _apply_threshold_action(
     policy_profile: str | None,
     strict_no_leak: bool,
     matrix: Mapping[str, Any] | None,
+    explain: bool = False,
 ) -> OpenMedSpan:
     from .thresholds import lookup_threshold
 
@@ -1505,15 +2268,26 @@ def _apply_threshold_action(
         matrix=matrix,
     )
     action = str(threshold["action"])
-    if span.action == action:
+    if span.action == action and not explain:
         return span
 
     metadata = dict(span.metadata)
-    metadata["threshold_action"] = {
+    threshold_action = {
         "policy_profile": threshold["policy_profile"],
         "source": threshold["source"],
         "schema_version": threshold["schema_version"],
     }
+    if explain:
+        threshold_action.update(
+            {
+                "keep_floor": threshold["keep_floor"],
+                "escalate_below": threshold["escalate_below"],
+                "action": action,
+                "canonical_label": threshold["canonical_label"],
+                "language": threshold["language"],
+            }
+        )
+    metadata["threshold_action"] = threshold_action
     return replace(span, action=action, metadata=metadata)
 
 

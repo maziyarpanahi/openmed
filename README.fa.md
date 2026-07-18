@@ -1,32 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — هوش مصنوعی سلامتِ محلی" width="400" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed: هوش مصنوعی بالینیِ روی دستگاه · بیش از 2,000 مدل" width="400" />
 
-<h3>هوش مصنوعی سلامتِ محلی که هرگز از دستگاه شما خارج نمی‌شود</h3>
+<h3>دادهٔ شما. مدلِ شما. سخت‌افزارِ شما.</h3>
 
-<p><b>متنِ بالینی را با یک خط کد به دادهٔ ساختارمند تبدیل کنید.</b><br/>
-استخراج موجودیت‌ها، حذف اطلاعات شناسایی‌کنندهٔ شخصی (PII)، و بیش از 1,000 مدل تخصصی پزشکی که کاملاً روی
-سخت‌افزار خودتان اجرا می‌شوند — از یک تک‌خط در پایتون تا یک اپ بومی Swift روی آیفون، با شتاب‌دهیِ Apple MLX.
-بدون ابر. بدون وابستگی به تأمین‌کننده. بدون خروج داده‌های بیمار از شبکهٔ شما.</p>
+<p><b>متنِ بالینی را بدون هیچ بارگذاری‌ای، به بینشِ ساختارمند و پاک‌شده از اطلاعاتِ هویتی تبدیل کنید.</b><br/>
+OpenMed موجودیت‌های زیست‌پزشکی را استخراج می‌کند و بیش از 55 نوع اطلاعاتِ سلامتِ محافظت‌شده (PHI) را کاملاً روی سخت‌افزارِ تحتِ کنترلِ شما حذف می‌کند، تا داده‌های شما هرگز از دستگاه خارج نشوند. همان بیش از ۲٬۰۰۰ مدلِ متن‌باز، از یک گوشی تا یک سرورِ GPU، به‌طور کامل آفلاین اجرا می‌شوند: iOS و iPadOS از طریق OpenMedKit، Android از طریق ONNX، پردازنده‌های معمولی CPU، Apple Silicon، پردازنده‌های گرافیکی NVIDIA، و مرورگر. بدون ابر. بدون وابستگی به تأمین‌کننده. بدون خروج داده‌های بیمار از شبکهٔ شما.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift — OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon — MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
+  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
 </p>
 
 <p>
-  <b>1,000+ مدل</b> &nbsp;·&nbsp; <b>12 زبان</b> &nbsp;·&nbsp; <b>247 نقطه‌بازرسیِ PII</b> &nbsp;·&nbsp; <b>100٪ روی دستگاه</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ مدل</b> &nbsp;·&nbsp; <b>15 زبانِ PII</b> &nbsp;·&nbsp; <b>600+ نقطه‌بازرسیِ PII</b> &nbsp;·&nbsp; <b>100٪ روی دستگاه</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -59,7 +57,7 @@
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="حذف بلادرنگِ PII از یک برگهٔ ترخیص بالینی توسط OpenMed" width="760" />
   <br/>
-  <sub><b>حذف بلادرنگِ اطلاعات شناسایی‌کننده</b> — فیلترِ حریمِ خصوصیِ Nemotron در حال پنهان‌سازیِ نام‌ها، نشانی‌ها، شناسه‌ها و اطلاعات صورتحساب از یک برگهٔ ترخیص بالینی، کاملاً روی دستگاه. <i>(همهٔ مقادیر نمایش‌داده‌شده ساختگی‌اند.)</i></sub>
+  <sub><b>حذف بلادرنگِ اطلاعات شناسایی‌کننده</b>: فیلترِ حریمِ خصوصیِ Nemotron در حال پنهان‌سازیِ نام‌ها، نشانی‌ها، شناسه‌ها و اطلاعات صورتحساب از یک برگهٔ ترخیص بالینی، کاملاً روی دستگاه. <i>(همهٔ مقادیر نمایش‌داده‌شده ساختگی‌اند.)</i></sub>
 </div>
 
 ---
@@ -86,7 +84,7 @@ for entity in result.entities:
 
 <div dir="rtl">
 
-یک مدلِ پیشرفتهٔ NER بالینی که به‌صورت محلی اجرا می‌شود — بدون کلید API، بدون تماس شبکه‌ای.
+یک مدلِ پیشرفتهٔ NER بالینی که به‌صورت محلی اجرا می‌شود، بدون کلید API، بدون تماس شبکه‌ای.
 
 </div>
 
@@ -103,20 +101,20 @@ for entity in result.entities:
 | اجرا روی دستگاه/سرورهای شما            |            ✅            |           ❌           |
 | خروج داده‌های بیمار از شبکهٔ شما       |         **هرگز**         |   ارسال به تأمین‌کننده  |
 | هزینه                                 |     رایگان و متن‌باز     |  هزینه به‌ازای هر فراخوان |
-| مدل‌های تخصصی پزشکی                    |          1,000+          |         محدود          |
+| مدل‌های تخصصی پزشکی                    |          2,000+          |         محدود          |
 | زبان‌ها                               |           12+            |         متغیر          |
 | آفلاین / ایزوله (air-gapped)          |            ✅            |           ❌           |
 | شتاب‌دهیِ Apple Silicon (MLX)         |            ✅            |          ندارد          |
 | اپ‌های بومیِ iOS / macOS              |   ✅ از طریق OpenMedKit   |           ❌           |
-| وابستگی به تأمین‌کننده                 |     ندارد — Apache-2.0   |          دارد          |
+| وابستگی به تأمین‌کننده                 |     ندارد، Apache-2.0   |          دارد          |
 
 <div dir="rtl">
 
-- **مدل‌های تخصصی** — بیش از 1,000 مدلِ زیست‌پزشکی و بالینیِ گزینش‌شده که بسیاری از آن‌ها از راهکارهای انحصاری بهتر عمل می‌کنند.
-- **حذف هویتِ سازگار با HIPAA** — هر 18 شناسهٔ Safe Harbor، ادغامِ هوشمندِ موجودیت‌ها، و جایگزین‌های ساختگیِ حافظِ قالب.
-- **همه‌جا اجرا می‌شود** — CPU، CUDA، Apple Silicon (MLX)، و به‌صورت بومی در اپ‌های iOS/macOS از طریق OpenMedKit.
-- **استقرارِ یک‌خطی** — API پایتون، سرویس REST داکرایزشده، یا خط‌لوله‌های دسته‌ای.
-- **بدون قفل‌شدگی** — Apache-2.0، زیرساختِ شما، دادهٔ شما.
+- **مدل‌های تخصصی**: بیش از 2,000 مدلِ زیست‌پزشکی و بالینیِ گزینش‌شده که بسیاری از آن‌ها از راهکارهای انحصاری بهتر عمل می‌کنند.
+- **حذف هویتِ سازگار با HIPAA**: هر 18 شناسهٔ Safe Harbor، ادغامِ هوشمندِ موجودیت‌ها، و جایگزین‌های ساختگیِ حافظِ قالب.
+- **همه‌جا اجرا می‌شود**: CPU، CUDA، Apple Silicon (MLX)، و به‌صورت بومی در اپ‌های iOS/macOS از طریق OpenMedKit.
+- **استقرارِ یک‌خطی**: API پایتون، سرویس REST داکرایزشده، یا خط‌لوله‌های دسته‌ای.
+- **بدون قفل‌شدگی**: Apache-2.0، زیرساختِ شما، دادهٔ شما.
 
 </div>
 
@@ -124,10 +122,10 @@ for entity in result.entities:
 
 <div dir="rtl">
 
-## روی دستگاه، روی Apple — Swift، MLX و iOS
+## روی دستگاه، روی Apple: Swift، MLX و iOS
 
 OpenMed برای اجرا در همان‌جایی که داده‌هایتان زندگی می‌کنند ساخته شده است. روی سخت‌افزارِ Apple با **MLX**
-شتاب می‌گیرد و از طریق **[OpenMedKit](swift/OpenMedKit)** مستقیماً به اپ‌های iPhone، iPad و Mac می‌رسد —
+شتاب می‌گیرد و از طریق **[OpenMedKit](swift/OpenMedKit)** مستقیماً به اپ‌های iPhone، iPad و Mac می‌رسد،
 به‌طوری‌که تشخیصِ PII و استخراجِ بالینی کاملاً آفلاین و روی خودِ دستگاه انجام می‌شود.
 
 </div>
@@ -135,15 +133,15 @@ OpenMed برای اجرا در همان‌جایی که داده‌هایتان 
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
 ]
 ```
 
 <div dir="rtl">
 
-- **زمان‌اجرای MLX** برای دسته‌بندیِ توکنیِ PII، خانوادهٔ Privacy Filter و وظایفِ zero-shot آزمایشیِ خانوادهٔ GLiNER — به‌همراه مسیرِ جایگزینِ CoreML.
-- **یک نامِ مدل، همهٔ پلتفرم‌ها** — نام‌های مدلِ MLX روی سخت‌افزارِ غیر‌Apple به‌طور خودکار به نقطه‌بازرسیِ متناظرِ PyTorch بازمی‌گردند.
-- **پایتون روی Apple Silicon** هم: `pip install "openmed[mlx]"`.
+- **زمان‌اجرای MLX** برای دسته‌بندیِ توکنیِ PII، خانوادهٔ Privacy Filter و وظایفِ zero-shot آزمایشیِ خانوادهٔ GLiNER، به‌همراه مسیرِ جایگزینِ CoreML.
+- **یک نامِ مدل، همهٔ پلتفرم‌ها**: نام‌های مدلِ MLX روی سخت‌افزارِ غیر‌Apple به‌طور خودکار به نقطه‌بازرسیِ متناظرِ PyTorch بازمی‌گردند.
+- **پایتون روی Apple Silicon** هم: `pip install --upgrade "openmed[mlx]"`.
 
 راهنماها: [بک‌اندِ MLX](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [خروجیِ CoreML](docs/coreml-export.md)
 
@@ -179,13 +177,13 @@ flowchart LR
 
 ```bash
 # Core + Hugging Face runtime (Linux, macOS, Windows; CPU or CUDA)
-pip install "openmed[hf]"
+pip install --upgrade "openmed[hf]"
 
 # Add the REST service
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 
 # Apple Silicon acceleration (MLX)
-pip install "openmed[mlx]"
+pip install --upgrade "openmed[mlx]"
 ```
 
 <table>
@@ -262,7 +260,7 @@ result = analyze_text(
 
 ## مدل‌ها
 
-یک رجیستریِ گزینش‌شده از مدل‌های تخصصیِ NER پزشکی — [کاتالوگِ کامل](https://openmed.life/docs/model-registry) را مرور کنید.
+یک رجیستریِ گزینش‌شده از مدل‌های تخصصیِ NER پزشکی. [کاتالوگِ کامل](https://openmed.life/docs/model-registry) را مرور کنید.
 
 </div>
 
@@ -308,13 +306,13 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 </div>
 
 <details>
-<summary><b>خانوادهٔ Privacy Filter</b> — سه خانوادهٔ مدل بر پایهٔ معماریِ OpenAI Privacy Filter</summary>
+<summary><b>خانوادهٔ Privacy Filter</b>: سه خانوادهٔ مدل بر پایهٔ معماریِ OpenAI Privacy Filter</summary>
 
 <br/>
 
 <div dir="rtl">
 
-کدِ مدل یکسان است (ترانسفورمرِ sparse-MoE به سبکِ gpt-oss با توجهِ محلی، توکن‌های sink، RoPE+YaRN، توکنایزرِ tiktoken `o200k_base`)، فقط دادهٔ آموزشی متفاوت است. همه از طریقِ **همان** APIِ `extract_pii()` / `deidentify()` کار می‌کنند — تنها آرگومانِ `model_name=` تغییر می‌کند.
+کدِ مدل یکسان است (ترانسفورمرِ sparse-MoE به سبکِ gpt-oss با توجهِ محلی، توکن‌های sink، RoPE+YaRN، توکنایزرِ tiktoken `o200k_base`)، فقط دادهٔ آموزشی متفاوت است. همه از طریقِ **همان** APIِ `extract_pii()` / `deidentify()` کار می‌کنند. تنها آرگومانِ `model_name=` تغییر می‌کند.
 
 </div>
 
@@ -336,7 +334,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-روی میزبان‌های غیر‌Apple-Silicon، نام‌های مدلِ MLX به‌طور خودکار با نقطه‌بازرسیِ متناظرِ PyTorch جایگزین می‌شوند (با یک هشدارِ یک‌باره) — یک نامِ مدل بنویسید، همه‌جا اجرا کنید. [معماریِ Privacy Filter و مسیریابیِ بک‌اند](docs/anonymization.md#privacy-filter-family) را ببینید.
+روی میزبان‌های غیر‌Apple-Silicon، نام‌های مدلِ MLX به‌طور خودکار با نقطه‌بازرسیِ متناظرِ PyTorch جایگزین می‌شوند (با یک هشدارِ یک‌باره). یک نامِ مدل بنویسید، همه‌جا اجرا کنید. [معماریِ Privacy Filter و مسیریابیِ بک‌اند](docs/anonymization.md#privacy-filter-family) را ببینید.
 
 </div>
 
@@ -348,7 +346,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 ## PII چندزبانه (12 زبان)
 
-استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr` — در مجموع **247 نقطه‌بازرسیِ PII**.
+استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr`، در مجموع **600+ نقطه‌بازرسیِ PII**.
 
 </div>
 
@@ -388,12 +386,12 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 </div>
 
 ```bash
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:local .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:local
 ```
 
 ```bash
@@ -432,7 +430,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 <img src="docs/brand/openmed-mascot-icon.png" alt="نمادِ OpenMed" width="104" align="right" />
 
-نگهبانِ OpenMed یک گربهٔ ایرانیِ پشمالوست که به‌شکلِ بوعلی سینا (ابن‌سینا) درآمده — پزشکِ بزرگِ ایرانی که
+نگهبانِ OpenMed یک گربهٔ ایرانیِ پشمالوست که به‌شکلِ بوعلی سینا (ابن‌سینا) درآمده، پزشکِ بزرگِ ایرانی که
 کتابِ «قانون در طب» او نزدیک به 600 سال متنِ پزشکیِ مرجعِ جهان بود. او نگهبانِ کتابِ گشودهٔ دانشِ پزشکی است،
 با پالتی برگرفته از فیروزهٔ ایرانی: نگهبانی محلی‌محور برای خصوصی‌ترین داده‌های شما.
 
@@ -446,14 +444,14 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 ## مشارکت
 
-از مشارکت‌ها استقبال می‌کنیم — گزارشِ اشکال، درخواستِ ویژگی و Pull Requestها.
+از مشارکت‌ها استقبال می‌کنیم: گزارشِ اشکال، درخواستِ ویژگی و Pull Requestها.
 
 - [ثبتِ یک issue](https://github.com/maziyarpanahi/openmed/issues)
-- **ترجمه‌ها پذیرفته می‌شوند** — به تکمیلِ README‌های زبان‌های دیگر (در سوییچرِ بالای صفحه) کمک کنید.
+- **ترجمه‌ها پذیرفته می‌شوند**: به تکمیلِ README‌های زبان‌های دیگر (در سوییچرِ بالای صفحه) کمک کنید.
 
 ## سپاس‌گزاری
 
-OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شده — با سپاسِ ویژه از **OpenAI** (معماریِ [Privacy Filter](https://huggingface.co/openai/privacy-filter))، **NVIDIA** (مجموعه‌دادهٔ [Nemotron PII](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1))، **Hugging Face** (`transformers` و اکوسیستمِ مدل)، **Apple** ([MLX](https://github.com/ml-explore/mlx))، و نگه‌دارندگانِ **[Faker](https://faker.readthedocs.io/)**.
+OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شده، با سپاسِ ویژه از **OpenAI** (معماریِ [Privacy Filter](https://huggingface.co/openai/privacy-filter))، **NVIDIA** (مجموعه‌دادهٔ [Nemotron PII](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1))، **Hugging Face** (`transformers` و اکوسیستمِ مدل)، **Apple** ([MLX](https://github.com/ml-explore/mlx))، و نگه‌دارندگانِ **[Faker](https://faker.readthedocs.io/)**.
 
 ## مجوز
 

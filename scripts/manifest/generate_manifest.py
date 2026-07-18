@@ -37,6 +37,8 @@ LANGUAGE_TAGS = {
     "italian": "it",
     "ja": "ja",
     "japanese": "ja",
+    "ko": "ko",
+    "korean": "ko",
     "nl": "nl",
     "dutch": "nl",
     "pt": "pt",
@@ -54,6 +56,7 @@ LANGUAGE_NAMES = {
     "hindi": "hi",
     "italian": "it",
     "japanese": "ja",
+    "korean": "ko",
     "portuguese": "pt",
     "spanish": "es",
     "telugu": "te",
@@ -297,6 +300,13 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
         formats.discard("mlx-fp")
     if any(name.endswith(".onnx") for name in lowered_names):
         formats.add("onnx")
+    if (
+        "transformers.js" in lowered_tags
+        or "transformersjs" in lowered_tags
+        or any(name == "onnx/model_quantized.onnx" for name in lowered_names)
+        or ("tokenizer.json" in lowered_names and "onnx/model.onnx" in lowered_names)
+    ):
+        formats.add("transformersjs")
     if any(name.endswith(".gguf") for name in lowered_names):
         formats.add("gguf")
     return sorted(formats) or ["unknown"]

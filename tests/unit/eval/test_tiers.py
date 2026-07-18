@@ -6,6 +6,7 @@ from pathlib import Path
 
 from openmed.cli import COMPLIANCE_CAVEAT, main_module
 from openmed.eval import TIERS
+from openmed.eval.tiers import NANO_SUB_TIER
 
 ROOT = Path(__file__).resolve().parents[3]
 REQUIRED_FIELDS = {"ram_mb_max", "p50_ms_max", "p95_ms_max", "default_format"}
@@ -35,6 +36,19 @@ def test_tier_budget_values_match_section_6_2() -> None:
     assert TIERS["Accurate-XLarge"]["ram_mb_max"] == 8192
     assert TIERS["Accurate-XLarge"]["p50_ms_max"] == 400
     assert TIERS["Accurate-XLarge"]["p95_ms_max"] == 1200
+
+
+def test_nano_is_tiny_sub_tier_with_tighter_slo_budget() -> None:
+    nano = TIERS["Tiny"]["sub_tiers"]["Nano"]
+
+    assert nano == NANO_SUB_TIER
+    assert nano["parent_tier"] == "Tiny"
+    assert nano["param_count_min"] == 10_000_000
+    assert nano["param_count_max"] == 30_000_000
+    assert nano["ram_mb_max"] == 150
+    assert nano["p50_ms_max"] == 25
+    assert nano["p95_ms_max"] == 60
+    assert nano["default_format"] == "INT8"
 
 
 def test_tier_docs_capture_four_rows_and_budgets() -> None:

@@ -82,20 +82,45 @@ original anywhere.
 
 ```python
 result = deidentify(
-    "DOB 01/15/2020",
+    "Admit 01/15/2020, follow-up 01/25/2020",
     method="shift_dates",
     date_shift_days=30,
 )
 print(result.deidentified_text)
-# DOB [date]
+# Admit 02/14/2020, follow-up 02/24/2020
 ```
 
 The intent is for every date in a document to shift by the same offset, so
-durations between dates (e.g. "3 days after admission") stay correct. With
-the default English model, however, dates currently get masked instead of
-shifted — the model's raw label for dates is lowercase `date`, but the
-redaction code only shifts entities labeled exactly `DATE`. Tracked in
-#408.
+durations between dates (e.g. "3 days after admission") stay correct.
+`date_shift_days=30` is a fixed offset when no patient key is supplied.
+
+For longitudinal research, pass a stable `patient_key` so every document for
+that patient receives the same HMAC-derived offset across sessions:
+
+```python
+patient_token = load_patient_key_from_vault()
+hmac_key_material = load_date_shift_hmac_key()
+
+shared_kwargs = {
+    "method": "shift_dates",
+    "patient_key": patient_token,
+    "date_shift_max_days": 365,
+    "date_shift_secret": hmac_key_material,
+}
+
+first = deidentify("Visit 01/15/2020", **shared_kwargs)
+second = deidentify("Visit 03/15/2020", **shared_kwargs)
+```
+
+Equal patient keys and the same secret yield identical offsets, preserving
+intervals across documents. Different patient keys generally produce different
+offsets within `date_shift_max_days`. The raw patient key is used only as HMAC
+input and is not returned in shifted text, mappings, logs, or audit artifacts.
+Patient-keyed offsets require caller-supplied `date_shift_secret`; do not use
+PHI as that key material.
+If `patient_key` is supplied with the older `date_shift_days` option, that
+value is treated as the maximum absolute offset bound; prefer
+`date_shift_max_days` for new code.
 
 ### Reversing a de-identification: `reidentify()`
 
@@ -118,6 +143,50 @@ Repeated entities of the same type (two `first_name`s above) get a numbered
 placeholder (`[first_name]`, `[first_name_2]`, ...) so each one maps back to
 its own original value — this was a known limitation (#204) fixed by #222;
 `reidentify()` now round-trips correctly even when a type repeats.
+
+## Custom deny-list and allow-list recognizer
+
+Use `custom_recognizer` when your site has identifiers the model does not
+know, or benign values that must never be redacted. The argument accepts a
+plain mapping, a `CustomRecognizer` instance, or a `.json`/`.yaml` path.
+
+```python
+from openmed import deidentify, extract_pii
+
+custom_recognizer = {
+    "case_sensitive": False,
+    "deny": {
+        "terms": [
+            {"term": "Ward Phoenix", "label": "LOCATION"},
+        ],
+        "patterns": [
+            {"pattern": r"\bSTUDY-\d+\b", "label": "ID_NUM"},
+        ],
+    },
+    "allow": {
+        "terms": ["Mercy Trial"],
+        "patterns": [r"\bPUBLIC-\d+\b"],
+    },
+}
+
+entities = extract_pii(text, custom_recognizer=custom_recognizer)
+result = deidentify(text, method="mask", custom_recognizer=custom_recognizer)
+```
+
+Deny-list terms are literal strings. Deny-list patterns are regular
+expressions. Each deny entry needs a `label`; OpenMed keeps that label on the
+returned entity and normalizes it into the canonical label taxonomy for
+policy and audit handling. Matches are emitted with `custom:deny`
+provenance.
+
+Allow-list terms and patterns suppress any overlapping span from any detector,
+including model detections, deterministic rules, and custom deny-list matches.
+Allow-list precedence always wins over deny-list and model detections, so an
+allowed value is left untouched in `deidentify()` output.
+
+Recognizer metadata stores hashes and rule ids, not raw matched surfaces. In
+the staged pipeline, custom matching runs on normalized text and spans are
+remapped back to original offsets before redaction.
 
 ## The new `replace` engine
 
@@ -160,6 +229,10 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
+default PII model, Faker locale, and a before/after example — see
+[Per-Language De-identification](languages.md).
+
 ### Determinism
 
 Three modes:
@@ -175,6 +248,36 @@ Three modes:
 
 Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
+
+### Cross-document surrogate vaults
+
+Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
+calls need stable pseudonyms for the same identifier:
+
+```python
+from openmed import SurrogateVault, deidentify
+
+vault = SurrogateVault.from_file(
+    "surrogate-vault.json",
+    hmac_secret="rotate-and-store-this-secret-outside-the-vault",
+)
+
+first = deidentify(
+    "Patient John Doe was admitted.",
+    method="replace",
+    surrogate_vault=vault,
+)
+second = deidentify(
+    "John Doe returned for follow-up.",
+    method="replace",
+    surrogate_vault=vault,
+)
+```
+
+The vault file stores `(canonical_label, lang, HMAC text_hash) -> surrogate`
+entries plus `schema_version` and `hmac_scheme`; it does not store raw source
+surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
+data anyway: it can connect records across documents even without plaintext.
 
 ### Format preservation
 
@@ -238,8 +341,12 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
+as its source of truth and supports **17 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, and `tr`.
+These are the model-backed PII language allow-list.
+Additional validator-backed national-ID providers cover ID-only locales such as
+Polish, Latvian, Slovak, Malay, Filipino, and Danish without adding
+default PII models for those language codes.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 
@@ -247,7 +354,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 12-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 17-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

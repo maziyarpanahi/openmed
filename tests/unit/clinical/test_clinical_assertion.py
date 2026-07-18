@@ -6,6 +6,7 @@ from openmed.clinical import (
     AFFIRMED,
     CERTAIN,
     HISTORICAL,
+    NEGATED,
     RECENT,
     UNCERTAIN,
     ClinicalAssertion,
@@ -36,12 +37,16 @@ def test_to_dict_round_trips_and_omits_unset_axes():
     assert ClinicalAssertion(**data) == assertion
 
 
-def test_optional_axes_default_to_none_until_wired():
+def test_assert_context_axes_includes_negation_and_leaves_experiencer_unset():
     assertion = assert_context_axes("no evidence of pneumonia")
 
-    assert assertion.negation is None
+    assert assertion.negation == NEGATED
     assert assertion.experiencer is None
-    assert assertion.to_dict() == {"temporality": RECENT, "certainty": CERTAIN}
+    assert assertion.to_dict() == {
+        "temporality": RECENT,
+        "certainty": CERTAIN,
+        "negation": NEGATED,
+    }
 
 
 def test_to_dict_includes_optional_axes_when_set():

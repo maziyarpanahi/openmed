@@ -4,25 +4,48 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
-from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
+from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import BenchmarkFixture
-from openmed.eval.metrics import EvalSpan, normalize_eval_spans
+from openmed.eval.metrics import (
+    CRITICAL_FINDING_CATEGORIES,
+    EvalSpan,
+    critical_finding_category,
+    normalize_critical_finding_category,
+    normalize_eval_spans,
+)
 
+CRITICAL_FINDINGS_CATEGORY = "critical_findings"
 GOLDEN_CATEGORIES: tuple[str, ...] = (
     "nested_overlapping",
     "chunk_boundary",
     "multilingual",
     "checksum_ids",
+    "financial_ids",
     "date_arithmetic",
+    "policy_profile_actions",
+    HARD_NEGATIVE_CATEGORY,
+    CRITICAL_FINDINGS_CATEGORY,
 )
 
 _FIXTURE_VERSION = 1
-_FIXTURE_DIR = Path(__file__).with_name("fixtures")
+_GOLDEN_DIR = Path(__file__).resolve().parent
+_FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
+_TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
+_NON_DEID_FIXTURE_NAMES = frozenset(
+    {
+        "context_multilingual.jsonl",
+        "grounding_crosslingual.jsonl",
+        "relation_assertion.jsonl",
+        "relation_gold.jsonl",
+        "surrogate_multilingual.jsonl",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -66,15 +89,22 @@ class GoldenFixture:
             raise ValueError("golden fixture expected_output.text is required")
 
         language = str(data.get("language") or data.get("lang") or "en")
-        if language not in SUPPORTED_LANGUAGES:
+        fixture_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        if language not in fixture_languages:
             raise ValueError(f"unsupported golden fixture language: {language!r}")
 
         text = str(data.get("text", ""))
         if not text:
             raise ValueError("golden fixture text is required")
 
+        fixture_id = str(data.get("id") or data.get("fixture_id") or "")
+        if not fixture_id:
+            raise ValueError("golden fixture id is required")
+
         raw_spans = data.get("gold_spans") or []
-        if not isinstance(raw_spans, list) or not raw_spans:
+        if not isinstance(raw_spans, list):
+            raise ValueError("golden fixture gold_spans must be a list")
+        if not raw_spans and category != HARD_NEGATIVE_CATEGORY:
             raise ValueError("golden fixture must include at least one gold span")
         _validate_raw_span_labels(raw_spans, language)
 
@@ -82,10 +112,15 @@ class GoldenFixture:
             normalize_eval_spans(raw_spans, default_language=language, source_text=text)
         )
         _validate_offsets(text, gold_spans)
-
-        fixture_id = str(data.get("id") or data.get("fixture_id") or "")
-        if not fixture_id:
-            raise ValueError("golden fixture id is required")
+        if category == HARD_NEGATIVE_CATEGORY:
+            _validate_hard_negative_fixture(text, metadata, language)
+        if category == CRITICAL_FINDINGS_CATEGORY:
+            gold_spans = _validate_critical_finding_fixture(
+                fixture_id,
+                text,
+                metadata,
+                gold_spans,
+            )
 
         return cls(
             fixture_id=fixture_id,
@@ -119,17 +154,36 @@ class GoldenFixture:
 
 
 def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
-    """Return fixture JSON paths in deterministic order."""
+    """Return fixture paths in deterministic order."""
     fixture_path = Path(path) if path is not None else _FIXTURE_DIR
     if fixture_path.is_file():
         return (fixture_path,)
-    return tuple(sorted(fixture_path.glob("*.json")))
+    paths = [
+        *fixture_path.glob("*.json"),
+        *(
+            path
+            for path in fixture_path.glob("**/*.jsonl")
+            if path.name not in _NON_DEID_FIXTURE_NAMES
+        ),
+    ]
+    if path is None:
+        paths.extend(fixture for fixture in _TOP_LEVEL_FIXTURES if fixture.exists())
+    return tuple(sorted(paths))
 
 
 def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:
     """Load and validate all golden fixtures under *path*."""
     fixtures: list[GoldenFixture] = []
     for fixture_path in list_fixture_paths(path):
+        if fixture_path.suffix.lower() == ".jsonl":
+            rows = [
+                json.loads(line)
+                for line in fixture_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            fixtures.extend(GoldenFixture.from_mapping(row) for row in rows)
+            continue
+
         raw = json.loads(fixture_path.read_text(encoding="utf-8"))
         if not isinstance(raw, Mapping):
             raise ValueError(f"{fixture_path} must contain a mapping")
@@ -149,6 +203,32 @@ def load_benchmark_fixtures(path: str | Path | None = None) -> list[BenchmarkFix
     return [fixture.to_benchmark_fixture() for fixture in load_golden_fixtures(path)]
 
 
+def benchmark_fixtures_by_language(
+    fixtures: list[BenchmarkFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> dict[str, list[BenchmarkFixture]]:
+    """Group benchmark fixtures by language in deterministic order."""
+    source = fixtures if fixtures is not None else load_benchmark_fixtures()
+    grouped: defaultdict[str, list[BenchmarkFixture]] = defaultdict(list)
+    for fixture in source:
+        if category is None or fixture.metadata.get("category") == category:
+            grouped[fixture.language].append(fixture)
+    return {
+        language: sorted(rows, key=lambda fixture: fixture.fixture_id)
+        for language, rows in sorted(grouped.items())
+    }
+
+
+def benchmark_fixture_languages(
+    fixtures: list[BenchmarkFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> set[str]:
+    """Return languages covered by benchmark fixtures."""
+    return set(benchmark_fixtures_by_language(fixtures, category=category))
+
+
 def fixtures_by_category(
     fixtures: list[GoldenFixture] | None = None,
 ) -> dict[str, list[GoldenFixture]]:
@@ -157,6 +237,20 @@ def fixtures_by_category(
     grouped: defaultdict[str, list[GoldenFixture]] = defaultdict(list)
     for fixture in source:
         grouped[fixture.category].append(fixture)
+    return dict(grouped)
+
+
+def fixtures_by_language(
+    fixtures: list[GoldenFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> dict[str, list[GoldenFixture]]:
+    """Group fixtures by language, optionally restricted to one category."""
+    source = fixtures if fixtures is not None else load_golden_fixtures()
+    grouped: defaultdict[str, list[GoldenFixture]] = defaultdict(list)
+    for fixture in source:
+        if category is None or fixture.category == category:
+            grouped[fixture.language].append(fixture)
     return dict(grouped)
 
 
@@ -174,6 +268,21 @@ def fixture_languages(
     }
 
 
+def non_latin_golden_fixtures(
+    fixtures: list[GoldenFixture] | None = None,
+) -> list[GoldenFixture]:
+    """Return synthetic golden fixtures containing non-Latin PHI spans."""
+    source = fixtures if fixtures is not None else load_golden_fixtures()
+    return sorted(
+        (
+            fixture
+            for fixture in source
+            if any(_has_non_latin_alpha(span.text) for span in fixture.gold_spans)
+        ),
+        key=lambda fixture: fixture.fixture_id,
+    )
+
+
 def _validate_raw_span_labels(raw_spans: list[Any], language: str) -> None:
     for raw_span in raw_spans:
         if not isinstance(raw_span, Mapping):
@@ -184,6 +293,108 @@ def _validate_raw_span_labels(raw_spans: list[Any], language: str) -> None:
         canonical = normalize_label(raw_label, language)
         if canonical != raw_label or canonical not in CANONICAL_LABELS:
             raise ValueError(f"gold span label must be canonical: {raw_label!r}")
+
+
+def _validate_critical_finding_fixture(
+    fixture_id: str,
+    text: str,
+    metadata: Mapping[str, Any],
+    spans: tuple[EvalSpan, ...],
+) -> tuple[EvalSpan, ...]:
+    disclaimer = str(metadata.get("medical_device_disclaimer") or "")
+    normalized_disclaimer = disclaimer.lower()
+    if (
+        "assistive safety probe" not in normalized_disclaimer
+        or "not clinical ground truth" not in normalized_disclaimer
+    ):
+        raise ValueError(
+            "critical finding fixtures require a medical_device_disclaimer "
+            "noting the set is an assistive safety probe, not clinical ground truth"
+        )
+
+    source = str(metadata.get("source") or metadata.get("source_dataset") or "")
+    if _is_dua_source_marker(source):
+        raise ValueError("critical finding fixtures must not reference DUA sources")
+
+    validated: list[EvalSpan] = []
+    for span in spans:
+        category = critical_finding_category(span)
+        if category is None:
+            raise ValueError(
+                "critical finding gold spans require critical_finding_category"
+            )
+        category = normalize_critical_finding_category(category)
+        if category not in CRITICAL_FINDING_CATEGORIES:
+            raise ValueError(f"unknown critical finding category: {category!r}")
+        span_fixture_id = span.metadata.get("fixture_id")
+        if span_fixture_id is not None and str(span_fixture_id) != fixture_id:
+            raise ValueError("critical finding span fixture_id must match fixture id")
+        span_metadata = dict(span.metadata)
+        span_metadata["critical_finding"] = True
+        span_metadata["critical_finding_category"] = category
+        span_metadata["fixture_id"] = fixture_id
+        validated.append(replace(span, metadata=span_metadata))
+
+    if not validated:
+        raise ValueError("critical finding fixture must include critical gold spans")
+    _validate_offsets(text, tuple(validated))
+    return tuple(validated)
+
+
+def _validate_hard_negative_fixture(
+    text: str,
+    metadata: Mapping[str, Any],
+    language: str,
+) -> None:
+    candidates = metadata.get("hard_negative_candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise ValueError(
+            "hard negative fixture metadata.hard_negative_candidates is required"
+        )
+    source = str(metadata.get("source") or metadata.get("source_dataset") or "")
+    if _is_dua_source_marker(source):
+        raise ValueError("hard negative fixtures must not reference DUA sources")
+
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            raise ValueError("hard negative candidate must be a mapping")
+        start = _int_field(candidate, "start")
+        end = _int_field(candidate, "end")
+        if start < 0 or end <= start or end > len(text):
+            raise ValueError("hard negative candidate has invalid offsets")
+        candidate_text = str(candidate.get("text", ""))
+        if text[start:end] != candidate_text:
+            raise ValueError("hard negative candidate text must match offsets")
+        raw_label = candidate.get("label")
+        if not isinstance(raw_label, str):
+            raise ValueError("hard negative candidate label is required")
+        canonical = normalize_label(raw_label, language)
+        if canonical != raw_label or canonical not in CANONICAL_LABELS:
+            raise ValueError(
+                f"hard negative candidate label must be canonical: {raw_label!r}"
+            )
+        if candidate.get("synthetic") is not True:
+            raise ValueError("hard negative candidate synthetic must be true")
+        candidate_source = str(
+            candidate.get("source_dataset")
+            or candidate.get("source")
+            or candidate.get("source_shard_id")
+            or ""
+        )
+        if _is_dua_source_marker(candidate_source):
+            raise ValueError("hard negative candidates must not reference DUA sources")
+        difficulty = candidate.get("difficulty_score")
+        if difficulty is not None:
+            try:
+                difficulty_value = float(difficulty)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "hard negative candidate difficulty_score must be numeric"
+                ) from exc
+            if not 0.0 <= difficulty_value <= 1.0:
+                raise ValueError(
+                    "hard negative candidate difficulty_score must be in [0, 1]"
+                )
 
 
 def _validate_offsets(text: str, spans: tuple[EvalSpan, ...]) -> None:
@@ -214,6 +425,26 @@ def _span_to_mapping(span: EvalSpan) -> dict[str, Any]:
     return row
 
 
+def _int_field(payload: Mapping[str, Any], field: str) -> int:
+    try:
+        return int(payload[field])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be an integer") from exc
+
+
+def _is_dua_source_marker(value: str) -> bool:
+    markers = {"dua", "i2b2", "n2c2", "mimic"}
+    parts = {
+        part.strip().lower()
+        for part in value.replace("_", "-").replace(".", "-").split("-")
+    }
+    return bool(parts & markers)
+
+
+def _has_non_latin_alpha(value: str) -> bool:
+    return any(ord(char) > 127 and char.isalpha() for char in value)
+
+
 def _plain_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
     return {str(key): _plain(value[key]) for key in sorted(value, key=str)}
 
@@ -227,11 +458,17 @@ def _plain(value: Any) -> Any:
 
 
 __all__ = [
+    "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
+    "HARD_NEGATIVE_CATEGORY",
     "GoldenFixture",
+    "benchmark_fixture_languages",
+    "benchmark_fixtures_by_language",
     "fixture_languages",
     "fixtures_by_category",
+    "fixtures_by_language",
     "list_fixture_paths",
     "load_benchmark_fixtures",
     "load_golden_fixtures",
+    "non_latin_golden_fixtures",
 ]

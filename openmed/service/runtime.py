@@ -3,30 +3,120 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
+from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
 from .keep_alive import parse_keep_alive
-from .warm_pool import WarmPool, parse_max_resident_models
+from .resilience import ResilienceManager, ServiceResilienceConfig
+from .warm_pool import (
+    DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS,
+    DEFAULT_MODEL_FOOTPRINT_BYTES,
+    WarmPool,
+    parse_default_model_footprint_bytes,
+    parse_max_resident_models,
+    parse_memory_admission_wait_seconds,
+    parse_model_memory_budget_bytes,
+)
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
 SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
+SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR = "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"
+SERVICE_DEFAULT_MODEL_FOOTPRINT_ENV_VAR = (
+    "OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES"
+)
+SERVICE_MODEL_ADMISSION_WAIT_ENV_VAR = "OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS"
 SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
+SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE"
+SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
+SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
+SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
+SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
+SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
+SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
+SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR = "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET"
+SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS"
+)
+SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS"
+)
+SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS"
+)
+SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN"
+)
+SERVICE_RESILIENCE_ENABLED_ENV_VAR = "OPENMED_SERVICE_RESILIENCE_ENABLED"
+SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR = "OPENMED_SERVICE_RETRY_MAX_ATTEMPTS"
+SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS"
+SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_MULTIPLIER"
+SERVICE_RETRY_BACKOFF_MAX_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_MAX_SECONDS"
+SERVICE_RETRY_BACKOFF_JITTER_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_JITTER_SECONDS"
+SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR = (
+    "OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD"
+)
+SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR = (
+    "OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS"
+)
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
+DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE = 256
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
+DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
+DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
+DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS = 512
+DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN = 65_536
+DEFAULT_SERVICE_RETRY_MAX_ATTEMPTS = 3
+DEFAULT_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS = 0.05
+DEFAULT_SERVICE_RETRY_BACKOFF_MULTIPLIER = 2.0
+DEFAULT_SERVICE_RETRY_BACKOFF_MAX_SECONDS = 1.0
+DEFAULT_SERVICE_RETRY_BACKOFF_JITTER_SECONDS = 0.01
+DEFAULT_SERVICE_BREAKER_FAILURE_THRESHOLD = 3
+DEFAULT_SERVICE_BREAKER_RECOVERY_TIMEOUT_SECONDS = 30.0
 
 _BATCHING_ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BATCHING_DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
+_MEMORY_BUDGET_PATTERN = re.compile(
+    r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>[a-zA-Z]+)?\s*$"
+)
+_MEMORY_MULTIPLIERS = {
+    None: 1,
+    "b": 1,
+    "byte": 1,
+    "bytes": 1,
+    "k": 1_000,
+    "kb": 1_000,
+    "m": 1_000_000,
+    "mb": 1_000_000,
+    "g": 1_000_000_000,
+    "gb": 1_000_000_000,
+    "ki": 1024,
+    "kib": 1024,
+    "mi": 1024**2,
+    "mib": 1024**2,
+    "gi": 1024**3,
+    "gib": 1024**3,
+}
+_THROTTLE_KEY_ALIASES = {
+    "global": "global",
+    "process": "global",
+    "xff": "x-forwarded-for",
+    "x-forwarded-for": "x-forwarded-for",
+    "peer": "peer",
+    "client": "peer",
+    "remote": "peer",
+}
 
 
 @dataclass(frozen=True)
@@ -36,6 +126,121 @@ class ServiceBatchingConfig:
     enabled: bool = False
     max_batch_size: int = DEFAULT_SERVICE_BATCH_MAX_SIZE
     max_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
+    max_queue_size: int = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+
+
+@dataclass(frozen=True)
+class ServiceCoalescingConfig:
+    """Request coalescing settings for REST model-backed endpoints."""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
+class ServiceThrottleConfig:
+    """Rate and concurrency limits for REST model-backed endpoints."""
+
+    rate_limit_rps: float = 0.0
+    rate_limit_burst: int = 0
+    max_concurrency: int = 0
+    concurrency_wait_seconds: float = DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS
+    key_by: str = "global"
+
+    @property
+    def rate_limit_enabled(self) -> bool:
+        """Return whether token-bucket rate limiting is active."""
+        return self.rate_limit_rps > 0 and self.rate_limit_burst > 0
+
+    @property
+    def concurrency_enabled(self) -> bool:
+        """Return whether in-flight concurrency limiting is active."""
+        return self.max_concurrency > 0
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether any throttling gate is active."""
+        return self.rate_limit_enabled or self.concurrency_enabled
+
+
+def _parse_non_negative_float(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: float,
+) -> float:
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a non-negative number") from exc
+    if parsed < 0:
+        raise ValueError(f"{env_var} must be greater than or equal to 0")
+    return parsed
+
+
+def _parse_non_negative_int(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: int,
+) -> int:
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a non-negative integer") from exc
+    if parsed < 0:
+        raise ValueError(f"{env_var} must be greater than or equal to 0")
+    return parsed
+
+
+def _parse_optional_positive_int(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: int | None,
+) -> int | None:
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a positive integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"{env_var} must be greater than 0")
+    return parsed
+
+
+def parse_memory_budget_bytes(raw_value: Optional[str], *, env_var: str) -> int:
+    """Parse a memory budget string into bytes.
+
+    Bare numbers are bytes. Decimal units (MB/GB) and binary units (MiB/GiB)
+    are accepted to keep deployment configuration explicit.
+    """
+    if raw_value is None or not raw_value.strip():
+        return 0
+
+    match = _MEMORY_BUDGET_PATTERN.match(raw_value)
+    if match is None:
+        raise ValueError(f"{env_var} must be a byte count or size like '512MiB'")
+
+    value = float(match.group("value"))
+    unit = match.group("unit")
+    normalized_unit = unit.lower() if unit is not None else None
+    try:
+        multiplier = _MEMORY_MULTIPLIERS[normalized_unit]
+    except KeyError as exc:
+        raise ValueError(f"{env_var} has unsupported size unit {unit!r}") from exc
+
+    parsed = int(value * multiplier)
+    if parsed < 0:
+        raise ValueError(f"{env_var} must be greater than or equal to 0")
+    return parsed
 
 
 def parse_service_batching_enabled(raw_value: Optional[str]) -> bool:
@@ -52,6 +257,42 @@ def parse_service_batching_enabled(raw_value: Optional[str]) -> bool:
         return False
     raise ValueError(
         f"{SERVICE_BATCHING_ENABLED_ENV_VAR} must be a boolean value like "
+        "'true' or 'false'"
+    )
+
+
+def parse_service_coalescing_enabled(raw_value: Optional[str]) -> bool:
+    """Parse the request-coalescing feature flag."""
+    if raw_value is None:
+        return False
+
+    normalized = raw_value.strip().lower()
+    if not normalized:
+        return False
+    if normalized in _BATCHING_ENABLED_VALUES:
+        return True
+    if normalized in _BATCHING_DISABLED_VALUES:
+        return False
+    raise ValueError(
+        f"{SERVICE_COALESCING_ENABLED_ENV_VAR} must be a boolean value like "
+        "'true' or 'false'"
+    )
+
+
+def parse_service_resilience_enabled(raw_value: Optional[str]) -> bool:
+    """Parse the resilience feature flag."""
+    if raw_value is None:
+        return True
+
+    normalized = raw_value.strip().lower()
+    if not normalized:
+        return True
+    if normalized in _BATCHING_ENABLED_VALUES:
+        return True
+    if normalized in _BATCHING_DISABLED_VALUES:
+        return False
+    raise ValueError(
+        f"{SERVICE_RESILIENCE_ENABLED_ENV_VAR} must be a boolean value like "
         "'true' or 'false'"
     )
 
@@ -88,6 +329,24 @@ def parse_service_batch_max_wait_ms(raw_value: Optional[str]) -> float:
     return parsed
 
 
+def parse_service_batch_max_queue_size(raw_value: Optional[str]) -> int:
+    """Parse the configured per-priority dynamic-batching queue capacity."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed <= 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR} must be greater than 0"
+        )
+    return parsed
+
+
 def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     """Parse the configured graceful-shutdown drain window in seconds."""
     if raw_value is None or not raw_value.strip():
@@ -106,6 +365,132 @@ def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     return parsed
 
 
+def parse_service_rate_limit_rps(raw_value: Optional[str]) -> float:
+    """Parse the configured token-bucket refill rate in requests per second."""
+    return _parse_non_negative_float(
+        raw_value,
+        env_var=SERVICE_RATE_LIMIT_RPS_ENV_VAR,
+        default=0.0,
+    )
+
+
+def parse_service_rate_limit_burst(raw_value: Optional[str]) -> int:
+    """Parse the configured token-bucket burst capacity."""
+    return _parse_non_negative_int(
+        raw_value,
+        env_var=SERVICE_RATE_LIMIT_BURST_ENV_VAR,
+        default=0,
+    )
+
+
+def parse_service_max_concurrency(raw_value: Optional[str]) -> int:
+    """Parse the configured maximum number of in-flight model requests."""
+    return _parse_non_negative_int(
+        raw_value,
+        env_var=SERVICE_MAX_CONCURRENCY_ENV_VAR,
+        default=0,
+    )
+
+
+def parse_service_concurrency_wait_seconds(raw_value: Optional[str]) -> float:
+    """Parse the bounded wait before rejecting saturated requests."""
+    return _parse_non_negative_float(
+        raw_value,
+        env_var=SERVICE_CONCURRENCY_WAIT_ENV_VAR,
+        default=DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS,
+    )
+
+
+def parse_service_retry_max_attempts(raw_value: Optional[str]) -> int:
+    """Parse the configured retry attempt cap."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_RETRY_MAX_ATTEMPTS
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"{SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR} must be greater than or equal to 1"
+        )
+    return parsed
+
+
+def parse_service_retry_backoff_multiplier(raw_value: Optional[str]) -> float:
+    """Parse the exponential backoff multiplier."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_RETRY_BACKOFF_MULTIPLIER
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR} must be a number"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"{SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR} must be greater than "
+            "or equal to 1"
+        )
+    return parsed
+
+
+def parse_service_breaker_failure_threshold(raw_value: Optional[str]) -> int:
+    """Parse the circuit-breaker consecutive failure threshold."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BREAKER_FAILURE_THRESHOLD
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"{SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR} must be greater than "
+            "or equal to 1"
+        )
+    return parsed
+
+
+def parse_service_throttle_key(raw_value: Optional[str]) -> str:
+    """Parse how throttle buckets are keyed."""
+    if raw_value is None or not raw_value.strip():
+        return "global"
+
+    normalized = raw_value.strip().lower()
+    try:
+        return _THROTTLE_KEY_ALIASES[normalized]
+    except KeyError as exc:
+        raise ValueError(
+            f"{SERVICE_THROTTLE_KEY_ENV_VAR} must be one of: global, "
+            "x-forwarded-for, or peer"
+        ) from exc
+
+
+def parse_service_throttle_config() -> ServiceThrottleConfig:
+    """Read throttling settings from the current process environment."""
+    return ServiceThrottleConfig(
+        rate_limit_rps=parse_service_rate_limit_rps(
+            os.getenv(SERVICE_RATE_LIMIT_RPS_ENV_VAR)
+        ),
+        rate_limit_burst=parse_service_rate_limit_burst(
+            os.getenv(SERVICE_RATE_LIMIT_BURST_ENV_VAR)
+        ),
+        max_concurrency=parse_service_max_concurrency(
+            os.getenv(SERVICE_MAX_CONCURRENCY_ENV_VAR)
+        ),
+        concurrency_wait_seconds=parse_service_concurrency_wait_seconds(
+            os.getenv(SERVICE_CONCURRENCY_WAIT_ENV_VAR)
+        ),
+        key_by=parse_service_throttle_key(os.getenv(SERVICE_THROTTLE_KEY_ENV_VAR)),
+    )
+
+
 def parse_service_batching_config() -> ServiceBatchingConfig:
     """Read dynamic-batching settings from the current process environment."""
     return ServiceBatchingConfig(
@@ -117,6 +502,94 @@ def parse_service_batching_config() -> ServiceBatchingConfig:
         ),
         max_wait_ms=parse_service_batch_max_wait_ms(
             os.getenv(SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR)
+        ),
+        max_queue_size=parse_service_batch_max_queue_size(
+            os.getenv(SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR)
+        ),
+    )
+
+
+def parse_service_coalescing_config() -> ServiceCoalescingConfig:
+    """Read request-coalescing settings from the current process environment."""
+    return ServiceCoalescingConfig(
+        enabled=parse_service_coalescing_enabled(
+            os.getenv(SERVICE_COALESCING_ENABLED_ENV_VAR)
+        )
+    )
+
+
+def parse_service_mlx_paged_kv_cache_config() -> PagedKVCacheConfig | None:
+    """Read optional MLX-LM paged KV-cache settings from the environment."""
+    budget_bytes = parse_memory_budget_bytes(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+    )
+    if budget_bytes <= 0:
+        return None
+
+    page_size_tokens = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR,
+        default=DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS,
+    )
+    chunk_size_tokens = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR,
+        default=DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS,
+    )
+    window_size_tokens = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR,
+        default=None,
+    )
+    bytes_per_token = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR,
+        default=DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN,
+    )
+    return PagedKVCacheConfig(
+        memory_budget_bytes=budget_bytes,
+        page_size_tokens=page_size_tokens or DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS,
+        chunk_size_tokens=chunk_size_tokens or DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS,
+        window_size_tokens=window_size_tokens,
+        bytes_per_token=bytes_per_token or DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN,
+    )
+
+
+def parse_service_resilience_config() -> ServiceResilienceConfig:
+    """Read retry and circuit-breaker settings from the environment."""
+    return ServiceResilienceConfig(
+        enabled=parse_service_resilience_enabled(
+            os.getenv(SERVICE_RESILIENCE_ENABLED_ENV_VAR)
+        ),
+        max_attempts=parse_service_retry_max_attempts(
+            os.getenv(SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR)
+        ),
+        backoff_initial_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR),
+            env_var=SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR,
+            default=DEFAULT_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS,
+        ),
+        backoff_multiplier=parse_service_retry_backoff_multiplier(
+            os.getenv(SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR)
+        ),
+        backoff_max_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_RETRY_BACKOFF_MAX_ENV_VAR),
+            env_var=SERVICE_RETRY_BACKOFF_MAX_ENV_VAR,
+            default=DEFAULT_SERVICE_RETRY_BACKOFF_MAX_SECONDS,
+        ),
+        backoff_jitter_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_RETRY_BACKOFF_JITTER_ENV_VAR),
+            env_var=SERVICE_RETRY_BACKOFF_JITTER_ENV_VAR,
+            default=DEFAULT_SERVICE_RETRY_BACKOFF_JITTER_SECONDS,
+        ),
+        failure_threshold=parse_service_breaker_failure_threshold(
+            os.getenv(SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR)
+        ),
+        recovery_timeout_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR),
+            env_var=SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR,
+            default=DEFAULT_SERVICE_BREAKER_RECOVERY_TIMEOUT_SECONDS,
         ),
     )
 
@@ -151,16 +624,34 @@ class ServiceRuntime:
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
     max_resident_models: Optional[int] = None
+    model_memory_budget_bytes: Optional[int] = None
+    default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
+    model_admission_wait_seconds: float = DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
     default_keep_alive_seconds: Optional[float] = None
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
+    coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
+    throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
+    paged_kv_cache: PagedKVCacheConfig | None = None
+    resilience_config: ServiceResilienceConfig = field(
+        default_factory=ServiceResilienceConfig
+    )
     _loader_factory: Optional[Callable[[OpenMedConfig], ModelLoader]] = None
     _loader: Optional[ModelLoader] = None
     _warm_pool: Optional[WarmPool] = None
+    _resilience: Optional[ResilienceManager] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _workflow_store: Optional[Any] = field(default=None, init=False, repr=False)
+    _workflow_store_lock: threading.RLock = field(
+        default_factory=threading.RLock,
+        init=False,
+        repr=False,
+    )
+
+    metrics: Optional[Any] = None
 
     @classmethod
-    def from_env(cls) -> "ServiceRuntime":
+    def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
         """Create a runtime using the current process environment."""
         profile = os.getenv(PROFILE_ENV_VAR, "prod")
         config = OpenMedConfig.from_profile(profile)
@@ -168,19 +659,40 @@ class ServiceRuntime:
         max_resident_models = parse_max_resident_models(
             os.getenv(SERVICE_MAX_RESIDENT_ENV_VAR)
         )
+        memory_budget_bytes = parse_model_memory_budget_bytes(
+            os.getenv(SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR)
+        )
+        default_model_footprint_bytes = parse_default_model_footprint_bytes(
+            os.getenv(SERVICE_DEFAULT_MODEL_FOOTPRINT_ENV_VAR)
+        )
+        admission_wait_seconds = parse_memory_admission_wait_seconds(
+            os.getenv(SERVICE_MODEL_ADMISSION_WAIT_ENV_VAR)
+        )
         keep_alive = parse_keep_alive(os.getenv(SERVICE_KEEP_ALIVE_ENV_VAR))
         batching = parse_service_batching_config()
+        coalescing = parse_service_coalescing_config()
+        throttle = parse_service_throttle_config()
+        paged_kv_cache = parse_service_mlx_paged_kv_cache_config()
+        resilience_config = parse_service_resilience_config()
         return cls(
             profile=profile,
             config=config,
             preload_models=preload_models,
             max_resident_models=max_resident_models,
+            model_memory_budget_bytes=memory_budget_bytes,
+            default_model_footprint_bytes=default_model_footprint_bytes,
+            model_admission_wait_seconds=admission_wait_seconds,
             default_keep_alive_seconds=keep_alive,
             shutdown_drain_seconds=parse_shutdown_drain_seconds(
                 os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
             ),
             batching=batching,
+            coalescing=coalescing,
+            throttle=throttle,
+            paged_kv_cache=paged_kv_cache,
+            resilience_config=resilience_config,
             _loader_factory=ModelLoader,
+            metrics=metrics,
         )
 
     def get_model_loader(self) -> ModelLoader:
@@ -201,9 +713,25 @@ class ServiceRuntime:
                         self.get_model_loader,
                         warm_models=self.preload_models,
                         max_resident_models=self.max_resident_models,
+                        memory_budget_bytes=self.model_memory_budget_bytes,
+                        default_model_footprint_bytes=(
+                            self.default_model_footprint_bytes
+                        ),
+                        memory_admission_wait_seconds=(
+                            self.model_admission_wait_seconds
+                        ),
                         default_keep_alive_seconds=self.default_keep_alive_seconds,
+                        metrics=self.metrics,
                     )
         return self._warm_pool
+
+    def get_resilience(self) -> ResilienceManager:
+        """Return the shared retry and circuit-breaker manager."""
+        if self._resilience is None:
+            with self._loader_lock:
+                if self._resilience is None:
+                    self._resilience = ResilienceManager(self.resilience_config)
+        return self._resilience
 
     def preload(self) -> None:
         """Warm configured model pipelines during service startup."""
@@ -218,21 +746,117 @@ class ServiceRuntime:
         keep_alive: Any,
         operation: Callable[[], Any],
     ) -> Any:
-        """Run one model-backed operation and update idle-unload bookkeeping."""
+        """Run one model-backed operation with retry and breaker protection."""
+        model_key = self._resolve_model_name(model_name)
+        return self.get_resilience().execute(
+            model_key,
+            lambda: self._run_model_request_once(model_key, keep_alive, operation),
+        )
+
+    def _run_model_request_once(
+        self,
+        model_key: str,
+        keep_alive: Any,
+        operation: Callable[[], Any],
+    ) -> Any:
+        """Run one model-backed attempt and update idle-unload bookkeeping."""
         pool = self.get_loader()
-        model_key = pool.begin_request(model_name)
+        active_model_key = pool.begin_request(model_key)
         try:
             return operation()
         finally:
-            pool.finish_request(model_key, keep_alive)
+            pool.finish_request(active_model_key, keep_alive)
+
+    async def stream_pii_extract(
+        self,
+        *,
+        text: str,
+        model_name: str,
+        confidence_threshold: float,
+        use_smart_merging: bool,
+        lang: str,
+        normalize_accents: Optional[bool],
+        keep_alive: Any,
+        chunk_size: int,
+        window_chars: int,
+        tokenizer_context_chars: int,
+        max_entity_chars: int,
+    ) -> AsyncIterator[Any]:
+        """Yield incremental PII extraction events for a service request."""
+        import asyncio
+
+        import openmed
+        from openmed.processing.advanced_ner import StreamingTokenClassifier
+
+        model_key = self.begin_model_request(model_name)
+
+        def classify(window_text: str) -> Any:
+            return openmed.extract_pii(
+                window_text,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                config=self.config,
+                use_smart_merging=use_smart_merging,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                loader=self.get_loader(),
+            )
+
+        streamer = StreamingTokenClassifier(
+            classify,
+            window_chars=window_chars,
+            tokenizer_context_chars=tokenizer_context_chars,
+            max_entity_chars=max_entity_chars,
+            confidence_threshold=confidence_threshold,
+        )
+
+        try:
+            for chunk in _iter_text_chunks(text, chunk_size):
+                events = await asyncio.to_thread(streamer.append, chunk)
+                for event in events:
+                    yield event
+                await asyncio.sleep(0)
+            events = await asyncio.to_thread(streamer.finish)
+            for event in events:
+                yield event
+        finally:
+            self.finish_model_request(model_key, keep_alive)
 
     def begin_model_request(self, model_name: str) -> str:
         """Mark a resolved model as active and cancel pending idle unload."""
-        return self.get_loader().begin_request(model_name)
+        model_key = self._resolve_model_name(model_name)
+        resilience = self.get_resilience()
+        resilience.check_available(model_key)
+        try:
+            return self.get_loader().begin_request(model_key)
+        except Exception as exc:
+            resilience.record_error(model_key, exc)
+            raise
 
-    def finish_model_request(self, model_key: str, keep_alive: Any) -> None:
+    def finish_model_request(
+        self,
+        model_key: str,
+        keep_alive: Any,
+        error: Optional[BaseException] = None,
+    ) -> None:
         """Mark a model request as complete and schedule idle unloading."""
-        self.get_loader().finish_request(model_key, keep_alive)
+        finish_error: Optional[BaseException] = None
+        try:
+            self.get_loader().finish_request(model_key, keep_alive)
+        except Exception as exc:
+            finish_error = exc
+        if error is None and finish_error is None:
+            self.get_resilience().record_success(model_key)
+        elif finish_error is not None:
+            self.get_resilience().record_error(model_key, finish_error)
+        else:
+            self.get_resilience().record_error(model_key, error)
+        if finish_error is not None:
+            raise finish_error
+
+    def circuit_breaker_state_counts(self) -> dict[str, int]:
+        """Return aggregate circuit-breaker states without model/backend labels."""
+        return self.get_resilience().state_counts()
 
     def unload_model(self, model_name: str) -> Dict[str, Any]:
         """Unload one inactive model from the shared loader cache."""
@@ -248,10 +872,32 @@ class ServiceRuntime:
             return {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
+                "memory_budget_bytes": self.model_memory_budget_bytes,
+                "resident_memory_bytes": 0,
+                "pending_memory_bytes": 0,
+                "memory_admission_wait_seconds": (self.model_admission_wait_seconds),
                 "warm_models": list(self.preload_models),
                 "models": {},
             }
         return self.get_loader().loaded_models()
+
+    def get_workflow_store(self) -> Any:
+        """Return the in-process MCP workflow state store."""
+        if self._workflow_store is None:
+            with self._workflow_store_lock:
+                if self._workflow_store is None:
+                    from openmed.mcp.workflow import WorkflowStateStore
+
+                    self._workflow_store = WorkflowStateStore()
+        return self._workflow_store
+
+    def record_speculative_decode(self, metrics: Any) -> None:
+        """Forward aggregate speculative decode metrics to the metrics registry."""
+        if self.metrics is None:
+            return
+        recorder = getattr(self.metrics, "record_speculative_decode", None)
+        if callable(recorder):
+            recorder(metrics)
 
     def _resolve_keep_alive_seconds(self, keep_alive: Any) -> Optional[float]:
         if keep_alive is None:
@@ -265,3 +911,9 @@ class ServiceRuntime:
         if callable(resolver):
             return resolver(validated)
         return validated
+
+
+def _iter_text_chunks(text: str, chunk_size: int):
+    chunk_size = max(1, int(chunk_size))
+    for index in range(0, len(text), chunk_size):
+        yield text[index : index + chunk_size]

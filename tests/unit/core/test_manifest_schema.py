@@ -104,6 +104,45 @@ def test_manifest_schema_accepts_mlx_4bit_format():
     assert validate_manifest_row(row, line_number=1) == []
 
 
+def test_manifest_schema_accepts_complete_training_provenance():
+    reproducibility_hash = "sha256:" + "1" * 64
+    row = _manifest_row_fixture(
+        reproducibility_hash=reproducibility_hash,
+        training_provenance=_training_provenance_fixture(reproducibility_hash),
+    )
+
+    assert validate_manifest_row(row, line_number=1) == []
+
+
+def test_manifest_schema_rejects_training_provenance_hash_mismatch():
+    row = _manifest_row_fixture(
+        reproducibility_hash="sha256:" + "1" * 64,
+        training_provenance=_training_provenance_fixture("sha256:" + "2" * 64),
+    )
+
+    violations = validate_manifest_row(row, line_number=1)
+
+    assert [str(item) for item in violations] == [
+        "line 1: training_provenance.reproducibility_hash must match "
+        "reproducibility_hash"
+    ]
+
+
+def test_manifest_schema_rejects_incomplete_training_provenance():
+    training_provenance = _training_provenance_fixture("sha256:" + "1" * 64)
+    training_provenance.pop("rng_seeds")
+    row = _manifest_row_fixture(
+        reproducibility_hash="sha256:" + "1" * 64,
+        training_provenance=training_provenance,
+    )
+
+    violations = validate_manifest_row(row, line_number=1)
+
+    assert [
+        "line 1: training_provenance missing required key: rng_seeds",
+    ] == [str(item) for item in violations]
+
+
 def test_registry_model_ids_are_derived_from_manifest():
     manifest_ids = {row["repo_id"] for row in _rows()}
     registry_ids = {info.model_id for info in model_registry.OPENMED_MODELS.values()}
@@ -136,6 +175,12 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     assert rows[0]["family"] == "NER"
     assert rows[0]["param_count"] == 135_000_000
     assert "leakage" in rows[0]["benchmark"]
+
+
+def test_manifest_generator_infers_korean_from_repo_name():
+    assert generate_manifest._languages(
+        "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1", []
+    ) == ["ko"]
 
 
 def test_only_manifest_generator_lists_org_models():
@@ -194,3 +239,16 @@ def _manifest_row_fixture(**overrides):
     }
     row.update(overrides)
     return row
+
+
+def _training_provenance_fixture(reproducibility_hash: str):
+    return {
+        "base_model_revision": "7b4f2ca",
+        "data_manifest_hash": "sha256:" + "a" * 64,
+        "env_lock_digest": "sha256:" + "b" * 64,
+        "git_sha": "abc123",
+        "path": "checkpoints/model/training_provenance.json",
+        "recipe_config_hash": "sha256:" + "c" * 64,
+        "reproducibility_hash": reproducibility_hash,
+        "rng_seeds": {"numpy": 21, "python": 13, "torch": 34},
+    }

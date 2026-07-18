@@ -87,6 +87,20 @@ def test_single_modifier_hit_string_is_supported():
     assert resolve_negation("sepsis", "no evidence of") == NEGATED
 
 
+def test_negation_cues_do_not_cross_sentence_boundary():
+    context = "No evidence of pneumonia. Pneumonia is present on exam."
+    span = _span_in_context(context, "Pneumonia")
+
+    assert resolve_negation(span, ["no evidence of"]) == AFFIRMED
+
+
+def test_same_sentence_negation_cue_still_applies_with_offsets():
+    context = "No evidence of pneumonia on exam."
+    span = _span_in_context(context, "pneumonia")
+
+    assert resolve_negation(span, ["no evidence of"]) == NEGATED
+
+
 def test_negation_cues_match_case_insensitively():
     assert resolve_negation("NO EVIDENCE OF pneumonia") == NEGATED
     assert resolve_negation("Pneumonia Cannot Be Excluded") == AFFIRMED
@@ -146,3 +160,13 @@ def test_required_negation_cues_are_public():
 def test_required_pseudo_negation_cues_are_public():
     for cue in ("no increase", "not ruled out", "cannot be excluded"):
         assert cue in PSEUDO_NEGATION_CUES
+
+
+def _span_in_context(context: str, target: str) -> dict[str, object]:
+    start = context.index(target)
+    return {
+        "text": target,
+        "context": context,
+        "start": start,
+        "end": start + len(target),
+    }

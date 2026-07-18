@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "action": {
-      "enum": ["keep", "redact", "replace", "mask", "hash"],
+      "enum": ["keep", "redact", "replace", "mask", "hash", "format_preserve"],
       "type": "string"
     },
     "metadata": {

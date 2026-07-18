@@ -20,12 +20,20 @@ class ResultCache:
         self.cache = OrderedDict()
         self._lock = RLock()
 
+    def __len__(self):
+        with self._lock:
+            return len(self.cache)
+
     def get(self, key):
         with self._lock:
             if key in self.cache:
                 self.cache.move_to_end(key)
                 return self.cache[key]
             return None
+
+    def clear(self):
+        with self._lock:
+            self.cache.clear()
 
     def set(self, key, result):
         if self.max_entries <= 0:

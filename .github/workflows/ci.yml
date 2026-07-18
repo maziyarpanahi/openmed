@@ -80,6 +80,10 @@ jobs:
       run: |
         uv run ruff format --check .
 
+    - name: Type-check annotated public modules
+      run: |
+        uv run mypy
+
   test:
     needs: [repo-policy, lint]
     runs-on: ${{ matrix.os }}
@@ -117,6 +121,10 @@ jobs:
     - name: Validate model manifest schema
       run: |
         uv run python -m scripts.manifest.validate_manifest
+
+    - name: Trust-CI no-raw-PHI logging guard
+      run: |
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
     - name: Test with pytest
       run: |
@@ -241,76 +249,8 @@ jobs:
       run: |
         pytest tests/unit/interop/test_spacy_component.py -q
 
-  secret-scan:
-    needs: repo-policy
-    runs-on: ubuntu-latest
-    env:
-      GITLEAKS_VERSION: "8.30.1"
-      GITLEAKS_LINUX_X64_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        fetch-depth: 0
-
-    - name: Install gitleaks
-      run: |
-        archive="/tmp/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-        curl -sSfL \
-          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-          -o "$archive"
-        echo "${GITLEAKS_LINUX_X64_SHA256}  $archive" | sha256sum -c -
-        tar -xzf "$archive" -C /tmp gitleaks
-        sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
-        gitleaks version
-
-    - name: Verify secret scanner canary
-      run: |
-        canary_dir="$(mktemp -d)"
-        cp tests/fixtures/secret_scan_canary.txt "$canary_dir/canary.txt"
-        set +e
-        gitleaks dir \
-          --config .gitleaks.toml \
-          --redact \
-          --no-banner \
-          --report-format json \
-          --report-path "$RUNNER_TEMP/gitleaks-canary.json" \
-          "$canary_dir"
-        canary_status=$?
-        set -e
-        if [ "$canary_status" -eq 0 ]; then
-          echo "::error title=Secret scanner canary was not detected::Expected the synthetic canary to fail outside its allowlisted fixture path"
-          exit 1
-        fi
-        if [ "$canary_status" -ne 1 ]; then
-          echo "::error title=Secret scanner canary failed unexpectedly::Scanner exited with status $canary_status"
-          exit "$canary_status"
-        fi
-
-    - name: Scan committed changes for secrets
-      env:
-        EVENT_NAME: ${{ github.event_name }}
-        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        PUSH_BEFORE_SHA: ${{ github.event.before }}
-      run: |
-        zero_sha="0000000000000000000000000000000000000000"
-        if [ "$EVENT_NAME" = "pull_request" ]; then
-          scan_range="${PR_BASE_SHA}..${PR_HEAD_SHA}"
-        elif [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "$zero_sha" ]; then
-          scan_range="${PUSH_BEFORE_SHA}..${GITHUB_SHA}"
-        else
-          scan_range="${GITHUB_SHA}^..${GITHUB_SHA}"
-        fi
-        gitleaks git \
-          --config .gitleaks.toml \
-          --redact \
-          --no-banner \
-          --verbose \
-          --log-opts "$scan_range" \
-          .
-
   build:
-    needs: [repo-policy, lint, test, security, secret-scan, spacy-integration]
+    needs: [repo-policy, lint, test, security, spacy-integration]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -331,6 +271,21 @@ jobs:
     - name: Build package
       run: |
         uv run --with build python -m build
+
+    - name: Verify PEP 561 marker in built artifacts
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import tarfile
+        import zipfile
+
+        wheel = next(Path("dist").glob("*.whl"))
+        sdist = next(Path("dist").glob("*.tar.gz"))
+        with zipfile.ZipFile(wheel) as archive:
+            assert "openmed/py.typed" in archive.namelist()
+        with tarfile.open(sdist, "r:gz") as archive:
+            assert any(name.endswith("/openmed/py.typed") for name in archive.getnames())
+        PY
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7

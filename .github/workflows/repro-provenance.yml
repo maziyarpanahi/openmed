@@ -1,0 +1,125 @@
+name: Reproducibility Provenance Gate
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/repro-provenance.yml"
+      - ".github/workflows/reproducible-lock.yml"
+      - "openmed/core/repro_hash.py"
+      - "openmed/core/model_card.py"
+      - "openmed/core/manifest_schema.py"
+      - "openmed/eval/data_provenance.py"
+      - "scripts/release/verify_provenance.py"
+      - "models.jsonl"
+      - "**/training_provenance.json"
+  workflow_dispatch:
+    inputs:
+      checkpoint-dir:
+        description: "Checkpoint directory containing training_provenance.json"
+        required: false
+        type: string
+      provenance:
+        description: "Explicit training_provenance.json path"
+        required: false
+        type: string
+      manifest:
+        description: "models.jsonl path for manifest hash cross-checking"
+        required: false
+        default: "models.jsonl"
+        type: string
+      model-card:
+        description: "Rendered model card README.md path"
+        required: false
+        type: string
+      repo-id:
+        description: "Repo id to select from the manifest"
+        required: false
+        type: string
+
+jobs:
+  training-provenance:
+    name: Verify training provenance
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install verifier dependencies
+        run: uv sync --frozen --extra dev --python 3.11
+
+      - name: Verify candidate provenance
+        env:
+          CHECKPOINT_DIR: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['checkpoint-dir'] || '' }}
+          PROVENANCE_PATH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.provenance || '' }}
+          MANIFEST_PATH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.manifest || 'models.jsonl' }}
+          MODEL_CARD_PATH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['model-card'] || '' }}
+          REPO_ID: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['repo-id'] || '' }}
+        run: |
+          set -euo pipefail
+
+          verify_one() {
+            local provenance="$1"
+            local args=(scripts/release/verify_provenance.py --provenance "$provenance")
+            if [ -n "$MANIFEST_PATH" ]; then
+              args+=(--manifest "$MANIFEST_PATH")
+            fi
+            if [ -n "$MODEL_CARD_PATH" ]; then
+              args+=(--model-card "$MODEL_CARD_PATH")
+            fi
+            if [ -n "$REPO_ID" ]; then
+              args+=(--repo-id "$REPO_ID")
+            fi
+            uv run python "${args[@]}"
+          }
+
+          if [ -n "$CHECKPOINT_DIR" ] && [ -n "$PROVENANCE_PATH" ]; then
+            echo "::error title=Ambiguous candidate::Use checkpoint-dir or provenance, not both."
+            exit 1
+          fi
+
+          if [ -n "$CHECKPOINT_DIR" ]; then
+            args=(scripts/release/verify_provenance.py --checkpoint-dir "$CHECKPOINT_DIR")
+            if [ -n "$MANIFEST_PATH" ]; then
+              args+=(--manifest "$MANIFEST_PATH")
+            fi
+            if [ -n "$MODEL_CARD_PATH" ]; then
+              args+=(--model-card "$MODEL_CARD_PATH")
+            fi
+            if [ -n "$REPO_ID" ]; then
+              args+=(--repo-id "$REPO_ID")
+            fi
+            uv run python "${args[@]}"
+            exit 0
+          fi
+
+          if [ -n "$PROVENANCE_PATH" ]; then
+            verify_one "$PROVENANCE_PATH"
+            exit 0
+          fi
+
+          mapfile -t candidates < <(find . \
+            -path "./.git" -prune -o \
+            -name "training_provenance.json" -type f -print | sort)
+
+          if [ "${#candidates[@]}" -eq 0 ]; then
+            echo "No training provenance candidate found in this change."
+            exit 0
+          fi
+
+          for candidate in "${candidates[@]}"; do
+            verify_one "$candidate"
+          done

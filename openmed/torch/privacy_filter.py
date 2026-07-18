@@ -18,6 +18,8 @@ import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.core.decoding import refine_privacy_filter_span, trim_span_whitespace
+from openmed.processing.advanced_ner import stream_token_classifier
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -155,8 +157,9 @@ class PrivacyFilterTorchPipeline:
             if torch_dtype is not None:
                 load_kwargs["torch_dtype"] = torch_dtype
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
+        self.tokenizer = get_tokenizer_with_loader(
             model_name,
+            AutoTokenizer.from_pretrained,
             local_files_only=local_files_only,
             trust_remote_code=trust_remote_code,
         )
@@ -217,6 +220,11 @@ class PrivacyFilterTorchPipeline:
 
         raw = self._pipeline(text, **call_kwargs)
         return [self._normalize_entity(item, text) for item in raw]
+
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental token-classification events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
 
     @staticmethod
     def _normalize_batch_output(

@@ -1,0 +1,149 @@
+# Number of OpenMed REST service pods to run.
+replicaCount: 1
+
+# Container image settings for the OpenMed REST service.
+image:
+  # Image repository to deploy.
+  repository: openmed
+  # Image tag to deploy. Defaults to Chart.appVersion when left empty.
+  tag: "1.9.1"
+  # Kubernetes image pull policy.
+  pullPolicy: IfNotPresent
+
+# Optional image pull secrets for private image registries.
+imagePullSecrets: []
+
+# Optional short name override for generated Kubernetes object names.
+nameOverride: ""
+
+# Optional full name override for generated Kubernetes object names.
+fullnameOverride: ""
+
+# Extra labels added to pods.
+podLabels: {}
+
+# Extra annotations added to pods.
+podAnnotations: {}
+
+# Pod-level security context.
+podSecurityContext: {}
+
+# Container-level security context.
+securityContext: {}
+
+# How long Kubernetes waits for graceful shutdown after SIGTERM.
+terminationGracePeriodSeconds: 45
+
+# REST service configuration rendered into a ConfigMap.
+config:
+  # OpenMed configuration profile.
+  profile: prod
+  # Cache directory used by OpenMed model downloads inside the container.
+  cacheDir: /root/.cache/huggingface/openmed
+  # Models to preload before readiness flips to ready.
+  preloadModels: []
+  # Maximum resident models in the warm pool. Empty means unbounded.
+  maxResidentModels: ""
+  # Default model keep-alive duration. Empty means indefinite caching.
+  keepAlive: 10m
+  # Maximum request text length accepted by model-backed endpoints.
+  maxTextLength: "1000000"
+  # Exact browser origins allowed for CORS. Empty disables browser CORS.
+  corsOrigins: []
+  # Additional trusted Host header values. The chart also adds loopback and
+  # generated Kubernetes service DNS names automatically.
+  trustedHosts: []
+  # Dynamic request batching for compatible /analyze and /pii/extract traffic.
+  batching:
+    enabled: false
+    maxSize: 8
+    maxWaitMs: 5
+  # Request coalescing for identical concurrent model-backed requests.
+  coalescing:
+    enabled: false
+  # Graceful shutdown drain timeout in seconds.
+  shutdownDrainSeconds: 30
+  # Optional pull-only Prometheus metrics endpoint.
+  metrics:
+    enabled: false
+  # In-process rate and concurrency limits for model-backed endpoints.
+  throttle:
+    rateLimitRps: 0
+    rateLimitBurst: 0
+    maxConcurrency: 0
+    concurrencyWaitSeconds: 0.05
+    keyBy: global
+
+# Additional environment variables appended directly to the container.
+# Use this for secretKeyRef/configMapKeyRef entries such as HF_TOKEN.
+extraEnv: []
+
+# HTTP service settings.
+service:
+  # Kubernetes Service type.
+  type: ClusterIP
+  # Service port exposed inside the cluster.
+  port: 8080
+  # Container port where Uvicorn listens.
+  targetPort: 8080
+  # Extra annotations added to the Service.
+  annotations: {}
+
+# Readiness and liveness probe settings.
+probes:
+  liveness:
+    path: /livez
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Resource requests and limits for the service container.
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+# Persistent model cache volume settings.
+persistence:
+  # Create or mount a PersistentVolumeClaim for model cache reuse.
+  enabled: true
+  # Existing PVC name to mount instead of creating one.
+  existingClaim: ""
+  # StorageClass name for the generated PVC. Empty uses the cluster default.
+  storageClassName: ""
+  # PVC access modes.
+  accessModes:
+    - ReadWriteOnce
+  # Requested PVC size.
+  size: 20Gi
+  # Cache mount path inside the container.
+  mountPath: /root/.cache/huggingface
+  # Optional subPath for the mounted PVC.
+  subPath: ""
+  # Extra annotations added to the generated PVC.
+  annotations: {}
+
+# Optional node selector for pod scheduling.
+nodeSelector: {}
+
+# Optional tolerations for pod scheduling.
+tolerations: []
+
+# Optional affinity rules for pod scheduling.
+affinity: {}
+
+# Extra volumes added to the pod.
+extraVolumes: []
+
+# Extra volume mounts added to the service container.
+extraVolumeMounts: []

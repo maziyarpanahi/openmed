@@ -1,0 +1,47 @@
+# Synthetic values used by the Helm CI workflow to exercise non-default paths.
+replicaCount: 2
+
+image:
+  repository: ghcr.io/maziyarpanahi/openmed
+  tag: "v1.9.1"
+
+config:
+  preloadModels:
+    - disease_detection_superclinical
+  maxResidentModels: "2"
+  corsOrigins:
+    - https://clinic-ui.example.com
+  trustedHosts:
+    - api.example.com
+  batching:
+    enabled: true
+    maxSize: 4
+    maxWaitMs: 20
+  coalescing:
+    enabled: true
+  metrics:
+    enabled: true
+  throttle:
+    rateLimitRps: 10
+    rateLimitBurst: 20
+    maxConcurrency: 4
+    concurrencyWaitSeconds: 0.1
+    keyBy: x-forwarded-for
+
+extraEnv:
+  - name: HF_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: openmed-hf-token
+        key: token
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "4"
+    memory: 8Gi
+
+persistence:
+  size: 50Gi

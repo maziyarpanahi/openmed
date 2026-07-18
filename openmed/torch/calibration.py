@@ -5,7 +5,11 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 
-SYNTHETIC_CLINICAL_AWQ_CALIBRATION_TEXTS: tuple[str, ...] = (
+QUANTIZATION_CALIBRATION_SOURCE = (
+    "openmed.torch.calibration.synthetic_clinical_quantization"
+)
+
+SYNTHETIC_CLINICAL_QUANTIZATION_CALIBRATION_TEXTS: tuple[str, ...] = (
     "Discharge note: Sample Patient A returned for blood pressure follow-up "
     "after lisinopril adjustment. Home readings averaged 128/76.",
     "Emergency triage: Synthetic adult with fever, cough, and oxygen saturation "
@@ -32,9 +36,13 @@ SYNTHETIC_CLINICAL_AWQ_CALIBRATION_TEXTS: tuple[str, ...] = (
     "rapid strep test was negative.",
 )
 
+SYNTHETIC_CLINICAL_AWQ_CALIBRATION_TEXTS = (
+    SYNTHETIC_CLINICAL_QUANTIZATION_CALIBRATION_TEXTS
+)
 
-def load_awq_calibration_texts(limit: int | None = None) -> list[str]:
-    """Return deterministic synthetic clinical notes for AWQ calibration.
+
+def load_quantization_calibration_texts(limit: int | None = None) -> list[str]:
+    """Return deterministic synthetic clinical notes for export calibration.
 
     Args:
         limit: Optional positive maximum number of samples to return. ``None``
@@ -46,7 +54,13 @@ def load_awq_calibration_texts(limit: int | None = None) -> list[str]:
 
     if limit is not None and limit <= 0:
         raise ValueError("limit must be a positive integer")
-    return list(SYNTHETIC_CLINICAL_AWQ_CALIBRATION_TEXTS[:limit])
+    return list(SYNTHETIC_CLINICAL_QUANTIZATION_CALIBRATION_TEXTS[:limit])
+
+
+def load_awq_calibration_texts(limit: int | None = None) -> list[str]:
+    """Return the shared export calibration set for AWQ callers."""
+
+    return load_quantization_calibration_texts(limit=limit)
 
 
 def calibration_texts_sha256(texts: Sequence[str]) -> str:
@@ -60,7 +74,10 @@ def calibration_texts_sha256(texts: Sequence[str]) -> str:
 
 
 __all__ = [
+    "QUANTIZATION_CALIBRATION_SOURCE",
     "SYNTHETIC_CLINICAL_AWQ_CALIBRATION_TEXTS",
+    "SYNTHETIC_CLINICAL_QUANTIZATION_CALIBRATION_TEXTS",
     "calibration_texts_sha256",
     "load_awq_calibration_texts",
+    "load_quantization_calibration_texts",
 ]

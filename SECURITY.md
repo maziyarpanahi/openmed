@@ -5,6 +5,15 @@ A defect that causes identifiers to leak — a redaction bypass — is a **secur
 defect, not an ordinary bug. Please report it **privately** so it can be fixed
 before it is disclosed publicly.
 
+The structured analysis of *how* the redactor can fail — adversary model, trust
+boundaries, and a catalog of leakage-bypass abuse cases with their mitigations
+and known gaps — lives in the
+[redactor threat model](docs/security/threat-model.md). Mitigated abuse classes
+are backed by synthetic regression tests
+(`tests/unit/security/test_redactor_leakage_bypass.py`). The current public docs
+and tests intentionally omit actionable reproduction details for unmitigated
+bypasses. Report new findings through the vulnerability-reporting process below.
+
 ## Reporting a vulnerability
 
 **Use GitHub Private Vulnerability Reporting:**
@@ -66,8 +75,10 @@ a public issue:
   redaction-bypass class.
 - **Audit integrity** — forging or tampering with signed audit reports, or
   defeating the reproducibility/HMAC signatures.
-- **Surrogate / pseudonym reversibility** — recovering original values from
-  `replace` / `reversible_id` outputs without the intended key.
+- **Surrogate / pseudonym reversibility** — unintended recovery or linkage of
+  original values through `replace` / `reversible_id`, or defects in mapping,
+  vault, and key handling. Seeded replacement is not encryption and is not
+  claimed to provide cryptographic non-invertibility.
 - **Secret or credential handling defects** — leakage of tokens, keys, or
   patient data into logs, caches, temp files, or audit artifacts.
 - **Supply-chain compromise** — malicious or compromised dependencies, build,
@@ -78,8 +89,12 @@ a public issue:
 
 ## Out of scope
 
-- A full project threat model, signing-key custody, and automated secret-scanning
-  configuration are tracked separately and are not part of this policy.
+- The public [redactor threat model](docs/security/threat-model.md) documents
+  architecture, threat classes, and mitigations. It does not exempt newly found
+  bypasses from this reporting policy: keep actionable details for suspected or
+  unmitigated issues in a private advisory until coordinated disclosure.
+- Signing-key custody and automated secret-scanning configuration are tracked
+  separately and are not part of this policy.
 - Model accuracy or quality requests that are **not** a redaction bypass — please
   file those as a normal [issue](https://github.com/maziyarpanahi/openmed/issues).
 - Testing of, or findings against, hosted endpoints (for example `openmed.life`
@@ -102,12 +117,12 @@ Privacy-impacting defects are never rated below **High**.
 ## Supported versions
 
 Security fixes target the **latest released minor version** (currently the
-`1.6.x` line); we do not backport to end-of-life lines. Reproduce on a supported
+`1.7.x` line); we do not backport to end-of-life lines. Reproduce on a supported
 version before reporting.
 
 | Version | Supported |
 |---|---|
-| Latest minor (`1.6.x`) | Yes |
+| Latest minor (`1.7.x`) | Yes |
 | Older releases | Upgrade first |
 
 ## Response targets

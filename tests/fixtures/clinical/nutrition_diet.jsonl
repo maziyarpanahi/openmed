@@ -1,0 +1,5 @@
+{"text": "Patient placed on 1800 kcal diabetic diet, PEG feeds at 60 mL/hr.", "entities": [{"label": "NutritionTarget", "start": 18, "end": 27}, {"label": "DietType", "start": 28, "end": 41}, {"label": "FeedingRoute", "start": 43, "end": 46}]}
+{"text": "Recommend TPN via central line; patient remains NPO pending swallow evaluation.", "entities": [{"label": "FeedingRoute", "start": 10, "end": 13}, {"label": "DietType", "start": 48, "end": 51}]}
+{"text": "Nutrition assessment notes moderate malnutrition with poor oral intake over the past week.", "entities": [{"label": "NutritionalStatus", "start": 27, "end": 48}, {"label": "IntakeFinding", "start": 54, "end": 70}]}
+{"text": "Patient prescribed a 2g sodium-restricted diet and started on a daily multivitamin supplement.", "entities": [{"label": "DietType", "start": 21, "end": 46}, {"label": "Supplement", "start": 70, "end": 93}]}
+{"text": "Fluid restriction of 1500 mL per day ordered due to renal impairment.", "entities": [{"label": "FluidRestriction", "start": 0, "end": 36}]}
