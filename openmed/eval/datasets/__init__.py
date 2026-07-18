@@ -84,7 +84,16 @@ from .i2b2 import (
     load_i2b2_deid,
     map_i2b2_phi_tag,
 )
-from .licenses import PUBLIC_DATASET_LICENSES, DatasetLicense, license_for
+from .licenses import (
+    PUBLIC_DATASET_LICENSES,
+    TERMINOLOGY_REDISTRIBUTION_PERMITTED,
+    TERMINOLOGY_REDISTRIBUTION_RESTRICTED,
+    DatasetLicense,
+    RestrictedTerminologyLocationError,
+    TerminologyLicense,
+    license_for,
+    validate_terminology_source_path,
+)
 from .masakhaner import (
     MASAKHANER,
     MASAKHANER_1_LANGUAGES,
@@ -163,6 +172,10 @@ __all__ = [
     "DatasetLicense",
     "DatasetLoadResult",
     "DatasetUnavailable",
+    "RestrictedTerminologyLocationError",
+    "TERMINOLOGY_REDISTRIBUTION_PERMITTED",
+    "TERMINOLOGY_REDISTRIBUTION_RESTRICTED",
+    "TerminologyLicense",
     "DRUGPROT",
     "DRUGPROT_DOI",
     "DRUGPROT_ENTITY_TO_CANONICAL",
@@ -248,6 +261,7 @@ __all__ = [
     "clinical_phi_manifest_hash",
     "i2b2_suite_metadata",
     "license_for",
+    "validate_terminology_source_path",
     "load_clinical_phi_manifest",
     "load_biomedical_ner_corpus",
     "load_biomedical_ner_fixtures",
