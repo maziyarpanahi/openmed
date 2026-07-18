@@ -17,6 +17,13 @@ from .core.anonymizer import (
     register_clinical_provider,
     register_label_generator,
 )
+from .core.attestation import (
+    AttestationReport,
+    AttestationTemplateError,
+    generate_attestation,
+    list_attestation_profiles,
+    load_attestation_template,
+)
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 from .core.custom_recognizer import CustomRecognizer
 from .core.explain import ExplainReport, explain
@@ -731,6 +738,11 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "AttestationReport",
+    "AttestationTemplateError",
+    "generate_attestation",
+    "list_attestation_profiles",
+    "load_attestation_template",
     "CustomRecognizer",
     "StreamingBufferError",
     "StreamingDeidentificationEvent",

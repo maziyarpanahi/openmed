@@ -43,6 +43,38 @@
     ],
     "schema_version": 1
   },
+  "attestation": {
+    "fingerprint": "sha256:c15d894ac1b2e1096dffd14efbac45912b1d5c498cbdd9ed130681cec00e4689",
+    "properties": [
+      "disclaimer",
+      "execution",
+      "generated_at",
+      "integrity_hash",
+      "jurisdiction",
+      "models",
+      "policy",
+      "profile_id",
+      "repro_hash",
+      "run",
+      "schema_version",
+      "template"
+    ],
+    "required": [
+      "disclaimer",
+      "execution",
+      "generated_at",
+      "integrity_hash",
+      "jurisdiction",
+      "models",
+      "policy",
+      "profile_id",
+      "repro_hash",
+      "run",
+      "schema_version",
+      "template"
+    ],
+    "schema_version": 1
+  },
   "code": {
     "fingerprint": "sha256:ad4e56848f6cbf9cf3d3935af4ab264c318479ad81a16fb5f3de4db6ee1af48f",
     "properties": [
