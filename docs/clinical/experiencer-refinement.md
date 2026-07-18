@@ -12,7 +12,7 @@ local subject cues, distinguishing three subjects:
 | Value | Subject | Example cues |
 |---|---|---|
 | `patient` | the patient (default) | none cued |
-| `family` | a relative of the patient | mother, father, sibling, maternal, family history |
+| `family` | a relative of the patient | mother, father, sibling, maternal, family history, FHx |
 | `other` | a non-patient, non-relative subject | donor, roommate, partner, coworker |
 
 This axis is a hard safety boundary for coreference-style aggregation: a
@@ -70,9 +70,12 @@ result = resolve_experiencer(text, span)
 ## Resolution order
 
 1. **Cue** -- the subject cue nearest the span, within the span's clause, wins.
-   Resolution is scoped to the clause (bounded by `.`, `!`, `?`, `;`), so a
-   subject named in a previous sentence does not leak across the boundary. On a
-   tie the more specific `other` subject wins over `family`.
+   Resolution is scoped by sentence punctuation (`.`, `!`, `?`, `;`) and the
+   contrastive subject-switch markers `but`, `however`, and `whereas`, so a
+   subject named in a previous clause does not leak across the boundary.
+   Coordinating `and` and `or` deliberately remain inside the same scope because
+   they commonly join findings about one subject. On a tie the more specific
+   `other` subject wins over `family`.
 2. **Section prior** -- when no cue is found and a `section_experiencer` is
    supplied (for example `family` under a *Family History* heading), it is used.
 3. **Default** -- otherwise the span is attributed to the `patient`.

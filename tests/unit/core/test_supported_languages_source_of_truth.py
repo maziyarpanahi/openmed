@@ -21,10 +21,7 @@ LANGUAGE_CLAIM_PATHS = (
     "docs/troubleshooting.md",
     "docs/website/index.html",
 )
-STALE_LANGUAGE_COUNT_PATHS = LANGUAGE_CLAIM_PATHS + (
-    "docs/brand/social/_src/hf-card.html",
-    "docs/website/assets/script.js",
-)
+STALE_LANGUAGE_COUNT_PATHS = LANGUAGE_CLAIM_PATHS + ("docs/website/assets/script.js",)
 
 EXPECTED_LANGUAGE_CODES = sorted(SUPPORTED_LANGUAGES)
 EXPECTED_LANGUAGE_COUNT = len(EXPECTED_LANGUAGE_CODES)

@@ -129,6 +129,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "fil_PH",
         "da_DK",
         "th_TH",
+        "cs_CZ",
         "sk_SK",
     }
 )
@@ -161,7 +162,7 @@ def _gen_age(faker, original, *, locale):
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
     "pt_BR": "cpf",
-    "pt_PT": "vat_id",
+    "pt_PT": "nif",
     "fr_FR": "ssn",
     "it_IT": "ssn",
     "es_ES": "nie",
@@ -182,6 +183,7 @@ _LOCALE_ID_METHODS = {
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
     "sk_SK": "rodne_cislo",
+    "cs_CZ": "rodne_cislo",
     "ro_RO": "romanian_cnp",
     "fi_FI": "ssn",
     "bg_BG": "egn",
@@ -189,6 +191,8 @@ _LOCALE_ID_METHODS = {
     "sr_RS": "jmbg",
     "hu_HU": "hungarian_taj",
     "et_EE": "isikukood",
+    "el_GR": "ssn",
+    "vi_VN": "vietnamese_cccd",
 }
 
 

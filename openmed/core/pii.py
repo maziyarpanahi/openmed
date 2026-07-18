@@ -327,7 +327,7 @@ _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset(
-    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"}
+    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr", "cs"}
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
