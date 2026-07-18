@@ -12,6 +12,11 @@ or endorsed infrastructure. Check your organization's supply-chain policy,
 pin package and model versions, and validate downloaded artifacts before
 production use.
 
+For a complete synthetic clinical-note walkthrough, run the
+[Simplified Chinese example](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_chinese_clinical_note.py)
+or follow the
+[Chinese and Hindi notebook tour](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/Chinese_Hindi_Deid_Tour.ipynb).
+
 ## Install OpenMed from a PyPI mirror
 
 For a one-time install through the Tsinghua TUNA mirror:
