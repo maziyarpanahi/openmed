@@ -249,8 +249,33 @@ jobs:
       run: |
         pytest tests/unit/interop/test_spacy_component.py -q
 
+  browser-extension:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/extension/package-lock.json
+
+    - name: Install extension dependencies
+      working-directory: web/extension
+      run: npm ci
+
+    - name: Install headless Chromium
+      working-directory: web/extension
+      run: npx playwright install --with-deps chromium
+
+    - name: Test browser extension
+      working-directory: web/extension
+      run: npm test
+
   build:
-    needs: [repo-policy, lint, test, security, spacy-integration]
+    needs: [repo-policy, lint, test, security, spacy-integration, browser-extension]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7

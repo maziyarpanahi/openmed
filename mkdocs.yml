@@ -57,6 +57,7 @@ nav:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
       - Per-Language De-identification: languages.md
+      - Browser Extension PHI Guard: runtimes/browser-extension.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
