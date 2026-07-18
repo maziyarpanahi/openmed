@@ -559,6 +559,29 @@ def _is_valid_calendar_date(year: int, month: int, day: int) -> bool:
 validate_south_african_id = validate_za_id_number
 
 
+def validate_mpesa_transaction_code(text: str) -> bool:
+    """Validate a Kenya or Tanzania M-Pesa transaction code.
+
+    M-Pesa confirmation codes contain exactly ten uppercase ASCII letters or
+    digits, include at least one of each, and use a digit in the fourth
+    position. Detection remains context-gated because the shape alone also
+    occurs in laboratory and billing systems.
+
+    Args:
+        text: Candidate M-Pesa confirmation code.
+
+    Returns:
+        True when the candidate satisfies the offline-verifiable structure.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[A-Z0-9]{10}", text) is None:
+        return False
+    return (
+        text[3].isdigit()
+        and any(char.isalpha() for char in text)
+        and any(char.isdigit() for char in text)
+    )
+
 # ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
@@ -3434,6 +3457,20 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_MPESA_TX_CODE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b[A-Z0-9]{3}[0-9][A-Z0-9]{6}\b",
+        "mpesa_tx_code",
+        priority=12,
+        flags=0,
+        base_score=0.45,
+        context_words=["m-pesa", "mpesa", "confirmed", "muamala"],
+        context_boost=0.5,
+        validator=validate_mpesa_transaction_code,
+        safety_sweep_requires_context=True,
+    ),
+]
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
@@ -7433,6 +7470,14 @@ for _country, _plan in AFRICAN_MOBILE_PLANS.items():
         _existing_patterns = LOCALE_PII_PATTERNS.get(_alias, [])
         if _phone_pattern not in _existing_patterns:
             LOCALE_PII_PATTERNS[_alias] = [*_existing_patterns, _phone_pattern]
+
+for _mpesa_alias in ("sw", "en_ke", "en_tz"):
+    _existing_patterns = LOCALE_PII_PATTERNS.get(_mpesa_alias, [])
+    if _MPESA_TX_CODE_PII_PATTERNS[0] not in _existing_patterns:
+        LOCALE_PII_PATTERNS[_mpesa_alias] = [
+            *_existing_patterns,
+            *_MPESA_TX_CODE_PII_PATTERNS,
+        ]
 
 
 # ---------------------------------------------------------------------------

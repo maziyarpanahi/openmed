@@ -3208,6 +3208,70 @@ class AustralianTFNProvider(BaseProvider):
         return generate_australian_tfn(rng=self.generator.random)
 
 
+_MPESA_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+_MPESA_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_MPESA_DIGITS = "0123456789"
+
+
+def generate_mpesa_transaction_code(
+    original: str | None = None,
+    *,
+    leading_character: str | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid M-Pesa transaction-code surrogate.
+
+    When an original code or explicit leading character is supplied, the
+    first character is retained. M-Pesa uses that position as part of its date
+    encoding, so preserving it keeps receipt ordering signals without copying
+    the identifying transaction code.
+
+    Args:
+        original: Optional original transaction code whose first character is
+            preserved.
+        leading_character: Optional explicit first character. Takes precedence
+            over ``original``.
+        rng: Optional seeded random-number generator.
+
+    Returns:
+        A ten-character uppercase alphanumeric transaction code.
+    """
+
+    source = rng or random.Random()
+    preserved = leading_character
+    if preserved is None and original:
+        preserved = original[0]
+    if preserved is not None and re.fullmatch(r"[A-Z0-9]", preserved) is None:
+        raise ValueError("leading_character must be one uppercase letter or digit")
+
+    characters = [preserved or source.choice(_MPESA_ALPHABET)]
+    characters.extend(source.choice(_MPESA_ALPHABET) for _ in range(2))
+    characters.append(source.choice(_MPESA_DIGITS))
+    characters.extend(source.choice(_MPESA_ALPHABET) for _ in range(6))
+
+    if not any(character.isalpha() for character in characters):
+        index = source.choice((1, 2, 4, 5, 6, 7, 8, 9))
+        characters[index] = source.choice(_MPESA_LETTERS)
+
+    candidate = "".join(characters)
+    if original is not None and candidate == original:
+        alternatives = _MPESA_LETTERS.replace(original[1], "")
+        characters[1] = source.choice(alternatives)
+        candidate = "".join(characters)
+    return candidate
+
+
+class MpesaProvider(BaseProvider):
+    """Generates seeded M-Pesa transaction-code surrogates."""
+
+    def mpesa_transaction_code(self, original: str | None = None) -> str:
+        """Return a valid code, preserving the original leading character."""
+
+        return generate_mpesa_transaction_code(
+            original,
+            rng=self.generator.random,
+        )
+
 # ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
@@ -3310,6 +3374,7 @@ __all__ = [
     "LatvianPersonasKodsProvider",
     "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
+    "MpesaProvider",
     "MrzProvider",
     "NPIProvider",
     "NigeriaIdProvider",
@@ -3370,6 +3435,7 @@ __all__ = [
     "generate_pesel",
     "generate_latvian_personas_kods",
     "generate_malaysian_mykad",
+    "generate_mpesa_transaction_code",
     "generate_moroccan_cin",
     "generate_ng_mobile_number",
     "generate_philhealth_pin",
