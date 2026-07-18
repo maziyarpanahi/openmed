@@ -53,6 +53,7 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_jmbg,
     validate_kenya_maisha_namba,
+    validate_kenya_mfl_code,
     validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
@@ -63,6 +64,7 @@ from openmed.core.pii_i18n import (
     validate_moroccan_cin,
     validate_mpesa_transaction_code,
     validate_nigeria_bvn,
+    validate_nigeria_hfr_code,
     validate_nigeria_nin,
     validate_pakistani_cnic,
     validate_philhealth_pin,
@@ -105,6 +107,7 @@ from .clinical_ids import (
     EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
     GhanaKenyaIdProvider,
+    HealthFacilityCodeProvider,
     HungarianTAJProvider,
     IndiaHealthIdProvider,
     IndiaSurrogateProvider,
@@ -805,6 +808,20 @@ def _register_builtin_specs() -> None:
         validate=validate_momo_reference,
         faker_method="momo_reference",
         faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        ("ke", "sw", "en_KE"),
+        id_type="kmhfl_code",
+        validate=validate_kenya_mfl_code,
+        faker_method="kmhfl_code",
+        faker_provider=HealthFacilityCodeProvider,
+    )
+    _register_aliases(
+        ("ng", "en_NG"),
+        id_type="hfr_facility_code",
+        validate=validate_nigeria_hfr_code,
+        faker_method="hfr_facility_code",
+        faker_provider=HealthFacilityCodeProvider,
     )
 
 

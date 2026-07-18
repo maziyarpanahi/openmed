@@ -1088,6 +1088,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "mobilemoneytill": ID_NUM,
     "mobilemoneyagent": ID_NUM,
     "momoreference": ID_NUM,
+    "facilityid": ID_NUM,
     "tz": ID_NUM,
     "npi": ID_NUM,
     "ssn": SSN,

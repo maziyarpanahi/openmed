@@ -3342,6 +3342,58 @@ class MobileMoneyProvider(BaseProvider):
         )
 
 
+# The Kenya Ministry of Health defines MFL codes as five-digit sequential
+# numbers. The high five-digit band and high Nigeria serial band keep generated
+# identifiers visibly synthetic without consulting either country's registry.
+KENYA_MFL_SYNTHETIC_MIN = 90_000
+KENYA_MFL_SYNTHETIC_MAX = 99_999
+NIGERIA_HFR_SYNTHETIC_SERIAL_MIN = 9_000
+NIGERIA_HFR_SYNTHETIC_SERIAL_MAX = 9_999
+
+
+class HealthFacilityCodeProvider(BaseProvider):
+    """Generate deterministic Kenya KMHFL and Nigeria HFR surrogates."""
+
+    def kmhfl_code(self, original: str | None = None) -> str:
+        """Return a five-digit Kenya MFL code from the synthetic high band."""
+
+        for _ in range(20):
+            candidate = str(
+                self.generator.random.randint(
+                    KENYA_MFL_SYNTHETIC_MIN,
+                    KENYA_MFL_SYNTHETIC_MAX,
+                )
+            )
+            if candidate != original:
+                return candidate
+
+        fallback = KENYA_MFL_SYNTHETIC_MIN
+        if str(fallback) == original:
+            fallback += 1
+        return str(fallback)
+
+    def hfr_facility_code(self, original: str | None = None) -> str:
+        """Return a structurally valid Nigeria HFR code with a synthetic serial."""
+
+        for _ in range(20):
+            state = self.generator.random.randint(1, 37)
+            lga = self.generator.random.randint(1, 44)
+            ownership = self.generator.random.randint(1, 2)
+            level_of_care = self.generator.random.randint(1, 3)
+            serial = self.generator.random.randint(
+                NIGERIA_HFR_SYNTHETIC_SERIAL_MIN,
+                NIGERIA_HFR_SYNTHETIC_SERIAL_MAX,
+            )
+            candidate = f"{state:02d}{lga:02d}{ownership}{level_of_care}{serial:04d}"
+            if candidate != original:
+                return candidate
+
+        fallback = f"010111{NIGERIA_HFR_SYNTHETIC_SERIAL_MIN:04d}"
+        if fallback == original:
+            fallback = f"010111{NIGERIA_HFR_SYNTHETIC_SERIAL_MIN + 1:04d}"
+        return fallback
+
+
 # ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
@@ -3434,6 +3486,7 @@ __all__ = [
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
+    "HealthFacilityCodeProvider",
     "GhanaKenyaIdProvider",
     "HungarianTAJProvider",
     "IndiaHealthIdProvider",
@@ -3441,6 +3494,8 @@ __all__ = [
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
+    "KENYA_MFL_SYNTHETIC_MAX",
+    "KENYA_MFL_SYNTHETIC_MIN",
     "LatvianPersonasKodsProvider",
     "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
@@ -3449,6 +3504,8 @@ __all__ = [
     "MrzProvider",
     "NPIProvider",
     "NigeriaIdProvider",
+    "NIGERIA_HFR_SYNTHETIC_SERIAL_MAX",
+    "NIGERIA_HFR_SYNTHETIC_SERIAL_MIN",
     "UnifiedSocialCreditCodeProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",
