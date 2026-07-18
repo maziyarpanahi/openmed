@@ -42,9 +42,31 @@ Release candidates such as `1.9.0rc1` are reserved for pre-stable cuts.
 - MAJOR: breaking API change, label-schema break, or migration that requires a
   downstream code change.
 
-Public APIs are deprecated for two minor releases before removal. Deprecations
-must emit `DeprecationWarning`, name the replacement, and appear in
-`CHANGELOG.md` under `Deprecated`.
+## Deprecation Policy
+
+Public APIs receive at least one full minor-version warning window before
+removal. A deprecation introduced in `1.9` remains usable throughout the `1.9`
+line; its scheduled removal must still respect SemVer, so this notice window is
+not permission to make a breaking removal in a later `1.x` release.
+
+New deprecations use `openmed.utils.deprecated`, emit `DeprecationWarning`, name
+the replacement when one exists, and appear in `CHANGELOG.md` under
+`Deprecated`. The decorator records the introduction and planned-removal
+versions so the static API-surface differ can classify the symbol as an
+intentional deprecation:
+
+```python
+from openmed.utils import deprecated
+
+
+@deprecated(since="1.9", remove_in="2.0", replacement="openmed.new_api")
+def legacy_api() -> None:
+    """Compatibility entry point retained during the warning window."""
+```
+
+Every breaking or deprecated change must also have a before/after entry in the
+relevant migration guide. Tag builds compare the candidate against the release
+baseline and fail when the guide omits a detected breaking symbol.
 
 ## Release Gates
 
