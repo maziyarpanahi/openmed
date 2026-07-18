@@ -161,6 +161,12 @@ def _gen_age(faker, original, *, locale):
 # When the locale-appropriate ID method exists, we call it; otherwise we
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
+    "fr_BE": "belgian_rrn",
+    "nl_BE": "belgian_rrn",
+    "de_BE": "belgian_rrn",
+    "fr_CH": "swiss_ahv",
+    "de_CH": "swiss_ahv",
+    "it_CH": "swiss_ahv",
     "pt_BR": "cpf",
     "pt_PT": "nif",
     "fr_FR": "ssn",
