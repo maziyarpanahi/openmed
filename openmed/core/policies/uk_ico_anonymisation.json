@@ -112,6 +112,9 @@
     "OXYGEN_SUPPORT": "mask",
     "RESPIRATORY_FINDING": "mask",
     "DYSPNEA_GRADE": "mask",
+    "GROWTH_PARAMETER": "mask",
+    "GROWTH_PERCENTILE": "mask",
+    "DEVELOPMENTAL_MILESTONE": "mask",
     "OTHER": "keep"
   }
 }

@@ -262,3 +262,14 @@
 | LungAuscultation | RESPIRATORY_FINDING | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/pulmonology.jsonl |
 | PFTInterpretation | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/pulmonology.jsonl |
 | AirwayDevice | AIRWAY_MANAGEMENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pulmonology.jsonl |
+
+## Pediatrics Growth
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GrowthParameter | GROWTH_PARAMETER | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/pediatrics_growth.jsonl |
+| GrowthPercentile | GROWTH_PERCENTILE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/pediatrics_growth.jsonl |
+| GrowthZScore | GROWTH_PERCENTILE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/pediatrics_growth.jsonl |
+| DevelopmentalMilestone | DEVELOPMENTAL_MILESTONE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/pediatrics_growth.jsonl |
+| FeedingHistory | NUTRITIONAL_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pediatrics_growth.jsonl |
+| PediatricFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | tests/fixtures/clinical/pediatrics_growth.jsonl |
