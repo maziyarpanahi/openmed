@@ -3359,6 +3359,60 @@ _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Hausa PII patterns (Boko Latin and Ajami Arabic scripts)
+# ---------------------------------------------------------------------------
+
+# Ajami coverage is deliberately numeric and pattern-level: dates, Nigerian
+# NINs, and Nigerian/Nigerien phone numbers are recognized in Western,
+# Arabic-Indic, and Eastern Arabic-Indic digits. No Ajami lexical matching or
+# transliteration is claimed; those require a separately reviewed lexicon.
+_HAUSA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=["ranar haihuwa", "haihuwa", "ranar", "kwanan wata"],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<!\w)(?:shekaru|shekara)\s+\d{1,3}(?!\d)|"
+        r"(?<!\d)\d{1,3}\s+(?:shekaru|shekara)\b)",
+        "age",
+        priority=8,
+        base_score=0.6,
+        context_words=["shekaru", "shekara", "shekarunsa", "shekarunta"],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)\+(?:(?:234|٢٣٤|۲۳۴)[\s.-]?[789٧٨٩۷۸۹]\d{2}"
+        r"[\s.-]?\d{3}[\s.-]?\d{4}|(?:227|٢٢٧|۲۲۷)[\s.-]?\d{2}"
+        r"(?:[\s.-]?\d{2}){3})(?!\d)",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=["lambar waya", "waya", "kira", "lamba"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Nigeria's NIN is an eleven-digit identifier with no public checksum.
+    # ``\d`` is intentional so exact-offset Ajami spans using native digits
+    # are covered without normalizing or rewriting the source text.
+    PIIPattern(
+        r"(?<!\d)\d{11}(?!\d)",
+        "national_id",
+        priority=9,
+        base_score=0.5,
+        context_words=["nin", "lambar nin", "lambar shaida", "lambar ƙasa", "lamba"],
+        context_boost=0.4,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
     # GH_GHANA_CARD: documented country prefix + ten digits. With no published
     # offline checksum, require explicit Ghana Card or NIA context.
@@ -7597,7 +7651,7 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "af": _NGUNI_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
-    "ha": _NIGERIAN_PII_PATTERNS,
+    "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
     "ig": _NIGERIAN_PII_PATTERNS,
     "yo": _NIGERIAN_PII_PATTERNS,
     "fr": _FRENCH_PII_PATTERNS,
@@ -8476,6 +8530,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Αθήνα", "Θεσσαλονίκη", "Πάτρα"],
         "ZIPCODE": ["104 31", "546 21", "262 21"],
+    },
+    "ha": {
+        "NAME": [
+            "Amina Ɗanladi",
+            "Musa Ɗanjuma",
+            "Bilkisu Ɗanƙande",
+            "Ƙasimu Balarabe",
+        ],
+        "FIRST_NAME": ["Amina", "Musa", "Bilkisu", "Ƙasimu"],
+        "LAST_NAME": ["Ɗanladi", "Ɗanjuma", "Ɗanƙande", "Balarabe"],
+        "EMAIL": ["majiyyaci@example.ng", "tuntuɓa@example.org"],
+        "PHONE": ["+234 803 123 4567", "+234 907 654 3210", "+227 90 12 34 56"],
+        "ID_NUM": ["12345678901", "10987654321"],
+        "STREET_ADDRESS": ["12 Titin Bompai", "45 Titin Ahmadu Bello"],
+        "URL_PERSONAL": ["https://example.ng"],
+        "USERNAME": ["majiyyaci123", "mai_amfani456"],
+        "DATE": ["14/03/1984", "01/01/2000"],
+        "AGE": ["42", "58", "73"],
+        "LOCATION": ["Kano", "Kaduna", "Sokoto", "Niamey"],
+        "ZIPCODE": ["700001", "800001", "840001"],
     },
     "zh": {
         "NAME": ["王芳", "李雷", "张伟", "刘洋"],

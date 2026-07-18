@@ -306,7 +306,7 @@ _SCRIPT_ORDER = (
 # current bundled model-backed language packs. These codes are routing hints;
 # entries in ``USER_SUPPLIED_MODEL_LANGUAGES`` do not gain default models.
 _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
-    "Arabic": ("ar", "ur"),
+    "Arabic": ("ar", "ha", "ur"),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
     "Bengali": ("bn", "as"),
@@ -503,7 +503,9 @@ class LanguagePackAdapters:
         )
         self.script_language_hints.clear()
         routable_languages = (
-            self.supported_languages | self._user_supplied_model_languages
+            self.supported_languages
+            | set(self._national_id_only)
+            | self._user_supplied_model_languages
         )
         for script in script_names:
             configured_hints = self._script_language_candidates.get(script)

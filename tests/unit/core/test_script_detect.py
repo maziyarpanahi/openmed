@@ -133,7 +133,7 @@ def test_indic_and_arabic_script_language_hints_are_exact():
         "Telugu": ("te",),
         "Kannada": ("kn",),
         "Malayalam": ("ml",),
-        "Arabic": ("ar", "ur"),
+        "Arabic": ("ar", "ha", "ur"),
     }
 
     for script, languages in expected_hints.items():

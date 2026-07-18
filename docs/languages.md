@@ -142,6 +142,12 @@ or out of process.
     India clinical NER output assists review and does not make clinical or
     disclosure decisions.
 
+Hausa (`ha`) is available through that deterministic pattern-pack path with a
+native `ha_NG` surrogate locale. Boko context cues cover dates, ages, Nigerian
+NINs, and Nigerian/Nigerien phones. Ajami coverage is intentionally limited to
+numeric patterns—phones, NINs, and dates written with Western or Arabic-Indic
+digits—and does not claim Ajami lexical recognition or transliteration.
+
 ## Worked examples
 
 Each example de-identifies synthetic, non-PHI text with `method="mask"`. The
