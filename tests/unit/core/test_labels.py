@@ -627,7 +627,6 @@ class TestPediatricGrowthConceptLabels:
             ("bmi", GROWTH_PARAMETER),
             ("bodymassindex", GROWTH_PARAMETER),
             ("growth percentile", GROWTH_PERCENTILE),
-            ("growth percentile", GROWTH_PERCENTILE),
             ("percentile", GROWTH_PERCENTILE),
             ("growth z score", GROWTH_PERCENTILE),
             ("developmental milestone", DEVELOPMENTAL_MILESTONE),
