@@ -747,13 +747,28 @@ def _apply_pii_smart_merging(
     lang: str,
     *,
     locale: Optional[str] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
 ) -> Any:
     """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
-    from .pii_i18n import get_patterns_for_language
+    from .pii_i18n import (
+        get_patterns_for_code_mixed_tags,
+        get_patterns_for_language,
+    )
 
-    lang_patterns = get_patterns_for_language(lang, locale=locale)
+    if code_mixed:
+        if token_language_tags is None:
+            raise ValueError("code_mixed=True requires token_language_tags")
+        lang_patterns = get_patterns_for_code_mixed_tags(
+            result.text,
+            token_language_tags,
+            base_lang=lang,
+            locale=locale,
+        )
+    else:
+        lang_patterns = get_patterns_for_language(lang, locale=locale)
     entity_dicts = [
         {
             "entity_type": e.label,
@@ -813,6 +828,9 @@ def _extract_pii_batch(
     normalize_accents: Optional[bool] = None,
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    transliterated_name_config: Any = None,
     *,
     preserve_whitespace: bool = False,
     locale: Optional[str] = None,
@@ -821,6 +839,10 @@ def _extract_pii_batch(
     **pipeline_kwargs: Any,
 ) -> list[Any]:
     """Extract PII for multiple texts while reusing the same backend resources."""
+    if code_mixed and len(texts) != 1:
+        raise ValueError("code-mixed token tags currently require one input text")
+    if code_mixed and token_language_tags is None:
+        raise ValueError("code_mixed=True requires token_language_tags")
     effective_model = _resolve_effective_pii_model(model_name, lang)
     prepared = [
         _prepare_pii_text(
@@ -892,7 +914,14 @@ def _extract_pii_batch(
 
     if use_smart_merging and not uses_privacy_filter:
         results = [
-            _apply_pii_smart_merging(result, effective_model, lang, locale=locale)
+            _apply_pii_smart_merging(
+                result,
+                effective_model,
+                lang,
+                locale=locale,
+                code_mixed=code_mixed,
+                token_language_tags=token_language_tags,
+            )
             for result in results
         ]
 
@@ -908,6 +937,25 @@ def _extract_pii_batch(
     if recognizer is not None:
         for result in results:
             recognizer.apply_to_prediction_result(result)
+
+    if code_mixed:
+        from .custom_recognizer import build_transliterated_name_recognizer
+        from .pii_i18n import code_mixed_route_active
+
+        if token_language_tags is not None and code_mixed_route_active(
+            results[0].text,
+            token_language_tags,
+        ):
+            name_recognizer = build_transliterated_name_recognizer(
+                transliterated_name_config
+            )
+            previous_metadata = dict(getattr(results[0], "metadata", None) or {})
+            name_recognizer.apply_to_prediction_result(results[0])
+            metadata = dict(getattr(results[0], "metadata", None) or {})
+            bridge_metadata = metadata.pop("custom_recognizer", {})
+            metadata.update(previous_metadata)
+            metadata["transliterated_name_bridge"] = bridge_metadata
+            results[0].metadata = metadata
 
     for result in results:
         _apply_clinical_protection_to_result(
@@ -943,6 +991,9 @@ def extract_pii(
     num_workers: Optional[int] = None,
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    transliterated_name_config: Any = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -982,6 +1033,14 @@ def extract_pii(
         abdm: Enable the India ABDM identifier bundle. ``None`` auto-enables
             it for Hindi/Telugu and India locales; ``False`` explicitly
             disables that automatic activation.
+        code_mixed: Enable the explicit English/Hinglish route. This preserves
+            English model detection while adding Roman-Hindi context patterns.
+        token_language_tags: Required with ``code_mixed=True``. Ordered,
+            non-overlapping records with ``start``, ``end``, and ``label``
+            (``en``, ``hi``, ``ne``, ``univ``, or ``other``). Tags are consumed
+            as offsets/labels only and are never copied with raw token surfaces.
+        transliterated_name_config: Optional configuration for the conservative
+            Latin-script Indian given/family-name allow/deny bridge.
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
@@ -1041,6 +1100,9 @@ def extract_pii(
         loader=loader,
         custom_recognizer=custom_recognizer,
         abdm=abdm,
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        transliterated_name_config=transliterated_name_config,
         **runtime_kwargs,
     )[0]
     if cache_results:
@@ -1094,6 +1156,7 @@ def _apply_safety_sweep_to_result(
     *,
     lang: str,
     locale: Optional[str] = None,
+    patterns: Optional[Sequence[Any]] = None,
 ) -> tuple[Any, int]:
     """Run the deterministic sweep and record its net span contribution."""
     from .quality_gates import validate_entity_spans
@@ -1104,11 +1167,18 @@ def _apply_safety_sweep_to_result(
     )
 
     before_count = len(pii_result.entities)
-    entities = safety_sweep(text, pii_result.entities, lang=lang, locale=locale)
+    entities = safety_sweep(
+        text,
+        pii_result.entities,
+        lang=lang,
+        locale=locale,
+        patterns=patterns,
+    )
     added_count = len(entities) - before_count
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
     metadata["safety_sweep"] = {
+        "enabled": True,
         "source": SAFETY_SWEEP_SOURCE,
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
         "spans_added": added_count,
@@ -1857,6 +1927,9 @@ def _deidentify_batch(
     preserve_whitespace: bool = False,
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    transliterated_name_config: Any = None,
     policy: Optional[str] = None,
     *,
     consistent: bool = False,
@@ -1895,6 +1968,9 @@ def _deidentify_batch(
             lang=lang,
             locale=locale,
         ),
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        transliterated_name_config=transliterated_name_config,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
@@ -1903,11 +1979,24 @@ def _deidentify_batch(
     if use_safety_sweep:
         swept_results = []
         for source_text, pii_result in zip(source_texts, pii_results):
+            sweep_patterns = None
+            if code_mixed:
+                if token_language_tags is None:
+                    raise ValueError("code_mixed=True requires token_language_tags")
+                from .pii_i18n import get_patterns_for_code_mixed_tags
+
+                sweep_patterns = get_patterns_for_code_mixed_tags(
+                    source_text,
+                    token_language_tags,
+                    base_lang=lang,
+                    locale=locale,
+                )
             pii_result, _ = _apply_safety_sweep_to_result(
                 source_text,
                 pii_result,
                 lang=lang,
                 locale=locale,
+                patterns=sweep_patterns,
             )
             _suppress_custom_allowed_entities(source_text, pii_result, recognizer)
             swept_results.append(pii_result)
@@ -1967,6 +2056,9 @@ def deidentify(
     calibration_thresholds_path: Optional[str | Path] = None,
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    transliterated_name_config: Any = None,
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
@@ -1987,6 +2079,12 @@ def deidentify(
 
     Smart merging uses regex patterns to merge fragmented entities (e.g., dates
     split into '01' and '/15/1970' are merged into complete '01/15/1970').
+
+    Code-mixed mode is explicit and offset driven. With ``code_mixed=True`` and
+    per-token language tags, the English NER path remains active while a
+    separate Roman-script Hindi pattern bank detects cues such as ``naam``,
+    ``umar``, ``pata``, ``mobile``, and ``janm``. The combined spans pass
+    through the normal entity merger and final safety sweep before redaction.
 
     Args:
         text: Input text to de-identify
@@ -2046,6 +2144,14 @@ def deidentify(
         abdm: Enable the India ABDM recognizer bundle. ``None`` auto-enables
             it for ``policy="india_dpdp_act"``, Hindi/Telugu, or an India
             locale. Pass ``False`` to opt out of automatic activation.
+        code_mixed: Enable the explicit English/Hinglish de-identification path.
+        token_language_tags: Required with ``code_mixed=True``. Ordered token
+            records with exact ``start``/``end`` offsets and an ``en``, ``hi``,
+            ``ne``, ``univ``, or ``other`` label. A pure-English tag stream does
+            not activate Roman-Hindi patterns.
+        transliterated_name_config: Optional configuration for the
+            Latin-script Indian name allow/deny bridge. The default bridge is
+            conservative and can be replaced or extended by configuration.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
@@ -2125,6 +2231,9 @@ def deidentify(
             else None
         ),
         custom_recognizer=recognizer_config,
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        transliterated_name_config=transliterated_name_config,
     )
     result = pipeline.run(
         text,
@@ -2240,6 +2349,7 @@ def _redact_entity(
                     label=label,
                     lang=lang,
                     create_surrogate=_create_surrogate,
+                    required_script=_surrogate_script_constraint(entity),
                 )
             return anonymizer.surrogate(
                 original,
@@ -2284,6 +2394,18 @@ def _redact_entity(
             return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
+    """Keep Roman-script personal names in their source script run."""
+    label = str(entity.canonical_label or entity.entity_type).upper()
+    if label not in {"NAME", "PATIENT", "PERSON"}:
+        return None
+    source = entity.original_text or entity.text
+    letters = [char for char in source if char.isalpha()]
+    if letters and all("LATIN" in unicodedata.name(char, "") for char in letters):
+        return "Latin"
+    return None
 
 
 def _mask_placeholder(entity: PIIEntity) -> str:
