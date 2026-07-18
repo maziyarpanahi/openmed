@@ -761,7 +761,7 @@ def _extract_india_clinical_via_script_windows(
     from .. import analyze_text
     from ..clinical.context import INDIA_CLINICAL_NER_DISCLAIMER
     from ..processing.outputs import EntityPrediction
-    from .models import ModelLoader
+    from .models import HF_AVAILABLE, ModelLoader
     from .pii_i18n import get_india_clinical_model_route
 
     windows = india_clinical_script_windows(text, lang)
@@ -769,7 +769,13 @@ def _extract_india_clinical_via_script_windows(
         raise ValueError("India clinical routing requires mixed Latin/Indic text")
 
     route = get_india_clinical_model_route(lang)
-    shared_loader = loader or ModelLoader(config)
+    # Keep the analyzer injection boundary usable in core-only installs. The
+    # real ``analyze_text`` path will still raise its normal optional-dependency
+    # error when Transformers is absent, while test/custom analyzers can run
+    # without constructing a Hugging Face loader they do not use.
+    shared_loader = loader
+    if shared_loader is None and HF_AVAILABLE:
+        shared_loader = ModelLoader(config)
     routed_results: list[Any] = []
     routed_entities: list[EntityPrediction] = []
     route_metadata: list[dict[str, Any]] = []

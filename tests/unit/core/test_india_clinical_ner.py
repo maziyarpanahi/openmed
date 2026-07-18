@@ -27,6 +27,13 @@ _FIXTURE_DIR = Path("openmed/eval/golden/fixtures/i18n")
 _INDIC_WORD_RE = re.compile(r"[A-Za-z]+|[\u0900-\u097f]+|[\u0c00-\u0c7f]+")
 
 
+@pytest.fixture(autouse=True)
+def _exercise_core_only_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep India routing tests independent of the optional HF extra."""
+
+    monkeypatch.setattr("openmed.core.models.HF_AVAILABLE", False)
+
+
 def _india_fixtures() -> list[dict]:
     rows: list[dict] = []
     for language in ("hi", "te"):
