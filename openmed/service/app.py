@@ -70,6 +70,7 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
+from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
@@ -90,6 +91,7 @@ _MODEL_BACKED_PATHS = frozenset(
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
+        "/pii/deidentify/stream",
         "/jobs",
         _PRIVACY_GATEWAY_PATH,
         _SMART_BACKEND_START_PATH,
@@ -832,6 +834,16 @@ def create_app() -> FastAPI:
             _operation,
             priority=priority,
         )
+
+    @app.post("/pii/deidentify/stream")
+    async def pii_deidentify_stream(
+        payload: PIIDeidentifyStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
+        set_access_log_model_name(request, payload.model_name)
+        runtime = _get_service_runtime(request)
+        events = deidentify_ndjson_stream(payload, runtime)
+        return StreamingResponse(events, media_type="application/x-ndjson")
 
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(

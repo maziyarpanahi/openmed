@@ -14,6 +14,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /pii/extract`
 - `POST /pii/extract/stream`
 - `POST /pii/deidentify`
+- `POST /pii/deidentify/stream`
 - `POST /fhir/smart-backend/ingestions`
 - `GET /fhir/smart-backend/ingestions/{job_id}`
 - `GET /fhir/smart-backend/ingestions/{job_id}/summary`
@@ -210,10 +211,11 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 12
 ```
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
-`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`, `/jobs`, and
-`/privacy-gateway/complete`. The default is `1,000,000` characters. Oversized
-requests return the standard `422` validation envelope; split larger documents
-client-side or route them through batch processing.
+`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
+`/pii/deidentify/stream`, `/jobs`, and `/privacy-gateway/complete`. The default
+is `1,000,000` characters. Oversized requests return the standard `422`
+validation envelope; split larger documents client-side or route them through
+batch processing.
 
 Optional privacy-gateway egress endpoint:
 
@@ -288,8 +290,8 @@ OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host
 `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
 During shutdown, readiness is flipped off, new model-backed work is rejected,
 and the service waits up to this timeout for in-flight `/analyze`,
-`/pii/extract`, `/pii/deidentify`, and `/privacy-gateway/complete` requests to
-finish. The default is `30`.
+`/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
+`/privacy-gateway/complete` requests to finish. The default is `30`.
 
 Optional pull-only Prometheus metrics endpoint:
 
@@ -352,6 +354,8 @@ names, counts, labels, lengths, and durations. See
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
+- Streaming de-identification advances the blocking core iterator in the
+  threadpool and applies the same active-profile timeout to the complete stream.
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
 - `/privacy-gateway/complete` redacts PHI before the configured external LLM
@@ -518,6 +522,70 @@ Date shifting:
 The deprecated `shift_dates: true` boolean is still accepted as an alias for `method: "shift_dates"`.
 
 Returns `deidentify(...).to_dict()`. When `keep_mapping=true` and mapping data exists, a `mapping` field is included.
+
+### `POST /pii/deidentify/stream`
+
+Use the streaming endpoint when a client should receive safe redacted output
+before a long de-identification request finishes. It accepts every
+`/pii/deidentify` request field plus an optional `chunk_size` from `1` to
+`32768` characters (default `1024`):
+
+```json
+{
+  "text": "Patient Maria Garcia called 555-0100 before discharge.",
+  "method": "mask",
+  "lang": "en",
+  "chunk_size": 16
+}
+```
+
+The response media type is `application/x-ndjson`. Each line is one complete
+JSON object. Redacted output records arrive in order:
+
+```json
+{"type":"chunk","index":0,"redacted_text":"Patient [NAME] called "}
+{"type":"chunk","index":1,"redacted_text":"[PHONE] before discharge."}
+{"type":"final","audit":{"span_count":2,"spans":[{"start":8,"end":20,"canonical_label":"PERSON","text_hash":"hmac-sha256:..."}],"stream":{"chunks":4,"max_buffer":4096,"max_observed_buffer":55}},"spans":[{"start":8,"end":20,"canonical_label":"PERSON","text_hash":"hmac-sha256:..."}]}
+```
+
+Concatenate `redacted_text` from records whose `type` is `chunk` to reconstruct
+the complete redacted document. The core carry-over buffer holds unsafe tails,
+so an identifier split across input chunks is not emitted partially. The final
+record contains global-offset spans and the aggregate audit record; these carry
+offsets, labels, and HMAC hashes rather than source surfaces.
+When `keep_mapping=true` (or the selected policy requires reversible mapping),
+the final record also contains the same opt-in `mapping` shape as the
+single-shot endpoint. Treat that mapping as PHI and do not log or persist it
+without the same controls used for the source document. Mapping-enabled streams
+use one full-document core window so placeholder numbering remains identical to
+the single-shot result; omit `keep_mapping` when early incremental output is the
+priority.
+
+Python clients can consume the response without buffering the NDJSON body:
+
+```python
+import json
+
+import requests
+
+with requests.post(
+    "http://127.0.0.1:8080/pii/deidentify/stream",
+    json={"text": "Patient Maria Garcia called 555-0100.", "chunk_size": 16},
+    stream=True,
+    timeout=310,
+) as response:
+    response.raise_for_status()
+    for line in response.iter_lines():
+        if line:
+            event = json.loads(line)
+            if event["type"] == "chunk":
+                consume_redacted_text(event["redacted_text"])
+```
+
+If the configured service timeout is reached after the response has started,
+the last line has `type: "error"` and the standard `timeout` error fields. A
+client disconnect stops iteration and releases the model request. Streamed
+source text is never written to service logs.
 
 ### `POST /privacy-gateway/complete`
 
