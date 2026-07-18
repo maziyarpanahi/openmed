@@ -83,6 +83,9 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mobile_money_paybill,
+    validate_mobile_money_till,
+    validate_momo_reference,
     validate_moroccan_cin,
     validate_mpesa_transaction_code,
     validate_nigeria_bvn,
@@ -5926,6 +5929,279 @@ class TestMpesaTransactionCodes:
         assert len(set(surrogates)) == 1
         assert surrogates[0][0] == row["expected_codes"][0][0]
         assert validate_mpesa_transaction_code(surrogates[0])
+
+
+_MOBILE_MONEY_FIXTURE_PATH = Path(
+    "tests/fixtures/pii/mobile_money_synthetic_billing.jsonl"
+)
+_MOBILE_MONEY_LABELS = {
+    "mobile_money_account",
+    "mobile_money_agent",
+    "mobile_money_paybill",
+    "mobile_money_till",
+    "momo_reference",
+}
+
+
+def _mobile_money_fixture_rows():
+    return [
+        json.loads(line)
+        for line in _MOBILE_MONEY_FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _mobile_money_fixture_entities(row):
+    from openmed.core.safety_sweep import safety_sweep
+
+    return [
+        entity
+        for entity in safety_sweep(
+            row["text"],
+            [],
+            lang=row["language"],
+            locale=row.get("locale"),
+        )
+        if entity.label in _MOBILE_MONEY_LABELS
+    ]
+
+
+class TestMobileMoneyBillingIdentifiers:
+    """Mobile-money billing identifiers are precise and safely replaceable."""
+
+    @pytest.mark.parametrize("value", ("12345", "542542", "7654321"))
+    def test_paybill_validator_accepts_five_to_seven_ascii_digits(self, value):
+        assert validate_mobile_money_paybill(value)
+
+    @pytest.mark.parametrize("value", ("83290", "832909", "1832909"))
+    def test_till_validator_accepts_five_to_seven_ascii_digits(self, value):
+        assert validate_mobile_money_till(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("8123456789", "81234567890", "812345678901"),
+    )
+    def test_momo_validator_accepts_ten_to_twelve_ascii_digits(self, value):
+        assert validate_momo_reference(value)
+
+    @pytest.mark.parametrize(
+        ("validator", "value"),
+        (
+            (validate_mobile_money_paybill, "1234"),
+            (validate_mobile_money_paybill, "12345678"),
+            (validate_mobile_money_paybill, "１２３４５"),
+            (validate_mobile_money_till, "123-45"),
+            (validate_mobile_money_till, None),
+            (validate_momo_reference, "123456789"),
+            (validate_momo_reference, "1234567890123"),
+            (validate_momo_reference, "12345ABCDE"),
+        ),
+    )
+    def test_validators_reject_wrong_length_or_non_ascii_digits(
+        self,
+        validator,
+        value,
+    ):
+        assert not validator(value)
+
+    @pytest.mark.parametrize(
+        ("method", "validator", "originals"),
+        (
+            (
+                "mobile_money_paybill",
+                validate_mobile_money_paybill,
+                ("12345", "542542", "7654321"),
+            ),
+            (
+                "mobile_money_till",
+                validate_mobile_money_till,
+                ("83290", "832909", "1832909"),
+            ),
+            (
+                "mobile_money_agent",
+                validate_mobile_money_paybill,
+                ("55443", "554433", "5544331"),
+            ),
+            (
+                "momo_reference",
+                validate_momo_reference,
+                ("8123456789", "81234567890", "812345678901"),
+            ),
+        ),
+    )
+    def test_seeded_provider_surrogates_validate_preserve_length_and_differ(
+        self,
+        method,
+        validator,
+        originals,
+    ):
+        for seed, original in enumerate(originals, start=860):
+            first = Faker("en_KE")
+            second = Faker("en_KE")
+            register_clinical_providers(first)
+            register_clinical_providers(second)
+            first.seed_instance(seed)
+            second.seed_instance(seed)
+
+            first_surrogate = getattr(first, method)(original)
+            second_surrogate = getattr(second, method)(original)
+
+            assert first_surrogate == second_surrogate
+            assert first_surrogate != original
+            assert len(first_surrogate) == len(original)
+            assert validator(first_surrogate)
+
+    @pytest.mark.parametrize(
+        ("label", "original", "validator"),
+        (
+            ("mobile_money_paybill", "542542", validate_mobile_money_paybill),
+            ("mobile_money_till", "83290", validate_mobile_money_till),
+            ("mobile_money_agent", "5544331", validate_mobile_money_paybill),
+            ("momo_reference", "812345678901", validate_momo_reference),
+        ),
+    )
+    def test_source_labels_route_to_shape_preserving_generators(
+        self,
+        label,
+        original,
+        validator,
+    ):
+        first = Anonymizer(lang="sw", consistent=True, seed=860)
+        second = Anonymizer(lang="sw", consistent=True, seed=860)
+
+        first_surrogate = first.surrogate(original, label)
+        second_surrogate = second.surrogate(original, label)
+
+        assert first_surrogate == second_surrogate
+        assert first_surrogate != original
+        assert len(first_surrogate) == len(original)
+        assert validator(first_surrogate)
+
+    def test_fixture_detects_expected_values_and_keyword_gates_negatives(self):
+        rows = _mobile_money_fixture_rows()
+        assert {row["country"] for row in rows} == {
+            "Ghana",
+            "Kenya",
+            "Tanzania",
+            "Uganda",
+        }
+
+        for row in rows:
+            observed = {
+                (entity.label, entity.text)
+                for entity in _mobile_money_fixture_entities(row)
+            }
+            expected = {(entity["label"], entity["text"]) for entity in row["expected"]}
+            assert observed == expected, row["id"]
+
+        negative = next(
+            row for row in rows if row["id"] == "mobile-money-hard-negatives"
+        )
+        assert negative["candidate_numbers"]
+        assert not _mobile_money_fixture_entities(negative)
+
+    def test_account_suffix_requires_paybill_and_captures_only_reference(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        for positive, reference in (
+            (
+                "Paybill 542542 Account AMINA OTIENO; invoice paid.",
+                "AMINA OTIENO",
+            ),
+            ("Paybill: 542542 Acc: PATIENT-2041. Invoice paid.", "PATIENT-2041"),
+        ):
+            entities = safety_sweep(positive, [], lang="sw")
+            account_entities = [
+                entity for entity in entities if entity.label == "mobile_money_account"
+            ]
+
+            assert [
+                (entity.text, entity.start, entity.end) for entity in account_entities
+            ] == [
+                (
+                    reference,
+                    positive.index(reference),
+                    positive.index(reference) + len(reference),
+                )
+            ]
+
+        negative = "Invoice Account AMINA OTIENO; balance paid in cash."
+        assert not any(
+            entity.label == "mobile_money_account"
+            for entity in safety_sweep(negative, [], lang="sw")
+        )
+
+    @pytest.mark.parametrize(
+        "alias",
+        ("sw", "sw_TZ", "en_KE", "en_TZ", "en_GH", "en_UG"),
+    )
+    def test_locale_aliases_expose_mobile_money_patterns(self, alias):
+        patterns = get_patterns_for_language(alias)
+        labels = {pattern.entity_type for pattern in patterns}
+
+        assert _MOBILE_MONEY_LABELS <= labels
+
+    def test_anonymizer_round_trip_has_zero_fixture_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        leakage = 0
+        for row in _mobile_money_fixture_rows():
+            if not row["expected"]:
+                continue
+
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, _added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=860,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            for expected in row["expected"]:
+                leakage += expected["text"] in result.deidentified_text
+
+            for entity in result.pii_entities:
+                if entity.entity_type not in {
+                    "mobile_money_agent",
+                    "mobile_money_paybill",
+                    "mobile_money_till",
+                    "momo_reference",
+                }:
+                    continue
+                assert entity.surrogate is not None
+                assert entity.surrogate != entity.original_text
+                assert len(entity.surrogate) == len(entity.original_text)
+                validator = (
+                    validate_momo_reference
+                    if entity.entity_type == "momo_reference"
+                    else validate_mobile_money_paybill
+                )
+                assert validator(entity.surrogate)
+
+        assert leakage == 0
 
 
 if __name__ == "__main__":

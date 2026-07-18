@@ -3273,6 +3273,75 @@ class MpesaProvider(BaseProvider):
         )
 
 
+def _generate_mobile_money_digits(
+    original: str | None,
+    *,
+    allowed_lengths: range,
+    default_length: int,
+    rng: random.Random,
+) -> str:
+    """Generate a distinct, length-preserving numeric billing identifier."""
+
+    if original is None:
+        length = default_length
+    else:
+        if not isinstance(original, str) or not original.isascii():
+            raise ValueError("mobile-money identifiers must contain ASCII digits")
+        if not original.isdigit() or len(original) not in allowed_lengths:
+            raise ValueError("mobile-money identifier has an unsupported digit length")
+        length = len(original)
+
+    candidate = "".join(str(rng.randint(0, 9)) for _ in range(length))
+    if candidate == original:
+        replacement = str((int(candidate[-1]) + 1) % 10)
+        candidate = f"{candidate[:-1]}{replacement}"
+    return candidate
+
+
+class MobileMoneyProvider(BaseProvider):
+    """Generate seeded mobile-money billing identifier surrogates."""
+
+    def mobile_money_paybill(self, original: str | None = None) -> str:
+        """Return a five- to seven-digit paybill surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(5, 8),
+            default_length=6,
+            rng=self.generator.random,
+        )
+
+    def mobile_money_till(self, original: str | None = None) -> str:
+        """Return a five- to seven-digit till surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(5, 8),
+            default_length=6,
+            rng=self.generator.random,
+        )
+
+    def mobile_money_agent(self, original: str | None = None) -> str:
+        """Return a five- to seven-digit agent-number surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(5, 8),
+            default_length=6,
+            rng=self.generator.random,
+        )
+
+    def momo_reference(self, original: str | None = None) -> str:
+        """Return a 10- to 12-digit MTN MoMo reference surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(10, 13),
+            default_length=10,
+            rng=self.generator.random,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
@@ -3375,6 +3444,7 @@ __all__ = [
     "LatvianPersonasKodsProvider",
     "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
+    "MobileMoneyProvider",
     "MpesaProvider",
     "MrzProvider",
     "NPIProvider",

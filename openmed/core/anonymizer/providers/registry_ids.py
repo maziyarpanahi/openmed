@@ -57,6 +57,9 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mobile_money_paybill,
+    validate_mobile_money_till,
+    validate_momo_reference,
     validate_moroccan_cin,
     validate_mpesa_transaction_code,
     validate_nigeria_bvn,
@@ -110,6 +113,7 @@ from .clinical_ids import (
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
+    MobileMoneyProvider,
     MpesaProvider,
     NigeriaIdProvider,
     NPIProvider,
@@ -762,6 +766,45 @@ def _register_builtin_specs() -> None:
         validate=validate_mpesa_transaction_code,
         faker_method="mpesa_transaction_code",
         faker_provider=MpesaProvider,
+    )
+    mobile_money_aliases = (
+        "ke",
+        "tz",
+        "gh",
+        "ug",
+        "sw",
+        "en_ke",
+        "en_tz",
+        "en_gh",
+        "en_ug",
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="mobile_money_paybill",
+        validate=validate_mobile_money_paybill,
+        faker_method="mobile_money_paybill",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="mobile_money_till",
+        validate=validate_mobile_money_till,
+        faker_method="mobile_money_till",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="mobile_money_agent",
+        validate=validate_mobile_money_paybill,
+        faker_method="mobile_money_agent",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="momo_reference",
+        validate=validate_momo_reference,
+        faker_method="momo_reference",
+        faker_provider=MobileMoneyProvider,
     )
 
 
