@@ -214,6 +214,27 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("xh_ZA", "south_african_id"),
     ),
+    _pack(
+        "sv",
+        "OpenMed/privacy-filter-multilingual",
+        "sv_SE",
+        ("Latin",),
+        national_id_provider=("sv_SE", "ssn"),
+    ),
+    _pack(
+        "da",
+        "OpenMed/privacy-filter-multilingual",
+        "da_DK",
+        ("Latin",),
+        national_id_provider=("da_DK", "danish_cpr"),
+    ),
+    _pack(
+        "no",
+        "OpenMed/privacy-filter-multilingual",
+        "no_NO",
+        ("Latin",),
+        national_id_provider=("no_NO", "ssn"),
+    ),
 )
 
 
@@ -235,7 +256,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "sk": NationalIdOnlyCapability("sk_SK", ("sk_SK", "rodne_cislo")),
     "ms": NationalIdOnlyCapability("ms_MY", ("ms_MY", "mykad")),
     "tl": NationalIdOnlyCapability("fil_PH", ("fil_PH", "philsys_psn")),
-    "da": NationalIdOnlyCapability("da_DK", ("da_DK", "danish_cpr")),
     "hu": NationalIdOnlyCapability("hu_HU", ("hu_HU", "hungarian_taj")),
     "et": NationalIdOnlyCapability("et_EE", ("et_EE", "isikukood")),
     "sr": NationalIdOnlyCapability("sr_RS", ("sr_RS", "jmbg")),

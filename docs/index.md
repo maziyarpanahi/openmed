@@ -20,8 +20,8 @@ coverage, and stronger release evidence:
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
   browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
   Transformers.js export bundles.
-- **22 supported PII language codes: am, ar, de, en, es, fr, he, hi, id, it, ja,
-  ko, nl, pt, ro, sw, te, th, tr, xh, zh, and zu**, with Chinese using the documented
+- **25 supported PII language codes: am, ar, da, de, en, es, fr, he, hi, id, it,
+  ja, ko, nl, no, pt, ro, sv, sw, te, th, tr, xh, zh, and zu**, with Chinese using the documented
   multilingual default-model placeholder, locale-aware validation and surrogate
   generation. A user-configured Indic NER adapter adds nine optional routes and
   can also serve Hindi and Telugu. Additional validator-backed national-ID

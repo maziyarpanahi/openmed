@@ -44,6 +44,15 @@ def test_openhim_dockerfile_probes_local_heartbeat() -> None:
     assert "127.0.0.1:8080/openhim/heartbeat" in dockerfile
 
 
+def test_openhim_dockerfile_includes_forced_package_data() -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert (
+        "COPY eval/redteam/corpus/adversarial_phi.jsonl "
+        "/app/eval/redteam/corpus/adversarial_phi.jsonl" in dockerfile
+    )
+
+
 def _run(
     args: list[str],
     *,
