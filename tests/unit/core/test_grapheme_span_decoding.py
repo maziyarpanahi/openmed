@@ -10,6 +10,7 @@ from openmed.core.decoding import (
     snap_span_to_grapheme_boundaries,
     trim_span_whitespace,
 )
+from openmed.core.decoding import spans as grapheme_spans
 
 _SYNTHETIC_CLUSTERS = (
     "क्षि",  # Devanagari consonant + virama + consonant + dependent vowel
@@ -172,6 +173,29 @@ def test_grapheme_iterator_handles_core_uax29_sequences():
 )
 def test_grapheme_iterator_keeps_supported_indic_conjuncts_whole(text):
     assert list(iter_grapheme_cluster_spans(text)) == [(0, len(text))]
+
+
+def test_span_snapping_only_inspects_clusters_touching_boundaries(monkeypatch):
+    text = ("Patient record 🧬 é ‍ 北京 مستشفى. " * 256) + "Zzyxx Qwerty"
+    start = text.index("Zzyxx")
+    calls: list[int] = []
+    original_has_grapheme_break = grapheme_spans._has_grapheme_break
+
+    def counted_has_grapheme_break(value: str, index: int) -> bool:
+        calls.append(index)
+        return original_has_grapheme_break(value, index)
+
+    monkeypatch.setattr(
+        grapheme_spans,
+        "_has_grapheme_break",
+        counted_has_grapheme_break,
+    )
+
+    assert snap_span_to_grapheme_boundaries(start, len(text), text) == (
+        start,
+        len(text),
+    )
+    assert len(calls) < 10
 
 
 def _legacy_codepoint_whitespace_trim(

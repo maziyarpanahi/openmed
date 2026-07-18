@@ -1029,6 +1029,7 @@ def normalize_for_pii_detection(
         )
         if width_char != folded_char
     }
+    cluster_starts, cluster_ends = _base_mark_cluster_maps(text)
 
     for index, char in enumerate(digit_folding.text):
         routed_start, routed_end = width_normalization.char_origins[index]
@@ -1057,8 +1058,8 @@ def normalize_for_pii_detection(
             changed_source_indices.add(original_start)
         for replacement_char in replacement:
             output.append(replacement_char)
-            starts.append(original_start)
-            ends.append(original_end)
+            starts.append(cluster_starts[original_start])
+            ends.append(cluster_ends[original_end - 1])
 
     return DetectionNormalization(
         text="".join(output),
@@ -1074,6 +1075,25 @@ def normalize_for_pii_detection(
         scripts=scripts,
         mixed_script=mixed_script,
     )
+
+
+def _base_mark_cluster_maps(text: str) -> tuple[list[int], list[int]]:
+    """Return containing base-plus-mark bounds for every source code point."""
+
+    starts = [0] * len(text)
+    ends = [0] * len(text)
+    cluster_start = 0
+
+    for index, char in enumerate(text):
+        if index > 0 and not unicodedata.category(char).startswith("M"):
+            for cluster_index in range(cluster_start, index):
+                ends[cluster_index] = index
+            cluster_start = index
+        starts[index] = cluster_start
+
+    for cluster_index in range(cluster_start, len(text)):
+        ends[cluster_index] = len(text)
+    return starts, ends
 
 
 def _script_for_char(char: str) -> str | None:
