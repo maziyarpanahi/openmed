@@ -431,6 +431,7 @@ class ConsensusDocument:
     doc_id: str
     text: str
     annotators: Mapping[str, tuple[EvalSpan, ...]]
+    annotator_relations: Mapping[str, tuple[ConsensusRelation, ...]]
     consensus_spans: tuple[EvalSpan, ...]
     consensus_relations: tuple[ConsensusRelation, ...]
 
@@ -447,14 +448,44 @@ def _consensus_spans(raw_spans: Any, text: str) -> tuple[EvalSpan, ...]:
 
 
 def _consensus_relation(raw: Mapping[str, Any], text: str) -> ConsensusRelation:
+    if not isinstance(raw, Mapping):
+        raise ValueError("consensus relation must be a mapping")
     head = _consensus_spans([raw["head"]], text)[0]
     tail = _consensus_spans([raw["tail"]], text)[0]
+    relation_type = str(raw.get("relation_type", "")).strip()
+    if not relation_type:
+        raise ValueError("consensus relation type is required")
     return ConsensusRelation(
-        relation_type=str(raw["relation_type"]),
+        relation_type=relation_type,
         head=head,
         tail=tail,
         label=str(raw.get("label", "")),
     )
+
+
+def _span_key(span: EvalSpan) -> tuple[int, int, str]:
+    return span.start, span.end, span.label
+
+
+def _consensus_relations(
+    raw_relations: Any,
+    text: str,
+    spans: tuple[EvalSpan, ...],
+    where: str,
+) -> tuple[ConsensusRelation, ...]:
+    if raw_relations is None:
+        return ()
+    if not isinstance(raw_relations, list):
+        raise ValueError(f"{where} relations must be a list")
+
+    relations = tuple(_consensus_relation(relation, text) for relation in raw_relations)
+    span_keys = {_span_key(span) for span in spans}
+    for relation in relations:
+        if _span_key(relation.head) not in span_keys:
+            raise ValueError(f"{where} relation head must reference one of its spans")
+        if _span_key(relation.tail) not in span_keys:
+            raise ValueError(f"{where} relation tail must reference one of its spans")
+    return relations
 
 
 def _consensus_document(data: Mapping[str, Any]) -> ConsensusDocument:
@@ -471,19 +502,30 @@ def _consensus_document(data: Mapping[str, Any]) -> ConsensusDocument:
         raise ValueError("consensus document requires at least two annotators")
 
     annotators: dict[str, tuple[EvalSpan, ...]] = {}
+    annotator_relations: dict[str, tuple[ConsensusRelation, ...]] = {}
     for name, export in raw_annotators.items():
         if not isinstance(export, Mapping):
             raise ValueError("annotator export must be a mapping")
         _require_synthetic(export, f"annotator {name!r} export")
-        annotators[str(name)] = _consensus_spans(export.get("spans"), text)
+        annotator_name = str(name)
+        annotator_spans = _consensus_spans(export.get("spans"), text)
+        annotators[annotator_name] = annotator_spans
+        annotator_relations[annotator_name] = _consensus_relations(
+            export.get("relations"),
+            text,
+            annotator_spans,
+            f"annotator {name!r}",
+        )
 
     consensus = data.get("consensus") or {}
     if not isinstance(consensus, Mapping):
         raise ValueError("consensus view must be a mapping")
     consensus_spans = _consensus_spans(consensus.get("spans"), text)
-    consensus_relations = tuple(
-        _consensus_relation(relation, text)
-        for relation in consensus.get("relations", [])
+    consensus_relations = _consensus_relations(
+        consensus.get("relations"),
+        text,
+        consensus_spans,
+        "consensus",
     )
 
     doc_id = str(data.get("id") or data.get("doc_id") or "")
@@ -494,6 +536,7 @@ def _consensus_document(data: Mapping[str, Any]) -> ConsensusDocument:
         doc_id=doc_id,
         text=text,
         annotators=annotators,
+        annotator_relations=annotator_relations,
         consensus_spans=consensus_spans,
         consensus_relations=consensus_relations,
     )
