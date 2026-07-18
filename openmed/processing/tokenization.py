@@ -7,9 +7,20 @@ import logging
 import re
 import shutil
 import unicodedata
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    NoReturn,
+    Optional,
+    Tuple,
+)
 
 from openmed.core.decoding.spans import (
     is_grapheme_boundary,
@@ -24,6 +35,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
+_DICTIONARY_READ_CHUNK_BYTES = 64 * 1024
+_REGEX_CONSTRUCT_CHARS = frozenset(r".^$*+?{}[]\|()")
+_ALLOWED_DICTIONARY_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES = 64 * 1024
 SEGMENTER_RESOURCE_DIRECTORY = "segmenter"
 DEFAULT_SEGMENTER_ID = "openmed-cjk-indic-v1"
@@ -77,6 +91,393 @@ _MEDICAL_TOKEN_PATTERN = re.compile(
     r"|[^ \t\r\n]"  # any other non-space char as its own token
 )
 _NUMERIC_CONNECTORS = frozenset({"/", "-", ".", ",", ":"})
+
+
+@dataclass(frozen=True)
+class DictionaryLimits:
+    """Resource and entry limits for untrusted dictionary files."""
+
+    max_compressed_bytes: int = 16 * 1024 * 1024
+    max_decompressed_bytes: int = 64 * 1024 * 1024
+    max_entries: int = 100_000
+    max_entry_bytes: int = 4 * 1024
+    max_term_characters: int = 256
+    max_expansion_ratio: float = 100.0
+
+    def __post_init__(self) -> None:
+        """Reject non-positive limits instead of silently removing a guard."""
+        values = {
+            "max_compressed_bytes": self.max_compressed_bytes,
+            "max_decompressed_bytes": self.max_decompressed_bytes,
+            "max_entries": self.max_entries,
+            "max_entry_bytes": self.max_entry_bytes,
+            "max_term_characters": self.max_term_characters,
+            "max_expansion_ratio": self.max_expansion_ratio,
+        }
+        for name, value in values.items():
+            if value <= 0:
+                raise ValueError(f"Dictionary limit {name} must be positive")
+
+
+DEFAULT_DICTIONARY_LIMITS = DictionaryLimits()
+
+
+@dataclass(frozen=True)
+class UserDictionaryEntry:
+    """One validated literal entry from a segmenter user dictionary."""
+
+    term: str
+    frequency: int | None = None
+    pos: str | None = None
+
+
+class DictionaryIngestionError(ValueError):
+    """Base class for fail-closed dictionary ingestion errors."""
+
+    reason = "dictionary_rejected"
+
+
+class DictionarySourceError(DictionaryIngestionError):
+    """Raised when a dictionary source cannot be read safely."""
+
+    reason = "source_error"
+
+
+class DictionaryArchiveError(DictionaryIngestionError):
+    """Raised when a dictionary archive has an unsupported or invalid shape."""
+
+    reason = "archive_error"
+
+
+class DictionarySizeLimitError(DictionaryIngestionError):
+    """Raised when compressed or decompressed bytes exceed a configured cap."""
+
+    reason = "size_limit"
+
+
+class DictionaryExpansionLimitError(DictionarySizeLimitError):
+    """Raised before reading an archive member with excessive expansion."""
+
+    reason = "expansion_ratio"
+
+
+class DictionaryEntryLimitError(DictionaryIngestionError):
+    """Raised as soon as a dictionary crosses its entry-count cap."""
+
+    reason = "entry_limit"
+
+    def __init__(self, observed_count: int) -> None:
+        self.observed_count = observed_count
+        super().__init__("Dictionary entry count exceeds the configured limit")
+
+
+class DictionaryEncodingError(DictionaryIngestionError):
+    """Raised when a dictionary is not strict UTF-8."""
+
+    reason = "utf8_required"
+
+
+class DictionaryEntryValidationError(DictionaryIngestionError):
+    """Raised when one entry violates a named validation rule."""
+
+    reason = "entry_validation"
+
+    def __init__(self, rule: str, line_number: int) -> None:
+        self.rule = rule
+        self.line_number = line_number
+        super().__init__(
+            f"Dictionary entry rejected by rule={rule} at line={line_number}"
+        )
+
+
+@dataclass
+class _DictionaryMetadata:
+    path_hash: str
+    size_bytes: int
+    entry_count: int = 0
+
+
+def load_user_dictionary(
+    path: str | Path,
+    *,
+    limits: DictionaryLimits = DEFAULT_DICTIONARY_LIMITS,
+) -> tuple[UserDictionaryEntry, ...]:
+    """Load a strict UTF-8 user dictionary through bounded streaming.
+
+    Plain-text files and single-member ``.zip`` archives are supported. Archive
+    metadata is checked before member decompression, and both source forms stop
+    as soon as a byte, record, or entry limit is crossed. Entries use the jieba
+    shape ``term [frequency [POS]]`` but terms are always literals: Unicode
+    controls and executable regular-expression constructs are rejected.
+
+    Rejection logs contain only a hash of the source path, byte size, entry
+    count, and a machine-readable reason. Dictionary content and raw paths are
+    never logged or included in raised exceptions.
+    """
+
+    source_path = Path(path).expanduser()
+    metadata = _DictionaryMetadata(
+        path_hash=_dictionary_path_hash(source_path),
+        size_bytes=_safe_file_size(source_path),
+    )
+    try:
+        is_archive = source_path.suffix.casefold() == ".zip" or zipfile.is_zipfile(
+            source_path
+        )
+        source_size_limit = (
+            limits.max_compressed_bytes if is_archive else limits.max_decompressed_bytes
+        )
+        if metadata.size_bytes > source_size_limit:
+            _reject_dictionary(
+                DictionarySizeLimitError(
+                    "Dictionary source exceeds the configured size limit"
+                ),
+                metadata,
+            )
+        if is_archive:
+            return _load_zipped_dictionary(source_path, limits, metadata)
+        with source_path.open("rb") as handle:
+            return _parse_dictionary_stream(handle, limits, metadata)
+    except DictionaryIngestionError:
+        raise
+    except (OSError, RuntimeError, zipfile.BadZipFile):
+        _reject_dictionary(
+            DictionarySourceError("Dictionary source is unreadable"), metadata
+        )
+
+
+def validate_user_dictionary_entry(
+    line: str,
+    *,
+    line_number: int = 1,
+    limits: DictionaryLimits = DEFAULT_DICTIONARY_LIMITS,
+) -> UserDictionaryEntry | None:
+    """Validate one dictionary line without logging its content."""
+
+    if not isinstance(line, str):
+        raise TypeError("Dictionary entry must be text")
+    if line_number <= 0:
+        raise ValueError("line_number must be positive")
+
+    candidate = line.split("#", 1)[0].strip()
+    if not candidate:
+        return None
+    fields = candidate.split()
+    if len(fields) > 3:
+        raise DictionaryEntryValidationError("field_count", line_number)
+
+    term = fields[0]
+    _validate_dictionary_field(term, "term", line_number, limits)
+    if any(char in _REGEX_CONSTRUCT_CHARS for char in term):
+        raise DictionaryEntryValidationError("executable_regex_construct", line_number)
+
+    frequency: int | None = None
+    if len(fields) >= 2:
+        try:
+            frequency = int(fields[1], 10)
+        except ValueError:
+            raise DictionaryEntryValidationError(
+                "frequency_integer", line_number
+            ) from None
+        if frequency <= 0:
+            raise DictionaryEntryValidationError("frequency_positive", line_number)
+        if frequency > 2_147_483_647:
+            raise DictionaryEntryValidationError("frequency_range", line_number)
+
+    pos: str | None = None
+    if len(fields) == 3:
+        pos = fields[2]
+        _validate_dictionary_field(pos, "pos", line_number, limits)
+        if len(pos) > 32:
+            raise DictionaryEntryValidationError("pos_length", line_number)
+        if not all(char.isalnum() or char in {"_", "-"} for char in pos):
+            raise DictionaryEntryValidationError("pos_characters", line_number)
+
+    return UserDictionaryEntry(term=term, frequency=frequency, pos=pos)
+
+
+def _load_zipped_dictionary(
+    path: Path,
+    limits: DictionaryLimits,
+    metadata: _DictionaryMetadata,
+) -> tuple[UserDictionaryEntry, ...]:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            members = [info for info in archive.infolist() if not info.is_dir()]
+            if len(members) != 1:
+                _reject_dictionary(
+                    DictionaryArchiveError(
+                        "Dictionary archive must contain exactly one file"
+                    ),
+                    metadata,
+                )
+            member = members[0]
+            if member.flag_bits & 0x1:
+                _reject_dictionary(
+                    DictionaryArchiveError(
+                        "Encrypted dictionary archives are unsupported"
+                    ),
+                    metadata,
+                )
+            if member.compress_type not in _ALLOWED_DICTIONARY_COMPRESSION:
+                _reject_dictionary(
+                    DictionaryArchiveError(
+                        "Dictionary archive compression method is unsupported"
+                    ),
+                    metadata,
+                )
+            if member.file_size > limits.max_decompressed_bytes:
+                _reject_dictionary(
+                    DictionarySizeLimitError(
+                        "Dictionary member exceeds the decompressed-size limit"
+                    ),
+                    metadata,
+                )
+            expansion_ratio = member.file_size / max(member.compress_size, 1)
+            if expansion_ratio >= limits.max_expansion_ratio:
+                _reject_dictionary(
+                    DictionaryExpansionLimitError(
+                        "Dictionary archive expansion ratio is too high"
+                    ),
+                    metadata,
+                )
+            with archive.open(member, "r") as handle:
+                return _parse_dictionary_stream(handle, limits, metadata)
+    except DictionaryIngestionError:
+        raise
+    except (OSError, RuntimeError, zipfile.BadZipFile):
+        _reject_dictionary(
+            DictionaryArchiveError("Dictionary archive is invalid"), metadata
+        )
+
+
+def _parse_dictionary_stream(
+    handle: Any,
+    limits: DictionaryLimits,
+    metadata: _DictionaryMetadata,
+) -> tuple[UserDictionaryEntry, ...]:
+    entries: list[UserDictionaryEntry] = []
+    line_number = 0
+    total_bytes = 0
+    pending = bytearray()
+
+    while True:
+        chunk = handle.read(_DICTIONARY_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > limits.max_decompressed_bytes:
+            _reject_dictionary(
+                DictionarySizeLimitError(
+                    "Dictionary stream exceeds the decompressed-size limit"
+                ),
+                metadata,
+            )
+        pending.extend(chunk)
+        while True:
+            newline_index = pending.find(b"\n")
+            if newline_index < 0:
+                if len(pending) > limits.max_entry_bytes:
+                    _reject_dictionary(
+                        DictionaryEntryValidationError(
+                            "entry_byte_length", line_number + 1
+                        ),
+                        metadata,
+                    )
+                break
+            raw_line = bytes(pending[:newline_index])
+            del pending[: newline_index + 1]
+            line_number += 1
+            _append_dictionary_entry(raw_line, line_number, entries, limits, metadata)
+
+    if pending:
+        line_number += 1
+        _append_dictionary_entry(bytes(pending), line_number, entries, limits, metadata)
+
+    return tuple(entries)
+
+
+def _append_dictionary_entry(
+    raw_line: bytes,
+    line_number: int,
+    entries: list[UserDictionaryEntry],
+    limits: DictionaryLimits,
+    metadata: _DictionaryMetadata,
+) -> None:
+    if len(raw_line) > limits.max_entry_bytes:
+        _reject_dictionary(
+            DictionaryEntryValidationError("entry_byte_length", line_number),
+            metadata,
+        )
+    try:
+        line = raw_line.rstrip(b"\r").decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        _reject_dictionary(
+            DictionaryEncodingError("Dictionary must be UTF-8"), metadata
+        )
+
+    try:
+        entry = validate_user_dictionary_entry(
+            line,
+            line_number=line_number,
+            limits=limits,
+        )
+    except DictionaryEntryValidationError as exc:
+        _reject_dictionary(exc, metadata)
+    if entry is None:
+        return
+
+    metadata.entry_count += 1
+    if metadata.entry_count > limits.max_entries:
+        _reject_dictionary(
+            DictionaryEntryLimitError(metadata.entry_count),
+            metadata,
+        )
+    entries.append(entry)
+
+
+def _validate_dictionary_field(
+    value: str,
+    field: str,
+    line_number: int,
+    limits: DictionaryLimits,
+) -> None:
+    if not value:
+        raise DictionaryEntryValidationError(f"{field}_empty", line_number)
+    if len(value) > limits.max_term_characters:
+        raise DictionaryEntryValidationError(f"{field}_length", line_number)
+    if any(unicodedata.category(char).startswith("C") for char in value):
+        raise DictionaryEntryValidationError("control_character", line_number)
+
+
+def _dictionary_path_hash(path: Path) -> str:
+    try:
+        normalized = str(path.resolve(strict=False))
+    except OSError:
+        normalized = str(path.absolute())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _safe_file_size(path: Path) -> int:
+    try:
+        return max(0, path.stat().st_size)
+    except OSError:
+        return 0
+
+
+def _reject_dictionary(
+    error: DictionaryIngestionError,
+    metadata: _DictionaryMetadata,
+) -> NoReturn:
+    logger.warning(
+        "dictionary_ingestion_rejected path_hash=%s size_bytes=%d "
+        "entry_count=%d reason=%s",
+        metadata.path_hash,
+        metadata.size_bytes,
+        metadata.entry_count,
+        error.reason,
+    )
+    raise error from None
 
 
 @dataclass(frozen=True)

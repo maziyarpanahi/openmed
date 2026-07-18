@@ -14,15 +14,48 @@ evasion defense are retained.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import re
 import unicodedata
+import warnings
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import NoReturn
 
 from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
 UNKNOWN_SCRIPT = "Unknown"
+
+logger = logging.getLogger(__name__)
+
+MAX_INGESTION_BYTES = 16 * 1024 * 1024
+
+_INGESTION_ENCODING_ALIASES = {
+    "ascii": "ascii",
+    "big5": "big5",
+    "cp1252": "cp1252",
+    "euc-jp": "euc_jp",
+    "euc-kr": "euc_kr",
+    "eucjp": "euc_jp",
+    "euckr": "euc_kr",
+    "gb18030": "gb18030",
+    "iso-8859-1": "latin-1",
+    "latin-1": "latin-1",
+    "latin1": "latin-1",
+    "shift-jis": "shift_jis",
+    "shiftjis": "shift_jis",
+    "sjis": "shift_jis",
+    "utf-16-be": "utf-16-be",
+    "utf-16-le": "utf-16-le",
+    "utf-8": "utf-8",
+    "utf-8-sig": "utf-8-sig",
+    "utf8": "utf-8",
+    "windows-1252": "cp1252",
+}
+ALLOWED_INGESTION_ENCODINGS = frozenset(_INGESTION_ENCODING_ALIASES.values())
 
 CJK_SCRIPTS = frozenset({"Han", "Hiragana/Katakana", "Hangul"})
 INDIC_SCRIPTS = frozenset(
@@ -432,6 +465,44 @@ _TRADITIONAL_VARIANT_RAW = frozenset(
 _SHARED_VARIANT_EVIDENCE = _SIMPLIFIED_VARIANT_RAW & _TRADITIONAL_VARIANT_RAW
 SIMPLIFIED_VARIANT_CHARS = _SIMPLIFIED_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
 TRADITIONAL_VARIANT_CHARS = _TRADITIONAL_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
+
+
+class EncodingIngestionError(ValueError):
+    """Base class for fail-closed multilingual byte-decoding errors."""
+
+    reason = "encoding_rejected"
+
+
+class UnsupportedIngestionEncodingError(EncodingIngestionError):
+    """Raised before codec lookup when an encoding is not allow-listed."""
+
+    reason = "encoding_not_allowed"
+
+
+class EncodingInputLimitError(EncodingIngestionError):
+    """Raised before decoding when a byte input crosses the configured cap."""
+
+    reason = "encoding_size_limit"
+
+
+class EncodingConversionError(EncodingIngestionError):
+    """Raised when strict decoding fails for an allow-listed encoding."""
+
+    reason = "encoding_conversion"
+
+
+class ConfusableIngestionWarning(UserWarning):
+    """Warn that decoded text needs confusable or mixed-script review."""
+
+
+@dataclass(frozen=True)
+class DecodedIngestionText:
+    """Strictly decoded text plus content-free script warning codes."""
+
+    text: str
+    encoding: str
+    byte_length: int
+    warning_codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1234,6 +1305,140 @@ def normalize_for_pii_detection(
     )
 
 
+def decode_ingestion_bytes(
+    data: bytes | bytearray | memoryview,
+    *,
+    encoding: str,
+    source_path: str | Path | None = None,
+    max_bytes: int = MAX_INGESTION_BYTES,
+    warn_on_confusables: bool = True,
+) -> DecodedIngestionText:
+    """Decode untrusted multilingual bytes using an explicit codec allow-list.
+
+    Codec names are normalized through a static alias table before Python codec
+    lookup, so a caller cannot activate a dynamically registered codec. Decoding
+    is strict and bounded. Mixed-script or folded-confusable text produces only
+    machine-readable warning codes; no source text or raw path is logged.
+
+    Args:
+        data: Bytes to decode.
+        encoding: Explicit allow-listed encoding name. Ambiguous or executable
+            codecs such as ``utf-7`` and BOM-selected ``utf-16`` are rejected.
+        source_path: Optional source path used only to derive a SHA-256 log key.
+        max_bytes: Positive input-size cap applied before decoding.
+        warn_on_confusables: Emit :class:`ConfusableIngestionWarning` when the
+            decoded text is mixed-script or contains folded confusables.
+
+    Returns:
+        Strictly decoded text and content-free warning metadata.
+
+    Raises:
+        EncodingIngestionError: If the codec, size, or byte sequence is invalid.
+    """
+
+    if not isinstance(data, (bytes, bytearray, memoryview)):
+        raise TypeError("data must be a bytes-like object")
+    if not isinstance(encoding, str):
+        raise TypeError("encoding must be text")
+    if max_bytes <= 0:
+        raise ValueError("max_bytes must be positive")
+
+    payload = bytes(data)
+    path_hash = _ingestion_path_hash(source_path)
+    if len(payload) > max_bytes:
+        _reject_encoding(
+            EncodingInputLimitError("Encoded input exceeds the configured limit"),
+            path_hash=path_hash,
+            size_bytes=len(payload),
+        )
+
+    normalized_name = encoding.strip().casefold().replace("_", "-")
+    codec_name = _INGESTION_ENCODING_ALIASES.get(normalized_name)
+    if codec_name is None:
+        _reject_encoding(
+            UnsupportedIngestionEncodingError("Encoding is not allow-listed"),
+            path_hash=path_hash,
+            size_bytes=len(payload),
+        )
+
+    try:
+        text = payload.decode(codec_name, errors="strict")
+    except (LookupError, UnicodeDecodeError):
+        _reject_encoding(
+            EncodingConversionError("Input cannot be decoded strictly"),
+            path_hash=path_hash,
+            size_bytes=len(payload),
+        )
+
+    normalization = normalize_for_pii_detection(text)
+    warning_codes: list[str] = []
+    if normalization.mixed_script:
+        warning_codes.append("mixed_script")
+    if normalization.folded_confusables:
+        warning_codes.append("confusable_characters")
+    if warning_codes and warn_on_confusables:
+        warnings.warn(
+            "decoded ingestion requires mixed-script/confusable review; "
+            f"warning_codes={','.join(warning_codes)}",
+            ConfusableIngestionWarning,
+            stacklevel=2,
+        )
+
+    return DecodedIngestionText(
+        text=text,
+        encoding=codec_name,
+        byte_length=len(payload),
+        warning_codes=tuple(warning_codes),
+    )
+
+
+def decode_legacy_text(
+    data: bytes | bytearray | memoryview,
+    *,
+    encoding: str,
+    source_path: str | Path | None = None,
+    max_bytes: int = MAX_INGESTION_BYTES,
+    warn_on_confusables: bool = True,
+) -> str:
+    """Return text from :func:`decode_ingestion_bytes` for converter adapters."""
+
+    return decode_ingestion_bytes(
+        data,
+        encoding=encoding,
+        source_path=source_path,
+        max_bytes=max_bytes,
+        warn_on_confusables=warn_on_confusables,
+    ).text
+
+
+def _ingestion_path_hash(path: str | Path | None) -> str:
+    if path is None:
+        normalized = "<memory>"
+    else:
+        candidate = Path(path).expanduser()
+        try:
+            normalized = str(candidate.resolve(strict=False))
+        except OSError:
+            normalized = str(candidate.absolute())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _reject_encoding(
+    error: EncodingIngestionError,
+    *,
+    path_hash: str,
+    size_bytes: int,
+) -> NoReturn:
+    logger.warning(
+        "encoding_ingestion_rejected path_hash=%s size_bytes=%d "
+        "entry_count=0 reason=%s",
+        path_hash,
+        size_bytes,
+        error.reason,
+    )
+    raise error from None
+
+
 def _base_mark_cluster_maps(text: str) -> tuple[list[int], list[int]]:
     """Return containing base-plus-mark bounds for every source code point."""
 
@@ -1321,23 +1526,31 @@ def _is_identifier_char(char: str) -> bool:
 
 
 __all__ = [
+    "ALLOWED_INGESTION_ENCODINGS",
     "CJK_SCRIPTS",
     "CONFUSABLE_DATA_LICENSE",
     "CONFUSABLE_DATA_URL",
     "CONFUSABLE_DATA_VERSION",
     "ChineseScriptEstimate",
     "ChineseScriptVariant",
+    "ConfusableIngestionWarning",
+    "DecodedIngestionText",
     "DetectionNormalization",
+    "EncodingConversionError",
+    "EncodingIngestionError",
+    "EncodingInputLimitError",
     "INDIC_SCRIPTS",
     "INDIAN_NAME_LANGUAGES",
     "INDIAN_NAME_SCRIPTS",
     "MixedScriptSpan",
+    "MAX_INGESTION_BYTES",
     "ScriptDetectionWindow",
     "SCRIPT_LANGUAGE_HINTS",
     "SIMPLIFIED_VARIANT_CHARS",
     "SUPPORTED_SCRIPTS",
     "TRADITIONAL_VARIANT_CHARS",
     "UNKNOWN_SCRIPT",
+    "UnsupportedIngestionEncodingError",
     "ZERO_WIDTH_CHARS",
     "canonical_indian_name",
     "candidate_languages_for_script",
@@ -1345,6 +1558,8 @@ __all__ = [
     "detect_chinese_script",
     "detect_mixed_script",
     "detect_script",
+    "decode_ingestion_bytes",
+    "decode_legacy_text",
     "india_clinical_script_windows",
     "indian_name_script",
     "is_han_dominant",

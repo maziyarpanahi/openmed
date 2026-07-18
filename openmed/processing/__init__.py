@@ -67,7 +67,21 @@ from .text import (
     postprocess_text,
     preprocess_text,
 )
-from .tokenization import TokenizationHelper, infer_tokenizer_max_length
+from .tokenization import (
+    DEFAULT_DICTIONARY_LIMITS,
+    DictionaryArchiveError,
+    DictionaryEncodingError,
+    DictionaryEntryLimitError,
+    DictionaryEntryValidationError,
+    DictionaryExpansionLimitError,
+    DictionaryIngestionError,
+    DictionaryLimits,
+    DictionarySizeLimitError,
+    DictionarySourceError,
+    TokenizationHelper,
+    infer_tokenizer_max_length,
+    validate_user_dictionary_entry,
+)
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
 from .transliteration import (
     LOSSY_CASES,
@@ -117,6 +131,16 @@ __all__ = [
     "postprocess_text",
     "TokenizationHelper",
     "infer_tokenizer_max_length",
+    "DEFAULT_DICTIONARY_LIMITS",
+    "DictionaryArchiveError",
+    "DictionaryEncodingError",
+    "DictionaryEntryLimitError",
+    "DictionaryEntryValidationError",
+    "DictionaryExpansionLimitError",
+    "DictionaryIngestionError",
+    "DictionaryLimits",
+    "DictionarySizeLimitError",
+    "DictionarySourceError",
     "ChineseSegmenter",
     "ChineseSegmentationConfig",
     "JiebaSegmenter",
@@ -128,6 +152,7 @@ __all__ = [
     "load_user_dictionary",
     "segmentation_boundary_f1",
     "validate_segmentation",
+    "validate_user_dictionary_entry",
     "get_tokenizer",
     "clear_tokenizer_cache",
     "ChineseTargetScript",
