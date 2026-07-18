@@ -30,6 +30,10 @@ class ModelInfo:
     architecture: Optional[str] = None
     base_model: Optional[str] = None
     formats: List[str] = field(default_factory=list)
+    nnapi_compatible: Optional[bool] = None
+    min_sdk: Optional[int] = None
+    execution_providers: List[str] = field(default_factory=list)
+    tokenizer_assets: List[str] = field(default_factory=list)
     benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
@@ -530,6 +534,12 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         architecture=row.get("architecture"),
         base_model=row.get("base_model"),
         formats=list(row.get("formats") or []),
+        nnapi_compatible=row.get("nnapi_compatible")
+        if isinstance(row.get("nnapi_compatible"), bool)
+        else None,
+        min_sdk=_positive_int_from_row(row, "min_sdk"),
+        execution_providers=_string_list_from_row(row, "execution_providers"),
+        tokenizer_assets=_string_list_from_row(row, "tokenizer_assets"),
         benchmark=_benchmark_from_row(row),
         latency_ms=_number_map_from_row(row, "latency_ms"),
         peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
@@ -561,6 +571,20 @@ def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, floa
         for device, measurement in value.items()
         if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
     }
+
+
+def _positive_int_from_row(row: Dict[str, Any], field_name: str) -> Optional[int]:
+    value = row.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _string_list_from_row(row: Dict[str, Any], field_name: str) -> List[str]:
+    value = row.get(field_name)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:

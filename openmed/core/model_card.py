@@ -9,6 +9,16 @@ from openmed.__about__ import __version__
 
 DEFAULT_ARXIV = "2508.01630"
 
+_ANDROID_METADATA_FIELDS = frozenset(
+    {
+        "execution_providers",
+        "min_sdk",
+        "nnapi_compatible",
+        "tokenizer_assets",
+    }
+)
+_ANDROID_FORMATS = frozenset({"onnx-android", "onnx-int8", "ort-android"})
+
 _MODEL_LANGUAGES = {
     "Arabic": "ar",
     "Bengali": "bn",
@@ -209,6 +219,9 @@ def render_model_card(row: dict[str, Any]) -> str:
     artifact_lines = _artifact_format_block(formats)
     if artifact_lines:
         lines.extend(["", "## Artifact Format", "", *artifact_lines])
+    android_lines = _android_artifact_block(row, formats)
+    if android_lines:
+        lines.extend(["", *android_lines])
     distillation_lines = _distillation_block(row)
     if distillation_lines:
         lines.extend(["", "## Distillation Evidence", "", *distillation_lines])
@@ -235,6 +248,7 @@ def _render_android_onnx_model_card(
     source_model = _string(row.get("base_model"), "Not specified")
     license_name = _string(row.get("license"), "apache-2.0")
     arxiv = _string(row.get("arxiv"), DEFAULT_ARXIV)
+    android_lines = _android_artifact_block(row, formats)
     task_name = (
         "PII token classification"
         if family == "PII"
@@ -389,6 +403,7 @@ def _render_android_onnx_model_card(
             "",
             "Inference and tokenization remain on-device.",
             "",
+            *([*android_lines, ""] if android_lines else []),
             "## Included Artifacts",
             "",
             "| Artifact | Recommended use |",
@@ -638,6 +653,40 @@ def _artifact_format_block(formats: list[str]) -> list[str]:
         f"| Runtime artifacts | {_comma_or_unspecified(runtime_formats)} |",
         f"| Quantization | {_comma_or_unspecified(quantization_formats)} |",
     ]
+
+
+def _android_artifact_block(row: dict[str, Any], formats: list[str]) -> list[str]:
+    if not _ANDROID_METADATA_FIELDS.intersection(row):
+        return []
+
+    android_formats = [
+        value for value in formats if _normalize_format(value) in _ANDROID_FORMATS
+    ]
+    min_sdk = row.get("min_sdk")
+    min_sdk_text = (
+        str(min_sdk)
+        if isinstance(min_sdk, int) and not isinstance(min_sdk, bool) and min_sdk > 0
+        else "Not specified"
+    )
+    return [
+        "## Android",
+        "",
+        "| Field | Value |",
+        "|---|---|",
+        f"| Formats | {_code_list(android_formats)} |",
+        f"| NNAPI compatible | {_yes_no(row.get('nnapi_compatible'))} |",
+        f"| Minimum Android SDK | {min_sdk_text} |",
+        f"| Execution providers | {_code_list(_list(row.get('execution_providers')))} |",
+        f"| Tokenizer assets | {_code_list(_list(row.get('tokenizer_assets')))} |",
+        "",
+        "**Medical-device disclaimer:** Outputs are not for autonomous clinical decisions.",
+    ]
+
+
+def _code_list(values: list[str]) -> str:
+    if not values:
+        return "Not specified"
+    return ", ".join(f"`{value}`" for value in values)
 
 
 def _onnx_usage_block(repo_id: str, formats: list[str]) -> list[str]:
