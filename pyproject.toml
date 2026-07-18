@@ -72,6 +72,10 @@ mcp = [
   "mcp>=1.9",
 ]
 
+lid = [
+  "pycld2>=0.41,<1",
+]
+
 presidio = [
   "presidio-analyzer>=2.2.354,<3",
 ]
