@@ -48,7 +48,11 @@ from .date_shift import (
 )
 from .decoding import remap_normalized_span
 from .offline import network_blocked_if_offline
-from .script_detect import DetectionNormalization, normalize_for_pii_detection
+from .script_detect import (
+    DetectionNormalization,
+    india_clinical_script_windows,
+    normalize_for_pii_detection,
+)
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
@@ -741,6 +745,169 @@ def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
     )
 
 
+def _extract_india_clinical_via_script_windows(
+    text: str,
+    *,
+    lang: str,
+    effective_model: str,
+    user_model: str | None,
+    confidence_threshold: float,
+    config: Optional[OpenMedConfig],
+    loader: Optional["ModelLoader"],
+    pipeline_kwargs: Mapping[str, Any],
+) -> Any:
+    """Run Latin and Indic context windows through their configured models."""
+
+    from .. import analyze_text
+    from ..clinical.context import INDIA_CLINICAL_NER_DISCLAIMER
+    from ..processing.outputs import EntityPrediction
+    from .models import ModelLoader
+    from .pii_i18n import get_india_clinical_model_route
+
+    windows = india_clinical_script_windows(text, lang)
+    if not windows:
+        raise ValueError("India clinical routing requires mixed Latin/Indic text")
+
+    route = get_india_clinical_model_route(lang)
+    shared_loader = loader or ModelLoader(config)
+    routed_results: list[Any] = []
+    routed_entities: list[EntityPrediction] = []
+    route_metadata: list[dict[str, Any]] = []
+    seen_requests: set[tuple[int, int, str, str]] = set()
+
+    for window in windows:
+        selected_model = route.model_for_script(
+            window.script,
+            user_model=user_model,
+        )
+        request_key = (window.start, window.end, selected_model, window.script)
+        if request_key in seen_requests:
+            continue
+        seen_requests.add(request_key)
+
+        window_text = window.extract(text)
+        result = analyze_text(
+            window_text,
+            model_name=selected_model,
+            confidence_threshold=confidence_threshold,
+            config=config,
+            loader=shared_loader,
+            group_entities=True,
+            **pipeline_kwargs,
+        )
+        result = _mutable_prediction_result(result)
+        routed_results.append(result)
+
+        # Tests and custom adapters sometimes return a full-note result even
+        # when invoked with a window. Accept that shape without double-offsetting.
+        base_offset = 0 if result.text == text else window.start
+        for entity in result.entities:
+            local_start = int(entity.start or 0)
+            local_end = int(entity.end or local_start)
+            start = base_offset + local_start
+            end = base_offset + local_end
+            if start < 0 or end < start or end > len(text):
+                raise ValueError("India clinical model returned an invalid span")
+            metadata = dict(entity.metadata or {})
+            metadata["india_clinical_route"] = {
+                "core_end": window.core_end,
+                "core_start": window.core_start,
+                "model": selected_model,
+                "script": window.script,
+                "window_end": window.end,
+                "window_start": window.start,
+            }
+            routed_entities.append(
+                EntityPrediction(
+                    text=text[start:end],
+                    label=entity.label,
+                    start=start,
+                    end=end,
+                    confidence=entity.confidence,
+                    metadata=metadata,
+                )
+            )
+        route_metadata.append(
+            {
+                "core_end": window.core_end,
+                "core_start": window.core_start,
+                "model": selected_model,
+                "script": window.script,
+                "window_end": window.end,
+                "window_start": window.start,
+            }
+        )
+
+    if not routed_results:
+        raise RuntimeError("India clinical routing produced no inference requests")
+
+    base_result = routed_results[0]
+    metadata = dict(getattr(base_result, "metadata", None) or {})
+    metadata["india_clinical"] = {
+        "active": True,
+        "disclaimer": INDIA_CLINICAL_NER_DISCLAIMER,
+        "fallback_model": route.fallback_model,
+        "language": lang,
+        "routes": route_metadata,
+    }
+    processing_times = [
+        float(result.processing_time)
+        for result in routed_results
+        if result.processing_time is not None
+    ]
+    return _replace_analysis_result(
+        base_result,
+        text=text,
+        entities=_coalesce_india_routed_entities(routed_entities, text),
+        model_name=effective_model,
+        processing_time=sum(processing_times) if processing_times else None,
+        metadata=metadata,
+    )
+
+
+def _coalesce_india_routed_entities(
+    entities: Sequence[EntityPrediction],
+    text: str,
+) -> list[EntityPrediction]:
+    """Union duplicate same-label detections emitted by overlapping windows."""
+
+    from .pii_entity_merger import normalize_label
+
+    ordered = sorted(
+        entities,
+        key=lambda entity: (int(entity.start or 0), int(entity.end or 0)),
+    )
+    coalesced: list[EntityPrediction] = []
+    for entity in ordered:
+        if not coalesced:
+            coalesced.append(entity)
+            continue
+        previous = coalesced[-1]
+        previous_start = int(previous.start or 0)
+        previous_end = int(previous.end or previous_start)
+        start = int(entity.start or 0)
+        end = int(entity.end or start)
+        same_family = normalize_label(previous.label) == normalize_label(entity.label)
+        if start >= previous_end or not same_family:
+            coalesced.append(entity)
+            continue
+
+        merged_start = min(previous_start, start)
+        merged_end = max(previous_end, end)
+        winner = max((previous, entity), key=lambda item: float(item.confidence))
+        metadata = dict(winner.metadata or {})
+        metadata["india_clinical_window_union"] = True
+        coalesced[-1] = EntityPrediction(
+            text=text[merged_start:merged_end],
+            label=winner.label,
+            start=merged_start,
+            end=merged_end,
+            confidence=max(float(previous.confidence), float(entity.confidence)),
+            metadata=metadata,
+        )
+    return coalesced
+
+
 def _apply_pii_smart_merging(
     result: Any,
     effective_model: str,
@@ -749,6 +916,7 @@ def _apply_pii_smart_merging(
     locale: Optional[str] = None,
     code_mixed: bool = False,
     token_language_tags: Optional[Sequence[Any]] = None,
+    india_clinical: bool = False,
 ) -> Any:
     """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
@@ -793,6 +961,7 @@ def _apply_pii_smart_merging(
         prefer_model_labels=True,
         allow_semantic_only_matches=not model_led_merging,
         allow_label_expansion=not model_led_merging,
+        india_clinical=india_clinical,
     )
 
     merged_entities = [
@@ -802,20 +971,32 @@ def _apply_pii_smart_merging(
             start=e["start"],
             end=e["end"],
             confidence=e["score"],
-            metadata=(
-                {
-                    "semantic_merge": {
-                        "source_labels": list(e.get("source_labels", ())),
-                        "mixed_label_union": bool(e.get("mixed_label_union", False)),
-                    }
-                }
-                if e.get("source_labels")
-                else None
-            ),
+            metadata=_pii_merge_metadata(e),
         )
         for e in merged_dicts
     ]
     return _replace_analysis_result(result, entities=merged_entities)
+
+
+def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return structured metadata retained from semantic/clinical merging."""
+
+    metadata: dict[str, Any] = {}
+    if entity.get("source_labels"):
+        metadata["semantic_merge"] = {
+            "source_labels": list(entity.get("source_labels", ())),
+            "mixed_label_union": bool(entity.get("mixed_label_union", False)),
+        }
+    if entity.get("normalized_word"):
+        # Keep result/audit metadata surface-free. The merger's internal
+        # ``normalized_word`` drives span logic, while public provenance records
+        # only the registered abbreviation keys and normalization version.
+        metadata["clinical_normalization"] = dict(
+            entity.get("clinical_normalization") or {}
+        )
+    if entity.get("india_clinical_merge"):
+        metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    return metadata or None
 
 
 def _extract_pii_batch(
@@ -858,6 +1039,11 @@ def _extract_pii_batch(
     if not prepared:
         return []
 
+    india_clinical_flags = [
+        bool(india_clinical_script_windows(item.inference_text, lang))
+        for item in prepared
+    ]
+
     uses_privacy_filter = _looks_like_privacy_filter_identifier(
         effective_model
     ) or _is_privacy_filter_artifact_path(effective_model)
@@ -899,30 +1085,49 @@ def _extract_pii_batch(
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
-        for item in prepared:
-            result = analyze_text(
-                item.inference_text,
-                model_name=effective_model,
-                confidence_threshold=confidence_threshold,
-                config=config,
-                loader=shared_loader,
-                group_entities=True,
-                **pipeline_kwargs,
-            )
+        for item, india_clinical in zip(prepared, india_clinical_flags):
+            if india_clinical:
+                result = _extract_india_clinical_via_script_windows(
+                    item.inference_text,
+                    lang=lang,
+                    effective_model=effective_model,
+                    user_model=(
+                        None if model_name == _DEFAULT_EN_MODEL else effective_model
+                    ),
+                    confidence_threshold=confidence_threshold,
+                    config=config,
+                    loader=shared_loader,
+                    pipeline_kwargs=pipeline_kwargs,
+                )
+            else:
+                result = analyze_text(
+                    item.inference_text,
+                    model_name=effective_model,
+                    confidence_threshold=confidence_threshold,
+                    config=config,
+                    loader=shared_loader,
+                    group_entities=True,
+                    **pipeline_kwargs,
+                )
             result = _mutable_prediction_result(result)
             results.append(result)
 
-    if use_smart_merging and not uses_privacy_filter:
+    if use_smart_merging:
         results = [
-            _apply_pii_smart_merging(
-                result,
-                effective_model,
-                lang,
-                locale=locale,
-                code_mixed=code_mixed,
-                token_language_tags=token_language_tags,
+            (
+                _apply_pii_smart_merging(
+                    result,
+                    effective_model,
+                    lang,
+                    locale=locale,
+                    code_mixed=code_mixed,
+                    token_language_tags=token_language_tags,
+                    india_clinical=india_clinical,
+                )
+                if not uses_privacy_filter or india_clinical
+                else result
             )
-            for result in results
+            for result, india_clinical in zip(results, india_clinical_flags)
         ]
 
     results = [
@@ -1015,7 +1220,9 @@ def extract_pii(
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
         lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
             ar, ja, tr). Controls which
-            default model and regex patterns are used.
+            default model and regex patterns are used. Mixed Latin/Devanagari
+            or Latin/Telugu notes automatically use script-aware India
+            clinical routing for ``hi`` and ``te``.
         normalize_accents: Strip diacritical marks before model inference so
             that models trained on accent-free text still detect accented
             names.  Entity spans in the result reference the *original*
@@ -2114,7 +2321,9 @@ def deidentify(
             after model detection and before redaction.
         lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
             ar, ja, tr). Controls model
-            selection, regex patterns, and fake data for replacement.
+            selection, regex patterns, and fake data for replacement. Mixed
+            Latin/Devanagari or Latin/Telugu notes automatically use the
+            script-aware India clinical route for ``hi`` and ``te``.
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
         loader: Optional shared model loader to reuse warmed pipelines.

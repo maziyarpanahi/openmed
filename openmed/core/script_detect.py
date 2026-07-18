@@ -200,6 +200,27 @@ class DetectionNormalization:
         }
 
 
+@dataclass(frozen=True)
+class ScriptDetectionWindow:
+    """One offset-preserving inference window around a Unicode script run.
+
+    ``start`` and ``end`` delimit the context-bearing text sent to a detector,
+    while ``core_start`` and ``core_end`` retain the exact run that caused the
+    route to be selected. The source text is deliberately not stored.
+    """
+
+    start: int
+    end: int
+    core_start: int
+    core_end: int
+    script: str
+
+    def extract(self, text: str) -> str:
+        """Return this window's exact slice from ``text``."""
+
+        return text[self.start : self.end]
+
+
 _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
     (
         "Latin",
@@ -453,6 +474,74 @@ def detect_mixed_script(text: str) -> bool:
     return bool(mixed_script_spans(text))
 
 
+def india_clinical_script_windows(
+    text: str,
+    lang: str,
+    *,
+    context_chars: int = 64,
+) -> tuple[ScriptDetectionWindow, ...]:
+    """Return context-bearing Latin/Indic windows for Indian clinical NER.
+
+    The route activates only when Latin and an Indic script occur in the same
+    note. Hindi accepts Devanagari, while Telugu accepts Telugu or Devanagari
+    because Indian-English clinical notes can embed Hindi phrases even when
+    ``lang="te"`` is the closest configured language. Context is expanded on
+    both sides of each run and snapped to token boundaries so PERSON and
+    LOCATION spans are not truncated merely because the script changes.
+
+    Args:
+        text: Source note whose offsets the returned windows reference.
+        lang: OpenMed language code. Only ``"hi"`` and ``"te"`` activate the
+            India clinical route.
+        context_chars: Maximum context expansion on either side before token
+            boundary adjustment.
+
+    Returns:
+        Deduplicated inference windows in source order, or an empty tuple when
+        the text is not an eligible mixed-script Indian clinical note.
+    """
+
+    if lang not in {"hi", "te"} or not text:
+        return ()
+    if context_chars < 0:
+        raise ValueError("context_chars must be non-negative")
+
+    target_scripts = {"Devanagari"}
+    if lang == "te":
+        target_scripts.add("Telugu")
+
+    runs = list(segment_by_script(text))
+    scripts = {script for _start, _end, script in runs}
+    if "Latin" not in scripts or not (scripts & target_scripts):
+        return ()
+
+    windows: list[ScriptDetectionWindow] = []
+    seen: set[tuple[int, int, str]] = set()
+    for core_start, core_end, script in runs:
+        if script != "Latin" and script not in target_scripts:
+            continue
+        start, end = _expand_detection_window(
+            text,
+            core_start,
+            core_end,
+            context_chars=context_chars,
+        )
+        key = (start, end, script)
+        if key in seen:
+            continue
+        seen.add(key)
+        windows.append(
+            ScriptDetectionWindow(
+                start=start,
+                end=end,
+                core_start=core_start,
+                core_end=core_end,
+                script=script,
+            )
+        )
+    return tuple(windows)
+
+
 def normalize_for_pii_detection(
     text: str,
     *,
@@ -600,6 +689,25 @@ def _script_for_char(char: str) -> str | None:
     return None
 
 
+def _expand_detection_window(
+    text: str,
+    core_start: int,
+    core_end: int,
+    *,
+    context_chars: int,
+) -> tuple[int, int]:
+    """Expand one script run without cutting through adjacent tokens."""
+
+    start = max(0, core_start - context_chars)
+    end = min(len(text), core_end + context_chars)
+
+    while start > 0 and not text[start - 1].isspace():
+        start -= 1
+    while end < len(text) and not text[end].isspace():
+        end += 1
+    return start, end
+
+
 def _script_counts(text: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     for char in text:
@@ -636,6 +744,7 @@ __all__ = [
     "DetectionNormalization",
     "INDIC_SCRIPTS",
     "MixedScriptSpan",
+    "ScriptDetectionWindow",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
@@ -644,6 +753,7 @@ __all__ = [
     "confusable_skeleton",
     "detect_mixed_script",
     "detect_script",
+    "india_clinical_script_windows",
     "is_han_dominant",
     "mixed_script_spans",
     "normalize_for_pii_detection",

@@ -115,6 +115,33 @@ Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
 
+## Indian-English and code-mixed clinical notes
+
+For `lang="hi"` or `lang="te"`, a note containing both Latin and Devanagari
+(or Latin and Telugu) automatically activates the India clinical route. OpenMed
+segments the note into offset-preserving script runs, adds bounded context to
+each run so PERSON and LOCATION spans can cross a script boundary, sends Latin
+windows to the registered English clinical model, and sends Indic windows to
+the language's registered Hindi or Telugu model. Caller-supplied model IDs or
+local model paths are used for every window instead; OpenMed does not select an
+unregistered third-party model automatically.
+
+The documented first-party fallback is
+`OpenMed/privacy-filter-multilingual`. Applications that choose that fallback
+must supply it explicitly as `model_name`; the route does not silently switch
+models after an inference error. Telugu replacement still uses the documented
+`en_IN` Faker locale approximation and can emit its existing one-time warning.
+
+Indian-English prescription abbreviations such as `Tab.`, `Cap.`, `OD`, `BD`,
+`TDS`, `HS`, and `SOS` are normalized locally before entity merging. Source
+text and offsets remain unchanged. All shipped fixtures are synthetic; any
+restricted clinical corpus or separately trained weights remain user-supplied
+or out of process.
+
+!!! warning "Assistive output"
+    India clinical NER output assists review and does not make clinical or
+    disclosure decisions.
+
 ## Worked examples
 
 Each example de-identifies synthetic, non-PHI text with `method="mask"`. The
