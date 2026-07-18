@@ -127,6 +127,8 @@ def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):
     assert manifest["variants"][0]["precision"] == "float16"
     assert manifest["variants"][0]["latency_ms"]["measured"] is False
     assert manifest["variants"][0]["residency"]["source"] == "missing_compute_plan"
+    assert "segmenter" not in manifest
+    assert not (output_path / "segmenter").exists()
 
 
 def test_convert_uses_custom_quantized_output_path(monkeypatch, tmp_path):
@@ -154,6 +156,31 @@ def test_convert_uses_custom_quantized_output_path(monkeypatch, tmp_path):
         "0": "O",
         "1": "B-NAME",
     }
+
+
+def test_convert_packages_and_validates_optional_segmenter(monkeypatch, tmp_path):
+    from openmed.coreml.convert import convert, validate_coreml_bundle
+
+    _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+    )
+    output_path = tmp_path / "privacy.mlpackage"
+
+    convert(
+        "OpenMed/tiny-stub",
+        output_path,
+        max_seq_length=16,
+        quantize="int8",
+        segmenter_id="openmed-cjk-indic-v1",
+    )
+
+    for package_path in (output_path, tmp_path / "privacy_int8.mlpackage"):
+        manifest = validate_coreml_bundle(package_path)
+        assert manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+        assert (package_path / "segmenter" / "han_words.txt").is_file()
+        assert (package_path / "segmenter" / "indic_rules.json").is_file()
 
 
 def test_convert_emits_int8_and_int4_variants(monkeypatch, tmp_path):

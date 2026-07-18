@@ -171,6 +171,26 @@ def test_write_export_manifest_records_onnx_and_webgpu(tmp_path: Path) -> None:
     assert manifest["optimization"]["enabled"] is False
     assert manifest["operator_fallbacks"] == []
     assert manifest["tokenizer"]["files"] == ["tokenizer.json"]
+    assert "segmenter" not in manifest
+
+
+def test_write_export_manifest_validates_optional_segmenter(tmp_path: Path) -> None:
+    module = _convert_module()
+    from openmed.processing.tokenization import package_segmenter_resources
+
+    (tmp_path / "model.onnx").write_bytes(b"onnx")
+    descriptor = package_segmenter_resources(tmp_path, "openmed-cjk-indic-v1")
+
+    module.write_export_manifest(
+        tmp_path,
+        source_model_id="OpenMed/test-model",
+        config={"model_type": "bert"},
+        artifacts=[module.ExportArtifact("onnx", tmp_path / "model.onnx", "float32")],
+        segmenter=descriptor,
+    )
+
+    manifest = module.validate_onnx_bundle(tmp_path)
+    assert manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
 
 
 def test_convert_orchestrates_artifacts_and_multi_format_publish(

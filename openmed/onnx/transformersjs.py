@@ -10,6 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
+    validate_segmenter_resources,
+)
+
 TRANSFORMERSJS_FORMAT = "transformersjs"
 DEFAULT_BUNDLE_DIRNAME = "transformersjs"
 DEFAULT_ONNX_FILENAME = "model.onnx"
@@ -75,6 +81,7 @@ def export_transformersjs_bundle(
     quantize: bool = True,
     update_manifest: bool = True,
     minimum_opset: int = MINIMUM_TOKEN_CLASSIFICATION_OPSET,
+    segmenter_id: str | None = None,
 ) -> TransformersJsBundleResult:
     """Emit a Transformers.js-compatible token-classification directory.
 
@@ -91,6 +98,7 @@ def export_transformersjs_bundle(
             onnxruntime dynamic INT8 weight quantization.
         update_manifest: If true and ``openmed-onnx.json`` exists, add the
             ``transformersjs`` format and artifact entry.
+        segmenter_id: Optional compact Han/Indic resource set to package.
     """
 
     source_dir = Path(onnx_export_dir)
@@ -136,9 +144,22 @@ def export_transformersjs_bundle(
     contract_path = bundle_dir / CONTRACT_FILENAME
     _write_json(contract_path, contract)
 
+    segmenter = (
+        package_segmenter_resources(bundle_dir, segmenter_id)
+        if segmenter_id is not None
+        else None
+    )
+    if segmenter is not None:
+        _write_transformersjs_manifest(bundle_dir, segmenter)
+
     validate_transformersjs_bundle(bundle_dir, minimum_opset=minimum_opset)
     manifest_path = (
-        _update_openmed_onnx_manifest(source_dir, bundle_dir, quantized=quantize)
+        _update_openmed_onnx_manifest(
+            source_dir,
+            bundle_dir,
+            quantized=quantize,
+            segmenter=segmenter,
+        )
         if update_manifest
         else None
     )
@@ -173,6 +194,14 @@ def validate_transformersjs_bundle(
 
     config = _read_json(bundle_path / "config.json")
     _normalize_id2label(config.get("id2label"))
+    manifest_path = bundle_path / OPENMED_ONNX_MANIFEST_FILENAME
+    if manifest_path.is_file():
+        manifest = _read_json(manifest_path)
+        segmenter = manifest.get("segmenter")
+        if segmenter is not None:
+            if not isinstance(segmenter, Mapping):
+                raise ValueError("ONNX segmenter descriptor must be an object")
+            validate_segmenter_resources(bundle_path, segmenter)
     return validate_transformersjs_contract(
         bundle_path / "onnx" / DEFAULT_ONNX_FILENAME,
         minimum_opset=minimum_opset,
@@ -303,6 +332,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=MINIMUM_TOKEN_CLASSIFICATION_OPSET,
         help="Minimum ONNX opset required for the bundle contract.",
     )
+    parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
     args = parser.parse_args(argv)
 
     result = export_transformersjs_bundle(
@@ -313,6 +348,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         quantize=not args.no_quantize,
         update_manifest=not args.no_manifest_update,
         minimum_opset=args.minimum_opset,
+        segmenter_id=args.segmenter,
     )
     print(result.output_dir)
 
@@ -484,6 +520,7 @@ def _update_openmed_onnx_manifest(
     bundle_dir: Path,
     *,
     quantized: bool,
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path | None:
     manifest_path = source_dir / OPENMED_ONNX_MANIFEST_FILENAME
     if not manifest_path.exists():
@@ -505,7 +542,35 @@ def _update_openmed_onnx_manifest(
             }
         )
     manifest["artifacts"] = artifacts
+    if segmenter is not None:
+        rebased_segmenter = dict(segmenter)
+        bundle_prefix = _relative_path(bundle_dir, source_dir)
+        rebased_segmenter["resource_files"] = [
+            {
+                **dict(item),
+                "path": f"{bundle_prefix}/{item['path']}",
+            }
+            for item in segmenter.get("resource_files", [])
+        ]
+        manifest["segmenter"] = rebased_segmenter
     _write_json(manifest_path, manifest)
+    return manifest_path
+
+
+def _write_transformersjs_manifest(
+    bundle_dir: Path,
+    segmenter: Mapping[str, Any],
+) -> Path:
+    manifest_path = bundle_dir / OPENMED_ONNX_MANIFEST_FILENAME
+    _write_json(
+        manifest_path,
+        {
+            "format": "openmed-onnx",
+            "format_version": 1,
+            "formats": [TRANSFORMERSJS_FORMAT],
+            "segmenter": dict(segmenter),
+        },
+    )
     return manifest_path
 
 

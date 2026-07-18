@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+
+from openmed.processing.tokenization import validate_segmenter_resources
 
 MANIFEST_FILENAME = "openmed-mlx.json"
 MANIFEST_FORMAT = "openmed-mlx"
@@ -20,6 +22,11 @@ _KNOWN_TOKENIZER_FILES = (
     "spm.model",
     "sentencepiece.bpe.model",
     "added_tokens.json",
+)
+
+_KNOWN_SEGMENTER_FILES = (
+    "segmenter/han_words.txt",
+    "segmenter/indic_rules.json",
 )
 
 _NON_TOKENIZER_FILENAMES = {
@@ -65,6 +72,13 @@ def find_tokenizer_files(model_dir: str | Path) -> list[str]:
 def has_local_tokenizer(model_dir: str | Path) -> bool:
     """Return True if *model_dir* contains local tokenizer assets."""
     return bool(find_tokenizer_files(model_dir))
+
+
+def find_segmenter_files(model_dir: str | Path) -> list[str]:
+    """Return known compact segmenter resources present in *model_dir*."""
+
+    root = Path(model_dir)
+    return [name for name in _KNOWN_SEGMENTER_FILES if (root / name).is_file()]
 
 
 def read_manifest(model_dir: str | Path) -> dict[str, Any] | None:
@@ -151,6 +165,7 @@ def write_manifest(
     source_model_id: str,
     config: dict[str, Any],
     tokenizer_files: list[str] | None = None,
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write ``openmed-mlx.json`` for a converted artifact."""
     model_dir = Path(model_dir)
@@ -227,7 +242,26 @@ def write_manifest(
     if runtime:
         manifest["runtime"] = runtime
 
+    if segmenter is not None:
+        manifest["segmenter"] = dict(segmenter)
+
     manifest_path = model_dir / MANIFEST_FILENAME
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
+    validate_mlx_bundle(model_dir)
     return manifest_path
+
+
+def validate_mlx_bundle(model_dir: str | Path) -> dict[str, Any]:
+    """Validate manifest-declared optional resources in an MLX artifact bundle."""
+
+    root = Path(model_dir)
+    manifest = read_manifest(root)
+    if manifest is None:
+        raise ValueError(f"MLX artifact is missing {MANIFEST_FILENAME}: {root}")
+    segmenter = manifest.get("segmenter")
+    if segmenter is not None:
+        if not isinstance(segmenter, Mapping):
+            raise ValueError("MLX segmenter descriptor must be an object")
+        validate_segmenter_resources(root, segmenter)
+    return manifest
