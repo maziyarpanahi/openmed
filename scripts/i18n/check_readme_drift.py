@@ -14,7 +14,11 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = Path("docs/i18n/readme_section_hashes.json")
-DEFAULT_TRANSLATIONS = (Path("README.zh-CN.md"), Path("README.hi.md"))
+DEFAULT_TRANSLATIONS = (
+    Path("README.zh-CN.md"),
+    Path("README.hi.md"),
+    Path("README.sw.md"),
+)
 GLOSSARY = Path("docs/i18n/glossary.md")
 PREAMBLE = "__preamble__"
 

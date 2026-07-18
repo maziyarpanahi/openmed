@@ -49,7 +49,8 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
   <a href="README.te.md">తెలుగు</a> ·
   <a href="README.ja.md">日本語</a> ·
   <a href="README.tr.md">Türkçe</a> ·
-  <a href="README.fa.md">فارسی</a>
+  <a href="README.fa.md">فارسی</a> ·
+  <a href="README.sw.md">Kiswahili</a>
 </p>
 
 </div>
