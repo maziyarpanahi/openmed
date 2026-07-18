@@ -1,0 +1,14 @@
+[
+  {
+    "id": "zh-standin-1",
+    "language": "zh",
+    "split": "test",
+    "text": "呼吸肌麻痹需要治疗。",
+    "entities": [
+      {"start_idx": 0, "end_idx": 2, "type": "bod", "entity": "呼吸肌"},
+      {"start_idx": 0, "end_idx": 4, "type": "sym", "entity": "呼吸肌麻痹"},
+      {"start_idx": 7, "end_idx": 8, "type": "pro", "entity": "治疗"}
+    ],
+    "metadata": {"synthetic": true}
+  }
+]
