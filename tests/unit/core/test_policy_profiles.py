@@ -18,6 +18,7 @@ from openmed.core.labels import (
     NDPA_SENSITIVE_DATA_CLASSES,
     POPIA_IDENTIFIER_CLASSES,
     QUASI_IDENTIFIER,
+    SENSITIVE_ATTRIBUTE,
     id_subtype_for,
     ndpa_classes_for,
     normalize_label,
@@ -395,6 +396,7 @@ def test_china_pipl_profile_covers_sensitive_personal_information():
     assert profile.policy_label_actions == {
         DIRECT_IDENTIFIER: "replace",
         QUASI_IDENTIFIER: "mask",
+        SENSITIVE_ATTRIBUTE: "mask",
         CLINICAL_CONCEPT: "mask",
     }
     assert all(
@@ -498,6 +500,7 @@ def test_za_popia_profile_loads_with_special_information_defaults():
     assert profile.policy_label_actions == {
         "DIRECT_IDENTIFIER": "replace",
         "QUASI_IDENTIFIER": "replace",
+        "SENSITIVE_ATTRIBUTE": "mask",
         "CLINICAL_CONCEPT": "mask",
     }
     assert profile.safety_sweep_mandatory is True
@@ -618,6 +621,7 @@ def test_ng_ndpa_profile_loads_with_strict_sensitive_data_defaults():
     assert profile.policy_label_actions == {
         "DIRECT_IDENTIFIER": "replace",
         "QUASI_IDENTIFIER": "mask",
+        "SENSITIVE_ATTRIBUTE": "mask",
         "CLINICAL_CONCEPT": "mask",
     }
     assert profile.safety_sweep_mandatory is True

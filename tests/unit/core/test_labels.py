@@ -36,6 +36,7 @@ from openmed.core.labels import (
     EMAIL,
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
+    ETHNICITY,
     EYE_COLOR,
     FEEDING_ROUTE,
     FIRST_NAME,
@@ -756,6 +757,7 @@ class TestClinicalLabelsAreAdditive:
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
+            ETHNICITY,
         }
     )
 

@@ -19,6 +19,7 @@
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "redact",
     "QUASI_IDENTIFIER": "redact",
+    "SENSITIVE_ATTRIBUTE": "redact",
     "CLINICAL_CONCEPT": "keep"
   },
   "actions": {
@@ -59,6 +60,7 @@
     "LITECOIN_ADDRESS": "redact",
     "MASKED_NUMBER": "redact",
     "GENDER": "redact",
+    "ETHNICITY": "redact",
     "EYE_COLOR": "redact",
     "HEIGHT": "redact",
     "ORGANIZATION": "redact",

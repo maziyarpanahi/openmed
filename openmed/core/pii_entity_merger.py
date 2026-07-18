@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .africa_context import rendered_pattern_entries
+
 
 @dataclass
 class PIIPattern:
@@ -517,6 +519,22 @@ PII_PATTERNS = [
         context_boost=0.2,
     ),
 ]
+
+
+PII_PATTERNS.extend(
+    PIIPattern(
+        entry["pattern"],
+        entry["entity_type"],
+        priority=entry["priority"],
+        flags=entry["flags"],
+        base_score=entry["base_score"],
+        context_boost=entry["context_boost"],
+        context_words=list(entry["context_words"]),
+        requires_context=entry["requires_context"],
+        safety_sweep_requires_context=entry["safety_sweep_requires_context"],
+    )
+    for entry in rendered_pattern_entries()
+)
 
 
 # ============================================================================
