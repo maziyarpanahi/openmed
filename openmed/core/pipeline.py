@@ -702,6 +702,8 @@ class Pipeline:
                 ]
                 pii_result.metadata = metadata
         else:
+            from .detector_plugins import INDIAN_MULTI_ID_ENTITY_TYPES
+
             pii._suppress_custom_allowed_entities(
                 normalized.normalized_text,
                 pii_result,
@@ -714,7 +716,12 @@ class Pipeline:
                     span
                     for span in policy_spans
                     if span.action != ACTION_KEEP
-                    and str(span.detector or "").startswith(("plugin:", "custom:"))
+                    and (
+                        str(span.detector or "").startswith(
+                            ("builtin:", "plugin:", "custom:")
+                        )
+                        or span.entity_type in INDIAN_MULTI_ID_ENTITY_TYPES
+                    )
                 ],
             )
 
@@ -1901,7 +1908,7 @@ def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
     if detector and str(detector).startswith(
-        ("rules:", "model:", "plugin:", "custom:")
+        ("rules:", "model:", "builtin:", "plugin:", "custom:")
     ):
         return str(detector)
 
@@ -2337,20 +2344,37 @@ def _append_span_predictions(
     if not spans:
         return pii_result
 
+    existing_entities = list(getattr(pii_result, "entities", ()) or ())
+    existing_keys: set[tuple[int, int, str]] = set()
+    for entity in existing_entities:
+        bounds = _entity_bounds(entity, text)
+        if bounds is None:
+            continue
+        label = str(getattr(entity, "label", "") or "")
+        existing_keys.add((*bounds, normalize_label(label)))
+
+    new_spans = [
+        span
+        for span in spans
+        if (span.start, span.end, span.canonical_label) not in existing_keys
+    ]
+    if not new_spans:
+        return pii_result
+
     span_result = _prediction_result_from_spans(
         text,
-        spans,
+        new_spans,
         model_name=str(getattr(pii_result, "model_name", "plugins") or "plugins"),
     )
     combined = copy.copy(pii_result)
     combined.entities = [
-        *list(getattr(pii_result, "entities", ()) or ()),
+        *existing_entities,
         *span_result.entities,
     ]
     if hasattr(combined, "num_entities"):
         combined.num_entities = len(combined.entities)
     metadata = dict(getattr(pii_result, "metadata", None) or {})
-    metadata["plugin_detector_spans"] = len(spans)
+    metadata["plugin_detector_spans"] = len(new_spans)
     combined.metadata = metadata
     return combined
 
