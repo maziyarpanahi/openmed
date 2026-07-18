@@ -69,6 +69,7 @@ nav:
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - Per-Language De-identification: languages.md
+      - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md

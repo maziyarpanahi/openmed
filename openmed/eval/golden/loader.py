@@ -31,6 +31,7 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     "multilingual",
     "checksum_ids",
     "financial_ids",
+    "india_health_ids",
     "date_arithmetic",
     "policy_profile_actions",
     HARD_NEGATIVE_CATEGORY,

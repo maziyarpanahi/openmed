@@ -1240,6 +1240,13 @@ class Pipeline:
                 self.custom_recognizer,
             )
 
+        if self.policy is not None:
+            _stamp_policy_actions_on_entities(
+                pii_result,
+                self.policy,
+                language=context.route.lang,
+            )
+
         spans = self._entities_to_spans(
             getattr(pii_result, "entities", ()),
             text,
@@ -1249,6 +1256,15 @@ class Pipeline:
             ),
             stage=STAGE_NAMES[8],
         )
+        if self.policy is not None:
+            spans = tuple(
+                _apply_policy_action(
+                    span,
+                    self.policy,
+                    language=context.route.lang,
+                )
+                for span in spans
+            )
         return spans, {
             "enabled": self.use_safety_sweep,
             "spans_added": spans_added,
@@ -2375,6 +2391,26 @@ def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:
         "reversible_id": policy.reversible_id,
     }
     pii_result.metadata = metadata
+
+
+def _stamp_policy_actions_on_entities(
+    pii_result: Any,
+    policy: Any,
+    *,
+    language: str,
+) -> None:
+    """Attach policy actions to entities added after the policy stage."""
+
+    for entity in getattr(pii_result, "entities", ()):
+        canonical = normalize_label(str(getattr(entity, "label", "")), lang=language)
+        metadata = dict(getattr(entity, "metadata", None) or {})
+        metadata["policy_action"] = {
+            "policy": policy.name,
+            "schema_version": policy.schema_version,
+            "action": policy.action_for(canonical, lang=language),
+            "source": "policy_profile",
+        }
+        entity.metadata = metadata
 
 
 def _call_detector_plugin(spec: Any, text: str, context: PipelineContext) -> Any:

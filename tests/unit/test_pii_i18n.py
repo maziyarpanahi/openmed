@@ -33,6 +33,7 @@ from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semant
 from openmed.core.pii_i18n import (
     AADHAAR_PII_PATTERNS,
     DEFAULT_PII_MODELS,
+    INDIA_HEALTH_ID_PII_PATTERNS,
     INDIC_NER_LANGUAGES,
     LANGUAGE_FAKE_DATA,
     LANGUAGE_MODEL_PREFIX,
@@ -2202,6 +2203,7 @@ class TestGetPatternsForLanguage:
             + len(MRZ_PII_PATTERNS)
             + len(USCC_PII_PATTERNS)
             + len(AADHAAR_PII_PATTERNS)
+            + len(INDIA_HEALTH_ID_PII_PATTERNS)
         )
 
     @pytest.mark.parametrize(
@@ -2215,8 +2217,14 @@ class TestGetPatternsForLanguage:
             + len(MRZ_PII_PATTERNS)
             + len(USCC_PII_PATTERNS)
             + len(AADHAAR_PII_PATTERNS)
+            + len(INDIA_HEALTH_ID_PII_PATTERNS)
         )
-        universal_patterns = MRZ_PII_PATTERNS + USCC_PII_PATTERNS + AADHAAR_PII_PATTERNS
+        universal_patterns = (
+            MRZ_PII_PATTERNS
+            + USCC_PII_PATTERNS
+            + AADHAAR_PII_PATTERNS
+            + INDIA_HEALTH_ID_PII_PATTERNS
+        )
         language_count = sum(
             not any(pattern is universal for universal in universal_patterns)
             for pattern in LANGUAGE_PII_PATTERNS[lang]
