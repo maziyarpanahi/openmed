@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.interop import adapter_spec, available_adapters
 from openmed.interop.athena import load_athena_vocab
 from openmed.interop.cdm_etl import (
@@ -149,6 +151,22 @@ def test_notes_to_cdm_uses_unmapped_placeholder_without_vocabulary() -> None:
         "drug_exposure": {"mapped": 0, "unmapped": 1},
         "measurement": {"mapped": 0, "unmapped": 1},
     }
+
+
+def test_notes_to_cdm_quality_floor_blocks_low_completeness_batch() -> None:
+    with pytest.raises(ValueError, match="quality profile gate failed"):
+        notes_to_cdm(
+            [
+                ClinicalNote(
+                    document_id="doc-3",
+                    patient_id="patient-3",
+                    entities=[
+                        ClinicalEntity(label="condition", text="condition alpha"),
+                    ],
+                )
+            ],
+            quality_floor=0.99,
+        )
 
 
 def test_notes_to_cdm_routes_supported_domains_and_skips_unknown_entities() -> None:

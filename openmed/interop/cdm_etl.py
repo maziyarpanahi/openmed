@@ -373,6 +373,7 @@ def notes_to_cdm(
     *,
     vocabulary_index: AthenaVocabularyIndex | None = None,
     concept_resolver: AthenaConceptResolver | None = None,
+    quality_floor: float | None = None,
 ) -> CdmTables:
     """Transform clinical note entities into deterministic CDM-style tables.
 
@@ -385,10 +386,29 @@ def notes_to_cdm(
             every clinical entity maps to the placeholder concept.
         concept_resolver: Optional resolver instance for callers that cache
             vocabulary indexes across runs.
+        quality_floor: Optional completeness floor. When set, the extracted
+            batch is profiled before ETL and low-completeness batches are
+            rejected without building CDM rows.
 
     Returns:
         CDM-style tables plus an aggregate, PHI-free summary.
     """
+
+    if quality_floor is not None:
+        records = tuple(notes)
+        from openmed.structured.quality import (
+            assert_profile_gate,
+            profile_extracted_batch,
+        )
+
+        assert_profile_gate(
+            profile_extracted_batch(
+                records,
+                completeness_floor=quality_floor,
+                athena_index=vocabulary_index,
+            )
+        )
+        notes = records
 
     resolver = concept_resolver or AthenaConceptResolver(vocabulary_index)
     people: dict[int, PersonRow] = {}

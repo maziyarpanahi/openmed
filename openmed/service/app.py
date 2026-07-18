@@ -61,6 +61,7 @@ from .schemas import (
     PIIExtractRequest,
     PIIExtractStreamRequest,
     PrivacyGatewayRequest,
+    ProfileRequest,
     SMARTBackendIngestionRequest,
 )
 from .security_headers import (
@@ -663,6 +664,28 @@ def create_app() -> FastAPI:
     async def loaded_models(request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
         return runtime.loaded_models()
+
+    @app.post("/profile")
+    async def profile(payload: ProfileRequest) -> Dict[str, Any]:
+        from openmed.structured.quality import (
+            load_profile_jsonl_text,
+            profile_extracted_batch,
+        )
+
+        if payload.records and payload.jsonl:
+            raise ValueError("provide either records or jsonl, not both")
+        if payload.jsonl is not None:
+            records = load_profile_jsonl_text(payload.jsonl)
+        else:
+            records = tuple(payload.records)
+        if not records:
+            raise ValueError("records or jsonl is required")
+
+        report = profile_extracted_batch(
+            records,
+            completeness_floor=payload.completeness_floor,
+        )
+        return report.to_dict()
 
     @app.post("/models/unload")
     async def unload_models(

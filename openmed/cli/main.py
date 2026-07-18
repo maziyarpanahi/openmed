@@ -178,6 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_audit_command(subparsers)
     _add_risk_command(subparsers)
     _add_policy_command(subparsers)
+    _add_profile_command(subparsers)
     _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
@@ -1252,6 +1253,39 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     load_parser.set_defaults(handler=_handle_eval_load_test)
 
 
+def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
+    """Register clinical extraction quality profiling commands."""
+
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="Profile extracted clinical JSONL for downstream analytics.",
+    )
+    profile_parser.add_argument(
+        "--input",
+        required=True,
+        type=Path,
+        help="JSONL file containing extracted and grounded result records.",
+    )
+    profile_parser.add_argument(
+        "--completeness-floor",
+        type=float,
+        default=0.8,
+        help="Minimum overall completeness score required for a pass.",
+    )
+    profile_parser.add_argument(
+        "--format",
+        choices=["json", "summary"],
+        default="json",
+        help="Output format.",
+    )
+    profile_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional path for the rendered profile report.",
+    )
+    profile_parser.set_defaults(handler=_handle_profile)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
     parser = build_parser()
@@ -1462,6 +1496,40 @@ def _handle_audit_show(args: argparse.Namespace) -> int:
 
     sys.stdout.write(_format_audit_summary(report))
     return 0
+
+
+def _handle_profile(args: argparse.Namespace) -> int:
+    from openmed.structured.quality import (
+        load_profile_jsonl,
+        profile_extracted_batch,
+        render_profile_summary,
+    )
+
+    try:
+        records = load_profile_jsonl(args.input)
+        report = profile_extracted_batch(
+            records,
+            completeness_floor=float(args.completeness_floor),
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"Profile failed: {exc}\n")
+        return 1
+
+    if args.format == "summary":
+        output = render_profile_summary(report)
+    else:
+        output = json.dumps(report.to_dict(), indent=2, sort_keys=True)
+
+    if args.output:
+        try:
+            args.output.write_text(f"{output}\n", encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write {args.output}: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(f"{output}\n")
+
+    return 0 if report.pipeline_gate["passed"] else 2
 
 
 def _load_audit_report(path: Path):

@@ -928,3 +928,11 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
+
+
+class ProfileRequest(_StrictModel):
+    """Request schema for PHI-free extracted-result quality profiling."""
+
+    records: list[dict[str, Any]] = Field(default_factory=list)
+    jsonl: Optional[str] = None
+    completeness_floor: float = Field(default=0.8, ge=0.0, le=1.0)
