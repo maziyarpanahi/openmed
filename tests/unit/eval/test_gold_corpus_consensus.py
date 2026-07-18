@@ -78,6 +78,10 @@ def test_consensus_loads_eval_compatible_spans_and_relations():
     document = load_consensus_corpus()[0]
 
     assert all(isinstance(span, EvalSpan) for span in document.consensus_spans)
+    assert set(document.annotator_relations) == set(document.annotators)
+    assert any(document.annotator_relations.values())
+    for relations in document.annotator_relations.values():
+        assert all(isinstance(relation, ConsensusRelation) for relation in relations)
     for relation in document.consensus_relations:
         assert isinstance(relation, ConsensusRelation)
         assert isinstance(relation.head, EvalSpan)
@@ -131,6 +135,22 @@ def test_rejects_single_annotator(tmp_path):
     del single["annotators"]["ann_b"]
     path = _write(tmp_path / "c.jsonl", [single])
     with pytest.raises(ValueError, match="two annotators"):
+        load_consensus_corpus(path)
+
+
+def test_rejects_relation_endpoint_outside_annotator_spans(tmp_path):
+    bad = json.loads(json.dumps(_DOC))
+    bad["annotators"]["ann_a"]["relations"] = [
+        {
+            "relation_type": "drug_to_date",
+            "label": "confirmed",
+            "head": {"start": 25, "end": 34, "label": "MEDICATION"},
+            "tail": {"start": 38, "end": 48, "label": "DATE"},
+        }
+    ]
+    path = _write(tmp_path / "c.jsonl", [bad])
+
+    with pytest.raises(ValueError, match="tail must reference"):
         load_consensus_corpus(path)
 
 
