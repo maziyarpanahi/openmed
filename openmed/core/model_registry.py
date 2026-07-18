@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -83,7 +84,54 @@ class ModelInfo:
         return None
 
 
+@dataclass(frozen=True)
+class DraftModelInfo:
+    """Separate draft-model artifact metadata for speculative decoding."""
+
+    target_model_id: str
+    draft_model_id: str
+    display_name: str
+    license: str
+    tokenizer: str = "shared"
+    format: str = "mlx-4bit"
+    description: str = ""
+
+    @property
+    def permissive_license(self) -> bool:
+        """Return whether the declared draft license is permissive."""
+        return self.license.lower() in PERMISSIVE_DRAFT_MODEL_LICENSES
+
+
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
+
+PERMISSIVE_DRAFT_MODEL_LICENSES = frozenset(
+    {
+        "apache-2.0",
+        "bsd-2-clause",
+        "bsd-3-clause",
+        "mit",
+    }
+)
+
+GENERATION_DRAFT_MODELS: Dict[str, DraftModelInfo] = {
+    "OpenMed/laneformer-2b-it-q4-mlx": DraftModelInfo(
+        target_model_id="OpenMed/laneformer-2b-it-q4-mlx",
+        draft_model_id="OpenMed/laneformer-pii-draft-350m-q4-mlx",
+        display_name="Laneformer PII draft 350M Q4 MLX",
+        license="apache-2.0",
+        tokenizer="shared",
+        format="mlx-4bit",
+        description=(
+            "Small draft model packaged as a separate MLX-LM artifact for "
+            "exact speculative verification by the target model."
+        ),
+    ),
+}
+
+_GENERATION_DRAFT_TARGET_ALIASES = {
+    "laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
+    "kogai/laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
+}
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _PARAM_RE = re.compile(r"^\d+(?:\.\d+)?[mb]$", re.IGNORECASE)
@@ -95,12 +143,15 @@ _LANGUAGE_NAME_TO_CODE = {
     "english": "en",
     "french": "fr",
     "german": "de",
+    "hebrew": "he",
     "hindi": "hi",
+    "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
     "portuguese": "pt",
     "spanish": "es",
     "telugu": "te",
+    "thai": "th",
     "turkish": "tr",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
@@ -168,15 +219,49 @@ _PII_ENTITY_TYPES = [
 _CATEGORY_ENTITY_TYPES = {
     "Disease": ["DISEASE", "CONDITION", "PATHOLOGY"],
     "Pharmaceutical": ["CHEM", "DRUG", "MEDICATION"],
-    "Oncology": ["CANCER", "CELL", "GENE_OR_GENE_PRODUCT"],
+    "Oncology": [
+        "SIMPLE_CHEMICAL",
+        "CHEM",
+        "AMINO_ACID",
+        "ANATOMICAL_SYSTEM",
+        "CANCER",
+        "CELL",
+        "GENE_OR_GENE_PRODUCT",
+        "CELLULAR_COMPONENT",
+        "DEVELOPING_ANATOMICAL_STRUCTURE",
+        "IMMATERIAL_ANATOMICAL_ENTITY",
+        "MULTI_TISSUE_STRUCTURE",
+        "ORGANISM",
+        "SPECIES",
+        "ORGAN",
+        "ORGANISM_SUBDIVISION",
+        "ORGANISM_SUBSTANCE",
+        "TISSUE",
+        "PATHOLOGICAL_FORMATION",
+    ],
     "Anatomy": ["ORGAN", "TISSUE", "ANATOMY"],
-    "Genomics": ["GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA"],
-    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
+    "Genomics": [
+        "GENE_OR_GENE_PRODUCT",
+        "GENE",
+        "PROTEIN",
+        "DNA",
+        "RNA",
+        "CELL_LINE",
+        "CELL_TYPE",
+    ],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM", "DRUG", "MEDICATION"],
     "Species": ["ORGANISM", "SPECIES"],
     "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
-    "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
-    "Pathology": ["DISEASE", "PATHOLOGY"],
-    "Hematology": ["CANCER", "DISEASE"],
+    "Protein": [
+        "GENE_OR_GENE_PRODUCT",
+        "PROTEIN",
+        "PROTEIN_COMPLEX",
+        "PROTEIN_ENUM",
+        "PROTEIN_FAMILIY_OR_GROUP",
+        "PROTEIN_VARIANT",
+    ],
+    "Pathology": ["DISEASE", "CONDITION", "PATHOLOGY"],
+    "Hematology": ["CANCER", "DISEASE", "CL"],
     # Forward metadata for future Cardiology models; no Cardiology model is
     # registered today (see issue #317).
     "Cardiology": [
@@ -195,6 +280,42 @@ _CATEGORY_ENTITY_TYPES = {
         "VISUAL_ACUITY",
         "INTRAOCULAR_PRESSURE",
         "ANATOMY",
+    ],
+    # Forward metadata for future Anesthesia models; no such model is
+    # registered today (see issue #952).
+    "Anesthesia": [
+        "ANESTHESIA_TYPE",
+        "ANESTHETIC_AGENT",
+        "AIRWAY_MANAGEMENT",
+        "ASA_CLASS",
+        "MONITORING_MODALITY",
+        "INTRAOPERATIVE_EVENT",
+    ],
+    # Nutrition- registered (see issue #951)
+    "Nutrition": [
+        "DIET_TYPE",
+        "NUTRITION_TARGET",
+        "FEEDING_ROUTE",
+        "NUTRITIONAL_STATUS",
+    ],
+    # Forward metadata for future Endocrinology models; no such model is
+    # registered today (see issue #895).
+    "Endocrinology": [
+        "GLYCEMIC_MEASURE",
+        "THYROID_MEASURE",
+        "HORMONE_LEVEL",
+        "INSULIN_REGIMEN",
+        "CONDITION",
+        "BODY_SITE",
+    ],
+    # Forward metadata for future Gastroenterology models; no such model is
+    # registered today (see issue #894).
+    "Gastroenterology": [
+        "ENDOSCOPIC_FINDING",
+        "GI_SYMPTOM",
+        "GI_SCORE",
+        "POLYP_DESCRIPTOR",
+        "BODY_SITE",
     ],
     "Privacy": _PII_ENTITY_TYPES,
 }
@@ -348,10 +469,18 @@ def _description_from_row(row: Dict[str, Any], category: str) -> str:
     return "; ".join(parts)
 
 
+def _dedupe_entity_types(entity_types: Iterable[Any]) -> List[str]:
+    return list(dict.fromkeys(str(entity_type) for entity_type in entity_types))
+
+
 def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
     labels = row.get("canonical_labels")
     if isinstance(labels, list) and labels:
-        return [str(label) for label in labels]
+        if category != "Privacy" and str(row.get("family") or "").upper() == "NER":
+            return _dedupe_entity_types(
+                chain(labels, _CATEGORY_ENTITY_TYPES.get(category, ()))
+            )
+        return _dedupe_entity_types(labels)
     return list(_CATEGORY_ENTITY_TYPES.get(category, []))
 
 
@@ -507,6 +636,16 @@ def _pii_compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     if _category_from_row(row) != "Privacy":
         return []
     repo_id = row["repo_id"]
+    if "privacy-filter-multilingual" in repo_id:
+        aliases = []
+        tokens = _clean_model_tokens(_split_repo_tokens(repo_id))
+        if tokens and tokens[0].lower() == "privacy":
+            tokens = ["privacy_filter"] + tokens[2:] if len(tokens) > 1 else tokens
+        suffix = _slug("_".join(tokens))
+        for lang in row.get("languages") or []:
+            if lang != "en":
+                aliases.append(f"pii_{lang}_{suffix}")
+        return aliases
     if "/OpenMed-PII-" not in repo_id:
         return []
 
@@ -519,9 +658,25 @@ def _pii_compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     return aliases
 
 
+def _multilingual_pii_aliases(row: Dict[str, Any]) -> List[str]:
+    if _category_from_row(row) != "Privacy":
+        return []
+    repo_id = row["repo_id"].lower()
+    languages = row.get("languages") or []
+    if "privacy-filter" not in repo_id or "multilingual" not in repo_id:
+        return []
+    if len(languages) <= 1:
+        return []
+
+    base_key = _pii_registry_key(row)
+    suffix = base_key.removeprefix("pii_")
+    return [f"pii_{lang}_{suffix}" for lang in languages if lang != "en"]
+
+
 def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     aliases = list(_LEGACY_MODEL_ALIASES.get(row["repo_id"], []))
     aliases.extend(_pii_compatibility_aliases(row))
+    aliases.extend(_multilingual_pii_aliases(row))
     return aliases
 
 
@@ -628,6 +783,30 @@ def get_model_info(model_key: str) -> Optional[ModelInfo]:
     return None
 
 
+def resolve_draft_model_for(
+    target_model: str,
+    *,
+    require_permissive: bool = True,
+) -> DraftModelInfo | None:
+    """Return a separate draft artifact for a generative target model.
+
+    The returned artifact is intentionally independent from the target model
+    manifest row so target packages do not silently bundle or load draft weights.
+    """
+
+    target_model_id = _GENERATION_DRAFT_TARGET_ALIASES.get(target_model, target_model)
+    model_info = get_model_info(target_model_id)
+    if model_info is not None:
+        target_model_id = model_info.model_id
+
+    draft_info = GENERATION_DRAFT_MODELS.get(target_model_id)
+    if draft_info is None:
+        return None
+    if require_permissive and not draft_info.permissive_license:
+        return None
+    return draft_info
+
+
 def get_models_by_category(category: str) -> List[ModelInfo]:
     """Get all models in a specific category."""
     model_keys = CATEGORIES.get(category, [])
@@ -694,6 +873,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "Ophthalmology",
         "Contains ophthalmology terms",
     ),
+    "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
+        "Anesthesia",
+        "Contains anesthesia-record terms",
+    ),
     "heart|lung|brain|liver|kidney|organ": (
         "Anatomy",
         "Contains anatomical terms",
@@ -717,6 +900,18 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "blood|lymph|leukemia|lymphoma": (
         "Hematology",
         "Contains hematological terms",
+    ),
+    "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
+        "Nutrition",
+        "Contains nutrition/diet-order terms",
+    ),
+    "hba1c|hemoglobin\\s*a1c|blood\\s*glucose|glycemic|thyroid\\s*function|\\btsh\\b|hormone\\s*level|cortisol|insulin\\s*regimen|glargine|endocrinolog": (
+        "Endocrinology",
+        "Contains endocrinology terms",
+    ),
+    "gastroenterolog|endoscopy|endoscopic|colonoscopy|polyp|varices|bowel\\s*prep|bristol\\s*stool|mayo\\s*score|abdominal\\s*pain|cramping": (
+        "Gastroenterology",
+        "Contains gastroenterology/endoscopy terms",
     ),
 }
 
@@ -781,11 +976,29 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         }
 
     prefix = f"pii_{lang}_"
-    return {
+    language_models = {
         key: info
         for key, info in OPENMED_MODELS.items()
         if key.startswith(prefix)
         and info.category == "Privacy"
+        and lang in (info.languages or [])
+    }
+    if language_models:
+        return language_models
+
+    from .pii_i18n import DEFAULT_PII_MODELS
+
+    default_model_id = DEFAULT_PII_MODELS.get(lang)
+    if not default_model_id:
+        return {}
+    # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
+    # so language-pack callers can reuse multilingual privacy filters safely.
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if key.startswith("pii_")
+        and info.category == "Privacy"
+        and info.model_id == default_model_id
         and lang in (info.languages or [])
     }
 

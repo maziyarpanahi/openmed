@@ -21,17 +21,23 @@ uv pip install -e ".[dev]"      # editable install with test + lint deps
 pre-commit install              # auto-format staged files on commit
 ```
 
+The pre-commit hooks also run the Gitleaks secret scanner on staged changes.
+See [Secret Scanning](docs/security/secret-scanning.md) for local use, CI
+behavior, and baseline maintenance.
+
 ## Run the checks before opening a PR
 
 ```bash
 .venv/bin/python -m pytest tests/ -q     # run the test suite
 make format                              # apply canonical Ruff formatting
 make lint                                # lint
+make type-check                          # scoped public-module type check
 make format-check                        # CI-parity format check
 ```
 
 Ruff is the single source of truth for Python lint, import ordering, and
-formatting — do not run Black, isort, or flake8. For Swift changes under
+formatting; the pinned mypy gate checks the annotated public-module scope. CI
+runs both gates. Do not run Black, isort, or flake8. For Swift changes under
 `swift/OpenMedKit`, run `make format-swift` and `make lint-swift`.
 
 ## Pull requests

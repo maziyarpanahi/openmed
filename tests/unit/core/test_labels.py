@@ -4,16 +4,23 @@ import pytest
 
 from openmed.core.labels import (
     ACCOUNT_NUMBER,
+    ADMINISTRATION_ROUTE,
     AGE,
+    AIRWAY_MANAGEMENT,
     AMOUNT,
+    ANESTHESIA_TYPE,
+    ANESTHETIC_AGENT,
     ANTIBIOTIC,
     API_KEY,
+    ASA_CLASS,
     BIC,
     BITCOIN_ADDRESS,
     BODY_SITE,
     BUILDING_NUMBER,
     CANONICAL_LABELS,
+    CKD_STAGE,
     CLINICAL_CONCEPT,
+    CLINICAL_SIGNIFICANCE,
     CONDITION,
     CREDIT_CARD,
     CREDIT_CARD_ISSUER,
@@ -21,14 +28,25 @@ from openmed.core.labels import (
     CVV,
     DATE,
     DATE_OF_BIRTH,
+    DIALYSIS_MODALITY,
+    DIET_TYPE,
+    DOSE_NUMBER,
+    DYSPNEA_GRADE,
     EMAIL,
+    ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
     EYE_COLOR,
+    FEEDING_ROUTE,
     FIRST_NAME,
     GENDER,
+    GENE_SYMBOL,
+    GI_SCORE,
+    GI_SYMPTOM,
+    GLYCEMIC_MEASURE,
     GPS_COORDINATES,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
+    HORMONE_LEVEL,
     IBAN,
     ID_NUM,
     ID_SUBTYPE_MRN,
@@ -36,6 +54,7 @@ from openmed.core.labels import (
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
     IMEI,
+    INSULIN_REGIMEN,
     IP_ADDRESS,
     JOB_DEPARTMENT,
     JOB_TITLE,
@@ -48,26 +67,41 @@ from openmed.core.labels import (
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
+    NUTRITION_TARGET,
+    NUTRITIONAL_STATUS,
     OCCUPATION,
     ORDINAL_DIRECTION,
     ORGANIZATION,
     OTHER,
+    OXYGEN_SUPPORT,
     PASSWORD,
     PERSON,
     PHONE,
     PIN,
+    POLYP_DESCRIPTOR,
     PREFIX,
     PROCEDURE,
+    PROTEIN_CHANGE,
+    RENAL_FUNCTION_MEASURE,
+    RESPIRATORY_FINDING,
+    SPIROMETRY_MEASURE,
     SSN,
     STREET_ADDRESS,
     SUSCEPTIBILITY,
+    THYROID_MEASURE,
     TIME,
+    URINE_FINDING,
     URL,
     USER_AGENT,
     USERNAME,
+    VACCINE_LOT,
+    VACCINE_NAME,
+    VACCINE_SERIES,
+    VARIANT_DESCRIPTOR,
     VEHICLE_REGISTRATION,
     VIN,
     ZIPCODE,
+    ZYGOSITY,
     hipaa_class_for,
     id_subtype_for,
     normalize_label,
@@ -100,8 +134,10 @@ class TestEnglishLabels:
             ("dob", DATE_OF_BIRTH),
             ("ssn", SSN),
             ("medical_record_number", ID_NUM),
+            ("nhs_number", ID_NUM),
             ("id_num", ID_NUM),
             ("national_id", ID_NUM),
+            ("teudat_zehut", ID_NUM),
             ("age", AGE),
             ("username", USERNAME),
             ("url_personal", URL),
@@ -260,6 +296,7 @@ class TestIdentifierSubtypes:
             ("medical_record_number", ID_SUBTYPE_MRN),
             ("mrn", ID_SUBTYPE_MRN),
             ("npi", ID_SUBTYPE_NPI),
+            ("nhs_number", ID_SUBTYPE_NATIONAL_ID),
             ("national_id", ID_SUBTYPE_NATIONAL_ID),
             ("nationalid", ID_SUBTYPE_NATIONAL_ID),
             ("cpf", ID_SUBTYPE_NATIONAL_ID),
@@ -271,6 +308,8 @@ class TestIdentifierSubtypes:
             ("nie", ID_SUBTYPE_NATIONAL_ID),
             ("bsn", ID_SUBTYPE_NATIONAL_ID),
             ("aadhaar", ID_SUBTYPE_NATIONAL_ID),
+            ("teudat_zehut", ID_SUBTYPE_NATIONAL_ID),
+            ("tz", ID_SUBTYPE_NATIONAL_ID),
             ("B-CPF", ID_SUBTYPE_NATIONAL_ID),
         ],
     )
@@ -429,6 +468,138 @@ class TestClinicalConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestAnesthesiaConceptLabels:
+    """Anesthesia-record canonical labels added for issue #952."""
+
+    NEW_LABELS = (
+        ANESTHESIA_TYPE,
+        ANESTHETIC_AGENT,
+        AIRWAY_MANAGEMENT,
+        ASA_CLASS,
+    )
+
+    def test_anesthesia_labels_in_canonical_set(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+
+    def test_anesthesia_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("anesthesia type", ANESTHESIA_TYPE),
+            ("anesthesia", ANESTHESIA_TYPE),
+            ("anesthetic agent", ANESTHETIC_AGENT),
+            ("anesthetic", ANESTHETIC_AGENT),
+            ("airway management", AIRWAY_MANAGEMENT),
+            ("airway", AIRWAY_MANAGEMENT),
+            ("ASA class", ASA_CLASS),
+            ("ASA physical status", ASA_CLASS),
+        ],
+    )
+    def test_anesthesia_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_anesthesia_labels_are_clinical_concepts(self):
+        for label in self.NEW_LABELS:
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+
+    def test_anesthesia_labels_have_hipaa_class(self):
+        for label in self.NEW_LABELS:
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
+class TestEndocrinologyConceptLabels:
+    """Endocrinology canonical labels and representative aliases for issue #895."""
+
+    NEW_LABELS = (
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("glycemic measure", GLYCEMIC_MEASURE),
+            ("HbA1c", GLYCEMIC_MEASURE),
+            ("glucose", GLYCEMIC_MEASURE),
+            ("thyroid function measure", THYROID_MEASURE),
+            ("TSH", THYROID_MEASURE),
+            ("hormone level", HORMONE_LEVEL),
+            ("cortisol", HORMONE_LEVEL),
+            ("insulin regimen", INSULIN_REGIMEN),
+            ("basal-bolus", INSULIN_REGIMEN),
+            ("insulin pump", INSULIN_REGIMEN),
+            ("glargine", INSULIN_REGIMEN),
+            ("metabolic finding", CONDITION),
+            ("endocrine gland", BODY_SITE),
+        ],
+    )
+    def test_endocrinology_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_endocrinology_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_endocrinology_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
+class TestGastroenterologyConceptLabels:
+    """Gastroenterology canonical labels and aliases for issue #894."""
+
+    NEW_LABELS = (
+        ENDOSCOPIC_FINDING,
+        GI_SYMPTOM,
+        GI_SCORE,
+        POLYP_DESCRIPTOR,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("endoscopic finding", ENDOSCOPIC_FINDING),
+            ("endoscopy finding", ENDOSCOPIC_FINDING),
+            ("colonoscopy", ENDOSCOPIC_FINDING),
+            ("GI symptom", GI_SYMPTOM),
+            ("abdominal pain", GI_SYMPTOM),
+            ("cramping", GI_SYMPTOM),
+            ("GI score", GI_SCORE),
+            ("bowel prep quality", GI_SCORE),
+            ("Boston bowel prep", GI_SCORE),
+            ("Bristol stool", GI_SCORE),
+            ("Mayo score", GI_SCORE),
+            ("polyp descriptor", POLYP_DESCRIPTOR),
+            ("lesion morphology", POLYP_DESCRIPTOR),
+            ("sessile polyp", POLYP_DESCRIPTOR),
+            ("biopsy site", BODY_SITE),
+        ],
+    )
+    def test_gastroenterology_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_gastroenterology_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_gastroenterology_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -490,7 +661,49 @@ class TestClinicalLabelsAreAdditive:
         }
     )
 
-    NEW_LABELS = frozenset({CONDITION, MEDICATION, LAB_TEST, PROCEDURE, BODY_SITE})
+    NEW_LABELS = frozenset(
+        {
+            CONDITION,
+            MEDICATION,
+            LAB_TEST,
+            PROCEDURE,
+            BODY_SITE,
+            ANESTHESIA_TYPE,
+            ANESTHETIC_AGENT,
+            AIRWAY_MANAGEMENT,
+            ASA_CLASS,
+            DIET_TYPE,
+            NUTRITION_TARGET,
+            FEEDING_ROUTE,
+            NUTRITIONAL_STATUS,
+            VACCINE_NAME,
+            VACCINE_SERIES,
+            VACCINE_LOT,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+            GLYCEMIC_MEASURE,
+            THYROID_MEASURE,
+            HORMONE_LEVEL,
+            INSULIN_REGIMEN,
+            ENDOSCOPIC_FINDING,
+            GI_SYMPTOM,
+            GI_SCORE,
+            POLYP_DESCRIPTOR,
+            CKD_STAGE,
+            DIALYSIS_MODALITY,
+            RENAL_FUNCTION_MEASURE,
+            URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
+        }
+    )
 
     # Full pre-#266 alias map from master. These resolutions must stay
     # byte-identical while clinical aliases are added.

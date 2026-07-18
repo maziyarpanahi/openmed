@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -16,16 +17,48 @@ from openmed.core.baseline import load_baseline_store, update_baseline_entry
 from openmed.core.model_card import DEFAULT_ARXIV, render_model_card, write_model_card
 from openmed.core.model_registry import load_manifest_rows
 from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
+from openmed.eval.evidence_bundle import bundle_gate_evidence
+from openmed.eval.model_card_builder import (
+    MODEL_DATASHEET_FILENAME,
+    ModelCardBuilderError,
+    build_model_card,
+)
+from openmed.eval.release_gates import RELEASABLE, GateReport
 from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
 DEFAULT_MANIFEST_PATH = Path("models.jsonl")
 DEFAULT_MODEL_CARD_COMMIT_MESSAGE = "Update generated model card"
+DEFAULT_GATE_SIGNING_KEY_ENV = "OPENMED_RELEASE_GATE_KEY"
 
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=$|-)")
 _SAFE_REPO_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_ONNX_FORMAT_ALIASES = {
+    "onnx",
+    "onnx-fp32",
+    "onnx-float32",
+    "webgpu",
+    "onnx-webgpu",
+    "webgpu-onnx",
+}
+_QUANTIZED_FORMAT_ALIASES = {
+    "int8": "int8",
+    "8bit": "int8",
+    "8-bit": "int8",
+    "onnx-int8": "int8",
+    "int4": "int4",
+    "4bit": "int4",
+    "4-bit": "int4",
+    "onnx-int4": "int4",
+    "awq": "awq",
+    "openmed-awq": "awq",
+    "gptq": "gptq",
+    "openmed-gptq": "gptq",
+}
 
 
 class HfPublishError(RuntimeError):
@@ -141,12 +174,20 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
 
     if path.exists():
         with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
                     continue
-                existing = json.loads(line)
+                try:
+                    existing = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Skipping malformed JSONL line %s in %s",
+                        line_number,
+                        path,
+                    )
+                    continue
                 if existing.get("repo_id") == row["repo_id"]:
-                    rows.append(row)
+                    rows.append(_merge_manifest_row(existing, row))
                     replaced = True
                 else:
                     rows.append(existing)
@@ -202,6 +243,16 @@ def publish_artifact(
     status_output_path: str | Path | None = None,
     smoke_status: str = "green",
     smoke_failure_reason: str | None = None,
+    gate_report_path: str | Path | None = None,
+    gate_signing_key: bytes | str | None = None,
+    gate_signing_key_env: str = DEFAULT_GATE_SIGNING_KEY_ENV,
+    calibration_report_path: str | Path | None = None,
+    calibration_thresholds_path: str | Path | None = None,
+    fairness_report_path: str | Path | None = None,
+    quant_delta_path: str | Path | None = None,
+    training_provenance_path: str | Path | None = None,
+    model_datasheet_path: str | Path | None = None,
+    evidence_bundle_dir: str | Path | None = None,
     api: Any | None = None,
     private: bool = False,
     skip_existing: bool = True,
@@ -215,6 +266,16 @@ def publish_artifact(
     artifact_dir = Path(artifact_dir)
     if not artifact_dir.exists():
         raise HfPublishError(f"artifact directory does not exist: {artifact_dir}")
+
+    verified_gate_report: GateReport | None = None
+    if gate_report_path is not None:
+        verified_gate_report = _load_verified_gate_report(
+            gate_report_path,
+            signing_key=_resolve_gate_signing_key(
+                gate_signing_key,
+                env_var=gate_signing_key_env,
+            ),
+        )
 
     token = token or read_hf_token(token_env)
     repo_id = repo_id or target_repo_id(
@@ -236,19 +297,35 @@ def publish_artifact(
         data_manifest=data_manifest,
         git_sha=resolved_git_sha,
     )
-    write_model_card(artifact_dir / "README.md", row)
+    if verified_gate_report is not None:
+        _write_verified_model_card(
+            artifact_dir=artifact_dir,
+            row=row,
+            gate_report=verified_gate_report,
+            calibration_report_path=calibration_report_path,
+            calibration_thresholds_path=calibration_thresholds_path,
+            fairness_report_path=fairness_report_path,
+            quant_delta_path=quant_delta_path,
+            training_provenance_path=training_provenance_path,
+            model_datasheet_path=model_datasheet_path,
+            evidence_bundle_dir=evidence_bundle_dir,
+        )
+    else:
+        write_model_card(artifact_dir / "README.md", row)
 
     skipped = False
-    if skip_existing and _repo_exists(api, repo_id=repo_id, token=token):
+    repo_exists = _repo_exists(api, repo_id=repo_id, token=token)
+    if skip_existing and repo_exists:
         skipped = True
     else:
-        api.create_repo(
-            repo_id=repo_id,
-            repo_type="model",
-            private=private,
-            exist_ok=True,
-            token=token,
-        )
+        if not repo_exists:
+            api.create_repo(
+                repo_id=repo_id,
+                repo_type="model",
+                private=private,
+                exist_ok=True,
+                token=token,
+            )
         api.upload_folder(
             repo_id=repo_id,
             repo_type="model",
@@ -303,6 +380,106 @@ def publish_artifact(
     )
 
 
+def _write_verified_model_card(
+    *,
+    artifact_dir: Path,
+    row: dict[str, Any],
+    gate_report: GateReport,
+    calibration_report_path: str | Path | None,
+    calibration_thresholds_path: str | Path | None,
+    fairness_report_path: str | Path | None,
+    quant_delta_path: str | Path | None,
+    training_provenance_path: str | Path | None,
+    model_datasheet_path: str | Path | None,
+    evidence_bundle_dir: str | Path | None,
+) -> None:
+    readme_path = artifact_dir / "README.md"
+    datasheet_path = (
+        Path(model_datasheet_path)
+        if model_datasheet_path is not None
+        else artifact_dir / MODEL_DATASHEET_FILENAME
+    )
+    if datasheet_path.resolve() == readme_path.resolve():
+        raise HfPublishError("model datasheet path must not alias README.md")
+
+    try:
+        result = build_model_card(
+            row,
+            gate_report,
+            calibration_report=calibration_report_path,
+            calibration_thresholds=calibration_thresholds_path,
+            fairness_report=fairness_report_path,
+            quant_delta=quant_delta_path,
+            training_provenance=training_provenance_path,
+        )
+    except ModelCardBuilderError as exc:
+        raise HfPublishError(str(exc)) from exc
+
+    if readme_path.exists():
+        existing = readme_path.read_text(encoding="utf-8")
+        if existing != result.markdown:
+            raise HfPublishError(
+                "stale model card disagrees with signed gate report; "
+                "rerun model-card generation before publishing"
+            )
+    else:
+        result.write_markdown(readme_path)
+
+    result.write_datasheet(datasheet_path)
+    if evidence_bundle_dir is not None:
+        bundle_gate_evidence(
+            result.gate_report,
+            evidence_bundle_dir,
+            extra_artifacts={
+                "model_card": readme_path,
+                "model_datasheet": datasheet_path,
+            },
+        )
+
+
+def _resolve_gate_signing_key(
+    signing_key: bytes | str | None,
+    *,
+    env_var: str,
+) -> bytes | str:
+    """Return an explicitly trusted, non-empty release-gate verification key."""
+    resolved = signing_key if signing_key is not None else os.environ.get(env_var)
+    if not isinstance(resolved, (bytes, str)) or not resolved:
+        raise HfPublishError(
+            "a trusted, non-empty release-gate signing key is required before "
+            f"publishing with gate evidence; pass gate_signing_key or set {env_var}"
+        )
+    return resolved
+
+
+def _load_verified_gate_report(
+    path: str | Path,
+    *,
+    signing_key: bytes | str,
+) -> GateReport:
+    """Load fail-closed gate evidence and require a releasable signed decision."""
+    gate_path = Path(path)
+    try:
+        report = GateReport.from_json(gate_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError) as exc:
+        raise HfPublishError("release-gate report could not be loaded safely") from exc
+
+    try:
+        verified = report.verify(signing_key)
+    except (TypeError, ValueError):
+        verified = False
+    if not verified:
+        raise HfPublishError(
+            "release-gate signature or reproducibility hash verification failed"
+        )
+    if report.decision != RELEASABLE:
+        raise HfPublishError(
+            "release-gate decision must be RELEASABLE before publishing; "
+            f"received {report.decision!r}"
+        )
+    return report
+
+
 def artifact_sha256(path: str | Path) -> str:
     """Return a deterministic sha256 digest for a file or directory tree."""
 
@@ -318,7 +495,7 @@ def artifact_sha256(path: str | Path) -> str:
 
     for file_path in paths:
         relative = file_path.relative_to(root).as_posix()
-        if relative == "README.md":
+        if relative in {"README.md", MODEL_DATASHEET_FILENAME}:
             continue
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
@@ -402,6 +579,57 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional smoke-test failure reason rendered for red status",
     )
     parser.add_argument(
+        "--gate-report",
+        default=None,
+        help="Signed release gate report used to build and verify the model card",
+    )
+    parser.add_argument(
+        "--gate-signing-key-env",
+        default=DEFAULT_GATE_SIGNING_KEY_ENV,
+        help=(
+            "Environment variable containing the trusted release-gate HMAC key "
+            f"(default: {DEFAULT_GATE_SIGNING_KEY_ENV})"
+        ),
+    )
+    parser.add_argument(
+        "--calibration-report",
+        default=None,
+        help="Optional calibration report JSON included in the datasheet",
+    )
+    parser.add_argument(
+        "--calibration-thresholds",
+        default=None,
+        help="Optional calibration thresholds JSON included in the datasheet",
+    )
+    parser.add_argument(
+        "--fairness-report",
+        default=None,
+        help="Optional fairness report JSON included in the datasheet",
+    )
+    parser.add_argument(
+        "--quant-delta",
+        default=None,
+        help="Optional quantization recall-delta JSON included in the datasheet",
+    )
+    parser.add_argument(
+        "--training-provenance",
+        default=None,
+        help="Optional training_provenance.json included in the datasheet",
+    )
+    parser.add_argument(
+        "--model-datasheet",
+        default=None,
+        help=(
+            "Optional output path for the generated datasheet JSON "
+            f"(default: artifact-dir/{MODEL_DATASHEET_FILENAME})"
+        ),
+    )
+    parser.add_argument(
+        "--evidence-bundle",
+        default=None,
+        help="Optional evidence bundle directory to receive card and datasheet",
+    )
+    parser.add_argument(
         "--git-sha",
         default=None,
         help="Git SHA to include in the reproducibility hash",
@@ -446,6 +674,15 @@ def main(argv: list[str] | None = None) -> None:
         status_output_path=args.status_output,
         smoke_status=args.smoke_status,
         smoke_failure_reason=args.smoke_failure_reason,
+        gate_report_path=args.gate_report,
+        gate_signing_key_env=args.gate_signing_key_env,
+        calibration_report_path=args.calibration_report,
+        calibration_thresholds_path=args.calibration_thresholds,
+        fairness_report_path=args.fairness_report,
+        quant_delta_path=args.quant_delta,
+        training_provenance_path=args.training_provenance,
+        model_datasheet_path=args.model_datasheet,
+        evidence_bundle_dir=args.evidence_bundle,
         private=args.private,
         skip_existing=not args.overwrite_existing,
         git_sha=args.git_sha,
@@ -505,6 +742,11 @@ def _format_repo_suffix(format_name: str) -> str:
         return "mlx-4bit"
     if normalized == "coreml":
         return "coreml"
+    if normalized in _ONNX_FORMAT_ALIASES:
+        return "onnx"
+    quantized = _QUANTIZED_FORMAT_ALIASES.get(normalized)
+    if quantized is not None:
+        return f"onnx-{quantized}"
     return normalized
 
 
@@ -516,6 +758,13 @@ def _manifest_format_name(format_name: str) -> str:
         return "mlx-8bit"
     if normalized in {"mlx-4bit", "mlx-int4"}:
         return "mlx-4bit"
+    if normalized in {"onnx-fp32", "onnx-float32"}:
+        return "onnx"
+    if normalized in {"onnx-webgpu", "webgpu-onnx"}:
+        return "webgpu"
+    quantized = _QUANTIZED_FORMAT_ALIASES.get(normalized)
+    if quantized is not None:
+        return quantized
     return normalized
 
 
@@ -538,11 +787,31 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _merge_manifest_row(
+    existing: dict[str, Any],
+    replacement: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(replacement)
+    existing_formats = existing.get("formats")
+    replacement_formats = replacement.get("formats")
+    if isinstance(existing_formats, list) and isinstance(replacement_formats, list):
+        merged["formats"] = _manifest_format_names(
+            [
+                *[str(item) for item in existing_formats],
+                *[str(item) for item in replacement_formats],
+            ]
+        )
+    return merged
+
+
 def _parse_json_object_arg(value: str) -> dict[str, Any]:
     source = value
     if value.startswith("@"):
         source = Path(value[1:]).read_text(encoding="utf-8")
-    payload = json.loads(source)
+    try:
+        payload = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise HfPublishError(f"--baseline-metrics is not valid JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise HfPublishError("--baseline-metrics must be a JSON object")
     return payload

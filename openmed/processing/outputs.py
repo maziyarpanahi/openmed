@@ -6,7 +6,7 @@ import logging
 import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,10 @@ def _to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
     try:
         return float(value)
     except (TypeError, ValueError):
-        logger.debug("Failed to convert %r to float", value)
+        logger.debug(
+            "Failed to convert value to float: value_type=%s",
+            type(value).__name__,
+        )
         return default
 
 
@@ -49,7 +52,10 @@ def _to_int(value: Any) -> Optional[int]:
     try:
         return int(value)
     except (TypeError, ValueError):
-        logger.debug("Failed to convert %r to int", value)
+        logger.debug(
+            "Failed to convert value to int: value_type=%s",
+            type(value).__name__,
+        )
         return None
 
 
@@ -432,15 +438,15 @@ class OutputFormatter:
         Returns:
             HTML string.
         """
-        html = f'<div class="openmed-result">\n'
-        html += f"<h3>Analysis Results</h3>\n"
+        html = '<div class="openmed-result">\n'
+        html += "<h3>Analysis Results</h3>\n"
         html += f"<p><strong>Model:</strong> {html_mod.escape(str(result.model_name))}</p>\n"
         html += f"<p><strong>Timestamp:</strong> {html_mod.escape(str(result.timestamp))}</p>\n"
 
         if result.processing_time:
             html += f"<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n"
 
-        html += f'<div class="text-content">\n'
+        html += '<div class="text-content">\n'
 
         # Highlight entities in text
         highlighted_text = html_mod.escape(result.text)
@@ -472,13 +478,13 @@ class OutputFormatter:
             offset += len(highlight_start) + len(highlight_end)
 
         html += f"<p>{highlighted_text}</p>\n"
-        html += f"</div>\n"
+        html += "</div>\n"
 
         # Entity summary
         if result.entities:
-            html += f'<div class="entity-summary">\n'
+            html += '<div class="entity-summary">\n'
             html += f"<h4>Detected Entities ({len(result.entities)})</h4>\n"
-            html += f"<ul>\n"
+            html += "<ul>\n"
 
             for entity in result.entities:
                 confidence_str = (
@@ -488,10 +494,10 @@ class OutputFormatter:
                 )
                 html += f"<li><strong>{html_mod.escape(entity.label)}:</strong> {html_mod.escape(entity.text)}{confidence_str}</li>\n"
 
-            html += f"</ul>\n"
-            html += f"</div>\n"
+            html += "</ul>\n"
+            html += "</div>\n"
 
-        html += f"</div>\n"
+        html += "</div>\n"
         return html
 
     def _get_entity_color(self, label: str) -> str:

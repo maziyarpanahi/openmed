@@ -17,6 +17,15 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.custom_recognizer import CustomRecognizer
+from .core.explain import ExplainReport, explain
+from .core.hf_hub import (
+    CachedModel,
+    clear_cached_model,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -28,6 +37,7 @@ from .core.model_registry import (
     list_model_categories,
 )
 from .core.model_search import ModelQuery, ModelSearchResult, search_models
+from .core.offline import network_blocked_if_offline
 from .core.pii import (
     DeidentificationResult,
     PIIEntity,
@@ -53,13 +63,42 @@ from .core.result_cache import (
     get_result_cache,
     make_cache_key,
 )
-from .mlx.lm import OpenMedMLXLanguageModel, generate_text
+from .core.results import AnalyzeResult
+from .core.streaming import (
+    StreamingBufferError,
+    StreamingDeidentificationEvent,
+    StreamingDeidentifier,
+    deidentify_stream,
+)
+from .core.surrogate_vault import (
+    ENCRYPTION_SCHEME,
+    InMemorySurrogateStore,
+    JsonFileSurrogateStore,
+    SurrogateEntry,
+    SurrogateKey,
+    SurrogateSource,
+    SurrogateVault,
+    VaultConsistencyReport,
+    VaultRotationResult,
+)
+from .mlx.lm import (
+    OpenMedMLXLanguageModel,
+    OpenMedPagedKVCache,
+    PagedKVCacheConfig,
+    PagedKVCachePlan,
+    PagedKVCacheStats,
+    TokenRange,
+    generate_text,
+)
+from .onnx.inference import OnnxEntity, OnnxModel, load_onnx_model
 from .processing import (
     BatchItem,
     BatchItemResult,
     BatchProcessor,
     BatchProgress,
     BatchResult,
+    DatasetRedactionResult,
+    DatasetRedactionSummary,
     OutputFormatter,
     TextProcessor,
     TokenizationHelper,
@@ -67,9 +106,17 @@ from .processing import (
     postprocess_text,
     preprocess_text,
     process_batch,
+    redact_dataset,
 )
 from .processing import sentences as sentence_utils
-from .processing.advanced_ner import AdvancedNERProcessor, create_advanced_processor
+from .processing.advanced_ner import (
+    AdvancedNERProcessor,
+    StreamingReplayResult,
+    StreamingTokenClassifier,
+    create_advanced_processor,
+    replay_token_classifier,
+    stream_token_classifier,
+)
 from .processing.outputs import PredictionResult
 from .utils import (
     Profiler,
@@ -153,7 +200,7 @@ def analyze_text(
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
-) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
+) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
     """Run a token-classification model on ``text`` and format the predictions.
 
     Args:
@@ -185,7 +232,37 @@ def analyze_text(
             :meth:`openmed.core.models.ModelLoader.create_pipeline`.
 
     Returns:
-        Prediction result in the requested ``output_format``.
+        Analyze result for ``"dict"`` output, otherwise the requested rendered
+        format.
+
+    Example:
+        >>> class FixtureLoader:
+        ...     config = None
+        ...
+        ...     def create_pipeline(self, model_name, **kwargs):
+        ...         def pipeline(text, **call_kwargs):
+        ...             return [
+        ...                 {
+        ...                     "entity_group": "CONDITION",
+        ...                     "score": 0.99,
+        ...                     "start": 11,
+        ...                     "end": 17,
+        ...                     "word": "asthma",
+        ...                 }
+        ...             ]
+        ...
+        ...         return pipeline
+        ...
+        ...     def get_max_sequence_length(self, model_name, tokenizer=None):
+        ...         return 128
+        >>> result = analyze_text(
+        ...     "History of asthma.",
+        ...     model_name="fixture-ner-model",
+        ...     loader=FixtureLoader(),
+        ...     sentence_detection=False,
+        ... )
+        >>> next((entity.text, entity.label) for entity in result.entities)
+        ('asthma', 'CONDITION')
     """
 
     validated_text = validate_input(text)
@@ -204,6 +281,7 @@ def analyze_text(
             return final_result
 
     loader = loader or ModelLoader(config)
+    runtime_config = getattr(loader, "config", config)
 
     pipeline_args = dict(
         task="token-classification",
@@ -227,10 +305,11 @@ def analyze_text(
     if truncate_inputs and provided_max_length is not None:
         effective_max_length = provided_max_length
     elif truncate_inputs:
-        effective_max_length = loader.get_max_sequence_length(
-            validated_model,
-            tokenizer=getattr(ner_pipeline, "tokenizer", None),
-        )
+        with network_blocked_if_offline(runtime_config):
+            effective_max_length = loader.get_max_sequence_length(
+                validated_model,
+                tokenizer=getattr(ner_pipeline, "tokenizer", None),
+            )
 
     desired_max_length = (
         provided_max_length if provided_max_length is not None else effective_max_length
@@ -337,7 +416,8 @@ def analyze_text(
                 len(current_indices) >= max_chunk_sentences
                 or span_length > max_chunk_chars
             ):
-                assert current_start is not None and current_end is not None
+                if current_start is None or current_end is None:
+                    raise RuntimeError("chunk boundary unexpectedly None")
                 chunk_descriptors.append(
                     {
                         "text": validated_text[current_start:current_end],
@@ -354,7 +434,8 @@ def analyze_text(
                 current_end = seg_end
 
         if current_indices:
-            assert current_start is not None and current_end is not None
+            if current_start is None or current_end is None:
+                raise RuntimeError("chunk boundary unexpectedly None")
             chunk_descriptors.append(
                 {
                     "text": validated_text[current_start:current_end],
@@ -378,9 +459,10 @@ def analyze_text(
     else:
         inference_input = validated_text
 
-    start_time = time.time()
-    raw_predictions = ner_pipeline(inference_input, **call_kwargs)
-    processing_time = time.time() - start_time
+    with network_blocked_if_offline(runtime_config):
+        start_time = time.time()
+        raw_predictions = ner_pipeline(inference_input, **call_kwargs)
+        processing_time = time.time() - start_time
 
     def _normalize_predictions(
         predictions: Any,
@@ -541,13 +623,18 @@ def analyze_text(
 
     fmt_output = validate_output_format(output_format)
 
-    final_result = format_predictions(
+    result = format_predictions(
         flattened_predictions,
         validated_text,
         model_name=validated_model,
         output_format=fmt_output,
         **fmt_kwargs,
     )
+    final_result: Union[AnalyzeResult, str, List[Dict[str, Any]]]
+    if fmt_output == "dict" and isinstance(result, PredictionResult):
+        final_result = AnalyzeResult.from_prediction_result(result)
+    else:
+        final_result = result
     if cache_results:
         cache.set(cache_key, final_result)
     return final_result
@@ -558,6 +645,9 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "OnnxEntity",
+    "OnnxModel",
+    "load_onnx_model",
     "TextProcessor",
     "preprocess_text",
     "postprocess_text",
@@ -569,9 +659,15 @@ __all__ = [
     "BatchItemResult",
     "BatchProgress",
     "BatchResult",
+    "DatasetRedactionResult",
+    "DatasetRedactionSummary",
     "process_batch",
+    "redact_dataset",
     "AdvancedNERProcessor",
+    "StreamingReplayResult",
+    "StreamingTokenClassifier",
     "create_advanced_processor",
+    "AnalyzeResult",
     "PredictionResult",
     "setup_logging",
     "get_logger",
@@ -588,11 +684,24 @@ __all__ = [
     "get_model_suggestions",
     "get_pii_models_by_language",
     "get_default_pii_model",
+    # Hugging Face Hub model-pull helpers
+    "prefetch_model",
+    "list_cached_models",
+    "clear_cached_model",
+    "resolve_repo_id",
+    "CachedModel",
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "explain",
+    "ExplainReport",
     "generate_text",
     "OpenMedMLXLanguageModel",
+    "OpenMedPagedKVCache",
+    "PagedKVCacheConfig",
+    "PagedKVCachePlan",
+    "PagedKVCacheStats",
+    "TokenRange",
     # Profiling utilities
     "Profiler",
     "ProfileReport",
@@ -608,6 +717,13 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "CustomRecognizer",
+    "StreamingBufferError",
+    "StreamingDeidentificationEvent",
+    "StreamingDeidentifier",
+    "deidentify_stream",
+    "replay_token_classifier",
+    "stream_token_classifier",
     "redaction_preview",
     "render_redaction_preview",
     # PII entity merging utilities
@@ -630,4 +746,13 @@ __all__ = [
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",
+    "SurrogateVault",
+    "SurrogateKey",
+    "SurrogateEntry",
+    "SurrogateSource",
+    "VaultConsistencyReport",
+    "VaultRotationResult",
+    "InMemorySurrogateStore",
+    "JsonFileSurrogateStore",
+    "ENCRYPTION_SCHEME",
 ]

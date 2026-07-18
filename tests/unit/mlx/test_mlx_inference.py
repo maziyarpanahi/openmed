@@ -8,6 +8,8 @@ No actual MLX installation required.
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,10 +21,19 @@ import pytest
 
 def _module_importable(module_name: str) -> bool:
     try:
-        __import__(module_name)
+        code = f"import {module_name}"
+        if module_name == "mlx.core":
+            code = "import mlx.core as mx; mx.array([0]).tolist()"
+        completed = subprocess.run(
+            [sys.executable, "-c", code],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
     except Exception:
         return False
-    return True
+    return completed.returncode == 0
 
 
 _MLX_AVAILABLE = _module_importable("mlx.core")
@@ -339,6 +350,80 @@ class TestMLXModelResolve:
         assert path == str(tmp_path)
         assert tok_name == str(tmp_path)
 
+    def test_direct_preconverted_repo_downloads_without_conversion(self, tmp_path):
+        """A direct ``-mlx`` Hub ID should load as a converted artifact."""
+        from openmed.mlx import inference
+
+        (tmp_path / "config.json").write_text(
+            '{"_mlx_weights_format": "safetensors"}',
+            encoding="utf-8",
+        )
+        (tmp_path / "openmed-mlx.json").write_text(
+            json.dumps(
+                {
+                    "format": "openmed-mlx",
+                    "format_version": 1,
+                    "preferred_weights": "weights.safetensors",
+                    "available_weights": ["weights.safetensors"],
+                    "tokenizer": {"path": ".", "files": ["tokenizer.json"]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (tmp_path / "tokenizer.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "weights.safetensors").write_bytes(b"weights")
+        config = type("Config", (), {"cache_dir": "/tmp/openmed-cache"})()
+
+        with (
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                return_value=str(tmp_path),
+            ) as mock_download,
+            patch("openmed.mlx.convert.convert") as mock_convert,
+        ):
+            path, tok_name = inference._resolve_mlx_model(
+                "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M-mlx",
+                config=config,
+            )
+
+        assert path == str(tmp_path)
+        assert tok_name == str(tmp_path)
+        mock_download.assert_called_once_with(
+            "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M-mlx",
+            cache_dir="/tmp/openmed-cache",
+        )
+        mock_convert.assert_not_called()
+
+    def test_direct_preconverted_repo_requires_weights(self, tmp_path):
+        """A malformed direct MLX artifact must fail instead of converting it."""
+        from openmed.mlx import inference
+
+        (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "openmed-mlx.json").write_text(
+            json.dumps(
+                {
+                    "format": "openmed-mlx",
+                    "format_version": 1,
+                    "preferred_weights": "weights.safetensors",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                return_value=str(tmp_path),
+            ),
+            patch("openmed.mlx.convert.convert") as mock_convert,
+            pytest.raises(ValueError, match="no supported weights file"),
+        ):
+            inference._resolve_mlx_model("OpenMed/example-mlx")
+
+        mock_convert.assert_not_called()
+
 
 class TestExperimentalMLXPipelineDispatch:
     """Manifest-driven dispatch should return the right MLX runtime class."""
@@ -479,6 +564,52 @@ class TestExperimentalMLXPipelineDispatch:
 
 class TestExperimentalGLiNERDecoding:
     """Regression tests for GLiNER-family prompt and span decoding helpers."""
+
+    def test_relex_relation_candidates_decode_through_span_graph(self):
+        from openmed.core.decoding import decode_span_graph
+        from openmed.mlx.inference import _decode_relation_graph
+
+        entities = [
+            {
+                "id": 0,
+                "text": "metformin",
+                "label": "medication",
+                "score": 0.95,
+                "start": 0,
+                "end": 9,
+            },
+            {
+                "id": 1,
+                "text": "nausea",
+                "label": "problem",
+                "score": 0.90,
+                "start": 18,
+                "end": 24,
+            },
+        ]
+
+        with patch(
+            "openmed.mlx.inference.decode_span_graph",
+            wraps=decode_span_graph,
+        ) as mock_decode:
+            relations = _decode_relation_graph(
+                entities=entities,
+                pair_scores=[[0.91, 0.20], [0.10, 0.86]],
+                pair_idx=[[0, 1], [1, 0]],
+                pair_mask=[True, True],
+                relations=["causes", "treated_by"],
+                relation_prompt_count=2,
+                relation_threshold=0.5,
+            )
+
+        assert mock_decode.called
+        assert {
+            (relation["label"], relation["head"]["id"], relation["tail"]["id"])
+            for relation in relations
+        } == {
+            ("causes", 0, 1),
+            ("treated_by", 1, 0),
+        }
 
     def test_gliner_word_splitter_matches_upstream_whitespace_splitter(self):
         from openmed.mlx.inference import _split_words_with_offsets

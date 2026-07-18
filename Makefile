@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lint format format-check lint-swift format-swift quality test sbom docs-serve docs-build docs-stage docs-deploy
+.PHONY: help build publish release clean install lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check docs-serve docs-build docs-stage docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -28,6 +28,10 @@ lint: ## Run Ruff lint checks
 	@echo "🔎 Running Ruff lint checks..."
 	ruff check .
 
+type-check: ## Type-check the annotated public-module scope
+	@echo "🔎 Running scoped mypy checks..."
+	mypy
+
 format: ## Apply Ruff import fixes and formatting
 	@echo "🎨 Formatting Python code with Ruff..."
 	ruff check --fix .
@@ -45,7 +49,7 @@ format-swift: ## Apply Swift formatting for OpenMedKit
 	@echo "🎨 Formatting Swift code with swift-format..."
 	scripts/format_swift.sh
 
-quality: lint format-check test ## Run the local quality gate
+quality: lint type-check format-check test ## Run the local quality gate
 
 test: ## Run the test suite
 	@echo "🧪 Running tests..."
@@ -55,6 +59,14 @@ sbom: ## Generate a CycloneDX 1.6 SBOM (sbom.cdx.json) for the runtime dependenc
 	@echo "📦 Generating CycloneDX SBOM..."
 	uv sync --frozen
 	uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
+
+grpc-proto: ## Regenerate committed gRPC protobuf stubs
+	@echo "🔁 Generating gRPC protobuf stubs..."
+	uv run --extra dev python scripts/generate_grpc_stubs.py
+
+grpc-proto-check: ## Verify committed gRPC protobuf stubs are current
+	@echo "🔎 Checking gRPC protobuf stubs..."
+	uv run --extra dev python scripts/generate_grpc_stubs.py --check
 
 docs-serve: ## Run the MkDocs dev server with live reload
 	@echo "📚 Serving docs at http://127.0.0.1:8008 ..."

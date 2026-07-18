@@ -1,0 +1,41 @@
+{
+  "exports": [
+    "CANONICAL_LABELS",
+    "OPENMED_SPAN_SCHEMA_VERSION",
+    "POLICY_LABELS",
+    "SPAN_ACTIONS",
+    "assertOfflineAssetPath",
+    "clearOrtWebSessionCache",
+    "configureOrtWebRuntime",
+    "decodeBioTokenSpans",
+    "deidentify",
+    "detectOrtWebCapabilities",
+    "extractPii",
+    "flattenTokenClassificationOutput",
+    "hmacTextHash",
+    "isLocalModelReference",
+    "loadOnnxModel",
+    "loadOrtWebSession",
+    "loadOrtWebTokenClassificationPipeline",
+    "loadTokenClassificationPipeline",
+    "normalizeLabel",
+    "normalizeOrtAssetPath",
+    "policyLabelFor",
+    "refinePrivacyFilterSpan",
+    "selectOrtWebBackend",
+    "spansToRedactedText",
+    "trimSpanWhitespace"
+  ],
+  "packageExports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  }
+}

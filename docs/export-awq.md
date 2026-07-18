@@ -29,13 +29,13 @@ dependency set.
 ## Quantize
 
 ```python
-from openmed.torch.calibration import load_awq_calibration_texts
+from openmed.torch.calibration import load_quantization_calibration_texts
 from openmed.torch.quantize_awq import quantize_awq
 
-calib_texts = load_awq_calibration_texts()
+calib_texts = load_quantization_calibration_texts()
 
 result = quantize_awq(
-    "OpenMed/example-token-classifier",
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
     calib_texts,
     "artifacts/example-awq",
     w_bit=4,

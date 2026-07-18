@@ -33,8 +33,16 @@ import warnings
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from .. import labels as L
 from ..labels import normalize_label
-from .locales import resolve_locale
+from ..name_order import CJK_LANGUAGES, normalize_person_span
+from .format_preserve import (
+    preserve_date_format,
+    preserve_email_pattern,
+    preserve_id_pattern,
+    preserve_phone_format,
+)
+from .locales import resolve_faker_backend_locale, resolve_locale
 from .providers import register_clinical_providers
 from .registry import LABEL_GENERATORS
 
@@ -108,11 +116,12 @@ class Anonymizer:
                 "Install with `pip install faker` (or upgrade openmed)."
             ) from exc
 
+        backend_locale = resolve_faker_backend_locale(locale)
         try:
-            faker = Faker(locale)
+            faker = Faker(backend_locale)
         except (AttributeError, KeyError):
             warnings.warn(
-                f"OpenMed: Faker locale {locale!r} is unavailable; "
+                f"OpenMed: Faker locale {backend_locale!r} is unavailable; "
                 "falling back to 'en_US'. Pass locale=... to override.",
                 UserWarning,
                 stacklevel=2,
@@ -172,13 +181,33 @@ class Anonymizer:
         effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
         canonical = normalize_label(label, effective_lang)
 
+        # CJK PERSON spans: peel a trailing honorific (さん/様/씨/님/先生/…) so
+        # the name is swapped while the honorific is re-attached verbatim.
+        # Only ja/ko/zh PERSON spans take this path; all other languages and
+        # labels are unaffected. See ``openmed.core.name_order`` (OM-291).
+        honorific_suffix = ""
+        seed_value = original
+        generator_input = original
+        if canonical == L.PERSON and effective_lang in CJK_LANGUAGES:
+            core_name, honorific_suffix = normalize_person_span(
+                original, effective_lang
+            )
+            if honorific_suffix:
+                if not core_name:
+                    return f"[{label}]{honorific_suffix}"
+                # Seed on the bare name so a name with and without an honorific
+                # map to the same core surrogate in deterministic mode.
+                seed_value = core_name
+                generator_input = core_name
+
         faker = self._get_faker(effective_locale)
         if self.config.consistent:
-            faker.seed_instance(self._derive_seed(canonical, original))
+            faker.seed_instance(self._derive_seed(canonical, seed_value))
 
         generator = LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"])
         try:
-            return generator(faker, original, locale=effective_locale)
+            generated = generator(faker, generator_input, locale=effective_locale)
+            return f"{generated}{honorific_suffix}"
         except Exception as exc:  # noqa: BLE001 — never let a single label kill the doc
             warnings.warn(
                 f"Anonymizer fallback for label {label!r} (canonical "
@@ -186,7 +215,123 @@ class Anonymizer:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return f"[{label}]"
+            return f"[{label}]{honorific_suffix}"
+
+    def can_format_preserve(
+        self,
+        original: str,
+        label: str,
+        *,
+        lang: Optional[str] = None,
+    ) -> bool:
+        """Return whether ``label`` has a format-preserving generator."""
+        canonical = normalize_label(label, lang or self.config.lang)
+        value = original or ""
+        if canonical == L.PHONE:
+            return any(ch.isdigit() for ch in value)
+        if canonical in _FORMAT_PRESERVE_DATE_LABELS:
+            return any(ch.isdigit() for ch in value)
+        if canonical == L.EMAIL:
+            return "@" in value
+        if canonical in _FORMAT_PRESERVE_GENERIC_ID_LABELS:
+            return any(ch.isalnum() for ch in value)
+        return False
+
+    def format_preserving_surrogate(
+        self,
+        original: str,
+        label: str,
+        *,
+        lang: Optional[str] = None,
+        locale: Optional[str] = None,
+    ) -> str | None:
+        """Return a synthetic surrogate that preserves ``original``'s shape.
+
+        Only structured labels with an explicit format-preserving generator are
+        supported. ``None`` signals callers to use their normal mask fallback.
+        """
+        effective_lang = lang or self.config.lang
+        effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
+        canonical = normalize_label(label, effective_lang)
+        original_value = original or ""
+        if not self.can_format_preserve(original_value, canonical, lang=effective_lang):
+            return None
+
+        faker = self._get_faker(effective_locale)
+        if self.config.consistent:
+            faker.seed_instance(self._derive_seed(canonical, original_value))
+
+        if canonical == L.PHONE:
+            return preserve_phone_format(original_value, rng=faker.random)
+        if canonical in _FORMAT_PRESERVE_DATE_LABELS:
+            day_first = effective_locale in _FORMAT_PRESERVE_DAY_FIRST_LOCALES
+            return _non_identical_surrogate(
+                original_value,
+                lambda: preserve_date_format(
+                    original_value,
+                    day_first=day_first,
+                    rng=faker.random,
+                ),
+            )
+        if canonical == L.EMAIL:
+            return _non_identical_surrogate(
+                original_value,
+                lambda: preserve_email_pattern(original_value, faker.email()),
+            )
+        if canonical in _FORMAT_PRESERVE_GENERIC_ID_LABELS:
+            return preserve_id_pattern(original_value, rng=faker.random)
+        return None
+
+
+_FORMAT_PRESERVE_DATE_LABELS = frozenset({L.DATE, L.DATE_OF_BIRTH})
+
+_FORMAT_PRESERVE_GENERIC_ID_LABELS = frozenset(
+    {
+        L.ACCOUNT_NUMBER,
+        L.API_KEY,
+        L.BIC,
+        L.BITCOIN_ADDRESS,
+        L.CREDIT_CARD,
+        L.CVV,
+        L.ETHEREUM_ADDRESS,
+        L.IBAN,
+        L.ID_NUM,
+        L.IMEI,
+        L.IP_ADDRESS,
+        L.LITECOIN_ADDRESS,
+        L.MAC_ADDRESS,
+        L.MASKED_NUMBER,
+        L.PASSWORD,
+        L.PIN,
+        L.SSN,
+        L.VEHICLE_REGISTRATION,
+        L.VIN,
+        L.ZIPCODE,
+    }
+)
+
+_FORMAT_PRESERVE_DAY_FIRST_LOCALES = frozenset(
+    {
+        "fr_FR",
+        "de_DE",
+        "it_IT",
+        "es_ES",
+        "nl_NL",
+        "hi_IN",
+        "en_IN",
+        "pt_PT",
+        "pt_BR",
+        "cs_CZ",
+    }
+)
+
+
+def _non_identical_surrogate(original: str, generator: Any) -> str | None:
+    for _ in range(10):
+        surrogate = generator()
+        if surrogate != original:
+            return surrogate
+    return None
 
 
 __all__ = ["Anonymizer", "AnonymizerConfig"]

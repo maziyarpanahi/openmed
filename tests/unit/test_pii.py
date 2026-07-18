@@ -1200,7 +1200,7 @@ class TestMultilingualPII:
     def test_extract_pii_unsupported_language_raises(self):
         """Test that unsupported language raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported language"):
-            extract_pii("test", lang="ko")
+            extract_pii("test", lang="xx")
 
     @patch("openmed.analyze_text")
     def test_extract_pii_french_uses_french_model(self, mock_analyze):
@@ -1768,6 +1768,42 @@ class TestAccentNormalization:
 
         call_args = mock_analyze.call_args
         assert call_args[0][0] == "Jose Garcia"
+
+    @patch("openmed.analyze_text")
+    def test_unicode_defense_normalizes_inference_and_remaps_offsets(
+        self,
+        mock_analyze,
+    ):
+        """Unicode defense strips attacks before inference and remaps spans."""
+        original = "Patient J\u200bo\u0301hn D\u03bfe"
+        mock_analyze.return_value = PredictionResult(
+            text="Patient John Doe",
+            entities=[
+                EntityPrediction(
+                    text="John Doe",
+                    label="NAME",
+                    start=8,
+                    end=16,
+                    confidence=0.97,
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = extract_pii(
+            original,
+            model_name="fixture-pii-model",
+            use_smart_merging=False,
+        )
+
+        call_args = mock_analyze.call_args
+        assert call_args[0][0] == "Patient John Doe"
+        assert result.text == original
+        assert result.entities[0].start == 8
+        assert result.entities[0].end == len(original)
+        assert result.entities[0].text == original[8:]
+        assert result.metadata["unicode_defense"]["removed_zero_width"] == 1
 
 
 # ---------------------------------------------------------------------------

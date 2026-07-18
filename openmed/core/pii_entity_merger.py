@@ -32,6 +32,8 @@ class PIIPattern:
     - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
     - context_words: Keywords that boost confidence when found nearby
     - validator: Optional checksum/validation function to confirm matches
+    - safety_sweep_requires_context: Require nearby context before the
+      deterministic safety sweep accepts this pattern
 
     Example:
         PIIPattern(
@@ -55,6 +57,7 @@ class PIIPattern:
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
+    safety_sweep_requires_context: bool = False
 
 
 # ============================================================================
@@ -120,6 +123,13 @@ def validate_iban(iban_text: str) -> bool:
     from .anonymizer.providers import clinical_ids
 
     return clinical_ids.validate_iban(iban_text)
+
+
+def validate_bic(bic_text: str) -> bool:
+    """Validate a SWIFT/BIC using the shared clinical identifier validator."""
+    from .anonymizer.providers import clinical_ids
+
+    return clinical_ids.validate_bic(bic_text)
 
 
 def validate_phone_us(phone_text: str) -> bool:
@@ -356,6 +366,7 @@ PII_PATTERNS = [
         base_score=0.4,  # Could be other 5-digit numbers
         context_words=["zip", "zipcode", "zip code", "postal", "postal code"],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
     # Credit card with Luhn validation
     PIIPattern(
@@ -381,10 +392,32 @@ PII_PATTERNS = [
         r"\b[A-Z]{2}\d{2}(?:[\s-]?[A-Z0-9]){11,30}\b",
         "iban",
         priority=9,
+        flags=0,
         base_score=0.85,
         context_words=["iban", "bank account", "account", "routing", "wire"],
         context_boost=0.1,
         validator=validate_iban,
+    ),
+    # SWIFT/BIC codes have fixed 8/11-character structure but no checksum, so
+    # require context during deterministic safety sweeps.
+    PIIPattern(
+        r"\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
+        "bic",
+        priority=8,
+        flags=0,
+        base_score=0.25,
+        context_words=[
+            "bic",
+            "swift",
+            "swift/bic",
+            "swift code",
+            "bank identifier",
+            "wire",
+            "wire transfer",
+        ],
+        context_boost=0.65,
+        validator=validate_bic,
+        safety_sweep_requires_context=True,
     ),
     # Account numbers when explicitly labeled in context
     PIIPattern(
@@ -783,6 +816,16 @@ def merge_entities_with_semantic_units(
                         else unit_type
                     )
 
+            source_labels = sorted(
+                {
+                    str(unit_type),
+                    *(str(entity["entity_type"]) for entity in overlapping_entities),
+                }
+            )
+            mixed_label_union = (
+                len({normalize_label(label) for label in source_labels}) > 1
+            )
+
             # Combine model confidence with pattern confidence.
             # When pattern validation failed, heavily discount the pattern
             # contribution to avoid high-confidence invalid entities.
@@ -793,15 +836,31 @@ def merge_entities_with_semantic_units(
                 # Unvalidated: 90% model, 10% pattern
                 final_confidence = (0.9 * model_avg_confidence) + (0.1 * unit_score)
 
+            # Semantic patterns may expand a fragmented model span, but they
+            # must never shrink away any text the model already classified as
+            # PII. Use the union of the regex unit and every overlapping model
+            # entity so a narrower semantic submatch (for example a postcode
+            # inside an MRN) cannot create a raw-identifier leak.
+            merged_start = min(
+                unit_start,
+                *(int(entity["start"]) for entity in overlapping_entities),
+            )
+            merged_end = max(
+                unit_end,
+                *(int(entity["end"]) for entity in overlapping_entities),
+            )
+
             # Create merged entity
             merged.append(
                 {
                     "entity_type": final_label,
                     "score": final_confidence,
-                    "start": unit_start,
-                    "end": unit_end,
-                    "word": text[unit_start:unit_end],
+                    "start": merged_start,
+                    "end": merged_end,
+                    "word": text[merged_start:merged_end],
                     "merged_from": len(overlapping),
+                    "source_labels": source_labels,
+                    "mixed_label_union": mixed_label_union,
                 }
             )
 
@@ -817,6 +876,8 @@ def merge_entities_with_semantic_units(
                     "end": unit_end,
                     "word": text[unit_start:unit_end],
                     "merged_from": 0,
+                    "source_labels": [str(unit_type)],
+                    "mixed_label_union": False,
                 }
             )
 
@@ -825,9 +886,86 @@ def merge_entities_with_semantic_units(
         if i not in used_entities:
             merged.append(entity)
 
-    # Sort by start position
-    merged.sort(key=lambda x: x["start"])
-    return merged
+    return _coalesce_overlapping_merged_entities(merged, text)
+
+
+def _coalesce_overlapping_merged_entities(
+    entities: List[Dict[str, Any]],
+    text: str,
+) -> List[Dict[str, Any]]:
+    """Union transitive overlaps without losing any detected source text.
+
+    Separate, non-overlapping semantic units can both overlap the same wider
+    model span. After semantic expansion that produces overlapping output
+    entities; simply choosing one would discard model-detected text. Collapse
+    each transitive overlap cluster to its full union before downstream
+    arbitration so every contributing detection remains covered.
+    """
+    if not entities:
+        return []
+
+    ordered = sorted(entities, key=lambda entity: (entity["start"], entity["end"]))
+    clusters: List[List[Dict[str, Any]]] = []
+    current = [ordered[0]]
+    current_end = int(ordered[0]["end"])
+    for entity in ordered[1:]:
+        start = int(entity["start"])
+        end = int(entity["end"])
+        if start < current_end:
+            current.append(entity)
+            current_end = max(current_end, end)
+            continue
+        clusters.append(current)
+        current = [entity]
+        current_end = end
+    clusters.append(current)
+
+    result: List[Dict[str, Any]] = []
+    for cluster in clusters:
+        if len(cluster) == 1:
+            result.append(cluster[0])
+            continue
+
+        start = min(int(entity["start"]) for entity in cluster)
+        end = max(int(entity["end"]) for entity in cluster)
+        winner = max(
+            cluster,
+            key=lambda entity: (
+                int(entity["end"]) - int(entity["start"]),
+                float(entity.get("score", 0.0)),
+                str(entity.get("entity_type", "")),
+            ),
+        )
+        source_labels = sorted(
+            {
+                str(label)
+                for entity in cluster
+                for label in entity.get(
+                    "source_labels",
+                    [entity.get("entity_type", "")],
+                )
+                if label
+            }
+        )
+        result.append(
+            {
+                "entity_type": winner["entity_type"],
+                "score": max(float(entity.get("score", 0.0)) for entity in cluster),
+                "start": start,
+                "end": end,
+                "word": text[start:end],
+                "merged_from": sum(
+                    max(int(entity.get("merged_from", 1)), 1) for entity in cluster
+                ),
+                "source_labels": source_labels,
+                "mixed_label_union": len(
+                    {normalize_label(label) for label in source_labels}
+                )
+                > 1,
+            }
+        )
+
+    return result
 
 
 def normalize_label(label: str) -> str:
@@ -873,6 +1011,9 @@ def normalize_label(label: str) -> str:
         "aadhaar",
         "cpf",
         "cnpj",
+        "teudat_zehut",
+        "teudatzehut",
+        "tz",
     ):
         return "national_id"
 
@@ -933,6 +1074,7 @@ def is_more_specific(label1: str, label2: str) -> bool:
             "codice_fiscale",
             "cpf",
             "cnpj",
+            "teudat_zehut",
         ],
     }
 

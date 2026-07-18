@@ -6,12 +6,21 @@ import json
 
 import pytest
 
+from openmed.eval.golden import non_latin_golden_fixtures
 from openmed.eval.harness import BenchmarkFixture, load_fixtures, run_benchmark
+from openmed.eval.leakage_heatmap import compute_extraction_reemission_heatmap
 from openmed.eval.metrics import (
+    ABSTENTION_ROUTE_REDACT,
+    CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
     EvalSpan,
+    apply_abstention_policy,
+    compute_abstention_metrics,
     compute_character_recall,
+    compute_critical_finding_recall,
     compute_exact_span_f1,
+    compute_extraction_reemission_leakage,
     compute_leakage_rate,
+    compute_metrics_bundle,
     compute_recall_slices,
     compute_relaxed_span_f1,
 )
@@ -33,6 +42,10 @@ def test_eval_modules_import_cleanly():
         "n2c2",
         "shield",
         "drugprot",
+        "policy_compliance",
+        "biomedical-ner",
+        "multilingual-clinical-ner",
+        "multimodal_dicom",
     )
 
 
@@ -56,6 +69,111 @@ def test_leakage_rate_is_char_weighted_and_sliced():
     assert result.by_device["cpu"] == pytest.approx(11 / 15)
     assert result.leaked_chars_by_label["SSN"] == 11
     assert result.total_chars_by_label["PERSON"] == 4
+
+
+def test_extraction_reemission_leakage_counts_surfaces_and_offsets():
+    text = "Patient Alice has SSN 123-45-6789."
+    name_start = text.index("Alice")
+    ssn_start = text.index("123-45-6789")
+    gold = [
+        {"start": name_start, "end": name_start + 5, "label": "PERSON"},
+        {"start": ssn_start, "end": ssn_start + 11, "label": "SSN"},
+    ]
+    extraction = {
+        "facts": [
+            {"value": "Alice", "concept": {"label": "masked condition"}},
+            {
+                "value": "redacted",
+                "evidence": {"start": ssn_start, "end": ssn_start + 11},
+            },
+        ],
+        "fhir": {"resourceType": "Observation", "valueString": "123-45-6789"},
+    }
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        extraction,
+        source_text=text,
+    )
+    heatmap = compute_extraction_reemission_heatmap(
+        gold,
+        extraction,
+        source_text=text,
+    )
+
+    assert result.overall == pytest.approx(1.0)
+    assert result.leaked_chars_by_label["PERSON"] == 5
+    assert result.leaked_chars_by_label["SSN"] == 11
+    assert heatmap.cells["PERSON"]["en"].leaked_chars == 5
+    assert heatmap.cells["SSN"]["en"].leaked_chars == 11
+
+
+def test_clean_extraction_output_has_zero_reemission_leakage():
+    text = "Patient Alice has SSN 123-45-6789."
+    name_start = text.index("Alice")
+    ssn_start = text.index("123-45-6789")
+    gold = [
+        {"start": name_start, "end": name_start + 5, "label": "PERSON"},
+        {"start": ssn_start, "end": ssn_start + 11, "label": "SSN"},
+    ]
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        {"facts": [{"value": "stable", "evidence": {"start": 0, "end": 7}}]},
+        source_text=text,
+    )
+    metrics = compute_metrics_bundle(
+        gold,
+        gold,
+        extraction_outputs={"facts": [{"value": "stable"}]},
+        source_text=text,
+    )
+
+    assert result.overall == 0.0
+    assert result.leaked_chars == 0
+    assert metrics["leakage"]["overall"] == 0.0
+    assert metrics["extraction_reemission_leakage"]["overall"] == 0.0
+
+
+def test_extraction_offsets_are_not_scanned_as_numeric_phi_surfaces():
+    text = "12 was recorded before a stable clinical observation."
+    gold = [{"start": 0, "end": 2, "label": "ID_NUM"}]
+    extraction = {
+        "facts": [
+            {
+                "value": "stable",
+                "evidence": {"start": 12, "end": 20},
+                "offsets": [30, 35],
+            }
+        ]
+    }
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        extraction,
+        source_text=text,
+    )
+
+    assert result.overall == 0.0
+    assert result.leaked_chars == 0
+
+
+def test_extraction_reemission_detects_non_latin_golden_fixture():
+    fixture = non_latin_golden_fixtures()[0]
+    span = next(
+        span
+        for span in fixture.gold_spans
+        if any(ord(char) > 127 and char.isalpha() for char in span.text)
+    )
+
+    result = compute_extraction_reemission_leakage(
+        fixture.gold_spans,
+        {"grounding": {"concept_label": f"echoed {span.text}"}},
+        default_language=fixture.language,
+    )
+
+    assert result.leaked_chars_by_language[fixture.language] >= span.length
+    assert result.by_language[fixture.language] > 0.0
 
 
 def test_zero_gold_spans_do_not_report_leakage_and_have_full_recall():
@@ -84,6 +202,91 @@ def test_exact_and_relaxed_f1_differ_on_boundary_drift():
     assert relaxed.true_positives == 1
 
 
+def test_critical_abstentions_route_to_redaction_not_passthrough():
+    decisions = apply_abstention_policy(
+        [],
+        [
+            {
+                "start": 0,
+                "end": 11,
+                "label": "SSN",
+                "language": "en",
+                "confidence": 0.25,
+            }
+        ],
+        confidence_threshold=0.90,
+    )
+
+    assert decisions[0].accepted is False
+    assert decisions[0].route == ABSTENTION_ROUTE_REDACT
+    assert all(decision.route != "passthrough" for decision in decisions)
+
+
+def test_abstention_metrics_are_sliced_deterministic_and_risk_bounded():
+    gold: list[dict[str, object]] = []
+    predicted: list[dict[str, object]] = []
+    for index in range(120):
+        start = index * 5
+        span = {
+            "start": start,
+            "end": start + 3,
+            "label": "SSN",
+            "language": "en",
+        }
+        gold.append(span)
+        predicted.append({**span, "confidence": 0.95})
+    for index in range(40):
+        start = 1000 + index * 5
+        predicted.append(
+            {
+                "start": start,
+                "end": start + 3,
+                "label": "SSN",
+                "language": "en",
+                "confidence": 0.40,
+            }
+        )
+    for index in range(4):
+        start = 2000 + index * 5
+        predicted.append(
+            {
+                "start": start,
+                "end": start + 4,
+                "label": "PERSON",
+                "language": "fr",
+                "confidence": 0.30,
+            }
+        )
+
+    first = compute_abstention_metrics(
+        gold,
+        predicted,
+        confidence_threshold=0.95,
+        target_risk=0.10,
+        confidence_level=0.80,
+        bootstrap_resamples=100,
+        seed=7,
+    ).to_dict()
+    second = compute_abstention_metrics(
+        gold,
+        predicted,
+        confidence_threshold=0.95,
+        target_risk=0.10,
+        confidence_level=0.80,
+        bootstrap_resamples=100,
+        seed=7,
+    ).to_dict()
+
+    assert first == second
+    assert first["abstention_rate"]["by_label"]["SSN"] == pytest.approx(0.25)
+    assert first["abstention_rate"]["by_language"]["en"] == pytest.approx(0.25)
+    assert first["abstention_rate"]["by_language"]["fr"] == pytest.approx(1.0)
+    assert first["residual_risk"]["by_label"]["SSN"] == 0.0
+    assert first["residual_risk"]["by_language"]["en"] == 0.0
+    assert first["residual_risk"]["critical"] == 0.0
+    assert first["residual_risk"]["bootstrap"]["max"] <= 0.10
+
+
 def test_recall_slices_cover_label_language_and_device_edges():
     gold = [
         EvalSpan(start=0, end=4, label="PERSON", language="en", device="cpu"),
@@ -102,6 +305,62 @@ def test_recall_slices_cover_label_language_and_device_edges():
     assert recall.by_language["fr"] == pytest.approx(5 / 11)
     assert recall.by_device["coreml"] == pytest.approx(5 / 11)
     assert "mlx-8bit" in recall.by_device
+
+
+def test_critical_finding_recall_reports_phi_free_missed_details():
+    text = (
+        "Critical safety probe: The synthetic patient has documented allergy to "
+        "penicillin with anaphylaxis, acute myocardial infarction, and potassium "
+        "6.9 mmol/L requiring urgent review."
+    )
+    gold = [
+        EvalSpan(
+            start=71,
+            end=81,
+            label="MEDICATION",
+            text="penicillin",
+            metadata={
+                "critical_finding": True,
+                "critical_finding_category": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+                "fixture_id": "fixture-critical",
+            },
+        ),
+        EvalSpan(
+            start=100,
+            end=127,
+            label="CONDITION",
+            text="acute myocardial infarction",
+            metadata={
+                "critical_finding": True,
+                "critical_finding_category": "critical_diagnosis",
+                "fixture_id": "fixture-critical",
+            },
+        ),
+    ]
+    predicted = [
+        EvalSpan(
+            start=100,
+            end=127,
+            label="CONDITION",
+            text="acute myocardial infarction",
+        )
+    ]
+
+    recall = compute_critical_finding_recall(gold, predicted, source_text=text)
+    payload = recall.to_dict()
+
+    assert recall.overall == pytest.approx(0.5)
+    assert recall.by_category[CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY] == 0.0
+    assert payload["missed_findings"] == [
+        {
+            "category": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+            "fixture_id": "fixture-critical",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert "penicillin" not in json.dumps(payload)
 
 
 def test_benchmark_report_serializes_deterministically_to_json_and_markdown():
@@ -154,6 +413,51 @@ def test_harness_runs_with_injected_runner_without_loading_models():
     assert report.fixture_count == 1
     assert report.metrics["leakage"]["overall"] == 0.0
     assert report.metrics["exact_span_f1"]["f1"] == 1.0
+
+
+def test_harness_surfaces_abstention_metrics_with_thresholds():
+    fixture = BenchmarkFixture.from_mapping(
+        {
+            "id": "note-1",
+            "text": "Patient John and Jane",
+            "language": "en",
+            "gold_spans": [
+                {"start": 8, "end": 12, "label": "PERSON"},
+                {"start": 17, "end": 21, "label": "PERSON"},
+            ],
+        }
+    )
+
+    def runner(fixture, model_name, device):
+        return [
+            {
+                "start": 8,
+                "end": 12,
+                "label": "PERSON",
+                "confidence": 0.95,
+            },
+            {
+                "start": 17,
+                "end": 21,
+                "label": "PERSON",
+                "confidence": 0.50,
+            },
+        ]
+
+    report = run_benchmark(
+        [fixture],
+        suite="golden",
+        model_name="test-model",
+        runner=runner,
+        abstention_thresholds={"PERSON": {"en": 0.90}},
+        abstention_target_risk=0.10,
+        abstention_confidence_level=0.80,
+        abstention_bootstrap_resamples=10,
+        abstention_seed=3,
+    )
+
+    assert report.metrics["abstention"]["abstention_rate"]["overall"] == 0.5
+    assert "abstention.residual_risk.critical" in report.to_markdown()
 
 
 def test_harness_rejects_duplicate_fixture_ids(tmp_path):

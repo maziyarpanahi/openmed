@@ -1,7 +1,12 @@
+import builtins
+import importlib
 import unicodedata
 from datetime import datetime
 
-from openmed.core.pipeline import Pipeline
+import pytest
+
+from openmed.core.pii import MissingOptionalDependencyError
+from openmed.core.pipeline import Pipeline, _identity_text
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
@@ -34,6 +39,118 @@ def test_normalized_offsets_remap_combining_characters_to_original_positions():
         normalized_e,
         normalized_e + 1,
     ) == (original_e, original_combining + 1)
+
+
+def test_stage1_records_skipped_encoding_repair_when_ftfy_missing(monkeypatch):
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "ftfy" or name.startswith("ftfy."):
+            raise ImportError("ftfy unavailable")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    document = Pipeline().stage1_normalize("Patient Caf\u00e9")
+    metadata = document.metadata["encoding_repair"]
+
+    assert metadata["available"] is False
+    assert metadata["skipped"] is True
+    assert metadata["dependency"] == "ftfy"
+    assert "missing optional dependency" in metadata["reason"]
+    assert "pip install ftfy" in metadata["install"]
+
+
+def test_stage1_identity_repair_shortcut_preserves_normalized_output(monkeypatch):
+    # When encoding repair is unavailable the per-segment repair call is skipped
+    # as a latency optimisation; the normalized text and offset map must be
+    # identical to the legacy path that invokes an identity function per segment.
+    text = "Café  Zoë   Straße\tnaı̈ve"
+    metadata = {"feature": "encoding repair", "available": False, "skipped": True}
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        lambda: (_identity_text, metadata),
+    )
+    optimized = Pipeline().stage1_normalize(text)
+
+    def legacy_identity(segment):
+        return segment
+
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        lambda: (legacy_identity, metadata),
+    )
+    legacy_equivalent = Pipeline().stage1_normalize(text)
+
+    assert optimized == legacy_equivalent
+
+
+def test_stage1_applies_active_encoding_repair_per_segment(monkeypatch):
+    # When a real repairer is active it must still run on each non-whitespace
+    # segment (the optimisation only skips the identity no-op case).
+    calls = []
+
+    def fake_repairer():
+        def repair(segment):
+            calls.append(segment)
+            return segment.replace("�", "?")
+
+        return repair, {"feature": "encoding repair", "available": True}
+
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        fake_repairer,
+    )
+
+    document = Pipeline().stage1_normalize("A�B")
+
+    assert document.normalized_text == "A?B"
+    # Repairer invoked once per non-whitespace segment (three characters here).
+    assert calls == ["A", "�", "B"]
+
+
+def test_run_exposes_per_stage_latency_measurements():
+    result = Pipeline(
+        model_detector=lambda text, **kwargs: _empty_prediction(
+            text, model_name=kwargs["model_name"]
+        )
+    ).run("Patient note without identifiers.", method="mask")
+
+    for stage_name in Pipeline.stage_names:
+        assert result.stage_duration_ms(stage_name) >= 0.0
+
+    with pytest.raises(KeyError):
+        result.stage_duration_ms("nonexistent_stage")
+
+    # Durations are latency-only floats keyed by every stage name, and are kept
+    # off the reproducible audit record because wall-clock time is
+    # non-deterministic.
+    assert set(result.stage_durations_ms) == set(Pipeline.stage_names)
+    assert all(isinstance(value, float) for value in result.stage_durations_ms.values())
+    assert result.cascade_duration_ms is None
+    assert "stage_durations_ms" not in result.audit_record
+    assert "cascade_duration_ms" not in result.audit_record
+
+
+def test_stage3_records_unavailable_section_hook_metadata(monkeypatch):
+    original_import_module = importlib.import_module
+
+    def fake_import_module(name, package=None):
+        if name == "openmed.clinical.sections":
+            raise ImportError("sections unavailable")
+        return original_import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+
+    metadata = Pipeline().stage3_doc_type_section("Assessment: stable")
+    section_detection = metadata["section_detection"]
+
+    assert metadata["section_hook"] == "unavailable"
+    assert metadata["sections"] == ()
+    assert section_detection["available"] is False
+    assert section_detection["skipped"] is True
+    assert section_detection["dependency"] == "openmed.clinical.sections"
+    assert "missing optional capability" in section_detection["reason"]
 
 
 def test_normalized_span_round_trips_nfc_length_change_to_original_surface():
@@ -168,6 +285,48 @@ def test_deidentification_redacts_original_collapsed_whitespace_entity_surface()
     assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
     assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
     assert result.redacted_text == "Patient [NAME] visited"
+
+
+def test_shift_dates_missing_dateutil_raises_clear_optional_extra_error(monkeypatch):
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "dateutil" or name.startswith("dateutil."):
+            raise ImportError("dateutil unavailable")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    text = "DOB 01/15/2020"
+
+    def model_detector(text, **kwargs):
+        entity_text = "01/15/2020"
+        start = text.index(entity_text)
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text=entity_text,
+                    label="DATE",
+                    start=start,
+                    end=start + len(entity_text),
+                    confidence=0.95,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp=datetime.now().isoformat(),
+        )
+
+    with pytest.raises(MissingOptionalDependencyError) as excinfo:
+        Pipeline(
+            model_detector=model_detector,
+            use_safety_sweep=False,
+        ).run(text, method="shift_dates", date_shift_days=30)
+
+    message = str(excinfo.value)
+    assert "method='shift_dates'" in message
+    assert "python-dateutil" in message
+    assert "pip install openmed[dev]" in message
 
 
 def test_luhn_valid_mrn_is_detected_before_model_stage_runs():

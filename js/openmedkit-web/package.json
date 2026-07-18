@@ -1,0 +1,80 @@
+{
+  "name": "openmed",
+  "version": "1.9.1",
+  "description": "On-device medical AI and de-identification for browsers and Node.js.",
+  "keywords": [
+    "medical-ai",
+    "de-identification",
+    "pii",
+    "ner",
+    "onnx",
+    "webgpu",
+    "healthcare"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && npm run typecheck && npm run test:node",
+    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_ort_web_loader.spec.ts",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": ">=3.0.0",
+    "onnxruntime-web": ">=1.20.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    },
+    "onnxruntime-web": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maziyarpanahi/openmed.git",
+    "directory": "js/openmedkit-web"
+  },
+  "homepage": "https://github.com/maziyarpanahi/openmed/tree/master/js/openmedkit-web#readme",
+  "bugs": {
+    "url": "https://github.com/maziyarpanahi/openmed/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,19 +1,261 @@
-# Tags matching v* publish the openmed package to PyPI.
-# workflow_dispatch runs the same guarded publish job manually.
-name: Publish to PyPI
+# Tags matching v* build and publish OpenMed to PyPI and npm.
+name: Publish OpenMed Packages
 
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
+  provenance:
+    name: Build, attest, and verify distributions
+    uses: ./.github/workflows/provenance.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+  npm-verify:
+    name: Verify npm package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify release versions agree
+        run: |
+          PYTHON_VERSION=$(python3 -c "import pathlib, re; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")
+          NPM_VERSION=$(node -p "require('./js/openmedkit-web/package.json').version")
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+          if [ "$PYTHON_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: Python $PYTHON_VERSION != tag $TAG_VERSION"
+            exit 1
+          fi
+          if [ "$NPM_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: npm $NPM_VERSION != tag $TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Install npm dependencies
+        working-directory: js/openmedkit-web
+        run: npm ci
+
+      - name: Audit npm dependencies
+        working-directory: js/openmedkit-web
+        run: npm audit --audit-level=low
+
+      - name: Build, typecheck, and test npm package
+        working-directory: js/openmedkit-web
+        run: npm test
+
+      - name: Inspect npm package tarball
+        working-directory: js/openmedkit-web
+        run: npm pack --dry-run
+
   publish:
+    name: Publish distributions
+    needs: [provenance, npm-verify]
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/openmed
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.0
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
+
+  npm-publish:
+    name: Publish npm package
+    needs: [provenance, npm-verify]
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/openmed
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify npm credentials
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_ACCESS_TOKEN is not configured in the npm environment."
+            exit 1
+          fi
+
+      - name: Install npm dependencies
+        working-directory: js/openmedkit-web
+        run: npm ci
+
+      - name: Build npm distribution
+        working-directory: js/openmedkit-web
+        run: npm run build
+
+      - name: Publish npm package with provenance
+        working-directory: js/openmedkit-web
+        run: npm publish --ignore-scripts --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+  evidence:
+    name: Sign and attach release evidence
+    needs: [provenance, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # attach the evidence assets to the tagged release
+      id-token: write  # keyless Sigstore signing
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      # Evidence generation is best effort: the provenance job already treats
+      # attestation as continue-on-error, so the bundle may not exist at all.
+      - name: Download provenance evidence
+        id: provenance-evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: release-provenance
+          path: release-provenance/
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Sigstore
+        id: install-sigstore
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'sigstore==4.4.0'
+
+      - name: Sign distributions with Sigstore
+        id: sign-distributions
+        if: steps.install-sigstore.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sigstore-bundles
+          for artifact in dist/*; do
+            name="$(basename "$artifact")"
+            python -m sigstore sign "$artifact" \
+              --bundle "sigstore-bundles/${name}.sigstore.json"
+          done
+
+      # Evidence that was produced must verify. This step is deliberately not
+      # continue-on-error: a bundle that cannot be verified must never be
+      # attached to a release.
+      - name: Verify Sigstore bundles
+        if: steps.sign-distributions.outcome == 'success'
+        shell: bash
+        env:
+          SIGNER_WORKFLOW: .github/workflows/publish.yml
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/${SIGNER_WORKFLOW}@${GITHUB_REF}"
+          for artifact in dist/*; do
+            name="$(basename "$artifact")"
+            bundle="sigstore-bundles/${name}.sigstore.json"
+            test -s "$bundle"
+            python -m sigstore verify github "$artifact" \
+              --bundle "$bundle" \
+              --offline \
+              --cert-identity "$identity" \
+              --repository "$GITHUB_REPOSITORY" \
+              --sha "$GITHUB_SHA" \
+              --ref "$GITHUB_REF"
+          done
+
+      # Attachment of produced evidence must succeed. `gh release create` is
+      # tolerated as a no-op because the release usually already exists, and the
+      # sbom job may otherwise create it first.
+      - name: Attach release evidence to the tagged GitHub release
+        if: >-
+          steps.sign-distributions.outcome == 'success' ||
+          steps.provenance-evidence.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}  # this job does not check out the repo
+          PROVENANCE_OUTCOME: ${{ steps.provenance-evidence.outcome }}
+          SIGN_OUTCOME: ${{ steps.sign-distributions.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          assets=()
+          if [ "$PROVENANCE_OUTCOME" = "success" ]; then
+            for candidate in \
+              release-provenance/provenance-bundles/python-distributions.intoto.json \
+              release-provenance/release-artifact-digests.txt; do
+              if [ ! -s "$candidate" ]; then
+                echo "Expected provenance evidence is missing or empty: $candidate" >&2
+                exit 1
+              fi
+              assets+=("$candidate")
+            done
+          fi
+
+          # Only ship signatures from a fully successful signing run: a partial
+          # run leaves bundles behind that the verify step never checked.
+          if [ "$SIGN_OUTCOME" = "success" ]; then
+            assets+=(sigstore-bundles/*.sigstore.json)
+          fi
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release evidence was produced; nothing to attach."
+            exit 0
+          fi
+
+          printf 'Attaching release evidence:\n'
+          printf -- '- %s\n' "${assets[@]}"
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+
+  sbom:
+    name: Generate release SBOM
+    needs: [publish, npm-publish]
+    runs-on: ubuntu-latest
     permissions:
       contents: write  # attach the SBOM asset to the tagged GitHub release
 
@@ -26,81 +268,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build hatch
-
-      - name: Clean package cache
-        run: |
-          pip uninstall openmed -y || true
-          rm -rf ~/.cache/pip || true
-
-      - name: Clean build artifacts
-        run: |
-          rm -rf dist build
-
-      - name: Enforce repo file policy
-        run: |
-          python scripts/release/check_repo_policy.py
-
-      - name: Compute release metadata
-        id: release_metadata
-        run: |
-          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
-            RELEASE_COMMIT=$(git rev-list -n 1 "$GITHUB_REF_NAME")
-            PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${RELEASE_COMMIT}^" 2>/dev/null || true)
-            RANGE_END="$RELEASE_COMMIT"
-          else
-            PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
-            RANGE_END="HEAD"
-          fi
-
-          if [ -n "$PREVIOUS_TAG" ]; then
-            BASE_VERSION="${PREVIOUS_TAG#v}"
-            RANGE="${PREVIOUS_TAG}..${RANGE_END}"
-          else
-            BASE_VERSION="0.0.0"
-            RANGE="$RANGE_END"
-          fi
-
-          python scripts/release/changelog.py \
-            --range "$RANGE" \
-            --current-version "$BASE_VERSION" \
-            --github-output
-
-      - name: Verify version matches tag
-        if: github.event_name == 'push'
-        run: |
-          VERSION=$(python -c "import pathlib, re; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")
-          TAG=${GITHUB_REF#refs/tags/v}
-          COMPUTED_VERSION="${{ steps.release_metadata.outputs.next_version }}"
-          if [ "$VERSION" != "$TAG" ]; then
-            echo "Version mismatch: package version $VERSION != tag version $TAG"
-            exit 1
-          fi
-          if [ "$COMPUTED_VERSION" != "$TAG" ]; then
-            echo "Version mismatch: computed next version $COMPUTED_VERSION != tag version $TAG"
-            exit 1
-          fi
-
-      - name: Build package
-        run: |
-          python -m build
-
-      - name: Check package
-        run: |
-          pip install twine
-          twine check dist/*
-
-      - name: Publish to PyPI
-        env:
-          HATCH_INDEX_USER: __token__
-          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
-          HATCH_KEYRING: disabled
-        run: |
-          hatch publish
 
       # SBOM generation runs after publish and is fail-open: a hiccup in any of
       # these steps must never block an otherwise-successful release.
