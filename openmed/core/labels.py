@@ -1080,6 +1080,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "ghghanacard": ID_NUM,
     "kenationalid": ID_NUM,
     "kemaishanamba": ID_NUM,
+    "gstin": ID_NUM,
+    "gstnumber": ID_NUM,
     "teudatzehut": ID_NUM,
     "tz": ID_NUM,
     "npi": ID_NUM,
@@ -1387,6 +1389,8 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "ghghanacard": ID_SUBTYPE_NATIONAL_ID,
     "kenationalid": ID_SUBTYPE_NATIONAL_ID,
     "kemaishanamba": ID_SUBTYPE_NATIONAL_ID,
+    "gstin": ID_SUBTYPE_NATIONAL_ID,
+    "gstnumber": ID_SUBTYPE_NATIONAL_ID,
     "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
     "tz": ID_SUBTYPE_NATIONAL_ID,
 }

@@ -97,6 +97,7 @@ from .clinical_ids import (
     GhanaKenyaIdProvider,
     HungarianTAJProvider,
     IndiaHealthIdProvider,
+    IndiaSurrogateProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
@@ -122,10 +123,12 @@ from .clinical_ids import (
     validate_abdm_registry_id,
     validate_abha_address,
     validate_abha_number,
+    validate_abha,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
     validate_canadian_sin,
+    validate_gstin,
     validate_npi,
     validate_ontario_health_card,
     validate_pan,
@@ -395,7 +398,6 @@ def _register_builtin_specs() -> None:
     for id_type, validate, faker_method in (
         ("abha_number", validate_abha_number, "abha_number"),
         ("abha_address", validate_abha_address, "abha_address"),
-        ("pan", validate_pan, "pan"),
         ("abdm_hpr_id", validate_abdm_registry_id, "abdm_hpr_id"),
         ("abdm_hfr_id", validate_abdm_registry_id, "abdm_hfr_id"),
     ):
@@ -406,13 +408,6 @@ def _register_builtin_specs() -> None:
             faker_method=faker_method,
             faker_provider=ABDMProvider,
         )
-    _register_aliases(
-        ("zh", "zh_CN", "cn"),
-        id_type="resident_id",
-        validate=validate_chinese_resident_id,
-        faker_method="chinese_resident_id",
-        faker_provider=ChineseResidentIdProvider,
-    )
     _register_aliases(
         ("in", "hi", "te", "en_IN", "hi_IN"),
         id_type="upi_id",
@@ -426,6 +421,44 @@ def _register_builtin_specs() -> None:
         validate=validate_indian_ration_card,
         faker_method="indian_ration_card",
         faker_provider=IndiaHealthIdProvider,
+    )
+    india_aliases = (
+        "in",
+        "india",
+        "en",
+        "hi",
+        "te",
+        "en_IN",
+        "hi_IN",
+        "te_IN",
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="pan",
+        validate=validate_pan,
+        faker_method="pan",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="gstin",
+        validate=validate_gstin,
+        faker_method="gstin",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="abha",
+        validate=validate_abha,
+        faker_method="abha",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        ("zh", "zh_CN", "cn"),
+        id_type="resident_id",
+        validate=validate_chinese_resident_id,
+        faker_method="chinese_resident_id",
+        faker_provider=ChineseResidentIdProvider,
     )
     _register_aliases(
         ("id", "id_ID"),
