@@ -102,6 +102,36 @@ def test_report_per_label_agreement():
     # PERSON is agreed by both; DATE/LOCATION are the disagreement.
     assert report.per_label["PERSON"] == pytest.approx(1.0)
     assert report.per_label["DATE"] < 1.0
+    assert list(report.per_label) == sorted(report.per_label)
+
+
+def test_report_span_f1_handles_overlap_missing_spans_and_label_disagreement():
+    exact = inter_annotator_agreement([[(0, 5, "PERSON")], [(0, 5, "PERSON")]])
+    shifted = inter_annotator_agreement([[(0, 5, "PERSON")], [(1, 6, "PERSON")]])
+    missing = inter_annotator_agreement(
+        [[(0, 5, "PERSON"), (10, 15, "DATE")], [(0, 5, "PERSON")]]
+    )
+    label_disagreement = inter_annotator_agreement(
+        [[(0, 5, "PERSON")], [(0, 5, "LOCATION")]]
+    )
+
+    assert exact.mean_span_f1 == pytest.approx(1.0)
+    assert shifted.mean_span_f1 == pytest.approx(1.0)
+    assert missing.mean_span_f1 == pytest.approx(2 / 3)
+    assert label_disagreement.mean_span_f1 == pytest.approx(0.0)
+
+
+def test_report_materializes_iterable_annotators_once():
+    annotators = [
+        (span for span in PERSON_A),
+        (span for span in PERSON_B),
+    ]
+
+    report = inter_annotator_agreement(annotators)
+
+    assert report.n_items == 2
+    assert report.cohen_kappa == pytest.approx(1 / 3, abs=1e-6)
+    assert report.mean_span_f1 == pytest.approx(0.5)
 
 
 def test_disagreements_carry_offsets_and_labels_not_text():
@@ -124,3 +154,11 @@ def test_per_relation_agreement():
 
     assert "drug_to_dose" in report.per_relation
     assert report.per_relation["drug_to_dose"] < 1.0
+
+
+def test_relations_require_one_mapping_per_annotator():
+    with pytest.raises(ValueError, match="one mapping per annotator"):
+        inter_annotator_agreement(
+            [PERSON_A, PERSON_A],
+            relations=[{"drug_to_dose": [(0, 5, "confirmed")]}],
+        )
