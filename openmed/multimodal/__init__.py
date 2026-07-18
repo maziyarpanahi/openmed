@@ -36,6 +36,14 @@ from .chatlog_jsonl import (
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
 )
+from .chw_forms import (
+    ACTION_GENERALIZE_GEO,
+    ChwFieldDecision,
+    RedactedChwForm,
+    classify_chw_field,
+    parse_xform_path,
+    redact_chw_form,
+)
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
     DicomHeaderAction,
@@ -142,6 +150,12 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "ACTION_GENERALIZE_GEO",
+    "ChwFieldDecision",
+    "RedactedChwForm",
+    "classify_chw_field",
+    "parse_xform_path",
+    "redact_chw_form",
     "redact_contacts_calendar",
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
