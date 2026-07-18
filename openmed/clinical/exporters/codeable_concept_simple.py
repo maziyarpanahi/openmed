@@ -31,6 +31,7 @@ __all__ = ["system_uri", "coding", "codeable_concept"]
 _SYSTEM_URI: dict[str, str] = {
     "rxnorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
     "icd-10-cm": "http://hl7.org/fhir/sid/icd-10-cm",
+    "icd-11-mms": "http://id.who.int/icd/release/11/mms",
     "loinc": "http://loinc.org",
     "snomed": "http://snomed.info/sct",
     "hpo": "http://human-phenotype-ontology.org",
@@ -45,6 +46,7 @@ _DEFAULT_SYSTEM_PRIORITY: tuple[str, ...] = (
     "http://loinc.org",
     "http://www.nlm.nih.gov/research/umls/rxnorm",
     "http://hl7.org/fhir/sid/icd-10-cm",
+    "http://id.who.int/icd/release/11/mms",
     "http://human-phenotype-ontology.org",
     "https://www.nlm.nih.gov/mesh",
 )
@@ -60,9 +62,9 @@ def system_uri(vocabulary_id: str) -> str:
 
     Args:
         vocabulary_id: A short vocabulary id such as ``"rxnorm"``,
-            ``"loinc"``, ``"snomed"``, ``"icd-10-cm"``, ``"hpo"``, or
-            ``"mesh"``; **or** an already-canonical system URI such as
-            ``"http://loinc.org"``.
+            ``"loinc"``, ``"snomed"``, ``"icd-10-cm"``, ``"icd-11-mms"``,
+            ``"hpo"``, or ``"mesh"``; **or** an already-canonical system URI
+            such as ``"http://loinc.org"``.
 
     Returns:
         The canonical HL7 system URI string.

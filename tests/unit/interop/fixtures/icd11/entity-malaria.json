@@ -1,0 +1,19 @@
+{
+  "@id": "http://id.who.int/icd/release/11/2026-01/mms/2002",
+  "child": [],
+  "classKind": "category",
+  "code": "TEST-1F40",
+  "inclusion": [
+    {
+      "deprecated": false,
+      "label": {
+        "@language": "en",
+        "@value": "malaria infection"
+      }
+    }
+  ],
+  "title": {
+    "@language": "en",
+    "@value": "Malaria"
+  }
+}

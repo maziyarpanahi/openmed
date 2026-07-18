@@ -1,0 +1,12 @@
+{
+  "destinationEntities": [
+    {
+      "chapter": "05",
+      "id": "http://id.who.int/icd/release/11/2026-01/mms/2001",
+      "theCode": "TEST-5A11",
+      "title": "Type 2 diabetes mellitus"
+    }
+  ],
+  "error": false,
+  "resultChopped": false
+}

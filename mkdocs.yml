@@ -70,6 +70,7 @@ nav:
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md

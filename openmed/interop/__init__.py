@@ -35,6 +35,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "icd11_api": AdapterSpec(
+        name="icd11_api",
+        module="openmed.interop.icd11_api",
+        extra="",
+        description="Offline ICD-11 MMS snapshot grounding and builder",
+    ),
     "duckdb": AdapterSpec(
         name="duckdb",
         module="openmed.interop.duckdb_udf",
