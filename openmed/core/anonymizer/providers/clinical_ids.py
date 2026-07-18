@@ -112,6 +112,118 @@ def validate_phone_us(phone_text: str) -> bool:
     return True
 
 
+def _matches_mobile_prefix(number: str, prefix: str) -> bool:
+    if len(number) < len(prefix):
+        return False
+    return all(
+        expected == "x" or expected == actual
+        for actual, expected in zip(number, prefix)
+    )
+
+
+def _match_african_mobile_phone(phone_text: str) -> tuple[int, int] | None:
+    """Return preserved digit count and total digit count for a known plan."""
+
+    if not isinstance(phone_text, str):
+        return None
+    stripped = phone_text.strip()
+    if not stripped or re.fullmatch(r"[+0-9\s.-]+", stripped) is None:
+        return None
+
+    from openmed.core.pii_i18n import AFRICAN_MOBILE_PLANS
+
+    digits = _digits_only(stripped)
+    candidates: list[tuple[int, int]] = []
+    for plan in AFRICAN_MOBILE_PLANS.values():
+        if stripped.startswith("+"):
+            international_prefix = plan.country_code
+            if not digits.startswith(international_prefix):
+                continue
+            nsn = digits[len(international_prefix) :]
+            rendering_prefix_length = len(international_prefix)
+        elif stripped.startswith("00"):
+            international_prefix = f"00{plan.country_code}"
+            if not digits.startswith(international_prefix):
+                continue
+            nsn = digits[len(international_prefix) :]
+            rendering_prefix_length = len(international_prefix)
+        elif stripped.startswith("0") and not stripped.startswith("00"):
+            nsn = digits[1:]
+            rendering_prefix_length = 1
+        else:
+            continue
+
+        if len(nsn) != plan.nsn_length:
+            continue
+        for prefix in plan.mobile_prefixes:
+            if _matches_mobile_prefix(nsn, prefix):
+                candidates.append(
+                    (
+                        rendering_prefix_length + len(prefix),
+                        len(digits),
+                    )
+                )
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate[0])
+
+
+def _different_phone_digit(original: str, *, rng: random.Random) -> str:
+    candidate = rng.randint(0, 8)
+    if candidate >= int(original):
+        candidate += 1
+    return str(candidate)
+
+
+def generate_african_phone(
+    original: str,
+    *,
+    rng: random.Random | None = None,
+) -> str | None:
+    """Generate a prefix-preserving surrogate for a registered African mobile.
+
+    Country/trunk digits, the matched operator-prefix class, separators, and
+    total length stay unchanged. Every subscriber digit is replaced, so a
+    successful surrogate can never equal its input.
+
+    Args:
+        original: Candidate E.164, ``00``-international, or national number.
+        rng: Optional seeded random source for deterministic generation.
+
+    Returns:
+        A non-identical surrogate, or ``None`` when no registered plan matches.
+    """
+
+    match = _match_african_mobile_phone(original)
+    if match is None:
+        return None
+    preserved_digits, _total_digits = match
+    source = rng or random.Random()
+
+    digit_index = 0
+    surrogate: list[str] = []
+    for char in original:
+        if not char.isdigit():
+            surrogate.append(char)
+            continue
+        if digit_index < preserved_digits:
+            surrogate.append(char)
+        else:
+            surrogate.append(_different_phone_digit(char, rng=source))
+        digit_index += 1
+    return "".join(surrogate)
+
+
+class AfricanPhoneProvider(BaseProvider):
+    """Faker provider for operator-prefix-preserving African mobile phones."""
+
+    def african_phone(self, original: str) -> str | None:
+        """Return a deterministic surrogate for a registered mobile number."""
+
+        return generate_african_phone(original, rng=self.generator.random)
+
+
 def validate_luhn(number_text: str) -> bool:
     """Validate a numeric identifier with the Luhn checksum."""
     digits = _digits_only(number_text)
@@ -3154,10 +3266,10 @@ def register_extra_clinical_provider(provider: type[BaseProvider]) -> None:
 
 def register_clinical_providers(faker) -> None:
     """Add every built-in and caller-registered provider to ``faker``."""
-    from .registry_ids import national_id_faker_provider_classes
+    from .registry_ids import clinical_faker_provider_classes
 
     providers = (
-        *national_id_faker_provider_classes(),
+        *clinical_faker_provider_classes(),
         MedicalRecordNumberProvider,
         FinancialIdentifierProvider,
         MrzProvider,
@@ -3174,6 +3286,7 @@ def register_clinical_providers(faker) -> None:
 __all__ = [
     "ABDMProvider",
     "AadhaarProvider",
+    "AfricanPhoneProvider",
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
@@ -3217,6 +3330,7 @@ __all__ = [
     "generate_australian_medicare",
     "generate_australian_tfn",
     "generate_aadhaar",
+    "generate_african_phone",
     "generate_bc_phn",
     "generate_bic",
     "generate_bulgarian_egn",

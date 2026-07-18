@@ -18,6 +18,7 @@ from openmed.core.anonymizer.providers import (
     generate_hungarian_taj,
 )
 from openmed.core.anonymizer.providers.clinical_ids import (
+    generate_african_phone,
     generate_bulgarian_egn,
     generate_egyptian_national_id,
     generate_estonian_isikukood,
@@ -36,6 +37,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     AADHAAR_PII_PATTERNS,
+    AFRICAN_MOBILE_PII_PATTERNS,
+    AFRICAN_MOBILE_PLANS,
     DEFAULT_PII_MODELS,
     INDIA_HEALTH_ID_PII_PATTERNS,
     INDIC_NER_LANGUAGES,
@@ -49,6 +52,8 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
+    AfricanMobilePlan,
+    build_african_mobile_pattern,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
     validate_bic,
@@ -5548,6 +5553,193 @@ class TestSouthAfricanIdentifiers:
                     source_digits[index : index + 6] not in replacement_digits
                     for index in range(len(source_digits) - 5)
                 )
+
+
+class TestAfricanMobilePlans:
+    """Data-driven African phone detection and anonymization regressions."""
+
+    VALID_NUMBERS = {
+        "EG": ("+20 10 1234 5678", "0020 11 2468 1357", "012 8765 4321"),
+        "GH": ("+233 24 123 4567", "00233 50 246 8135", "055 765 4321"),
+        "ET": ("+251 91 234 5678", "00251 72 246 8135", "092 876 5432"),
+        "TZ": ("+255 71 234 5678", "00255 68 246 8135", "065 876 5432"),
+        "UG": ("+256 772 123 456", "00256 782 246 813", "0752 876 543"),
+        "RW": ("+250 78 123 4567", "00250 79 246 8135", "073 876 5432"),
+    }
+
+    INVALID_PREFIX_NUMBERS = {
+        "EG": "+20 13 1234 5678",
+        "GH": "+233 30 123 4567",
+        "ET": "+251 11 234 5678",
+        "TZ": "+255 22 234 5678",
+        "UG": "+256 200 123 456",
+        "RW": "+250 25 123 4567",
+    }
+
+    @staticmethod
+    def _fullmatch(country: str, value: str) -> bool:
+        pattern = AFRICAN_MOBILE_PII_PATTERNS[country]
+        return re.fullmatch(pattern.pattern, value, pattern.flags) is not None
+
+    def test_plan_table_encodes_all_six_country_contracts(self):
+        assert set(AFRICAN_MOBILE_PLANS) == {"EG", "GH", "ET", "TZ", "UG", "RW"}
+        assert AFRICAN_MOBILE_PLANS["EG"].mobile_prefixes == (
+            "10",
+            "11",
+            "12",
+            "15",
+        )
+        assert AFRICAN_MOBILE_PLANS["UG"].mobile_prefixes == ("7xx",)
+        assert AFRICAN_MOBILE_PLANS["RW"].mobile_prefixes == (
+            "72",
+            "73",
+            "78",
+            "79",
+        )
+
+    @pytest.mark.parametrize("country", VALID_NUMBERS)
+    def test_all_three_renderings_are_detected(self, country):
+        for value in self.VALID_NUMBERS[country]:
+            assert self._fullmatch(country, value), value
+
+    @pytest.mark.parametrize("country", VALID_NUMBERS)
+    def test_invalid_prefixes_and_lengths_are_rejected(self, country):
+        valid = self.VALID_NUMBERS[country][0]
+        compact = valid.replace(" ", "")
+
+        assert not self._fullmatch(country, self.INVALID_PREFIX_NUMBERS[country])
+        assert not self._fullmatch(country, compact[:-1])
+        assert not self._fullmatch(country, compact + "0")
+
+    def test_builder_compiles_a_dummy_plan_without_code_changes(self):
+        dummy = AfricanMobilePlan(
+            country_code="999",
+            nsn_length=6,
+            mobile_prefixes=("4x",),
+            locale_aliases=("zz",),
+        )
+        pattern = build_african_mobile_pattern(dummy)
+
+        for value in ("+999 42 3456", "00999-47-6543", "049 8765"):
+            assert re.fullmatch(pattern, value), value
+        assert re.fullmatch(pattern, "+999 32 3456") is None
+        assert re.fullmatch(pattern, "+999 42 345") is None
+
+    def test_plan_entries_populate_every_locale_alias(self):
+        for country, plan in AFRICAN_MOBILE_PLANS.items():
+            expected = AFRICAN_MOBILE_PII_PATTERNS[country]
+            for alias in plan.locale_aliases:
+                assert expected in LOCALE_PII_PATTERNS[alias]
+
+        for lang in ("am", "sw", "rw"):
+            patterns = get_patterns_for_language(lang)
+            assert any(
+                pattern in patterns for pattern in AFRICAN_MOBILE_PII_PATTERNS.values()
+            )
+
+    def test_other_african_national_id_fixture_values_are_not_phones(self):
+        national_ids = {
+            "29801011234567",  # Egypt national ID golden fixture
+            "19850712123456789012",  # Tanzania NIDA fixture
+            "CF123456789ABC",  # Uganda NIN fixture
+            "1198571234567890",  # Rwanda national ID fixture
+            "234123412346",  # Ethiopia Fayda fixture
+        }
+        phone_patterns = tuple(AFRICAN_MOBILE_PII_PATTERNS.values())
+
+        for identifier in national_ids:
+            assert not any(
+                re.search(pattern.pattern, identifier, pattern.flags)
+                for pattern in phone_patterns
+            ), identifier
+
+    def test_fixture_has_every_country_rendering_and_exact_spans(self):
+        fixture_path = Path("tests/fixtures/pii/africa_phones_synthetic.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert {row["country"] for row in rows} == set(AFRICAN_MOBILE_PLANS)
+        assert all(row["synthetic"] is True for row in rows)
+        for row in rows:
+            assert "Appointment reminder" in row["text"]
+            assert "Billing contact" in row["text"]
+            assert len(row["phones"]) == 3
+            assert any(phone.startswith("+") for phone in row["phones"])
+            assert any(phone.startswith("00") for phone in row["phones"])
+            assert any(
+                phone.startswith("0") and not phone.startswith("00")
+                for phone in row["phones"]
+            )
+            for phone in row["phones"]:
+                assert phone in row["text"]
+                assert self._fullmatch(row["country"], phone)
+
+    def test_fixture_round_trip_has_zero_phone_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("tests/fixtures/pii/africa_phones_synthetic.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row["locale"],
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=858,
+                locale=row["locale"],
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["phones"])
+            assert all(phone not in result.deidentified_text for phone in row["phones"])
+
+    @pytest.mark.parametrize(
+        ("original", "preserved_prefix"),
+        [
+            ("+251 91 234 5678", "+251 91"),
+            ("00233 24 123 4567", "00233 24"),
+            ("0752 876 543", "0752"),
+        ],
+    )
+    def test_generator_preserves_operator_prefix_and_changes_input(
+        self,
+        original,
+        preserved_prefix,
+    ):
+        surrogate = generate_african_phone(original, rng=random.Random(858))
+
+        assert surrogate is not None
+        assert surrogate.startswith(preserved_prefix)
+        assert surrogate != original
 
 
 if __name__ == "__main__":

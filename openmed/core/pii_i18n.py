@@ -2943,6 +2943,155 @@ def generate_mrz_td1(rng=None) -> str:
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
 
+@dataclass(frozen=True)
+class AfricanMobilePlan:
+    """Declarative national mobile-number plan.
+
+    ``x`` characters in ``mobile_prefixes`` represent operator-prefix digits
+    that must be present and are preserved when a surrogate is generated.
+
+    Attributes:
+        country_code: ITU-T E.164 country calling code without ``+``.
+        nsn_length: Exact national significant number length, excluding the
+            national trunk prefix.
+        mobile_prefixes: Allowed mobile prefixes, using ``x`` for any digit.
+        locale_aliases: Normalized language or locale keys that activate the
+            plan's detector.
+    """
+
+    country_code: str
+    nsn_length: int
+    mobile_prefixes: tuple[str, ...]
+    locale_aliases: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.country_code.isdigit() or self.country_code.startswith("0"):
+            raise ValueError("country_code must contain digits and cannot start with 0")
+        if self.nsn_length <= 0:
+            raise ValueError("nsn_length must be positive")
+        if not self.mobile_prefixes:
+            raise ValueError("mobile_prefixes must not be empty")
+        for prefix in self.mobile_prefixes:
+            if not prefix or re.fullmatch(r"[0-9x]+", prefix) is None:
+                raise ValueError("mobile prefixes must contain only digits or 'x'")
+            if prefix.startswith("0") or len(prefix) >= self.nsn_length:
+                raise ValueError(
+                    "mobile prefixes cannot start with 0 or fill the entire NSN"
+                )
+        if not self.locale_aliases:
+            raise ValueError("locale_aliases must not be empty")
+
+
+AFRICAN_MOBILE_PLANS: Dict[str, AfricanMobilePlan] = {
+    "EG": AfricanMobilePlan(
+        country_code="20",
+        nsn_length=10,
+        mobile_prefixes=("10", "11", "12", "15"),
+        locale_aliases=("ar_eg",),
+    ),
+    "GH": AfricanMobilePlan(
+        country_code="233",
+        nsn_length=9,
+        mobile_prefixes=("2x", "5x"),
+        locale_aliases=("en_gh",),
+    ),
+    "ET": AfricanMobilePlan(
+        country_code="251",
+        nsn_length=9,
+        mobile_prefixes=("7x", "9x"),
+        locale_aliases=("am", "am_et", "en_et"),
+    ),
+    "TZ": AfricanMobilePlan(
+        country_code="255",
+        nsn_length=9,
+        mobile_prefixes=("6x", "7x"),
+        locale_aliases=("sw", "sw_tz", "en_tz"),
+    ),
+    "UG": AfricanMobilePlan(
+        country_code="256",
+        nsn_length=9,
+        mobile_prefixes=("7xx",),
+        locale_aliases=("en_ug",),
+    ),
+    "RW": AfricanMobilePlan(
+        country_code="250",
+        nsn_length=9,
+        mobile_prefixes=("72", "73", "78", "79"),
+        locale_aliases=("rw", "rw_rw", "en_rw"),
+    ),
+}
+
+
+_AFRICAN_PHONE_SEPARATOR = r"[\s.-]?"
+
+
+def _african_mobile_prefix_expression(prefix: str) -> str:
+    digits = [r"[0-9]" if char == "x" else re.escape(char) for char in prefix]
+    return _AFRICAN_PHONE_SEPARATOR.join(digits)
+
+
+def build_african_mobile_pattern(plan: AfricanMobilePlan) -> str:
+    """Build one strict E.164, ``00``, and national mobile regex.
+
+    The generated expression accepts optional spaces, dots, or hyphens while
+    enforcing the plan's exact NSN length and mobile-prefix classes.
+
+    Args:
+        plan: Declarative mobile plan to compile.
+
+    Returns:
+        A regular-expression string for all three supported renderings.
+    """
+
+    nsn_alternatives: list[str] = []
+    for prefix in plan.mobile_prefixes:
+        subscriber_length = plan.nsn_length - len(prefix)
+        prefix_expression = _african_mobile_prefix_expression(prefix)
+        subscriber_expression = (
+            rf"(?:{_AFRICAN_PHONE_SEPARATOR}[0-9]){{{subscriber_length}}}"
+        )
+        nsn_alternatives.append(prefix_expression + subscriber_expression)
+
+    nsn_expression = "(?:" + "|".join(nsn_alternatives) + ")"
+    international_prefix = (
+        rf"(?:\+|00){_AFRICAN_PHONE_SEPARATOR}"
+        rf"{re.escape(plan.country_code)}{_AFRICAN_PHONE_SEPARATOR}"
+    )
+    national_prefix = rf"0{_AFRICAN_PHONE_SEPARATOR}"
+    return (
+        rf"(?<![A-Za-z0-9])(?:{international_prefix}|{national_prefix})"
+        rf"{nsn_expression}(?![A-Za-z0-9])"
+    )
+
+
+def _build_african_mobile_pii_pattern(plan: AfricanMobilePlan) -> PIIPattern:
+    return PIIPattern(
+        build_african_mobile_pattern(plan),
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=[
+            "phone",
+            "mobile",
+            "telephone",
+            "contact",
+            "call",
+            "appointment",
+            "billing",
+            "mobile money",
+            "wallet",
+            "هاتف",
+            "جوال",
+            "اتصال",
+        ],
+        context_boost=0.3,
+    )
+
+
+AFRICAN_MOBILE_PII_PATTERNS: Dict[str, PIIPattern] = {
+    country: _build_african_mobile_pii_pattern(plan)
+    for country, plan in AFRICAN_MOBILE_PLANS.items()
+}
 INDIA_HEALTH_ID_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<!\d)(?:\d{14}|\d{2}(?:[ -]\d{4}){3}|\d{4}(?:[ -]\d{4}){2}[ -]\d{2})(?!\d)",
@@ -4540,11 +4689,12 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.25,
         flags=re.IGNORECASE,
     ),
+    AFRICAN_MOBILE_PII_PATTERNS["EG"],
     PIIPattern(
-        # Require either an international prefix (+CC) or a leading 0 so the
-        # pattern doesn't fire on every 5–13-digit number string (e.g. the
-        # 14-digit national-ID format in the same clinical note).
-        r"(?<!\w)(?:\+(?:20|966|971|962|961|212|216|213|964|965|974|968|973)[\s.-]?|0)\d{1,3}(?:[\s.-]?\d{2,4}){2,3}\b",
+        # Other Arabic-region international numbers retain the existing broad
+        # coverage. Egypt uses the stricter table-driven mobile plan above so
+        # landlines and national-ID digit runs cannot enter the phone path.
+        r"(?<!\w)\+(?:966|971|962|961|212|216|213|964|965|974|968|973)[\s.-]?\d{1,3}(?:[\s.-]?\d{2,4}){2,3}\b",
         "phone_number",
         priority=8,
         base_score=0.45,
@@ -7276,6 +7426,13 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
 }
 
+for _country, _plan in AFRICAN_MOBILE_PLANS.items():
+    _phone_pattern = AFRICAN_MOBILE_PII_PATTERNS[_country]
+    for _alias in _plan.locale_aliases:
+        _existing_patterns = LOCALE_PII_PATTERNS.get(_alias, [])
+        if _phone_pattern not in _existing_patterns:
+            LOCALE_PII_PATTERNS[_alias] = [*_existing_patterns, _phone_pattern]
+
 
 # ---------------------------------------------------------------------------
 # Language-specific fake data
@@ -8147,13 +8304,9 @@ def _normalize_pattern_locale(locale: str) -> str:
 
 
 def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
-    keys: list[str] = []
+    keys: list[str] = [_normalize_pattern_locale(lang)]
     if locale:
-        keys.append(_normalize_pattern_locale(locale))
-    elif "_" in lang or "-" in lang:
-        keys.append(_normalize_pattern_locale(lang))
-    else:
-        keys.append(_normalize_pattern_locale(lang))
+        keys.insert(0, _normalize_pattern_locale(locale))
 
     deduped: list[str] = []
     seen: set[str] = set()
@@ -8187,8 +8340,12 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     Raises:
         ValueError: If the language is not supported
     """
+    locale_overlay_languages = {key.split("_", 1)[0] for key in LOCALE_PII_PATTERNS}
     supported_pattern_languages = (
-        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | locale_overlay_languages
     )
     base_lang = _normalize_pattern_language(lang)
     if base_lang not in supported_pattern_languages:
