@@ -39,6 +39,11 @@ uv pip install ".[hf,gliner]"      # add GLiNER + transformers
 uv pip install ".[dev]"            # pytest + coverage + linting
 ```
 
+Installing behind an institutional proxy or package mirror, or preparing for
+a metered/offline deployment? Follow the
+[low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md)
+to configure pip, `HF_ENDPOINT`, the shared model cache, and diagnostics.
+
 For scanned images and document OCR, install the multimodal extra plus the
 system Tesseract binary:
 
@@ -158,4 +163,5 @@ ner = loader.create_pipeline("disease_detection_superclinical")
 entities = ner("Hydroxyurea dose reduced after platelet drop.")
 ```
 
-Continue to the **Configuration** section for the full YAML/ENV schema, PHI-aware validation helpers, and logging setup.
+Continue to the **Configuration** section for the full YAML/ENV schema,
+PHI-aware validation helpers, and logging setup.

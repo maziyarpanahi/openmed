@@ -26,6 +26,11 @@ def test_required_checks_present():
     assert "openmed_version" in names
     assert "low_resource_memory" in names
     assert "hf_token" in names
+    assert "hf_endpoint" in names
+    assert "hf_cache" in names
+    assert "http_proxy" in names
+    assert "https_proxy" in names
+    assert "no_proxy" in names
     assert "openmed_offline" in names
     assert "manifest_exists" in names
     assert "manifest_rows" in names
@@ -59,6 +64,64 @@ def test_hf_token_absence_reports_boolean(monkeypatch):
 
     assert token_check["status"] == "WARN"
     assert token_check["present"] is False
+
+
+def test_network_environment_is_reported_without_proxy_credentials(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("HF_ENDPOINT", "https://mirror.example.org")
+    monkeypatch.setenv(
+        "HTTP_PROXY",
+        "http://network-user:SUPER_SECRET_PROXY_PASSWORD@proxy.example.org:8080",
+    )
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.org:8443")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1,.example.org")
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf-home"))
+    monkeypatch.delenv("HF_HUB_CACHE", raising=False)
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    results = run_diagnostics()
+    checks = {item["name"]: item for item in results}
+
+    assert checks["hf_endpoint"]["details"] == "https://mirror.example.org"
+    assert checks["hf_endpoint"]["source"] == "HF_ENDPOINT"
+    assert checks["http_proxy"]["details"] == ("http://***:***@proxy.example.org:8080")
+    assert checks["http_proxy"]["source"] == "HTTP_PROXY"
+    assert checks["https_proxy"]["present"] is True
+    assert checks["no_proxy"]["details"] == "localhost,127.0.0.1,.example.org"
+    assert checks["hf_cache"]["details"] == str(tmp_path / "hf-home" / "hub")
+    assert checks["hf_cache"]["source"] == "HF_HOME"
+    assert checks["openmed_offline"]["enabled"] is True
+    assert "SUPER_SECRET_PROXY_PASSWORD" not in str(results)
+
+
+def test_network_environment_reports_defaults(monkeypatch):
+    for name in (
+        "HF_ENDPOINT",
+        "HF_HOME",
+        "HF_HUB_CACHE",
+        "XDG_CACHE_HOME",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+        "OPENMED_OFFLINE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    results = run_diagnostics()
+    checks = {item["name"]: item for item in results}
+
+    assert checks["hf_endpoint"]["details"] == doctor_module.DEFAULT_HF_ENDPOINT
+    assert checks["hf_endpoint"]["source"] == "default"
+    assert checks["http_proxy"]["details"] == "not set"
+    assert checks["http_proxy"]["present"] is False
+    assert checks["hf_cache"]["details"] == str(
+        doctor_module.Path.home() / ".cache" / "huggingface" / "hub"
+    )
+    assert checks["openmed_offline"]["enabled"] is False
 
 
 def test_unsupported_python_version_fails(monkeypatch):
@@ -184,6 +247,25 @@ def test_doctor_returns_zero_when_no_fail():
     exit_code = _handle_doctor(args)
 
     assert exit_code == 0
+
+
+def test_doctor_text_output_includes_network_environment(monkeypatch, capsys):
+    monkeypatch.setenv("HF_ENDPOINT", "https://mirror.example.org")
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.example.org:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.org:8443")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    exit_code = _handle_doctor(argparse.Namespace(json=False))
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "PASS hf_endpoint: https://mirror.example.org" in captured.out
+    assert "PASS http_proxy: http://proxy.example.org:8080" in captured.out
+    assert "PASS https_proxy: http://proxy.example.org:8443" in captured.out
+    assert "PASS no_proxy: localhost,127.0.0.1" in captured.out
+    assert "PASS hf_cache:" in captured.out
+    assert "PASS openmed_offline: enabled (OPENMED_OFFLINE=1)" in captured.out
 
 
 def test_fail_returns_nonzero(monkeypatch):

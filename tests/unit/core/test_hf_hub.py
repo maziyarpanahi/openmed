@@ -7,9 +7,17 @@ runs here, so the suite stays offline-friendly (see ``AGENTS.md``).
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import re
+import shutil
 import socket
+import subprocess
 import sys
+import textwrap
+import threading
 import types
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, List
 
@@ -35,6 +43,11 @@ from openmed.core.offline import (
 # A stable legacy registry alias -> Hub repo id pair.
 _ALIAS = "disease_detection_superclinical"
 _REPO_ID = "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M"
+_MIRROR_REPO_ID = "mirror-org/mirror-fixture"
+_MIRROR_COMMIT = "0123456789abcdef0123456789abcdef01234567"
+_MIRROR_FILENAME = "config.json"
+_MIRROR_CONTENT = b'{"downloaded_from": "local-mirror"}\n'
+_LOW_BANDWIDTH_DOC = Path(__file__).parents[3] / "docs" / "low-bandwidth-install.md"
 
 
 class _FakeRepo:
@@ -115,6 +128,74 @@ def _write_snapshot_file(root: Path, filename: str, content: bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return path
+
+
+def _make_mirror_handler(
+    requests: List[tuple[str, str]],
+) -> type[BaseHTTPRequestHandler]:
+    class MirrorHandler(BaseHTTPRequestHandler):
+        def _record_request(self) -> str:
+            path = self.path.partition("?")[0]
+            requests.append((self.command, path))
+            return path
+
+        def _send_bytes(
+            self,
+            payload: bytes,
+            *,
+            content_type: str,
+            include_hub_headers: bool = False,
+        ) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            if include_hub_headers:
+                self.send_header("ETag", '"mirror-config-etag"')
+                self.send_header("X-Repo-Commit", _MIRROR_COMMIT)
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(payload)
+
+        def do_HEAD(self) -> None:  # noqa: N802 - stdlib handler API
+            path = self._record_request()
+            if path == (
+                f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
+            ):
+                self._send_bytes(
+                    _MIRROR_CONTENT,
+                    content_type="application/json",
+                    include_hub_headers=True,
+                )
+                return
+            self.send_error(404)
+
+        def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+            path = self._record_request()
+            if path == f"/api/models/{_MIRROR_REPO_ID}/revision/main":
+                payload = json.dumps(
+                    {
+                        "id": _MIRROR_REPO_ID,
+                        "sha": _MIRROR_COMMIT,
+                        "siblings": [{"rfilename": _MIRROR_FILENAME}],
+                    }
+                ).encode("utf-8")
+                self._send_bytes(payload, content_type="application/json")
+                return
+            if path == (
+                f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
+            ):
+                self._send_bytes(
+                    _MIRROR_CONTENT,
+                    content_type="application/json",
+                    include_hub_headers=True,
+                )
+                return
+            self.send_error(404)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            return
+
+    return MirrorHandler
 
 
 # --- resolve_repo_id -------------------------------------------------------
@@ -262,6 +343,137 @@ def test_prefetch_model_preserves_single_allow_pattern(
     prefetch_model(_ALIAS, allow_patterns="*.safetensors")
 
     assert [call["filename"] for call in calls] == ["model.safetensors"]
+
+
+def test_prefetch_model_downloads_through_hf_endpoint_mirror(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("huggingface_hub")
+    requests: List[tuple[str, str]] = []
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _make_mirror_handler(requests))
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    endpoint = f"http://127.0.0.1:{server.server_address[1]}"
+    cache_dir = tmp_path / "mirror-cache"
+    env = os.environ.copy()
+    env.update(
+        {
+            "HF_ENDPOINT": endpoint,
+            "HF_HOME": str(tmp_path / "hf-home"),
+            "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+            "HF_HUB_DISABLE_XET": "1",
+            "NO_PROXY": "127.0.0.1,localhost",
+            "no_proxy": "127.0.0.1,localhost",
+        }
+    )
+    for name in (
+        "OPENMED_OFFLINE",
+        "HF_HUB_OFFLINE",
+        "TRANSFORMERS_OFFLINE",
+        "HF_DATASETS_OFFLINE",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        env.pop(name, None)
+
+    script = "\n".join(
+        [
+            "import json",
+            "import os",
+            "import socket",
+            "import sys",
+            "from pathlib import Path",
+            "from openmed import prefetch_model",
+            (
+                f"snapshot = Path(prefetch_model('{_MIRROR_REPO_ID}', "
+                "cache_dir=sys.argv[1]))"
+            ),
+            f"downloaded = snapshot / '{_MIRROR_FILENAME}'",
+            "os.environ['OPENMED_OFFLINE'] = '1'",
+            "def block_network(*args, **kwargs):",
+            "    raise AssertionError('post-prefetch command attempted network access')",
+            "socket.socket.connect = block_network",
+            "socket.socket.connect_ex = block_network",
+            "socket.create_connection = block_network",
+            (
+                f"cached = Path(prefetch_model('{_MIRROR_REPO_ID}', "
+                "cache_dir=sys.argv[1]))"
+            ),
+            "from openmed.core.doctor import run_diagnostics",
+            "checks = {item['name']: item for item in run_diagnostics()}",
+            (
+                "print(json.dumps({'path': str(snapshot), 'cached': str(cached), "
+                "'content': downloaded.read_text(), "
+                "'offline': checks['openmed_offline']['enabled']}))"
+            ),
+        ]
+    )
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script, str(cache_dir)],
+            check=True,
+            capture_output=True,
+            env=env,
+            text=True,
+            timeout=30,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=5)
+
+    payload = json.loads(completed.stdout)
+    assert json.loads(payload["content"]) == {"downloaded_from": "local-mirror"}
+    assert payload["cached"] == payload["path"]
+    assert payload["offline"] is True
+    assert ("GET", f"/api/models/{_MIRROR_REPO_ID}/revision/main") in requests
+    download_path = f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
+    assert ("HEAD", download_path) in requests
+    assert ("GET", download_path) in requests
+
+
+def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is not available on this platform")
+
+    markdown = _LOW_BANDWIDTH_DOC.read_text(encoding="utf-8")
+    blocks = re.findall(r"```bash\n(.*?)```", markdown, flags=re.DOTALL)
+
+    assert len(blocks) >= 8
+    for index, block in enumerate(blocks, start=1):
+        completed = subprocess.run(
+            [bash, "-n"],
+            capture_output=True,
+            input=textwrap.dedent(block),
+            text=True,
+        )
+        assert completed.returncode == 0, (
+            f"bash block {index} is not copy-paste valid:\n{completed.stderr}"
+        )
+
+
+def test_metered_checklist_uses_offline_safe_commands() -> None:
+    markdown = _LOW_BANDWIDTH_DOC.read_text(encoding="utf-8")
+    checklist = markdown.split("## Metered-connection checklist", 1)[1].split(
+        "## Diagnose the active environment", 1
+    )[0]
+    shell_commands = "\n".join(
+        textwrap.dedent(block)
+        for block in re.findall(r"```bash\n(.*?)```", checklist, flags=re.DOTALL)
+    )
+
+    assert "openmed models size disease_detection_tiny" in checklist
+    assert "--remote" not in shell_commands
+    assert "prefetch_model" in checklist
+    assert "openmed doctor" in checklist
+    assert "export OPENMED_OFFLINE=1" in checklist
 
 
 def test_prefetch_model_offline_passes_local_files_only_and_raises_when_uncached(
