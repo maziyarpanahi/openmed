@@ -36,6 +36,19 @@ def test_agreement_by_label():
     assert report.per_label["PERSON"] == 1.0
     # The medication/date/org labels are annotator disagreements.
     assert any(score < 1.0 for score in report.per_label.values())
+    assert list(report.per_label) == sorted(
+        report.per_label,
+        key=lambda label: (report.per_label[label], label),
+    )
+
+
+def test_agreement_by_relation_type():
+    report = _report()
+
+    # One annotator linked the medication/date pair and one omitted it.
+    assert report.relation_agreement["drug_to_date"] == 0.0
+    assert report.to_dict()["relation_agreement"] == {"drug_to_date": 0.0}
+    assert "Agreement by relation type" in report.to_markdown()
 
 
 def test_relation_type_breakdown_from_consensus():

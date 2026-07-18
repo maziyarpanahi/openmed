@@ -130,6 +130,7 @@ class GoldCorpusQualityReport:
     n_documents: int
     overall_agreement: float
     per_label: Mapping[str, float]
+    relation_agreement: Mapping[str, float]
     relation_types: Mapping[str, int]
     adjudication_coverage: float
     low_agreement_examples: tuple[Mapping[str, Any], ...]
@@ -139,6 +140,7 @@ class GoldCorpusQualityReport:
             "n_documents": self.n_documents,
             "overall_agreement": self.overall_agreement,
             "per_label": dict(self.per_label),
+            "relation_agreement": dict(self.relation_agreement),
             "relation_types": dict(self.relation_types),
             "adjudication_coverage": self.adjudication_coverage,
             "low_agreement_examples": [
@@ -168,6 +170,14 @@ class GoldCorpusQualityReport:
         ]
         for label, score in self.per_label.items():
             lines.append(f"| {label} | {score:.4f} |")
+        lines.extend(["", "## Agreement by relation type", ""])
+        if self.relation_agreement:
+            lines.append("| Relation type | Agreement |")
+            lines.append("| --- | --- |")
+            for relation_type, score in self.relation_agreement.items():
+                lines.append(f"| {relation_type} | {score:.4f} |")
+        else:
+            lines.append("_None._")
         lines.extend(["", "## Consensus relations by type", ""])
         if self.relation_types:
             lines.append("| Relation type | Count |")
@@ -188,6 +198,54 @@ class GoldCorpusQualityReport:
                 f"({resolved}, {example['hash']})"
             )
         return "\n".join(lines) + "\n"
+
+
+def _relation_key(relation: Any) -> tuple[Any, ...]:
+    return (
+        relation.head.start,
+        relation.head.end,
+        relation.head.label,
+        relation.tail.start,
+        relation.tail.end,
+        relation.tail.label,
+        relation.label,
+    )
+
+
+def _relation_agreement_by_type(
+    documents: Sequence["ConsensusDocument"],
+) -> dict[str, float]:
+    agreement_flags: dict[str, list[float]] = defaultdict(list)
+    for document in documents:
+        annotator_relations = list(document.annotator_relations.values())
+        relation_types = sorted(
+            {
+                relation.relation_type
+                for relations in annotator_relations
+                for relation in relations
+            }
+        )
+        for relation_type in relation_types:
+            relation_sets = [
+                {
+                    _relation_key(relation)
+                    for relation in relations
+                    if relation.relation_type == relation_type
+                }
+                for relations in annotator_relations
+            ]
+            relation_items = set().union(*relation_sets)
+            for item in relation_items:
+                presence = {item in relations for relations in relation_sets}
+                agreement_flags[relation_type].append(
+                    1.0 if len(presence) == 1 else 0.0
+                )
+
+    scores = {
+        relation_type: sum(flags) / len(flags)
+        for relation_type, flags in agreement_flags.items()
+    }
+    return dict(sorted(scores.items(), key=lambda item: (item[1], item[0])))
 
 
 def gold_corpus_quality_report(
@@ -253,16 +311,19 @@ def gold_corpus_quality_report(
             )
 
     overall = sum(kappas) / len(kappas) if kappas else 1.0
-    per_label = {
-        label: sum(scores) / len(scores)
-        for label, scores in sorted(label_scores.items())
+    label_averages = {
+        label: sum(scores) / len(scores) for label, scores in label_scores.items()
     }
+    per_label = dict(
+        sorted(label_averages.items(), key=lambda item: (item[1], item[0]))
+    )
     coverage = resolved_count / disagreement_count if disagreement_count else 1.0
 
     return GoldCorpusQualityReport(
         n_documents=len(documents),
         overall_agreement=overall,
         per_label=per_label,
+        relation_agreement=_relation_agreement_by_type(documents),
         relation_types=dict(sorted(relation_counts.items())),
         adjudication_coverage=coverage,
         low_agreement_examples=tuple(low_agreement),
