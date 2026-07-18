@@ -1079,6 +1079,84 @@ _CHINESE_RESIDENT_ID_WEIGHTS = (
     4,
     2,
 )
+
+
+def validate_tanzania_nida(text: str) -> bool:
+    """Validate a Tanzania NIDA number's offline-verifiable fields.
+
+    NIDA numbers contain 20 digits and begin with an eight-digit Gregorian
+    birth date. Both the compact form and the commonly printed
+    ``YYYYMMDD-XXXXX-XXXXX-XX`` form are accepted.
+
+    Args:
+        text: Candidate NIDA number.
+
+    Returns:
+        True when the candidate has a supported shape and plausible birth date.
+    """
+    if not isinstance(text, str):
+        return False
+    stripped = text.strip()
+    if re.fullmatch(r"\d{20}|\d{8}-\d{5}-\d{5}-\d{2}", stripped) is None:
+        return False
+
+    digits = stripped.replace("-", "")
+    try:
+        birth_date = date(
+            int(digits[0:4]),
+            int(digits[4:6]),
+            int(digits[6:8]),
+        )
+    except ValueError:
+        return False
+    return date(1900, 1, 1) <= birth_date <= date.today()
+
+
+def validate_uganda_nin(text: str) -> bool:
+    """Validate the stable structure of a Uganda NIRA NIN.
+
+    The 14-character identifier starts with a class character (``C``, ``P``,
+    or ``R``) followed by the encoded gender character (``M`` or ``F``).
+    Remaining characters are alphanumeric and have no public checksum.
+    """
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"[CPR][MF][A-Z0-9]{12}", text.strip().upper()) is not None
+
+
+def validate_rwanda_id(text: str) -> bool:
+    """Validate offline-verifiable fields in a Rwanda national ID.
+
+    Rwanda IDs contain 16 digits. OpenMed checks the embedded four-digit birth
+    year and the public gender digit (``7`` for female or ``8`` for male).
+    Registry-backed status and security-code verification is intentionally not
+    attempted offline.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"\d{16}", digits) is None:
+        return False
+
+    birth_year = int(digits[1:5])
+    return 1900 <= birth_year <= date.today().year and digits[5] in {"7", "8"}
+
+
+def validate_ethiopia_fayda(text: str) -> bool:
+    """Validate Ethiopia's 12-digit Fayda identification number (FAN).
+
+    Fayda follows the MOSIP UIN contract: the first digit cannot be ``0`` or
+    ``1`` and the final digit is a Verhoeff check digit. This is the same
+    offline checksum and leading-digit rule used by Aadhaar.
+    """
+    if not isinstance(text, str):
+        return False
+    stripped = text.strip()
+    if re.fullmatch(r"\d{12}", stripped) is None:
+        return False
+    return validate_aadhaar(stripped)
+
+
 _CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
 
 _PAKISTANI_CNIC_EASTERN_DIGITS = str.maketrans(
@@ -7042,8 +7120,84 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_TANZANIA_NIDA_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\d{20}|\d{8}-\d{5}-\d{5}-\d{2})(?![A-Za-z0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "nida",
+            "nida number",
+            "namba ya nida",
+            "namba ya utambulisho",
+            "national identification number",
+        ],
+        context_boost=0.6,
+        validator=validate_tanzania_nida,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_UGANDA_NIN_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<![A-Za-z0-9])[CPR][MF][A-Za-z0-9]{12}(?![A-Za-z0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "nin",
+            "nira",
+            "nira nin",
+            "national id number",
+            "national identification number",
+        ],
+        context_boost=0.6,
+        validator=validate_uganda_nin,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_RWANDA_ID_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<!\d)\d{16}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "indangamuntu",
+            "nimero y'indangamuntu",
+            "national id",
+            "national identification",
+        ],
+        context_boost=0.6,
+        validator=validate_rwanda_id,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_ETHIOPIA_FAYDA_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<!\d)\d{12}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.7,
+        context_words=[
+            "fayda",
+            "fan",
+            "fayda number",
+            "fayda identification number",
+            "national id",
+        ],
+        context_boost=0.25,
+        validator=validate_ethiopia_fayda,
+    ),
+]
+
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "af": _NGUNI_PII_PATTERNS,
+    "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,
     "yo": _NIGERIAN_PII_PATTERNS,
@@ -7057,7 +7211,6 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     # while get_patterns_for_language deduplicates the universal rule.
     "hi": [*_HINDI_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
     "te": [*_TELUGU_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
-    "am": _AMHARIC_PII_PATTERNS,
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
@@ -7075,7 +7228,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
-    "sw": _SWAHILI_AND_KENYA_PII_PATTERNS,
+    "rw": _RWANDA_ID_PII_PATTERNS,
+    "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
     "zu": _NGUNI_PII_PATTERNS,
     "xh": _NGUNI_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
@@ -7093,6 +7247,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "am": _ETHIOPIA_FAYDA_PII_PATTERNS,
     "zh_cn": _CHINESE_IDENTIFIER_PII_PATTERNS,
     "ar": _EGYPT_NATIONAL_ID_PII_PATTERNS + _MOROCCO_CIN_PII_PATTERNS,
     "ar_eg": _EGYPT_NATIONAL_ID_PII_PATTERNS,
@@ -7105,7 +7260,12 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "yo": _NIGERIAN_PII_PATTERNS,
     "en_gh": _GHANA_CARD_PII_PATTERNS,
     "en_ke": _KENYA_ID_PII_PATTERNS,
-    "sw": _SWAHILI_AND_KENYA_PII_PATTERNS,
+    "en_et": _ETHIOPIA_FAYDA_PII_PATTERNS,
+    "en_tz": _TANZANIA_NIDA_PII_PATTERNS,
+    "en_ug": _UGANDA_NIN_PII_PATTERNS,
+    "rw": _RWANDA_ID_PII_PATTERNS,
+    "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
+    "sw_tz": _TANZANIA_NIDA_PII_PATTERNS,
     "zu": _NGUNI_PII_PATTERNS,
     "xh": _NGUNI_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,

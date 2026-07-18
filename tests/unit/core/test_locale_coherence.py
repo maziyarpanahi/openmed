@@ -54,6 +54,7 @@ DOCUMENTED_APPROXIMATE = {
     "mr",
     "ms",
     "pa",
+    "rw",
     "sr",
     "te",
     "ur",

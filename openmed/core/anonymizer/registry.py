@@ -441,6 +441,7 @@ def _gen_age(faker, original, *, locale):
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
     "af_ZA": "south_african_id",
+    "am_ET": "ethiopia_fayda",
     "ar_EG": "egyptian_national_id",
     "ar_MA": "moroccan_cin",
     "en_ZA": "south_african_id",
@@ -466,6 +467,9 @@ _LOCALE_ID_METHODS = {
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "nino",
+    "en_ET": "ethiopia_fayda",
+    "en_TZ": "tanzania_nida",
+    "en_UG": "uganda_nin",
     "tr_TR": "ssn",
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
@@ -487,6 +491,8 @@ _LOCALE_ID_METHODS = {
     "et_EE": "isikukood",
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
+    "rw_RW": "rwanda_id",
+    "sw_TZ": "tanzania_nida",
     "ur_PK": "cnic",
 }
 
@@ -498,6 +504,8 @@ _INDIA_ID_METHODS = {
     "ABDM_HPR_ID": "abdm_hpr_id",
     "ABDM_HFR_ID": "abdm_hfr_id",
 }
+
+_FIELD_PRESERVING_ID_METHODS = frozenset({"rwanda_id", "tanzania_nida", "uganda_nin"})
 
 
 _MRZ_CHARSET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
@@ -604,11 +612,16 @@ def _gen_id_num(faker, original, *, locale):
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id
+    if locale == "sw":
+        from openmed.core.pii_i18n import validate_tanzania_nida
+
+        if validate_tanzania_nida(original):
+            return faker.tanzania_nida(original)
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
-        if method in {
+        if method in _FIELD_PRESERVING_ID_METHODS | {
             "egyptian_national_id",
             "moroccan_cin",
             "nigeria_nin",

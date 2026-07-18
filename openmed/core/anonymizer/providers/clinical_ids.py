@@ -27,6 +27,7 @@ deterministic:
   - Chinese Resident Identity Card (18 characters with MOD 11-2 checksum)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
+  - East African national IDs for Tanzania, Uganda, Rwanda, and Ethiopia
   - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
   - Danish CPR / personnummer with a decodable embedded birth date
@@ -2323,6 +2324,108 @@ class VietnameseIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# East African national IDs (Tanzania, Uganda, Rwanda, Ethiopia)
+# ---------------------------------------------------------------------------
+
+
+def generate_tanzania_nida(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Tanzania NIDA surrogate, preserving the birth decade."""
+    from openmed.core.pii_i18n import validate_tanzania_nida
+
+    source = rng or random.Random()
+    today = date.today()
+    if original is not None and validate_tanzania_nida(original):
+        original_year = int(re.sub(r"[^0-9]", "", original)[:4])
+        decade_start = (original_year // 10) * 10
+        first_date = date(decade_start, 1, 1)
+        last_date = min(date(decade_start + 9, 12, 31), today)
+    else:
+        first_date = date(1940, 1, 1)
+        last_date = today
+
+    birth_date = date.fromordinal(
+        source.randint(first_date.toordinal(), last_date.toordinal())
+    )
+    suffix = "".join(str(source.randint(0, 9)) for _ in range(12))
+    return f"{birth_date:%Y%m%d}{suffix}"
+
+
+def generate_uganda_nin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Uganda NIN surrogate, preserving class and gender."""
+    from openmed.core.pii_i18n import validate_uganda_nin
+
+    source = rng or random.Random()
+    if original is not None and validate_uganda_nin(original):
+        prefix = original.strip().upper()[:2]
+    else:
+        prefix = f"C{source.choice(('M', 'F'))}"
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    suffix = "".join(source.choice(alphabet) for _ in range(12))
+    return f"{prefix}{suffix}"
+
+
+def generate_rwanda_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Rwanda ID preserving status, birth decade, and gender."""
+    from openmed.core.pii_i18n import validate_rwanda_id
+
+    source = rng or random.Random()
+    current_year = date.today().year
+    if original is not None and validate_rwanda_id(original):
+        digits = original.strip()
+        status = digits[0]
+        gender = digits[5]
+        decade_start = (int(digits[1:5]) // 10) * 10
+        birth_year = source.randint(
+            decade_start,
+            min(decade_start + 9, current_year),
+        )
+    else:
+        status = str(source.randint(1, 9))
+        gender = source.choice(("7", "8"))
+        birth_year = source.randint(1940, current_year)
+
+    suffix = "".join(str(source.randint(0, 9)) for _ in range(10))
+    return f"{status}{birth_year:04d}{gender}{suffix}"
+
+
+def generate_ethiopia_fayda(*, rng: random.Random | None = None) -> str:
+    """Generate a 12-digit Fayda FAN with a valid Verhoeff checksum."""
+    source = rng or random.Random()
+    digits = [source.randint(2, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(10))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
+class EastAfricanIdProvider(BaseProvider):
+    """Generate structurally valid East African national-ID surrogates."""
+
+    def tanzania_nida(self, original: str | None = None) -> str:
+        return generate_tanzania_nida(original, rng=self.generator.random)
+
+    def uganda_nin(self, original: str | None = None) -> str:
+        return generate_uganda_nin(original, rng=self.generator.random)
+
+    def rwanda_id(self, original: str | None = None) -> str:
+        return generate_rwanda_id(original, rng=self.generator.random)
+
+    def ethiopia_fayda(self) -> str:
+        return generate_ethiopia_fayda(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Malaysian MyKad / NRIC (YYMMDD-PB-XXXX with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -3079,6 +3182,7 @@ __all__ = [
     "ChineseIdentifierProvider",
     "ChineseResidentIdProvider",
     "DanishCPRProvider",
+    "EastAfricanIdProvider",
     "EgyptMoroccoIdProvider",
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
@@ -3132,10 +3236,12 @@ __all__ = [
     "generate_indian_pin",
     "generate_pan",
     "generate_estonian_isikukood",
+    "generate_ethiopia_fayda",
     "generate_ghana_card_pin",
     "generate_hong_kong_macau_permit",
     "generate_iban",
     "generate_ontario_health_card",
+    "generate_rwanda_id",
     "generate_indonesian_nik",
     "generate_indian_ration_card",
     "generate_jmbg",
@@ -3164,6 +3270,8 @@ __all__ = [
     "generate_za_mobile_number",
     "generate_thai_national_id",
     "generate_taiwan_compatriot_permit",
+    "generate_tanzania_nida",
+    "generate_uganda_nin",
     "generate_upi_id",
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",

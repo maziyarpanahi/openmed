@@ -29,6 +29,7 @@ helpers in :mod:`format_preserve`; clinical-ID providers in
 from __future__ import annotations
 
 import hashlib
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Optional
@@ -153,6 +154,22 @@ class Anonymizer:
         digest = hashlib.blake2b(material, digest_size=8).digest()
         return int.from_bytes(digest, "big", signed=False)
 
+    @staticmethod
+    def _seed_value_for_identifier(
+        canonical_label: str,
+        original_value: str,
+        locale: str,
+    ) -> str:
+        """Canonicalize alternate renderings of the same Tanzania NIDA."""
+        if canonical_label != L.ID_NUM or locale not in {"en_TZ", "sw", "sw_TZ"}:
+            return original_value
+
+        from ..pii_i18n import validate_tanzania_nida
+
+        if validate_tanzania_nida(original_value):
+            return re.sub(r"[^0-9]", "", original_value)
+        return original_value
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -220,6 +237,11 @@ class Anonymizer:
             # Aadhaar stays checksum-valid even when an English/code-mixed
             # note routes through the generic en_US locale.
             effective_locale = "en_IN"
+        seed_value = self._seed_value_for_identifier(
+            canonical,
+            seed_value,
+            effective_locale,
+        )
         faker = self._get_faker(effective_locale)
         if self.config.consistent:
             faker.seed_instance(self._derive_seed(canonical, seed_value))
