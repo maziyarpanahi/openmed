@@ -1,0 +1,7 @@
+{
+  "@id": "http://id.who.int/icd/release/11/2026-01/mms",
+  "child": [
+    "http://id.who.int/icd/release/11/2026-01/mms/1000"
+  ],
+  "releaseId": "2026-01"
+}

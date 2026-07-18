@@ -99,6 +99,7 @@ nav:
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
+      - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
