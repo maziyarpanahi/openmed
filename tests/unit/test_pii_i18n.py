@@ -20,6 +20,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_bulgarian_egn,
     generate_estonian_isikukood,
     generate_jmbg,
+    generate_mexican_curp,
+    generate_mexican_rfc,
     generate_philhealth_pin,
     generate_portuguese_nif,
     generate_vietnamese_cccd,
@@ -59,6 +61,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mexican_curp,
+    validate_mexican_rfc,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cnpj,
@@ -500,6 +504,72 @@ class TestValidateSpanishNIE:
         assert validate_spanish_nie("X1234567A") is False
 
 
+class TestValidateMexicanCURP:
+    """Tests for validate_mexican_curp()."""
+
+    def test_valid_synthetic_curp(self):
+        assert validate_mexican_curp("MOBI851113MSPMTP95") is True
+
+    def test_accepts_lowercase(self):
+        assert validate_mexican_curp("mobi851113mspmtp95") is True
+
+    def test_rejects_wrong_check_digit(self):
+        assert validate_mexican_curp("MOBI851113MSPMTP94") is False
+
+    def test_rejects_impossible_date(self):
+        assert validate_mexican_curp("MOBI851332MSPMTP95") is False
+
+    def test_rejects_unknown_state_code(self):
+        assert validate_mexican_curp("MOBI851113MXXMTP95") is False
+
+    def test_rejects_wrong_century_marker_for_future_date(self):
+        assert validate_mexican_curp("MOBI991113MSPMTPA5") is False
+
+    def test_generated_curps_round_trip(self):
+        rng = random.Random(469)
+        for _ in range(100):
+            assert validate_mexican_curp(generate_mexican_curp(rng=rng))
+
+
+class TestValidateMexicanRFC:
+    """Tests for validate_mexican_rfc()."""
+
+    @pytest.mark.parametrize(
+        "rfc",
+        [
+            "MYNB630325659",  # individual, 13 positions
+            "MYN430819Q64",  # legal entity, 12 positions
+            "GODE561231GR8",  # published-form individual example
+            "XAXX010101000",  # SAT generic domestic taxpayer RFC
+            "XEXX010101000",  # SAT generic foreign taxpayer RFC
+        ],
+    )
+    def test_valid_rfc_forms(self, rfc):
+        assert validate_mexican_rfc(rfc) is True
+
+    def test_accepts_lowercase(self):
+        assert validate_mexican_rfc("myn430819q64") is True
+
+    @pytest.mark.parametrize("rfc", ["MYNB630325658", "MYN430819Q63"])
+    def test_rejects_wrong_check_character(self, rfc):
+        assert validate_mexican_rfc(rfc) is False
+
+    @pytest.mark.parametrize("rfc", ["MYNB631332659", "MYN431332Q64"])
+    def test_rejects_impossible_date(self, rfc):
+        assert validate_mexican_rfc(rfc) is False
+
+    def test_rejects_wrong_length(self):
+        assert validate_mexican_rfc("MY630325659") is False
+
+    @pytest.mark.parametrize("person", [True, False])
+    def test_generated_rfcs_round_trip(self, person):
+        rng = random.Random(469)
+        for _ in range(100):
+            surrogate = generate_mexican_rfc(person=person, rng=rng)
+            assert len(surrogate) == (13 if person else 12)
+            assert validate_mexican_rfc(surrogate)
+
+
 class TestValidatePortugueseCPF:
     """Tests for validate_portuguese_cpf()."""
 
@@ -586,6 +656,66 @@ class TestPortugueseLocaleIdSplit:
             warnings.simplefilter("ignore")
             surrogate = anon.surrogate("456.378.921-64", "national_id", locale="pt_BR")
         assert validate_portuguese_cpf(surrogate) is True
+
+
+class TestMexicanLocaleIdDispatch:
+    """es_MX surrogates preserve CURP and both RFC forms."""
+
+    def test_curp_surrogate_round_trip(self):
+        anon = Anonymizer(lang="es", consistent=True, seed=469)
+        surrogate = anon.surrogate(
+            "MOBI851113MSPMTP95",
+            "national_id",
+            locale="es_MX",
+        )
+
+        assert len(surrogate) == 18
+        assert validate_mexican_curp(surrogate)
+
+    @pytest.mark.parametrize("original", ["MYNB630325659", "MYN430819Q64"])
+    def test_rfc_surrogate_round_trip_preserves_form(self, original):
+        anon = Anonymizer(lang="es", consistent=True, seed=469)
+        surrogate = anon.surrogate(original, "national_id", locale="es_MX")
+
+        assert len(surrogate) == len(original)
+        assert validate_mexican_rfc(surrogate)
+
+    def test_es_mx_golden_fixture_deidentifies_offline_without_leakage(self):
+        from datetime import datetime
+
+        from openmed.core.config import OpenMedConfig
+        from openmed.core.pii import deidentify
+        from openmed.eval.golden import GoldenFixture
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/es.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        row = next(row for row in rows if row["id"] == "golden-i18n-es-mx-curp-rfc")
+        fixture = GoldenFixture.from_mapping(row)
+
+        with patch("openmed.core.pii.extract_pii") as mock_extract:
+            mock_extract.return_value = PredictionResult(
+                text=fixture.text,
+                entities=[],
+                model_name="stub",
+                timestamp=datetime.now().isoformat(),
+            )
+            result = deidentify(
+                fixture.text,
+                method="mask",
+                lang="es",
+                locale="es_MX",
+                config=OpenMedConfig(local_only=True),
+            )
+
+        assert result.metadata["safety_sweep"]["spans_added"] == 3
+        assert result.deidentified_text.count("[national_id]") == 3
+        for span in fixture.gold_spans:
+            assert span.text not in result.deidentified_text
 
 
 def test_portuguese_nif_pattern_detects_with_context():
@@ -1257,6 +1387,47 @@ class TestLanguagePIIPatterns:
         text = "X1234567L"
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Spanish NIE pattern should match"
+
+    @pytest.mark.parametrize(
+        ("identifier", "validator"),
+        [
+            ("MOBI851113MSPMTP95", validate_mexican_curp),
+            ("MYNB630325659", validate_mexican_rfc),
+            ("MYN430819Q64", validate_mexican_rfc),
+        ],
+    )
+    def test_mexican_national_id_patterns(self, identifier, validator):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["es"]
+            if pattern.entity_type == "national_id" and pattern.validator is validator
+        ]
+
+        assert patterns
+        assert any(
+            match is not None and pattern.validator(match.group(0))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, identifier, pattern.flags))
+        )
+
+    @pytest.mark.parametrize(
+        "identifier",
+        ["MOBI851113MSPMTP94", "MYNB630325658", "MYN430819Q63"],
+    )
+    def test_mexican_patterns_reject_bad_check_characters(self, identifier):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["es"]
+            if pattern.validator in {validate_mexican_curp, validate_mexican_rfc}
+        ]
+
+        matched = [
+            (pattern, match.group(0))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, identifier, pattern.flags))
+        ]
+        assert matched
+        assert all(not pattern.validator(value) for pattern, value in matched)
 
     def test_portuguese_cpf_pattern(self):
         patterns = [
