@@ -15,7 +15,8 @@ try:
     import apache_beam as beam
 except ImportError as exc:  # pragma: no cover - exercised by packaging users
     raise ImportError(
-        "Apache Beam support requires the 'dataflow' extra. "
+        "Apache Beam support is available on Python 3.10-3.12 and requires "
+        "the 'dataflow' extra. "
         "Install with `pip install openmed[dataflow]`."
     ) from exc
 
