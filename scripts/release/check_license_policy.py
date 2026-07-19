@@ -92,6 +92,7 @@ REVIEWED_LICENSES = {
     "opentelemetry-api": "Apache-2.0",
     "opentelemetry-exporter-otlp-proto-http": "Apache-2.0",
     "opentelemetry-sdk": "Apache-2.0",
+    "openpyxl": "MIT",
     "openvino": "Apache-2.0",
     "paddleocr": "Apache-2.0",
     "pandas": "BSD-3-Clause",
