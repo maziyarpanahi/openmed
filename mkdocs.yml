@@ -39,6 +39,7 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
+      - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
       - Zero-shot NER How-to: zero-shot-howto.md
