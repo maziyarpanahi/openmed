@@ -39,7 +39,8 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
-      - Batch Processing: batch-processing.md
+      - Batch Processing How-to: batch-howto.md
+      - BatchProcessor Reference: batch-processing.md
       - Performance Profiling: profiling.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md

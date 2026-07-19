@@ -2,6 +2,11 @@
 
 OpenMed provides batch processing capabilities for efficiently analyzing multiple texts or files with progress reporting and result aggregation.
 
+Looking for an end-to-end data-engineering workflow? The
+[batch-processing how-to](batch-howto.md) shows how to de-identify a CSV column,
+redact a directory into a mirrored output tree, report PHI-safe progress, and
+tune memory and throughput using synthetic data.
+
 ## Quick Start
 
 ```python
