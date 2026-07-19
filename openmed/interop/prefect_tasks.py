@@ -46,9 +46,9 @@ def deidentify_file_task(
             :func:`openmed.processing.batch.redact_dataset`.
 
     Returns:
-        PHI-free mapping with the input/output paths and redaction counts
-        (``files_processed``, ``rows_processed``, ``cells_redacted``, and
-        ``spans_redacted``) usable by downstream tasks.
+        PHI-free mapping with ``files_processed``, ``rows_processed``,
+        ``cells_redacted``, and ``spans_redacted`` counts usable by
+        downstream tasks.
     """
     redact_dataset = _load_redact_dataset()
     result = redact_dataset(
@@ -62,8 +62,6 @@ def deidentify_file_task(
     )
     summary = result.summary
     return {
-        "input_path": str(path),
-        "output_path": str(result.output_path),
         "files_processed": 1,
         "rows_processed": summary.total_rows,
         "cells_redacted": summary.redacted_cells,
@@ -100,17 +98,22 @@ def deidentify_dataset_flow(
         ``rows_processed``, ``cells_redacted``, and ``spans_redacted``
         counts plus the per-file summaries under ``files``.
     """
+    paths = tuple(input_paths)
+    output_paths = [
+        _resolve_output_path(input_path, output_dir) for input_path in paths
+    ]
+    _validate_unique_output_paths(output_paths)
     file_summaries = [
         deidentify_file_task(
             input_path,
             text_columns,
-            output_path=_resolve_output_path(input_path, output_dir),
+            output_path=output_path,
             policy=policy,
             method=method,
             confidence_threshold=confidence_threshold,
             **redact_kwargs,
         )
-        for input_path in input_paths
+        for input_path, output_path in zip(paths, output_paths, strict=True)
     ]
     return {
         "files_processed": len(file_summaries),
@@ -129,6 +132,15 @@ def _resolve_output_path(
         return None
     source = Path(input_path)
     return Path(output_dir) / f"{source.stem}.redacted{source.suffix}"
+
+
+def _validate_unique_output_paths(output_paths: Sequence[Path | None]) -> None:
+    resolved = [path.resolve() for path in output_paths if path is not None]
+    if len(resolved) != len(set(resolved)):
+        raise ValueError(
+            "output_dir produces duplicate redacted output names; "
+            "use unique input basenames or omit output_dir"
+        )
 
 
 def _load_redact_dataset() -> DatasetRedactor:

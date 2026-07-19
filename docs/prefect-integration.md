@@ -13,6 +13,8 @@ Install the optional extra:
 pip install "openmed[prefect]"
 ```
 
+The integration supports Prefect 3.7 and later 3.x releases.
+
 Run the flow over a list of local dataset files:
 
 ```python
@@ -33,7 +35,9 @@ task run per file, and aggregates the per-file summaries. Each file is
 processed with `openmed.processing.batch.redact_dataset`, so `.csv`,
 `.jsonl`/`.ndjson`, and `.parquet` inputs are supported. By default the
 redacted copy is written next to its input as `<stem>.redacted<suffix>`; pass
-`output_dir` to collect the redacted files in one directory instead.
+`output_dir` to collect the redacted files in one directory instead. Inputs
+must have unique basenames when `output_dir` is set so one task cannot
+overwrite another task's output.
 
 The single-file task can also be used directly inside your own flows:
 
@@ -47,12 +51,16 @@ def nightly_deid(path: str) -> dict:
     return deidentify_file_task(path, text_columns=["note"])
 ```
 
-Both the task and the flow return PHI-free summaries containing counts only —
-`files_processed`, `rows_processed`, `cells_redacted`, and `spans_redacted`
-plus input/output paths — so downstream tasks can branch on the results
-without raw identifiers entering Prefect logs or state. Prefect runtime
-options such as retries stay configurable through standard Prefect APIs, for
-example `deidentify_file_task.with_options(retries=2)`.
+Both the task and the flow return PHI-free summaries containing counts only:
+`files_processed`, `rows_processed`, `cells_redacted`, and `spans_redacted`.
+The flow also returns the count-only per-file summaries under `files`, in the
+same order as `input_paths`, so downstream tasks can branch on the results
+without copying dataset contents into result state.
+
+Prefect records task parameters for orchestration. Use opaque dataset paths
+and column names, and never put PHI in filenames or directory names. Prefect
+runtime options such as retries stay configurable through standard Prefect
+APIs, for example `deidentify_file_task.with_options(retries=2)`.
 
 Additional keyword arguments (for example `lang`, `keep_year`,
 `date_shift_days`, or `model_name`) are forwarded to
