@@ -50,6 +50,7 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - OpenVINO Runtime: runtimes/openvino.md
+      - TensorRT Runtime: runtimes/tensorrt.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
