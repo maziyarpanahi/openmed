@@ -78,6 +78,34 @@ def test_reference_range_is_parsed_into_bounds():
     assert row["reference_range"]["high"] == 145.0
 
 
+def test_mapping_reference_range_is_preserved_and_compared_with_units():
+    row = structure_lab_panels(
+        [
+            {
+                "analyte": "Glucose",
+                "value": 120,
+                "unit": "mg/dL",
+                "reference_range": {
+                    "low": 70,
+                    "high": 99,
+                    "low_inclusive": True,
+                    "high_inclusive": True,
+                    "unit": "mg/dL",
+                },
+            }
+        ]
+    )[0]["analytes"][0]
+
+    assert row["reference_range"] == {
+        "low": 70.0,
+        "high": 99.0,
+        "low_inclusive": True,
+        "high_inclusive": True,
+        "unit": "mg/dL",
+    }
+    assert row["flag"] == "high"
+
+
 # --------------------------------------------------------------------------
 # Free-text / table parsing
 # --------------------------------------------------------------------------
@@ -108,6 +136,51 @@ def test_multi_result_line_is_split():
     assert {"Sodium", "Potassium", "Chloride"} <= analytes
 
 
+def test_pipe_table_uses_panel_header_and_originating_flag():
+    text = (
+        "CBC:\n"
+        "| Analyte | Value | Unit | Reference range | Flag |\n"
+        "| --- | --- | --- | --- | --- |\n"
+        "| Bands | 12 | % | 0-10 | H |\n"
+    )
+
+    panels = parse_lab_report(text)
+
+    assert [panel["panel"] for panel in panels] == ["CBC"]
+    assert panels[0]["analytes"] == [
+        {
+            "analyte": "Bands",
+            "value": 12.0,
+            "unit": "%",
+            "reference_range": {
+                "low": 0.0,
+                "high": 10.0,
+                "low_inclusive": True,
+                "high_inclusive": True,
+            },
+            "flag": "high",
+        }
+    ]
+
+
+def test_multiword_analyte_and_unparenthesized_range_are_parsed():
+    panels = parse_lab_report("White blood cell count 12.5 10^3/uL 4.0-11.0")
+
+    row = panels[0]["analytes"][0]
+    assert row["analyte"] == "WBC"
+    assert row["value"] == 12.5
+    assert row["unit"] == "10^3/uL"
+    assert row["reference_range"]["high"] == 11.0
+    assert row["flag"] == "high"
+
+
+def test_inline_panel_header_and_originating_flag_are_honored():
+    panels = parse_lab_report("BMP: K 4.0 mmol/L H (3.5-5.1)")
+
+    assert [panel["panel"] for panel in panels] == ["BMP"]
+    assert panels[0]["analytes"][0]["flag"] == "high"
+
+
 # --------------------------------------------------------------------------
 # Contract
 # --------------------------------------------------------------------------
@@ -123,6 +196,18 @@ def test_deterministic_and_typed():
 def test_empty_input_returns_empty():
     assert structure_lab_panels([]) == []
     assert parse_lab_report("") == []
+
+
+def test_blank_analytes_are_skipped_and_boolean_values_are_not_numeric():
+    panels = structure_lab_panels(
+        [
+            {"analyte": "", "value": 1},
+            {"analyte": "WBC", "value": True},
+        ]
+    )
+
+    assert len(panels) == 1
+    assert panels[0]["analytes"][0]["value"] is None
 
 
 def test_advisory_exposed():
