@@ -79,6 +79,7 @@ nav:
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android Quickstart: android-quickstart.md
       - Android ONNX Export: export-onnx-android.md
+      - Android QNN and NNAPI: runtimes/android-accelerators.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
