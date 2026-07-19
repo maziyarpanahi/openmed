@@ -243,6 +243,7 @@ docs = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-sidecar = "openmed.service.sidecar:main"
 
 [tool.hatch.build]
 include = [
