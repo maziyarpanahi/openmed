@@ -59,6 +59,7 @@ dev = [
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.20",
+  "sqlalchemy>=2.0,<3",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -97,6 +98,10 @@ columnar = [
 
 dask = [
   "dask[dataframe]>=2024.8",
+]
+
+sqlalchemy = [
+  "sqlalchemy>=2.0,<3",
 ]
 
 spacy = [

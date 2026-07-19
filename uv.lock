@@ -4497,6 +4497,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "python-dateutil" },
     { name = "ruff" },
+    { name = "sqlalchemy" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 docs = [
@@ -4616,6 +4617,9 @@ spacy = [
 spark = [
     { name = "pyspark" },
 ]
+sqlalchemy = [
+    { name = "sqlalchemy" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -4714,6 +4718,8 @@ requires-dist = [
     { name = "s3fs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
     { name = "spacy", marker = "extra == 'spacy'", specifier = ">=3.5" },
+    { name = "sqlalchemy", marker = "extra == 'dev'", specifier = ">=2.0,<3" },
+    { name = "sqlalchemy", marker = "extra == 'sqlalchemy'", specifier = ">=2.0,<3" },
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.7" },
     { name = "tokenizers", marker = "extra == 'hf'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'mlx'", specifier = ">=0.15" },
@@ -4730,7 +4736,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy", "spark"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy", "spark", "sqlalchemy"]
 
 [[package]]
 name = "opentelemetry-api"
