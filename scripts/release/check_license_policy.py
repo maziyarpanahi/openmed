@@ -114,6 +114,7 @@ REVIEWED_LICENSES = {
     "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
+    "python-pptx": "MIT",
     "rapidfuzz": "MIT",
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
