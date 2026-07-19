@@ -51,8 +51,9 @@ def _install_prefect_stub_if_missing() -> None:
     sys.modules["prefect"] = module
 
 
-@pytest.fixture(scope="module")
-def prefect_tasks():
+@pytest.fixture
+def prefect_tasks(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PREFECT_HOME", str(tmp_path / "prefect-home"))
     _install_prefect_stub_if_missing()
     from openmed.interop import prefect_tasks as module
 
@@ -99,7 +100,7 @@ def test_deidentify_file_task_fn_redacts_temp_file_and_summarizes(
     monkeypatch,
     prefect_tasks,
 ) -> None:
-    input_path = tmp_path / "notes.csv"
+    input_path = tmp_path / "john-doe-notes.csv"
     input_path.write_text(
         "id,note,age\n"
         "1,Patient John Doe called 555-0101,42\n"
@@ -114,15 +115,13 @@ def test_deidentify_file_task_fn_redacts_temp_file_and_summarizes(
         policy="strict_no_leak",
     )
 
-    output_path = tmp_path / "notes.redacted.csv"
+    output_path = tmp_path / "john-doe-notes.redacted.csv"
     rows = list(csv.DictReader(output_path.open(encoding="utf-8", newline="")))
     assert rows == [
         {"id": "1", "note": "Patient [PERSON] called [PHONE]", "age": "42"},
         {"id": "2", "note": "Patient [PERSON] emailed [EMAIL]", "age": "37"},
     ]
     assert summary == {
-        "input_path": str(input_path),
-        "output_path": str(output_path),
         "files_processed": 1,
         "rows_processed": 2,
         "cells_redacted": 2,
@@ -147,6 +146,8 @@ def test_deidentify_dataset_flow_fn_fans_task_and_aggregates(
         "_load_redact_dataset",
         lambda: _recording_redactor(calls),
     )
+    task_fn = prefect_tasks.deidentify_file_task.fn
+    monkeypatch.setattr(prefect_tasks, "deidentify_file_task", task_fn)
 
     result = prefect_tasks.deidentify_dataset_flow.fn(
         input_paths,
@@ -167,13 +168,37 @@ def test_deidentify_dataset_flow_fn_fans_task_and_aggregates(
     assert result["rows_processed"] == 4
     assert result["cells_redacted"] == 2
     assert result["spans_redacted"] == 6
-    assert [item["output_path"] for item in result["files"]] == [
-        str(output_dir / "batch-a.redacted.csv"),
-        str(output_dir / "batch-b.redacted.csv"),
+    assert result["files"] == [
+        {
+            "files_processed": 1,
+            "rows_processed": 2,
+            "cells_redacted": 1,
+            "spans_redacted": 3,
+        },
+        {
+            "files_processed": 1,
+            "rows_processed": 2,
+            "cells_redacted": 1,
+            "spans_redacted": 3,
+        },
     ]
-    for item in result["files"]:
-        assert item["files_processed"] == 1
-        assert Path(item["output_path"]).exists()
+    assert (output_dir / "batch-a.redacted.csv").exists()
+    assert (output_dir / "batch-b.redacted.csv").exists()
+
+
+def test_deidentify_dataset_flow_rejects_output_name_collisions(
+    tmp_path: Path,
+    prefect_tasks,
+) -> None:
+    input_paths = [tmp_path / "site-a" / "notes.csv", tmp_path / "site-b" / "notes.csv"]
+    output_dir = tmp_path / "redacted"
+
+    with pytest.raises(ValueError, match="unique input basenames"):
+        prefect_tasks.deidentify_dataset_flow.fn(
+            input_paths,
+            text_columns=["note"],
+            output_dir=output_dir,
+        )
 
 
 def _recording_redactor(calls: list[dict]):
@@ -244,5 +269,11 @@ def _fake_deidentify(text: str, **kwargs) -> DeidentificationResult:
 
 def _assert_summary_has_no_fixture_phi(summary: dict) -> None:
     payload = json.dumps(summary, sort_keys=True)
-    for token in ("John Doe", "Jane Roe", "555-0101", "jane@example.test"):
+    for token in (
+        "John Doe",
+        "Jane Roe",
+        "555-0101",
+        "jane@example.test",
+        "john-doe-notes",
+    ):
         assert token not in payload

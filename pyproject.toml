@@ -159,7 +159,7 @@ kafka = [
 ]
 
 prefect = [
-  "prefect>=2.20,<4",
+  "prefect>=3.7,<4",
 ]
 
 cloud = [
