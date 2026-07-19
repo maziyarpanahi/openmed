@@ -4475,6 +4475,7 @@ dask = [
     { name = "dask", extra = ["dataframe"] },
 ]
 dev = [
+    { name = "cryptography" },
     { name = "dask", extra = ["dataframe"] },
     { name = "duckdb" },
     { name = "fastapi" },
@@ -4600,6 +4601,7 @@ pydeid = [
     { name = "pydeid" },
 ]
 service = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "grpcio" },
     { name = "httpx" },
@@ -4626,6 +4628,8 @@ requires-dist = [
     { name = "click", marker = "extra == 'spacy'", specifier = ">=8.0" },
     { name = "confluent-kafka", marker = "extra == 'kafka'", specifier = ">=2.3" },
     { name = "coremltools", marker = "extra == 'coreml'", specifier = ">=8.0" },
+    { name = "cryptography", marker = "extra == 'dev'", specifier = ">=43,<50" },
+    { name = "cryptography", marker = "extra == 'service'", specifier = ">=43,<50" },
     { name = "dask", extras = ["dataframe"], marker = "extra == 'dask'", specifier = ">=2024.8" },
     { name = "dask", extras = ["dataframe"], marker = "extra == 'dev'", specifier = ">=2024.8" },
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.0,<2" },
