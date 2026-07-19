@@ -50,6 +50,17 @@ def test_number_and_unit_are_extracted():
     assert first["unit"] == "C"
 
 
+def test_vital_sign_units_are_preserved():
+    text = "Parameter|08:00\nTemp|37.0 °C\nResp|16 breaths/min\n"
+
+    flowsheet = structure_flowsheet(text)
+
+    temperature = _series(flowsheet, "Temp")["points"][0]
+    respiration = _series(flowsheet, "Resp")["points"][0]
+    assert (temperature["number"], temperature["unit"]) == (37.0, "°C")
+    assert (respiration["number"], respiration["unit"]) == (16, "breaths/min")
+
+
 def test_non_numeric_value_is_kept_verbatim():
     bp = _series(structure_flowsheet(FLOWSHEET), "BP")
     assert bp["points"][0]["value"] == "120/80"
@@ -71,6 +82,35 @@ def test_missing_cells_produce_gaps_not_misaligned_points():
     temp = _series(flowsheet, "Temp")
     # Temp is missing at 12:00 -> the 16:00 value must not shift to 12:00.
     assert [p["timestamp"] for p in temp["points"]] == ["08:00", "16:00"]
+
+
+def test_continuation_rows_carry_forward_parameter_identity_and_units():
+    text = "Parameter|08:00|12:00\nBP|120/80 mmHg|\n||118/78 mmHg\n"
+
+    flowsheet = structure_flowsheet(text)
+
+    assert [series["parameter"] for series in flowsheet["series"]] == ["BP"]
+    assert [
+        (point["timestamp"], point["value"], point["number"], point["unit"])
+        for point in flowsheet["series"][0]["points"]
+    ] == [
+        ("08:00", "120/80 mmHg", None, "mmHg"),
+        ("12:00", "118/78 mmHg", None, "mmHg"),
+    ]
+    for point in flowsheet["series"][0]["points"]:
+        assert text[point["start"] : point["end"]] == point["value"]
+
+
+def test_repeated_parameter_rows_are_coalesced():
+    text = "Parameter|08:00|12:00\nHR|72|\nHR||75\n"
+
+    flowsheet = structure_flowsheet(text)
+
+    assert [series["parameter"] for series in flowsheet["series"]] == ["HR"]
+    assert [
+        (point["timestamp"], point["value"])
+        for point in flowsheet["series"][0]["points"]
+    ] == [("08:00", "72"), ("12:00", "75")]
 
 
 # --------------------------------------------------------------------------
