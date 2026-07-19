@@ -49,6 +49,7 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
+      - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
