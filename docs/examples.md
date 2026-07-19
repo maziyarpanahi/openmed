@@ -4,6 +4,10 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+If you already know the task you want to complete, use the
+[Cookbook](./cookbook.md) to jump directly to the matching script, notebook, or
+copy-ready recipe.
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |
