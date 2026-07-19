@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added versioned HMAC-SHA256 request signing over method, path, timestamp,
+  nonce, and body digest, with client-side header helpers, bounded fail-closed
+  replay protection, and verifier-compatible signatures on async job webhooks
+  (#849).
 - Added a Prefect integration with a `deidentify_file_task` task and a
   `deidentify_dataset_flow` flow that fan the local dataset redaction runner
   over lists of files and return PHI-free count summaries. Prefect stays an
