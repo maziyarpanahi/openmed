@@ -247,6 +247,7 @@ docs = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-executable-udf = "openmed.integrations.executable_udf:main"
 
 [tool.hatch.build]
 include = [
