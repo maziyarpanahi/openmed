@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import re
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
 
@@ -44,6 +45,7 @@ class ModelInfo:
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
     released: Optional[str] = None
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def size_mb(self) -> Optional[int]:
@@ -120,6 +122,88 @@ class DraftModelInfo:
         return self.license.lower() in PERMISSIVE_DRAFT_MODEL_LICENSES
 
 
+@dataclass(frozen=True)
+class IndicEncoderConfig:
+    """Explicit user configuration for an optional Indic encoder backbone."""
+
+    source: str
+    family: str
+    languages: tuple[str, ...]
+    cache_dir: Optional[str] = None
+    token: Optional[str] = field(default=None, repr=False, compare=False)
+    revision: Optional[str] = None
+    local_files_only: bool = False
+    device: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class IndicEncoderSpec:
+    """Permissive-license metadata for a supported Indic encoder family."""
+
+    family: str
+    display_name: str
+    license_id: str
+    source_url: str
+    languages: frozenset[str]
+    supports_transliterated_text: bool = False
+
+
+@dataclass(frozen=True)
+class IndicEncoderLoadResult:
+    """Result of resolving optional encoder weights without hard failure."""
+
+    handle: Any | None
+    skip_reason: str | None
+    metadata: IndicEncoderSpec | None = None
+
+    @property
+    def available(self) -> bool:
+        """Return whether a tokenizer/backbone handle was loaded."""
+
+        return self.handle is not None
+
+
+INDIC_ENCODER_SPECS: Mapping[str, IndicEncoderSpec] = {
+    "muril": IndicEncoderSpec(
+        family="muril",
+        display_name="MuRIL",
+        license_id="Apache-2.0",
+        source_url="https://huggingface.co/google/muril-base-cased",
+        languages=frozenset(
+            {
+                "as",
+                "bn",
+                "en",
+                "gu",
+                "hi",
+                "kn",
+                "ks",
+                "ml",
+                "mr",
+                "ne",
+                "or",
+                "pa",
+                "sa",
+                "sd",
+                "ta",
+                "te",
+                "ur",
+            }
+        ),
+        supports_transliterated_text=True,
+    ),
+    "indicbert": IndicEncoderSpec(
+        family="indicbert",
+        display_name="IndicBERT",
+        license_id="MIT",
+        source_url="https://huggingface.co/ai4bharat/indic-bert",
+        languages=frozenset(
+            {"as", "bn", "en", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+        ),
+    ),
+}
+
+
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
 
 PERMISSIVE_DRAFT_MODEL_LICENSES = frozenset(
@@ -145,6 +229,8 @@ GENERATION_DRAFT_MODELS: Dict[str, DraftModelInfo] = {
         ),
     ),
 }
+
+_INDIC_ENCODER_CONFIG: Optional[IndicEncoderConfig] = None
 
 _GENERATION_DRAFT_TARGET_ALIASES = {
     "laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
@@ -574,6 +660,9 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
         released=row.get("released"),
+        provenance=dict(row.get("provenance") or {})
+        if isinstance(row.get("provenance"), dict)
+        else {},
     )
 
 
@@ -1113,11 +1202,197 @@ def get_entity_types_by_category(category: str) -> List[str]:
     return sorted(entity_types)
 
 
+def get_indic_encoder_spec(
+    family: str | None = None,
+    *,
+    source: str | None = None,
+) -> IndicEncoderSpec:
+    """Return normalized family metadata, inferring from a known repo name."""
+
+    if family is not None:
+        if not isinstance(family, str):
+            raise TypeError("family must be a string or None")
+        normalized = family.strip().casefold().replace("-", "").replace("_", "")
+    else:
+        if source is not None and not isinstance(source, str):
+            raise TypeError("source must be a string or None")
+        normalized_source = (source or "").casefold().replace("-", "")
+        if "muril" in normalized_source:
+            normalized = "muril"
+        elif "indicbert" in normalized_source:
+            normalized = "indicbert"
+        else:
+            raise ValueError(
+                "family must be 'muril' or 'indicbert' for an unrecognized source"
+            )
+    try:
+        return INDIC_ENCODER_SPECS[normalized]
+    except KeyError as exc:
+        allowed = ", ".join(sorted(INDIC_ENCODER_SPECS))
+        raise ValueError(
+            f"unsupported Indic encoder family {family!r}; expected {allowed}"
+        ) from exc
+
+
+def configure_indic_encoder(
+    source: str | Path,
+    *,
+    family: str | None = None,
+    languages: Iterable[str] | None = None,
+    cache_dir: str | Path | None = None,
+    token: str | None = None,
+    revision: str | None = None,
+    local_files_only: bool = False,
+    device: str | None = None,
+) -> IndicEncoderConfig:
+    """Configure user-supplied MuRIL or IndicBERT weights for PII discovery.
+
+    Configuration does not load or download weights. Loading happens only when
+    :func:`load_configured_indic_encoder` is called explicitly.
+    """
+
+    if not isinstance(source, (str, Path)):
+        raise TypeError("Indic encoder source must be a string or path")
+    if not isinstance(local_files_only, bool):
+        raise TypeError("local_files_only must be a boolean")
+    source_value = str(source).strip()
+    if not source_value:
+        raise ValueError("Indic encoder source must not be empty")
+    metadata = get_indic_encoder_spec(family, source=source_value)
+
+    if languages is None:
+        from .pii_i18n import INDIC_ENCODER_PII_LANGUAGES
+
+        normalized_languages = tuple(sorted(INDIC_ENCODER_PII_LANGUAGES))
+    else:
+        if isinstance(languages, (str, bytes)):
+            raise TypeError("languages must be an iterable of language codes")
+        language_values = tuple(languages)
+        if any(not isinstance(language, str) for language in language_values):
+            raise TypeError("each Indic encoder language must be a string")
+        normalized_languages = tuple(
+            sorted({language.strip().casefold() for language in language_values})
+        )
+    if not normalized_languages or any(
+        not language for language in normalized_languages
+    ):
+        raise ValueError("at least one Indic encoder language must be configured")
+    unsupported = set(normalized_languages) - metadata.languages
+    if unsupported:
+        raise ValueError(
+            f"{metadata.display_name} does not support language codes: "
+            + ", ".join(sorted(unsupported))
+        )
+
+    config = IndicEncoderConfig(
+        source=source_value,
+        family=metadata.family,
+        languages=normalized_languages,
+        cache_dir=str(cache_dir) if cache_dir is not None else None,
+        token=token,
+        revision=revision,
+        local_files_only=local_files_only,
+        device=device,
+    )
+    global _INDIC_ENCODER_CONFIG
+    _INDIC_ENCODER_CONFIG = config
+    return config
+
+
+def get_indic_encoder_config() -> IndicEncoderConfig | None:
+    """Return the active Indic encoder configuration, if one was supplied."""
+
+    return _INDIC_ENCODER_CONFIG
+
+
+def clear_indic_encoder_config() -> None:
+    """Remove the process-local Indic encoder configuration."""
+
+    global _INDIC_ENCODER_CONFIG
+    _INDIC_ENCODER_CONFIG = None
+
+
+def load_configured_indic_encoder() -> IndicEncoderLoadResult:
+    """Load the configured encoder or return a result carrying a skip reason."""
+
+    config = get_indic_encoder_config()
+    if config is None:
+        return IndicEncoderLoadResult(
+            handle=None,
+            skip_reason="no Indic encoder weights are configured",
+        )
+
+    from openmed.ner.families.indic import load_indic_encoder
+
+    return load_indic_encoder(
+        config.source,
+        family=config.family,
+        cache_dir=config.cache_dir,
+        token=config.token,
+        revision=config.revision,
+        local_files_only=config.local_files_only,
+        device=config.device,
+    )
+
+
+def _configured_indic_encoder_pii_models(lang: str) -> Dict[str, ModelInfo]:
+    config = get_indic_encoder_config()
+    if config is None or lang not in config.languages:
+        return {}
+    if not _is_indic_encoder_runtime_available():
+        return {}
+
+    metadata = get_indic_encoder_spec(config.family)
+    key = f"pii_{lang}_{metadata.family}_encoder"
+    transliteration = (
+        " Includes transliterated-text support for Hinglish and code-mixed paths."
+        if metadata.supports_transliterated_text
+        else ""
+    )
+    return {
+        key: ModelInfo(
+            model_id=config.source,
+            display_name=f"{metadata.display_name} Indic encoder adapter",
+            category="Privacy",
+            specialization="Indic encoder-backed PII",
+            description=(
+                "Optional backbone-only encoder configured from user-supplied weights."
+                + transliteration
+            ),
+            entity_types=list(_PII_ENTITY_TYPES),
+            size_category="Unknown",
+            family=metadata.display_name,
+            task="feature-extraction",
+            languages=list(config.languages),
+            architecture="Transformer encoder",
+            base_model=config.source,
+            formats=["transformers"],
+            license=metadata.license_id,
+            provenance={
+                "source": config.source,
+                "weights": "user-supplied",
+                "bundled": False,
+                "revision": config.revision,
+            },
+        )
+    }
+
+
+def _is_indic_encoder_runtime_available() -> bool:
+    try:
+        return all(
+            importlib.util.find_spec(module_name) is not None
+            for module_name in ("transformers", "torch")
+        )
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
 def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
-    """Return PII models whose tokenizer supports the language's script."""
+    """Return script-compatible PII models and configured Indic adapters."""
     if lang == "en":
         localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS
-        return {
+        language_models = {
             key: info
             for key, info in OPENMED_MODELS.items()
             if key.startswith("pii_")
@@ -1126,35 +1401,38 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
             and _supports_pii_language(info, lang)
             and not any(key.startswith(f"pii_{lc}_") for lc in localized_prefixes)
         }
-
-    prefix = f"pii_{lang}_"
-    language_models = {
-        key: info
-        for key, info in OPENMED_MODELS.items()
-        if key.startswith(prefix)
-        and info.category == "Privacy"
-        and lang in (info.languages or [])
-        and _supports_pii_language(info, lang)
-    }
+    else:
+        prefix = f"pii_{lang}_"
+        language_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith(prefix)
+            and info.category == "Privacy"
+            and lang in (info.languages or [])
+            and _supports_pii_language(info, lang)
+        }
     optional_indic = _configured_indic_pii_model(lang)
 
     from .pii_i18n import DEFAULT_PII_MODELS
 
     default_model_id = DEFAULT_PII_MODELS.get(lang)
-    if not default_model_id:
-        return optional_indic
-    # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
-    # so language-pack callers can reuse multilingual privacy filters safely.
-    fallback_models = {
-        key: info
-        for key, info in OPENMED_MODELS.items()
-        if key.startswith("pii_")
-        and info.category == "Privacy"
-        and info.model_id == default_model_id
-        and lang in (info.languages or [])
-        and _supports_pii_language(info, lang)
-    }
-    return {**language_models, **fallback_models, **optional_indic}
+    if default_model_id:
+        # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
+        # so language-pack callers can reuse multilingual privacy filters safely.
+        fallback_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith("pii_")
+            and info.category == "Privacy"
+            and info.model_id == default_model_id
+            and lang in (info.languages or [])
+            and _supports_pii_language(info, lang)
+        }
+        language_models.update(fallback_models)
+
+    language_models.update(optional_indic)
+    language_models.update(_configured_indic_encoder_pii_models(lang))
+    return language_models
 
 
 def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
