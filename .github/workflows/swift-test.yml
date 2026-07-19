@@ -72,13 +72,17 @@ jobs:
     - name: Select available watchOS simulator
       id: destination
       shell: bash
-      working-directory: swift/OpenMedKit
       run: |
         set -euo pipefail
         udid="$(
-          xcodebuild -scheme OpenMedKit -showdestinations |
-            sed -n 's/.*platform:watchOS Simulator.*id:\([^,]*\).*OS:.*/\1/p' |
-            head -n 1
+          xcrun simctl list devices available --json |
+            jq -r '[
+              .devices | to_entries[] |
+              select(.key | contains("watchOS")) |
+              .value[] |
+              select(.isAvailable == true) |
+              .udid
+            ][0] // empty'
         )"
         test -n "$udid"
         echo "udid=$udid" >> "$GITHUB_OUTPUT"
@@ -115,14 +119,17 @@ jobs:
     - name: Select available visionOS simulator
       id: destination
       shell: bash
-      working-directory: swift/OpenMedKit
       run: |
         set -euo pipefail
         udid="$(
-          xcodebuild -scheme OpenMedKit -showdestinations |
-            grep -v 'variant:Designed' |
-            sed -n 's/.*platform:visionOS Simulator.*id:\([^,]*\).*OS:.*/\1/p' |
-            head -n 1
+          xcrun simctl list devices available --json |
+            jq -r '[
+              .devices | to_entries[] |
+              select(.key | contains("xrOS")) |
+              .value[] |
+              select(.isAvailable == true) |
+              .udid
+            ][0] // empty'
         )"
         test -n "$udid"
         echo "udid=$udid" >> "$GITHUB_OUTPUT"
