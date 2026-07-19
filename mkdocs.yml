@@ -28,6 +28,7 @@ nav:
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - gRPC Service: serving/grpc.md
       - REST Authentication: serving/authentication.md
+      - Mutual TLS Authentication: serving/mtls.md
       - Helm Deployment: deploy/helm.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
