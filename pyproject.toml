@@ -55,8 +55,8 @@ dev = [
   "python-dateutil>=2.8",
   "hypothesis>=6.100",
   "fsspec>=2025.9.0",
-  "grpcio>=1.64",
-  "grpcio-tools>=1.64",
+  "grpcio>=1.81.1",
+  "grpcio-tools>=1.81.1",
   "protobuf>=5.26,<7",
   "ruff==0.15.20",
   "tomli>=2.0; python_version < '3.11'",
@@ -178,13 +178,21 @@ hf = [
 
 service = [
   "fastapi>=0.110",
-  "grpcio>=1.64",
+  "grpcio>=1.81.1",
   "httpx>=0.27",
   "opentelemetry-api>=1.26,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "protobuf>=5.26,<7",
   "uvicorn[standard]>=0.29",
+]
+
+triton = [
+  "grpcio>=1.81.1",
+  "httpx>=0.27",
+  "numpy>=1.26",
+  "protobuf>=5.26,<7",
+  "transformers>=4.50",
 ]
 
 gliner = [

@@ -118,11 +118,45 @@ class MLXBackend:
         )
 
 
+class RemoteInferenceBackend:
+    """Backend using a user-operated KServe V2 or Triton endpoint."""
+
+    def __init__(self, config: Any = None) -> None:
+        self._config = config
+
+    def is_available(self) -> bool:
+        from openmed.service.backends.remote_inference import (
+            remote_inference_dependencies_available,
+        )
+
+        return remote_inference_dependencies_available(self._config)
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Callable:
+        from openmed.service.backends.remote_inference import (
+            create_remote_inference_pipeline,
+        )
+
+        return create_remote_inference_pipeline(
+            model_name,
+            config=self._config,
+            task=task,
+            aggregation_strategy=aggregation_strategy,
+            **kwargs,
+        )
+
+
 # -- Backend registry and auto-detection ------------------------------------
 
 _BACKENDS: Dict[str, type] = {
     "hf": HuggingFaceBackend,
     "mlx": MLXBackend,
+    "remote": RemoteInferenceBackend,
 }
 
 
@@ -133,7 +167,7 @@ def get_backend(
     """Return the requested backend, or auto-detect the best available one.
 
     Args:
-        name: ``"hf"``, ``"mlx"``, or ``None`` for auto-detect.
+        name: ``"hf"``, ``"mlx"``, ``"remote"``, or ``None`` for auto-detect.
         config: OpenMedConfig to pass to the backend.
 
     Auto-detection order:

@@ -12,9 +12,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROTO_DIR = REPO_ROOT / "openmed" / "service" / "proto"
-PROTO_FILE = PROTO_DIR / "openmed.proto"
+PROTO_FILES = (PROTO_DIR / "openmed.proto", PROTO_DIR / "kserve_v2.proto")
 GENERATED_DIR = PROTO_DIR / "generated"
-GENERATED_FILES = ("openmed_pb2.py", "openmed_pb2_grpc.py", "__init__.py")
+GENERATED_FILES = (
+    "openmed_pb2.py",
+    "openmed_pb2_grpc.py",
+    "kserve_v2_pb2.py",
+    "__init__.py",
+)
 
 
 def main() -> int:
@@ -65,23 +70,42 @@ def _generate_into(output_dir: Path) -> None:
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    args = [
+    common_args = [
         "grpc_tools.protoc",
         f"-I{PROTO_DIR}",
         f"-I{grpc_tools_include}",
-        f"--python_out={output_dir}",
-        f"--grpc_python_out={output_dir}",
-        str(PROTO_FILE),
     ]
-    result = protoc.main(args)
+    python_args = [
+        *common_args,
+        f"--python_out={output_dir}",
+        *(str(path) for path in PROTO_FILES),
+    ]
+    result = protoc.main(python_args)
+    if result != 0:
+        raise SystemExit(result)
+
+    grpc_args = [
+        *common_args,
+        f"--grpc_python_out={output_dir}",
+        str(PROTO_DIR / "openmed.proto"),
+    ]
+    result = protoc.main(grpc_args)
     if result != 0:
         raise SystemExit(result)
 
     _patch_relative_import(output_dir / "openmed_pb2_grpc.py")
     (output_dir / "__init__.py").write_text(
         '"""Generated protobuf modules for the OpenMed gRPC service."""\n\n'
-        "from . import openmed_pb2, openmed_pb2_grpc\n\n"
-        '__all__ = ["openmed_pb2", "openmed_pb2_grpc"]\n',
+        "from . import (\n"
+        "    kserve_v2_pb2,\n"
+        "    openmed_pb2,\n"
+        "    openmed_pb2_grpc,\n"
+        ")\n\n"
+        "__all__ = [\n"
+        '    "kserve_v2_pb2",\n'
+        '    "openmed_pb2",\n'
+        '    "openmed_pb2_grpc",\n'
+        "]\n",
         encoding="utf-8",
     )
 
@@ -91,6 +115,10 @@ def _patch_relative_import(path: Path) -> None:
     text = text.replace(
         "import openmed_pb2 as openmed__pb2",
         "from . import openmed_pb2 as openmed__pb2",
+    )
+    text = text.replace(
+        "import kserve_v2_pb2 as kserve__v2__pb2",
+        "from . import kserve_v2_pb2 as kserve__v2__pb2",
     )
     path.write_text(text, encoding="utf-8")
 
@@ -106,7 +134,7 @@ def _diff_generated_files(expected_dir: Path, actual_dir: Path) -> list[str]:
 
 
 def _generated_files_match(expected: Path, actual: Path, name: str) -> bool:
-    if name == "openmed_pb2.py":
+    if name.endswith("_pb2.py"):
         return _normalized_pb2_text(expected) == _normalized_pb2_text(actual)
     return filecmp.cmp(expected, actual, shallow=False)
 

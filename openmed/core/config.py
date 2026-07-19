@@ -88,8 +88,18 @@ class OpenMedConfig:
     clinical_protect_terms: Optional[List[str]] = None
     clinical_protect_use_builtin: bool = True
 
-    # Inference backend: None (auto-detect), "hf" (HuggingFace/PyTorch), "mlx" (Apple MLX)
+    # Inference backend: None (auto-detect), "hf", "mlx", or "remote"
     backend: Optional[str] = None
+
+    # KServe V2 / Triton out-of-process inference settings. Tokenization and
+    # entity decoding remain local; the endpoint receives only model tensors.
+    remote_inference_endpoint: Optional[str] = None
+    remote_inference_protocol: str = "http"
+    remote_inference_model_name: Optional[str] = None
+    remote_inference_model_version: Optional[str] = None
+    remote_inference_tokenizer: Optional[str] = None
+    remote_inference_timeout_seconds: float = 30.0
+    remote_inference_verify_tls: bool = True
 
     # PyTorch/Transformers attention backend: auto, flash_attention_2, sdpa, or eager
     torch_attention_backend: str = "auto"
@@ -118,6 +128,18 @@ class OpenMedConfig:
                 "cjk_width_convention must be 'cjk' or 'nfkc', got "
                 f"{self.cjk_width_convention!r}"
             )
+
+        self.remote_inference_protocol = self.remote_inference_protocol.strip().lower()
+        if self.remote_inference_protocol not in {"http", "grpc"}:
+            raise ValueError(
+                "remote_inference_protocol must be 'http' or 'grpc', got "
+                f"{self.remote_inference_protocol!r}"
+            )
+        self.remote_inference_timeout_seconds = float(
+            self.remote_inference_timeout_seconds
+        )
+        if self.remote_inference_timeout_seconds <= 0:
+            raise ValueError("remote_inference_timeout_seconds must be positive")
 
         if self.hf_token is None:
             self.hf_token = os.getenv("HF_TOKEN")
@@ -206,6 +228,13 @@ class OpenMedConfig:
             "clinical_protect_terms",
             "clinical_protect_use_builtin",
             "backend",
+            "remote_inference_endpoint",
+            "remote_inference_protocol",
+            "remote_inference_model_name",
+            "remote_inference_model_version",
+            "remote_inference_tokenizer",
+            "remote_inference_timeout_seconds",
+            "remote_inference_verify_tls",
             "torch_attention_backend",
             "load_in_4bit",
             "bnb_4bit_use_double_quant",
@@ -268,6 +297,13 @@ class OpenMedConfig:
             "clinical_protect_terms": self.clinical_protect_terms,
             "clinical_protect_use_builtin": self.clinical_protect_use_builtin,
             "backend": self.backend,
+            "remote_inference_endpoint": self.remote_inference_endpoint,
+            "remote_inference_protocol": self.remote_inference_protocol,
+            "remote_inference_model_name": self.remote_inference_model_name,
+            "remote_inference_model_version": self.remote_inference_model_version,
+            "remote_inference_tokenizer": self.remote_inference_tokenizer,
+            "remote_inference_timeout_seconds": self.remote_inference_timeout_seconds,
+            "remote_inference_verify_tls": self.remote_inference_verify_tls,
             "torch_attention_backend": self.torch_attention_backend,
             "load_in_4bit": self.load_in_4bit,
             "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
@@ -357,6 +393,12 @@ def _parse_value(value: str) -> Any:
     except ValueError:
         pass
 
+    # Float
+    try:
+        return float(value)
+    except ValueError:
+        pass
+
     # Fallback to raw string
     return value
 
@@ -366,7 +408,7 @@ def _format_value(value: Any) -> str:
         return "null"
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, int):
+    if isinstance(value, (int, float)):
         return str(value)
     return f'"{value}"'
 
