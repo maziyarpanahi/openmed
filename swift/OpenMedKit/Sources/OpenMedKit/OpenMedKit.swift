@@ -45,7 +45,8 @@ public final class OpenMed {
     /// Initialize OpenMed with an explicit backend.
     public init(
         backend: OpenMedBackend,
-        maxSeqLength: Int = 512
+        maxSeqLength: Int = 512,
+        allowNetworkAccess: Bool = true
     ) throws {
         switch backend {
         case .coreML(let modelURL, let id2labelURL, let tokenizerName, let tokenizerFolderURL):
@@ -57,7 +58,8 @@ public final class OpenMed {
             self.runtime = .coreML(pipeline)
             self.tokenizer = try Self.loadTokenizer(
                 tokenizerName: tokenizerName,
-                tokenizerFolderURL: tokenizerFolderURL
+                tokenizerFolderURL: tokenizerFolderURL,
+                allowNetworkAccess: allowNetworkAccess
             )
             self.maxSeqLength = maxSeqLength
 
@@ -79,7 +81,8 @@ public final class OpenMed {
                 self.runtime = .mlx(pipeline)
                 self.tokenizer = try Self.loadTokenizer(
                     tokenizerName: pipeline.tokenizerName ?? modelDirectoryURL.path,
-                    tokenizerFolderURL: pipeline.tokenizerDirectoryURL
+                    tokenizerFolderURL: pipeline.tokenizerDirectoryURL,
+                    allowNetworkAccess: allowNetworkAccess
                 )
                 self.maxSeqLength = pipeline.resolvedMaxSequenceLength
             }
@@ -94,12 +97,14 @@ public final class OpenMed {
     ///   - tokenizerName: HuggingFace tokenizer name for text tokenization.
     ///   - tokenizerFolderURL: Optional local tokenizer asset directory for offline use.
     ///   - maxSeqLength: Maximum token sequence length (default: 512).
+    ///   - allowNetworkAccess: Whether missing tokenizer assets may be downloaded.
     public convenience init(
         modelURL: URL,
         id2labelURL: URL,
         tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
         tokenizerFolderURL: URL? = nil,
-        maxSeqLength: Int = 512
+        maxSeqLength: Int = 512,
+        allowNetworkAccess: Bool = true
     ) throws {
         try self.init(
             backend: .coreML(
@@ -108,7 +113,8 @@ public final class OpenMed {
                 tokenizerName: tokenizerName,
                 tokenizerFolderURL: tokenizerFolderURL
             ),
-            maxSeqLength: maxSeqLength
+            maxSeqLength: maxSeqLength,
+            allowNetworkAccess: allowNetworkAccess
         )
     }
 
@@ -707,7 +713,8 @@ public final class OpenMed {
 
     static func loadTokenizer(
         tokenizerName: String,
-        tokenizerFolderURL: URL?
+        tokenizerFolderURL: URL?,
+        allowNetworkAccess: Bool = true
     ) throws -> any Tokenizer {
         let semaphore = DispatchSemaphore(value: 0)
         var result: Result<any Tokenizer, Error>?
@@ -716,7 +723,8 @@ public final class OpenMed {
             do {
                 let tokenizer = try await loadTokenizerAsync(
                     tokenizerName: tokenizerName,
-                    tokenizerFolderURL: tokenizerFolderURL
+                    tokenizerFolderURL: tokenizerFolderURL,
+                    allowNetworkAccess: allowNetworkAccess
                 )
                 result = .success(tokenizer)
             } catch {
@@ -731,13 +739,18 @@ public final class OpenMed {
 
     private static func loadTokenizerAsync(
         tokenizerName: String,
-        tokenizerFolderURL: URL?
+        tokenizerFolderURL: URL?,
+        allowNetworkAccess: Bool
     ) async throws -> any Tokenizer {
         if let tokenizerFolderURL {
             return try loadTokenizerFromDirectory(
                 tokenizerFolderURL,
-                fallbackTokenizerName: tokenizerName
+                fallbackTokenizerName: allowNetworkAccess ? tokenizerName : nil
             )
+        }
+
+        guard allowNetworkAccess else {
+            throw TokenizerError.missingConfig
         }
 
         if tokenizerName.contains("/") {

@@ -82,6 +82,7 @@ nav:
       - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
+      - iOS Share and Action Extensions: runtimes/ios-share-extension.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
