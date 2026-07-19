@@ -110,6 +110,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "pt": ("pt_BR", "cpf"),
     "tr": ("tr_TR", "ssn"),  # TCKN
     "he": ("he_IL", "teudat_zehut"),  # Israeli Teudat Zehut
+    "ja": ("ja_JP", "my_number"),  # Japanese My Number
     "id": ("id_ID", "indonesian_nik"),  # NIK
     "th": ("th_TH", "thai_national_id"),  # Thai 13-digit national ID
     "pl": ("pl_PL", "pesel"),  # PESEL

@@ -151,8 +151,8 @@ def test_i18n_fixture_national_ids_pass_checksum_where_a_validator_exists(path: 
             if span["label"] != "ID_NUM":
                 continue
             if not validators:
-                # Languages such as ar/ja have a regex-only national_id pattern
-                # with no checksum validator; the span is still recovered above.
+                # Languages such as ar have a regex-only national_id pattern with
+                # no checksum validator; the span is still recovered above.
                 assert span.get("metadata", {}).get("checksum_status") == "unvalidated"
                 continue
             assert any(v(span["text"]) for v in validators), (

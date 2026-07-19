@@ -36,7 +36,10 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
 _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
-_TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
+_TOP_LEVEL_FIXTURES: tuple[Path, ...] = (
+    _GOLDEN_DIR / "financial_ids.jsonl",
+    _GOLDEN_DIR / "ie.jsonl",
+)
 _NON_DEID_FIXTURE_NAMES = frozenset(
     {
         "context_multilingual.jsonl",

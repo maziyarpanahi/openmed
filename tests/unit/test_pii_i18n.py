@@ -19,6 +19,8 @@ from openmed.core.anonymizer.providers import (
 from openmed.core.anonymizer.providers.clinical_ids import (
     generate_bulgarian_egn,
     generate_estonian_isikukood,
+    generate_irish_pps,
+    generate_japanese_my_number,
     generate_jmbg,
     generate_philhealth_pin,
     generate_portuguese_nif,
@@ -33,6 +35,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_MONTH_NAMES,
     LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
+    LOCALE_PII_PATTERNS,
     MRZ_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
@@ -53,8 +56,10 @@ from openmed.core.pii_i18n import (
     validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
+    validate_irish_pps,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_japanese_my_number,
     validate_jmbg,
     validate_korean_rrn,
     validate_latvian_personas_kods,
@@ -341,6 +346,183 @@ class TestValidateDutchBSN:
 
     def test_invalid_bsn_wrong_length(self):
         assert validate_dutch_bsn("1234567") is False
+
+
+# ---------------------------------------------------------------------------
+# Irish PPS and Japanese My Number Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateIrishPPS:
+    """Tests for validate_irish_pps()."""
+
+    @pytest.mark.parametrize("value", ("1234567T", "1234567FA", "1234567WH"))
+    def test_accepts_checksum_valid_pps_numbers(self, value):
+        assert validate_irish_pps(value) is True
+
+    def test_accepts_lowercase_check_letters(self):
+        assert validate_irish_pps("1234567fa") is True
+
+    @pytest.mark.parametrize(
+        "value",
+        ("1234567A", "1234567TA", "123456T", "12345678T", "1234567TX1"),
+    )
+    def test_rejects_bad_checks_and_malformed_values(self, value):
+        assert validate_irish_pps(value) is False
+
+
+class TestValidateJapaneseMyNumber:
+    """Tests for validate_japanese_my_number()."""
+
+    @pytest.mark.parametrize("value", ("123456789018", "1234 5678 9018"))
+    def test_accepts_checksum_valid_my_numbers(self, value):
+        assert validate_japanese_my_number(value) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        ("123456789012", "12345678901", "1234-5678-9018", "000000000000"),
+    )
+    def test_rejects_bad_checks_and_malformed_values(self, value):
+        assert validate_japanese_my_number(value) is False
+
+
+def test_generated_pps_and_my_number_values_round_trip_validators():
+    pps_rng = random.Random(470)
+    pps_values = [generate_irish_pps(rng=pps_rng) for _ in range(200)]
+    assert {len(value) for value in pps_values} == {8, 9}
+    assert all(validate_irish_pps(value) for value in pps_values)
+
+    my_number_rng = random.Random(827)
+    my_numbers = [generate_japanese_my_number(rng=my_number_rng) for _ in range(200)]
+    assert all(validate_japanese_my_number(value) for value in my_numbers)
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_locale_surrogate_pps_and_my_number_round_trip(seed):
+    irish = Anonymizer(lang="en", locale="en_IE", consistent=True, seed=seed)
+    japanese = Anonymizer(lang="ja", consistent=True, seed=seed)
+
+    assert validate_irish_pps(irish.surrogate("1234567T", "national_id"))
+    assert validate_japanese_my_number(
+        japanese.surrogate("1234 5678 9018", "national_id")
+    )
+
+
+def test_pps_and_my_number_registry_aliases_generate_valid_values():
+    from openmed.core.anonymizer.providers.clinical_ids import (
+        register_clinical_providers,
+    )
+    from openmed.core.anonymizer.providers.registry_ids import get_national_id
+
+    for alias, id_type, locale in (
+        ("en_IE", "pps", "en_IE"),
+        ("ie", "pps", "en_IE"),
+        ("ja", "my_number", "ja_JP"),
+        ("ja_JP", "my_number", "ja_JP"),
+    ):
+        spec = get_national_id(alias, id_type)
+        assert spec is not None
+        faker = Faker(locale)
+        register_clinical_providers(faker)
+        faker.seed_instance(42)
+        assert spec.validate(getattr(faker, spec.faker_method)())
+
+
+def test_en_ie_pps_pattern_uses_context_and_checksum_validation():
+    patterns = LOCALE_PII_PATTERNS["en_ie"]
+    assert len(patterns) == 1
+    pattern = patterns[0]
+    assert pattern.validator is validate_irish_pps
+    assert pattern.safety_sweep_requires_context is True
+    assert "uimhir phearsanta seirbhíse poiblí" in pattern.context_words
+
+    assert re.fullmatch(pattern.pattern, "1234567T", pattern.flags)
+    assert pattern.validator("1234567T")
+    assert re.fullmatch(pattern.pattern, "1234567A", pattern.flags)
+    assert not pattern.validator("1234567A")
+
+
+@pytest.mark.parametrize(
+    ("fixture_path", "fixture_id", "locale", "validator"),
+    (
+        (
+            Path("openmed/eval/golden/ie.jsonl"),
+            "golden-checksum-ie-pps",
+            "en_IE",
+            validate_irish_pps,
+        ),
+        (
+            Path("openmed/eval/golden/fixtures/i18n/ja.jsonl"),
+            "golden-i18n-ja-followup-identifiers",
+            "ja_JP",
+            validate_japanese_my_number,
+        ),
+    ),
+)
+def test_pps_and_my_number_golden_traps_deidentify_without_leakage_offline(
+    fixture_path,
+    fixture_id,
+    locale,
+    validator,
+):
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.golden import GoldenFixture, load_golden_fixtures
+    from openmed.processing.outputs import PredictionResult
+
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    fixture = GoldenFixture.from_mapping(
+        next(row for row in rows if row["id"] == fixture_id)
+    )
+    hard_negative = fixture.metadata["hard_negatives"][0]
+
+    assert any(item.fixture_id == fixture_id for item in load_golden_fixtures())
+    for span in fixture.gold_spans:
+        assert fixture.text[span.start : span.end] == span.text
+    assert any(validator(span.text) for span in fixture.gold_spans)
+    assert (
+        fixture.text[hard_negative["start"] : hard_negative["end"]]
+        == hard_negative["text"]
+    )
+    assert not validator(hard_negative["text"])
+
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-19T00:00:00Z",
+        metadata={},
+    )
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+        locale=locale,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=locale,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    for span in fixture.gold_spans:
+        assert span.text not in result.deidentified_text
+    assert hard_negative["text"] in result.deidentified_text
 
 
 # ---------------------------------------------------------------------------
@@ -1515,9 +1697,22 @@ class TestLanguagePIIPatterns:
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["ja"] if p.entity_type == "national_id"
         ]
-        text = "1234 5678 9012"
-        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
-        assert matched, "Japanese My Number pattern should match"
+        valid = "1234 5678 9018"
+        invalid = "1234 5678 9012"
+
+        assert any(
+            re.fullmatch(pattern.pattern, valid, pattern.flags)
+            and pattern.validator is validate_japanese_my_number
+            and pattern.validator(valid)
+            for pattern in patterns
+        )
+        assert any(
+            re.fullmatch(pattern.pattern, invalid, pattern.flags)
+            for pattern in patterns
+        )
+        assert not any(
+            pattern.validator and pattern.validator(invalid) for pattern in patterns
+        )
 
     def test_turkish_tckn_pattern(self):
         patterns = [

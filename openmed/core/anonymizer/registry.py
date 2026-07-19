@@ -172,6 +172,8 @@ _LOCALE_ID_METHODS = {
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "nino",
+    "en_IE": "pps",
+    "ja_JP": "my_number",
     "tr_TR": "ssn",
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
