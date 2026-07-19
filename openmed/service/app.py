@@ -211,6 +211,7 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
             metrics=runtime.metrics,
+            metrics_queue="analyze",
         )
         app.state.pii_extract_batcher = DynamicBatcher(
             lambda jobs: _dispatch_pii_extract_batch(runtime, jobs),
@@ -218,6 +219,7 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
             metrics=runtime.metrics,
+            metrics_queue="pii_extract",
         )
     app.state.throttle = ServiceThrottle(
         runtime.throttle,
@@ -454,10 +456,17 @@ def create_app() -> FastAPI:
                     details=None,
                 )
             state.inflight = getattr(state, "inflight", 0) + 1
+            metrics = getattr(state, "metrics", None)
+            scaling_started = getattr(metrics, "scaling_request_started", None)
+            scaling_finished = getattr(metrics, "scaling_request_finished", None)
+            if callable(scaling_started):
+                scaling_started()
             try:
                 return await call_next(request)
             finally:
                 state.inflight = getattr(state, "inflight", 0) - 1
+                if callable(scaling_finished):
+                    scaling_finished()
         return await call_next(request)
 
     if app.state.metrics is not None:
