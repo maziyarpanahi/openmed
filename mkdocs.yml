@@ -26,6 +26,7 @@ nav:
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md

@@ -86,11 +86,14 @@ Webhook requests include:
 
 - `X-OpenMed-Event`: `job.done` or `job.failed`
 - `X-OpenMed-Timestamp`: Unix timestamp
+- `X-OpenMed-Nonce`: unique opaque request nonce
 - `X-OpenMed-Signature`: `sha256=<hmac>`
 
-The signature is computed over `<timestamp>.<canonical-json-body>` using the
-configured shared secret and HMAC-SHA256. Non-2xx responses and transport
-errors are retried with exponential backoff.
+The signature uses the shared
+[HMAC request-signing scheme](request-signing.md), covering `POST`, the exact
+callback path and query, timestamp, nonce, and SHA-256 digest of the canonical
+JSON body. Non-2xx responses and transport errors are retried with exponential
+backoff.
 
 ## Local Store Configuration
 
