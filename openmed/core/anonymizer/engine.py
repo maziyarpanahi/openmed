@@ -35,6 +35,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Optional
 
 from .. import labels as L
+from ..indic_name_match import (
+    DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
+    IndicNameNormalizer,
+    is_indic_name_candidate,
+)
 from ..labels import normalize_label
 from ..language_pack import get_language_pack
 from ..name_order import CJK_LANGUAGES, normalize_person_span
@@ -70,6 +75,12 @@ class AnonymizerConfig:
             ``consistent=True``, surrogates are stable across sessions.
         custom_providers: Additional Faker providers to register on every
             new locale instance.
+        transliteration_aware_name_matching: Link Indic-script and Latin
+            PERSON spellings through one canonical surrogate identity.
+        indic_name_similarity_threshold: Collision-safety threshold used by
+            the stdlib romanization fallback.
+        indic_name_normalizer: Optional preconfigured normalizer carrying a
+            caller-supplied local transliterator.
     """
 
     lang: str = "en"
@@ -77,6 +88,9 @@ class AnonymizerConfig:
     consistent: bool = False
     seed: Optional[int] = None
     custom_providers: list[Any] = field(default_factory=list)
+    transliteration_aware_name_matching: bool = False
+    indic_name_similarity_threshold: float = DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD
+    indic_name_normalizer: IndicNameNormalizer | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +108,11 @@ class Anonymizer:
         locale: Optional[str] = None,
         consistent: bool = False,
         seed: Optional[int] = None,
+        transliteration_aware_name_matching: bool = False,
+        indic_name_similarity_threshold: float = (
+            DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD
+        ),
+        indic_name_normalizer: IndicNameNormalizer | None = None,
         config: Optional[AnonymizerConfig] = None,
     ) -> None:
         if config is not None:
@@ -104,7 +123,17 @@ class Anonymizer:
                 locale=locale,
                 consistent=consistent,
                 seed=seed,
+                transliteration_aware_name_matching=(
+                    transliteration_aware_name_matching
+                ),
+                indic_name_similarity_threshold=indic_name_similarity_threshold,
+                indic_name_normalizer=indic_name_normalizer,
             )
+        self._indic_name_normalizer = self.config.indic_name_normalizer or (
+            IndicNameNormalizer(
+                similarity_threshold=self.config.indic_name_similarity_threshold
+            )
+        )
         self._faker_cache: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------
@@ -200,6 +229,17 @@ class Anonymizer:
         effective_lang = lang or self.config.lang
         canonical = normalize_label(label, effective_lang)
 
+        if (
+            canonical == L.PERSON
+            and self.config.transliteration_aware_name_matching
+            and is_indic_name_candidate(original, lang=effective_lang)
+        ):
+            identity = self._indic_name_identity(
+                original,
+                canonical_label=canonical,
+            )
+            return self.render_name_surrogate(identity, source_surface=original)
+
         # CJK PERSON spans: peel a trailing honorific (さん/様/씨/님/先生/…) so
         # the name is swapped while the honorific is re-attached verbatim.
         # Only ja/ko/zh PERSON spans take this path; all other languages and
@@ -290,6 +330,83 @@ class Anonymizer:
                 locale="en_IN",
             )
         raise ValueError("strategy must be 'uidai_mask' or 'surrogate'")
+
+    def surrogate_identity(
+        self,
+        original: str,
+        label: str,
+        *,
+        lang: Optional[str] = None,
+        locale: Optional[str] = None,
+        attempt: int = 0,
+    ) -> str:
+        """Return the stored Latin identity for a transliteration-aware name.
+
+        Non-Indic names and disabled configurations retain :meth:`surrogate`
+        behavior. The method is primarily used by :class:`SurrogateVault`,
+        which stores one identity and renders it for each source script.
+        """
+
+        effective_lang = lang or self.config.lang
+        canonical = normalize_label(label, effective_lang)
+        if (
+            canonical == L.PERSON
+            and self.config.transliteration_aware_name_matching
+            and is_indic_name_candidate(original, lang=effective_lang)
+        ):
+            return self._indic_name_identity(
+                original,
+                canonical_label=canonical,
+                attempt=attempt,
+            )
+        return self.surrogate(
+            original,
+            label,
+            lang=effective_lang,
+            locale=locale,
+        )
+
+    def render_name_surrogate(self, identity: str, *, source_surface: str) -> str:
+        """Render a stored Latin PERSON identity in ``source_surface``'s script."""
+
+        if not self.config.transliteration_aware_name_matching:
+            return identity
+        return self._indic_name_normalizer.render_surrogate(
+            identity,
+            source_surface=source_surface,
+        )
+
+    def _indic_name_identity(
+        self,
+        original: str,
+        *,
+        canonical_label: str,
+        attempt: int = 0,
+    ) -> str:
+        """Generate one Latin surrogate identity without retaining raw names."""
+
+        faker = self._get_faker("en_IN")
+        canonical_key = self._indic_name_normalizer.canonical_key(original)
+        if self.config.consistent:
+            faker.seed_instance(
+                self._derive_seed(canonical_label, f"{canonical_key}|{attempt}")
+            )
+        generator, _ = resolve_label_generator(
+            canonical_label,
+            language_pack=get_language_pack("en"),
+            script="Latin",
+            source_label=canonical_label,
+        )
+        try:
+            return generator(faker, original, locale="en_IN")
+        except Exception as exc:  # noqa: BLE001 - retain safe anonymizer fallback
+            warnings.warn(
+                "Anonymizer fallback for transliteration-aware PERSON at "
+                f"locale 'en_IN': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return "[PERSON]"
 
     def can_format_preserve(
         self,
