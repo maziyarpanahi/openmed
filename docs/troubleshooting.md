@@ -103,7 +103,7 @@ published OpenMed installation.
 
 | Feature | Extra | Install command |
 |---|---|---|
-| Document / image intake + OCR (`pdfplumber`, `python-docx`, `Pillow`, DICOM, docTR/Tesseract/EasyOCR) | `multimodal` | `pip install "openmed[multimodal]"` |
+| Document / image intake + OCR (`pdfplumber`, `python-docx`, `python-pptx`, `Pillow`, DICOM, docTR/Tesseract/EasyOCR) | `multimodal` | `pip install "openmed[multimodal]"` |
 | Heavier PaddleOCR backend | `ocr-paddle` | `pip install "openmed[ocr-paddle]"` |
 | Zero-shot GLiNER NER | `gliner` | `pip install "openmed[gliner]"` |
 | REST service | `service` | `pip install "openmed[service]"` |
