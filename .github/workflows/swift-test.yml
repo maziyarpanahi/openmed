@@ -58,3 +58,80 @@ jobs:
           -scheme OpenMedKit \
           -destination 'generic/platform=iOS Simulator' \
           -skipPackagePluginValidation
+
+  build-watchos:
+    name: Build & Test watchOS Simulator
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    - name: Select available watchOS simulator
+      id: destination
+      shell: bash
+      working-directory: swift/OpenMedKit
+      run: |
+        set -euo pipefail
+        udid="$(
+          xcodebuild -scheme OpenMedKit -showdestinations |
+            sed -n 's/.*platform:watchOS Simulator.*id:\([^,]*\).*OS:.*/\1/p' |
+            head -n 1
+        )"
+        test -n "$udid"
+        echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+    - name: Build and run watchOS parity tests
+      working-directory: swift/OpenMedKit
+      run: |
+        xcodebuild test \
+          -scheme OpenMedKit \
+          -destination 'platform=watchOS Simulator,id=${{ steps.destination.outputs.udid }}' \
+          -only-testing:OpenMedKitTests/WatchVisionParityTests \
+          -skipPackagePluginValidation
+
+  build-visionos:
+    name: Build & Test visionOS Simulator
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    - name: Build native visionOS simulator target
+      working-directory: swift/OpenMedKit
+      shell: bash
+      run: |
+        set -euo pipefail
+        sdk_path="$(xcrun --sdk xrsimulator --show-sdk-path)"
+        swift build \
+          --triple arm64-apple-xros1.0-simulator \
+          --sdk "$sdk_path"
+
+    - name: Select available visionOS simulator
+      id: destination
+      shell: bash
+      working-directory: swift/OpenMedKit
+      run: |
+        set -euo pipefail
+        udid="$(
+          xcodebuild -scheme OpenMedKit -showdestinations |
+            grep -v 'variant:Designed' |
+            sed -n 's/.*platform:visionOS Simulator.*id:\([^,]*\).*OS:.*/\1/p' |
+            head -n 1
+        )"
+        test -n "$udid"
+        echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+    - name: Build and run visionOS parity tests
+      working-directory: swift/OpenMedKit
+      run: |
+        xcodebuild test \
+          -scheme OpenMedKit \
+          -destination 'platform=visionOS Simulator,id=${{ steps.destination.outputs.udid }}' \
+          -only-testing:OpenMedKitTests/WatchVisionParityTests \
+          -skipPackagePluginValidation

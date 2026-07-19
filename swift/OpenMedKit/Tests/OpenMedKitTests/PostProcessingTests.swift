@@ -268,17 +268,19 @@ final class PostProcessingTests: XCTestCase {
         XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Maya Shah, MD" })
     }
 
-    func testChunkedEntityDedupKeepsBestOverlappingSpan() {
-        let entities = [
-            EntityPrediction(label: "full_name", text: "Jordan", confidence: 0.92, start: 23, end: 29),
-            EntityPrediction(label: "full_name", text: "Whitfield, Jordan A.", confidence: 0.87, start: 12, end: 32),
-        ]
+    #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        func testChunkedEntityDedupKeepsBestOverlappingSpan() {
+            let entities = [
+                EntityPrediction(label: "full_name", text: "Jordan", confidence: 0.92, start: 23, end: 29),
+                EntityPrediction(label: "full_name", text: "Whitfield, Jordan A.", confidence: 0.87, start: 12, end: 32),
+            ]
 
-        let deduplicated = OpenMed.deduplicateOverlappingEntities(entities)
+            let deduplicated = OpenMed.deduplicateOverlappingEntities(entities)
 
-        XCTAssertEqual(deduplicated.count, 1)
-        XCTAssertEqual(deduplicated[0].text, "Whitfield, Jordan A.")
-    }
+            XCTAssertEqual(deduplicated.count, 1)
+            XCTAssertEqual(deduplicated[0].text, "Whitfield, Jordan A.")
+        }
+    #endif
 
     func testMergePIIEntitiesRecoversSurnameFirstPatientHeader() {
         let text = """
