@@ -5,15 +5,15 @@ batches and reuses one resident processor for each worker-side `DoFn` instance.
 It uses `BatchElements` rather than grouping on record content, so PHI and
 quasi-identifiers never become shuffle or partition keys.
 
-Install the optional integration and run the same graph locally with Beam's
-DirectRunner before submitting it to Dataflow:
+Install Apache Beam alongside OpenMed, then run the same graph locally with
+Beam's DirectRunner before submitting it to Dataflow:
 
 ```bash
-pip install --upgrade "openmed[dataflow]"
+pip install --upgrade "openmed" "apache-beam>=2.60,<3"
 ```
 
-The `dataflow` extra supports Python 3.10-3.12, matching the Beam runner
-versions covered by OpenMed's test matrix.
+The integration is tested with Python 3.10-3.12. Apache Beam remains a separate
+runtime dependency so it does not enlarge OpenMed's core dependency surface.
 
 ```python
 import apache_beam as beam

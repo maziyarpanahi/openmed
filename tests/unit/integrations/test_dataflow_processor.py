@@ -5,16 +5,20 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-import apache_beam as beam
 import pytest
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.testing.test_pipeline import TestPipeline as BeamTestPipeline
-from apache_beam.testing.util import assert_that, equal_to
 
-from openmed.integrations.dataflow_processor import (
-    DataflowBatchProcessor,
-    DataflowDeadLetter,
-)
+beam = pytest.importorskip("apache_beam", reason="requires Apache Beam")
+_pipeline_options = pytest.importorskip("apache_beam.options.pipeline_options")
+_test_pipeline = pytest.importorskip("apache_beam.testing.test_pipeline")
+_testing_util = pytest.importorskip("apache_beam.testing.util")
+_dataflow = pytest.importorskip("openmed.integrations.dataflow_processor")
+
+PipelineOptions = _pipeline_options.PipelineOptions
+BeamTestPipeline = _test_pipeline.TestPipeline
+assert_that = _testing_util.assert_that
+equal_to = _testing_util.equal_to
+DataflowBatchProcessor = _dataflow.DataflowBatchProcessor
+DataflowDeadLetter = _dataflow.DataflowDeadLetter
 
 
 def _redact(text: str) -> str:
