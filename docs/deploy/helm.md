@@ -98,6 +98,10 @@ extraEnv:
 | `config.batching.enabled` | `false` | `OPENMED_SERVICE_BATCHING_ENABLED`. |
 | `config.batching.maxSize` | `8` | `OPENMED_SERVICE_BATCH_MAX_SIZE`. |
 | `config.batching.maxWaitMs` | `5` | `OPENMED_SERVICE_BATCH_MAX_WAIT_MS`. |
+| `config.batching.maxQueueSize` | `256` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE`. |
+| `config.batching.highWatermark` | `256` | `OPENMED_SERVICE_BATCH_HIGH_WATERMARK`. |
+| `config.batching.lowWatermark` | `128` | `OPENMED_SERVICE_BATCH_LOW_WATERMARK`. |
+| `config.batching.maxQueueWaitMs` | `1000` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS`. |
 | `config.coalescing.enabled` | `false` | `OPENMED_SERVICE_COALESCING_ENABLED`. |
 | `config.shutdownDrainSeconds` | `30` | `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`. |
 | `config.metrics.enabled` | `false` | `OPENMED_SERVICE_METRICS_ENABLED`. |

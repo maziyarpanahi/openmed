@@ -10,6 +10,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Generic, Optional, Sequence, TypeVar, Union
 
+from .backpressure import AdmissionQueue, AdmissionSnapshot, BackpressureError
+
 T = TypeVar("T")
 R = TypeVar("R")
 BatchResult = Union[R, BaseException]
@@ -67,33 +69,6 @@ def priority_is_higher(candidate: str, current: str) -> bool:
     )
 
 
-class BackpressureError(RuntimeError):
-    """Raised when a priority queue is saturated and cannot admit work."""
-
-    def __init__(
-        self,
-        *,
-        priority: str,
-        queue_depth: int,
-        queue_capacity: int,
-        retry_after_seconds: float,
-    ) -> None:
-        self.priority = normalize_priority(priority)
-        self.queue_depth = int(queue_depth)
-        self.queue_capacity = int(queue_capacity)
-        self.retry_after_seconds = max(float(retry_after_seconds), 0.0)
-        super().__init__(f"{self.priority} inference queue is saturated; retry later")
-
-    def to_details(self) -> dict[str, Any]:
-        """Return the stable API details payload for this backpressure event."""
-        return {
-            "priority": self.priority,
-            "queue_depth": self.queue_depth,
-            "queue_capacity": self.queue_capacity,
-            "retry_after_seconds": self.retry_after_seconds,
-        }
-
-
 class BatchPriorityHandle:
     """Mutable priority handle shared by coalesced callers for one queued job."""
 
@@ -145,6 +120,7 @@ class _QueuedJob(Generic[T, R]):
     priority: str
     queued_at: float
     priority_handle: Optional[BatchPriorityHandle]
+    wait_timeout: Optional[asyncio.TimerHandle]
 
 
 class DynamicBatcher(Generic[T, R]):
@@ -159,6 +135,10 @@ class DynamicBatcher(Generic[T, R]):
         max_queue_size_per_priority: int | Mapping[str, int] = (
             DEFAULT_MAX_QUEUE_SIZE_PER_PRIORITY
         ),
+        high_watermark: Optional[int] = None,
+        low_watermark: Optional[int] = None,
+        max_queue_wait_ms: float = 1000.0,
+        queue_name: str = "batch",
         priority_weights: Optional[Mapping[str, int]] = None,
         metrics: Optional[Any] = None,
     ) -> None:
@@ -171,6 +151,21 @@ class DynamicBatcher(Generic[T, R]):
         self.max_wait_ms = float(max_wait_ms)
         self._dispatch = dispatch
         self._queue_limits = _normalize_queue_limits(max_queue_size_per_priority)
+        admission_high = (
+            sum(self._queue_limits.values())
+            if high_watermark is None
+            else int(high_watermark)
+        )
+        admission_low = (
+            max(0, admission_high // 2) if low_watermark is None else int(low_watermark)
+        )
+        self._admission = AdmissionQueue(
+            queue_name=queue_name,
+            high_watermark=admission_high,
+            low_watermark=admission_low,
+            max_wait_ms=max_queue_wait_ms,
+            metrics=metrics,
+        )
         self._queues: dict[str, deque[_QueuedJob[T, R]]] = {
             priority: deque() for priority in PRIORITY_CLASSES
         }
@@ -209,6 +204,12 @@ class DynamicBatcher(Generic[T, R]):
                 self._record_shed(requested_priority)
                 raise error
 
+            try:
+                self._admission.admit(priority=requested_priority)
+            except BackpressureError:
+                self._record_shed(requested_priority)
+                raise
+
             self._job_sequence += 1
             job = _QueuedJob(
                 job_id=self._job_sequence,
@@ -217,11 +218,13 @@ class DynamicBatcher(Generic[T, R]):
                 priority=requested_priority,
                 queued_at=time.monotonic(),
                 priority_handle=priority_handle,
+                wait_timeout=None,
             )
             if priority_handle is not None:
                 priority_handle._bind(self, job.job_id, loop)
             queue.append(job)
             self._jobs[job.job_id] = job
+            self._schedule_wait_timeout_locked(job, loop)
             self._record_queue_depth(job.priority)
 
             if self._pending_count_locked() == 1:
@@ -235,17 +238,23 @@ class DynamicBatcher(Generic[T, R]):
             future.cancel()
             await self._remove_pending_job(job.job_id)
             raise
+        finally:
+            async with self._lock:
+                self._admission.release()
 
     async def admission_error(self, priority: object) -> Optional[BackpressureError]:
         """Return a backpressure error if *priority* cannot admit more work."""
         normalized = normalize_priority(priority)
         async with self._lock:
             queue = self._queues[normalized]
-            if len(queue) < self._queue_limits[normalized]:
-                return None
+            if len(queue) >= self._queue_limits[normalized]:
+                error = self._backpressure_error_locked(normalized)
+                self._record_shed(normalized)
+                return error
 
-            error = self._backpressure_error_locked(normalized)
-            self._record_shed(normalized)
+            error = self._admission.admission_error(priority=normalized)
+            if error is not None:
+                self._record_shed(normalized)
             return error
 
     async def promote(self, job_id: int, priority: object) -> None:
@@ -276,6 +285,55 @@ class DynamicBatcher(Generic[T, R]):
             return {
                 priority: len(self._queues[priority]) for priority in PRIORITY_CLASSES
             }
+
+    async def admission_snapshot(self) -> AdmissionSnapshot:
+        """Return aggregate admitted work and hysteresis state."""
+        async with self._lock:
+            return self._admission.snapshot()
+
+    def _schedule_wait_timeout_locked(
+        self,
+        job: _QueuedJob[T, R],
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        wait_seconds = self._admission.max_wait_seconds
+        if wait_seconds <= 0:
+            job.wait_timeout = loop.call_soon(self._on_wait_timeout, job.job_id)
+        else:
+            job.wait_timeout = loop.call_later(
+                wait_seconds,
+                self._on_wait_timeout,
+                job.job_id,
+            )
+
+    def _on_wait_timeout(self, job_id: int) -> None:
+        asyncio.get_running_loop().create_task(self._expire_waiting_job(job_id))
+
+    async def _expire_waiting_job(self, job_id: int) -> None:
+        async with self._lock:
+            job = self._jobs.pop(job_id, None)
+            if job is None:
+                return
+            try:
+                self._queues[job.priority].remove(job)
+            except ValueError:
+                return
+
+            job.wait_timeout = None
+            if not self._jobs and self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+            waited = max(time.monotonic() - job.queued_at, 0.0)
+            self._record_queue_depth(job.priority)
+            self._record_queue_wait(job.priority, waited)
+            self._admission.record_wait(waited)
+            self._record_shed(job.priority)
+            if job.priority_handle is not None:
+                job.priority_handle._clear(job.job_id)
+            if not job.future.done():
+                job.future.set_exception(
+                    self._admission.wait_expired(priority=job.priority)
+                )
 
     def _schedule_flush_locked(self, loop: asyncio.AbstractEventLoop) -> None:
         if self._timer is not None:
@@ -317,8 +375,13 @@ class DynamicBatcher(Generic[T, R]):
             if job is None:
                 break
             self._jobs.pop(job.job_id, None)
+            if job.wait_timeout is not None:
+                job.wait_timeout.cancel()
+                job.wait_timeout = None
             self._record_queue_depth(job.priority)
-            self._record_queue_wait(job.priority, time.monotonic() - job.queued_at)
+            waited = max(time.monotonic() - job.queued_at, 0.0)
+            self._record_queue_wait(job.priority, waited)
+            self._admission.record_wait(waited)
             if job.priority_handle is not None:
                 job.priority_handle._clear(job.job_id)
             batch.append(job)
@@ -378,6 +441,12 @@ class DynamicBatcher(Generic[T, R]):
                 self._queues[job.priority].remove(job)
             except ValueError:
                 return
+            if job.wait_timeout is not None:
+                job.wait_timeout.cancel()
+                job.wait_timeout = None
+            if not self._jobs and self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
             self._record_queue_depth(job.priority)
             if job.priority_handle is not None:
                 job.priority_handle._clear(job.job_id)
@@ -388,6 +457,7 @@ class DynamicBatcher(Generic[T, R]):
     def _backpressure_error_locked(self, priority: str) -> BackpressureError:
         return BackpressureError(
             priority=priority,
+            queue_name=priority,
             queue_depth=len(self._queues[priority]),
             queue_capacity=self._queue_limits[priority],
             retry_after_seconds=max(self.max_wait_ms / 1000.0, 0.001),

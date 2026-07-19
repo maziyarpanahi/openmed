@@ -236,6 +236,9 @@ Optional dynamic request batching:
 OPENMED_SERVICE_BATCHING_ENABLED=true \
 OPENMED_SERVICE_BATCH_MAX_SIZE=8 \
 OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
+OPENMED_SERVICE_BATCH_HIGH_WATERMARK=256 \
+OPENMED_SERVICE_BATCH_LOW_WATERMARK=128 \
+OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS=1000 \
 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
@@ -248,7 +251,9 @@ batch helper falls back to per-text analysis still preserve per-request results.
 non-batch-compatible settings are still coalesced but executed independently.
 `OPENMED_SERVICE_BATCH_MAX_SIZE` must be a positive integer.
 `OPENMED_SERVICE_BATCH_MAX_WAIT_MS` is a non-negative wait window in
-milliseconds.
+milliseconds. Bounded admission, high/low-watermark hysteresis, maximum queue
+waits, `503` responses with `Retry-After`, and aggregate metrics are described
+in [`Serving Backpressure`](serving/backpressure.md).
 
 Optional request coalescing:
 

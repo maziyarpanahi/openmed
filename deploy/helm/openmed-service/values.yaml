@@ -58,6 +58,10 @@ config:
     enabled: false
     maxSize: 8
     maxWaitMs: 5
+    maxQueueSize: 256
+    highWatermark: 256
+    lowWatermark: 128
+    maxQueueWaitMs: 1000
   # Request coalescing for identical concurrent model-backed requests.
   coalescing:
     enabled: false
