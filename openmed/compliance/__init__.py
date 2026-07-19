@@ -1,8 +1,8 @@
-"""Local-first compliance reporting and subject-access helpers.
+"""Local-first compliance reporting, subject-access, and evidence helpers.
 
 This package hosts local-first, access-logged compliance workflows built on the
 surrogate vault, de-identification audit reports, and a tamper-evident audit
-chain.
+chain, plus deterministic technical control crosswalks for auditor handoff.
 """
 
 from .audit_chain import (
@@ -21,6 +21,19 @@ from .dsar import (
     assemble_dsar_package,
     plan_erasure,
     render_dsar_summary,
+)
+from .iso27701 import (
+    CONTROL_STATUSES,
+    MANIFEST_FILENAME,
+    MARKDOWN_FILENAME,
+    ControlEvidence,
+    ControlEvidencePack,
+    ControlEvidencePackResult,
+    EvidencePointer,
+    build_control_evidence_pack,
+    generate_control_evidence_pack,
+    load_control_evidence_schema,
+    render_control_evidence_markdown,
 )
 from .safe_harbor import (
     SAFE_HARBOR_ATTESTATION_NOTICE,
@@ -47,6 +60,17 @@ __all__ = [
     "assemble_dsar_package",
     "render_dsar_summary",
     "plan_erasure",
+    "CONTROL_STATUSES",
+    "MANIFEST_FILENAME",
+    "MARKDOWN_FILENAME",
+    "ControlEvidence",
+    "ControlEvidencePack",
+    "ControlEvidencePackResult",
+    "EvidencePointer",
+    "build_control_evidence_pack",
+    "generate_control_evidence_pack",
+    "load_control_evidence_schema",
+    "render_control_evidence_markdown",
     "SAFE_HARBOR_ATTESTATION_NOTICE",
     "SAFE_HARBOR_ATTESTATION_SCHEMA_VERSION",
     "SAFE_HARBOR_CATEGORY_LABELS",
