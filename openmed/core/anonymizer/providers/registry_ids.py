@@ -42,8 +42,10 @@ from openmed.core.pii_i18n import (
     validate_greek_amka,
     validate_hungarian_taj,
     validate_indonesian_nik,
+    validate_irish_pps,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_japanese_my_number,
     validate_jmbg,
     validate_korean_rrn,
     validate_latvian_personas_kods,
@@ -77,7 +79,9 @@ from .clinical_ids import (
     GermanSteuerIdProvider,
     HungarianTAJProvider,
     IndonesianNIKProvider,
+    IrishPPSProvider,
     IsraeliTeudatZehutProvider,
+    JapaneseMyNumberProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
@@ -277,6 +281,20 @@ def _register_builtin_specs() -> None:
         id_type="bsn",
         validate=validate_dutch_bsn,
         faker_method="ssn",
+    )
+    _register_aliases(
+        ("en_IE", "ie"),
+        id_type="pps",
+        validate=validate_irish_pps,
+        faker_method="pps",
+        faker_provider=IrishPPSProvider,
+    )
+    _register_aliases(
+        ("ja", "ja_JP", "jp"),
+        id_type="my_number",
+        validate=validate_japanese_my_number,
+        faker_method="my_number",
+        faker_provider=JapaneseMyNumberProvider,
     )
     _register_aliases(
         ("in", "hi", "te", "en_IN", "hi_IN"),
