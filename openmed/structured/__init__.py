@@ -4,6 +4,13 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .flowsheet import (
+    FLOWSHEET_ADVISORY,
+    Flowsheet,
+    ParameterSeries,
+    TimeSeriesPoint,
+    structure_flowsheet,
+)
 from .lab_panels import (
     LAB_PANEL_ADVISORY,
     PANEL_ORDER,
@@ -15,11 +22,16 @@ from .lab_panels import (
 )
 
 __all__ = [
+    "FLOWSHEET_ADVISORY",
     "LAB_PANEL_ADVISORY",
     "PANEL_ORDER",
     "AnalyteRow",
+    "Flowsheet",
     "LabPanel",
+    "ParameterSeries",
+    "TimeSeriesPoint",
     "canonical_analyte",
     "parse_lab_report",
+    "structure_flowsheet",
     "structure_lab_panels",
 ]
