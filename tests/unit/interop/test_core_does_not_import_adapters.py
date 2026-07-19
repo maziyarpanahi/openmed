@@ -12,6 +12,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "presidio",
     "philter_ucsf",
     "polars",
+    "pyspark",
     "pyDeid",
     "pydeid",
     "gliner",

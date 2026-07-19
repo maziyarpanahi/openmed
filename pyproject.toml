@@ -166,6 +166,9 @@ cloud = [
 ]
 
 spark = [
+  "numpy>=1.26,<2",
+  "pandas>=2.0",
+  "pyarrow>=16",
   "pyspark>=3.5,<4",
 ]
 
