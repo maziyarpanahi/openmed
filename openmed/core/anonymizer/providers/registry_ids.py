@@ -48,6 +48,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mexican_curp,
+    validate_mexican_rfc,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_polish_pesel,
@@ -81,6 +83,8 @@ from .clinical_ids import (
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
+    MexicanCURPProvider,
+    MexicanRFCProvider,
     NPIProvider,
     OntarioHealthCardProvider,
     PhilippinesIdProvider,
@@ -271,6 +275,20 @@ def _register_builtin_specs() -> None:
         validate=validate_spanish_nie,
         faker_method="nie",
         faker_provider=SpanishNIEProvider,
+    )
+    _register_aliases(
+        ("es", "es_MX", "mx"),
+        id_type="curp",
+        validate=validate_mexican_curp,
+        faker_method="mexican_curp",
+        faker_provider=MexicanCURPProvider,
+    )
+    _register_aliases(
+        ("es", "es_MX", "mx"),
+        id_type="rfc",
+        validate=validate_mexican_rfc,
+        faker_method="mexican_rfc",
+        faker_provider=MexicanRFCProvider,
     )
     _register_aliases(
         ("nl", "nl_NL"),

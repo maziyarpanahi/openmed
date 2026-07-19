@@ -26,6 +26,8 @@ EXPECTED_VALIDATOR_KEYS = (
     ("it", "codice_fiscale"),
     ("es", "dni"),
     ("es", "nie"),
+    ("es", "curp"),
+    ("es", "rfc"),
     ("nl", "bsn"),
     ("in", "aadhaar"),
     ("id", "nik"),
@@ -56,6 +58,8 @@ ROUND_TRIP_CASES = (
     ("it", "codice_fiscale", "it_IT"),
     ("es", "dni", "es_ES"),
     ("es", "nie", "es_ES"),
+    ("es", "curp", "es_MX"),
+    ("es", "rfc", "es_MX"),
     ("nl", "bsn", "nl_NL"),
     ("in", "aadhaar", "en_IN"),
     ("id", "nik", "id_ID"),
@@ -132,6 +136,17 @@ class TestNationalIdRegistry:
             "en_IN",
             "aadhaar",
         )
+        es_mx_curp = get_national_id("ES-mx", "CURP")
+        mx_curp = get_national_id("mx", "curp")
+        assert es_mx_curp is not None and mx_curp is not None
+        assert es_mx_curp.validate is mx_curp.validate
+        assert es_mx_curp.faker_method == mx_curp.faker_method
+
+        es_mx_rfc = get_national_id("es_MX", "RFC")
+        es_rfc = get_national_id("es", "rfc")
+        assert es_mx_rfc is not None and es_rfc is not None
+        assert es_mx_rfc.validate is es_rfc.validate
+        assert es_mx_rfc.faker_method == es_rfc.faker_method
 
     def test_unknown_lookup_returns_none(self):
         assert get_national_id("zz", "unknown") is None

@@ -118,6 +118,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "de_DE",
         "it_IT",
         "es_ES",
+        "es_MX",
         "nl_NL",
         "hi_IN",
         "en_IN",
@@ -166,6 +167,7 @@ _LOCALE_ID_METHODS = {
     "fr_FR": "ssn",
     "it_IT": "ssn",
     "es_ES": "nie",
+    "es_MX": "mexican_curp",
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
@@ -231,6 +233,22 @@ def _uscc_surrogate(faker, original):
     return generate_unified_social_credit_code(rng=faker.random)
 
 
+def _mexican_id_surrogate(faker, original, *, locale):
+    """Return a CURP/RFC surrogate when ``locale`` and input identify one."""
+    if locale != "es_MX" or not original:
+        return None
+
+    from openmed.core.anonymizer.providers.clinical_ids import generate_mexican_rfc
+    from openmed.core.pii_i18n import validate_mexican_curp, validate_mexican_rfc
+
+    cleaned = original.strip()
+    if validate_mexican_curp(cleaned) and hasattr(faker, "mexican_curp"):
+        return faker.mexican_curp()
+    if validate_mexican_rfc(cleaned):
+        return generate_mexican_rfc(person=len(cleaned) == 13, rng=faker.random)
+    return None
+
+
 def _gen_id_num(faker, original, *, locale):
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
@@ -238,6 +256,9 @@ def _gen_id_num(faker, original, *, locale):
     uscc = _uscc_surrogate(faker, original)
     if uscc is not None:
         return uscc
+    mexican_id = _mexican_id_surrogate(faker, original, locale=locale)
+    if mexican_id is not None:
+        return mexican_id
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         return getattr(faker, method)()
