@@ -4616,6 +4616,13 @@ spacy = [
 spark = [
     { name = "pyspark" },
 ]
+triton = [
+    { name = "grpcio" },
+    { name = "httpx" },
+    { name = "numpy" },
+    { name = "protobuf" },
+    { name = "transformers" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -4639,11 +4646,13 @@ requires-dist = [
     { name = "gcsfs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "gliner", extras = ["tokenizers"], marker = "extra == 'gliner'", specifier = ">=0.2.0" },
     { name = "griffe", marker = "extra == 'docs'" },
-    { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.64" },
-    { name = "grpcio", marker = "extra == 'service'", specifier = ">=1.64" },
-    { name = "grpcio-tools", marker = "extra == 'dev'", specifier = ">=1.64" },
+    { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.81.1" },
+    { name = "grpcio", marker = "extra == 'service'", specifier = ">=1.81.1" },
+    { name = "grpcio", marker = "extra == 'triton'", specifier = ">=1.81.1" },
+    { name = "grpcio-tools", marker = "extra == 'dev'", specifier = ">=1.81.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'service'", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'triton'", specifier = ">=0.27" },
     { name = "huggingface-hub", marker = "extra == 'coreml'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.30" },
@@ -4669,6 +4678,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'duckdb'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'multimodal'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'onnx-runtime'", specifier = ">=1.26" },
+    { name = "numpy", marker = "extra == 'triton'", specifier = ">=1.26" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.14" },
     { name = "onnxruntime", marker = "extra == 'onnx'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'onnx-runtime'", specifier = ">=1.16" },
@@ -4695,6 +4705,7 @@ requires-dist = [
     { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.354,<3" },
     { name = "protobuf", marker = "extra == 'dev'", specifier = ">=5.26,<7" },
     { name = "protobuf", marker = "extra == 'service'", specifier = ">=5.26,<7" },
+    { name = "protobuf", marker = "extra == 'triton'", specifier = ">=5.26,<7" },
     { name = "pyarrow", marker = "extra == 'columnar'", specifier = ">=16" },
     { name = "pydeid", marker = "extra == 'pydeid'", specifier = ">=0.0.1" },
     { name = "pydicom", marker = "extra == 'multimodal'", specifier = ">=3.0" },
@@ -4727,10 +4738,11 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'onnx-runtime'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'openvino'", specifier = ">=4.50" },
+    { name = "transformers", marker = "extra == 'triton'", specifier = ">=4.50" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy", "spark"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy", "spark", "triton"]
 
 [[package]]
 name = "opentelemetry-api"
