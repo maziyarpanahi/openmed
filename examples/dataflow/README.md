@@ -12,6 +12,9 @@ DirectRunner before submitting it to Dataflow:
 pip install --upgrade "openmed[dataflow]"
 ```
 
+The `dataflow` extra supports Python 3.10-3.12, matching the Beam runner
+versions covered by OpenMed's test matrix.
+
 ```python
 import apache_beam as beam
 

@@ -56,6 +56,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
+    "apache-beam": "Apache-2.0",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
