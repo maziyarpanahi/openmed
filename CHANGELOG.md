@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Prefect integration with a `deidentify_file_task` task and a
+  `deidentify_dataset_flow` flow that fan the local dataset redaction runner
+  over lists of files and return PHI-free count summaries. Prefect stays an
+  optional `prefect` extra, and the adapter is registered lazily as
+  `prefect` in `openmed.interop` (#471).
 - Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
   and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
   five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden

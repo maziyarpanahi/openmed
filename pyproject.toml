@@ -158,6 +158,10 @@ kafka = [
   "confluent-kafka>=2.3",
 ]
 
+prefect = [
+  "prefect>=3.7,<4",
+]
+
 cloud = [
   "fsspec>=2025.9.0",
   "s3fs>=2025.9.0",
