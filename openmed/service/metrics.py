@@ -7,6 +7,12 @@ import os
 import threading
 from typing import Mapping
 
+from .scaling_metrics import (
+    SCALING_INFLIGHT_NAME,
+    SCALING_QUEUE_DEPTH_NAME,
+    ScalingMetrics,
+)
+
 METRICS_ENABLED_ENV_VAR = "OPENMED_SERVICE_METRICS_ENABLED"
 PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
@@ -100,6 +106,7 @@ class PrometheusMetricsRegistry:
         self._duration_count: dict[str, int] = {}
         self._duration_sum: dict[str, float] = {}
         self._inflight_requests = 0
+        self._scaling_metrics = ScalingMetrics()
         self._model_load_total = 0
         self._model_eviction_total = 0
         self._paged_kv_cache_occupancy_pages = 0
@@ -134,6 +141,14 @@ class PrometheusMetricsRegistry:
         """Increment the active request gauge."""
         with self._lock:
             self._inflight_requests += 1
+
+    def scaling_request_started(self) -> None:
+        """Increment the model-backed request gauge used for autoscaling."""
+        self._scaling_metrics.request_started()
+
+    def scaling_request_finished(self) -> None:
+        """Decrement the model-backed request gauge used for autoscaling."""
+        self._scaling_metrics.request_finished()
 
     def request_finished(
         self,
@@ -207,11 +222,22 @@ class PrometheusMetricsRegistry:
             if evictions > 0:
                 self._paged_kv_cache_eviction_total += int(evictions)
 
-    def record_batch_queue_depth(self, *, priority: str, depth: int) -> None:
+    def record_batch_queue_depth(
+        self,
+        *,
+        priority: str,
+        depth: int,
+        queue: str = "default",
+    ) -> None:
         """Set the current dynamic-batcher queue depth for one priority."""
         priority_label = str(priority)
         with self._lock:
             self._batch_queue_depth[priority_label] = max(int(depth), 0)
+        self._scaling_metrics.record_queue_depth(
+            queue=queue,
+            priority=priority_label,
+            depth=depth,
+        )
 
     def record_batch_queue_wait(
         self,
@@ -313,6 +339,7 @@ class PrometheusMetricsRegistry:
 
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
+        scaling_snapshot = self._scaling_metrics.snapshot()
         with self._lock:
             request_total = dict(self._request_total)
             duration_bucket_counts = {
@@ -395,6 +422,22 @@ class PrometheusMetricsRegistry:
             "gauge",
         )
         lines.append(f"{INFLIGHT_NAME} {inflight_requests}")
+
+        _append_family_header(
+            lines,
+            SCALING_QUEUE_DEPTH_NAME,
+            "Pending model requests across this pod's dynamic batch queues.",
+            "gauge",
+        )
+        lines.append(f"{SCALING_QUEUE_DEPTH_NAME} {scaling_snapshot.queue_depth}")
+
+        _append_family_header(
+            lines,
+            SCALING_INFLIGHT_NAME,
+            "Active model-backed requests currently handled by this pod.",
+            "gauge",
+        )
+        lines.append(f"{SCALING_INFLIGHT_NAME} {scaling_snapshot.inflight_requests}")
 
         _append_family_header(
             lines,

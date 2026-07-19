@@ -291,7 +291,9 @@ and the service waits up to this timeout for in-flight `/analyze`,
 `/pii/extract`, `/pii/deidentify`, and `/privacy-gateway/complete` requests to
 finish. The default is `30`.
 
-Optional pull-only Prometheus metrics endpoint:
+### Prometheus metrics
+
+Enable the optional pull-only Prometheus metrics endpoint:
 
 ```bash
 OPENMED_SERVICE_METRICS_ENABLED=true uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
@@ -302,7 +304,11 @@ OPENMED_SERVICE_METRICS_ENABLED=true uvicorn openmed.service.app:app --host 127.
 `1` before the app starts. When enabled, the endpoint renders Prometheus 0.0.4
 text exposition for aggregate request counts, request duration histograms,
 in-flight request count, warm-pool model load/eviction counters, and aggregate
-circuit-breaker state gauges. Metrics
+circuit-breaker state gauges. The label-free
+`openmed_service_scaling_queue_depth` and
+`openmed_service_scaling_inflight_requests` gauges are suitable for a
+Prometheus Adapter and Kubernetes HPA; see the
+[autoscaling guide](deploy/autoscaling.md). Metrics
 are pull-only: OpenMed does not push them to any remote service. Scrape it from
 a locally scoped Prometheus or sidecar, and avoid exposing it directly to
 untrusted networks. Metric labels are limited to static route templates and

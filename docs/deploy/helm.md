@@ -41,7 +41,9 @@ helm upgrade openmed-service deploy/helm/openmed-service \
 
 The chart does not create an Ingress or autoscaling object. Add those in
 environment-specific overlays so cluster ingress classes, certificates, and HPA
-policy stay outside the reusable chart.
+policy stay outside the reusable chart. The cluster-neutral
+[autoscaling guide](autoscaling.md) provides an HPA manifest and Prometheus
+Adapter wiring for the service's queue-depth and in-flight metrics.
 
 ## Probes
 
