@@ -2,7 +2,8 @@ package com.openmed.openmedkit
 
 import ai.djl.huggingface.tokenizers.Encoding
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
-import com.openmed.openmedkit.onnx.OnnxTokenClassifier as RuntimeOnnxTokenClassifier
+import com.openmed.openmedkit.onnx.AcceleratorSelection
+import com.openmed.openmedkit.onnx.AcceleratorSession
 import com.openmed.openmedkit.onnx.TokenOffset
 import com.openmed.openmedkit.onnx.TokenPrediction
 import java.io.Closeable
@@ -39,9 +40,17 @@ class BackendOnnxTokenClassifier(
     private val backend: OpenMedBackend,
 ) : OnnxTokenClassifier {
     private val classifier = if (backend.id2Label.isEmpty()) {
-        RuntimeOnnxTokenClassifier(backend.modelFile, backend.id2LabelFile)
+        AcceleratorSession(
+            backend.modelFile,
+            backend.id2LabelFile,
+            backend.acceleratorConfig,
+        )
     } else {
-        RuntimeOnnxTokenClassifier(backend.modelFile, backend.id2Label)
+        AcceleratorSession(
+            backend.modelFile,
+            backend.id2Label,
+            backend.acceleratorConfig,
+        )
     }
     private val tokenizer = try {
         loadTokenizer(backend)
@@ -49,6 +58,10 @@ class BackendOnnxTokenClassifier(
         classifier.close()
         throw error
     }
+
+    /** Provider and operator-partition decision for this model session. */
+    val acceleratorSelection: AcceleratorSelection
+        get() = classifier.selection
 
     override suspend fun predict(text: String): List<TokenClassificationPrediction> {
         require(text.isNotEmpty()) { "text must not be empty" }

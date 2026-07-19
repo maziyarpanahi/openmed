@@ -155,6 +155,10 @@ class OpenMedKitApiTest {
         assertEquals(File("/models/openmed/model.onnx"), backend.modelFile)
         assertEquals(File("/models/openmed/tokenizer.json"), backend.tokenizerJson)
         assertEquals("PERSON", backend.id2Label[1])
+        assertEquals(
+            listOf("QNN", "NNAPI", "CPU"),
+            backend.acceleratorConfig.preferredProviders.map { it.name },
+        )
     }
 
     private class StaticClassifier(

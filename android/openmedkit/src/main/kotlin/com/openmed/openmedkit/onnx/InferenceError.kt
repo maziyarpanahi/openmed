@@ -11,4 +11,7 @@ public sealed class InferenceError(
 
     public class InvalidOutput(message: String, cause: Throwable? = null) :
         InferenceError(message, cause)
+
+    public class SessionCreation(cause: Throwable? = null) :
+        InferenceError("Unable to create an ONNX Runtime CPU session", cause)
 }
