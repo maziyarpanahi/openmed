@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 from typing import TypedDict
 
+from openmed.clinical.vital_signs import structure_vital_sign
+
 FLOWSHEET_ADVISORY = (
     "Flowsheet structuring aligns a delimited grid into per-parameter time "
     "series deterministically; blank cells are gaps, not interpolated values. "
@@ -55,11 +57,18 @@ class Flowsheet(TypedDict):
     series: list[ParameterSeries]
 
 
-def _parse_number_unit(value: str) -> tuple[float | None, str | None]:
+def _parse_number_unit(
+    parameter: str,
+    value: str,
+) -> tuple[float | None, str | None]:
     match = _NUMBER_UNIT_RE.match(value)
-    if match is None:
-        return None, None
-    return float(match.group(1)), (match.group(2) or None)
+    if match is not None:
+        return float(match.group(1)), (match.group(2) or None)
+
+    vital = structure_vital_sign(f"{parameter} {value}")
+    if vital["kind"] != "unknown":
+        return vital["value"], (vital["unit"] or None)
+    return None, None
 
 
 def _split_cells(line: str, line_start: int, delimiter: str) -> list[tuple[int, str]]:
@@ -102,13 +111,19 @@ def structure_flowsheet(
     timestamps = [cell.strip() for _, cell in header_cells[1:]]
 
     series: list[ParameterSeries] = []
+    series_by_parameter: dict[str, ParameterSeries] = {}
+    previous_parameter: str | None = None
     for line_start, line in rows[header_index + 1 :]:
         if not line.strip():
             continue
         cells = _split_cells(line, line_start, delimiter)
         parameter = cells[0][1].strip()
         if not parameter:
-            continue
+            if previous_parameter is None:
+                continue
+            parameter = previous_parameter
+        else:
+            previous_parameter = parameter
 
         points: list[TimeSeriesPoint] = []
         for column, (cell_start, cell_text) in enumerate(cells[1:]):
@@ -118,7 +133,7 @@ def structure_flowsheet(
             if not stripped:
                 continue  # blank cell -> gap for this timestamp
             value_start = cell_start + cell_text.index(stripped)
-            number, unit = _parse_number_unit(stripped)
+            number, unit = _parse_number_unit(parameter, stripped)
             points.append(
                 TimeSeriesPoint(
                     timestamp=timestamps[column],
@@ -129,7 +144,12 @@ def structure_flowsheet(
                     end=value_start + len(stripped),
                 )
             )
-        series.append(ParameterSeries(parameter=parameter, points=points))
+        parameter_series = series_by_parameter.get(parameter)
+        if parameter_series is None:
+            parameter_series = ParameterSeries(parameter=parameter, points=[])
+            series_by_parameter[parameter] = parameter_series
+            series.append(parameter_series)
+        parameter_series["points"].extend(points)
 
     return Flowsheet(timestamps=timestamps, series=series)
 
