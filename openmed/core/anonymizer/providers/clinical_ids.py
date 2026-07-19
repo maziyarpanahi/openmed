@@ -21,6 +21,8 @@ deterministic:
     passes the official Verhoeff check — only ~1 in 20 by sampling)
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Irish PPS numbers (weighted modulo-23 check letter)
+  - Japanese My Numbers (weighted modulo-11 check digit)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - Malaysian MyKad / NRIC with a decodable embedded birth date
@@ -520,6 +522,64 @@ class FinancialIdentifierProvider(BaseProvider):
 
     def financial_bic(self) -> str:
         return generate_bic(include_branch=True, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Irish PPS number (7 digits + modulo-23 check letter + optional range letter)
+# ---------------------------------------------------------------------------
+
+_IRISH_PPS_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+_IRISH_PPS_RANGE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def generate_irish_pps(*, rng: random.Random | None = None) -> str:
+    """Generate an Irish PPS number accepted by ``validate_irish_pps``."""
+    source = rng or random.Random()
+    digits = "".join(str(source.randint(0, 9)) for _ in range(7))
+    range_letter = (
+        source.choice(_IRISH_PPS_RANGE_LETTERS) if source.randint(0, 1) else None
+    )
+    total = sum(int(digit) * weight for digit, weight in zip(digits, range(8, 1, -1)))
+    if range_letter is not None:
+        total += (ord(range_letter) - ord("A") + 1) * 9
+    check_letter = _IRISH_PPS_CHECK_LETTERS[total % 23]
+    return f"{digits}{check_letter}{range_letter or ''}"
+
+
+class IrishPPSProvider(BaseProvider):
+    """Generates checksum-valid Irish PPS number surrogates."""
+
+    def pps(self) -> str:
+        return generate_irish_pps(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Japanese My Number (11 digits + weighted modulo-11 check digit)
+# ---------------------------------------------------------------------------
+
+_JAPANESE_MY_NUMBER_WEIGHTS = (6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+
+
+def generate_japanese_my_number(*, rng: random.Random | None = None) -> str:
+    """Generate a Japanese My Number accepted by its checksum validator."""
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(11)]
+    if len(set(body)) == 1:
+        body[-1] = (body[-1] + 1) % 10
+
+    remainder = (
+        sum(digit * weight for digit, weight in zip(body, _JAPANESE_MY_NUMBER_WEIGHTS))
+        % 11
+    )
+    check_digit = 0 if remainder <= 1 else 11 - remainder
+    return "".join(str(digit) for digit in (*body, check_digit))
+
+
+class JapaneseMyNumberProvider(BaseProvider):
+    """Generates checksum-valid Japanese My Number surrogates."""
+
+    def my_number(self) -> str:
+        return generate_japanese_my_number(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -1928,7 +1988,9 @@ __all__ = [
     "GermanSteuerIdProvider",
     "HungarianTAJProvider",
     "IndonesianNIKProvider",
+    "IrishPPSProvider",
     "IsraeliTeudatZehutProvider",
+    "JapaneseMyNumberProvider",
     "KoreanRRNProvider",
     "LatvianPersonasKodsProvider",
     "MalaysianMyKadProvider",
@@ -1960,7 +2022,9 @@ __all__ = [
     "generate_iban",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
+    "generate_irish_pps",
     "generate_jmbg",
+    "generate_japanese_my_number",
     "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",

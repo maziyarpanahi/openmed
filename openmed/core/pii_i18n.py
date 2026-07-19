@@ -384,6 +384,62 @@ def validate_dutch_bsn(text: str) -> bool:
     return checksum % 11 == 0
 
 
+_IRISH_PPS_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+
+
+def validate_irish_pps(text: str) -> bool:
+    """Validate an Irish Personal Public Service Number (PPSN).
+
+    A PPS number contains seven digits, a modulo-23 check letter, and an
+    optional second range letter. The seven digits use weights 8 through 2;
+    when present, the range letter contributes its alphabet position with
+    weight 9 before the first letter is checked.
+    """
+    if not isinstance(text, str):
+        return False
+
+    cleaned = text.strip().upper()
+    match = re.fullmatch(r"(\d{7})([A-W])([A-Z])?", cleaned)
+    if match is None:
+        return False
+
+    digits, check_letter, range_letter = match.groups()
+    total = sum(int(digit) * weight for digit, weight in zip(digits, range(8, 1, -1)))
+    if range_letter is not None:
+        total += (ord(range_letter) - ord("A") + 1) * 9
+    return check_letter == _IRISH_PPS_CHECK_LETTERS[total % 23]
+
+
+_JAPANESE_MY_NUMBER_WEIGHTS = (6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+
+
+def validate_japanese_my_number(text: str) -> bool:
+    """Validate a Japanese 12-digit Individual Number (My Number).
+
+    The final digit is derived from the first eleven using the statutory
+    weighted modulo-11 calculation. Plain and 4-4-4 space-separated forms are
+    accepted because both occur in clinical and administrative text.
+    """
+    if not isinstance(text, str):
+        return False
+
+    cleaned = text.strip()
+    if re.fullmatch(r"(?:\d{12}|\d{4} \d{4} \d{4})", cleaned) is None:
+        return False
+
+    digits = cleaned.replace(" ", "")
+    if len(set(digits)) == 1:
+        return False
+
+    total = sum(
+        int(digit) * weight
+        for digit, weight in zip(digits[:11], _JAPANESE_MY_NUMBER_WEIGHTS)
+    )
+    remainder = total % 11
+    check_digit = 0 if remainder <= 1 else 11 - remainder
+    return int(digits[-1]) == check_digit
+
+
 # Verhoeff tables for Aadhaar checksum validation
 _VERHOEFF_D = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -2007,6 +2063,31 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_IRISH_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![A-Z0-9])\d{7}[A-W][A-Z]?(?![A-Z0-9])",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "pps",
+            "ppsn",
+            "pps number",
+            "personal public service number",
+            "personal public services number",
+            "uimhir psp",
+            "uimhir phearsanta seirbhíse poiblí",
+            "uimhir phearsanta seirbhise poibli",
+        ],
+        context_boost=0.45,
+        validator=validate_irish_pps,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # Ontario (OHIP) health card: 10 digits beginning with 1-9 (4-3-3 spacing)
     # plus an optional one- or two-letter version code, Luhn-checked. Health
@@ -3247,7 +3328,8 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.25,
     ),
     PIIPattern(
-        r"(?<!\w)(?:\+81[\s-]?)?(?:0\d{1,4}|\d{1,4})[\s-]?\d{1,4}[\s-]?\d{3,4}\b",
+        r"(?<!\w)(?<!\d{4} )(?!\d{4}\s?\d{4}\s?\d{4}\b)"
+        r"(?:\+81[\s-]?)?(?:0\d{1,4}|\d{1,4})[\s-]?\d{1,4}[\s-]?\d{3,4}\b",
         "phone_number",
         priority=8,
         base_score=0.55,
@@ -3272,6 +3354,7 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
             "\u756a\u53f7",
         ],
         context_boost=0.5,
+        validator=validate_japanese_my_number,
     ),
     PIIPattern(
         r"\b(?:\d{3}-\d{4}|\u3012\d{3}-\d{4})\b",
@@ -5133,6 +5216,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_ie": _IRISH_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
