@@ -35,6 +35,7 @@ deterministic:
   - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
   - Ghana Card PIN and Kenyan legacy/Maisha identity numbers
   - South African ID (13 digits with an embedded birth date and Luhn checksum)
+  - Ukrainian RNOKPP (10 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
   - UK NHS Number, a patient health identifier validated with the NHS
@@ -2878,6 +2879,30 @@ class RodneCisloProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Ukrainian RNOKPP (10 digits, weighted modulo-11 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_ukrainian_rnokpp(*, rng: random.Random | None = None) -> str:
+    """Generate a checksum-valid Ukrainian RNOKPP surrogate."""
+    source = rng or random.Random()
+    day_count = source.randint(1, 50000)
+    serial = source.randint(0, 999)
+    gender_digit = source.randint(0, 9)
+    body = f"{day_count:05d}{serial:03d}{gender_digit}"
+    weights = (-1, 5, 7, 9, 4, 6, 10, 5, 7)
+    check = sum(int(digit) * weight for digit, weight in zip(body, weights)) % 11 % 10
+    return body + str(check)
+
+
+class UkrainianRnokppProvider(BaseProvider):
+    """Generates valid Ukrainian RNOKPP taxpayer registration numbers."""
+
+    def rnokpp(self) -> str:
+        return generate_ukrainian_rnokpp(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Thai national ID (13 digits, weighted mod-11 checksum)
 # ---------------------------------------------------------------------------
 
@@ -3652,6 +3677,7 @@ __all__ = [
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
+    "UkrainianRnokppProvider",
     "generate_australian_medicare",
     "generate_australian_tfn",
     "generate_aadhaar",
@@ -3723,6 +3749,7 @@ __all__ = [
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
+    "generate_ukrainian_rnokpp",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
     "register_clinical_providers",

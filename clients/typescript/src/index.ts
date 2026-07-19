@@ -44,7 +44,10 @@ export type PIILanguage =
   | "sw"
   | "zu"
   | "xh"
-  | "zh";
+  | "zh"
+  | "uk"
+  | "cs"
+  | "el";
 
 export type DeidentificationMethod =
   | "mask"
