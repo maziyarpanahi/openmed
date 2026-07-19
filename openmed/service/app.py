@@ -86,6 +86,7 @@ _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _MODEL_BACKED_PATHS = frozenset(
     {
+        "/graphql",
         "/analyze",
         "/pii/extract",
         "/pii/extract/stream",
@@ -915,6 +916,10 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
+
+    from .graphql_app import mount_graphql
+
+    mount_graphql(app, runtime_getter=_get_service_runtime)
 
     if app.state.tracing.enabled:
         app.add_middleware(

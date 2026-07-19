@@ -27,6 +27,7 @@ nav:
       - Hardened Service Image: deploy/hardened-image.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - gRPC Service: serving/grpc.md
+      - GraphQL Service: serving/graphql.md
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
       - Multi-Arch Containers: deploy/multi-arch.md

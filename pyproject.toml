@@ -59,6 +59,7 @@ dev = [
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
   "ruff==0.15.20",
+  "strawberry-graphql[fastapi]>=0.316,<1",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -184,6 +185,7 @@ service = [
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "protobuf>=5.26,<7",
+  "strawberry-graphql[fastapi]>=0.316,<1",
   "uvicorn[standard]>=0.29",
 ]
 

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a read-only Strawberry GraphQL endpoint for selective analysis and
+  de-identification fields, canonical entity discovery, policy details, safe
+  aggregate risk facets, introspection, and deterministic SDL export (#828).
 - Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
   and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
   five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
