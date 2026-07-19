@@ -24,6 +24,7 @@ nav:
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
+      - KServe and Triton Backends: serving/kserve-triton.md
       - Hardened Service Image: deploy/hardened-image.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - gRPC Service: serving/grpc.md

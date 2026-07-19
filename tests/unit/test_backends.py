@@ -10,6 +10,7 @@ from openmed.core.backends import (
     _BACKENDS,
     HuggingFaceBackend,
     MLXBackend,
+    RemoteInferenceBackend,
     get_backend,
 )
 
@@ -84,6 +85,12 @@ class TestBackendRegistry:
 
     def test_mlx_in_registry(self):
         assert "mlx" in _BACKENDS
+
+    def test_remote_in_registry(self):
+        assert "remote" in _BACKENDS
+
+    def test_remote_registry_entry(self):
+        assert _BACKENDS["remote"] is RemoteInferenceBackend
 
 
 class TestOpenMedConfigBackendField:

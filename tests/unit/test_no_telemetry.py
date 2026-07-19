@@ -66,6 +66,9 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "eval/datasets/drugprot.py": "opt-in evaluation dataset download",
     "eval/suites/shield.py": "opt-in evaluation dataset/rows fetch",
     "service/client.py": "opt-in REST service HTTP client",
+    "service/backends/remote_inference.py": (
+        "opt-in remote inference to a user-configured KServe/Triton endpoint"
+    ),
     "service/privacy_gateway.py": "opt-in privacy-gateway forwarding (user-configured)",
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",
