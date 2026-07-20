@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib
 import io
 import json
 from pathlib import Path
@@ -139,6 +140,39 @@ def test_main_renders_cli_error_from_a_real_failing_command(capsys):
     assert payload["ok"] is False
     assert payload["command"] == "audit verify"
     assert set(payload["error"]) == {"code", "message"}
+
+
+def test_analyze_missing_input_file_uses_error_envelope(tmp_path, capsys):
+    missing = tmp_path / "missing.txt"
+    rc = main(["analyze", "--input-file", str(missing), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert rc == EXIT_ERROR
+    assert payload["ok"] is False
+    assert payload["command"] == "analyze"
+    assert payload["error"]["code"] == "input_not_found"
+
+
+def test_main_sanitizes_unexpected_runtime_errors(monkeypatch, capsys):
+    cli_main = importlib.import_module("openmed.cli.main")
+    secret = "MRN 123456789"
+
+    def fail(_args):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(cli_main, "_handle_analyze", fail)
+    rc = cli_main.main(["analyze", "--text", "synthetic", "--json"])
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+
+    assert rc == EXIT_ERROR
+    assert payload["ok"] is False
+    assert payload["command"] == "analyze"
+    assert payload["error"] == {
+        "code": "runtime_error",
+        "message": "Command failed with RuntimeError.",
+    }
+    assert secret not in output
 
 
 # ---------------------------------------------------------------------------
