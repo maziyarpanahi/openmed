@@ -57,7 +57,23 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
+    "pl",
+    "lv",
+    "sk",
+    "ms",
+    "tl",
+    "da",
+    "hu",
+    "et",
+    "sr",
+    "hr",
+    "bg",
+    "fi",
+    "cs",
+    "el",
+    "vi",
+}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -222,6 +238,36 @@ def validate_german_steuer_id(text: str) -> bool:
         return False
 
     return True
+
+
+def validate_hungarian_taj(text: str) -> bool:
+    """Validate a Hungarian TAJ social-security identifier.
+
+    TAJ values contain eight serial digits followed by a check digit. The
+    first eight digits use alternating weights 3 and 7, starting with 3; the
+    weighted sum modulo 10 must equal the ninth digit, as specified by Annex 2
+    of Hungary's Act XX of 1996. Plain nine-digit values and the commonly
+    grouped ``NNN NNN NNN`` / ``NNN-NNN-NNN`` forms are accepted.
+
+    Args:
+        text: Candidate TAJ value.
+
+    Returns:
+        True when the value has a supported format and a valid check digit.
+    """
+    if not isinstance(text, str):
+        return False
+
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9]{9}|[0-9]{3}([ -])[0-9]{3}\1[0-9]{3}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[ -]", "", stripped)
+    numbers = [int(digit) for digit in digits]
+    total = sum(
+        digit * (3 if index % 2 == 0 else 7) for index, digit in enumerate(numbers[:8])
+    )
+    return numbers[8] == total % 10
 
 
 def validate_italian_codice_fiscale(text: str) -> bool:
@@ -505,6 +551,41 @@ def validate_portuguese_cnpj(text: str) -> bool:
     return numbers[12] == first_check and numbers[13] == second_check
 
 
+# Portuguese NIF/NIPC valid leading digits (individuals, companies, public
+# bodies, sole traders) and two-digit prefixes (non-resident individuals and
+# special taxpayer categories).
+_PORTUGUESE_NIF_FIRST_DIGITS: frozenset[str] = frozenset("1235689")
+_PORTUGUESE_NIF_PREFIXES: frozenset[str] = frozenset(
+    {"45", "70", "71", "72", "74", "75", "77", "79", "90", "91", "98", "99"}
+)
+
+
+def validate_portuguese_nif(text: str) -> bool:
+    """Validate a Portuguese NIF/NIPC tax identification number.
+
+    The NIF (individuals) and NIPC (entities) share a nine-digit format
+    with a weighted modulo-11 check digit. The leading digit — or, for
+    some taxpayer categories, the leading two digits — must fall in the
+    documented issuance set. This is distinct from the Brazilian CPF/CNPJ
+    validated elsewhere in the Portuguese pack.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 9:
+        return False
+    if (
+        digits[0] not in _PORTUGUESE_NIF_FIRST_DIGITS
+        and digits[:2] not in _PORTUGUESE_NIF_PREFIXES
+    ):
+        return False
+
+    total = sum(int(digits[index]) * (9 - index) for index in range(8))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return check == int(digits[8])
+
+
 def validate_turkish_tckn(text: str) -> bool:
     """Validate Turkish T.C. Kimlik No (TCKN).
 
@@ -614,6 +695,51 @@ def validate_indonesian_nik(text: str) -> bool:
         )
     except (ValueError, calendar.IllegalMonthError):
         return False
+
+
+def validate_vietnamese_cccd(text: str) -> bool:
+    """Validate the offline-verifiable structure of a Vietnamese CCCD.
+
+    Article 12 of Vietnam's 2023 Law on Identification publicly guarantees a
+    natural-number sequence of 12 digits. Earlier province, century, gender,
+    and birth-year encoding rules expired with Circular 59/2021/TT-BCA on
+    1 July 2024, and no public checksum is available. OpenMed therefore checks
+    only the current public length and digit contract; detection patterns
+    require nearby CCCD context to avoid treating arbitrary clinical numbers
+    as identifiers.
+
+    Args:
+        text: CCCD value, contiguous or grouped as four three-digit blocks.
+
+    Returns:
+        True when the candidate contains exactly 12 digits in a supported
+        presentation.
+    """
+    stripped = text.strip()
+    supported_shape = r"\d{12}|\d{3}(?:\s+\d{3}){3}|\d{3}(?:-\d{3}){3}"
+    return re.fullmatch(supported_shape, stripped) is not None
+
+
+def validate_vietnamese_cmnd(text: str) -> bool:
+    """Validate the local structure of a legacy Vietnamese CMND.
+
+    Legacy CMND values have nine digits and no public checksum. To keep this
+    structural validator conservative, all-zero and repeated-digit values are
+    rejected. The corresponding detection pattern additionally requires an
+    explicit CMND or ``chung minh nhan dan`` context cue.
+
+    Args:
+        text: CMND value, contiguous or grouped as three three-digit blocks.
+
+    Returns:
+        True when the candidate has a plausible legacy CMND structure.
+    """
+    stripped = text.strip()
+    if re.fullmatch(r"\d{9}|\d{3}(?:[\s-]+\d{3}){2}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    return len(set(digits)) > 1
 
 
 def validate_thai_national_id(text: str) -> bool:
@@ -906,6 +1032,290 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     )
 
 
+def validate_greek_amka(text: str) -> bool:
+    """Validate a Greek AMKA social-security number.
+
+    The AMKA is an 11-digit code whose first six digits encode a birth
+    date as ``DDMMYY`` and whose full value carries a Luhn check digit.
+    The two-digit year is century-ambiguous, so a date valid in either
+    the 1900s or the 2000s is accepted.
+    """
+
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+    if not _passes_luhn(digits):
+        return False
+
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:6])
+    if month < 1 or month > 12:
+        return False
+
+    import calendar
+
+    for century in (1900, 2000):
+        year = century + year_suffix
+        try:
+            if 1 <= day <= calendar.monthrange(year, month)[1]:
+                return True
+        except (ValueError, calendar.IllegalMonthError):
+            continue
+    return False
+
+
+def _passes_luhn(digits: str) -> bool:
+    """Return whether an all-digit string satisfies the Luhn checksum."""
+    total = 0
+    for index, char in enumerate(reversed(digits)):
+        value = int(char)
+        if index % 2 == 1:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+_FINNISH_HETU_CHECK_ALPHABET = "0123456789ABCDEFHJKLMNPRSTUVWXY"
+_FINNISH_HETU_CENTURY_SIGNS = {
+    **{"+": 1800},
+    **{sign: 1900 for sign in "-YXWVU"},
+    **{sign: 2000 for sign in "ABCDEF"},
+}
+_FINNISH_HETU_RE = re.compile(
+    r"^(\d{2})(\d{2})(\d{2})([-+YXWVUABCDEF])(\d{3})([0-9ABCDEFHJKLMNPRSTUVWXY])$"
+)
+
+
+def validate_finnish_hetu(text: str) -> bool:
+    """Validate Finnish HETU personal identity code.
+
+    The HETU is ``DDMMYYCZZZQ``:
+
+    - DDMMYY: birth date within the century selected by C.
+    - C: century sign — ``+`` for the 1800s, ``-`` (or reform signs
+      ``Y``/``X``/``W``/``V``/``U``) for the 1900s, and ``A``-``F`` for
+      the 2000s.
+    - ZZZ: individual serial number.
+    - Q: modulo-31 check character over the nine digits ``DDMMYYZZZ``,
+      mapped through the alphabet ``0-9ABCDEFHJKLMNPRSTUVWXY``.
+    """
+
+    if not isinstance(text, str):
+        return False
+
+    match = _FINNISH_HETU_RE.fullmatch(text)
+    if match is None:
+        return False
+
+    day_text, month_text, year_text, sign, serial, check = match.groups()
+    if not 2 <= int(serial) <= 899:
+        return False
+
+    expected = _FINNISH_HETU_CHECK_ALPHABET[
+        int(day_text + month_text + year_text + serial) % 31
+    ]
+    if check != expected:
+        return False
+
+    year = _FINNISH_HETU_CENTURY_SIGNS[sign] + int(year_text)
+    month = int(month_text)
+    day = int(day_text)
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def validate_bulgarian_egn(text: str) -> bool:
+    """Validate Bulgarian EGN unified civil number.
+
+    The EGN is a 10-digit code ``YYMMDDRRRC``:
+
+    - YYMMDD: birth date with a century-offset month — months 01-12 are
+      births in the 1900s, 21-32 (month + 20) the 1800s, and 41-52
+      (month + 40) the 2000s.
+    - RRR: region/serial digits; the ninth digit encodes sex.
+    - C: weighted check digit; see :func:`_bulgarian_egn_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{10}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if numbers[9] != _bulgarian_egn_check_digit(numbers[:9]):
+        return False
+
+    year = int(digits[0:2])
+    month_raw = int(digits[2:4])
+    day = int(digits[4:6])
+    if 41 <= month_raw <= 52:
+        year += 2000
+        month = month_raw - 40
+    elif 21 <= month_raw <= 32:
+        year += 1800
+        month = month_raw - 20
+    elif 1 <= month_raw <= 12:
+        year += 1900
+        month = month_raw
+    else:
+        return False
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _bulgarian_egn_check_digit(digits: list[int]) -> int:
+    """Return the Bulgarian EGN check digit for the first 9 digits.
+
+    Weighted sum with weights 2,4,8,5,10,9,7,3,6 modulo 11; a remainder
+    of 10 yields check digit 0.
+    """
+    weights = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+    remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+    return 0 if remainder == 10 else remainder
+
+
+def validate_croatian_oib(text: str) -> bool:
+    """Validate Croatian OIB personal identification number.
+
+    The OIB is an 11-digit code with no embedded structure; the final
+    digit is an ISO 7064 MOD 11,10 check over the first 10 digits; see
+    :func:`_croatian_oib_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{11}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    return numbers[10] == _croatian_oib_check_digit(numbers[:10])
+
+
+def _croatian_oib_check_digit(digits: list[int]) -> int:
+    """Return the ISO 7064 MOD 11,10 check digit for the first 10 digits."""
+    partial = 10
+    for digit in digits:
+        partial = (partial + digit) % 10
+        if partial == 0:
+            partial = 10
+        partial = (partial * 2) % 11
+    return (11 - partial) % 10
+
+
+def validate_jmbg(text: str) -> bool:
+    """Validate Serbian / ex-Yugoslav JMBG unique master citizen number.
+
+    The JMBG is a 13-digit code ``DDMMYYYRRSSSK``:
+
+    - DDMMYYY: birth date; YYY holds the last three digits of the year
+      (values of 800 and above map to the 1800/1900s, lower values to
+      the 2000s).
+    - RR: political region of registration (all values accepted).
+    - SSS: serial number; 000-499 male, 500-999 female.
+    - K: modulo-11 check digit; see :func:`_jmbg_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{13}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if numbers[12] != _jmbg_check_digit(numbers[:12]):
+        return False
+
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:7])
+    year = 1000 + year_suffix if year_suffix >= 800 else 2000 + year_suffix
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _jmbg_check_digit(digits: list[int]) -> int:
+    """Return the JMBG check digit for the first 12 digits.
+
+    ``m = 11 - ((7*(d1+d7) + 6*(d2+d8) + 5*(d3+d9) + 4*(d4+d10) +
+    3*(d5+d11) + 2*(d6+d12)) mod 11)``; remainders of 10 or 11 yield
+    check digit 0.
+    """
+    weights = (7, 6, 5, 4, 3, 2)
+    total = sum(
+        weight * (digits[index] + digits[index + 6])
+        for index, weight in enumerate(weights)
+    )
+    remainder = 11 - (total % 11)
+    return 0 if remainder > 9 else remainder
+
+
+def validate_estonian_isikukood(text: str) -> bool:
+    """Validate Estonian isikukood.
+
+    The isikukood is an 11-digit personal code ``GYYMMDDSSSC``:
+
+    - G: century and sex (1/2 = 1800s, 3/4 = 1900s, 5/6 = 2000s;
+      odd = male, even = female).
+    - YYMMDD: date of birth within that century.
+    - SSS: serial number.
+    - C: two-pass modulo-11 check digit; see
+      :func:`_estonian_isikukood_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{11}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if not 1 <= numbers[0] <= 6:
+        return False
+    if numbers[10] != _estonian_isikukood_check_digit(numbers[:10]):
+        return False
+
+    year = 1800 + ((numbers[0] - 1) // 2) * 100 + int(digits[1:3])
+    month = int(digits[3:5])
+    day = int(digits[5:7])
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _estonian_isikukood_check_digit(digits: list[int]) -> int:
+    """Return the Estonian isikukood check digit for the first 10 digits.
+
+    First pass uses weights 1..9,1 modulo 11; a remainder of 10 triggers a
+    second pass with weights 3..9,1,2,3, and a second remainder of 10 yields
+    check digit 0.
+    """
+    for weights in (
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 1),
+        (3, 4, 5, 6, 7, 8, 9, 1, 2, 3),
+    ):
+        remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+        if remainder < 10:
+            return remainder
+    return 0
+
+
 def validate_korean_rrn(text: str) -> bool:
     """Validate South Korean Resident Registration Number (RRN).
 
@@ -985,23 +1395,33 @@ def validate_korean_rrn(text: str) -> bool:
 def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     """Validate a Czech/Slovak rodne cislo birth number.
 
-    Modern Czech and Slovak birth numbers use ten digits in the shape
-    ``YYMMDDXXXX`` with a modulo-11 checksum over the whole value. Female
-    identifiers add 50 to the birth month; overflow series may add 20 for
-    men or 70 for women.
+    Modern values use ten digits in the shape ``YYMMDDXXXX`` and the whole
+    value must be divisible by 11. Legacy values assigned to people born
+    before 1954 use nine digits and no checksum. Female identifiers add 50
+    to the birth month; post-2004 overflow series may add 20 for men or 70
+    for women.
 
     Args:
         text: Birth number string, optionally containing a slash, spaces, or
             hyphen separators.
 
     Returns:
-        True if the identifier has a decodable birth date and modulo-11 check.
+        True if the identifier has a valid shape, birth date, serial, and
+        (for ten-digit values) modulo-11 checksum.
     """
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 10:
+    if not isinstance(text, str):
         return False
-    if int(digits) % 11 != 0:
+
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9]{9,10}|[0-9]{6}[ /-][0-9]{3,4}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    legacy = len(digits) == 9
+    if legacy:
+        if digits[6:] == "000":
+            return False
+    elif int(digits) % 11 != 0:
         return False
 
     year_suffix = int(digits[0:2])
@@ -1022,26 +1442,29 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     else:
         return False
 
+    if legacy and overflow_series:
+        return False
     if day < 1 or day > 31:
         return False
 
     import calendar
 
-    # Ten-digit rodne cislo values were introduced in 1954. The two-digit year
-    # is century-ambiguous, so accept either plausible civil-registration
-    # century while keeping the overflow series in the post-2004 era.
-    for century in (1900, 2000):
-        year = century + year_suffix
-        if year < 1954:
-            continue
+    if legacy:
+        year = (1900 if year_suffix <= 53 else 1800) + year_suffix
+    else:
+        year = (2000 if year_suffix <= 53 else 1900) + year_suffix
         if overflow_series and year < 2004:
-            continue
-        try:
-            if day <= calendar.monthrange(year, month)[1]:
-                return True
-        except (ValueError, calendar.IllegalMonthError):
-            continue
-    return False
+            return False
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+# Czech and Slovak share the Czechoslovak birth-number system. Keep a
+# Czech-facing public name for issue-specific callers without duplicating logic.
+validate_czech_rodne_cislo = validate_czechoslovak_rodne_cislo
 
 
 # Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
@@ -1681,6 +2104,92 @@ _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# China Unified Social Credit Code (GB 32100-2015), ISO 7064 MOD 31-3 over a
+# restricted 31-character alphabet that excludes the ambiguous letters I, O, S,
+# V and Z. Position values are the index into this ordered alphabet.
+USCC_ALPHABET = "0123456789ABCDEFGHJKLMNPQRTUWXY"
+_USCC_VALUE = {char: index for index, char in enumerate(USCC_ALPHABET)}
+_USCC_WEIGHTS = tuple(pow(3, i, 31) for i in range(17))
+# Department/category pairs from GB 32100-2015 Amendment No. 1. Keeping the
+# pairs together prevents a checksum-valid but structurally impossible prefix.
+USCC_DEPARTMENT_CATEGORY_CODES = {
+    "1": frozenset("1239"),
+    "2": frozenset("19"),
+    "3": frozenset("123459"),
+    "4": frozenset("19"),
+    "5": frozenset("1239"),
+    "6": frozenset("129"),
+    "7": frozenset("129"),
+    "8": frozenset("19"),
+    "9": frozenset("123"),
+    "A": frozenset("19"),
+    "N": frozenset("1239"),
+    "Y": frozenset("1"),
+}
+
+
+def uscc_check_char(body17: str) -> str:
+    """Return the ISO 7064 MOD 31-3 check character for a USCC body.
+
+    Args:
+        body17: Seventeen characters from :data:`USCC_ALPHABET`.
+
+    Returns:
+        The single checksum character.
+
+    Raises:
+        ValueError: If the body has the wrong length or contains a forbidden
+            character.
+    """
+
+    if len(body17) != 17 or any(char not in _USCC_VALUE for char in body17):
+        raise ValueError("USCC body must contain 17 characters from USCC_ALPHABET")
+    total = sum(_USCC_VALUE[char] * _USCC_WEIGHTS[i] for i, char in enumerate(body17))
+    return USCC_ALPHABET[(31 - (total % 31)) % 31]
+
+
+def validate_unified_social_credit_code(text: str) -> bool:
+    """Validate a China Unified Social Credit Code (18-char, ISO 7064 MOD 31-3).
+
+    Checks the length, the restricted alphabet (excluding I/O/S/V/Z), the
+    numeric administrative-region segment (positions 3-8), and the MOD 31-3
+    check character. Returns ``False`` for any non-conforming input.
+    """
+    if not isinstance(text, str):
+        return False
+    code = text.strip()
+    if len(code) != 18 or any(char not in _USCC_VALUE for char in code):
+        return False
+    categories = USCC_DEPARTMENT_CATEGORY_CODES.get(code[0])
+    if categories is None or code[1] not in categories:
+        return False
+    # Positions 3-8 (0-indexed 2:8) are the 6-digit administrative region code.
+    if not code[2:8].isdigit():
+        return False
+    return uscc_check_char(code[:17]) == code[17]
+
+
+# Language-agnostic China Unified Social Credit Code pattern, guarded by the
+# MOD 31-3 validator and always included in the universal base set.
+USCC_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9A-Z])[0-9A-HJ-NP-RTUW-Y]{18}(?![0-9A-Z])",
+        "social_credit_code",
+        priority=15,
+        base_score=0.6,
+        context_words=[
+            "统一社会信用代码",
+            "信用代码",
+            "unified social credit",
+            "social credit code",
+            "uscc",
+        ],
+        context_boost=0.4,
+        validator=validate_unified_social_credit_code,
+    ),
+]
+
+
 # Language-agnostic ICAO 9303 machine-readable-zone patterns, guarded by the
 # check-digit validators and always included in the universal base set.
 MRZ_PII_PATTERNS: List[PIIPattern] = [
@@ -2215,6 +2724,23 @@ _PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.45,
         validator=validate_portuguese_cnpj,
+    ),
+    # Portuguese NIF / NIPC (9 digits, pt_PT)
+    PIIPattern(
+        r"\b\d{3}\s?\d{3}\s?\d{3}\b",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "nif",
+            "nipc",
+            "contribuinte",
+            "n\u00famero de contribuinte",
+            "numero de contribuinte",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_portuguese_nif,
     ),
     # Portuguese street addresses
     PIIPattern(
@@ -3170,6 +3696,445 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Finnish PII patterns
+# ---------------------------------------------------------------------------
+
+_FINNISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "syntymäaika",
+            "syntymaaika",
+            "syntynyt",
+            "päivämäärä",
+            "paivamaara",
+            "saapunut",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+358[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{2,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["puhelin", "matkapuhelin", "gsm", "yhteystiedot"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{6}[-+YXWVUABCDEF]\d{3}[0-9ABCDEFHJKLMNPRSTUVWXY]\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "henkilötunnus",
+            "henkilotunnus",
+            "hetu",
+        ],
+        context_boost=0.4,
+        validator=validate_finnish_hetu,
+    ),
+    PIIPattern(
+        r"\b[A-ZÅÄÖ][a-zåäö.'-]*(?:katu|tie|kuja|polku|raitti)\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["osoite", "asuu", "katu"],
+        context_boost=0.25,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postinumero", "osoite"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Bulgarian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_BULGARIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "раждане",
+            "роден",
+            "родена",
+            "приет",
+            "приета",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+359[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "мобилен", "gsm"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{2}[0-5]\d[0-3]\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "егн",
+            "егн:",
+            "egn",
+            "единен граждански номер",
+        ],
+        context_boost=0.4,
+        validator=validate_bulgarian_egn,
+    ),
+    PIIPattern(
+        r"\b(?:[А-Я][а-яА-Я.'-]+\s+(?:улица|булевард|площад)\s+\d{1,5}[А-Яа-яA-Za-z]?|(?:улица|булевард|площад|ул\.|бул\.)\s+[А-Я][а-яА-Я .'-]{2,60}\s+\d{1,5}[А-Яа-яA-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адрес", "живее", "улица"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{4}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["пощенски код", "адрес"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Croatian PII patterns
+# ---------------------------------------------------------------------------
+
+_CROATIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "rodjenja",
+            "rođenja",
+            "primljen",
+            "otpusten",
+            "otpušten",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+385[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobitel", "kontakt"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "oib",
+            "oib:",
+            "osobni identifikacijski broj",
+        ],
+        context_boost=0.4,
+        validator=validate_croatian_oib,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"\b(?:[A-ZČĆŠŽĐ][A-Za-zčćšžđ.'-]+\s+(?:ulica|trg|avenija|cesta)\s+\d{1,5}[A-Za-z]?|(?:ulica|trg|avenija|cesta)\s+[A-ZČĆŠŽĐ][A-Za-zčćšžđ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresa", "stanuje", "ulica"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postanski broj", "poštanski broj", "adresa"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Serbian PII patterns (Latin and Cyrillic scripts)
+# ---------------------------------------------------------------------------
+
+_SERBIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "rodjenja",
+            "rođenja",
+            "датум",
+            "рођења",
+            "primljen",
+            "примљен",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+381[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobilni", "kontakt", "телефон", "мобилни"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[0-3]\d[01]\d{10}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "jmbg",
+            "jmbg:",
+            "јмбг",
+            "maticni broj",
+            "matični broj",
+            "матични број",
+        ],
+        context_boost=0.4,
+        validator=validate_jmbg,
+    ),
+    PIIPattern(
+        r"\b(?:[A-ZČĆŠŽĐЀ-Я][A-Za-zčćšžđа-џ.'-]+\s+(?:ulica|bulevar|trg|улица|булевар|трг)\s+\d{1,5}[A-Za-z]?|(?:ulica|bulevar|trg|улица|булевар|трг)\s+[A-ZČĆŠŽĐЀ-Я][A-Za-zčćšžđа-џ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresa", "stanuje", "ulica", "адреса", "улица"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "postanski broj",
+            "poštanski broj",
+            "поштански број",
+            "adresa",
+            "адреса",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Estonian PII patterns
+# ---------------------------------------------------------------------------
+
+_ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "kuupaev",
+            "kuupäev",
+            "sunniaeg",
+            "sünniaeg",
+            "sundinud",
+            "sündinud",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+372\s?)?[3-8]\d{2,3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobiil", "kontakt"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[1-6]\d{2}[01]\d[0-3]\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "isikukood",
+            "isikukood:",
+            "ik",
+        ],
+        context_boost=0.4,
+        validator=validate_estonian_isikukood,
+    ),
+    PIIPattern(
+        r"\b(?:[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f.'-]+\s+(?:tanav|tänav|maantee|puiestee|tee)\s+\d{1,5}[A-Za-z]?|(?:tanav|tänav|maantee|puiestee|tee)\s+[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["aadress", "elukoht", "tanav", "tänav"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postiindeks", "indeks", "aadress"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Czech PII patterns
+# ---------------------------------------------------------------------------
+
+# Czech month names in both nominative and genitive (dates read
+# "16. listopadu 1975"). Longer forms are listed first so the alternation
+# prefers them.
+_CZECH_MONTH_PATTERN = (
+    r"ledna|leden|února|únor|března|březen|dubna|duben|"
+    r"května|květen|července|červenec|června|červen|"
+    r"srpna|srpen|září|října|říjen|listopadu|listopad|prosince|prosinec"
+)
+
+_CZECH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "narozeni",
+            "narození",
+            "narozen",
+            "narozena",
+            "prijat",
+            "přijat",
+            "přijata",
+            "propusten",
+            "propuštěn",
+            "propuštěna",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\.?\s+(?:{_CZECH_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "datum",
+            "narození",
+            "narozeni",
+            "narozen",
+            "narozena",
+            "přijat",
+            "prijat",
+            "přijata",
+            "propuštěn",
+            "propusten",
+            "propuštěna",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+420[\s.-]?)?[2-7]\d{2}(?:[\s.-]?\d{3}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "tel", "mobil", "číslo", "cislo", "kontakt"],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{3,4}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "rodne cislo",
+            "rodné číslo",
+            "rc",
+            "rč",
+            "identifikacni cislo",
+            "identifikační číslo",
+        ],
+        context_boost=0.45,
+        validator=validate_czech_rodne_cislo,
+    ),
+    PIIPattern(
+        r"\b(?!(?:adresa|bydliště|bydliste|trvalé)\b)(?:[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+(?:\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+)*?\s+(?:ulice|ul\.|trida|třída|namesti|náměstí|nábřeží)\s+\d{1,5}[A-Za-z]?|(?:ulice|ul\.|trida|třída|namesti|náměstí|nábřeží)\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adresa",
+            "bydliste",
+            "bydliště",
+            "trvalé bydliště",
+            "ulice",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}\s?\d{2}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "psc",
+            "psč",
+            "postovni smerovaci cislo",
+            "poštovní směrovací číslo",
+            "adresa",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # Korean dates: YYYY년 MM월 DD일
@@ -3772,7 +4737,7 @@ _SLOVAK_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.35,
     ),
     PIIPattern(
-        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{4}(?!\d)",
+        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{3,4}(?!\d)",
         "national_id",
         priority=10,
         base_score=0.5,
@@ -3820,6 +4785,318 @@ _SLOVAK_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_HUNGARIAN_MONTH_PATTERN = (
+    r"január|február|március|április|május|június|július|augusztus|"
+    r"szeptember|október|november|december"
+)
+
+_HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Hungarian civil dates conventionally use year-month-day order.
+    PIIPattern(
+        r"(?<!\d)\d{4}[./-]\s?\d{1,2}[./-]\s?\d{1,2}\.?(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "dátum",
+            "született",
+            "születési dátum",
+            "felvétel",
+            "elbocsátás",
+            "kontroll",
+        ],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        rf"(?<!\d)\d{{4}}\.\s?(?:{_HUNGARIAN_MONTH_PATTERN})\s+\d{{1,2}}\.?(?!\d)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "dátum",
+            "született",
+            "születési dátum",
+            "felvétel",
+            "elbocsátás",
+            "kontroll",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Hungarian E.164 (+36) and domestic (06) geographic/mobile forms.
+    PIIPattern(
+        r"(?<!\w)(?:\+36|06)[\s.-]?(?:"
+        r"1[\s.-]?\d{3}[\s.-]?\d{4}|"
+        r"(?:20|30|31|50|70)[\s.-]?\d{3}[\s.-]?\d{4}|"
+        r"[2-9]\d[\s.-]?\d{3}[\s.-]?\d{3})(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "telefonszám", "mobil", "elérhetőség", "tel"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:[0-9]{9}|[0-9]{3}(?:[ -][0-9]{3}){2})(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "taj",
+            "taj-szám",
+            "taj szám",
+            "társadalombiztosítási azonosító jel",
+            "biztosítási azonosító",
+        ],
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        validator=validate_hungarian_taj,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[^\W\d_](?:[^\W_]|[ .'-]){1,60}\s+"
+        r"(?:utca|út|tér|körút|köz|sétány|fasor|park|sor)\s+"
+        r"\d{1,4}[A-Za-z]?(?:/\d+)?\.?(?!\w)",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "cím",
+            "lakcím",
+            "lakóhely",
+            "tartózkodási hely",
+            "utca",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)[1-9]\d{3}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["irányítószám", "postai irányítószám", "cím", "lakcím"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Greek PII patterns (Greek script)
+# ---------------------------------------------------------------------------
+
+_GREEK_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "ημερομηνία",
+            "γέννησης",
+            "γεννήθηκε",
+            "εισαγωγή",
+            "εξιτήριο",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+30[\s.-]?)?(?:69\d|2\d{2})[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["τηλέφωνο", "τηλ", "κινητό", "επικοινωνία"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "αμκα",
+            "α.μ.κ.α",
+            "αριθμός μητρώου κοινωνικής ασφάλισης",
+        ],
+        context_boost=0.4,
+        validator=validate_greek_amka,
+    ),
+    PIIPattern(
+        r"\b(?:οδός|λεωφόρος|πλατεία)\s+[Α-ΩΆΈΉΊΌΎΏ][Α-Ωα-ωάέήίόύώϊϋΐΰ.'-]{2,40}\s+\d{1,4}[Α-Ωα-ωA-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["διεύθυνση", "κατοικία", "οδός"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{3}\s?\d{2}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["ταχυδρομικός κώδικας", "τ.κ", "διεύθυνση"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Vietnamese PII patterns
+# ---------------------------------------------------------------------------
+
+_VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])/(?:0?[1-9]|1[0-2])/(?:19|20)\d{2}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "ngày sinh",
+            "ngay sinh",
+            "sinh ngày",
+            "sinh ngay",
+            "ngày khám",
+            "ngay kham",
+            "ngày nhập viện",
+            "ngay nhap vien",
+            "ngày xuất viện",
+            "ngay xuat vien",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)ngày\s+(?:0?[1-9]|[12]\d|3[01])\s+tháng\s+"
+        r"(?:0?[1-9]|1[0-2])\s+năm\s+(?:19|20)\d{2}(?!\d)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=["ngày sinh", "sinh ngày", "ngày khám", "ngày nhập viện"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+84[\s.-]?|0)[35789]\d(?:[\s.-]?\d){7}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "điện thoại",
+            "dien thoai",
+            "số điện thoại",
+            "so dien thoai",
+            "di động",
+            "di dong",
+            "liên hệ",
+            "lien he",
+            "đt",
+            "sđt",
+        ],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+84[\s.-]?|0)2\d{1,2}(?:[\s.-]?\d){7,8}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.45,
+        context_words=[
+            "điện thoại",
+            "dien thoai",
+            "số điện thoại",
+            "so dien thoai",
+            "liên hệ",
+            "lien he",
+            "đt",
+        ],
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}(?:[\s-]?\d{3}){3}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "cccd",
+            "căn cước công dân",
+            "can cuoc cong dan",
+            "căn cước",
+            "can cuoc",
+            "số định danh cá nhân",
+            "so dinh danh ca nhan",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        validator=validate_vietnamese_cccd,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}(?:[\s-]?\d{3}){2}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.35,
+        context_words=[
+            "cmnd",
+            "chứng minh nhân dân",
+            "chung minh nhan dan",
+            "số chứng minh",
+            "so chung minh",
+        ],
+        # Keep a contextual CMND below a fully contextual Vietnamese phone so
+        # a spaced nine-digit subscriber number wins overlap resolution.
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        validator=validate_vietnamese_cmnd,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:số\s+)?\d{1,5}[A-Za-z]?(?:[/.-]\d{1,5}[A-Za-z]?)?\s+"
+        r"(?:đường|duong|phố|pho|ngõ|ngo|hẻm|hem)\s+[^\n,;]{2,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "địa chỉ",
+            "dia chi",
+            "thường trú",
+            "thuong tru",
+            "tạm trú",
+            "tam tru",
+            "đường",
+            "duong",
+            "phường",
+            "phuong",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "mã bưu chính",
+            "ma buu chinh",
+            "mã bưu điện",
+            "ma buu dien",
+            "bưu chính",
+            "buu chinh",
+            "địa chỉ",
+            "dia chi",
+        ],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -3843,6 +5120,15 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "fi": _FINNISH_PII_PATTERNS,
+    "bg": _BULGARIAN_PII_PATTERNS,
+    "hr": _CROATIAN_PII_PATTERNS,
+    "sr": _SERBIAN_PII_PATTERNS,
+    "hu": _HUNGARIAN_PII_PATTERNS,
+    "et": _ESTONIAN_PII_PATTERNS,
+    "el": _GREEK_PII_PATTERNS,
+    "cs": _CZECH_PII_PATTERNS,
+    "vi": _VIETNAMESE_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -4238,6 +5524,29 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["Kobenhavn", "Aarhus", "Odense"],
         "ZIPCODE": ["1260", "8000", "5000"],
     },
+    "vi": {
+        "NAME": [
+            "Nguyễn Minh Anh",
+            "Trần Hoàng Nam",
+            "Lê Thu Hà",
+            "Phạm Quang Huy",
+        ],
+        "FIRST_NAME": ["Minh Anh", "Hoàng Nam", "Thu Hà", "Quang Huy"],
+        "LAST_NAME": ["Nguyễn", "Trần", "Lê", "Phạm"],
+        "EMAIL": ["benhnhan@example.vn", "lienhe@example.org"],
+        "PHONE": ["+84 912 345 678", "0912-345-678", "028 3822 1234"],
+        "ID_NUM": ["001203123456", "024 203 654 321", "123456789"],
+        "STREET_ADDRESS": [
+            "12 đường Nguyễn Trãi",
+            "45 phố Trần Hưng Đạo",
+        ],
+        "URL_PERSONAL": ["https://example.vn"],
+        "USERNAME": ["benhnhan123", "nguoidung456"],
+        "DATE": ["17/08/1985", "ngày 1 tháng 1 năm 2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Hà Nội", "Thành phố Hồ Chí Minh", "Đà Nẵng"],
+        "ZIPCODE": ["10000", "70000", "50000"],
+    },
     "th": {
         "NAME": [
             "สมชาย ใจดี",
@@ -4347,6 +5656,131 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
     },
+    "fi": {
+        "NAME": ["Matti Virtanen", "Liisa Korhonen", "Juha Nieminen", "Anna Laine"],
+        "FIRST_NAME": ["Matti", "Liisa", "Juha", "Anna"],
+        "LAST_NAME": ["Virtanen", "Korhonen", "Nieminen", "Laine"],
+        "EMAIL": ["potilas@example.fi", "yhteys@example.org"],
+        "PHONE": ["+358 40 123 4567", "09 1234 567"],
+        "ID_NUM": ["210582-0179", "030904A501C"],
+        "STREET_ADDRESS": ["Mannerheimintie 12", "Aleksanterinkatu 5"],
+        "URL_PERSONAL": ["https://example.fi"],
+        "USERNAME": ["potilas123", "kayttaja456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Helsinki", "Tampere", "Turku"],
+        "ZIPCODE": ["00100", "33100", "20100"],
+    },
+    "bg": {
+        "NAME": ["Иван Петров", "Мария Иванова", "Георги Димитров", "Елена Тодорова"],
+        "FIRST_NAME": ["Иван", "Мария", "Георги", "Елена"],
+        "LAST_NAME": ["Петров", "Иванова", "Димитров", "Тодорова"],
+        "EMAIL": ["patsient@example.bg", "kontakt@example.org"],
+        "PHONE": ["+359 88 123 4567", "02 987 6543"],
+        "ID_NUM": ["8205210172", "0449035017"],
+        "STREET_ADDRESS": ["улица Раковски 35", "булевард Витоша 18"],
+        "URL_PERSONAL": ["https://example.bg"],
+        "USERNAME": ["patsient123", "potrebitel456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["София", "Пловдив", "Варна"],
+        "ZIPCODE": ["1000", "4000", "9000"],
+    },
+    "hr": {
+        "NAME": ["Ivan Horvat", "Ana Kovacevic", "Marko Babic", "Petra Novak"],
+        "FIRST_NAME": ["Ivan", "Ana", "Marko", "Petra"],
+        "LAST_NAME": ["Horvat", "Kovacevic", "Babic", "Novak"],
+        "EMAIL": ["pacijent@example.hr", "kontakt@example.org"],
+        "PHONE": ["+385 91 234 5678", "01 234 5678"],
+        "ID_NUM": ["12345678903", "55512345672"],
+        "STREET_ADDRESS": ["Savska ulica 12", "Vukovarska ulica 45"],
+        "URL_PERSONAL": ["https://example.hr"],
+        "USERNAME": ["pacijent123", "korisnik456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Zagreb", "Split", "Rijeka"],
+        "ZIPCODE": ["10000", "21000", "51000"],
+    },
+    "sr": {
+        "NAME": ["Marko Petrovic", "Jelena Jovanovic", "Nikola Nikolic", "Ana Ilic"],
+        "FIRST_NAME": ["Marko", "Jelena", "Nikola", "Ana"],
+        "LAST_NAME": ["Petrovic", "Jovanovic", "Nikolic", "Ilic"],
+        "EMAIL": ["pacijent@example.rs", "kontakt@example.org"],
+        "PHONE": ["+381 64 123 4567", "011 234 5678"],
+        "ID_NUM": ["2105982710174", "0309004715013"],
+        "STREET_ADDRESS": ["Bulevar Oslobodjenja 45", "Ulica Kneza Milosa 12"],
+        "URL_PERSONAL": ["https://example.rs"],
+        "USERNAME": ["pacijent123", "korisnik456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Beograd", "Novi Sad", "Nis"],
+        "ZIPCODE": ["11000", "21000", "18000"],
+    },
+    "hu": {
+        "NAME": ["Kovács Anna", "Nagy Péter", "Tóth Júlia", "Szabó Gábor"],
+        "FIRST_NAME": ["Anna", "Péter", "Júlia", "Gábor"],
+        "LAST_NAME": ["Kovács", "Nagy", "Tóth", "Szabó"],
+        "EMAIL": ["beteg@example.hu", "kapcsolat@example.org"],
+        "PHONE": ["+36 30 123 4567", "06 1 234 5678"],
+        "ID_NUM": ["123456788", "123 456 788"],
+        "STREET_ADDRESS": ["Kossuth Lajos utca 12", "Andrássy út 45"],
+        "URL_PERSONAL": ["https://example.hu"],
+        "USERNAME": ["beteg123", "felhasznalo456"],
+        "DATE": ["1985. május 5.", "2000.01.01."],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Budapest", "Szeged", "Debrecen"],
+        "ZIPCODE": ["1051", "6720", "4024"],
+    },
+    "et": {
+        "NAME": ["Mari Tamm", "Jaan Kask", "Anu Saar", "Peeter Kivi"],
+        "FIRST_NAME": ["Mari", "Jaan", "Anu", "Peeter"],
+        "LAST_NAME": ["Tamm", "Kask", "Saar", "Kivi"],
+        "EMAIL": ["patsient@example.ee", "kontakt@example.org"],
+        "PHONE": ["+372 5123 4567", "644 1234"],
+        "ID_NUM": ["38205210123", "60409032208"],
+        "STREET_ADDRESS": ["Pikk tanav 12", "Narva maantee 45"],
+        "URL_PERSONAL": ["https://example.ee"],
+        "USERNAME": ["patsient123", "kasutaja456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Tallinn", "Tartu", "Parnu"],
+        "ZIPCODE": ["10115", "50090", "80010"],
+    },
+    "cs": {
+        "NAME": ["Jana Nováková", "Petr Novák", "Marie Svobodová", "Tomáš Král"],
+        "FIRST_NAME": ["Jana", "Petr", "Marie", "Tomáš"],
+        "LAST_NAME": ["Nováková", "Novák", "Svobodová", "Král"],
+        "EMAIL": ["pacient@example.cz", "kontakt@example.org"],
+        "PHONE": ["+420 601 234 567", "702 345 678"],
+        "ID_NUM": ["820521/0002", "485305/123"],
+        "STREET_ADDRESS": ["Hlavní ulice 12", "Náměstí Míru 5"],
+        "URL_PERSONAL": ["https://example.cz"],
+        "USERNAME": ["pacient123", "uzivatel456"],
+        "DATE": ["16.11.1975", "16. listopadu 1975"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Praha", "Brno", "Ostrava"],
+        "ZIPCODE": ["110 00", "602 00", "702 00"],
+    },
+    "el": {
+        "NAME": [
+            "Γιώργος Παπαδόπουλος",
+            "Μαρία Νικολάου",
+            "Δημήτρης Ιωάννου",
+            "Ελένη Γεωργίου",
+        ],
+        "FIRST_NAME": ["Γιώργος", "Μαρία", "Δημήτρης", "Ελένη"],
+        "LAST_NAME": ["Παπαδόπουλος", "Νικολάου", "Ιωάννου", "Γεωργίου"],
+        "EMAIL": ["asthenis@example.gr", "epikoinonia@example.org"],
+        "PHONE": ["+30 691 234 5678", "210 123 4567"],
+        "ID_NUM": ["21058200177", "03090450119"],
+        "STREET_ADDRESS": ["οδός Ερμού 15", "λεωφόρος Κηφισίας 42"],
+        "URL_PERSONAL": ["https://example.gr"],
+        "USERNAME": ["asthenis123", "christis456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Αθήνα", "Θεσσαλονίκη", "Πάτρα"],
+        "ZIPCODE": ["104 31", "546 21", "262 21"],
+    },
 }
 
 
@@ -4413,8 +5847,8 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     from .pii_entity_merger import PII_PATTERNS
 
     # English patterns serve as universal base
-    # MRZ patterns are language-agnostic, so they join the universal base.
-    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS
+    # MRZ and USCC patterns are language-agnostic, so they join the universal base.
+    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS + USCC_PII_PATTERNS
 
     combined = base
     if base_lang != "en":

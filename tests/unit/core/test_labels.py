@@ -28,9 +28,11 @@ from openmed.core.labels import (
     CVV,
     DATE,
     DATE_OF_BIRTH,
+    DEVELOPMENTAL_MILESTONE,
     DIALYSIS_MODALITY,
     DIET_TYPE,
     DOSE_NUMBER,
+    DYSPNEA_GRADE,
     EMAIL,
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
@@ -43,6 +45,8 @@ from openmed.core.labels import (
     GI_SYMPTOM,
     GLYCEMIC_MEASURE,
     GPS_COORDINATES,
+    GROWTH_PARAMETER,
+    GROWTH_PERCENTILE,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
     HORMONE_LEVEL,
@@ -72,6 +76,7 @@ from openmed.core.labels import (
     ORDINAL_DIRECTION,
     ORGANIZATION,
     OTHER,
+    OXYGEN_SUPPORT,
     PASSWORD,
     PERSON,
     PHONE,
@@ -81,6 +86,8 @@ from openmed.core.labels import (
     PROCEDURE,
     PROTEIN_CHANGE,
     RENAL_FUNCTION_MEASURE,
+    RESPIRATORY_FINDING,
+    SPIROMETRY_MEASURE,
     SSN,
     STREET_ADDRESS,
     SUSCEPTIBILITY,
@@ -596,6 +603,54 @@ class TestGastroenterologyConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestPediatricGrowthConceptLabels:
+    """Pediatric growth and developmental-surveillance labels (issue #896)."""
+
+    NEW_LABELS = (
+        GROWTH_PARAMETER,
+        GROWTH_PERCENTILE,
+        DEVELOPMENTAL_MILESTONE,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("growth parameter", GROWTH_PARAMETER),
+            ("weight", GROWTH_PARAMETER),
+            ("length", GROWTH_PARAMETER),
+            ("head circumference", GROWTH_PARAMETER),
+            ("arm circumference", GROWTH_PARAMETER),
+            ("muac", GROWTH_PARAMETER),
+            ("skinfold", GROWTH_PARAMETER),
+            ("subscapular skinfold", GROWTH_PARAMETER),
+            ("triceps skinfold", GROWTH_PARAMETER),
+            ("bmi", GROWTH_PARAMETER),
+            ("bodymassindex", GROWTH_PARAMETER),
+            ("growth percentile", GROWTH_PERCENTILE),
+            ("percentile", GROWTH_PERCENTILE),
+            ("growth z score", GROWTH_PERCENTILE),
+            ("developmental milestone", DEVELOPMENTAL_MILESTONE),
+            ("milestone", DEVELOPMENTAL_MILESTONE),
+            ("motor development", DEVELOPMENTAL_MILESTONE),
+            ("feeding history", NUTRITIONAL_STATUS),
+            ("pediatric finding", CONDITION),
+        ],
+    )
+    def test_pediatric_growth_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_pediatric_growth_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_pediatric_growth_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -694,6 +749,13 @@ class TestClinicalLabelsAreAdditive:
             DIALYSIS_MODALITY,
             RENAL_FUNCTION_MEASURE,
             URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
+            GROWTH_PARAMETER,
+            GROWTH_PERCENTILE,
+            DEVELOPMENTAL_MILESTONE,
         }
     )
 

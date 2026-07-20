@@ -78,6 +78,7 @@ content-security policy blocks the optional inline styling.
 | `examples/dbt-deidentify/` | Demonstrates the v1.8 warehouse transformation package for table redaction macros and redacted staging models. |
 | `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
+| `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
 
@@ -113,9 +114,15 @@ deployment paths:
 - Service operations: [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [Serving Resilience](./serving/resilience.md), and [REST Tracing](./serving/tracing.md).
 - Structured-data jobs: [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md), [DuckDB De-identification UDFs](./duckdb-deidentification.md), and `examples/dbt-deidentify/`.
 
+The datasets walkthrough uses only bundled, synthetic, redistributable fixtures. The records do not require a data-use agreement (DUA), and the example does not download data. To try another fixture, update `FIXTURE_ID` in the script to an ID from `openmed/eval/golden/fixtures/multilingual.json`. Model downloads remain disabled by default; set `OPENMED_EXAMPLE_ALLOW_DOWNLOAD=1` only when you explicitly want to load a model.
+
+```bash
+python examples/datasets_walkthrough.py
+```
+
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.8.1` includes release-critical Apple, Android, browser, and service entry points:
+OpenMed `1.9.1` includes release-critical Apple, Android, browser, and service entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

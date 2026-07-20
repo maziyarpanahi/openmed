@@ -2449,6 +2449,213 @@ def relation_assertion_consistency(
     )
 
 
+# ---------------------------------------------------------------------------
+# Inter-annotator agreement
+# ---------------------------------------------------------------------------
+
+#: Category assigned to an item an annotator did not label.
+_UNLABELED = "∅"  # empty-set symbol
+
+
+@dataclass(frozen=True)
+class InterAnnotatorAgreement:
+    """Agreement across two or more annotators on an extraction gold set.
+
+    ``cohen_kappa`` is populated for exactly two annotators; ``fleiss_kappa`` for
+    three or more. ``disagreements`` carries offsets and labels only -- never raw
+    clinical text.
+    """
+
+    n_annotators: int
+    n_items: int
+    cohen_kappa: float | None
+    fleiss_kappa: float | None
+    mean_span_f1: float
+    per_label: Mapping[str, float]
+    per_relation: Mapping[str, float]
+    disagreements: tuple[Mapping[str, Any], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "n_annotators": self.n_annotators,
+            "n_items": self.n_items,
+            "cohen_kappa": self.cohen_kappa,
+            "fleiss_kappa": self.fleiss_kappa,
+            "mean_span_f1": self.mean_span_f1,
+            "per_label": dict(self.per_label),
+            "per_relation": dict(self.per_relation),
+            "disagreements": [
+                {"offset": list(item["offset"]), "labels": list(item["labels"])}
+                for item in self.disagreements
+            ],
+        }
+
+
+def _coerce_annotation(span: Any) -> tuple[int, int, str]:
+    """Coerce a span (tuple or ``EvalSpan``) to ``(start, end, label)``."""
+
+    if isinstance(span, EvalSpan):
+        return span.start, span.end, span.label
+    if isinstance(span, Mapping):
+        return int(span["start"]), int(span["end"]), str(span["label"])
+    start, end, label = span
+    return int(start), int(end), str(label)
+
+
+def _annotation_map(annotator: Iterable[Any]) -> dict[tuple[int, int], str]:
+    return {(s, e): label for s, e, label in map(_coerce_annotation, annotator)}
+
+
+def _aligned_categories(
+    annotators: Sequence[Iterable[Any]],
+) -> tuple[list[tuple[int, int]], list[list[str]]]:
+    """Return the sorted item universe and the per-item annotator categories."""
+
+    maps = [_annotation_map(annotator) for annotator in annotators]
+    items = sorted({offset for mapping in maps for offset in mapping})
+    rows = [[mapping.get(item, _UNLABELED) for mapping in maps] for item in items]
+    return items, rows
+
+
+def _kappa_from_agreement(observed: float, expected: float) -> float:
+    if expected >= 1.0:
+        return 1.0
+    return (observed - expected) / (1.0 - expected)
+
+
+def cohen_kappa_agreement(*annotators: Iterable[Any]) -> float:
+    """Cohen kappa between exactly two annotators over offset-aligned labels."""
+
+    if len(annotators) != 2:
+        raise ValueError("cohen_kappa_agreement requires exactly two annotators")
+    items, rows = _aligned_categories(annotators)
+    if not items:
+        return 1.0
+
+    total = len(rows)
+    observed = sum(1 for a, b in rows if a == b) / total
+    first = defaultdict(float)
+    second = defaultdict(float)
+    for a, b in rows:
+        first[a] += 1 / total
+        second[b] += 1 / total
+    expected = sum(first[c] * second[c] for c in set(first) | set(second))
+    return _kappa_from_agreement(observed, expected)
+
+
+def fleiss_kappa_agreement(annotators: Sequence[Iterable[Any]]) -> float:
+    """Fleiss kappa across three or more annotators over offset-aligned labels."""
+
+    if len(annotators) < 3:
+        raise ValueError("fleiss_kappa_agreement requires at least three annotators")
+    items, rows = _aligned_categories(annotators)
+    if not items:
+        return 1.0
+
+    n_items = len(rows)
+    n_raters = len(annotators)
+    categories = {category for row in rows for category in row}
+
+    agreement_sum = 0.0
+    category_totals = defaultdict(int)
+    for row in rows:
+        counts = defaultdict(int)
+        for category in row:
+            counts[category] += 1
+            category_totals[category] += 1
+        agreement_sum += (
+            sum(count * count for count in counts.values()) - n_raters
+        ) / (n_raters * (n_raters - 1))
+
+    mean_agreement = agreement_sum / n_items
+    expected = sum((category_totals[c] / (n_items * n_raters)) ** 2 for c in categories)
+    return _kappa_from_agreement(mean_agreement, expected)
+
+
+def _mean_pairwise_span_f1(annotators: Sequence[Iterable[Any]]) -> float:
+    coerced = [
+        [
+            EvalSpan(start=s, end=e, label=label)
+            for s, e, label in map(_coerce_annotation, annotator)
+        ]
+        for annotator in annotators
+    ]
+    scores: list[float] = []
+    for i in range(len(coerced)):
+        for j in range(i + 1, len(coerced)):
+            scores.append(compute_relaxed_span_f1(coerced[i], coerced[j]).f1)
+    return sum(scores) / len(scores) if scores else 1.0
+
+
+def _label_agreement(items: Sequence[tuple[int, int]], rows: Sequence[Sequence[str]]):
+    """Per-label observed agreement over items involving that label."""
+
+    involved = defaultdict(list)
+    for item, row in zip(items, rows):
+        agreed = all(category == row[0] for category in row)
+        for label in set(row) - {_UNLABELED}:
+            involved[label].append(1.0 if agreed else 0.0)
+    return {
+        label: sum(involved[label]) / len(involved[label]) for label in sorted(involved)
+    }
+
+
+def inter_annotator_agreement(
+    annotators: Sequence[Iterable[Any]],
+    *,
+    relations: Sequence[Mapping[str, Iterable[Any]]] | None = None,
+) -> InterAnnotatorAgreement:
+    """Compute inter-annotator agreement over an extraction gold set.
+
+    ``annotators`` is one span set per annotator (tuples ``(start, end, label)``
+    or ``EvalSpan``). With two annotators Cohen kappa is reported; with three or
+    more, Fleiss kappa. ``relations`` optionally supplies, per annotator, a
+    mapping of relation type to its labeled spans for per-relation agreement.
+    """
+
+    if len(annotators) < 2:
+        raise ValueError("inter_annotator_agreement requires at least two annotators")
+    if relations is not None and len(relations) != len(annotators):
+        raise ValueError("relations must contain one mapping per annotator")
+
+    materialized = [tuple(annotator) for annotator in annotators]
+    items, rows = _aligned_categories(materialized)
+    n_annotators = len(materialized)
+
+    cohen = cohen_kappa_agreement(*materialized) if n_annotators == 2 else None
+    fleiss = fleiss_kappa_agreement(materialized) if n_annotators >= 3 else None
+
+    disagreements = tuple(
+        {"offset": item, "labels": tuple(sorted(set(row) - {_UNLABELED}))}
+        for item, row in zip(items, rows)
+        if any(category != row[0] for category in row)
+    )
+
+    per_relation: dict[str, float] = {}
+    if relations is not None:
+        relation_types = {rt for mapping in relations for rt in mapping}
+        for relation_type in sorted(relation_types):
+            _rel_items, rel_rows = _aligned_categories(
+                [mapping.get(relation_type, []) for mapping in relations]
+            )
+            if not rel_rows:
+                continue
+            per_relation[relation_type] = sum(
+                1 for row in rel_rows if all(c == row[0] for c in row)
+            ) / len(rel_rows)
+
+    return InterAnnotatorAgreement(
+        n_annotators=n_annotators,
+        n_items=len(items),
+        cohen_kappa=cohen,
+        fleiss_kappa=fleiss,
+        mean_span_f1=_mean_pairwise_span_f1(materialized),
+        per_label=_label_agreement(items, rows),
+        per_relation=per_relation,
+        disagreements=disagreements,
+    )
+
+
 __all__ = [
     "ABSTENTION_ROUTE_ACCEPT",
     "ABSTENTION_ROUTE_REDACT",
@@ -2505,4 +2712,8 @@ __all__ = [
     "apply_abstention_policy",
     "bootstrap_abstention_residual_risk",
     "relation_assertion_consistency",
+    "InterAnnotatorAgreement",
+    "cohen_kappa_agreement",
+    "fleiss_kappa_agreement",
+    "inter_annotator_agreement",
 ]

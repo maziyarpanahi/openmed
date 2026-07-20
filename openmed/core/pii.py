@@ -327,7 +327,7 @@ _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset(
-    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"}
+    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr", "cs"}
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
@@ -583,6 +583,7 @@ def _prepare_pii_text(
     *,
     lang: str,
     normalize_accents: Optional[bool],
+    config: Optional[OpenMedConfig] = None,
 ) -> _PreparedPIIText:
     """Return original stripped text, inference text, and normalization flag."""
     do_normalize = (
@@ -592,7 +593,11 @@ def _prepare_pii_text(
     )
 
     original_text = text.strip()
-    detection_normalization = normalize_for_pii_detection(original_text)
+    width_convention = config.cjk_width_convention if config is not None else "cjk"
+    detection_normalization = normalize_for_pii_detection(
+        original_text,
+        width_convention=width_convention,
+    )
     inference_text = detection_normalization.text
     if do_normalize:
         inference_text = _strip_accents(inference_text)
@@ -758,6 +763,7 @@ def _extract_pii_batch(
             text,
             lang=lang,
             normalize_accents=normalize_accents,
+            config=config,
         )
         for text in texts
     ]
@@ -788,16 +794,13 @@ def _extract_pii_batch(
             raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
-            _remap_prepared_pii_result(
-                _prediction_result_from_privacy_filter_raw(
-                    raw,
-                    item.inference_text,
-                    model_name=effective_model,
-                    confidence_threshold=confidence_threshold,
-                    original_text=item.inference_text,
-                    do_normalize=False,
-                ),
-                item,
+            _prediction_result_from_privacy_filter_raw(
+                raw,
+                item.inference_text,
+                model_name=effective_model,
+                confidence_threshold=confidence_threshold,
+                original_text=item.inference_text,
+                do_normalize=False,
             )
             for raw, item in zip(batched_raw, prepared)
         ]
@@ -820,13 +823,18 @@ def _extract_pii_batch(
                 **pipeline_kwargs,
             )
             result = _mutable_prediction_result(result)
-            results.append(_remap_prepared_pii_result(result, item))
+            results.append(result)
 
     if use_smart_merging and not uses_privacy_filter:
         results = [
             _apply_pii_smart_merging(result, effective_model, lang, locale=locale)
             for result in results
         ]
+
+    results = [
+        _remap_prepared_pii_result(result, item)
+        for result, item in zip(results, prepared)
+    ]
 
     recognizer = coerce_custom_recognizer(custom_recognizer)
     if recognizer is not None:

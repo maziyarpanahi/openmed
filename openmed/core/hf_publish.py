@@ -314,16 +314,18 @@ def publish_artifact(
         write_model_card(artifact_dir / "README.md", row)
 
     skipped = False
-    if skip_existing and _repo_exists(api, repo_id=repo_id, token=token):
+    repo_exists = _repo_exists(api, repo_id=repo_id, token=token)
+    if skip_existing and repo_exists:
         skipped = True
     else:
-        api.create_repo(
-            repo_id=repo_id,
-            repo_type="model",
-            private=private,
-            exist_ok=True,
-            token=token,
-        )
+        if not repo_exists:
+            api.create_repo(
+                repo_id=repo_id,
+                repo_type="model",
+                private=private,
+                exist_ok=True,
+                token=token,
+            )
         api.upload_folder(
             repo_id=repo_id,
             repo_type="model",
