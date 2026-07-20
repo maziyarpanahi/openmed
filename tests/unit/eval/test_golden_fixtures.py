@@ -14,6 +14,7 @@ from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
+    validate_hungarian_taj,
     validate_israeli_teudat_zehut,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
@@ -73,8 +74,15 @@ def test_expanded_multilingual_fixtures_cover_person_date_and_locale_id():
 
     assert set(EXPANDED_MULTILINGUAL_LANGUAGES).issubset(grouped)
     for language in EXPANDED_MULTILINGUAL_LANGUAGES:
-        assert len(grouped[language]) == 1
-        fixture = grouped[language][0]
+        # The OM-019 expanded fixtures live in multilingual.json; the per-language
+        # OM-100 i18n fixtures (golden-i18n-*) are a separate multilingual set.
+        expanded = [
+            fixture
+            for fixture in grouped[language]
+            if fixture.fixture_id.startswith("golden-multilingual-")
+        ]
+        assert len(expanded) == 1
+        fixture = expanded[0]
         spans_by_label = {span.label: span for span in fixture.gold_spans}
 
         assert list(spans_by_label) == ["PERSON", "DATE", "ID_NUM"]
@@ -94,7 +102,11 @@ def test_expanded_multilingual_fixtures_run_through_harness_scoring():
         category="multilingual",
     )
     benchmark_fixtures = [
-        grouped[language][0].to_benchmark_fixture()
+        next(
+            fixture
+            for fixture in grouped[language]
+            if fixture.fixture_id.startswith("golden-multilingual-")
+        ).to_benchmark_fixture()
         for language in EXPANDED_MULTILINGUAL_LANGUAGES
     ]
 
@@ -255,6 +267,142 @@ def test_slovak_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "81101"
     assert gold_by_label["STREET_ADDRESS"] == "Hlavna ulica 12"
     assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
+
+
+def test_hungarian_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/hu.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "hu"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "1985. május 5."
+    assert gold_by_label["PHONE"] == "+36 30 123 4567"
+    assert gold_by_label["ZIPCODE"] == "1051"
+    assert gold_by_label["STREET_ADDRESS"] == "Kossuth Lajos utca 12"
+    assert validate_hungarian_taj(gold_by_label["ID_NUM"])
+
+
+def test_hungarian_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/hu.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    for span in fixture.gold_spans:
+        assert span.text not in result.deidentified_text
+
+
+def test_czech_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/cs.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "cs"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "16.11.1975"
+    assert gold_by_label["PHONE"] == "+420 601 234 567"
+    assert gold_by_label["ZIPCODE"] == "110 00"
+    assert gold_by_label["STREET_ADDRESS"] == "Vodickova ulice 12"
+    assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
+
+
+def test_czech_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/cs.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    for span in fixture.gold_spans:
+        assert span.text not in result.deidentified_text
 
 
 def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():

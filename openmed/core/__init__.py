@@ -24,6 +24,7 @@ from .language_pack import (
     LanguagePackRegistry,
     register_language_pack,
 )
+from .language_pack_catalog import REGISTERED_SEGMENTERS, is_registered_segmenter
 from .language_pack_coherence import (
     LanguagePackCoherenceError,
     check_language_pack_coherence,
@@ -124,6 +125,8 @@ __all__ = [
     "LanguagePackRegistry",
     "LANGUAGE_PACK_REGISTRY",
     "register_language_pack",
+    "REGISTERED_SEGMENTERS",
+    "is_registered_segmenter",
     "LanguagePackCoherenceError",
     "check_language_pack_coherence",
     "incoherent_packs",

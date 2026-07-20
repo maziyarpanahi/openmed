@@ -88,6 +88,17 @@ def test_all_policy_literals_load_and_gdpr_alias_resolves():
     assert load_policy("gdpr").name == "gdpr_pseudonymization"
 
 
+def test_all_policy_profiles_run_through_deidentify(monkeypatch):
+    text = "Patient John Doe"
+    _patch_extract(monkeypatch, _entity(text, "John Doe", "NAME", 0.95))
+
+    for name in CANONICAL_POLICY_NAMES:
+        result = deidentify(text, policy=name, use_safety_sweep=False)
+
+        assert result.metadata["policy"]["name"] == name
+        assert result.pii_entities
+
+
 def test_gdpr_art9_health_profile_and_alias_load():
     profile = load_policy("gdpr_art9_health")
     gdpr = load_policy("gdpr_pseudonymization")
@@ -259,9 +270,31 @@ def test_deidentify_without_policy_preserves_default_output(monkeypatch):
     assert "reversible_id" not in result.to_dict()["pii_entities"][0]
 
 
-def test_unknown_policy_raises_before_detection():
-    with pytest.raises(ValueError, match="unknown policy"):
-        deidentify("Patient John Doe", policy="not_a_policy")
+def test_unknown_policy_raises_before_detection(monkeypatch):
+    from openmed.core import pii
+
+    def fail_extract(text: str, *args: object, **kwargs: object) -> PredictionResult:
+        raise AssertionError("detection should not run for an unknown policy")
+
+    monkeypatch.setattr(pii, "extract_pii", fail_extract)
+
+    with pytest.raises(ValueError) as exc_info:
+        deidentify("Patient John Doe", policy="not_a_profile")
+
+    message = str(exc_info.value)
+    assert "not_a_profile" in message
+    for name in CANONICAL_POLICY_NAMES:
+        assert name in message
+
+
+@pytest.mark.parametrize(
+    "bad_policy", [123, {"posture": "strict"}, ["hipaa_safe_harbor"]]
+)
+def test_malformed_policy_type_raises_type_error_explaining_accepted_forms(bad_policy):
+    with pytest.raises(
+        TypeError, match="policy must be a profile name string or a PolicyProfile"
+    ):
+        load_policy(bad_policy)
 
 
 def test_strict_no_leak_forces_union_sweep_and_accurate_cascade(monkeypatch):

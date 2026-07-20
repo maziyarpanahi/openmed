@@ -44,8 +44,12 @@ _NON_DEID_FIXTURE_NAMES = frozenset(
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
         "surrogate_multilingual.jsonl",
+        "consensus_corpus.jsonl",
     }
 )
+
+#: Committed synthetic multi-annotator consensus corpus.
+_CONSENSUS_CORPUS = _FIXTURE_DIR / "consensus_corpus.jsonl"
 
 
 @dataclass(frozen=True)
@@ -397,6 +401,166 @@ def _validate_hard_negative_fixture(
                 )
 
 
+# ---------------------------------------------------------------------------
+# Multi-annotator consensus corpus
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ConsensusRelation:
+    """An adjudicated relation between two consensus spans."""
+
+    relation_type: str
+    head: EvalSpan
+    tail: EvalSpan
+    label: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "relation_type": self.relation_type,
+            "label": self.label,
+            "head": _span_to_mapping(self.head),
+            "tail": _span_to_mapping(self.tail),
+        }
+
+
+@dataclass(frozen=True)
+class ConsensusDocument:
+    """A synthetic document with per-annotator exports and a consensus view."""
+
+    doc_id: str
+    text: str
+    annotators: Mapping[str, tuple[EvalSpan, ...]]
+    annotator_relations: Mapping[str, tuple[ConsensusRelation, ...]]
+    consensus_spans: tuple[EvalSpan, ...]
+    consensus_relations: tuple[ConsensusRelation, ...]
+
+
+def _require_synthetic(payload: Mapping[str, Any], where: str) -> None:
+    if payload.get("synthetic") is not True:
+        raise ValueError(f"{where} must be explicitly marked synthetic")
+
+
+def _consensus_spans(raw_spans: Any, text: str) -> tuple[EvalSpan, ...]:
+    spans = tuple(normalize_eval_spans(raw_spans or [], source_text=text))
+    _validate_offsets(text, spans)
+    return spans
+
+
+def _consensus_relation(raw: Mapping[str, Any], text: str) -> ConsensusRelation:
+    if not isinstance(raw, Mapping):
+        raise ValueError("consensus relation must be a mapping")
+    head = _consensus_spans([raw["head"]], text)[0]
+    tail = _consensus_spans([raw["tail"]], text)[0]
+    relation_type = str(raw.get("relation_type", "")).strip()
+    if not relation_type:
+        raise ValueError("consensus relation type is required")
+    return ConsensusRelation(
+        relation_type=relation_type,
+        head=head,
+        tail=tail,
+        label=str(raw.get("label", "")),
+    )
+
+
+def _span_key(span: EvalSpan) -> tuple[int, int, str]:
+    return span.start, span.end, span.label
+
+
+def _consensus_relations(
+    raw_relations: Any,
+    text: str,
+    spans: tuple[EvalSpan, ...],
+    where: str,
+) -> tuple[ConsensusRelation, ...]:
+    if raw_relations is None:
+        return ()
+    if not isinstance(raw_relations, list):
+        raise ValueError(f"{where} relations must be a list")
+
+    relations = tuple(_consensus_relation(relation, text) for relation in raw_relations)
+    span_keys = {_span_key(span) for span in spans}
+    for relation in relations:
+        if _span_key(relation.head) not in span_keys:
+            raise ValueError(f"{where} relation head must reference one of its spans")
+        if _span_key(relation.tail) not in span_keys:
+            raise ValueError(f"{where} relation tail must reference one of its spans")
+    return relations
+
+
+def _consensus_document(data: Mapping[str, Any]) -> ConsensusDocument:
+    if not isinstance(data, Mapping):
+        raise ValueError("consensus record must be a mapping")
+    _require_synthetic(data, "consensus document")
+
+    text = str(data.get("text", ""))
+    if not text:
+        raise ValueError("consensus document text is required")
+
+    raw_annotators = data.get("annotators") or {}
+    if not isinstance(raw_annotators, Mapping) or len(raw_annotators) < 2:
+        raise ValueError("consensus document requires at least two annotators")
+
+    annotators: dict[str, tuple[EvalSpan, ...]] = {}
+    annotator_relations: dict[str, tuple[ConsensusRelation, ...]] = {}
+    for name, export in raw_annotators.items():
+        if not isinstance(export, Mapping):
+            raise ValueError("annotator export must be a mapping")
+        _require_synthetic(export, f"annotator {name!r} export")
+        annotator_name = str(name)
+        annotator_spans = _consensus_spans(export.get("spans"), text)
+        annotators[annotator_name] = annotator_spans
+        annotator_relations[annotator_name] = _consensus_relations(
+            export.get("relations"),
+            text,
+            annotator_spans,
+            f"annotator {name!r}",
+        )
+
+    consensus = data.get("consensus") or {}
+    if not isinstance(consensus, Mapping):
+        raise ValueError("consensus view must be a mapping")
+    consensus_spans = _consensus_spans(consensus.get("spans"), text)
+    consensus_relations = _consensus_relations(
+        consensus.get("relations"),
+        text,
+        consensus_spans,
+        "consensus",
+    )
+
+    doc_id = str(data.get("id") or data.get("doc_id") or "")
+    if not doc_id:
+        raise ValueError("consensus document id is required")
+
+    return ConsensusDocument(
+        doc_id=doc_id,
+        text=text,
+        annotators=annotators,
+        annotator_relations=annotator_relations,
+        consensus_spans=consensus_spans,
+        consensus_relations=consensus_relations,
+    )
+
+
+def load_consensus_corpus(
+    path: str | Path | None = None,
+) -> list[ConsensusDocument]:
+    """Load the synthetic multi-annotator consensus corpus.
+
+    Each record carries source text, at least two synthetic annotator exports,
+    and an adjudicated consensus view of spans and relations. Every document and
+    annotation must be explicitly marked synthetic, and all span offsets are
+    validated against the document text.
+    """
+
+    corpus_path = Path(path) if path is not None else _CONSENSUS_CORPUS
+    documents: list[ConsensusDocument] = []
+    for line in corpus_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            documents.append(_consensus_document(json.loads(line)))
+    return documents
+
+
 def _validate_offsets(text: str, spans: tuple[EvalSpan, ...]) -> None:
     for span in spans:
         if span.start < 0 or span.end <= span.start or span.end > len(text):
@@ -461,6 +625,8 @@ __all__ = [
     "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
+    "ConsensusDocument",
+    "ConsensusRelation",
     "GoldenFixture",
     "benchmark_fixture_languages",
     "benchmark_fixtures_by_language",
@@ -469,6 +635,7 @@ __all__ = [
     "fixtures_by_language",
     "list_fixture_paths",
     "load_benchmark_fixtures",
+    "load_consensus_corpus",
     "load_golden_fixtures",
     "non_latin_golden_fixtures",
 ]

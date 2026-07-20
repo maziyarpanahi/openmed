@@ -170,5 +170,22 @@
     "VaccineLot",
     "AdministrationDate",
     "VaccineSeries"
+  ],
+  "pulmonology": [
+    "SpirometryMeasure",
+    "OxygenSupport",
+    "RespiratoryFinding",
+    "DyspneaGrade",
+    "LungAuscultation",
+    "PFTInterpretation",
+    "AirwayDevice"
+  ],
+  "pediatrics_growth": [
+    "GrowthParameter",
+    "GrowthPercentile",
+    "GrowthZScore",
+    "DevelopmentalMilestone",
+    "FeedingHistory",
+    "PediatricFinding"
   ]
 }

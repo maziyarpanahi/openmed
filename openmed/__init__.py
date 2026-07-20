@@ -90,6 +90,7 @@ from .mlx.lm import (
     TokenRange,
     generate_text,
 )
+from .onnx.inference import OnnxEntity, OnnxModel, load_onnx_model
 from .processing import (
     BatchItem,
     BatchItemResult,
@@ -644,6 +645,9 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "OnnxEntity",
+    "OnnxModel",
+    "load_onnx_model",
     "TextProcessor",
     "preprocess_text",
     "postprocess_text",

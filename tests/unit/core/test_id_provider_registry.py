@@ -38,9 +38,14 @@ EXPECTED_VALIDATOR_KEYS = (
     ("pl", "pesel"),
     ("lv", "personas_kods"),
     ("ko", "rrn"),
+    ("hu", "taj"),
+    ("cs", "rodne_cislo"),
+    ("sk", "rodne_cislo"),
     ("pt", "cpf"),
     ("pt", "cnpj"),
     ("tr", "tckn"),
+    ("vi", "cccd"),
+    ("vi", "cmnd"),
     ("us", "npi"),
 )
 
@@ -63,9 +68,14 @@ ROUND_TRIP_CASES = (
     ("pl", "pesel", "pl_PL"),
     ("lv", "personas_kods", "lv_LV"),
     ("ko", "rrn", "ko_KR"),
+    ("hu", "taj", "hu_HU"),
+    ("cs", "rodne_cislo", "cs_CZ"),
+    ("sk", "rodne_cislo", "sk_SK"),
     ("pt", "cpf", "pt_BR"),
     ("pt", "cnpj", "pt_BR"),
     ("tr", "tckn", "tr_TR"),
+    ("vi", "cccd", "vi_VN"),
+    ("vi", "cmnd", "vi_VN"),
     ("us", "npi", "en_US"),
 )
 

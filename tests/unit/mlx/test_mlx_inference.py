@@ -350,6 +350,80 @@ class TestMLXModelResolve:
         assert path == str(tmp_path)
         assert tok_name == str(tmp_path)
 
+    def test_direct_preconverted_repo_downloads_without_conversion(self, tmp_path):
+        """A direct ``-mlx`` Hub ID should load as a converted artifact."""
+        from openmed.mlx import inference
+
+        (tmp_path / "config.json").write_text(
+            '{"_mlx_weights_format": "safetensors"}',
+            encoding="utf-8",
+        )
+        (tmp_path / "openmed-mlx.json").write_text(
+            json.dumps(
+                {
+                    "format": "openmed-mlx",
+                    "format_version": 1,
+                    "preferred_weights": "weights.safetensors",
+                    "available_weights": ["weights.safetensors"],
+                    "tokenizer": {"path": ".", "files": ["tokenizer.json"]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (tmp_path / "tokenizer.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "weights.safetensors").write_bytes(b"weights")
+        config = type("Config", (), {"cache_dir": "/tmp/openmed-cache"})()
+
+        with (
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                return_value=str(tmp_path),
+            ) as mock_download,
+            patch("openmed.mlx.convert.convert") as mock_convert,
+        ):
+            path, tok_name = inference._resolve_mlx_model(
+                "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M-mlx",
+                config=config,
+            )
+
+        assert path == str(tmp_path)
+        assert tok_name == str(tmp_path)
+        mock_download.assert_called_once_with(
+            "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M-mlx",
+            cache_dir="/tmp/openmed-cache",
+        )
+        mock_convert.assert_not_called()
+
+    def test_direct_preconverted_repo_requires_weights(self, tmp_path):
+        """A malformed direct MLX artifact must fail instead of converting it."""
+        from openmed.mlx import inference
+
+        (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "openmed-mlx.json").write_text(
+            json.dumps(
+                {
+                    "format": "openmed-mlx",
+                    "format_version": 1,
+                    "preferred_weights": "weights.safetensors",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                return_value=str(tmp_path),
+            ),
+            patch("openmed.mlx.convert.convert") as mock_convert,
+            pytest.raises(ValueError, match="no supported weights file"),
+        ):
+            inference._resolve_mlx_model("OpenMed/example-mlx")
+
+        mock_convert.assert_not_called()
+
 
 class TestExperimentalMLXPipelineDispatch:
     """Manifest-driven dispatch should return the right MLX runtime class."""

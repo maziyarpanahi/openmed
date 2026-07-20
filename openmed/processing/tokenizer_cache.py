@@ -10,7 +10,7 @@ from typing import Any
 
 DEFAULT_TOKENIZER_CACHE_SIZE = 32
 
-AutoTokenizer: Any | None = None
+AutoTokenizer: Any = None
 _TOKENIZER_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 _TOKENIZER_CACHE_LOCK = RLock()
 
@@ -69,7 +69,6 @@ def clear_tokenizer_cache() -> None:
 
 def _default_tokenizer_loader() -> Callable[..., Any]:
     global AutoTokenizer
-
     if AutoTokenizer is None:
         try:
             from transformers import AutoTokenizer as TransformersAutoTokenizer

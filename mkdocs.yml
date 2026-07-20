@@ -12,6 +12,8 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
+      - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
@@ -37,6 +39,7 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
+      - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
       - Zero-shot NER How-to: zero-shot-howto.md
@@ -54,6 +57,7 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
+      - Per-Language De-identification: languages.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
@@ -61,6 +65,7 @@ nav:
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
@@ -73,7 +78,9 @@ nav:
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Android Quickstart: android-quickstart.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
@@ -82,10 +89,12 @@ nav:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md
       - Onboarding: onboarding.md
+      - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - No-Telemetry Guarantee: security/no-telemetry.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
@@ -95,6 +104,8 @@ nav:
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
       - PyPI Publishing: release/trusted-publishing.md
+      - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
+      - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md
