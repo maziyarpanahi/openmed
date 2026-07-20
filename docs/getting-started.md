@@ -5,14 +5,27 @@ This guide gets you from a blank workstation to copying results from the docs wi
 
 ## 1. Bootstrap the environment
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh  # install uv (skip if already installed)
-uv venv --python 3.11                           # create a dedicated virtualenv
-source .venv/bin/activate                       # or use `uv python` directly
+=== "macOS/Linux"
 
-# install OpenMed with Hugging Face extras and doc tooling
-uv pip install ".[hf]"
-```
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh  # install uv (skip if already installed)
+    uv venv --python 3.11                           # create a dedicated virtualenv
+    source .venv/bin/activate                       # or use `uv python` directly
+
+    # install OpenMed with Hugging Face extras and doc tooling
+    uv pip install ".[hf]"
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    uv venv --python 3.11
+    .venv\Scripts\Activate.ps1
+
+    # install OpenMed with Hugging Face extras and doc tooling
+    uv pip install ".[hf]"
+    ```
 
 Need the zero-shot GLiNER stack or dev tools? Stack extras as needed:
 
