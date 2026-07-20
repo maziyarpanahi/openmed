@@ -13,7 +13,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
@@ -35,7 +35,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.2.0
+      uses: astral-sh/setup-uv@v8.3.2
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -56,12 +56,12 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.2.0
+      uses: astral-sh/setup-uv@v8.3.2
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -102,12 +102,12 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.2.0
+      uses: astral-sh/setup-uv@v8.3.2
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -145,12 +145,12 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.2.0
+      uses: astral-sh/setup-uv@v8.3.2
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -193,12 +193,12 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.2.0
+      uses: astral-sh/setup-uv@v8.3.2
       with:
         enable-cache: true
         cache-dependency-glob: |
@@ -227,7 +227,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
@@ -256,12 +256,12 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
     - name: Set up uv
-      uses: astral-sh/setup-uv@v8.2.0
+      uses: astral-sh/setup-uv@v8.3.2
       with:
         enable-cache: true
         cache-dependency-glob: |
