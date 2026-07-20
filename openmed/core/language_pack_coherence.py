@@ -1,4 +1,4 @@
-"""Language-pack coherence validation and capability coverage (OM- / #1584).
+"""Language-pack coherence validation and capability coverage (#1584).
 
 This module extends the OM-135 locale-coherence contract
 (:func:`openmed.core.anonymizer.locales.locale_coherence_report`) into an
@@ -18,12 +18,6 @@ surrogate locale that is neither a real Faker locale nor a documented
 approximation, a national-ID provider whose surrogates do not round-trip its
 registered validator, a policy profile the threshold matrix does not define, or
 a recall-floor override keyed by a non-canonical label.
-
-Provisional note (segmenter resolution): master has no segmenter registry keyed
-by ``segmenter_id`` yet -- that resolver is expected from the downstream-adapter
-child (#1583). Until it lands, segmenter ids are resolved against the documented
-known-set :data:`_PROVISIONAL_KNOWN_SEGMENTERS`; swap it for the adapter's
-resolver when available.
 """
 
 from __future__ import annotations
@@ -31,6 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable, Mapping, Optional
 
 from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePackRegistry
+from .language_pack_catalog import is_registered_segmenter
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .language_pack import LanguagePack
@@ -49,15 +44,6 @@ FILLED = "filled"
 APPROXIMATED = "approximated"
 MISSING = "missing"
 
-# PROVISIONAL (pending #1583's downstream adapter / a real segmenter registry).
-# Master exposes no segmenter registry keyed by ``segmenter_id``; until the
-# adapter introduces one, coherence resolves segmenter ids against this
-# documented known-set. ``unicode-sentence`` is the LanguagePack contract's
-# default id; ``pysbd`` backs the current sentence pipeline
-# (:mod:`openmed.processing.sentences`). Replace this with the adapter's
-# resolver when it lands.
-_PROVISIONAL_KNOWN_SEGMENTERS = frozenset({"unicode-sentence", "pysbd"})
-
 # Number of surrogate samples drawn per national-ID provider during round-trip
 # validation. A mis-wired provider (wrong locale/method) fails deterministically
 # well within this budget; kept modest so the report stays fast.
@@ -74,8 +60,9 @@ class LanguagePackCoherenceError(RuntimeError):
 
 
 def _segmenter_resolves(segmenter_id: str) -> bool:
-    """Return whether ``segmenter_id`` resolves (provisional known-set)."""
-    return segmenter_id in _PROVISIONAL_KNOWN_SEGMENTERS
+    """Return whether ``segmenter_id`` resolves through the shared catalog."""
+
+    return is_registered_segmenter(segmenter_id)
 
 
 def _surrogate_locale_status(pack: "LanguagePack") -> tuple[str, dict[str, object]]:
@@ -86,17 +73,21 @@ def _surrogate_locale_status(pack: "LanguagePack") -> tuple[str, dict[str, objec
         _APPROXIMATE_LOCALES,
         resolve_faker_backend_locale,
     )
+    from .language_pack_catalog import LANG_TO_LOCALE
 
     backend = resolve_faker_backend_locale(pack.surrogate_locale)
     detail: dict[str, object] = {
         "locale": pack.surrogate_locale,
         "backend": backend,
     }
-    if pack.code in _APPROXIMATE_LOCALES:
+    if backend not in AVAILABLE_LOCALES:
+        return MISSING, detail
+    if (
+        pack.code in _APPROXIMATE_LOCALES
+        and LANG_TO_LOCALE.get(pack.code) == pack.surrogate_locale
+    ):
         return APPROXIMATED, detail
-    if backend in AVAILABLE_LOCALES:
-        return FILLED, detail
-    return MISSING, detail
+    return FILLED, detail
 
 
 def _national_id_validators(lang: str) -> list:
@@ -193,6 +184,13 @@ def _policy_status(pack: "LanguagePack") -> tuple[str, list[str], dict[str, obje
     }
     issues: list[str] = []
 
+    unknown_policy_keys = sorted(set(pack.policy_overrides) - {"profile"})
+    if unknown_policy_keys:
+        issues.append(
+            f"unsupported policy override keys: {unknown_policy_keys}; "
+            "only 'profile' is defined"
+        )
+
     declared_profile = pack.policy_overrides.get("profile")
     if declared_profile is not None:
         valid_profiles = set(load_thresholds()["profiles"])
@@ -208,8 +206,8 @@ def _policy_status(pack: "LanguagePack") -> tuple[str, list[str], dict[str, obje
             f"recall-floor overrides reference non-canonical labels: {unknown_labels}"
         )
 
-    declared = bool(pack.policy_overrides) or bool(pack.recall_floor_overrides)
-    status = FILLED if declared else MISSING
+    declared = declared_profile is not None or bool(pack.recall_floor_overrides)
+    status = FILLED if declared and not issues else MISSING
     return status, issues, detail
 
 
