@@ -95,6 +95,7 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .odt import extract_odt
 from .tabular_csv import (
     ColumnDecision,
     RedactedTable,
@@ -143,6 +144,7 @@ __all__ = [
     "extract_docx",
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
+    "extract_odt",
     "extract_epub",
     "MetadataFinding",
     "ResidualMetadataReport",

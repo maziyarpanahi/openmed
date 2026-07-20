@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added dependency-free OpenDocument Text (`.odt`) extraction with paragraph
+  and list reading order, deterministic table linearization, character-offset
+  source maps, multimodal registry discovery, and usage documentation (#857).
 - Added a Prefect integration with a `deidentify_file_task` task and a
   `deidentify_dataset_flow` flow that fan the local dataset redaction runner
   over lists of files and return PHI-free count summaries. Prefect stays an

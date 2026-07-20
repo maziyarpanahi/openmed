@@ -47,6 +47,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - ODT/ODF Text Extraction: multimodal/odt-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
