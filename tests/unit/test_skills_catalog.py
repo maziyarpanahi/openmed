@@ -6,6 +6,7 @@ frontmatter, a folder/name mismatch, or accidental vendor attribution can't ship
 It reuses the repo's own ``skills/build_catalog.py`` validator (standard-library
 only) and additionally enforces strict-YAML parseability when PyYAML is present.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -17,7 +18,9 @@ BUILDER = SKILLS_DIR / "build_catalog.py"
 
 
 def _load_builder():
-    spec = importlib.util.spec_from_file_location("openmed_skills_build_catalog", BUILDER)
+    spec = importlib.util.spec_from_file_location(
+        "openmed_skills_build_catalog", BUILDER
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
