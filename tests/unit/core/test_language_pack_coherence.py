@@ -21,6 +21,7 @@ from openmed.core import (
     pack_coherence_report,
     require_language_pack_coherence,
 )
+from openmed.core.language_pack_catalog import SUPPORTED_LANGUAGES
 from openmed.core.language_pack_coherence import (
     APPROXIMATED,
     CAPABILITY_SLOTS,
@@ -96,6 +97,37 @@ def test_approximate_surrogate_locale_is_explicit_and_never_silently_empty():
     assert row["coverage"]["missing"] == 0
 
 
+def test_approximate_language_with_invalid_locale_fails_loudly():
+    registry = _registry(
+        _pack(
+            "te",
+            scripts=["Telugu"],
+            surrogate_locale="not_A_REAL_LOCALE",
+            national_id_providers={},
+        )
+    )
+    row = _row_for("te", registry)
+
+    assert row["coherent"] is False
+    assert row["surrogate_locale"]["status"] == MISSING
+    assert any("surrogate locale" in issue for issue in row["issues"])
+
+
+def test_real_override_for_approximate_language_is_filled():
+    registry = _registry(
+        _pack(
+            "te",
+            scripts=["Telugu"],
+            surrogate_locale="en_US",
+            national_id_providers={},
+        )
+    )
+    row = _row_for("te", registry)
+
+    assert row["coherent"] is True
+    assert row["surrogate_locale"]["status"] == FILLED
+
+
 def test_policy_slot_missing_is_not_a_coherence_failure():
     registry = _registry(_pack("en", policy_overrides={}, recall_floor_overrides={}))
     row = _row_for("en", registry)
@@ -163,6 +195,15 @@ def test_unknown_policy_profile_fails_loudly():
 
     assert row["coherent"] is False
     assert any("policy profile" in issue for issue in row["issues"])
+
+
+def test_unknown_policy_override_key_fails_loudly():
+    registry = _registry(_pack("en", policy_overrides={"garbage": "value"}))
+    row = _row_for("en", registry)
+
+    assert row["coherent"] is False
+    assert row["policy"]["status"] == MISSING
+    assert any("unsupported policy override keys" in issue for issue in row["issues"])
 
 
 def test_non_canonical_recall_floor_label_fails_loudly():
@@ -238,3 +279,11 @@ def test_empty_registry_reports_no_rows_and_is_coherent():
     registry = LanguagePackRegistry()
     assert pack_coherence_report(registry=registry) == []
     assert check_language_pack_coherence(registry=registry) == 0
+
+
+def test_builtin_language_pack_catalog_is_coherent():
+    rows = pack_coherence_report()
+
+    assert len(rows) == len(SUPPORTED_LANGUAGES)
+    assert [row["language"] for row in rows] == sorted(row["language"] for row in rows)
+    assert [row for row in rows if not row["coherent"]] == []
