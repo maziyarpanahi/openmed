@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -12,6 +11,8 @@ from openmed.training.active_learning import (
     DEFAULT_EVENT_LOG,
     ActiveLearningQueue,
 )
+
+from ._output import EXIT_ERROR, CliError, emit
 
 
 def add_active_learning_command(subparsers: argparse._SubParsersAction) -> None:
@@ -73,16 +74,24 @@ def handle_next_batch(args: argparse.Namespace) -> int:
         for item in _load_records(args.adjudication):
             queue.ingest_adjudication(item)
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        sys.stderr.write(f"Failed to prepare active-learning queue: {exc}\n")
-        return 1
+        raise CliError(
+            f"Failed to prepare active-learning queue: {exc}",
+            code="ingest_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-    payload = queue.next_batch_jsonl(args.size)
+    batch = queue.next_batch_jsonl(args.size)
+    records = (
+        [json.loads(line) for line in batch.splitlines() if line.strip()]
+        if batch
+        else []
+    )
+    payload = {"count": len(records), "records": records}
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(f"{payload}\n" if payload else "", encoding="utf-8")
-    elif payload:
-        sys.stdout.write(f"{payload}\n")
-    return 0
+        args.output.write_text(f"{batch}\n" if batch else "", encoding="utf-8")
+        return emit(args, payload, human=None)
+    return emit(args, payload, human=batch if batch else None)
 
 
 def _load_records(paths: Iterable[Path]) -> Iterable[Mapping[str, Any]]:
