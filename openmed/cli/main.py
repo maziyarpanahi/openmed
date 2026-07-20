@@ -1301,6 +1301,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return handler(args)
     except CliError as exc:
         return emit_error(args, exc)
+    except Exception as exc:
+        # Keep unexpected failures scriptable without echoing exception text,
+        # which may contain input content or other sensitive details.
+        error = CliError(
+            f"Command failed with {type(exc).__name__}.",
+            code="runtime_error",
+            exit_code=EXIT_ERROR,
+        )
+        return emit_error(args, error)
 
 
 # ---------------------------------------------------------------------------
@@ -1345,11 +1354,17 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         try:
             text = args.input_file.read_text(encoding="utf-8")
         except FileNotFoundError:
-            sys.stderr.write(f"Input file not found: {args.input_file}\n")
-            return 1
+            raise CliError(
+                f"Input file not found: {args.input_file}",
+                code="input_not_found",
+                exit_code=EXIT_ERROR,
+            )
         except OSError as exc:  # pragma: no cover - defensive
-            sys.stderr.write(f"Failed to read {args.input_file}: {exc}\n")
-            return 1
+            raise CliError(
+                f"Failed to read {args.input_file}: {exc}",
+                code="read_failed",
+                exit_code=EXIT_ERROR,
+            )
 
     analyze_text, _, _, _ = _lazy_api()
 
