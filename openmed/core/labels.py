@@ -147,6 +147,17 @@ DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
 RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
 URINE_FINDING: Final = "URINE_FINDING"
 
+#: Pulmonology concepts (issue #893)
+SPIROMETRY_MEASURE: Final = "SPIROMETRY_MEASURE"
+OXYGEN_SUPPORT: Final = "OXYGEN_SUPPORT"
+RESPIRATORY_FINDING: Final = "RESPIRATORY_FINDING"
+DYSPNEA_GRADE: Final = "DYSPNEA_GRADE"
+
+#: Pediatric growth and developmental-surveillance concepts (issue #896)
+GROWTH_PARAMETER: Final = "GROWTH_PARAMETER"
+GROWTH_PERCENTILE: Final = "GROWTH_PERCENTILE"
+DEVELOPMENTAL_MILESTONE: Final = "DEVELOPMENTAL_MILESTONE"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -158,6 +169,8 @@ ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
 ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
 #: ICAO 9303 passport/ID machine-readable zone; still normalizes to ID_NUM.
 ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
+#: China Unified Social Credit Code (organization-linked); normalizes to ID_NUM.
+ID_SUBTYPE_SOCIAL_CREDIT_CODE: Final = "social_credit_code"
 ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
     {
         ID_SUBTYPE_MRN,
@@ -165,6 +178,7 @@ ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
         ID_SUBTYPE_NATIONAL_ID,
         ID_SUBTYPE_SSN_ADJACENT,
         ID_SUBTYPE_PASSPORT_MRZ,
+        ID_SUBTYPE_SOCIAL_CREDIT_CODE,
     }
 )
 
@@ -246,6 +260,13 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         DIALYSIS_MODALITY,
         RENAL_FUNCTION_MEASURE,
         URINE_FINDING,
+        SPIROMETRY_MEASURE,
+        OXYGEN_SUPPORT,
+        RESPIRATORY_FINDING,
+        DYSPNEA_GRADE,
+        GROWTH_PARAMETER,
+        GROWTH_PERCENTILE,
+        DEVELOPMENTAL_MILESTONE,
         VARIANT_DESCRIPTOR,
         PROTEIN_CHANGE,
         ZYGOSITY,
@@ -471,6 +492,40 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
     URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Pulmonology concepts (issue #893)
+    SPIROMETRY_MEASURE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    OXYGEN_SUPPORT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    RESPIRATORY_FINDING: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    DYSPNEA_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Pediatric growth and developmental-surveillance concepts (issue #896)
+    GROWTH_PARAMETER: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (
+            SNOMED,
+            LOINC,
+        ),
+    ),
+    GROWTH_PERCENTILE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (
+            SNOMED,
+            LOINC,
+        ),
+    ),
+    DEVELOPMENTAL_MILESTONE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (
+            SNOMED,
+            LOINC,
+        ),
+    ),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -580,6 +635,15 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
     RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
     URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    # Pulmonology concepts
+    SPIROMETRY_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    OXYGEN_SUPPORT: HIPAA_UNIQUE_IDENTIFIER,
+    RESPIRATORY_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    DYSPNEA_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    # Pediatric growth and developmental-surveillance concepts
+    GROWTH_PARAMETER: HIPAA_UNIQUE_IDENTIFIER,
+    GROWTH_PERCENTILE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVELOPMENTAL_MILESTONE: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -687,6 +751,9 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "id": ID_NUM,
     "identifier": ID_NUM,
     "passportmrz": ID_NUM,
+    "socialcreditcode": ID_NUM,
+    "unifiedsocialcreditcode": ID_NUM,
+    "uscc": ID_NUM,
     "medicalrecordnumber": ID_NUM,
     "mrn": ID_NUM,
     "nhsnumber": ID_NUM,
@@ -888,15 +955,55 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "urinefinding": URINE_FINDING,
     "proteinuria": URINE_FINDING,
     "hematuria": URINE_FINDING,
+    # Pulmonology concepts
+    "spirometrymeasure": SPIROMETRY_MEASURE,
+    "spirometry": SPIROMETRY_MEASURE,
+    "fev1": SPIROMETRY_MEASURE,
+    "fvc": SPIROMETRY_MEASURE,
+    "oxygensupport": OXYGEN_SUPPORT,
+    "oxygentherapy": OXYGEN_SUPPORT,
+    "nasalcannula": OXYGEN_SUPPORT,
+    "respiratoryfinding": RESPIRATORY_FINDING,
+    "wheeze": RESPIRATORY_FINDING,
+    "crackles": RESPIRATORY_FINDING,
+    "dyspneagrade": DYSPNEA_GRADE,
+    "mmrc": DYSPNEA_GRADE,
+    "dyspnea": DYSPNEA_GRADE,
+    # Pediatric growth and developmental-surveillance concepts
+    "growthparameter": GROWTH_PARAMETER,
+    "weight": GROWTH_PARAMETER,
+    "length": GROWTH_PARAMETER,
+    "headcircumference": GROWTH_PARAMETER,
+    "armcircumference": GROWTH_PARAMETER,
+    "muac": GROWTH_PARAMETER,
+    "skinfold": GROWTH_PARAMETER,
+    "subscapularskinfold": GROWTH_PARAMETER,
+    "tricepsskinfold": GROWTH_PARAMETER,
+    "bmi": GROWTH_PARAMETER,
+    "bodymassindex": GROWTH_PARAMETER,
+    "growthvelocity": GROWTH_PARAMETER,
+    "growthpercentile": GROWTH_PERCENTILE,
+    "percentile": GROWTH_PERCENTILE,
+    "growthzscore": GROWTH_PERCENTILE,
+    "developmentalmilestone": DEVELOPMENTAL_MILESTONE,
+    "milestone": DEVELOPMENTAL_MILESTONE,
+    "motordevelopment": DEVELOPMENTAL_MILESTONE,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
+    "lungauscultation": RESPIRATORY_FINDING,
+    "airwaydevice": AIRWAY_MANAGEMENT,
+    "feedinghistory": NUTRITIONAL_STATUS,
+    "pediatricfinding": CONDITION,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
     "passportmrz": ID_SUBTYPE_PASSPORT_MRZ,
+    "socialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "unifiedsocialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "uscc": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
     "npi": ID_SUBTYPE_NPI,
     "nhsnumber": ID_SUBTYPE_NATIONAL_ID,
     "nhs": ID_SUBTYPE_NATIONAL_ID,
@@ -1021,6 +1128,8 @@ __all__ = [
     "ID_SUBTYPE_NPI",
     "ID_SUBTYPE_NATIONAL_ID",
     "ID_SUBTYPE_SSN_ADJACENT",
+    "ID_SUBTYPE_PASSPORT_MRZ",
+    "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
     "POLICY_LABELS",
@@ -1126,4 +1235,7 @@ __all__ = [
     "DIALYSIS_MODALITY",
     "RENAL_FUNCTION_MEASURE",
     "URINE_FINDING",
+    "GROWTH_PARAMETER",
+    "GROWTH_PERCENTILE",
+    "DEVELOPMENTAL_MILESTONE",
 ]

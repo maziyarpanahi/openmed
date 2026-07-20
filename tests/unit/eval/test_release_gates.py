@@ -990,6 +990,16 @@ def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> No
     assert check.details["mismatches"]["readme"]["models"]["readme_floor"] == 2
 
 
+def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
+    rows = release_gates._load_manifest_rows(release_gates._DEFAULT_MANIFEST_PATH)
+
+    derived_count = release_gates._published_android_onnx_derivative_count(rows)
+
+    assert len(rows) == 1_519
+    assert derived_count == 751
+    assert len(rows) + derived_count >= 2_000
+
+
 def _coreml_manifest() -> dict[str, object]:
     parity_pass = {
         "passed": True,

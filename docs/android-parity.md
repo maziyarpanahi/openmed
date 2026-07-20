@@ -12,7 +12,7 @@ generate the parity JSON:
 
 ```bash
 .venv/bin/python -m openmed.onnx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-android-onnx \
   --profile android
 
