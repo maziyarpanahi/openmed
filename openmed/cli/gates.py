@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 from openmed.core import baseline as baseline_store
 from openmed.eval.evidence_bundle import bundle_gate_evidence
 from openmed.eval.release_gates import RELEASABLE, format_preview, preview
+
+from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit
 
 
 def add_gates_command(subparsers: argparse._SubParsersAction) -> None:
@@ -120,8 +121,11 @@ def handle_gates_preview(args: argparse.Namespace) -> int:
     """Run a read-only release-gate preview."""
 
     if not args.candidate.is_file():
-        sys.stderr.write(f"Candidate report not found: {args.candidate}\n")
-        return 2
+        raise CliError(
+            f"Candidate report not found: {args.candidate}",
+            code="candidate_not_found",
+            exit_code=EXIT_USAGE,
+        )
 
     try:
         candidate = _read_json_object(args.candidate)
@@ -135,10 +139,13 @@ def handle_gates_preview(args: argparse.Namespace) -> int:
             thresholds_matrix_path=args.thresholds_matrix,
         )
     except Exception as exc:
-        sys.stderr.write(f"Release gate preview failed: {exc}\n")
-        return 2
+        raise CliError(
+            f"Release gate preview failed: {exc}",
+            code="preview_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-    sys.stdout.write(format_preview(report) + "\n")
+    emit(args, report.to_dict(), human=format_preview(report))
     if args.strict and report.decision != RELEASABLE:
         return 1
     return 0
@@ -146,7 +153,7 @@ def handle_gates_preview(args: argparse.Namespace) -> int:
 
 def _handle_bundle(args: argparse.Namespace) -> int:
     try:
-        payload = _read_json_object(args.gate_report)
+        gate_report = _read_json_object(args.gate_report)
         extra_artifacts = [_parse_artifact(value) for value in args.artifact]
         extra_artifacts.append(
             {
@@ -156,16 +163,28 @@ def _handle_bundle(args: argparse.Namespace) -> int:
             }
         )
         result = bundle_gate_evidence(
-            payload,
+            gate_report,
             args.output_dir,
             evidence_root=args.evidence_root or args.gate_report.parent,
             extra_artifacts=extra_artifacts,
         )
     except Exception as exc:
-        sys.stderr.write(f"Failed to bundle gate evidence: {exc}\n")
-        return 2
+        raise CliError(
+            f"Failed to bundle gate evidence: {exc}",
+            code="bundle_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-    print(result.summary)
+    payload = {
+        "output_dir": str(result.output_dir),
+        "manifest_path": str(result.manifest_path),
+        "summary_path": str(result.summary_path),
+        "manifest": dict(result.manifest),
+        "missing_required": [dict(item) for item in result.missing_required],
+        "has_missing_required": result.has_missing_required,
+        "summary": result.summary,
+    }
+    emit(args, payload, human=result.summary)
     if args.strict and result.has_missing_required:
         return 1
     return 0
