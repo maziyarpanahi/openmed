@@ -215,4 +215,7 @@ def test_doctor_json_command_is_registered(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert json.loads(captured.out) == diagnostics
+    payload = json.loads(captured.out)
+    assert payload["ok"] is True
+    assert payload["command"] == "doctor"
+    assert payload["data"]["checks"] == diagnostics
