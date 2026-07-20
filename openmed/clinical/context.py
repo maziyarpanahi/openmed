@@ -1209,7 +1209,12 @@ def resolve_span_context(
     modifier_hits: Any = None,
     language: str | None = None,
 ) -> ClinicalContextResult:
-    """Return all currently implemented ConText decision axes for ``span``."""
+    """Return all currently implemented ConText decision axes for ``span``.
+
+    Registered non-English languages use only their own cue pack. When that
+    pack has no matching cue, the axes degrade to recent, certain, and
+    affirmed; absent English cues never flip a Chinese or Hindi assertion.
+    """
 
     return ClinicalContextResult(
         temporality=resolve_temporality(span, modifier_hits, language=language),

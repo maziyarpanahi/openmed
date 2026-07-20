@@ -208,6 +208,10 @@ def compute_relation_metrics(
         {relation.relation_type for relation in gold}
         | {relation.relation_type for relation in predicted}
     )
+    languages = sorted(
+        {_relation_language(relation) for relation in gold}
+        | {_relation_language(relation) for relation in predicted}
+    )
     scopes = [
         scope
         for scope in RELATION_SCOPES
@@ -247,8 +251,24 @@ def compute_relation_metrics(
             )
             for scope in scopes
         },
+        "by_language": {
+            language: _metric_pair(
+                [
+                    relation
+                    for relation in gold
+                    if _relation_language(relation) == language
+                ],
+                [
+                    relation
+                    for relation in predicted
+                    if _relation_language(relation) == language
+                ],
+            )
+            for language in languages
+        },
         "counts": {
             "gold": len(gold),
+            "languages": languages,
             "predicted": len(predicted),
             "relation_types": relation_types,
             "scopes": scopes,
@@ -271,6 +291,7 @@ def compute_relation_metrics_bundle(
         "relaxed": metrics["relaxed"],
         "strict": metrics["strict"],
         "by_scope": metrics["by_scope"],
+        "per_language": metrics["by_language"],
     }
 
 
@@ -319,6 +340,13 @@ def _metric_pair(
         "strict": compute_strict_relation_f1(gold, predicted).to_dict(),
         "relaxed": compute_relaxed_relation_f1(gold, predicted).to_dict(),
     }
+
+
+def _relation_language(relation: EvalRelation) -> str:
+    metadata_language = relation.metadata.get("language")
+    if metadata_language:
+        return str(metadata_language)
+    return relation.head.language or relation.tail.language or "en"
 
 
 def _as_relations(relations: Iterable[Any]) -> list[EvalRelation]:

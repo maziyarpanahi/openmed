@@ -1,10 +1,15 @@
-"""Typed medication relation candidate schema."""
+"""Relation candidate schemas and script-agnostic candidate construction."""
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Literal
 
+from openmed.core.decoding import SpanEdge, SpanNode
+from openmed.core.labels import normalize_label
 from openmed.processing.advanced_ner import EntitySpan
 
 MedicationAttributeType = Literal["dose", "route", "frequency", "duration"]
@@ -92,6 +97,233 @@ class SpanReference:
         if self.section is not None:
             payload["section"] = self.section
         return payload
+
+
+@dataclass(frozen=True)
+class RelationCandidateRule:
+    """Language-specific rule used to construct typed relation candidates.
+
+    Candidate construction operates only on source character offsets and cue
+    substrings. It intentionally does not tokenize on whitespace, which keeps
+    the same path valid for Chinese and Indic scripts.
+    """
+
+    relation_type: str
+    source_relation: str
+    head_labels: frozenset[str]
+    tail_labels: frozenset[str]
+    cues: tuple[str, ...]
+    max_character_distance: int = 96
+
+    def __post_init__(self) -> None:
+        if not self.relation_type:
+            raise ValueError("relation_type must be non-empty")
+        if not self.source_relation:
+            raise ValueError("source_relation must be non-empty")
+        if not self.head_labels or not self.tail_labels:
+            raise ValueError("relation rules require head and tail labels")
+        if not self.cues:
+            raise ValueError("relation rules require at least one cue")
+        if self.max_character_distance < 0:
+            raise ValueError("max_character_distance must be non-negative")
+
+
+@dataclass(frozen=True)
+class RelationCandidateBatch:
+    """Span-graph inputs produced from already-extracted NER spans."""
+
+    nodes: tuple[SpanNode, ...]
+    candidates: tuple[SpanEdge, ...]
+    spans_by_node_id: Mapping[str, SpanReference]
+
+
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?。！？；;\n]")
+
+
+def build_relation_candidates(
+    text: str,
+    spans: Iterable[Any],
+    rules: Iterable[RelationCandidateRule],
+    *,
+    language: str,
+) -> RelationCandidateBatch:
+    """Build graph candidates from existing spans without word tokenization.
+
+    Args:
+        text: Original clinical text.
+        spans: Existing NER spans with character offsets into ``text``.
+        rules: Language-keyed relation rules.
+        language: Language code recorded as safe graph provenance.
+
+    Returns:
+        Nodes, candidate edges, and the stable node-to-span lookup used by the
+        shared :func:`openmed.core.decoding.decode_span_graph` decoder.
+    """
+
+    references = _coerce_relation_spans(text, spans)
+    nodes: list[SpanNode] = []
+    spans_by_node_id: dict[str, SpanReference] = {}
+    for index, reference in enumerate(references):
+        node_id = f"span-{index}"
+        spans_by_node_id[node_id] = reference
+        nodes.append(
+            SpanNode(
+                node_id=node_id,
+                start=reference.start,
+                end=reference.end,
+                label=normalize_label(reference.label),
+                score=reference.score,
+                metadata={"language": language},
+            )
+        )
+
+    candidates: list[SpanEdge] = []
+    ordered_rules = sorted(
+        rules,
+        key=lambda rule: (rule.relation_type, rule.source_relation),
+    )
+    for head_node in nodes:
+        for tail_node in nodes:
+            if head_node.node_id == tail_node.node_id:
+                continue
+            head = spans_by_node_id[head_node.node_id]
+            tail = spans_by_node_id[tail_node.node_id]
+            distance = _character_distance(head, tail)
+            between = _text_between(text, head, tail)
+            if _SENTENCE_BOUNDARY_RE.search(between):
+                continue
+            window = text[min(head.start, tail.start) : max(head.end, tail.end)]
+            for rule in ordered_rules:
+                if head_node.label not in rule.head_labels:
+                    continue
+                if tail_node.label not in rule.tail_labels:
+                    continue
+                if distance > rule.max_character_distance:
+                    continue
+                matched_cue = _matched_cue(window, rule.cues)
+                if matched_cue is None:
+                    continue
+                candidates.append(
+                    SpanEdge(
+                        head=head_node.node_id,
+                        tail=tail_node.node_id,
+                        label=rule.relation_type,
+                        score=_candidate_score(head, tail, distance),
+                        metadata={
+                            "character_distance": distance,
+                            "language": language,
+                            "matched_cue": matched_cue,
+                            "source_relation": rule.source_relation,
+                        },
+                    )
+                )
+
+    return RelationCandidateBatch(
+        nodes=tuple(nodes),
+        candidates=tuple(
+            sorted(
+                candidates,
+                key=lambda edge: (edge.label, edge.head, edge.tail, -edge.score),
+            )
+        ),
+        spans_by_node_id=MappingProxyType(spans_by_node_id),
+    )
+
+
+def _coerce_relation_spans(
+    text: str,
+    spans: Iterable[Any],
+) -> tuple[SpanReference, ...]:
+    references: list[SpanReference] = []
+    for item in spans:
+        if isinstance(item, SpanReference):
+            start = item.start
+            end = item.end
+            label = item.label
+            score = item.score
+            section = item.section
+        elif isinstance(item, EntitySpan):
+            start = item.start
+            end = item.end
+            label = item.label
+            score = item.score
+            section = None
+        else:
+            data = item if isinstance(item, Mapping) else vars(item)
+            metadata = data.get("metadata") or {}
+            if not isinstance(metadata, Mapping):
+                metadata = {}
+            start = int(data.get("start", data.get("start_char", -1)))
+            end = int(data.get("end", data.get("end_char", -1)))
+            label = str(data.get("label", data.get("entity", "")))
+            score = float(data.get("score", metadata.get("confidence", 1.0)))
+            raw_section = data.get("section", metadata.get("section"))
+            section = None if raw_section is None else str(raw_section)
+        if not label or start < 0 or end <= start or end > len(text):
+            continue
+        references.append(
+            SpanReference(
+                text=text[start:end],
+                label=str(label),
+                start=start,
+                end=end,
+                score=float(score),
+                section=section,
+            )
+        )
+
+    unique = {
+        (reference.start, reference.end, normalize_label(reference.label)): reference
+        for reference in references
+    }
+    return tuple(
+        sorted(
+            unique.values(),
+            key=lambda reference: (
+                reference.start,
+                reference.end,
+                normalize_label(reference.label),
+            ),
+        )
+    )
+
+
+def _text_between(
+    text: str,
+    left: SpanReference,
+    right: SpanReference,
+) -> str:
+    if left.end <= right.start:
+        return text[left.end : right.start]
+    if right.end <= left.start:
+        return text[right.end : left.start]
+    return ""
+
+
+def _character_distance(left: SpanReference, right: SpanReference) -> int:
+    if left.end <= right.start:
+        return right.start - left.end
+    if right.end <= left.start:
+        return left.start - right.end
+    return 0
+
+
+def _matched_cue(window: str, cues: tuple[str, ...]) -> str | None:
+    normalized_window = window.casefold()
+    for cue in sorted(cues, key=lambda value: (-len(value), value)):
+        if cue.casefold() in normalized_window:
+            return cue
+    return None
+
+
+def _candidate_score(
+    head: SpanReference,
+    tail: SpanReference,
+    distance: int,
+) -> float:
+    entity_confidence = max(0.0, min((head.score + tail.score) / 2.0, 1.0))
+    proximity = 1.0 / (1.0 + float(distance))
+    return round(0.65 + 0.2 * entity_confidence + 0.15 * proximity, 6)
 
 
 @dataclass(frozen=True)
@@ -212,6 +444,9 @@ __all__ = [
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
+    "RelationCandidateBatch",
+    "RelationCandidateRule",
     "RelationCandidate",
     "SpanReference",
+    "build_relation_candidates",
 ]

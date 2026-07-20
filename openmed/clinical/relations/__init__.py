@@ -25,12 +25,29 @@ from .candidate import (
     MedicationRelationGroup,
     MedicationRelationType,
     RelationCandidate,
+    RelationCandidateBatch,
+    RelationCandidateRule,
     SpanReference,
+    build_relation_candidates,
 )
 from .medication_links import (
     MEDICATION_LINK_ADVISORY,
     MedicationRelationScorer,
     link_medication_attributes,
+)
+from .multilingual import (
+    CMEIE_ENTITY_TYPES,
+    CMEIE_RELATION_MAPPING,
+    INDIC_RELATION_MAPPING,
+    MULTILINGUAL_RELATION_ADVISORY,
+    MULTILINGUAL_RELATION_REGISTRY_VERSION,
+    RELATION_TYPE_REGISTRY,
+    MultilingualRelation,
+    available_multilingual_relation_languages,
+    extract_relations,
+    map_relation_type,
+    multilingual_relation_rules,
+    relation_type_mapping,
 )
 
 __all__ = [
@@ -58,6 +75,21 @@ __all__ = [
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
     "RelationCandidate",
+    "RelationCandidateBatch",
+    "RelationCandidateRule",
     "SpanReference",
+    "build_relation_candidates",
     "link_medication_attributes",
+    "CMEIE_ENTITY_TYPES",
+    "CMEIE_RELATION_MAPPING",
+    "INDIC_RELATION_MAPPING",
+    "MULTILINGUAL_RELATION_ADVISORY",
+    "MULTILINGUAL_RELATION_REGISTRY_VERSION",
+    "RELATION_TYPE_REGISTRY",
+    "MultilingualRelation",
+    "available_multilingual_relation_languages",
+    "extract_relations",
+    "map_relation_type",
+    "multilingual_relation_rules",
+    "relation_type_mapping",
 ]
