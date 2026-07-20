@@ -15,6 +15,7 @@ from tests.fuzz import conftest as fuzz_conftest
 ROOT = Path(__file__).resolve().parents[3]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 FUZZ_WORKFLOW = ROOT / ".github" / "workflows" / "fuzz.yml"
+FORMAT_PARSER_FUZZ_WORKFLOW = ROOT / ".github" / "workflows" / "fuzz-parsers.yml"
 
 
 def _load_workflow(path: Path) -> dict[str, object]:
@@ -41,6 +42,26 @@ def test_expensive_fuzz_profile_has_a_dedicated_event_gate():
 
     assert set(ci["on"]) == {"push", "pull_request"}
     assert "fuzz-nightly" not in ci["jobs"]
+
+
+def test_format_parser_fuzz_workflow_is_opt_in_and_time_bounded() -> None:
+    workflow = _load_workflow(FORMAT_PARSER_FUZZ_WORKFLOW)
+
+    assert set(workflow["on"]) == {"schedule", "workflow_dispatch"}
+    assert workflow["permissions"] == {"contents": "read"}
+
+    job = workflow["jobs"]["fuzz-format-parsers"]
+    assert job["if"] == (
+        "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+    )
+    assert int(job["timeout-minutes"]) <= 15
+    assert any(
+        step.get("env", {}).get("HYPOTHESIS_PROFILE") == "fuzz-nightly"
+        and step.get("env", {}).get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS") == "0.5"
+        and "pytest tests/fuzz/test_format_parsers_fuzz.py -q -m fuzz"
+        in step.get("run", "")
+        for step in job["steps"]
+    )
 
 
 def test_explicit_unknown_hypothesis_profile_fails_closed(
