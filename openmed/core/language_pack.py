@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from threading import RLock
 from types import MappingProxyType
@@ -153,6 +153,7 @@ class LanguagePackRegistry:
         """Create an empty registry."""
 
         self._packs: dict[str, LanguagePack] = {}
+        self._listeners: list[Callable[[], None]] = []
         self._lock = RLock()
 
     def register(
@@ -183,7 +184,34 @@ class LanguagePackRegistry:
             if pack.code in self._packs and not replace:
                 raise ValueError(f"language pack {pack.code!r} is already registered")
             self._packs[pack.code] = pack
+            listeners = tuple(self._listeners)
+        for listener in listeners:
+            listener()
         return pack
+
+    def _add_listener(
+        self,
+        listener: Callable[[], None],
+        *,
+        replay: bool = True,
+    ) -> None:
+        """Subscribe an internal live adapter to registry changes.
+
+        Args:
+            listener: Zero-argument callback that refreshes derived state.
+            replay: Invoke the callback immediately for the current snapshot.
+
+        Raises:
+            TypeError: If ``listener`` is not callable.
+        """
+
+        if not callable(listener):
+            raise TypeError("listener must be callable")
+        with self._lock:
+            if listener not in self._listeners:
+                self._listeners.append(listener)
+        if replay:
+            listener()
 
     def get(self, code: str) -> LanguagePack:
         """Return the pack registered for ``code``.
