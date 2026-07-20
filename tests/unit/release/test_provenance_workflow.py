@@ -37,7 +37,7 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
         "attestations": "write",
     }
     assert "actions/checkout@v7" in content
-    assert "actions/setup-python@v6" in content
+    assert "actions/setup-python@v7" in content
     assert "python -m build" in content
     assert "twine check dist/*" in content
     assert "actions/attest@v4" in content
@@ -75,7 +75,7 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
     assert "npm publish --ignore-scripts --access public --provenance" in str(
         npm_publish
     )
-    assert "pypa/gh-action-pypi-publish@v1.14.0" in PUBLISH_WORKFLOW.read_text(
+    assert "pypa/gh-action-pypi-publish@v1.14.1" in PUBLISH_WORKFLOW.read_text(
         encoding="utf-8"
     )
 
