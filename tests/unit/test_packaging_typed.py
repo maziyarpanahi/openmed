@@ -14,6 +14,7 @@ consumers:
 from __future__ import annotations
 
 import importlib
+import importlib.resources
 import inspect
 import subprocess
 import sys
@@ -51,8 +52,8 @@ def _load_pyproject() -> dict:
 
 
 def test_py_typed_marker_present_in_package() -> None:
-    """The PEP 561 marker must live inside the installed package tree."""
-    marker = PACKAGE_ROOT / "py.typed"
+    """The PEP 561 marker must be available as a package resource."""
+    marker = importlib.resources.files("openmed").joinpath("py.typed")
     assert marker.is_file(), (
         "openmed/py.typed marker is missing; downstream type checkers will treat "
         "openmed as untyped without it"
