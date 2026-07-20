@@ -26,6 +26,16 @@ from .flat_table import (
     to_csv,
     to_dataframe,
 )
+from .openehr import (
+    DEFAULT_OPENEHR_BINDINGS,
+    OpenEHRBinding,
+    OpenEHRTemplate,
+    OpenEHRValidationResult,
+    extract_round_trip_coded_values,
+    parse_operational_template,
+    to_openehr_composition,
+    validate_openehr_composition,
+)
 
 __all__ = [
     "CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL",
@@ -33,15 +43,23 @@ __all__ = [
     "CodeableConceptFinding",
     "CodeableConceptFindingCode",
     "FLAT_TABLE_COLUMNS",
+    "DEFAULT_OPENEHR_BINDINGS",
     "SYSTEM_URI",
     "GroundedSpan",
+    "OpenEHRBinding",
+    "OpenEHRTemplate",
+    "OpenEHRValidationResult",
     "build_reverse_index",
     "check_codeable_concept",
     "codeable_concept_from_ranked_candidates",
+    "extract_round_trip_coded_values",
     "flatten_clinical_entities",
     "flatten_entities",
+    "parse_operational_template",
     "stamp_coding_provenance",
     "to_codeable_concept",
     "to_csv",
     "to_dataframe",
+    "to_openehr_composition",
+    "validate_openehr_composition",
 ]
