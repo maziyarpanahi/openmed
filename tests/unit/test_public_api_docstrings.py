@@ -47,11 +47,11 @@ MIN_COVERAGE = 100.0
 EXPECTED_DATA_EXPORTS = {
     "__version__": ("openmed", str),
     "PII_PATTERNS": ("openmed.core.pii_entity_merger", list),
-    "SUPPORTED_LANGUAGES": ("openmed.core.pii_i18n", set),
-    "DEFAULT_PII_MODELS": ("openmed.core.pii_i18n", dict),
+    "SUPPORTED_LANGUAGES": ("openmed.core.language_pack_catalog", set),
+    "DEFAULT_PII_MODELS": ("openmed.core.language_pack_catalog", dict),
     "LANGUAGE_PII_PATTERNS": ("openmed.core.pii_i18n", dict),
     "CANONICAL_LABELS": ("openmed.core.labels", frozenset),
-    "LANG_TO_LOCALE": ("openmed.core.anonymizer.locales", dict),
+    "LANG_TO_LOCALE": ("openmed.core.language_pack_catalog", dict),
     "ENCRYPTION_SCHEME": ("openmed.core.surrogate_vault", str),
 }
 
