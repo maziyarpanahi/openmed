@@ -247,6 +247,7 @@ docs = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-mcp = "openmed.mcp.server:main"
 
 [tool.hatch.build]
 include = [
