@@ -12,6 +12,8 @@ import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
+
 UNKNOWN_SCRIPT = "Unknown"
 
 SUPPORTED_SCRIPTS = (
@@ -27,21 +29,6 @@ SUPPORTED_SCRIPTS = (
     "Hebrew",
     "Thai",
 )
-
-SCRIPT_LANGUAGE_HINTS: dict[str, tuple[str, ...]] = {
-    "Latin": ("en", "fr", "de", "it", "es", "nl", "pt", "tr"),
-    "Arabic": ("ar",),
-    "Han": ("ja",),
-    "Hiragana/Katakana": ("ja",),
-    "Hangul": ("ko",),
-    "Cyrillic": ("en",),
-    "Devanagari": ("hi",),
-    "Telugu": ("te",),
-    "Greek": ("en",),
-    "Hebrew": ("en",),
-    "Thai": ("en",),
-    UNKNOWN_SCRIPT: ("en",),
-}
 
 ZERO_WIDTH_CHARS = frozenset(
     {

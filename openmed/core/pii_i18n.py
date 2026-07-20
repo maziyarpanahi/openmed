@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from .anonymizer.providers.clinical_ids import (
     validate_australian_medicare,
@@ -30,50 +30,15 @@ from .anonymizer.providers.clinical_ids import (
     validate_uk_nhs_number,
     validate_uk_nino,
 )
+from .language_pack_catalog import (
+    DEFAULT_PII_MODELS,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-SUPPORTED_LANGUAGES: Set[str] = {
-    "en",
-    "fr",
-    "de",
-    "it",
-    "es",
-    "nl",
-    "hi",
-    "te",
-    "pt",
-    "ar",
-    "he",
-    "ja",
-    "tr",
-    "id",
-    "th",
-    "ko",
-    "ro",
-}
-
-# Languages with validator-backed national-ID coverage but no bundled default
-# PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
-    "pl",
-    "lv",
-    "sk",
-    "ms",
-    "tl",
-    "da",
-    "hu",
-    "et",
-    "sr",
-    "hr",
-    "bg",
-    "fi",
-    "cs",
-    "el",
-    "vi",
-}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -114,27 +79,6 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ko": "Korean-",
     "ro": "Romanian-",
 }
-
-DEFAULT_PII_MODELS: Dict[str, str] = {
-    "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
-    "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
-    "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
-    "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
-    "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
-    "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
-    "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
-    "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
-    "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
-    "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
-    "he": "OpenMed/privacy-filter-multilingual",
-    "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
-    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
-    "id": "OpenMed/privacy-filter-multilingual",
-    "th": "OpenMed/privacy-filter-multilingual",
-    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
-    "ro": "OpenMed/privacy-filter-multilingual",
-}
-
 
 # ---------------------------------------------------------------------------
 # Financial Identifier Validators
