@@ -37,7 +37,10 @@ Tagged library releases build and check the wheel and source distribution
 before uploading to PyPI, and attempt to generate repository-level SLSA
 provenance evidence in the same release path. The current PyPI upload uses the
 project-scoped `PYPI_API_TOKEN` GitHub secret until the PyPI trusted publisher
-is configured for this workflow. See the
+is configured for this workflow. After the upload, the release path signs each
+distribution with Sigstore keyless signing and attaches the provenance bundle,
+digest manifest, and signature bundles to the tagged GitHub release, so
+consumers can verify a release without the GitHub attestation API. See the
 [PyPI Publishing](../release/trusted-publishing.md) guide for the upload
 contract and migration checklist.
 

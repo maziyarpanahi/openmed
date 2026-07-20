@@ -31,7 +31,7 @@ def test_quantize_dynamic_int8_writes_qint8_arm_artifact(
     calls: list[dict[str, Any]] = []
 
     onnx_mod = types.ModuleType("onnx")
-    onnx_mod.load = lambda path: {"path": path}
+    onnx_mod.load = lambda path, **kwargs: {"path": path}
     onnx_mod.checker = types.SimpleNamespace(check_model=lambda model: None)
 
     runtime_mod = types.ModuleType("onnxruntime")
@@ -63,8 +63,87 @@ def test_quantize_dynamic_int8_writes_qint8_arm_artifact(
             "output_model": str(output),
             "weight_type": "qint8",
             "op_types_to_quantize": ["MatMul", "Gemm"],
+            "use_external_data_format": False,
         }
     ]
+
+
+def test_quantize_dynamic_int8_preserves_external_data_format(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _quant_module()
+    source = tmp_path / "model.onnx"
+    output = tmp_path / "model_int8.onnx"
+    source.write_bytes(b"onnx")
+    calls = []
+
+    quantization_mod = types.ModuleType("onnxruntime.quantization")
+    quantization_mod.QuantType = types.SimpleNamespace(QInt8="qint8")
+
+    def fake_quantize_dynamic(input_model, output_model, **kwargs):
+        calls.append(kwargs)
+        Path(output_model).write_bytes(b"int8")
+
+    quantization_mod.quantize_dynamic = fake_quantize_dynamic
+    monkeypatch.setitem(sys.modules, "onnxruntime.quantization", quantization_mod)
+    monkeypatch.setattr(module, "_uses_external_data", lambda path: True)
+    monkeypatch.setattr(module, "_repair_onnx_topological_order", lambda path: None)
+    monkeypatch.setattr(module, "_check_onnx_model", lambda path: None)
+
+    module.quantize_dynamic_int8(source, output)
+
+    assert calls[0]["use_external_data_format"] is True
+
+
+def test_topological_repair_accounts_for_if_branch_captures() -> None:
+    module = _quant_module()
+    fake_onnx = types.SimpleNamespace(
+        AttributeProto=types.SimpleNamespace(GRAPH=1, GRAPHS=2)
+    )
+    branch = _FakeGraph(
+        [
+            _FakeNode(
+                "branch_identity",
+                inputs=["cast_out"],
+                outputs=["branch_out"],
+            )
+        ]
+    )
+    graph = _FakeGraph(
+        [
+            _FakeNode(
+                "if_node",
+                inputs=["condition"],
+                outputs=["if_out"],
+                attributes=[_FakeAttribute(fake_onnx.AttributeProto.GRAPH, branch)],
+            ),
+            _FakeNode("cast_node", inputs=["input_ids"], outputs=["cast_out"]),
+        ]
+    )
+
+    changed = module._sort_onnx_graph(graph, fake_onnx)
+
+    assert changed is True
+    assert [node.name for node in graph.node] == ["cast_node", "if_node"]
+
+
+def test_topological_repair_detects_reordered_unnamed_nodes() -> None:
+    module = _quant_module()
+    fake_onnx = types.SimpleNamespace(
+        AttributeProto=types.SimpleNamespace(GRAPH=1, GRAPHS=2)
+    )
+    graph = _FakeGraph(
+        [
+            _FakeNode("", inputs=["cast_out"], outputs=["result"]),
+            _FakeNode("", inputs=["input_ids"], outputs=["cast_out"]),
+        ]
+    )
+
+    changed = module._sort_onnx_graph(graph, fake_onnx)
+
+    assert changed is True
+    assert [node.output for node in graph.node] == [["cast_out"], ["result"]]
 
 
 def test_int8_report_certifies_and_omits_record_text(tmp_path: Path) -> None:
@@ -190,9 +269,6 @@ def test_convert_android_profile_emits_int8_and_runs_certification(
             "report_path": "recall_delta.json",
         }
 
-    def fake_convert_android_onnx_to_ort(*args, **kwargs):
-        return types.SimpleNamespace(skipped=True, ort_path=None)
-
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_android_fp16", fake_export_android_fp16)
     monkeypatch.setattr(module, "quantize_dynamic_int8", fake_quantize_dynamic_int8)
@@ -202,13 +278,17 @@ def test_convert_android_profile_emits_int8_and_runs_certification(
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(
         module,
-        "write_int8_recall_delta_report",
-        fake_write_int8_recall_delta_report,
+        "convert_android_onnx_to_ort",
+        lambda *args, **kwargs: types.SimpleNamespace(
+            skipped=True,
+            ort_path=None,
+            skip_reason="tooling unavailable",
+        ),
     )
     monkeypatch.setattr(
         module,
-        "convert_android_onnx_to_ort",
-        fake_convert_android_onnx_to_ort,
+        "write_int8_recall_delta_report",
+        fake_write_int8_recall_delta_report,
     )
 
     result = module.convert(
@@ -257,6 +337,63 @@ def _write_fixture(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+class _FakeValue:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeSparseInitializer:
+    def __init__(self, name: str) -> None:
+        self.values = _FakeValue(name)
+
+
+class _FakeAttribute:
+    def __init__(
+        self,
+        attribute_type: int,
+        graph: "_FakeGraph | None" = None,
+        graphs: list["_FakeGraph"] | None = None,
+    ) -> None:
+        self.type = attribute_type
+        self.g = graph
+        self.graphs = graphs or []
+
+
+class _FakeNode:
+    def __init__(
+        self,
+        name: str,
+        *,
+        inputs: list[str] | None = None,
+        outputs: list[str] | None = None,
+        attributes: list[_FakeAttribute] | None = None,
+    ) -> None:
+        self.name = name
+        self.input = inputs or []
+        self.output = outputs or []
+        self.attribute = attributes or []
+
+    def SerializeToString(self) -> bytes:
+        return repr((self.name, self.input, self.output)).encode()
+
+
+class _FakeGraph:
+    def __init__(
+        self,
+        nodes: list[_FakeNode],
+        *,
+        inputs: list[str] | None = None,
+        initializers: list[str] | None = None,
+        sparse_initializers: list[str] | None = None,
+    ) -> None:
+        self.node = nodes
+        self.input = [_FakeValue(name) for name in inputs or []]
+        self.initializer = [_FakeValue(name) for name in initializers or []]
+        self.sparse_initializer = [
+            _FakeSparseInitializer(name) for name in sparse_initializers or []
+        ]
 
 
 def _write_stub_onnx_artifact(path: Path) -> Path:

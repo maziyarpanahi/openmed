@@ -101,6 +101,7 @@ REVIEWED_LICENSES = {
     "pillow": "HPND",
     "pikepdf": "MPL-2.0",
     "polars": "MIT",
+    "prefect": "Apache-2.0",
     "presidio-analyzer": "MIT",
     "pyarrow": "Apache-2.0",
     "protobuf": "BSD-3-Clause",

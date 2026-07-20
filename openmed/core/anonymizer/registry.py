@@ -129,6 +129,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "fil_PH",
         "da_DK",
         "th_TH",
+        "cs_CZ",
         "sk_SK",
     }
 )
@@ -161,7 +162,7 @@ def _gen_age(faker, original, *, locale):
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
     "pt_BR": "cpf",
-    "pt_PT": "vat_id",
+    "pt_PT": "nif",
     "fr_FR": "ssn",
     "it_IT": "ssn",
     "es_ES": "nie",
@@ -182,7 +183,16 @@ _LOCALE_ID_METHODS = {
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
     "sk_SK": "rodne_cislo",
+    "cs_CZ": "rodne_cislo",
     "ro_RO": "romanian_cnp",
+    "fi_FI": "ssn",
+    "bg_BG": "egn",
+    "hr_HR": "ssn",
+    "sr_RS": "jmbg",
+    "hu_HU": "hungarian_taj",
+    "et_EE": "isikukood",
+    "el_GR": "ssn",
+    "vi_VN": "vietnamese_cccd",
 }
 
 
@@ -206,10 +216,28 @@ def _mrz_surrogate(faker, original):
     return None
 
 
+def _uscc_surrogate(faker, original):
+    """Return a valid USCC surrogate when ``original`` is a valid USCC."""
+    if not original:
+        return None
+    from openmed.core.pii_i18n import validate_unified_social_credit_code
+
+    if not validate_unified_social_credit_code(original.strip()):
+        return None
+    from openmed.core.anonymizer.providers.clinical_ids import (
+        generate_unified_social_credit_code,
+    )
+
+    return generate_unified_social_credit_code(rng=faker.random)
+
+
 def _gen_id_num(faker, original, *, locale):
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
+    uscc = _uscc_surrogate(faker, original)
+    if uscc is not None:
+        return uscc
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         return getattr(faker, method)()

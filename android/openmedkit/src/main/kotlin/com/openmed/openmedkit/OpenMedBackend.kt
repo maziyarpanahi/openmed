@@ -14,6 +14,7 @@ data class OpenMedBackend(
     val modelFile: File = File(modelDirectory, "model.onnx"),
     val tokenizerJson: File = File(modelDirectory, "tokenizer.json"),
     val tokenizerConfig: File? = File(modelDirectory, "tokenizer_config.json"),
+    val id2LabelFile: File = File(modelDirectory, "id2label.json"),
     val id2Label: Map<Int, String> = emptyMap(),
 ) {
     init {

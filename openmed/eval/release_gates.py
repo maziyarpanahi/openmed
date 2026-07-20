@@ -154,6 +154,20 @@ _TIER_BUDGETS = {
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_MANIFEST_PATH = _REPO_ROOT / "models.jsonl"
 _DEFAULT_README_PATH = _REPO_ROOT / "README.md"
+# Keep this offline catalog selector aligned with the batch export policy in
+# scripts/onnx/batch_android_convert_publish.py.
+_DERIVED_FORMAT_PREFIXES = ("mlx", "coreml", "onnx", "tflite")
+_ANDROID_FORMAT_PREFIXES = ("onnx", "tflite")
+_ANDROID_UNSUPPORTED_ARCHITECTURES = {"gliner", "privacy-filter"}
+_ANDROID_DERIVED_REPO_SUFFIXES = (
+    "-mlx",
+    "-mlx-8bit",
+    "-mlx-4bit",
+    "-coreml",
+    "-onnx",
+    "-onnx-android",
+    "-onnx-int8",
+)
 
 
 @dataclass(frozen=True)
@@ -1082,7 +1096,11 @@ def _manifest_surface_mismatches(
     if readme_path is None and default_manifest:
         readme_path = _DEFAULT_README_PATH
     if readme_path is not None:
-        readme_mismatches = _readme_manifest_mismatches(rows, readme_path)
+        readme_mismatches = _readme_manifest_mismatches(
+            rows,
+            readme_path,
+            include_android_onnx_derivatives=default_manifest,
+        )
         if readme_mismatches:
             mismatches["readme"] = readme_mismatches
 
@@ -1116,6 +1134,8 @@ def _manifest_surface_mismatches(
 def _readme_manifest_mismatches(
     rows: Sequence[Mapping[str, Any]],
     readme_path: Path,
+    *,
+    include_android_onnx_derivatives: bool = False,
 ) -> dict[str, Any]:
     if not readme_path.exists():
         return {"path": str(readme_path), "error": "README evidence is missing"}
@@ -1124,13 +1144,21 @@ def _readme_manifest_mismatches(
     declared = _readme_declared_counts(text)
     mismatches: dict[str, Any] = {}
     model_count = len(rows)
+    derived_model_count = (
+        _published_android_onnx_derivative_count(rows)
+        if include_android_onnx_derivatives
+        else 0
+    )
+    catalog_model_count = model_count + derived_model_count
     pii_count = len([row for row in rows if _is_pii_manifest_row(row)])
     pii_languages = _manifest_pii_languages(rows)
 
-    if declared.get("models") is not None and model_count < declared["models"]:
+    if declared.get("models") is not None and catalog_model_count < declared["models"]:
         mismatches["models"] = {
             "readme_floor": declared["models"],
             "manifest": model_count,
+            "android_onnx_derivatives": derived_model_count,
+            "catalog": catalog_model_count,
         }
     if (
         declared.get("pii_checkpoints") is not None
@@ -1149,6 +1177,43 @@ def _readme_manifest_mismatches(
             "manifest": len(pii_languages),
         }
     return mismatches
+
+
+def _published_android_onnx_derivative_count(
+    rows: Sequence[Mapping[str, Any]],
+) -> int:
+    """Count the audited Android ONNX fleet derived outside ``models.jsonl``."""
+
+    return sum(_is_android_onnx_source_row(row) for row in rows)
+
+
+def _is_android_onnx_source_row(row: Mapping[str, Any]) -> bool:
+    repo_id = str(row.get("repo_id") or "").strip()
+    if not repo_id or repo_id.startswith("OpenMed/privacy-filter-"):
+        return False
+    if _normalise_dimension(row.get("task")) != "token-classification":
+        return False
+    if (
+        _normalise_dimension(row.get("architecture"))
+        in _ANDROID_UNSUPPORTED_ARCHITECTURES
+    ):
+        return False
+
+    formats = {
+        _normalise_dimension(item)
+        for item in row.get("formats") or []
+        if str(item).strip()
+    }
+    if "pytorch" not in formats:
+        return False
+    if any(item.startswith(_ANDROID_FORMAT_PREFIXES) for item in formats):
+        return False
+    if any(
+        item != "pytorch" and item.startswith(_DERIVED_FORMAT_PREFIXES)
+        for item in formats
+    ):
+        return False
+    return not repo_id.endswith(_ANDROID_DERIVED_REPO_SUFFIXES)
 
 
 def _readme_declared_counts(text: str) -> dict[str, int]:
