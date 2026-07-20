@@ -30,11 +30,11 @@ DEFAULT_SMS_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 
 _NAME_TOKEN = r"(?:[A-Z][^\W\d_]{1,}(?:[-'’][A-Z]?[^\W\d_]*)?|[A-Z]{2,})"
 _HONORIFIC_NAME_PATTERN = (
-    r"(?i:\b(?:mama|maama|mami|sisi|dada|mme|mrs?|ms|dr|ndugu)\.?\s+)"
+    r"(?i:\b(?:mama|maama|mami|sisi|dada|mme|mrs?|ms|dr|ndugu)\.?\s+"
     + _NAME_TOKEN
     + r"(?:\s+"
     + _NAME_TOKEN
-    + r")?"
+    + r")?)"
 )
 
 _SHORT_TEXT_DENY_PATTERNS: tuple[dict[str, Any], ...] = (
@@ -62,7 +62,7 @@ _SHORT_TEXT_DENY_PATTERNS: tuple[dict[str, Any], ...] = (
     {
         "pattern": (
             r"(?i:\b(?:id|nid|mrn|patient\s*(?:id|no)|clinic\s*no)"
-            r"\s*[:#-]?\s*)[A-Z0-9][A-Z0-9/.-]{3,}"
+            r"\s*[:#-]?\s*[A-Z0-9][A-Z0-9/.-]{3,})"
         ),
         "label": "ID_NUM",
         "rule_id": "short_text_contextual_id",
@@ -214,25 +214,22 @@ class _ContactHasher:
             self._key = bytes(key)
         if not self._key:
             raise ValueError("contact_hash_key must not be empty")
-        self._tokens: dict[str, str] = {}
+        self._count = 0
 
     def pseudonymize(self, value: str) -> str:
         if not value:
             return value
-        token = self._tokens.get(value)
-        if token is None:
-            digest = hmac.new(
-                self._key,
-                value.encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()[:24]
-            token = f"contact_sha256:{digest}"
-            self._tokens[value] = token
-        return token
+        digest = hmac.new(
+            self._key,
+            value.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()[:24]
+        self._count += 1
+        return f"contact_sha256:{digest}"
 
     @property
     def count(self) -> int:
-        return len(self._tokens)
+        return self._count
 
 
 def resolve_short_text_preset(
@@ -651,7 +648,9 @@ def _redact_record_batch(
                 [slot.text for slot in nonempty_slots],
                 ids=[f"sms_{index}" for index in range(len(nonempty_slots))],
             )
-            if batch_result.failed_items:
+            if batch_result.failed_items or len(batch_result.items) != len(
+                nonempty_slots
+            ):
                 raise RuntimeError("short_text batch de-identification failed")
             redacted_texts = [
                 _coerce_redacted_text(item.result) for item in batch_result.items
@@ -761,9 +760,10 @@ def _load_json_payload(
         with Path(source).open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
     elif isinstance(source, str):
-        path = Path(source)
-        if "\n" not in source and "\r" not in source and path.exists():
-            with path.open("r", encoding="utf-8") as handle:
+        if source.lstrip().startswith(("{", "[")):
+            payload = json.loads(source)
+        elif _path_exists(source):
+            with Path(source).open("r", encoding="utf-8") as handle:
                 payload = json.load(handle)
         else:
             payload = json.loads(source)
@@ -798,9 +798,8 @@ def _open_text_source(
         return source, False
     if isinstance(source, os.PathLike):
         return Path(source).open("r", encoding="utf-8", newline=""), True
-    path = Path(source)
-    if "\n" not in source and "\r" not in source and path.exists():
-        return path.open("r", encoding="utf-8", newline=""), True
+    if _path_exists(source):
+        return Path(source).open("r", encoding="utf-8", newline=""), True
     return io.StringIO(source, newline=""), True
 
 
@@ -839,13 +838,21 @@ def _infer_export_format(
         if suffix in {".json", ".csv"}:
             return suffix[1:]
     if isinstance(source, str):
-        path = Path(source)
-        if "\n" not in source and "\r" not in source and path.exists():
-            suffix = path.suffix.lower()
+        if source.lstrip().startswith(("{", "[")):
+            return "json"
+        if _path_exists(source):
+            suffix = Path(source).suffix.lower()
             if suffix in {".json", ".csv"}:
                 return suffix[1:]
-        return "json" if source.lstrip().startswith(("{", "[")) else "csv"
+        return "csv"
     raise ValueError("format is required for streams without a recognizable suffix")
+
+
+def _path_exists(value: str | os.PathLike[str]) -> bool:
+    try:
+        return Path(value).exists()
+    except OSError:
+        return False
 
 
 __all__ = [

@@ -106,10 +106,12 @@ The expected RapidPro-compatible core columns are:
 urn,contact,direction,text,sent_on
 ```
 
-Extra columns are preserved in their original order. The CSV path reads and
-writes incrementally, while `iter_redacted_sms_records` accepts any iterable of
-mapping records. Both retain at most one source batch in memory and reuse
-OpenMed's `BatchProcessor` for batched model inference.
+Extra columns are preserved in their original order. When an output destination
+is supplied, the CSV path reads and writes incrementally, while
+`iter_redacted_sms_records` accepts any iterable of mapping records. Both keep
+constant-size contact-hashing state, retain at most one source batch in memory,
+and reuse OpenMed's `BatchProcessor` for batched model inference. Omitting the
+CSV output destination materializes the result text for convenience.
 
 ```python
 from openmed.multimodal import redact_sms_csv

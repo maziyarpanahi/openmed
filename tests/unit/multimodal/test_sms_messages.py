@@ -100,7 +100,7 @@ def _recall(outputs: list[str], seeded: list[tuple[str, ...]]) -> float:
 
 
 def test_short_text_preset_preserves_every_non_replacement_character():
-    text = "\tSAWUBONA SISI Nomsa Dlamini\ncall 0712345678 ANC pls\n"
+    text = "\tsawubona sisi nomsa dlamini\ncall 0712345678 id: ug123456 ANC pls\n"
 
     result = deidentify_short_text(text, model_detector=_empty_detector)
 
@@ -108,8 +108,9 @@ def test_short_text_preset_preserves_every_non_replacement_character():
     assert result.deidentified_text == _expected_replacement_only_text(result)
     assert result.deidentified_text.startswith("\t")
     assert result.deidentified_text.endswith(" ANC pls\n")
-    assert "Nomsa Dlamini" not in result.deidentified_text
+    assert "nomsa dlamini" not in result.deidentified_text
     assert "0712345678" not in result.deidentified_text
+    assert "ug123456" not in result.deidentified_text
     assert result.metadata["pipeline_preset"] == SHORT_TEXT
 
 
@@ -205,7 +206,7 @@ def test_flow_result_input_text_is_redacted_without_changing_flow_uuid(monkeypat
     }
 
     result = redact_sms_json(
-        payload,
+        json.dumps(payload, separators=(",", ":")),
         contact_hash_key="flow-result-key",
         loader=object(),
     )
