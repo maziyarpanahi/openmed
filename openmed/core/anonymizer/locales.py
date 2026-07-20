@@ -31,45 +31,7 @@ from __future__ import annotations
 import warnings
 from typing import Final, Mapping
 
-# Default conceptual Faker locale per OpenMed language code. Some conceptual
-# locales are backed by another installed Faker locale at runtime; see
-# ``FAKER_BACKEND_LOCALE``.
-LANG_TO_LOCALE: Final[Mapping[str, str]] = {
-    "en": "en_US",
-    "fr": "fr_FR",
-    "de": "de_DE",
-    "it": "it_IT",
-    "es": "es_ES",
-    "nl": "nl_NL",
-    "hi": "hi_IN",
-    "te": "en_IN",  # Faker has no Telugu locale; en_IN is the closest match
-    "pt": "pt_PT",
-    "ar": "ar_EG",  # Egypt is the most-populous Arabic-speaking country; override for Gulf/Levant locales.
-    "he": "he_IL",
-    "ja": "ja_JP",
-    "zh": "zh_CN",  # CJK PERSON spans draw family-name-first Chinese surrogates
-    "tr": "tr_TR",
-    "id": "id_ID",
-    "th": "th_TH",
-    "pl": "pl_PL",
-    "lv": "lv_LV",
-    "ko": "ko_KR",
-    "cs": "cs_CZ",
-    "sk": "sk_SK",
-    "ms": "ms_MY",
-    "tl": "fil_PH",
-    "da": "da_DK",
-    "ro": "ro_RO",
-    "fi": "fi_FI",
-    "bg": "bg_BG",
-    "hr": "hr_HR",
-    "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
-    "hu": "hu_HU",
-    "et": "et_EE",
-    "el": "el_GR",
-    "vi": "vi_VN",
-}
-
+from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
@@ -82,53 +44,6 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "ms_MY": "id_ID",
     "sr_RS": "hr_HR",
-}
-
-
-# Per-language national-ID surrogate providers — the single source of truth for
-# the OM-135 round-trip fidelity suite. Maps each language that has a
-# validator-backed national ID to the ``(faker_locale, faker_method)`` whose
-# generated surrogates pass that language's registered validator(s) in
-# :mod:`openmed.core.pii_i18n`. The locale here can differ from the language's
-# default display locale when the registered validators target another country's
-# format: Portuguese national-ID validation is Brazilian CPF/CNPJ, so ``pt``
-# draws ID surrogates from ``pt_BR`` even though its default locale (names,
-# addresses, ...) stays ``pt_PT``. The method must match the registry's
-# locale-aware dispatch (``registry._LOCALE_ID_METHODS``); the regression suite
-# asserts that and the round-trip.
-NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
-    "en": ("en_US", "ssn"),
-    "fr": ("fr_FR", "ssn"),  # NIR / INSEE
-    "de": ("de_DE", "german_steuer_id"),  # Steuer-ID
-    "it": ("it_IT", "ssn"),  # Codice Fiscale
-    "es": ("es_ES", "nie"),  # NIE
-    "nl": ("nl_NL", "ssn"),  # BSN
-    "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
-    "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
-    # CPF drives the OM-135 coherence round-trip; pt_PT surrogates draw NIF via
-    # the locale-keyed registry dispatch (``registry._LOCALE_ID_METHODS``).
-    "pt": ("pt_BR", "cpf"),
-    "tr": ("tr_TR", "ssn"),  # TCKN
-    "he": ("he_IL", "teudat_zehut"),  # Israeli Teudat Zehut
-    "id": ("id_ID", "indonesian_nik"),  # NIK
-    "th": ("th_TH", "thai_national_id"),  # Thai 13-digit national ID
-    "pl": ("pl_PL", "pesel"),  # PESEL
-    "lv": ("lv_LV", "personas_kods"),
-    "ko": ("ko_KR", "korean_rrn"),  # RRN
-    "cs": ("cs_CZ", "rodne_cislo"),  # Czech rodne cislo (shared provider)
-    "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
-    "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
-    "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
-    "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
-    "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
-    "fi": ("fi_FI", "ssn"),  # Finnish HETU (Faker's native fi_FI ssn)
-    "bg": ("bg_BG", "egn"),  # Bulgarian EGN (unified civil number)
-    "hr": ("hr_HR", "ssn"),  # Croatian OIB (Faker's native hr_HR ssn)
-    "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
-    "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
-    "et": ("et_EE", "isikukood"),  # Estonian isikukood
-    "el": ("el_GR", "ssn"),  # Greek AMKA (Faker's native el_GR ssn)
-    "vi": ("vi_VN", "vietnamese_cccd"),  # 12-digit CCCD
 }
 
 
