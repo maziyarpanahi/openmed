@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import time
 from dataclasses import dataclass
@@ -11,10 +9,15 @@ from typing import Any, Callable, Optional
 
 import httpx
 
-SIGNATURE_HEADER = "X-OpenMed-Signature"
-TIMESTAMP_HEADER = "X-OpenMed-Timestamp"
+from .signing import (
+    NONCE_HEADER,
+    SIGNATURE_HEADER,
+    SIGNATURE_PREFIX,
+    TIMESTAMP_HEADER,
+    sign_request,
+)
+
 EVENT_HEADER = "X-OpenMed-Event"
-SIGNATURE_PREFIX = "sha256="
 DEFAULT_WEBHOOK_TIMEOUT_SECONDS = 10.0
 
 
@@ -52,16 +55,26 @@ def sign_webhook_payload(
     payload: Any,
     *,
     secret: str,
+    path: str = "/",
     timestamp: Optional[int] = None,
-) -> tuple[bytes, str, str]:
-    """Return canonical body bytes, timestamp, and HMAC signature header value."""
-    if not secret:
-        raise ValueError("Webhook secret must not be blank")
+    nonce: Optional[str] = None,
+) -> tuple[bytes, str, str, str]:
+    """Return body bytes plus timestamp, nonce, and signature header values."""
     body = canonical_json_bytes(payload)
-    issued_at = str(int(time.time() if timestamp is None else timestamp))
-    signed = issued_at.encode("ascii") + b"." + body
-    digest = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
-    return body, issued_at, f"{SIGNATURE_PREFIX}{digest}"
+    headers = sign_request(
+        "POST",
+        path,
+        body,
+        secret=secret,
+        timestamp=timestamp,
+        nonce=nonce,
+    )
+    return (
+        body,
+        headers[TIMESTAMP_HEADER],
+        headers[NONCE_HEADER],
+        headers[SIGNATURE_HEADER],
+    )
 
 
 def deliver_webhook(
@@ -81,11 +94,17 @@ def deliver_webhook(
     if backoff_seconds < 0:
         raise ValueError("backoff_seconds must be greater than or equal to 0")
 
-    body, timestamp, signature = sign_webhook_payload(payload, secret=secret)
+    request_path = httpx.URL(url).raw_path.decode("ascii")
+    body, timestamp, nonce, signature = sign_webhook_payload(
+        payload,
+        secret=secret,
+        path=request_path,
+    )
     headers = {
         "Content-Type": "application/json",
         EVENT_HEADER: str(payload.get("event", "job.terminal")),
         TIMESTAMP_HEADER: timestamp,
+        NONCE_HEADER: nonce,
         SIGNATURE_HEADER: signature,
     }
 
