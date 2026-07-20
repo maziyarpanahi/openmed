@@ -2100,6 +2100,75 @@ def _safe_rate(
     return float(numerator) / float(denominator)
 
 
+_RADIOLOGY_SECTION_KEYS = ("findings", "impression", "recommendation")
+
+
+def _normalize_section_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
+
+
+def section_boundary_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+    *,
+    section_keys: Sequence[str] = _RADIOLOGY_SECTION_KEYS,
+) -> RateMetric:
+    """Fraction of report sections whose predicted text matches the gold text.
+
+    ``predicted`` and ``gold`` are parallel iterables of per-report mappings,
+    each carrying ``<section>_text`` keys (e.g. ``findings_text``). Text is
+    whitespace-normalized before comparison so segmentation is scored, not
+    incidental spacing. Parser-agnostic: callers pass already-parsed sections.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        for key in section_keys:
+            total += 1
+            field = f"{key}_text"
+            if _normalize_section_text(
+                predicted_row.get(field)
+            ) == _normalize_section_text(gold_row.get(field)):
+                correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
+def stated_category_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> RateMetric:
+    """Fraction of reports whose stated ``(system, category)`` matches the gold.
+
+    A report with no stated category (both ``None``) counts as correct only when
+    the gold also has none, so inferring a category where none is written is
+    penalized. Parser-agnostic: callers pass already-parsed rows carrying
+    ``assessment_system`` and ``assessment_category``.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        predicted_pair = (
+            predicted_row.get("assessment_system"),
+            predicted_row.get("assessment_category"),
+        )
+        gold_pair = (
+            gold_row.get("assessment_system"),
+            gold_row.get("assessment_category"),
+        )
+        if predicted_pair == gold_pair:
+            correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
 def _bounded_unit_interval(value: Any, field_name: str) -> float:
     result = float(value)
     if not isfinite(result) or not 0.0 <= result <= 1.0:
@@ -2690,6 +2759,8 @@ __all__ = [
     "compute_critical_finding_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
+    "section_boundary_accuracy",
+    "stated_category_accuracy",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
