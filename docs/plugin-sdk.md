@@ -80,17 +80,20 @@ example_mrn = "example_openmed_detector:detector"
 Return a `DetectorSpec` from the referenced object:
 
 ```python
+import re
+
 from openmed.core.detector_plugins import DetectorSpec
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 
+_MRN_PATTERN = re.compile(r"\bMRN:\s*([A-Za-z0-9-]+)\b")
+
 
 def detect(text: str, *, lang: str, context=None):
-    marker = "MRN:"
-    start = text.find(marker)
-    if start < 0:
+    match = _MRN_PATTERN.search(text)
+    if match is None:
         return ()
 
-    end = start + len(marker)
+    start, end = match.span(1)
     return (
         OpenMedSpan(
             doc_id="plugin-placeholder",
