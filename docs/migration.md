@@ -47,11 +47,11 @@ They are imported explicitly and do not replace the stable root API.
 
 | Namespace | Available since | Purpose | Upgrade action |
 |---|---:|---|---|
-| `openmed.structured` | 1.6.0 | Reserved structured-data privacy namespace. It has no public helpers in 1.9.1. | Do not depend on private modules; adopt public exports as they are documented. |
+| `openmed.structured` | 1.6.0 | Reserved structured-data privacy namespace in 1.9.1. The current v2 development line adds public flowsheet and lab-panel structures. | Existing v1 code is unaffected; adopt new public helpers only when the target release documents them. |
 | `openmed.risk` | 1.6.0 | Re-identification risk reports, privacy budgets, k-anonymity, and audit diffs. | Import risk helpers from `openmed.risk`. |
 | `openmed.interop` | 1.6.0 | Lazy optional adapters for FHIR, HL7 v2, dataframes, orchestration tools, and third-party libraries. | Use `available_adapters()` and install the adapter's optional extra. |
-| `openmed.clinical` | 1.7.0 | Clinical context, relations, timelines, normalization, and extraction helpers. | Import clinical helpers from `openmed.clinical`. |
-| `openmed.eval` | 1.9.0 | Evaluation suites, calibration, leakage, fairness, and release-gate evidence. | Import evaluation helpers from `openmed.eval`. |
+| `openmed.clinical` | 1.6.0 | Clinical context, relations, timelines, normalization, and extraction helpers. | Import clinical helpers from `openmed.clinical`. |
+| `openmed.eval` | 1.6.0 | Evaluation suites, calibration, leakage, fairness, and release-gate evidence. | Import evaluation helpers from `openmed.eval`. |
 
 ## Changed and expanded surfaces
 
@@ -91,7 +91,7 @@ Profiles](profiles.md).
 Async APIs are additive; synchronous v1 entry points remain supported.
 
 - `openmed.interop.fhir_bulk.deidentify_ndjson_async` is available since
-  1.7.0 for FHIR Bulk NDJSON workflows.
+  1.8.0 for FHIR Bulk NDJSON workflows.
 - `openmed.processing.advanced_ner.stream_token_classifier` is available since
   1.8.0 for asynchronous token-classification streams.
 - Service async jobs and webhooks are documented in [Async REST Jobs &
