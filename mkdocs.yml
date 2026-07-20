@@ -88,6 +88,7 @@ nav:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md
       - Onboarding: onboarding.md
+      - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
