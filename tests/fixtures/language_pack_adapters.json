@@ -1,0 +1,259 @@
+{
+  "default_pii_models": {
+    "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
+    "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+    "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
+    "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
+    "he": "OpenMed/privacy-filter-multilingual",
+    "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
+    "id": "OpenMed/privacy-filter-multilingual",
+    "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
+    "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
+    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+    "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
+    "ro": "OpenMed/privacy-filter-multilingual",
+    "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
+    "th": "OpenMed/privacy-filter-multilingual",
+    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1"
+  },
+  "lang_to_locale": {
+    "ar": "ar_EG",
+    "bg": "bg_BG",
+    "cs": "cs_CZ",
+    "da": "da_DK",
+    "de": "de_DE",
+    "el": "el_GR",
+    "en": "en_US",
+    "es": "es_ES",
+    "et": "et_EE",
+    "fi": "fi_FI",
+    "fr": "fr_FR",
+    "he": "he_IL",
+    "hi": "hi_IN",
+    "hr": "hr_HR",
+    "hu": "hu_HU",
+    "id": "id_ID",
+    "it": "it_IT",
+    "ja": "ja_JP",
+    "ko": "ko_KR",
+    "lv": "lv_LV",
+    "ms": "ms_MY",
+    "nl": "nl_NL",
+    "pl": "pl_PL",
+    "pt": "pt_PT",
+    "ro": "ro_RO",
+    "sk": "sk_SK",
+    "sr": "sr_RS",
+    "te": "en_IN",
+    "th": "th_TH",
+    "tl": "fil_PH",
+    "tr": "tr_TR",
+    "vi": "vi_VN",
+    "zh": "zh_CN"
+  },
+  "national_id_only_languages": [
+    "bg",
+    "cs",
+    "da",
+    "el",
+    "et",
+    "fi",
+    "hr",
+    "hu",
+    "lv",
+    "ms",
+    "pl",
+    "sk",
+    "sr",
+    "tl",
+    "vi"
+  ],
+  "national_id_providers": {
+    "bg": [
+      "bg_BG",
+      "egn"
+    ],
+    "cs": [
+      "cs_CZ",
+      "rodne_cislo"
+    ],
+    "da": [
+      "da_DK",
+      "danish_cpr"
+    ],
+    "de": [
+      "de_DE",
+      "german_steuer_id"
+    ],
+    "el": [
+      "el_GR",
+      "ssn"
+    ],
+    "en": [
+      "en_US",
+      "ssn"
+    ],
+    "es": [
+      "es_ES",
+      "nie"
+    ],
+    "et": [
+      "et_EE",
+      "isikukood"
+    ],
+    "fi": [
+      "fi_FI",
+      "ssn"
+    ],
+    "fr": [
+      "fr_FR",
+      "ssn"
+    ],
+    "he": [
+      "he_IL",
+      "teudat_zehut"
+    ],
+    "hi": [
+      "hi_IN",
+      "aadhaar"
+    ],
+    "hr": [
+      "hr_HR",
+      "ssn"
+    ],
+    "hu": [
+      "hu_HU",
+      "hungarian_taj"
+    ],
+    "id": [
+      "id_ID",
+      "indonesian_nik"
+    ],
+    "it": [
+      "it_IT",
+      "ssn"
+    ],
+    "ko": [
+      "ko_KR",
+      "korean_rrn"
+    ],
+    "lv": [
+      "lv_LV",
+      "personas_kods"
+    ],
+    "ms": [
+      "ms_MY",
+      "mykad"
+    ],
+    "nl": [
+      "nl_NL",
+      "ssn"
+    ],
+    "pl": [
+      "pl_PL",
+      "pesel"
+    ],
+    "pt": [
+      "pt_BR",
+      "cpf"
+    ],
+    "ro": [
+      "ro_RO",
+      "romanian_cnp"
+    ],
+    "sk": [
+      "sk_SK",
+      "rodne_cislo"
+    ],
+    "sr": [
+      "sr_RS",
+      "jmbg"
+    ],
+    "te": [
+      "en_IN",
+      "aadhaar"
+    ],
+    "th": [
+      "th_TH",
+      "thai_national_id"
+    ],
+    "tl": [
+      "fil_PH",
+      "philsys_psn"
+    ],
+    "tr": [
+      "tr_TR",
+      "ssn"
+    ],
+    "vi": [
+      "vi_VN",
+      "vietnamese_cccd"
+    ]
+  },
+  "script_language_hints": {
+    "Arabic": [
+      "ar"
+    ],
+    "Cyrillic": [
+      "en"
+    ],
+    "Devanagari": [
+      "hi"
+    ],
+    "Greek": [
+      "en"
+    ],
+    "Han": [
+      "ja"
+    ],
+    "Hangul": [
+      "ko"
+    ],
+    "Hebrew": [
+      "en"
+    ],
+    "Hiragana/Katakana": [
+      "ja"
+    ],
+    "Latin": [
+      "en",
+      "fr",
+      "de",
+      "it",
+      "es",
+      "nl",
+      "pt",
+      "tr"
+    ],
+    "Telugu": [
+      "te"
+    ],
+    "Thai": [
+      "en"
+    ],
+    "Unknown": [
+      "en"
+    ]
+  },
+  "supported_languages": [
+    "ar",
+    "de",
+    "en",
+    "es",
+    "fr",
+    "he",
+    "hi",
+    "id",
+    "it",
+    "ja",
+    "ko",
+    "nl",
+    "pt",
+    "ro",
+    "te",
+    "th",
+    "tr"
+  ]
+}
