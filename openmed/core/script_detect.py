@@ -4,6 +4,12 @@ The helpers in this module are intentionally lightweight and stdlib-only. They
 use explicit Unicode block ranges plus :mod:`unicodedata` character categories
 to identify dominant scripts and preserve exact offsets while segmenting text
 into script-oriented runs.
+
+The curated confusable mappings are derived from Unicode UTS #39
+``confusables.txt`` version 17.0.0. Unicode data files are distributed under
+the Unicode License v3 (SPDX: ``Unicode-3.0``). The full data file is not
+embedded: only mappings needed for the supported Latin/Cyrillic/Greek/CJK PII
+evasion defense are retained.
 """
 
 from __future__ import annotations
@@ -30,6 +36,9 @@ INDIC_SCRIPTS = frozenset(
         "Malayalam",
     }
 )
+CONFUSABLE_DATA_VERSION = "17.0.0"
+CONFUSABLE_DATA_URL = "https://www.unicode.org/Public/17.0.0/security/confusables.txt"
+CONFUSABLE_DATA_LICENSE = "Unicode-3.0"
 
 SUPPORTED_SCRIPTS = (
     "Latin",
@@ -104,7 +113,29 @@ _CONFUSABLE_FOLD: dict[str, str] = {
     "\u0441": "c",
     "\u0445": "x",
     "\u0456": "i",
+    "\u3007": "O",
 }
+
+
+@dataclass(frozen=True)
+class MixedScriptSpan:
+    """An identifier-like source span containing more than one script."""
+
+    start: int
+    end: int
+    scripts: tuple[str, ...]
+    confusable_count: int = 0
+    invisible_count: int = 0
+
+    def to_metadata(self) -> dict[str, object]:
+        """Return a raw-text-free representation suitable for audit metadata."""
+        return {
+            "confusable_count": self.confusable_count,
+            "end": self.end,
+            "invisible_count": self.invisible_count,
+            "scripts": list(self.scripts),
+            "start": self.start,
+        }
 
 
 @dataclass(frozen=True)
@@ -340,6 +371,67 @@ def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
 
 
+def confusable_skeleton(text: str) -> str:
+    """Return a curated UTS #39-style skeleton for PII matching.
+
+    The mapper is deliberately narrower than general-purpose Unicode
+    normalization: it folds the supported cross-script lookalikes and ASCII
+    full-width forms, and removes the invisible controls used by the evasion
+    generator. It does not case-fold or strip diacritics.
+    """
+
+    output: list[str] = []
+    for char in text:
+        if char in ZERO_WIDTH_CHARS:
+            continue
+        output.append(_fold_confusable_char(char))
+    return "".join(output)
+
+
+def mixed_script_spans(text: str) -> tuple[MixedScriptSpan, ...]:
+    """Return identifier-like spans that mix Unicode scripts.
+
+    Script changes separated by whitespace or ordinary punctuation are normal
+    multilingual prose and are not flagged. Invisible controls stay attached
+    to the surrounding token so an inserted zero-width character cannot split
+    an otherwise suspicious identifier.
+    """
+
+    findings: list[MixedScriptSpan] = []
+    token_start: int | None = None
+    for index in range(len(text) + 1):
+        char = text[index] if index < len(text) else ""
+        if char and _is_identifier_char(char):
+            if token_start is None:
+                token_start = index
+            continue
+        if token_start is None:
+            continue
+
+        token = text[token_start:index]
+        scripts = tuple(sorted(_script_counts(token)))
+        if len(scripts) > 1:
+            findings.append(
+                MixedScriptSpan(
+                    start=token_start,
+                    end=index,
+                    scripts=scripts,
+                    confusable_count=sum(
+                        _fold_confusable_char(item) != item for item in token
+                    ),
+                    invisible_count=sum(item in ZERO_WIDTH_CHARS for item in token),
+                )
+            )
+        token_start = None
+    return tuple(findings)
+
+
+def detect_mixed_script(text: str) -> bool:
+    """Return whether an identifier-like span mixes Unicode scripts."""
+
+    return bool(mixed_script_spans(text))
+
+
 def normalize_for_pii_detection(
     text: str,
     *,
@@ -361,6 +453,7 @@ def normalize_for_pii_detection(
     from ..processing.zh_normalize import normalize_width
 
     scripts = tuple(sorted(_script_counts(text)))
+    mixed_script = detect_mixed_script(text)
     indic_normalizer = IndicNormalizer()
     routed_chars: list[str] = []
     routed_starts: list[int] = []
@@ -453,16 +546,19 @@ def normalize_for_pii_detection(
         indic_changes=indic_changes,
         indic_scripts=tuple(indic_scripts),
         scripts=scripts,
-        mixed_script=len(scripts) > 1,
+        mixed_script=mixed_script,
     )
 
 
 def _script_for_char(char: str) -> str | None:
+    codepoint = ord(char)
+    if codepoint == 0x3007:
+        return "Han"
+
     category = unicodedata.category(char)
     if category[0] not in {"L", "M"}:
         return None
 
-    codepoint = ord(char)
     for script, ranges in _SCRIPT_RANGES:
         if any(start <= codepoint <= end for start, end in ranges):
             return script
@@ -491,16 +587,29 @@ def _fold_confusable_char(char: str) -> str:
     return char
 
 
+def _is_identifier_char(char: str) -> bool:
+    if char in ZERO_WIDTH_CHARS:
+        return True
+    return unicodedata.category(char)[0] in {"L", "M", "N"}
+
+
 __all__ = [
     "CJK_SCRIPTS",
+    "CONFUSABLE_DATA_LICENSE",
+    "CONFUSABLE_DATA_URL",
+    "CONFUSABLE_DATA_VERSION",
     "DetectionNormalization",
     "INDIC_SCRIPTS",
+    "MixedScriptSpan",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
     "ZERO_WIDTH_CHARS",
     "candidate_languages_for_script",
+    "confusable_skeleton",
+    "detect_mixed_script",
     "detect_script",
+    "mixed_script_spans",
     "normalize_for_pii_detection",
     "segment_by_script",
 ]

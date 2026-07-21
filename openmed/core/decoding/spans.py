@@ -148,6 +148,27 @@ def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
     return start, end
 
 
+def remap_normalized_span(
+    start: int,
+    end: int,
+    original_text: str,
+    normalization: Any,
+) -> tuple[int, int, str]:
+    """Project a decoded normalized span onto the original source text.
+
+    ``normalization`` follows the :class:`DetectionNormalization` contract and
+    is intentionally duck-typed to keep the backend-agnostic decoder free of a
+    dependency on the higher-level PII module.
+    """
+
+    original_start, original_end = normalization.remap_span(start, end)
+    return (
+        original_start,
+        original_end,
+        original_text[original_start:original_end],
+    )
+
+
 _PRIVACY_FILTER_SPAN_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
     ("url", re.compile(r"\b(?:https?://|www\.)[^\s,;)\]]+")),
@@ -638,6 +659,7 @@ __all__ = [
     "coerce_token_classification_spans",
     "iter_grapheme_cluster_spans",
     "reconcile_stream_spans",
+    "remap_normalized_span",
     "refine_privacy_filter_span",
     "stable_span_id",
     "stable_span_key",

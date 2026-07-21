@@ -17,6 +17,7 @@ from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -202,6 +203,32 @@ class LeakageMetrics:
             "total_graphemes_by_script": self.total_chars_by_script,
             "leaked_chars_by_script": self.leaked_chars_by_script,
             "total_chars_by_script": self.total_chars_by_script,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class MixedScriptLeakageMetrics:
+    """Leakage gate result for a confusable/mixed-script attack corpus."""
+
+    leakage: LeakageMetrics
+    ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING
+    pre_defense_baseline: float | None = None
+
+    @property
+    def passed(self) -> bool:
+        """Return whether leakage stays at or below the strict ceiling."""
+        return self.leakage.overall <= self.ceiling
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready gate payload."""
+        return {
+            **self.leakage.to_dict(),
+            "ceiling": self.ceiling,
+            "passed": self.passed,
+            "pre_defense_baseline": self.pre_defense_baseline,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -689,6 +716,36 @@ def compute_leakage_rate(
         for span in gold
     ]
     return _leakage_metrics_from_tallies(gold, leakage_tallies)
+
+
+def compute_mixed_script_leakage(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING,
+    pre_defense_baseline: float | None = None,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> MixedScriptLeakageMetrics:
+    """Compute grapheme-cluster leakage and apply the evasion ceiling."""
+
+    if not 0.0 <= ceiling <= 1.0:
+        raise ValueError("mixed-script leakage ceiling must be between 0 and 1")
+    if pre_defense_baseline is not None and not 0.0 <= pre_defense_baseline <= 1.0:
+        raise ValueError("pre-defense leakage baseline must be between 0 and 1")
+    leakage = compute_leakage_rate(
+        gold_spans,
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    return MixedScriptLeakageMetrics(
+        leakage=leakage,
+        ceiling=ceiling,
+        pre_defense_baseline=pre_defense_baseline,
+    )
 
 
 def compute_extraction_reemission_leakage(
@@ -2862,6 +2919,7 @@ __all__ = [
     "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
     "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
+    "MIXED_SCRIPT_LEAKAGE_CEILING",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
@@ -2870,6 +2928,7 @@ __all__ = [
     "RateMetric",
     "F1Metrics",
     "LeakageMetrics",
+    "MixedScriptLeakageMetrics",
     "RecallSlices",
     "ConsistencyMetric",
     "LatencyMetrics",
@@ -2882,6 +2941,7 @@ __all__ = [
     "normalize_eval_spans",
     "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
+    "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
     "compute_recall_slices",
