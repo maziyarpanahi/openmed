@@ -79,6 +79,31 @@ def test_artifact_manifest_rejects_one_byte_tamper_with_both_hashes(
     assert actual in str(raised.value)
 
 
+def test_artifact_manifest_rejects_wrong_registry_revision(tmp_path: Path) -> None:
+    artifact = tmp_path / "model.safetensors"
+    artifact.write_bytes(b"trusted model bytes")
+    sidecar = _write_integrity_manifest(tmp_path)
+
+    with pytest.raises(
+        ModelIntegrityError,
+        match="does not match the registry revision",
+    ):
+        verify_artifact_manifest(
+            sidecar,
+            expected_reproducibility_hash="sha256:" + "2" * 64,
+        )
+
+
+def test_artifact_manifest_reports_malformed_sidecar_as_integrity_error(
+    tmp_path: Path,
+) -> None:
+    sidecar = tmp_path / ARTIFACT_MANIFEST_FILENAME
+    sidecar.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ModelIntegrityError, match="integrity manifest is invalid"):
+        verify_artifact_manifest(sidecar)
+
+
 @patch("openmed.core.models.HF_AVAILABLE", True)
 @patch("openmed.core.models.AutoConfig")
 def test_load_model_fails_before_pipeline_construction_on_tamper(
@@ -133,9 +158,11 @@ def test_strict_mode_rejects_registry_model_without_hash(
         )
 
 
+@pytest.mark.parametrize("weight_storage", ("lfs", "git"))
 def test_verified_download_pins_remote_metadata_and_rechecks_offline(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    weight_storage: str,
 ) -> None:
     model_id = "OpenMed/download-fixture"
     revision = "abc123"
@@ -143,6 +170,10 @@ def test_verified_download_pins_remote_metadata_and_rechecks_offline(
     weights = b"verified model weights"
     config = b'{"model_type":"bert"}\n'
     weight_hash = hashlib.sha256(weights).hexdigest()
+    weight_blob = hashlib.sha1(  # noqa: S324 - Git object identity
+        f"blob {len(weights)}\0".encode("ascii") + weights,
+        usedforsecurity=False,
+    ).hexdigest()
     config_blob = hashlib.sha1(  # noqa: S324 - Git object identity
         f"blob {len(config)}\0".encode("ascii") + config,
         usedforsecurity=False,
@@ -155,8 +186,10 @@ def test_verified_download_pins_remote_metadata_and_rechecks_offline(
         ),
         SimpleNamespace(
             rfilename="model.safetensors",
-            blob_id="unused-lfs-blob-id",
-            lfs=SimpleNamespace(sha256=weight_hash),
+            blob_id=weight_blob,
+            lfs=(
+                SimpleNamespace(sha256=weight_hash) if weight_storage == "lfs" else None
+            ),
         ),
     ]
     remote = SimpleNamespace(

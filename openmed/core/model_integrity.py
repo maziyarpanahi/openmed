@@ -161,7 +161,11 @@ def prepare_model_reference(
 
     sidecar = _registry_sidecar_path(cache_dir, model_id, reproducibility_hash)
     if sidecar.exists():
-        result = verify_artifact_manifest(sidecar, expected_model_id=model_id)
+        result = verify_artifact_manifest(
+            sidecar,
+            expected_model_id=model_id,
+            expected_reproducibility_hash=reproducibility_hash,
+        )
         return str(result.artifact_root)
 
     if local_only:
@@ -179,6 +183,7 @@ def verify_artifact_manifest(
     manifest_path: str | Path,
     *,
     expected_model_id: str | None = None,
+    expected_reproducibility_hash: str | None = None,
 ) -> ModelVerificationResult:
     """Verify every file named by an offline model integrity manifest."""
     sidecar = Path(manifest_path)
@@ -191,6 +196,18 @@ def verify_artifact_manifest(
             actual_sha256="sha256:" + "0" * 64,
             artifact=sidecar,
             reason=f"integrity manifest belongs to {model_id}",
+        )
+    recorded_reproducibility_hash = str(payload["reproducibility_hash"])
+    if (
+        expected_reproducibility_hash is not None
+        and recorded_reproducibility_hash != expected_reproducibility_hash
+    ):
+        raise ModelIntegrityError(
+            model_id,
+            expected_sha256=expected_reproducibility_hash,
+            actual_sha256=recorded_reproducibility_hash,
+            artifact=sidecar,
+            reason="integrity manifest does not match the registry revision",
         )
 
     artifact_root = _artifact_root(sidecar, payload)
@@ -306,7 +323,7 @@ def verify_manifest_signature(
         )
         signature = base64.b64decode(message_signature["signature"], validate=True)
         raw_certificate = _bundle_certificate_bytes(payload)
-    except (KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
         raise ModelIntegrityError(
             "models.jsonl",
             expected_sha256="sha256:<valid Sigstore bundle>",
@@ -449,7 +466,7 @@ def _download_verified_snapshot(
             )
 
         siblings = _select_runtime_siblings(remote_info.siblings or ())
-        if not siblings or not any(getattr(item, "lfs", None) for item in siblings):
+        if not any(_runtime_weight_file(str(item.rfilename)) for item in siblings):
             return _handle_missing_integrity_sidecar(model_id, model_id, sidecar)
         snapshot = Path(
             snapshot_download(
@@ -468,7 +485,11 @@ def _download_verified_snapshot(
             artifact_root=snapshot,
             artifacts=records,
         )
-        verify_artifact_manifest(sidecar, expected_model_id=model_id)
+        verify_artifact_manifest(
+            sidecar,
+            expected_model_id=model_id,
+            expected_reproducibility_hash=str(registry_info.reproducibility_hash),
+        )
         return str(snapshot)
     except ModelIntegrityError:
         raise
@@ -535,6 +556,11 @@ def _pytorch_weight_file(filename: str) -> bool:
     return name == "pytorch_model.bin" or (
         name.startswith("pytorch_model-") and name.endswith(".bin")
     )
+
+
+def _runtime_weight_file(filename: str) -> bool:
+    name = Path(filename).name
+    return name.endswith(".safetensors") or _pytorch_weight_file(name)
 
 
 def _verified_remote_artifact(snapshot: Path, sibling: Any) -> dict[str, Any]:
@@ -620,32 +646,37 @@ def _write_artifact_manifest(
 def _load_artifact_manifest(sidecar: Path) -> Mapping[str, Any]:
     try:
         payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        if not isinstance(payload, Mapping):
+            raise ValueError("integrity manifest must be an object")
+        if payload.get("schema_version") != ARTIFACT_MANIFEST_SCHEMA:
+            raise ValueError("unsupported integrity manifest schema")
+        model_id = payload.get("model_id")
+        reproducibility_hash = payload.get("reproducibility_hash")
+        artifacts = payload.get("artifacts")
+        if not isinstance(model_id, str) or not model_id:
+            raise ValueError("integrity manifest model_id is invalid")
+        if not isinstance(reproducibility_hash, str) or not _SHA256_RE.fullmatch(
+            reproducibility_hash
+        ):
+            raise ValueError("integrity manifest reproducibility_hash is invalid")
+        if not isinstance(artifacts, list) or not artifacts:
+            raise ValueError("integrity manifest artifacts are empty")
+        for entry in artifacts:
+            if not isinstance(entry, Mapping):
+                raise ValueError("integrity artifact entry is invalid")
+            if not isinstance(entry.get("path"), str):
+                raise ValueError("integrity artifact path is invalid")
+            digest = entry.get("sha256")
+            if not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest):
+                raise ValueError("integrity artifact sha256 is invalid")
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise ModelIntegrityError(
             str(sidecar),
             expected_sha256="sha256:<valid integrity manifest>",
-            actual_sha256="sha256:<unreadable>",
+            actual_sha256="sha256:<invalid>",
             artifact=sidecar,
-            reason="integrity manifest is unreadable",
+            reason=f"integrity manifest is invalid: {exc}",
         ) from exc
-    if not isinstance(payload, Mapping):
-        raise ValueError(f"integrity manifest must be an object: {sidecar}")
-    if payload.get("schema_version") != ARTIFACT_MANIFEST_SCHEMA:
-        raise ValueError(f"unsupported integrity manifest schema: {sidecar}")
-    model_id = payload.get("model_id")
-    artifacts = payload.get("artifacts")
-    if not isinstance(model_id, str) or not model_id:
-        raise ValueError(f"integrity manifest model_id is invalid: {sidecar}")
-    if not isinstance(artifacts, list) or not artifacts:
-        raise ValueError(f"integrity manifest artifacts are empty: {sidecar}")
-    for entry in artifacts:
-        if not isinstance(entry, Mapping):
-            raise ValueError(f"integrity artifact entry is invalid: {sidecar}")
-        if not isinstance(entry.get("path"), str):
-            raise ValueError(f"integrity artifact path is invalid: {sidecar}")
-        digest = entry.get("sha256")
-        if not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest):
-            raise ValueError(f"integrity artifact sha256 is invalid: {sidecar}")
     return payload
 
 
