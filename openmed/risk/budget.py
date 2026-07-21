@@ -625,6 +625,12 @@ DEFAULT_POLICY_BUDGETS: Mapping[str, RiskBudget] = {
         max_surviving_direct_ids=0,
         max_singleton_records=0,
     ),
+    "india_dpdp_act": RiskBudget(
+        name="india_dpdp_act",
+        max_residual_qi_weight=3.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
 }
 
 if set(DEFAULT_POLICY_BUDGETS) != set(CANONICAL_POLICY_NAMES):
