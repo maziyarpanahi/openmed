@@ -15,6 +15,7 @@ from openmed.core.pii_i18n import (
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
@@ -45,6 +46,7 @@ _ID_VALIDATORS = {
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
+    "sw": validate_kenya_maisha_namba,
     "zh": validate_chinese_resident_id,
 }
 

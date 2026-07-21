@@ -104,6 +104,17 @@ class TestLocaleResolution:
             "documented approximation"
         )
 
+    def test_swahili_uses_native_faker_locale_without_warning(self):
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            locale = resolve_locale("sw")
+
+        assert locale == "sw"
+        assert locale in AVAILABLE_LOCALES
+        assert not caught
+        assert "sw" not in L._APPROXIMATE_LOCALES
+
 
 class TestNationalIdRoundTrip:
     def test_contract_matches_registry_dispatch(self):

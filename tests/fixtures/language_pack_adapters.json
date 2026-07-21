@@ -14,6 +14,7 @@
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
+    "sw": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
@@ -74,7 +75,6 @@
     "pl",
     "sk",
     "sr",
-    "sw",
     "tl",
     "vi",
     "yo"
@@ -271,7 +271,8 @@
       "es",
       "nl",
       "pt",
-      "tr"
+      "tr",
+      "sw"
     ],
     "Malayalam": [
       "ml"
@@ -307,6 +308,7 @@
     "nl",
     "pt",
     "ro",
+    "sw",
     "te",
     "th",
     "tr",
