@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from importlib import resources
 from typing import Dict, List, Optional
 
 from .anonymizer.providers.clinical_ids import (
@@ -83,6 +84,44 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ro": "Romanian-",
     "zh": "Chinese-",
 }
+
+# ---------------------------------------------------------------------------
+# Chinese personal-name assist data
+# ---------------------------------------------------------------------------
+
+_CHINESE_SURNAME_RESOURCE = "data/chinese_surnames.txt"
+_HAN_CHARACTER_CLASS = "\u3400-\u4dbf\u4e00-\u9fff"
+
+
+def _load_chinese_surnames() -> frozenset[str]:
+    """Load the packaged public-domain/CC0 Chinese surname gazetteer."""
+
+    resource = resources.files("openmed.clinical").joinpath(_CHINESE_SURNAME_RESOURCE)
+    with resource.open("r", encoding="utf-8") as handle:
+        surnames = {
+            line.strip()
+            for line in handle
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+    if not surnames or any(
+        re.fullmatch(rf"[{_HAN_CHARACTER_CLASS}]{{1,2}}", surname) is None
+        for surname in surnames
+    ):
+        raise RuntimeError("invalid packaged Chinese surname gazetteer")
+    return frozenset(surnames)
+
+
+CHINESE_SURNAMES = _load_chinese_surnames()
+"""Permissively licensed Chinese surname vocabulary with no patient data."""
+
+CHINESE_COMPOUND_SURNAMES = frozenset(
+    surname for surname in CHINESE_SURNAMES if len(surname) == 2
+)
+"""Common two-character Chinese surnames, such as ``欧阳`` and ``司马``."""
+
+CHINESE_SINGLE_SURNAMES = CHINESE_SURNAMES - CHINESE_COMPOUND_SURNAMES
+"""Single-character Chinese surnames used by the name-recognition assist."""
+
 
 # ---------------------------------------------------------------------------
 # Financial Identifier Validators
@@ -3356,6 +3395,25 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_CHINESE_SURNAME_ALTERNATION = "|".join(
+    re.escape(surname)
+    for surname in sorted(CHINESE_SURNAMES, key=lambda value: (-len(value), value))
+)
+
+# Chinese names are contiguous, so ordinary ``\b`` boundaries cannot separate a
+# family name from surrounding Han text. The left side accepts either a true Han
+# boundary or a strong clinical/name-field cue; the right side accepts normal
+# punctuation/whitespace plus common clinical continuations. The latter makes
+# ``患者王伟今日复诊`` resolve to ``王伟`` rather than ``王伟今``.
+_CHINESE_NAME_LEFT_BOUNDARY = (
+    rf"(?:(?<![{_HAN_CHARACTER_CLASS}])|(?<=患者)|(?<=病人)|(?<=病患)|"
+    r"(?<=姓名为)|(?<=姓名是)|(?<=姓名：)|(?<=姓名:))"
+)
+_CHINESE_NAME_RIGHT_BOUNDARY = (
+    rf"(?=$|[^{_HAN_CHARACTER_CLASS}]|今日|因|于|来|现|复诊|就诊|主诉|"
+    r"报告|表示|诉|接受|返回)"
+)
+
 _CHINESE_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<![0-9])[0-9]{17}[0-9Xx](?![0-9A-Za-z])",
@@ -3375,9 +3433,27 @@ _CHINESE_PII_PATTERNS: List[PIIPattern] = [
         validator=validate_chinese_resident_id,
         safety_sweep_requires_context=True,
     ),
+    PIIPattern(
+        _CHINESE_NAME_LEFT_BOUNDARY
+        + rf"(?:{_CHINESE_SURNAME_ALTERNATION})"
+        + rf"[{_HAN_CHARACTER_CLASS}]{{1,2}}"
+        + _CHINESE_NAME_RIGHT_BOUNDARY,
+        "person",
+        priority=12,
+        flags=0,
+        base_score=0.75,
+        context_words=[
+            "患者",
+            "病人",
+            "病患",
+            "姓名",
+            "就诊者",
+            "联系人",
+            "家属",
+        ],
+        context_boost=0.2,
+    ),
 ]
-
-
 _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",

@@ -10,6 +10,8 @@ Notes:
   callers as a ``UserWarning`` the first time it's used.
 - Portuguese defaults to ``pt_PT``; pass ``locale="pt_BR"`` explicitly to
   generate Brazilian-Portuguese surrogates (matters for CPF/CNPJ context).
+- Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
+  the surname-aware, Han-only surrogate generators rather than a Latin fallback.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a

@@ -14,6 +14,7 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 
 from __future__ import annotations
 
+import re
 from typing import Callable, Dict
 
 from .. import labels as L
@@ -33,15 +34,104 @@ Generator = Callable[..., str]
 # ---------------------------------------------------------------------------
 
 
+_HAN_NAME_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_ZH_GIVEN_NAME_FALLBACK = tuple("清宁安和嘉悦晨星岚澄涵瑞瑶璟")
+
+
+def _is_zh_cn(locale: str) -> bool:
+    return locale.replace("-", "_").casefold() == "zh_cn"
+
+
+def _han_characters(value: str) -> str:
+    return "".join(_HAN_NAME_RE.findall(value or ""))
+
+
+def _zh_surname_pools():
+    from ..pii_i18n import CHINESE_COMPOUND_SURNAMES, CHINESE_SINGLE_SURNAMES
+
+    return (
+        tuple(sorted(CHINESE_SINGLE_SURNAMES)),
+        tuple(sorted(CHINESE_COMPOUND_SURNAMES)),
+    )
+
+
+def _draw_zh_surname(faker, *, compound: bool, forbidden: set[str]) -> str:
+    single_surnames, compound_surnames = _zh_surname_pools()
+    pool = compound_surnames if compound else single_surnames
+    eligible = tuple(
+        surname for surname in pool if not set(surname).intersection(forbidden)
+    )
+    return faker.random_element(eligible or pool)
+
+
+def _draw_zh_given_name(faker, *, length: int, forbidden: set[str]) -> str:
+    sampled_characters: list[str] = []
+    for _ in range(128):
+        candidate = _han_characters(faker.first_name())
+        sampled_characters.extend(candidate)
+        if len(candidate) == length and not set(candidate).intersection(forbidden):
+            return candidate
+
+    eligible = [
+        char
+        for char in (*sampled_characters, *_ZH_GIVEN_NAME_FALLBACK)
+        if char not in forbidden
+    ]
+    if not eligible:
+        raise RuntimeError("could not generate a non-leaking Chinese given name")
+    return "".join(faker.random.choice(eligible) for _ in range(length))
+
+
+def _gen_zh_person(faker, original: str) -> str:
+    source = _han_characters(original)
+    source_characters = set(source)
+    _single_surnames, compound_surnames = _zh_surname_pools()
+    compound = any(source.startswith(surname) for surname in compound_surnames)
+    target_length = 3 if compound else max(2, min(len(source) or 2, 3))
+    given_length = target_length - (2 if compound else 1)
+
+    for _ in range(64):
+        surname = _draw_zh_surname(
+            faker,
+            compound=compound,
+            forbidden=source_characters,
+        )
+        given_name = _draw_zh_given_name(
+            faker,
+            length=given_length,
+            forbidden=source_characters | set(surname),
+        )
+        candidate = f"{surname}{given_name}"
+        if candidate != source and not set(candidate).intersection(source_characters):
+            return candidate
+    raise RuntimeError("could not generate a distinct Chinese person surrogate")
+
+
 def _gen_person(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        return _gen_zh_person(faker, original)
     return faker.name()
 
 
 def _gen_first_name(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        source = _han_characters(original)
+        return _draw_zh_given_name(
+            faker,
+            length=max(1, min(len(source) or 1, 2)),
+            forbidden=set(source),
+        )
     return faker.first_name()
 
 
 def _gen_last_name(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        source = _han_characters(original)
+        return _draw_zh_surname(
+            faker,
+            compound=len(source) >= 2,
+            forbidden=set(source),
+        )
     return faker.last_name()
 
 

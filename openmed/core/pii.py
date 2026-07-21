@@ -1566,6 +1566,7 @@ def _build_deidentification_result(
 
     deidentified = text
     mapping = {} if keep_mapping else None
+    source_surrogates: dict[tuple[str, str], str] = {}
     entity_occurrence_indexes: dict[int, int] = {}
     if keep_mapping:
         entity_type_counts: dict[str, int] = {}
@@ -1597,20 +1598,37 @@ def _build_deidentification_result(
             lang,
         ):
             actual_entity_method = "mask"
-        redacted = _redact_entity(
-            entity,
-            actual_entity_method,
-            keep_year=keep_year,
-            date_shift_days=(
-                date_shift_days if actual_entity_method == "shift_dates" else None
-            ),
-            lang=lang,
-            anonymizer=anonymizer,
-            require_dateutil=effective_method == "shift_dates",
-            surrogate_vault=surrogate_vault,
+        source_key = (
+            entity.canonical_label or entity.entity_type,
+            entity.original_text or entity.text,
         )
+        if (
+            keep_mapping
+            and actual_entity_method in {"replace", "format_preserve"}
+            and source_key in source_surrogates
+        ):
+            redacted = source_surrogates[source_key]
+        else:
+            redacted = _redact_entity(
+                entity,
+                actual_entity_method,
+                keep_year=keep_year,
+                date_shift_days=(
+                    date_shift_days if actual_entity_method == "shift_dates" else None
+                ),
+                lang=lang,
+                anonymizer=anonymizer,
+                require_dateutil=effective_method == "shift_dates",
+                surrogate_vault=surrogate_vault,
+            )
         if entity_method == "format_preserve" and redacted == _mask_placeholder(entity):
             actual_entity_method = "mask"
+        if (
+            keep_mapping
+            and actual_entity_method in {"replace", "format_preserve"}
+            and redacted
+        ):
+            source_surrogates.setdefault(source_key, redacted)
 
         if keep_mapping and actual_entity_method == "remove":
             redacted = f"[{entity.entity_type}_REMOVED]"
