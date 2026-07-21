@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 from openmed.eval.calibrate import (
@@ -13,6 +12,8 @@ from openmed.eval.calibrate import (
     load_calibration_samples,
     write_calibration_artifacts,
 )
+
+from ._output import EXIT_ERROR, CliError, emit
 
 
 def add_calibrate_command(subparsers: argparse._SubParsersAction) -> None:
@@ -110,27 +111,23 @@ def handle_calibrate(args: argparse.Namespace) -> int:
             metadata={"sample_source": sample_source},
         )
     except Exception as exc:
-        sys.stderr.write(f"Calibration failed: {exc}\n")
-        return 1
-
-    sys.stdout.write(
-        json.dumps(
-            {
-                "artifact_dir": str(paths.artifact_dir),
-                "thresholds": str(paths.thresholds_path),
-                "report": str(paths.report_path),
-                "under_shift_report": (
-                    str(paths.under_shift_report_path)
-                    if paths.under_shift_report_path is not None
-                    else None
-                ),
-            },
-            indent=2,
-            sort_keys=True,
+        raise CliError(
+            f"Calibration failed: {exc}",
+            code="calibration_failed",
+            exit_code=EXIT_ERROR,
         )
-        + "\n"
-    )
-    return 0
+
+    data = {
+        "artifact_dir": str(paths.artifact_dir),
+        "thresholds": str(paths.thresholds_path),
+        "report": str(paths.report_path),
+        "under_shift_report": (
+            str(paths.under_shift_report_path)
+            if paths.under_shift_report_path is not None
+            else None
+        ),
+    }
+    return emit(args, data, human=json.dumps(data, indent=2, sort_keys=True))
 
 
 __all__ = ["add_calibrate_command", "handle_calibrate"]

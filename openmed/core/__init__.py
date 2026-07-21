@@ -18,6 +18,20 @@ from .hf_hub import (
     prefetch_model,
     resolve_repo_id,
 )
+from .language_pack import (
+    LANGUAGE_PACK_REGISTRY,
+    LanguagePack,
+    LanguagePackRegistry,
+    register_language_pack,
+)
+from .language_pack_catalog import REGISTERED_SEGMENTERS, is_registered_segmenter
+from .language_pack_coherence import (
+    LanguagePackCoherenceError,
+    check_language_pack_coherence,
+    incoherent_packs,
+    pack_coherence_report,
+    require_language_pack_coherence,
+)
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
@@ -107,4 +121,15 @@ __all__ = [
     "clear_cached_model",
     "resolve_repo_id",
     "CachedModel",
+    "LanguagePack",
+    "LanguagePackRegistry",
+    "LANGUAGE_PACK_REGISTRY",
+    "register_language_pack",
+    "REGISTERED_SEGMENTERS",
+    "is_registered_segmenter",
+    "LanguagePackCoherenceError",
+    "check_language_pack_coherence",
+    "incoherent_packs",
+    "pack_coherence_report",
+    "require_language_pack_coherence",
 ]
