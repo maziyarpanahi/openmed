@@ -87,6 +87,23 @@ def test_cue_fallback_when_headings_absent():
     assert parsed["recommendation_text"] == "PET-CT."
 
 
+def test_inline_cues_complete_flattened_line_start_sections():
+    parsed = parse_radiology_report(
+        "FINDINGS: Stable scarring. IMPRESSION: Benign. "
+        "RECOMMENDATION: Routine screening."
+    )
+    assert parsed["findings_text"] == "Stable scarring."
+    assert parsed["impression_text"] == "Benign."
+    assert parsed["recommendation_text"] == "Routine screening."
+
+
+def test_inline_cue_requires_a_label_boundary():
+    text = "This is not an impression: just a sentence."
+    parsed = parse_radiology_report(text)
+    assert parsed["findings_text"] == text
+    assert parsed["impression_text"] == ""
+
+
 def test_report_without_headings_or_cues_is_all_findings():
     text = "Frontal radiograph shows clear lungs without acute abnormality."
     parsed = parse_radiology_report(text)
@@ -135,6 +152,9 @@ def test_empty_input_yields_empty_template():
         ("IMPRESSION: Lung RADS 2.", "Lung-RADS", "2"),
         ("IMPRESSION: Lung-RADS 4b.", "Lung-RADS", "4B"),
         ("IMPRESSION: BI-RADS: 5.", "BI-RADS", "5"),
+        ("IMPRESSION: The BI-RADS category is 4.", "BI-RADS", "4"),
+        ("IMPRESSION: BI-RADS final assessment category is 5.", "BI-RADS", "5"),
+        ("IMPRESSION: Lung-RADS assessment category is 4A.", "Lung-RADS", "4A"),
     ],
 )
 def test_captures_stated_category(text, system, category):
@@ -161,6 +181,8 @@ def test_captures_stated_category(text, system, category):
         "The BI-RADS 5 point scale was applied.",  # scale
         "BI-RADS 6 categories exist in the lexicon.",  # count
         "Lung-RADS 3 nodules noted in both lobes.",  # count
+        "Legend: BI-RADS 0: incomplete, 1: negative.",  # legend entry
+        "Legend: BI-RADS category 0 means incomplete.",  # qualified legend
     ],
 )
 def test_does_not_capture_non_stated_or_invalid_category(text):

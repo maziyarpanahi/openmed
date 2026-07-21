@@ -6,10 +6,9 @@ BI-RADS or Lung-RADS assessment category when it is explicitly written. It
 makes no assessment decision of its own: the category is read verbatim from the
 report text, never computed or inferred from the findings.
 
-Segmentation uses a documented heading lexicon matched at line starts, with a
-graceful inline-cue fallback (e.g. ``IMPRESSION:``) when a report has no
-standalone headings. Character spans for each captured section are preserved
-for provenance.
+Segmentation uses a documented heading lexicon matched at line starts, with
+sentence-boundary inline cues (e.g. ``IMPRESSION:``) for flattened reports.
+Character spans for each captured section are preserved for provenance.
 """
 
 from __future__ import annotations
@@ -61,10 +60,18 @@ SECTION_HEADINGS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-#: Inline cue phrases used only when no standalone heading is found. Each cue is
-#: an in-sentence label that introduces a section (e.g. ``IMPRESSION:``).
+#: Inline cue phrases that introduce a section in flattened report text. Cues
+#: must occur at the start of the report or after sentence/line punctuation, so
+#: ordinary prose such as ``not an impression:`` is not treated as a label.
 SECTION_INLINE_CUES: dict[str, tuple[str, ...]] = {
-    IMPRESSION: ("impression:", "conclusion:", "interpretation:"),
+    FINDINGS: ("findings:", "observations:"),
+    IMPRESSION: (
+        "clinical impression:",
+        "overall impression:",
+        "impression:",
+        "conclusion:",
+        "interpretation:",
+    ),
     RECOMMENDATION: (
         "recommendation:",
         "recommendations:",
@@ -133,17 +140,16 @@ def _heading_markers(text: str) -> list[tuple[int, _Marker]]:
 
 
 def _inline_cue_markers(text: str) -> list[tuple[int, _Marker]]:
-    lowered = text.lower()
     markers: list[tuple[int, _Marker]] = []
     for section, cues in SECTION_INLINE_CUES.items():
-        for cue in cues:
-            start = 0
-            while True:
-                idx = lowered.find(cue, start)
-                if idx < 0:
-                    break
-                markers.append((idx, _Marker(section, idx + len(cue))))
-                start = idx + len(cue)
+        alternatives = "|".join(
+            re.escape(cue) for cue in sorted(cues, key=len, reverse=True)
+        )
+        pattern = re.compile(
+            rf"(?i)(?:^|(?<=[.!?;\n]))[ \t]*(?P<cue>{alternatives})[ \t]*"
+        )
+        for match in pattern.finditer(text):
+            markers.append((match.start("cue"), _Marker(section, match.end())))
     return markers
 
 
@@ -166,9 +172,7 @@ def _segment(text: str) -> dict[str, Optional[SpanOffset]]:
     if not text.strip():
         return spans
 
-    markers = _dedupe_markers(_heading_markers(text))
-    if not markers:
-        markers = _dedupe_markers(_inline_cue_markers(text))
+    markers = _dedupe_markers([*_heading_markers(text), *_inline_cue_markers(text)])
 
     if not markers:
         # No headings or cues: the whole report is findings prose.
@@ -226,21 +230,38 @@ def _span_text(text: str, span: Optional[SpanOffset]) -> str:
 # punctuation, a line break, or end of text. This rejects counts and scale
 # legends adjacent to the token (e.g. ``BI-RADS 4 lesions``, ``BI-RADS 0-6
 # scale``), which are not stated assessments and must never be inferred.
-_TERMINAL = r"(?=\s*(?:[.,;:)\]]|\r?\n|$))"
+_TERMINAL = r"(?=\s*(?:[.,;)\]]|\r?\n|$))"
+_QUALIFIER = r"(?:(?:final\s+)?assessment(?:\s+category)?|category|score)"
+_ASSIGNMENT = r"\s*(?:is\s*)?[:=]?\s*"
 _BIRADS_RE = re.compile(
     r"(?i)\bBI[- ]?RADS\b[\s:]*"
     r"(?:"
-    r"(?:(?:final\s+)?assessment|category|score)[\s:]*(?P<q>[0-6])\b"
+    rf"{_QUALIFIER}{_ASSIGNMENT}(?P<q>[0-6])\b"
     rf"|(?P<t>[0-6]){_TERMINAL}"
     r")"
 )
 _LUNGRADS_RE = re.compile(
     r"(?i)\bLung[- ]?RADS\b[\s:]*"
     r"(?:"
-    r"(?:category|score)[\s:]*(?P<q>4A|4B|4X|[0-3])\b"
+    rf"{_QUALIFIER}{_ASSIGNMENT}(?P<q>4A|4B|4X|[0-3])\b"
     rf"|(?P<t>4A|4B|4X|[0-3]){_TERMINAL}"
     r")"
 )
+_REFERENCE_CONTEXT_RE = re.compile(
+    r"(?i)\b(?:atlas|categories|guideline|legend|lexicon|scale)\b"
+)
+
+
+def _is_reference_context(text: str, match_start: int) -> bool:
+    """Return whether a RADS token is introduced as reference material."""
+    clause_start = max(
+        text.rfind("\n", 0, match_start),
+        text.rfind(".", 0, match_start),
+        text.rfind(";", 0, match_start),
+    )
+    return (
+        _REFERENCE_CONTEXT_RE.search(text[clause_start + 1 : match_start]) is not None
+    )
 
 
 def _capture_assessment(text: str) -> tuple[Optional[str], Optional[str]]:
@@ -250,12 +271,26 @@ def _capture_assessment(text: str) -> tuple[Optional[str], Optional[str]]:
     ``(None, None)`` when no category is written in the report.
     """
     candidates: list[tuple[int, str, str]] = []
-    birads = _BIRADS_RE.search(text)
+    birads = next(
+        (
+            match
+            for match in _BIRADS_RE.finditer(text)
+            if not _is_reference_context(text, match.start())
+        ),
+        None,
+    )
     if birads is not None:
         candidates.append(
             (birads.start(), "BI-RADS", birads.group("q") or birads.group("t"))
         )
-    lungrads = _LUNGRADS_RE.search(text)
+    lungrads = next(
+        (
+            match
+            for match in _LUNGRADS_RE.finditer(text)
+            if not _is_reference_context(text, match.start())
+        ),
+        None,
+    )
     if lungrads is not None:
         category = (lungrads.group("q") or lungrads.group("t")).upper()
         candidates.append((lungrads.start(), "Lung-RADS", category))
