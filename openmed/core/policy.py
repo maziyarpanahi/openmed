@@ -34,6 +34,9 @@ class PolicyName(str, Enum):
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
     CHINA_PIPL = "china_pipl"
     INDIA_DPDP_ACT = "india_dpdp_act"
+    ZA_POPIA = "za_popia"
+    NG_NDPA = "ng_ndpa"
+    KENYA_DPA = "ke_dpa"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
@@ -41,6 +44,7 @@ POLICY_ALIASES: Mapping[str, str] = {
     "au_privacy": PolicyName.AUSTRALIA_PRIVACY_ACT.value,
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
     "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
+    "kenya_dpa": PolicyName.KENYA_DPA.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
     "uk_ico": PolicyName.UK_ICO_ANONYMISATION.value,
 }

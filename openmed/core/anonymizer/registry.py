@@ -225,6 +225,8 @@ _DAY_FIRST_LOCALES = frozenset(
         "th_TH",
         "cs_CZ",
         "sk_SK",
+        "zu_ZA",
+        "xh_ZA",
     }
 )
 
@@ -262,6 +264,8 @@ _LOCALE_ID_METHODS = {
     "en_GH": "ghana_card_pin",
     "en_KE": "kenya_national_id",
     "sw": "kenya_national_id",
+    "zu_ZA": "south_african_id",
+    "xh_ZA": "south_african_id",
     "pt_BR": "cpf",
     "pt_PT": "nif",
     "fr_FR": "ssn",

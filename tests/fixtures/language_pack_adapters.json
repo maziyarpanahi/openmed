@@ -18,7 +18,9 @@
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
-    "zh": "OpenMed/privacy-filter-multilingual"
+    "xh": "OpenMed/privacy-filter-multilingual",
+    "zh": "OpenMed/privacy-filter-multilingual",
+    "zu": "OpenMed/privacy-filter-multilingual"
   },
   "lang_to_locale": {
     "ar": "ar_EG",
@@ -56,9 +58,11 @@
     "tl": "fil_PH",
     "tr": "tr_TR",
     "vi": "vi_VN",
-    "ur": "ur_PK"
+    "ur": "ur_PK",
+    "xh": "xh_ZA",
     "yo": "yo_NG",
-    "zh": "zh_CN"
+    "zh": "zh_CN",
+    "zu": "zu_ZA"
   },
   "national_id_only_languages": [
     "bg",
@@ -218,6 +222,10 @@
       "vi_VN",
       "vietnamese_cccd"
     ],
+    "xh": [
+      "xh_ZA",
+      "south_african_id"
+    ],
     "yo": [
       "yo_NG",
       "nigeria_nin"
@@ -225,6 +233,10 @@
     "zh": [
       "zh_CN",
       "chinese_resident_id"
+    ],
+    "zu": [
+      "zu_ZA",
+      "south_african_id"
     ]
   },
   "script_language_hints": {
@@ -278,7 +290,9 @@
       "nl",
       "pt",
       "tr",
-      "sw"
+      "sw",
+      "zu",
+      "xh"
     ],
     "Malayalam": [
       "ml"
@@ -318,6 +332,8 @@
     "te",
     "th",
     "tr",
-    "zh"
+    "xh",
+    "zh",
+    "zu"
   ]
 }

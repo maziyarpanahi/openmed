@@ -100,8 +100,10 @@ from .tabular_csv import (
     RedactedTable,
     TableView,
     classify_columns,
+    derive_date_shift_days,
     read_table,
     redact_table,
+    shift_quasi_identifier_date,
 )
 from .verify_pdf import (
     PdfFidelityReport,
@@ -174,6 +176,8 @@ __all__ = [
     "read_table",
     "classify_columns",
     "redact_table",
+    "derive_date_shift_days",
+    "shift_quasi_identifier_date",
     "extract_markdown",
     "extract_asciidoc",
     "redact_source_text",

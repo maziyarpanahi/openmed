@@ -12,10 +12,10 @@ from openmed.core.audit import manifest_hash, stable_hash
 from openmed.eval.datasets.dua_stubs import DUA_GATED_CORPORA
 from openmed.eval.datasets.licenses import DatasetLicense, license_for
 from openmed.eval.golden import GOLDEN_CATEGORIES, load_golden_fixtures
-from openmed.eval.suites import DRUGPROT, GOLDEN, SHIELD, suite_metadata
+from openmed.eval.suites import DRUGPROT, GOLDEN, MASAKHANER, SHIELD, suite_metadata
 
-DATASET_CARD_SUITES: tuple[str, ...] = (GOLDEN, SHIELD, DRUGPROT)
-_EXTERNAL_SUITES = {SHIELD, DRUGPROT}
+DATASET_CARD_SUITES: tuple[str, ...] = (GOLDEN, SHIELD, DRUGPROT, MASAKHANER)
+_EXTERNAL_SUITES = {SHIELD, DRUGPROT, MASAKHANER}
 MODEL_CARD_SCHEMA_VERSION = "openmed.eval.model_card.v1"
 PROVENANCE_MANIFEST_SCHEMA_VERSION = "openmed.eval.model_card.provenance.v1"
 DATA_PROVENANCE_ASSERTION = "synthetic_or_permissive_only"
@@ -70,6 +70,8 @@ class DatasetCard:
     languages: tuple[str, ...] = field(default_factory=tuple)
     splits: tuple[str, ...] = field(default_factory=tuple)
     provenance: str = ""
+    source_hash: str = ""
+    content_hash: str = ""
     notes: str = ""
     schema_version: str = "openmed.eval.dataset_card.v1"
 
@@ -85,6 +87,7 @@ class DatasetCard:
 
         return {
             "dataset": self.dataset,
+            "content_hash": self.content_hash,
             "labels": list(self.labels),
             "languages": list(self.languages),
             "license_id": self.license_id,
@@ -94,6 +97,7 @@ class DatasetCard:
             "redistribution": self.redistribution,
             "schema_version": self.schema_version,
             "source_url": self.source_url,
+            "source_hash": self.source_hash,
             "splits": list(self.splits),
         }
 
@@ -123,6 +127,8 @@ class DatasetCard:
             ("Languages", _markdown_list(self.languages)),
             ("Splits", _markdown_list(self.splits)),
             ("Provenance", self.provenance),
+            ("Source hash", self.source_hash),
+            ("Content hash", self.content_hash),
             ("Notes", self.notes),
         ]
         lines = [
@@ -150,6 +156,8 @@ def build_dataset_card(suite: str, **loader_kwargs: Any) -> DatasetCard:
         return _shield_card(**loader_kwargs)
     if suite == DRUGPROT:
         return _drugprot_card(**loader_kwargs)
+    if suite == MASAKHANER:
+        return _masakhaner_card(**loader_kwargs)
     allowed = ", ".join(DATASET_CARD_SUITES)
     raise ValueError(
         f"unknown dataset card suite {suite!r}; expected one of: {allowed}"
@@ -1406,6 +1414,75 @@ def _drugprot_card(**loader_kwargs: Any) -> DatasetCard:
     )
 
 
+def _masakhaner_card(**loader_kwargs: Any) -> DatasetCard:
+    normalized_kwargs = dict(loader_kwargs)
+    language = normalized_kwargs.pop("language", None)
+    if language is not None and "languages" not in normalized_kwargs:
+        normalized_kwargs["languages"] = (language,)
+    languages = tuple(normalized_kwargs.get("languages") or ()) or None
+    if languages:
+        metadata = suite_metadata(
+            MASAKHANER,
+            languages=languages,
+            split=normalized_kwargs.get("split", "test"),
+            version=normalized_kwargs.get("version", "2.0"),
+        )
+    else:
+        metadata = suite_metadata(
+            MASAKHANER,
+            split=normalized_kwargs.get("split", "test"),
+            version=normalized_kwargs.get("version", "2.0"),
+        )
+    fixtures = _load_external_fixtures(MASAKHANER, normalized_kwargs)
+    content_hashes = {
+        str(fixture.language): str(fixture.metadata.get("content_hash"))
+        for fixture in fixtures
+        if fixture.metadata.get("content_hash")
+    }
+    content_hash = (
+        next(iter(content_hashes.values()))
+        if len(content_hashes) == 1
+        else stable_hash({"content_hashes": content_hashes})
+        if content_hashes
+        else ""
+    )
+    fallback_languages = tuple(str(item) for item in metadata["languages"])
+    license_metadata = license_for(MASAKHANER)
+    if str(metadata["version"]) == "1.0":
+        first_source = next(iter(metadata["sources"].values()))
+        license_metadata = DatasetLicense(
+            dataset=MASAKHANER,
+            license_id=str(metadata["license_id"]),
+            source_url=str(first_source["source_url"]),
+            redistribution=str(metadata["redistribution"]),
+            notes=(
+                "MasakhaNER 1.0 uses its dataset-card license declaration; "
+                "callers must verify and explicitly accept that card."
+            ),
+        )
+    return _card_from_license(
+        license_metadata,
+        record_count=len(fixtures),
+        labels=_labels_from_mapping(metadata.get("canonical_label_mapping")),
+        languages=_fixture_languages(fixtures, fallback=fallback_languages),
+        splits=_fixture_splits(
+            fixtures,
+            fallback=(str(metadata["split"]),),
+        ),
+        provenance="user-supplied local corpus or pre-populated cache",
+        source_hash=content_hash,
+        content_hash=content_hash,
+        notes=" ".join(
+            item
+            for item in (
+                str(metadata["organization_handling"]),
+                str(metadata.get("license_notice") or ""),
+            )
+            if item
+        ),
+    )
+
+
 def _card_from_license(
     license_metadata: DatasetLicense,
     *,
@@ -1414,6 +1491,8 @@ def _card_from_license(
     languages: Iterable[str],
     splits: Iterable[str],
     provenance: str,
+    source_hash: str = "",
+    content_hash: str = "",
     notes: str = "",
 ) -> DatasetCard:
     return DatasetCard(
@@ -1426,6 +1505,8 @@ def _card_from_license(
         languages=tuple(languages),
         splits=tuple(splits),
         provenance=provenance,
+        source_hash=source_hash,
+        content_hash=content_hash,
         notes=notes or license_metadata.notes,
     )
 
@@ -1442,7 +1523,7 @@ def _load_external_fixtures(suite: str, loader_kwargs: Mapping[str, Any]) -> lis
 
 
 def _has_explicit_source(loader_kwargs: Mapping[str, Any]) -> bool:
-    explicit_keys = {"path", "rows_loader", "downloader"}
+    explicit_keys = {"cache_dir", "path", "paths", "rows_loader", "downloader"}
     return any(loader_kwargs.get(key) is not None for key in explicit_keys)
 
 
