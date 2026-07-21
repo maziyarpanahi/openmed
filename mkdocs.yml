@@ -44,6 +44,7 @@ nav:
       - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
+      - Low-resource Benchmark: benchmarks/low-resource.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
