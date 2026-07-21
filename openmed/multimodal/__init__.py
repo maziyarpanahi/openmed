@@ -1,10 +1,10 @@
 """Multimodal ingestion and redaction package for section 4.2.
 
 Provides the shared ingest/redact contract (``ExtractedDocument`` and the
-``redact_document`` dispatcher) that PDF/DOCX/HTML/image/DICOM ingesters build
-on. The per-format parsers and OCR adapters live in sibling modules and are
-registered lazily via :func:`register_handler`; this package stays importable
-without the ``multimodal`` extra installed.
+``redact_document`` dispatcher) that PDF/DOCX/PPTX/HTML/image/DICOM ingesters
+build on. The per-format parsers and OCR adapters live in sibling modules and
+are registered lazily via :func:`register_handler`; this package stays
+importable without the ``multimodal`` extra installed.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from . import dicom as _dicom
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_docx as _documents_docx
 from . import documents_markdown as _documents_markdown
+from . import pptx as _pptx
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -95,6 +96,13 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .pptx import (
+    PptxRedaction,
+    PptxRunRange,
+    extract_pptx,
+    map_text_spans_to_pptx_runs,
+    write_redacted_pptx,
+)
 from .tabular_csv import (
     ColumnDecision,
     RedactedTable,
@@ -143,6 +151,11 @@ __all__ = [
     "extract_docx",
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
+    "PptxRedaction",
+    "PptxRunRange",
+    "extract_pptx",
+    "map_text_spans_to_pptx_runs",
+    "write_redacted_pptx",
     "extract_epub",
     "MetadataFinding",
     "ResidualMetadataReport",
