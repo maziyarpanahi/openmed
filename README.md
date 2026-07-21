@@ -625,6 +625,11 @@ See the full [REST service guide](docs/rest-service.md).
 
 Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 
+AI agents can load the curated [llms.txt](https://openmed.life/docs/llms.txt)
+index or the inlined [llms-full.txt](https://openmed.life/docs/llms-full.txt)
+feed. Both are regenerated from the current documentation during every strict
+MkDocs build.
+
 | | | |
 |---|---|---|
 | [Getting Started](https://openmed.life/docs/) | [Analyze Text](https://openmed.life/docs/analyze-text) | [Model Registry](https://openmed.life/docs/model-registry) |

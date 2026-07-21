@@ -79,6 +79,7 @@ REVIEWED_LICENSES = {
     "mcp": "MIT",
     "mkdocs": "BSD-2-Clause",
     "mkdocs-git-revision-date-localized-plugin": "MIT",
+    "mkdocs-llmstxt": "ISC",
     "mkdocs-material": "MIT",
     "mkdocs-minify-plugin": "MIT",
     "mkdocstrings": "ISC",
