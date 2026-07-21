@@ -1,4 +1,9 @@
-from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
+)
 from openmed.core.script_detect import (
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
@@ -75,12 +80,62 @@ def test_segment_by_script_mixed_latin_han_offsets_cover_text():
 
 def test_script_language_hints_cover_detectable_scripts():
     expected_scripts = set(SUPPORTED_SCRIPTS) | {UNKNOWN_SCRIPT}
+    routing_languages = (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     assert expected_scripts <= set(SCRIPT_LANGUAGE_HINTS)
     for script in expected_scripts:
         hints = candidate_languages_for_script(script)
         assert hints
-        assert set(hints) <= SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        assert set(hints) <= routing_languages
+
+
+def test_indic_and_arabic_script_language_hints_are_exact():
+    expected_hints = {
+        "Devanagari": ("hi", "mr", "ne"),
+        "Bengali": ("bn", "as"),
+        "Gurmukhi": ("pa",),
+        "Gujarati": ("gu",),
+        "Odia": ("or",),
+        "Tamil": ("ta",),
+        "Telugu": ("te",),
+        "Kannada": ("kn",),
+        "Malayalam": ("ml",),
+        "Arabic": ("ar", "ur"),
+    }
+
+    for script, languages in expected_hints.items():
+        assert candidate_languages_for_script(script) == languages
+
+
+def test_routing_only_languages_do_not_claim_bundled_models():
+    expected_languages = {
+        "as",
+        "bn",
+        "gu",
+        "kn",
+        "ml",
+        "mr",
+        "ne",
+        "or",
+        "pa",
+        "ta",
+        "ur",
+    }
+
+    assert USER_SUPPLIED_MODEL_LANGUAGES == expected_languages
+    assert USER_SUPPLIED_MODEL_LANGUAGES.isdisjoint(DEFAULT_PII_MODELS)
+    assert candidate_languages_for_script("Latin") == (
+        "en",
+        "fr",
+        "de",
+        "it",
+        "es",
+        "nl",
+        "pt",
+        "tr",
+    )
 
 
 def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():
