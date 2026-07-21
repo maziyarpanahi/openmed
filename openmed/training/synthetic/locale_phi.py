@@ -18,6 +18,7 @@ from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_chinese_resident_id,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
@@ -264,6 +265,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
+    "zh": validate_chinese_resident_id,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -282,6 +284,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "th": "pii_i18n.validate_thai_national_id",
     "ko": "pii_i18n.validate_korean_rrn",
     "ro": "pii_i18n.validate_romanian_cnp",
+    "zh": "pii_i18n.validate_chinese_resident_id",
 }
 
 

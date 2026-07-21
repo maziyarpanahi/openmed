@@ -21,6 +21,7 @@ deterministic:
     passes the official Verhoeff check — only ~1 in 20 by sampling)
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Chinese Resident Identity Card (18 characters with MOD 11-2 checksum)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - Malaysian MyKad / NRIC with a decodable embedded birth date
@@ -833,6 +834,52 @@ class UKNINOProvider(BaseProvider):
         digits = f"{rng.randint(0, 999999):06d}"
         suffix = rng.choice("ABCD")
         return f"{prefix} {digits[:2]} {digits[2:4]} {digits[4:]} {suffix}"
+
+
+# ---------------------------------------------------------------------------
+# Chinese Resident Identity Card (18 characters, ISO 7064 MOD 11-2)
+# ---------------------------------------------------------------------------
+
+_CHINESE_RESIDENT_ID_PREFECTURE_CODES = (*range(1, 71), 90)
+
+
+def generate_chinese_resident_id(*, rng: random.Random | None = None) -> str:
+    """Generate a checksum-valid synthetic Chinese Resident Identity Card ID.
+
+    The six-digit region portion uses a stable mainland GB/T 2260
+    province-level prefix and synthetic non-zero subdivision digits. Birth
+    dates and sequence values are generated rather than copied from any
+    person or dataset.
+    """
+    import calendar
+
+    from openmed.core.pii_i18n import (
+        CHINESE_RESIDENT_ID_REGION_PREFIXES,
+        chinese_resident_id_check_character,
+    )
+
+    source = rng or random.Random()
+    province_prefix = source.choice(tuple(sorted(CHINESE_RESIDENT_ID_REGION_PREFIXES)))
+    prefecture_code = source.choice(_CHINESE_RESIDENT_ID_PREFECTURE_CODES)
+    county_code = source.randint(1, 99)
+
+    year = source.randint(1940, 2020)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    sequence = source.randint(1, 999)
+
+    body = (
+        f"{province_prefix}{prefecture_code:02d}{county_code:02d}"
+        f"{year:04d}{month:02d}{day:02d}{sequence:03d}"
+    )
+    return f"{body}{chinese_resident_id_check_character(body)}"
+
+
+class ChineseResidentIdProvider(BaseProvider):
+    """Generates synthetic Chinese Resident IDs with valid MOD 11-2 checks."""
+
+    def chinese_resident_id(self) -> str:
+        return generate_chinese_resident_id(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -1922,6 +1969,7 @@ __all__ = [
     "BCPHNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
+    "ChineseResidentIdProvider",
     "DanishCPRProvider",
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
@@ -1954,6 +2002,7 @@ __all__ = [
     "generate_bic",
     "generate_bulgarian_egn",
     "generate_canadian_sin",
+    "generate_chinese_resident_id",
     "generate_danish_cpr",
     "generate_hungarian_taj",
     "generate_estonian_isikukood",

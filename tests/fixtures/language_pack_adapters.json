@@ -191,6 +191,10 @@
     "vi": [
       "vi_VN",
       "vietnamese_cccd"
+    ],
+    "zh": [
+      "zh_CN",
+      "chinese_resident_id"
     ]
   },
   "script_language_hints": {

@@ -149,6 +149,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         segmenter_id="jieba",
         recognizers=("builtin-patterns", "model"),
         surrogate_locale="zh_CN",
+        national_id_providers={"chinese_resident_id": "zh_CN"},
     ),
     _pack(
         "tr",

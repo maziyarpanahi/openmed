@@ -385,47 +385,142 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
-_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+CHINESE_RESIDENT_ID_REGION_PREFIXES = frozenset(
+    {
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "21",
+        "22",
+        "23",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+    }
+)
+"""Mainland province-level prefixes from the GB/T 2260 code hierarchy.
+
+The full county-level table changes over time. OpenMed deliberately bundles
+only this small, stable first-level set and validates the remaining four
+digits structurally, avoiding a stale or restrictively licensed data asset.
+"""
+
+_CHINESE_RESIDENT_ID_WEIGHTS = (
+    7,
+    9,
+    10,
+    5,
+    8,
+    4,
+    2,
+    1,
+    6,
+    3,
+    7,
+    9,
+    10,
+    5,
+    8,
+    4,
+    2,
+)
 _CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
 
 
-def validate_chinese_resident_identity_card(text: str) -> bool:
-    """Validate a mainland China 18-digit resident identity card number.
+def chinese_resident_id_check_character(body: str) -> str:
+    """Return the ISO 7064 MOD 11-2 check character for a 17-digit body.
+
+    Args:
+        body: The first 17 digits of a Chinese Resident Identity Card number.
+
+    Returns:
+        The decimal check digit or uppercase ``"X"``.
+
+    Raises:
+        ValueError: If ``body`` is not exactly 17 ASCII digits.
+    """
+    if re.fullmatch(r"[0-9]{17}", body) is None:
+        raise ValueError("Chinese Resident ID body must contain 17 ASCII digits")
+
+    total = sum(
+        int(digit) * weight for digit, weight in zip(body, _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+
+
+def validate_chinese_resident_id(text: str) -> bool:
+    """Validate a mainland China 18-digit Resident Identity Card number.
 
     The second-generation resident identity card stores a six-digit address
     code, an eight-digit Gregorian birth date, a three-digit sequence, and a
-    MOD 11-2 checksum digit. OpenMed validates only these offline structural
-    and checksum properties; it does not bundle or query a region registry.
+    MOD 11-2 checksum character. Region validation deliberately uses the
+    stable province-level GB/T 2260 prefixes plus structural county digits,
+    rather than bundling a mutable full administrative-code dataset.
+
+    Args:
+        text: Candidate identifier. The final check character is
+            case-insensitive, but separators are not accepted.
+
+    Returns:
+        ``True`` only when format, region, birth date, sequence, and checksum
+        are all valid.
     """
-    cleaned = re.sub(r"[\s-]", "", text).upper()
-    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+    if not isinstance(text, str):
         return False
 
-    if cleaned[:6] == "000000":
+    cleaned = text.upper()
+    if re.fullmatch(r"[0-9]{17}[0-9X]", cleaned) is None:
+        return False
+
+    region_code = cleaned[:6]
+    prefecture_code = int(region_code[2:4])
+    if (
+        region_code[:2] not in CHINESE_RESIDENT_ID_REGION_PREFIXES
+        or (prefecture_code > 70 and prefecture_code != 90)
+        or prefecture_code == 0
+        or region_code[4:] == "00"
+    ):
         return False
 
     try:
-        year = int(cleaned[6:10])
-        month = int(cleaned[10:12])
-        day = int(cleaned[12:14])
+        birth_date = date.fromisoformat(
+            f"{cleaned[6:10]}-{cleaned[10:12]}-{cleaned[12:14]}"
+        )
     except ValueError:
         return False
 
-    import calendar
-
-    if month < 1 or month > 12 or day < 1:
-        return False
-    try:
-        if day > calendar.monthrange(year, month)[1]:
-            return False
-    except (ValueError, calendar.IllegalMonthError):
+    if birth_date > date.today() or cleaned[14:17] == "000":
         return False
 
-    total = sum(
-        int(digit) * weight
-        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
-    )
-    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+    return cleaned[-1] == chinese_resident_id_check_character(cleaned[:17])
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Compatibility alias for :func:`validate_chinese_resident_id`."""
+
+    return validate_chinese_resident_id(text)
 
 
 def validate_portuguese_cpf(text: str) -> bool:
@@ -3261,6 +3356,28 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_CHINESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9])[0-9]{17}[0-9Xx](?![0-9A-Za-z])",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "居民身份证",
+            "公民身份号码",
+            "身份证号码",
+            "身份证号",
+            "身份证",
+            "身份号码",
+            "证件号码",
+        ],
+        context_boost=0.5,
+        validator=validate_chinese_resident_id,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
 _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
@@ -5071,6 +5188,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
+    "zh": _CHINESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
