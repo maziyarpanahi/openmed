@@ -30,6 +30,7 @@ from typing import Any, Callable
 from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_bulgarian_egn,
+    validate_chinese_resident_id,
     validate_croatian_oib,
     validate_czech_rodne_cislo,
     validate_czechoslovak_rodne_cislo,
@@ -72,6 +73,7 @@ from .clinical_ids import (
     BCPHNProvider,
     BulgarianEgnProvider,
     CanadianSINProvider,
+    ChineseResidentIdProvider,
     DanishCPRProvider,
     EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
@@ -284,6 +286,13 @@ def _register_builtin_specs() -> None:
         validate=validate_aadhaar,
         faker_method="aadhaar",
         faker_provider=AadhaarProvider,
+    )
+    _register_aliases(
+        ("zh", "zh_CN", "cn"),
+        id_type="resident_id",
+        validate=validate_chinese_resident_id,
+        faker_method="chinese_resident_id",
+        faker_provider=ChineseResidentIdProvider,
     )
     _register_aliases(
         ("id", "id_ID"),
