@@ -89,11 +89,13 @@ routing is first requested, and do not download or bundle model weights.
 Chinese segmentation and Han-script routing are supported, but the `zh`
 default remains an explicit multilingual placeholder rather than a claim that
 a dedicated Chinese PII model has shipped. Codes outside this list (for example
-`pl`, `lv`, `sk`, `ms`, `tl`, and `da`) are **not** model-backed PII languages.
+`pl`, `lv`, `sk`, `ms`, `tl`, `da`, and `ur`) are **not** model-backed PII languages.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
 [PII Anonymization](anonymization.md#clinical-id-checksums) for the ID providers.
+Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
+`en_PK` backend for general surrogate data, with a one-time approximation warning.
 
 ## Worked examples
 

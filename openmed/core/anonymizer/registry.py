@@ -299,6 +299,7 @@ _LOCALE_ID_METHODS = {
     "et_EE": "isikukood",
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
+    "ur_PK": "cnic",
 }
 
 _INDIA_ID_METHODS = {

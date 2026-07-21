@@ -579,6 +579,26 @@ class AadhaarProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Pakistani CNIC
+# ---------------------------------------------------------------------------
+class PakistaniCnicProvider(BaseProvider):
+    """Generate structurally valid synthetic Pakistani CNIC values."""
+
+    def cnic(self) -> str:
+        """Return a dashed 13-digit synthetic CNIC."""
+        province = self.random_int(1, 7)
+        district_tehsil = f"{self.random_int(1000, 9999):04d}"
+        region = f"{province}{district_tehsil}"
+        family = f"{self.random_int(0, 9999999):07d}"
+        sex_digit = self.random_int(0, 9)
+        return f"{region}-{family}-{sex_digit}"
+
+    def cnic_undashed(self) -> str:
+        """Return an undashed 13-digit synthetic CNIC."""
+        return self.cnic().replace("-", "")
+
+
+# ---------------------------------------------------------------------------
 # India ABDM / ABHA identifiers
 # ---------------------------------------------------------------------------
 
