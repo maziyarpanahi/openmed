@@ -24,6 +24,35 @@ For the redaction methods (`mask`, `remove`, `replace`, `hash`, `shift_dates`),
 locale resolution, determinism, and cross-document surrogate vaults, see
 [PII Anonymization](anonymization.md).
 
+## Automatic language and script routing
+
+The staged privacy pipeline can choose a document pack automatically while
+preserving exact language decisions for every script run:
+
+```python
+from openmed.core.pipeline import Pipeline
+
+route = Pipeline(lang="auto").stage2_language_script(
+    "Patient stable. 患者发热。 रोगी स्थिर है।"
+)
+print(route.lang, route.model_name)
+print(route.metadata["runs"])
+```
+
+The core fallback is deterministic and dependency-free. It combines Unicode
+script runs with each `LanguagePack`'s candidate priority and context hints;
+for example, adjacent kana selects Japanese for Han runs, while standalone Han
+prefers Chinese and Devanagari currently prefers Hindi. Install
+`openmed[lid]` to enable the lazy, on-device `pycld2` adapter for ambiguous
+runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
+routing is first requested, and do not download or bundle model weights.
+
+!!! warning "Language-ID license boundary"
+    This router deliberately excludes CLD3, which is outside this roadmap
+    task's approved dependency scope. Non-commercial language-ID assets remain
+    prohibited; only permissively licensed implementations may be bundled or
+    referenced by the router.
+
 !!! note "Kept in sync with the code"
     The table below lists **every** code in `SUPPORTED_LANGUAGES` together with
     its `DEFAULT_PII_MODELS` entry and its `LANG_TO_LOCALE` mapping.
