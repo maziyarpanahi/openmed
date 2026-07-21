@@ -31,11 +31,13 @@
     "et": "et_EE",
     "fi": "fi_FI",
     "fr": "fr_FR",
+    "ha": "ha_NG",
     "he": "he_IL",
     "hi": "hi_IN",
     "hr": "hr_HR",
     "hu": "hu_HU",
     "id": "id_ID",
+    "ig": "ig_NG",
     "it": "it_IT",
     "ja": "ja_JP",
     "ko": "ko_KR",
@@ -52,6 +54,7 @@
     "tl": "fil_PH",
     "tr": "tr_TR",
     "vi": "vi_VN",
+    "yo": "yo_NG",
     "zh": "zh_CN"
   },
   "national_id_only_languages": [
@@ -61,15 +64,18 @@
     "el",
     "et",
     "fi",
+    "ha",
     "hr",
     "hu",
+    "ig",
     "lv",
     "ms",
     "pl",
     "sk",
     "sr",
     "tl",
-    "vi"
+    "vi",
+    "yo"
   ],
   "national_id_providers": {
     "bg": [
@@ -112,6 +118,10 @@
       "fr_FR",
       "ssn"
     ],
+    "ha": [
+      "ha_NG",
+      "nigeria_nin"
+    ],
     "he": [
       "he_IL",
       "teudat_zehut"
@@ -131,6 +141,10 @@
     "id": [
       "id_ID",
       "indonesian_nik"
+    ],
+    "ig": [
+      "ig_NG",
+      "nigeria_nin"
     ],
     "it": [
       "it_IT",
@@ -191,6 +205,10 @@
     "vi": [
       "vi_VN",
       "vietnamese_cccd"
+    ],
+    "yo": [
+      "yo_NG",
+      "nigeria_nin"
     ],
     "zh": [
       "zh_CN",

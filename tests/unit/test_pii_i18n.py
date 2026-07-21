@@ -24,6 +24,7 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_portuguese_nif,
     generate_vietnamese_cccd,
     generate_vietnamese_cmnd,
+    register_clinical_providers,
 )
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
@@ -33,6 +34,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_MONTH_NAMES,
     LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
+    LOCALE_PII_PATTERNS,
     MRZ_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
@@ -59,6 +61,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_nigeria_bvn,
+    validate_nigeria_nin,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cnpj,
@@ -104,6 +108,9 @@ class TestConstants:
 
     def test_national_id_only_languages(self):
         assert NATIONAL_ID_ONLY_LANGUAGES == {
+            "ha",
+            "ig",
+            "yo",
             "pl",
             "lv",
             "sk",
@@ -4186,6 +4193,221 @@ class TestKoreanLocaleAndFixture:
             == (hard_negative["text"])
         )
         assert not validate_korean_rrn(hard_negative["text"])
+
+
+class TestNigerianIdentifiers:
+    """Validator, pattern, surrogate, and synthetic-fixture coverage for NG."""
+
+    @staticmethod
+    def _faker(seed: int, locale: str = "en_NG") -> Faker:
+        faker = Faker(locale)
+        register_clinical_providers(faker)
+        faker.seed_instance(seed)
+        return faker
+
+    @pytest.mark.parametrize(
+        "value",
+        ["36787753186", "12345678901"],
+    )
+    def test_nin_validator_accepts_non_trivial_values(self, value):
+        assert validate_nigeria_nin(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "00000000000",
+            "99999999999",
+            "01234567890",
+            "98765432109",
+            "1234567890",
+            "123456789012",
+            "１２３４５６７８９０１",
+            None,
+        ],
+    )
+    def test_nin_validator_rejects_trivial_or_malformed_values(self, value):
+        assert not validate_nigeria_nin(value)
+
+    def test_bvn_validator_accepts_non_trivial_eleven_digit_values(self):
+        assert validate_nigeria_bvn("24107152688")
+        assert validate_nigeria_bvn("12345678901")
+        assert validate_nigeria_bvn("36787753186")
+        assert validate_nigeria_bvn("04107152688")
+        assert not validate_nigeria_bvn("00000000000")
+        assert not validate_nigeria_bvn("99999999999")
+        assert not validate_nigeria_bvn("2410715268")
+        assert not validate_nigeria_bvn("241071526880")
+
+    def test_one_thousand_nin_and_bvn_surrogates_pass_validators(self):
+        faker = self._faker(840)
+        for _ in range(1_000):
+            assert validate_nigeria_nin(faker.nigeria_nin())
+            assert validate_nigeria_bvn(faker.nigeria_bvn())
+
+    def test_provider_is_seed_deterministic_and_preserves_phone_prefix_class(self):
+        first = self._faker(840)
+        second = self._faker(840)
+        assert first.nigeria_nin() == second.nigeria_nin()
+        assert first.nigeria_bvn() == second.nigeria_bvn()
+
+        for phone in (
+            "+234 803 123 4567",
+            "07051234567",
+            "08039999999",
+            "08121234567",
+            "09031234567",
+            "09159999999",
+        ):
+            surrogate = first.ng_mobile_number(phone)
+            source_digits = re.sub(r"[^0-9]", "", phone)
+            surrogate_digits = re.sub(r"[^0-9]", "", surrogate)
+            source_national = (
+                "0" + source_digits[3:]
+                if source_digits.startswith("234")
+                else source_digits
+            )
+            surrogate_national = (
+                "0" + surrogate_digits[3:]
+                if surrogate_digits.startswith("234")
+                else surrogate_digits
+            )
+            assert surrogate_national[:3] == source_national[:3]
+            assert surrogate_national != source_national
+
+    def test_locale_aliases_share_patterns_and_language_lookup(self):
+        aliases = ("en_ng", "ha", "ig", "yo")
+        assert all(
+            LOCALE_PII_PATTERNS[alias] is LOCALE_PII_PATTERNS["en_ng"]
+            for alias in aliases
+        )
+        for language in ("ha", "ig", "yo"):
+            patterns = get_patterns_for_language(language)
+            assert all(pattern in patterns for pattern in LOCALE_PII_PATTERNS[language])
+
+    def test_nin_and_bvn_patterns_require_context_in_safety_sweep(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        patterns = LOCALE_PII_PATTERNS["en_ng"]
+        bare = safety_sweep("12345678901", [], patterns=patterns)
+        labeled_nin = safety_sweep("NIN: 12345678901", [], patterns=patterns)
+        labeled_bvn = safety_sweep("BVN: 24107152688", [], patterns=patterns)
+
+        assert bare == []
+        assert [(entity.label, entity.text) for entity in labeled_nin] == [
+            ("NG_NIN", "12345678901")
+        ]
+        assert [(entity.label, entity.text) for entity in labeled_bvn] == [
+            ("NG_BVN", "24107152688")
+        ]
+
+    def test_phone_patterns_match_required_forms_and_id_priority_wins(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        patterns = LOCALE_PII_PATTERNS["en_ng"]
+        phone_patterns = [
+            pattern for pattern in patterns if pattern.entity_type == "NG_PHONE"
+        ]
+        for phone in ("+234 803 123 4567", "08039999999", "09159999999"):
+            assert any(
+                re.fullmatch(pattern.pattern, phone, pattern.flags)
+                for pattern in phone_patterns
+            )
+
+        for identifier in ("12345678901", "24107152688"):
+            assert not any(
+                re.search(pattern.pattern, identifier, pattern.flags)
+                for pattern in phone_patterns
+            )
+
+        mobile_shaped_nin = safety_sweep(
+            "NIN: 08039999999",
+            [],
+            patterns=patterns,
+        )
+        assert [(entity.label, entity.text) for entity in mobile_shaped_nin] == [
+            ("NG_NIN", "08039999999")
+        ]
+
+    def test_source_labels_route_to_distinct_identifier_surrogates(self):
+        from openmed.core.labels import ID_NUM, PHONE, id_subtype_for, normalize_label
+
+        assert normalize_label("NG_NIN") == ID_NUM
+        assert normalize_label("NG_BVN") == ID_NUM
+        assert normalize_label("NG_PHONE") == PHONE
+        assert id_subtype_for("NG_NIN") == "national_id"
+        assert id_subtype_for("NG_BVN") == "national_id"
+
+        anonymizer = Anonymizer(locale="en_NG", consistent=True, seed=840)
+        nin = anonymizer.surrogate("36787753186", "NG_NIN")
+        bvn = anonymizer.surrogate("24107152688", "NG_BVN")
+        phone = anonymizer.surrogate("+234 803 123 4567", "NG_PHONE")
+
+        assert nin != "36787753186"
+        assert bvn != "24107152688"
+        assert phone != "+234 803 123 4567"
+        assert validate_nigeria_nin(nin)
+        assert validate_nigeria_bvn(bvn)
+        assert re.fullmatch(r"\+234 80\d \d{3} \d{4}", phone)
+
+    def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        rows = [
+            json.loads(line)
+            for line in Path("tests/fixtures/pii/ng_synthetic_notes.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        assert {row["id"] for row in rows} == {
+            "ng-synthetic-registration-nin",
+            "ng-synthetic-payment-bvn",
+            "ng-synthetic-registration-phone",
+            "ng-synthetic-payment-phone",
+        }
+
+        for row in rows:
+            assert row["metadata"]["synthetic"] is True
+            assert row["metadata"]["generated_only"] is True
+            entity = row["entities"][0]
+            assert row["text"][entity["start"] : entity["end"]] == entity["text"]
+
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-16T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang="en",
+                locale="en_NG",
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang="en",
+                consistent=True,
+                seed=840,
+                locale="en_NG",
+                use_safety_sweep=True,
+            )
+
+            assert added_count == 1
+            assert len(result.pii_entities) == 1
+            assert result.pii_entities[0].label == entity["label"]
+            assert entity["text"] not in result.deidentified_text
+            assert result.pii_entities[0].redacted_text != entity["text"]
 
 
 if __name__ == "__main__":

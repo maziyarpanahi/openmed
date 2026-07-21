@@ -149,6 +149,54 @@ def validate_bic(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _is_nigeria_sequential_run(digits: str) -> bool:
+    """Return whether an 11-digit value contains a full ascending/descending run."""
+
+    return "0123456789" in digits or "9876543210" in digits
+
+
+def validate_nigeria_nin(text: str) -> bool:
+    """Validate the offline structural rules for a Nigerian NIN.
+
+    Nigerian National Identification Numbers contain exactly 11 ASCII digits
+    and have no public checksum. OpenMed therefore rejects only unmistakable
+    placeholder values: repeated single digits and complete ascending or
+    descending digit runs. Detection remains context-gated to avoid treating
+    arbitrary 11-digit values as identifiers.
+
+    Args:
+        text: Candidate containing exactly 11 ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has a non-trivial NIN structure.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{11}", digits) is None:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return not _is_nigeria_sequential_run(digits)
+
+
+def validate_nigeria_bvn(text: str) -> bool:
+    """Validate the offline structural rules for a Nigerian BVN.
+
+    Bank Verification Numbers contain exactly 11 ASCII digits. No public
+    checksum or leading-digit allocation rule is documented, so OpenMed uses
+    the same conservative non-triviality checks as NIN validation and keeps
+    detection context-gated.
+
+    Args:
+        text: Candidate containing exactly 11 ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has a non-trivial BVN structure.
+    """
+    return validate_nigeria_nin(text)
+
+
 def validate_french_nir(text: str) -> bool:
     """Validate French NIR/INSEE number.
 
@@ -2067,6 +2115,62 @@ def generate_mrz_td1(rng=None) -> str:
 # ---------------------------------------------------------------------------
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
+
+_NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Nigeria's NIN and BVN have no public checksums, so deterministic sweeps
+    # require explicit identifier context. NIN precedes phone detection so an
+    # explicitly labeled mobile-shaped identifier is consumed as an ID first.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "NG_NIN",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "nin",
+            "nimc",
+            "national identification",
+            "national identification number",
+            "national identity number",
+        ],
+        context_boost=0.45,
+        validator=validate_nigeria_nin,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "NG_BVN",
+        priority=13,
+        base_score=0.5,
+        context_words=[
+            "bvn",
+            "nibss",
+            "bank verification",
+            "bank verification number",
+        ],
+        context_boost=0.45,
+        validator=validate_nigeria_bvn,
+        safety_sweep_requires_context=True,
+    ),
+    # Nigerian mobile numbers use 070x/080x/081x/090x/091x domestically and
+    # drop the leading zero after the +234 country code.
+    PIIPattern(
+        r"(?<![0-9])(?:\+234[\s.-]?(?:70|80|81|90|91)[0-9]|"
+        r"0(?:70|80|81|90|91)[0-9])[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+        "NG_PHONE",
+        priority=12,
+        base_score=0.7,
+        context_words=[
+            "phone",
+            "mobile",
+            "telephone",
+            "contact",
+            "waya",
+            "ekwentị",
+            "foonu",
+        ],
+        context_boost=0.25,
+    ),
+]
 
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
@@ -5253,6 +5357,9 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 
 
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "ha": _NIGERIAN_PII_PATTERNS,
+    "ig": _NIGERIAN_PII_PATTERNS,
+    "yo": _NIGERIAN_PII_PATTERNS,
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
@@ -5288,6 +5395,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "en_ng": _NIGERIAN_PII_PATTERNS,
+    "ha": _NIGERIAN_PII_PATTERNS,
+    "ig": _NIGERIAN_PII_PATTERNS,
+    "yo": _NIGERIAN_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,

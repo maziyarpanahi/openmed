@@ -158,6 +158,10 @@ def _gen_email(faker, original, *, locale):
 
 
 def _gen_phone(faker, original, *, locale):
+    if locale in {"en_NG", "ha_NG", "ig_NG", "yo_NG"} and hasattr(
+        faker, "ng_mobile_number"
+    ):
+        return faker.ng_mobile_number(original)
     if any(ch.isdigit() for ch in original):
         return preserve_phone_format(original, rng=faker.random)
     return faker.phone_number()
@@ -251,6 +255,10 @@ def _gen_age(faker, original, *, locale):
 # When the locale-appropriate ID method exists, we call it; otherwise we
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
+    "en_NG": "nigeria_nin",
+    "ha_NG": "nigeria_nin",
+    "ig_NG": "nigeria_nin",
+    "yo_NG": "nigeria_nin",
     "pt_BR": "cpf",
     "pt_PT": "nif",
     "fr_FR": "ssn",
@@ -359,6 +367,8 @@ def _gen_id_num(faker, original, *, locale):
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
+        if method == "nigeria_nin":
+            return getattr(faker, method)(original)
         return getattr(faker, method)()
     return preserve_id_pattern(original, rng=faker.random)
 
@@ -401,6 +411,14 @@ def _gen_abdm_hpr_id(faker, original, *, locale):
 
 def _gen_abdm_hfr_id(faker, original, *, locale):
     return _gen_india_id(faker, original, locale=locale, id_type="ABDM_HFR_ID")
+
+
+def _gen_ng_nin(faker, original, *, locale):
+    return faker.nigeria_nin(original)
+
+
+def _gen_ng_bvn(faker, original, *, locale):
+    return faker.nigeria_bvn(original)
 
 
 def _gen_ssn(faker, original, *, locale):
@@ -677,6 +695,8 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     "PAN": _gen_pan,
     "ABDM_HPR_ID": _gen_abdm_hpr_id,
     "ABDM_HFR_ID": _gen_abdm_hfr_id,
+    "NG_NIN": _gen_ng_nin,
+    "NG_BVN": _gen_ng_bvn,
 }
 
 

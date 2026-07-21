@@ -49,6 +49,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_nigeria_bvn,
+    validate_nigeria_nin,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_polish_pesel,
@@ -84,6 +86,7 @@ from .clinical_ids import (
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
+    NigeriaIdProvider,
     NPIProvider,
     OntarioHealthCardProvider,
     PhilippinesIdProvider,
@@ -246,6 +249,21 @@ def _register_aliases(
 
 
 def _register_builtin_specs() -> None:
+    nigeria_aliases = ("ng", "en_NG", "ha", "ha_NG", "ig", "ig_NG", "yo", "yo_NG")
+    _register_aliases(
+        nigeria_aliases,
+        id_type="nin",
+        validate=validate_nigeria_nin,
+        faker_method="nigeria_nin",
+        faker_provider=NigeriaIdProvider,
+    )
+    _register_aliases(
+        nigeria_aliases,
+        id_type="bvn",
+        validate=validate_nigeria_bvn,
+        faker_method="nigeria_bvn",
+        faker_provider=NigeriaIdProvider,
+    )
     _register_aliases(
         ("fr", "fr_FR"),
         id_type="nir",

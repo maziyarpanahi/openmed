@@ -198,6 +198,9 @@ class NationalIdOnlyCapability:
 
 
 NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
+    "ha": NationalIdOnlyCapability("ha_NG", ("ha_NG", "nigeria_nin")),
+    "ig": NationalIdOnlyCapability("ig_NG", ("ig_NG", "nigeria_nin")),
+    "yo": NationalIdOnlyCapability("yo_NG", ("yo_NG", "nigeria_nin")),
     "pl": NationalIdOnlyCapability("pl_PL", ("pl_PL", "pesel")),
     "lv": NationalIdOnlyCapability("lv_LV", ("lv_LV", "personas_kods")),
     "sk": NationalIdOnlyCapability("sk_SK", ("sk_SK", "rodne_cislo")),
@@ -291,6 +294,9 @@ _LOCALE_ORDER = (
     "tr",
     "id",
     "th",
+    "ha",
+    "ig",
+    "yo",
     "pl",
     "lv",
     "ko",
@@ -324,6 +330,9 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "he",
     "id",
     "th",
+    "ha",
+    "ig",
+    "yo",
     "pl",
     "lv",
     "ko",
