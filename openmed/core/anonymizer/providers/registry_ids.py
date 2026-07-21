@@ -54,6 +54,7 @@ from openmed.core.pii_i18n import (
     validate_malaysian_mykad,
     validate_nigeria_bvn,
     validate_nigeria_nin,
+    validate_pakistani_cnic,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_polish_pesel,
@@ -94,6 +95,7 @@ from .clinical_ids import (
     NigeriaIdProvider,
     NPIProvider,
     OntarioHealthCardProvider,
+    PakistaniCnicProvider,
     PhilippinesIdProvider,
     PolishPeselProvider,
     PortugueseNIFProvider,
@@ -603,6 +605,13 @@ def _register_builtin_specs() -> None:
         validate=validate_bc_phn,
         faker_method="bc_phn",
         faker_provider=BCPHNProvider,
+    )
+    _register_aliases(
+        ("ur", "ur_PK"),
+        id_type="cnic",
+        validate=validate_pakistani_cnic,
+        faker_method="cnic",
+        faker_provider=PakistaniCnicProvider,
     )
 
 

@@ -57,6 +57,7 @@
     "th": "th_TH",
     "tl": "fil_PH",
     "tr": "tr_TR",
+    "ur": "ur_PK",
     "vi": "vi_VN",
     "xh": "xh_ZA",
     "yo": "yo_NG",
@@ -80,6 +81,7 @@
     "sk",
     "sr",
     "tl",
+    "ur",
     "vi",
     "yo"
   ],
@@ -211,6 +213,10 @@
     "tr": [
       "tr_TR",
       "ssn"
+    ],
+    "ur": [
+      "ur_PK",
+      "cnic"
     ],
     "vi": [
       "vi_VN",
