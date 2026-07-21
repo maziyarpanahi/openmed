@@ -484,7 +484,15 @@ def _normalise_patterns(
 
 def _safe_repo_filename(filename: str) -> bool:
     path = PurePosixPath(filename)
-    return bool(filename) and not path.is_absolute() and ".." not in path.parts
+    return (
+        bool(filename)
+        and not path.is_absolute()
+        and ".." not in path.parts
+        and "\\" not in filename
+        and all(
+            ord(character) >= 32 and ord(character) != 127 for character in filename
+        )
+    )
 
 
 def _is_hex_digest(value: Any, length: int) -> bool:
@@ -509,24 +517,32 @@ def _with_retry(operation: Callable[[], Any], *, retries: int) -> Any:
 
 
 def _is_transient_error(error: Exception) -> bool:
-    status_code = _error_status_code(error)
-    if status_code is not None:
-        return status_code in {408, 429} or 500 <= status_code <= 599
-    if isinstance(error, (ConnectionError, TimeoutError)):
-        return True
-    error_type = type(error)
-    qualified_name = f"{error_type.__module__}.{error_type.__name__}".lower()
-    return any(
-        marker in qualified_name
-        for marker in (
-            "connecterror",
-            "connectionerror",
-            "networkerror",
-            "proxyerror",
-            "timeoutexception",
-            "timeouterror",
-        )
-    )
+    current: Exception | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        status_code = _error_status_code(current)
+        if status_code is not None:
+            return status_code in {408, 429} or 500 <= status_code <= 599
+        if isinstance(current, (ConnectionError, TimeoutError)):
+            return True
+        error_type = type(current)
+        qualified_name = f"{error_type.__module__}.{error_type.__name__}".lower()
+        if any(
+            marker in qualified_name
+            for marker in (
+                "connecterror",
+                "connectionerror",
+                "networkerror",
+                "proxyerror",
+                "timeoutexception",
+                "timeouterror",
+            )
+        ):
+            return True
+        cause = current.__cause__ or current.__context__
+        current = cause if isinstance(cause, Exception) else None
+    return False
 
 
 def _error_status_code(error: Exception) -> int | None:

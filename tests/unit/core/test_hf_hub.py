@@ -427,6 +427,37 @@ def test_prefetch_model_retries_transient_failures_with_backoff(
     assert delays == [1.0, 2.0]
 
 
+def test_prefetch_model_retries_wrapped_transient_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    content = b"{}"
+    snapshot = tmp_path / "snapshot"
+    attempts = 0
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            try:
+                raise TimeoutError("temporary outage")
+            except TimeoutError as cause:
+                raise _FakeLocalEntryNotFoundError("cache miss") from cause
+        return str(_write_snapshot_file(snapshot, "config.json", content))
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", content),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+    monkeypatch.setattr(hf_hub.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(hf_hub.random, "uniform", lambda start, end: 0.0)
+
+    assert prefetch_model(_ALIAS, retries=1) == str(snapshot)
+    assert attempts == 2
+
+
 def test_prefetch_model_default_retries_five_times(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -476,6 +507,35 @@ def test_prefetch_model_does_not_retry_permanent_http_errors(
 
     with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
         prefetch_model(_ALIAS)
+
+    assert attempts == 1
+
+
+def test_prefetch_model_does_not_retry_permanent_error_with_transient_cause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    def fake_hf_hub_download(**kwargs: Any) -> str:
+        nonlocal attempts
+        attempts += 1
+        try:
+            raise TimeoutError("earlier timeout")
+        except TimeoutError as cause:
+            error = RuntimeError("HTTP 404")
+            error.response = types.SimpleNamespace(status_code=404)  # type: ignore[attr-defined]
+            raise error from cause
+
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: _model_info("config.json", b"{}"),
+        hf_hub_download=fake_hf_hub_download,
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        prefetch_model(_ALIAS, retries=2)
 
     assert attempts == 1
 
@@ -546,6 +606,28 @@ def test_prefetch_model_fails_when_integrity_metadata_is_missing(
 
     with pytest.raises(DownloadIntegrityError, match="model.bin"):
         prefetch_model(_ALIAS)
+
+
+@pytest.mark.parametrize(
+    "invalid_filename",
+    ["../secret", "/absolute", "..\\secret", "bad\nname", "\x1b[31mred"],
+)
+def test_prefetch_model_rejects_unsafe_remote_filenames(
+    monkeypatch: pytest.MonkeyPatch, invalid_filename: str
+) -> None:
+    info = _model_info(invalid_filename, b"content")
+    _install_fake_hub(
+        monkeypatch,
+        snapshot_download=lambda **kwargs: "/offline/cache",
+        model_info=lambda *args, **kwargs: info,
+        hf_hub_download=lambda **kwargs: "/unused",
+    )
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    with pytest.raises(DownloadIntegrityError, match="invalid filename") as exc_info:
+        prefetch_model(_ALIAS)
+
+    assert invalid_filename not in str(exc_info.value)
 
 
 def test_prefetch_model_offline_attempts_no_socket_connection(
