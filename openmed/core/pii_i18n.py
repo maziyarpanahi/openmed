@@ -106,6 +106,84 @@ def validate_bic(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def validate_belgian_rrn(text: str) -> bool:
+    """Validate a Belgian Rijksregister / national-register number.
+
+    Belgian RRN values contain ``YYMMDD`` birth-date digits, a three-digit
+    sequence number, and a two-digit modulo-97 control number. For births from
+    2000 onward, the control number is calculated after prefixing the first
+    nine digits with ``2``.
+
+    Args:
+        text: Candidate RRN, either as 11 digits or with common separators.
+
+    Returns:
+        True when the shape, embedded date, sequence, and checksum are valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9][0-9./\s-]*[0-9]", candidate) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", candidate)
+    if len(digits) != 11:
+        return False
+
+    body = digits[:9]
+    sequence = int(body[6:9])
+    if not 1 <= sequence <= 998:
+        return False
+
+    control = int(digits[9:11])
+    checksum_paths = (
+        (1900 + int(body[:2]), 97 - (int(body) % 97)),
+        (2000 + int(body[:2]), 97 - (int(f"2{body}") % 97)),
+    )
+    for year, expected_control in checksum_paths:
+        if control != expected_control:
+            continue
+        try:
+            birth_date = date(year, int(body[2:4]), int(body[4:6]))
+        except ValueError:
+            continue
+        if birth_date <= date.today():
+            return True
+
+    return False
+
+
+def validate_swiss_ahv(text: str) -> bool:
+    """Validate a Swiss AHV/AVS number with its EAN-13 check digit.
+
+    Args:
+        text: Candidate 13-digit AHV number, optionally separated by dots,
+            spaces, or hyphens.
+
+    Returns:
+        True when the value starts with Switzerland's ``756`` prefix and its
+        final digit passes the EAN-13 modulo-10 checksum.
+    """
+    if not isinstance(text, str):
+        return False
+
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9][0-9.\s-]*[0-9]", candidate) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", candidate)
+    if len(digits) != 13 or not digits.startswith("756"):
+        return False
+
+    weighted_sum = sum(
+        int(digit) * (1 if index % 2 == 0 else 3)
+        for index, digit in enumerate(digits[:12])
+    )
+    expected_check = (10 - weighted_sum % 10) % 10
+    return int(digits[-1]) == expected_check
+
+
 def validate_french_nir(text: str) -> bool:
     """Validate French NIR/INSEE number.
 
@@ -1915,6 +1993,60 @@ def generate_mrz_td1(rng=None) -> str:
 # ---------------------------------------------------------------------------
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
+
+_BELGIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{2}(?:[.\s/-]?\d{2}){2}[.\s/-]?\d{3}[.\s/-]?\d{2}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "rrn",
+            "niss",
+            "insz",
+            "registre national",
+            "numéro de registre national",
+            "numero de registre national",
+            "numéro national",
+            "numero national",
+            "rijksregister",
+            "rijksregisternummer",
+            "nationaal nummer",
+            "nationalregister",
+            "nationalregisternummer",
+        ],
+        context_boost=0.45,
+        validator=validate_belgian_rrn,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+_SWISS_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)756(?:[.\s-]?\d{4}){2}[.\s-]?\d{2}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "ahv",
+            "ahv-nummer",
+            "avs",
+            "numéro avs",
+            "numero avs",
+            "numero avs/ai",
+            "versichertennummer",
+            "sozialversicherungsnummer",
+            "numéro d'assuré",
+            "numero d'assure",
+            "numero d'assicurato",
+        ],
+        context_boost=0.45,
+        validator=validate_swiss_ahv,
+        safety_sweep_requires_context=True,
+    ),
+]
+
 
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
@@ -5080,6 +5212,12 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_be": _BELGIAN_PII_PATTERNS,
+    "nl_be": _BELGIAN_PII_PATTERNS,
+    "de_be": _BELGIAN_PII_PATTERNS,
+    "fr_ch": _SWISS_PII_PATTERNS,
+    "de_ch": _SWISS_PII_PATTERNS,
+    "it_ch": _SWISS_PII_PATTERNS,
 }
 
 

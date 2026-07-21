@@ -31,6 +31,7 @@ from openmed.core.anonymizer.locales import (
     locale_coherence_report,
     resolve_locale,
 )
+from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
@@ -144,6 +145,30 @@ class TestNationalIdRoundTrip:
                 f"failed every registered validator "
                 f"{[v.__name__ for v in validators]}"
             )
+
+    @pytest.mark.parametrize(
+        ("lang", "locale", "id_type", "method"),
+        [
+            ("nl", "nl_BE", "rrn", "belgian_rrn"),
+            ("de", "de_CH", "ahv", "swiss_ahv"),
+        ],
+    )
+    def test_regional_national_id_surrogates_round_trip(
+        self,
+        lang,
+        locale,
+        id_type,
+        method,
+    ):
+        spec = get_national_id(locale, id_type)
+        assert spec is not None
+        assert spec.faker_method == method
+        assert _LOCALE_ID_METHODS[locale] == method
+
+        anon = Anonymizer(lang=lang, consistent=True, seed=42)
+        surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
+
+        assert spec.validate(surrogate)
 
 
 class TestApproximateLocaleWarnings:

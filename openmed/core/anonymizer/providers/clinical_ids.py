@@ -25,6 +25,7 @@ deterministic:
   - Indonesian NIK with a decodable embedded birth date
   - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
+  - Belgian Rijksregister (RRN) and Swiss AHV/AVS national identifiers
   - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
@@ -1269,6 +1270,70 @@ class PhilippinesIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Belgian Rijksregister (YYMMDD-SSS-CC, modulo-97 with post-2000 prefix)
+# ---------------------------------------------------------------------------
+
+
+def generate_belgian_rrn(*, rng: random.Random | None = None) -> str:
+    """Generate a Belgian RRN accepted by ``validate_belgian_rrn``."""
+    source = rng or random.Random()
+    today = date.today()
+    birth_date = date.fromordinal(
+        source.randint(date(1900, 1, 1).toordinal(), today.toordinal())
+    )
+    sequence = source.randint(1, 998)
+    body = (
+        f"{birth_date.year % 100:02d}{birth_date.month:02d}"
+        f"{birth_date.day:02d}{sequence:03d}"
+    )
+    checksum_input = f"2{body}" if birth_date.year >= 2000 else body
+    control = 97 - (int(checksum_input) % 97)
+    candidate = f"{body[:2]}.{body[2:4]}.{body[4:6]}-{body[6:9]}.{control:02d}"
+
+    from openmed.core.pii_i18n import validate_belgian_rrn
+
+    if not validate_belgian_rrn(candidate):  # pragma: no cover
+        raise RuntimeError("generated Belgian RRN failed checksum validation")
+    return candidate
+
+
+class BelgianRRNProvider(BaseProvider):
+    """Generates checksum-valid Belgian Rijksregister numbers."""
+
+    def belgian_rrn(self) -> str:
+        return generate_belgian_rrn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Swiss AHV / AVS (756 prefix, EAN-13 modulo-10 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_swiss_ahv(*, rng: random.Random | None = None) -> str:
+    """Generate a Swiss AHV/AVS number accepted by ``validate_swiss_ahv``."""
+    source = rng or random.Random()
+    body = "756" + "".join(str(source.randint(0, 9)) for _ in range(9))
+    weighted_sum = sum(
+        int(digit) * (1 if index % 2 == 0 else 3) for index, digit in enumerate(body)
+    )
+    digits = body + str((10 - weighted_sum % 10) % 10)
+    candidate = f"{digits[:3]}.{digits[3:7]}.{digits[7:11]}.{digits[11:]}"
+
+    from openmed.core.pii_i18n import validate_swiss_ahv
+
+    if not validate_swiss_ahv(candidate):  # pragma: no cover
+        raise RuntimeError("generated Swiss AHV failed checksum validation")
+    return candidate
+
+
+class SwissAHVProvider(BaseProvider):
+    """Generates checksum-valid Swiss AHV/AVS identifiers."""
+
+    def swiss_ahv(self) -> str:
+        return generate_swiss_ahv(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Danish CPR / personnummer (DDMMYY-SSSS with century digit)
 # ---------------------------------------------------------------------------
 
@@ -1920,6 +1985,7 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BelgianRRNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
     "DanishCPRProvider",
@@ -1946,12 +2012,14 @@ __all__ = [
     "SpanishDNIProvider",
     "PortugueseNIFProvider",
     "SpanishNIEProvider",
+    "SwissAHVProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
     "generate_australian_medicare",
     "generate_australian_tfn",
     "generate_bc_phn",
     "generate_bic",
+    "generate_belgian_rrn",
     "generate_bulgarian_egn",
     "generate_canadian_sin",
     "generate_danish_cpr",
@@ -1975,6 +2043,7 @@ __all__ = [
     "generate_portuguese_nif",
     "generate_spanish_nie",
     "generate_ssn",
+    "generate_swiss_ahv",
     "generate_thai_national_id",
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
