@@ -87,14 +87,14 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **18 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, `tr`, and `zh`.
+PII extraction and de-identification support **19 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, and `zh`.
 Chinese routing currently uses the documented multilingual default-model
 placeholder; dedicated Chinese model weights are not bundled.
 Validator-backed national-ID coverage is broader for specific ID-only locales,
 including Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-17-model-backed-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-18-model-backed-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.

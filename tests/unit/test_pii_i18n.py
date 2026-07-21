@@ -106,6 +106,7 @@ class TestConstants:
             "th",
             "ko",
             "ro",
+            "sw",
             "zh",
         }
 
@@ -129,7 +130,6 @@ class TestConstants:
             "cs",
             "el",
             "vi",
-            "sw",
         }
 
     def test_language_names_keys(self):
@@ -153,6 +153,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["th"] == "Thai-"
         assert LANGUAGE_MODEL_PREFIX["ko"] == "Korean-"
         assert LANGUAGE_MODEL_PREFIX["ro"] == "Romanian-"
+        assert LANGUAGE_MODEL_PREFIX["sw"] == "Swahili-"
         assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
 
     def test_default_pii_models_all_languages(self):
@@ -178,6 +179,7 @@ class TestConstants:
             == "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1"
         )
         assert DEFAULT_PII_MODELS["ro"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["sw"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
@@ -4566,7 +4568,10 @@ class TestGhanaKenyaIdentifiers:
         assert validate_kenya_maisha_namba(maisha)
 
     def test_locale_aliases_share_kenyan_patterns(self):
-        assert LOCALE_PII_PATTERNS["sw"] is LOCALE_PII_PATTERNS["en_ke"]
+        assert all(
+            pattern in LOCALE_PII_PATTERNS["sw"]
+            for pattern in LOCALE_PII_PATTERNS["en_ke"]
+        )
         swahili_patterns = get_patterns_for_language("sw")
         assert all(pattern in swahili_patterns for pattern in LOCALE_PII_PATTERNS["sw"])
         assert LOCALE_PII_PATTERNS["en_gh"] is not LOCALE_PII_PATTERNS["en_ke"]

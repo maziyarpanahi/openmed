@@ -186,6 +186,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         (UNROUTED_SCRIPT,),
         national_id_provider=("ro_RO", "romanian_cnp"),
     ),
+    _pack(
+        "sw",
+        "OpenMed/privacy-filter-multilingual",
+        "sw",
+        ("Latin",),
+        national_id_provider=("sw", "kenya_national_id"),
+    ),
 )
 
 
@@ -201,7 +208,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "ha": NationalIdOnlyCapability("ha_NG", ("ha_NG", "nigeria_nin")),
     "ig": NationalIdOnlyCapability("ig_NG", ("ig_NG", "nigeria_nin")),
     "yo": NationalIdOnlyCapability("yo_NG", ("yo_NG", "nigeria_nin")),
-    "sw": NationalIdOnlyCapability("sw", ("sw", "kenya_national_id")),
     "pl": NationalIdOnlyCapability("pl_PL", ("pl_PL", "pesel")),
     "lv": NationalIdOnlyCapability("lv_LV", ("lv_LV", "personas_kods")),
     "sk": NationalIdOnlyCapability("sk_SK", ("sk_SK", "rodne_cislo")),
@@ -298,7 +304,6 @@ _LOCALE_ORDER = (
     "ha",
     "ig",
     "yo",
-    "sw",
     "pl",
     "lv",
     "ko",
@@ -308,6 +313,7 @@ _LOCALE_ORDER = (
     "tl",
     "da",
     "ro",
+    "sw",
     "fi",
     "bg",
     "hr",
@@ -335,7 +341,6 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "ha",
     "ig",
     "yo",
-    "sw",
     "pl",
     "lv",
     "ko",
@@ -345,6 +350,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "tl",
     "da",
     "ro",
+    "sw",
     "fi",
     "bg",
     "hr",

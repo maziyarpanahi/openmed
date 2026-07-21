@@ -78,6 +78,7 @@ routing is first requested, and do not download or bundle model weights.
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | Pass `locale="pt_BR"` for CPF/CNPJ surrogates.               |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
+| `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
@@ -225,6 +226,15 @@ After:  Paciente [NAME], CPF [ID]
 ```text
 Before: Pacient Ion Popescu, CNP 1960101221144
 After:  Pacient [NAME], CNP [ID]
+```
+
+### Swahili — `sw`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `sw`
+
+```text
+Before: Jina: Amina Hassan. Nambari ya kitambulisho 12345678
+After:  Jina: [NAME]. Nambari ya kitambulisho [ID]
 ```
 
 ### Telugu — `te`

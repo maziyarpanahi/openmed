@@ -97,13 +97,15 @@ def _national_id_validators(lang: str) -> list:
     validators, falling back to the shared base SSN/national-ID validators for
     languages whose national ID is validated by the base pattern set.
     """
+    from .labels import ID_NUM, normalize_label
     from .pii_entity_merger import PII_PATTERNS
     from .pii_i18n import LANGUAGE_PII_PATTERNS
 
     lang_validators = [
         pattern.validator
         for pattern in LANGUAGE_PII_PATTERNS.get(lang, [])
-        if pattern.validator is not None and pattern.entity_type == "national_id"
+        if pattern.validator is not None
+        and normalize_label(pattern.entity_type) == ID_NUM
     ]
     if lang_validators:
         return lang_validators
