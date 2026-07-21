@@ -19,6 +19,13 @@ except ImportError:  # pragma: no cover - exercised in minimal test envs
 
 DEFAULT_ORG = "OpenMed"
 DEFAULT_OUTPUT = Path("models.jsonl")
+PRESERVED_ENRICHMENT_FIELDS = (
+    "latency_ms",
+    "peak_ram_mb",
+    "recommended_tier",
+    "script_coverage",
+    "training_provenance",
+)
 
 LANGUAGE_TAGS = {
     "ar": "ar",
@@ -431,6 +438,35 @@ def write_jsonl(rows: Iterable[dict[str, Any]], output: Path) -> None:
             handle.write("\n")
 
 
+def preserve_existing_enrichment(
+    rows: Iterable[dict[str, Any]],
+    output: Path,
+) -> list[dict[str, Any]]:
+    """Carry audited and measured metadata across a live manifest refresh."""
+    generated = [dict(row) for row in rows]
+    if not output.exists():
+        return generated
+
+    existing: dict[str, dict[str, Any]] = {}
+    with output.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            repo_id = row.get("repo_id")
+            if isinstance(repo_id, str):
+                existing[repo_id] = row
+
+    for row in generated:
+        previous = existing.get(row.get("repo_id"))
+        if previous is None:
+            continue
+        for field in PRESERVED_ENRICHMENT_FIELDS:
+            if field in previous:
+                row[field] = previous[field]
+    return generated
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate models.jsonl from the OpenMed HF org API."
@@ -443,6 +479,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     rows = fetch_manifest_rows(args.org)
+    rows = preserve_existing_enrichment(rows, args.output)
     write_jsonl(rows, args.output)
     print(f"Wrote {len(rows)} rows to {args.output}")
 

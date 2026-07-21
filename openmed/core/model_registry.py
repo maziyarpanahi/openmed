@@ -9,6 +9,8 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
+
 
 @dataclass
 class ModelInfo:
@@ -34,6 +36,7 @@ class ModelInfo:
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
     recommended_tier: Optional[str] = None
+    script_coverage: Dict[str, Dict[str, float | str]] = field(default_factory=dict)
     arxiv: Optional[str] = None
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
@@ -536,6 +539,7 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         recommended_tier=row.get("recommended_tier")
         if isinstance(row.get("recommended_tier"), str)
         else None,
+        script_coverage=_script_coverage_from_row(row),
         arxiv=row.get("arxiv"),
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
@@ -560,6 +564,24 @@ def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, floa
         str(device): float(measurement)
         for device, measurement in value.items()
         if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
+    }
+
+
+def _script_coverage_from_row(
+    row: Dict[str, Any],
+) -> Dict[str, Dict[str, float | str]]:
+    value = row.get("script_coverage")
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(script): {
+            str(metric): measurement
+            for metric, measurement in metrics.items()
+            if isinstance(measurement, (int, float, str))
+            and not isinstance(measurement, bool)
+        }
+        for script, metrics in value.items()
+        if isinstance(metrics, dict)
     }
 
 
@@ -963,7 +985,7 @@ def get_entity_types_by_category(category: str) -> List[str]:
 
 
 def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
-    """Return all single-language PII models for a given language."""
+    """Return PII models whose tokenizer supports the language's script."""
     if lang == "en":
         localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS
         return {
@@ -972,6 +994,7 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
             if key.startswith("pii_")
             and info.category == "Privacy"
             and "en" in (info.languages or ["en"])
+            and _supports_pii_language(info, lang)
             and not any(key.startswith(f"pii_{lc}_") for lc in localized_prefixes)
         }
 
@@ -982,6 +1005,7 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         if key.startswith(prefix)
         and info.category == "Privacy"
         and lang in (info.languages or [])
+        and _supports_pii_language(info, lang)
     }
     if language_models:
         return language_models
@@ -1000,7 +1024,17 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         and info.category == "Privacy"
         and info.model_id == default_model_id
         and lang in (info.languages or [])
+        and _supports_pii_language(info, lang)
     }
+
+
+def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
+    normalized = lang.lower().replace("_", "-")
+    scripts = LANGUAGE_SCRIPT_TARGETS.get(normalized, ())
+    return not any(
+        info.script_coverage.get(script, {}).get("verdict") == "unsupported"
+        for script in scripts
+    )
 
 
 def get_default_pii_model(lang: str) -> Optional[str]:
