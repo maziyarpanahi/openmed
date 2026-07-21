@@ -210,12 +210,32 @@ _SCRIPT_ORDER = (
     "Hangul",
     "Cyrillic",
     "Devanagari",
+    "Bengali",
+    "Gurmukhi",
+    "Gujarati",
+    "Odia",
+    "Tamil",
     "Telugu",
+    "Kannada",
+    "Malayalam",
     "Greek",
     "Hebrew",
     "Thai",
     UNKNOWN_SCRIPT,
 )
+
+# Until dedicated model-backed language packs land, route the remaining Indic
+# scripts through the closest bundled Indic PII model. The normalizer still
+# applies each script's own Unicode rules before model inference.
+_SCRIPT_LANGUAGE_FALLBACKS: Mapping[str, tuple[str, ...]] = {
+    "Bengali": ("hi",),
+    "Gurmukhi": ("hi",),
+    "Gujarati": ("hi",),
+    "Odia": ("hi",),
+    "Tamil": ("te",),
+    "Kannada": ("te",),
+    "Malayalam": ("te",),
+}
 
 _LOCALE_ORDER = (
     "en",
@@ -379,6 +399,12 @@ class LanguagePackAdapters:
         self.script_language_hints.clear()
         for script in script_names:
             hints = tuple(pack.code for pack in packs if script in pack.scripts)
+            if not hints:
+                hints = tuple(
+                    code
+                    for code in _SCRIPT_LANGUAGE_FALLBACKS.get(script, ())
+                    if code in self.supported_languages
+                )
             if hints:
                 self.script_language_hints[script] = hints
 
