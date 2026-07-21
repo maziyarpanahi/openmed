@@ -271,6 +271,123 @@ def test_resume_refuses_mismatched_committed_journal(tmp_path: Path) -> None:
         )
 
 
+def test_resume_refuses_mismatched_configuration(tmp_path: Path) -> None:
+    output_path = tmp_path / "results.json"
+    checkpoint_path = tmp_path / "results.checkpoint.json"
+    processor = _SyntheticProcessor()
+    processor.config = {"profile": "first"}
+    processor.process_texts(
+        ["Patient Alice Example"],
+        output_path=output_path,
+        checkpoint_path=checkpoint_path,
+    )
+
+    resumed_processor = _SyntheticProcessor()
+    resumed_processor.config = {"profile": "second"}
+    with pytest.raises(
+        BatchCheckpointError,
+        match="Checkpoint configuration does not match this batch",
+    ):
+        resumed_processor.process_texts(
+            ["Patient Alice Example"],
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=True,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("schema_version", {}),
+        ("total_items", "1"),
+        ("committed_count", 1.0),
+        ("checkpoint_interval", False),
+    ],
+)
+def test_resume_rejects_malformed_checkpoint_integers(
+    tmp_path: Path,
+    field: str,
+    invalid_value: object,
+) -> None:
+    output_path = tmp_path / "results.json"
+    checkpoint_path = tmp_path / "results.checkpoint.json"
+    processor = _SyntheticProcessor()
+    processor.process_texts(
+        ["Patient Alice Example"],
+        output_path=output_path,
+        checkpoint_path=checkpoint_path,
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint[field] = invalid_value
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    with pytest.raises(BatchCheckpointError, match="Checkpoint .* is invalid"):
+        processor.process_texts(
+            ["Patient Alice Example"],
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=True,
+        )
+
+
+def test_resume_refuses_mismatched_item_output_offset(tmp_path: Path) -> None:
+    output_path = tmp_path / "results.json"
+    checkpoint_path = tmp_path / "results.checkpoint.json"
+    processor = _SyntheticProcessor()
+    processor.process_texts(
+        ["Patient Alice Example"],
+        output_path=output_path,
+        checkpoint_path=checkpoint_path,
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["items"][0]["committed_output_offset"] += 1
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    with pytest.raises(
+        BatchCheckpointError,
+        match="Checkpoint item output offset does not match the journal",
+    ):
+        processor.process_texts(
+            ["Patient Alice Example"],
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=True,
+        )
+
+
+def test_resume_requires_hash_for_every_successful_file(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+    source = input_dir / "note.txt"
+    source.write_text("Patient Alice Example", encoding="utf-8")
+    checkpoint_path = output_dir / "checkpoint.json"
+    processor = _SyntheticProcessor()
+    processor.process_files_to_directory(
+        [source],
+        input_root=input_dir,
+        output_dir=output_dir,
+        checkpoint_path=checkpoint_path,
+    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    del checkpoint["items"][0]["artifact_size"]
+    del checkpoint["items"][0]["artifact_sha256"]
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    with pytest.raises(
+        BatchCheckpointError,
+        match="Checkpoint artifact metadata is incomplete",
+    ):
+        processor.process_files_to_directory(
+            [source],
+            input_root=input_dir,
+            output_dir=output_dir,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=True,
+        )
+
+
 @pytest.mark.parametrize("target_name", ["checkpoint.json", "checkpoint.json.part"])
 @pytest.mark.parametrize(
     "crash_phase",
@@ -448,3 +565,59 @@ def test_pii_batch_cli_checkpoint_is_phi_free_and_resume_skips_completed_files(
     assert main_module.main([*arguments, "--resume"]) == 0
     assert calls == []
     assert "Processed 1 files, 0 failed" in capsys.readouterr().out
+
+
+def test_pii_batch_cli_json_mode_emits_only_envelope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+    (input_dir / "note.txt").write_text(
+        "Patient Alice Example called 555-0100.",
+        encoding="utf-8",
+    )
+
+    def deidentify_batch(
+        texts: list[str],
+        **kwargs: object,
+    ) -> list[DeidentificationResult]:
+        return [
+            DeidentificationResult(
+                original_text=text,
+                deidentified_text="Patient [NAME] called [PHONE].",
+                pii_entities=[],
+                method=str(kwargs["method"]),
+                timestamp=datetime(2026, 1, 1),
+            )
+            for text in texts
+        ]
+
+    monkeypatch.setattr("openmed.core.pii._deidentify_batch", deidentify_batch)
+    monkeypatch.setattr(BatchProcessor, "_get_shared_loader", lambda self: None)
+
+    assert (
+        main_module.main(
+            [
+                "pii",
+                "batch",
+                "--model",
+                "synthetic-model",
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    captured = capsys.readouterr()
+    envelope = json.loads(captured.out)
+    assert envelope["ok"] is True
+    assert envelope["command"] == "pii batch"
+    assert envelope["data"]["successful_items"] == 1
+    assert envelope["data"]["output_dir"] == str(output_dir)
+    assert captured.err == ""

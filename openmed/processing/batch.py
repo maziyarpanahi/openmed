@@ -276,6 +276,13 @@ def _stable_hash(*values: Any) -> str:
     return digest.hexdigest()
 
 
+def _checkpoint_integer(value: Any, field_name: str, *, minimum: int = 0) -> int:
+    """Return a strictly typed checkpoint integer or raise a safe error."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise BatchCheckpointError(f"Checkpoint {field_name} is invalid")
+    return value
+
+
 def _fsync_directory(path: Path) -> None:
     """Best-effort fsync of a directory after an atomic rename."""
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
@@ -421,13 +428,23 @@ class _BatchCheckpointSession:
             ) from exc
 
         self._validate_checkpoint(payload)
-        self.checkpoint_interval = int(payload["checkpoint_interval"])
+        self.checkpoint_interval = _checkpoint_integer(
+            payload.get("checkpoint_interval"),
+            "interval",
+            minimum=1,
+        )
         self.started_at = str(payload.get("started_at") or self.started_at)
         self.completed_at = str(payload.get("completed_at") or "")
         self.is_complete = payload.get("status") == "complete"
-        committed_count = int(payload["committed_count"])
+        committed_count = _checkpoint_integer(
+            payload.get("committed_count"),
+            "committed count",
+        )
         committed_output = payload["committed_output"]
-        committed_offset = int(committed_output["offset"])
+        committed_offset = _checkpoint_integer(
+            committed_output.get("offset"),
+            "committed output offset",
+        )
         expected_hash = str(committed_output["sha256"])
 
         try:
@@ -455,12 +472,16 @@ class _BatchCheckpointSession:
             )
 
         serialized_records: List[Mapping[str, Any]] = []
+        record_offsets: List[int] = []
+        record_offset = 0
         try:
-            for line in committed_bytes.splitlines():
+            for line in committed_bytes.splitlines(keepends=True):
                 parsed = json.loads(line)
                 if not isinstance(parsed, Mapping):
                     raise TypeError("result record is not an object")
                 serialized_records.append(parsed)
+                record_offset += len(line)
+                record_offsets.append(record_offset)
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             raise BatchCheckpointError(
                 "Committed batch output contains an invalid result record"
@@ -478,19 +499,49 @@ class _BatchCheckpointSession:
             raise BatchCheckpointError("Checkpoint item metadata is incomplete")
 
         records: List[BatchItemResult] = []
-        for index, (item, serialized_record, metadata) in enumerate(
-            zip(self.items, serialized_records, checkpointed_items)
+        for index, (item, serialized_record, metadata, output_offset) in enumerate(
+            zip(self.items, serialized_records, checkpointed_items, record_offsets)
         ):
             if not isinstance(metadata, Mapping):
                 raise BatchCheckpointError("Checkpoint item metadata is invalid")
-            if int(metadata.get("index", -1)) != index:
+            if _checkpoint_integer(metadata.get("index"), "item index") != index:
                 raise BatchCheckpointError("Checkpoint item order does not match input")
             if str(metadata.get("item_id_sha256", "")) != _stable_hash(item.id):
                 raise BatchCheckpointError("Checkpoint item id does not match input")
+            if (
+                _checkpoint_integer(
+                    metadata.get("committed_output_offset"),
+                    "item output offset",
+                )
+                != output_offset
+            ):
+                raise BatchCheckpointError(
+                    "Checkpoint item output offset does not match the journal"
+                )
             if self.store_full_results:
-                record = _restore_result_record(serialized_record)
+                try:
+                    record = _restore_result_record(serialized_record)
+                except (TypeError, ValueError) as exc:
+                    raise BatchCheckpointError(
+                        "Committed batch output contains an invalid result record"
+                    ) from exc
             else:
-                record_succeeded = serialized_record.get("status") == "success"
+                if (
+                    _checkpoint_integer(
+                        serialized_record.get("index"),
+                        "journal item index",
+                    )
+                    != index
+                ):
+                    raise BatchCheckpointError(
+                        "Committed journal item order does not match input"
+                    )
+                journal_status = serialized_record.get("status")
+                if journal_status not in {"success", "failed"}:
+                    raise BatchCheckpointError(
+                        "Committed journal item status is invalid"
+                    )
+                record_succeeded = journal_status == "success"
                 record = BatchItemResult(
                     id=item.id,
                     result={"checkpointed": True} if record_succeeded else None,
@@ -628,7 +679,10 @@ class _BatchCheckpointSession:
     def _validate_checkpoint(self, payload: Any) -> None:
         if not isinstance(payload, Mapping):
             raise BatchCheckpointError("Checkpoint must contain a JSON object")
-        if int(payload.get("schema_version", 0)) != _BATCH_CHECKPOINT_SCHEMA_VERSION:
+        if (
+            _checkpoint_integer(payload.get("schema_version"), "schema version")
+            != _BATCH_CHECKPOINT_SCHEMA_VERSION
+        ):
             raise BatchCheckpointError("Unsupported batch checkpoint schema version")
         if payload.get("status") not in {"in_progress", "complete"}:
             raise BatchCheckpointError("Checkpoint status is invalid")
@@ -642,13 +696,21 @@ class _BatchCheckpointSession:
             )
         if payload.get("input_sha256") != self.input_hash:
             raise BatchCheckpointError("Checkpoint input does not match this batch")
-        if int(payload.get("total_items", -1)) != len(self.items):
+        if _checkpoint_integer(payload.get("total_items"), "item count") != len(
+            self.items
+        ):
             raise BatchCheckpointError("Checkpoint item count does not match input")
-        committed_count = int(payload.get("committed_count", -1))
-        if committed_count < 0 or committed_count > len(self.items):
+        committed_count = _checkpoint_integer(
+            payload.get("committed_count"),
+            "committed count",
+        )
+        if committed_count > len(self.items):
             raise BatchCheckpointError("Checkpoint committed count is invalid")
-        if int(payload.get("checkpoint_interval", 0)) < 1:
-            raise BatchCheckpointError("Checkpoint interval is invalid")
+        _checkpoint_integer(
+            payload.get("checkpoint_interval"),
+            "interval",
+            minimum=1,
+        )
         expected_journal_format = (
             "full_result" if self.store_full_results else "status_only"
         )
@@ -660,8 +722,16 @@ class _BatchCheckpointSession:
             raise BatchCheckpointError(
                 "Checkpoint output format does not match this batch"
             )
-        if not isinstance(payload.get("committed_output"), Mapping):
+        committed_output = payload.get("committed_output")
+        if not isinstance(committed_output, Mapping):
             raise BatchCheckpointError("Checkpoint output metadata is missing")
+        _checkpoint_integer(
+            committed_output.get("offset"),
+            "committed output offset",
+        )
+        committed_hash = committed_output.get("sha256")
+        if not isinstance(committed_hash, str) or len(committed_hash) != 64:
+            raise BatchCheckpointError("Checkpoint committed output hash is invalid")
 
     def _restore_and_verify_artifact(
         self,
@@ -672,6 +742,8 @@ class _BatchCheckpointSession:
         size_value = metadata.get("artifact_size")
         hash_value = metadata.get("artifact_sha256")
         if size_value is None and hash_value is None:
+            if not self.store_full_results and metadata.get("status") == "success":
+                raise BatchCheckpointError("Checkpoint artifact metadata is incomplete")
             return
         if size_value is None or hash_value is None:
             raise BatchCheckpointError("Checkpoint artifact metadata is incomplete")
@@ -687,7 +759,8 @@ class _BatchCheckpointSession:
                 "Committed output artifact is missing or unreadable"
             ) from exc
         artifact = _OutputArtifact(size=len(contents), sha256=_sha256_bytes(contents))
-        if artifact.size != int(size_value) or artifact.sha256 != str(hash_value):
+        expected_size = _checkpoint_integer(size_value, "artifact size")
+        if artifact.size != expected_size or artifact.sha256 != str(hash_value):
             raise BatchCheckpointError(
                 "Committed output artifact does not match the checkpoint hash"
             )
@@ -703,9 +776,13 @@ class _BatchCheckpointSession:
             raise BatchCheckpointError(
                 "Final batch output is missing or unreadable"
             ) from exc
-        if len(contents) != int(metadata.get("size", -1)) or _sha256_bytes(
-            contents
-        ) != str(metadata.get("sha256", "")):
+        expected_size = _checkpoint_integer(
+            metadata.get("size"),
+            "final output size",
+        )
+        if len(contents) != expected_size or _sha256_bytes(contents) != str(
+            metadata.get("sha256", "")
+        ):
             raise BatchCheckpointError(
                 "Final batch output does not match the checkpoint hash"
             )
@@ -1261,6 +1338,11 @@ class BatchProcessor:
                     "confidence_threshold": self.confidence_threshold,
                     "group_entities": self.group_entities,
                     "continue_on_error": self.continue_on_error,
+                    "config": (
+                        self.config.to_dict()
+                        if callable(getattr(self.config, "to_dict", None))
+                        else self.config
+                    ),
                     "analyze_kwargs": self.analyze_kwargs,
                 },
                 final_output_path=(
