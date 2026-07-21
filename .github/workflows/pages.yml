@@ -31,8 +31,11 @@ jobs:
           python-version: "3.11"
       - name: Install documentation tooling
         run: pip install ".[docs]"
-      - name: Build MkDocs site
-        run: mkdocs build --strict
+      - name: Build MkDocs site and verify LLM feeds
+        run: |
+          mkdocs build --strict
+          test -s site/docs/llms.txt
+          test -s site/docs/llms-full.txt
       - name: Bundle marketing site
         run: rsync -av docs/website/ site/
       - name: Setup Pages
