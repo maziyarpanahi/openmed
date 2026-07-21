@@ -145,6 +145,11 @@ from .problem_list import (
     clinical_status_from_assertion,
     deduplicate_problem_list,
 )
+from .radiology_report import (
+    RADIOLOGY_REPORT_ADVISORY,
+    RadiologyReportTemplate,
+    parse_radiology_report,
+)
 from .relations import (
     MEDICATION_LINK_ADVISORY,
     MedicationAttributeType,
@@ -360,6 +365,9 @@ __all__ = [
     "REFUTED",
     "PROBLEM_CLINICAL_STATUS_VALUES",
     "PROBLEM_LIST_RECONCILIATION_ADVISORY",
+    "RADIOLOGY_REPORT_ADVISORY",
+    "RadiologyReportTemplate",
+    "parse_radiology_report",
     "ProblemClinicalStatus",
     "ProblemMention",
     "ReconciledProblem",

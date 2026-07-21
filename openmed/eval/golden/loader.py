@@ -45,6 +45,9 @@ _NON_DEID_FIXTURE_NAMES = frozenset(
         "relation_gold.jsonl",
         "surrogate_multilingual.jsonl",
         "consensus_corpus.jsonl",
+        # Domain eval fixtures that are not PII de-identification gold spans and
+        # must not be loaded as such by load_golden_fixtures().
+        "radiology_report.jsonl",
     }
 )
 
