@@ -16,11 +16,13 @@ from .labels import (
     policy_label_for,
 )
 from .policy import _profile_from_mapping, canonical_policy_name
+from .schemas.span import ACTION_VALUES
 from .thresholds import load_thresholds
 
 POLICY_SOURCE_NOT_FOUND = "POLICY_SOURCE_NOT_FOUND"
 POLICY_JSON_INVALID = "POLICY_JSON_INVALID"
 POLICY_SCHEMA_INVALID = "POLICY_SCHEMA_INVALID"
+POLICY_UNKNOWN_ACTION_VALUE = "POLICY_UNKNOWN_ACTION_VALUE"
 POLICY_UNKNOWN_ACTION_LABEL = "POLICY_UNKNOWN_ACTION_LABEL"
 POLICY_DUPLICATE_ACTION_LABEL = "POLICY_DUPLICATE_ACTION_LABEL"
 POLICY_ACTION_LABEL_SET_MISMATCH = "POLICY_ACTION_LABEL_SET_MISMATCH"
@@ -91,6 +93,7 @@ def lint_policy(payload_or_path: Mapping[str, Any] | str | Path) -> dict[str, An
     if isinstance(payload, Mapping):
         errors.extend(_duplicate_key_errors(payload))
         errors.extend(_action_label_errors(payload))
+        errors.extend(_action_value_errors(payload))
         errors.extend(_policy_label_action_errors(payload))
 
         schema_profile = None
@@ -311,6 +314,33 @@ def _action_label_errors(payload: Mapping[str, Any]) -> list[PolicyLintFinding]:
     return findings
 
 
+def _action_value_errors(payload: Mapping[str, Any]) -> list[PolicyLintFinding]:
+    findings: list[PolicyLintFinding] = []
+    action_values: list[tuple[str, Any]] = [
+        ("$.default_action", payload.get("default_action")),
+    ]
+    for field_name in ("actions", "policy_label_actions"):
+        values = payload.get(field_name)
+        if not isinstance(values, Mapping):
+            continue
+        action_values.extend(
+            (_json_path(f"$.{field_name}", str(label)), action)
+            for label, action in values.items()
+        )
+
+    for path, action in action_values:
+        if action in ACTION_VALUES:
+            continue
+        findings.append(
+            PolicyLintFinding(
+                code=POLICY_UNKNOWN_ACTION_VALUE,
+                message=f"policy actions must be one of {ACTION_VALUES!r}",
+                path=path,
+            )
+        )
+    return findings
+
+
 def _policy_label_action_errors(
     payload: Mapping[str, Any],
 ) -> list[PolicyLintFinding]:
@@ -473,6 +503,7 @@ __all__ = [
     "POLICY_STRICT_POSTURE_KEEP_BIAS",
     "POLICY_STRICT_POSTURE_REQUIRES_SWEEP",
     "POLICY_UNKNOWN_ACTION_LABEL",
+    "POLICY_UNKNOWN_ACTION_VALUE",
     "POLICY_UNKNOWN_POLICY_LABEL",
     "POLICY_UNKNOWN_THRESHOLD_PROFILE",
     "POLICY_UNREACHABLE_POLICY_LABEL_ACTION",

@@ -6,6 +6,7 @@ import copy
 import hashlib
 import hmac
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,27 @@ _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _MISSING_KEY_ERROR = (
     "A non-empty HMAC release key is required for audit signing and verification"
 )
+_AUDIT_RAW_VALUE_KEYS = frozenset(
+    {
+        "deidentified_text",
+        "original",
+        "original_text",
+        "raw",
+        "replacement",
+        "surface",
+        "text",
+        "value",
+        "word",
+    }
+)
+_AUDIT_ABHA_ADDRESS_RE = re.compile(
+    r"(?<![\w.])[A-Z][A-Z0-9]*(?:\.[A-Z0-9]+)*@[A-Z][A-Z0-9-]{1,31}(?![\w.-])",
+    re.IGNORECASE,
+)
+_AUDIT_PAN_RE = re.compile(
+    r"(?<![A-Z0-9])[A-Z]{3}[ABCFGHLJPT][A-Z][0-9]{4}[A-Z](?![A-Z0-9])"
+)
+_AUDIT_LONG_INDIA_ID_RE = re.compile(r"(?<!\d)(?:\d[ -]?){11,13}\d(?!\d)")
 
 
 def _canonical_json(data: Any) -> str:
@@ -35,6 +57,38 @@ def _sha256_bytes(data: bytes) -> str:
 def hash_text(text: str) -> str:
     """Return a stable SHA-256 hash for text content."""
     return _sha256_bytes(text.encode("utf-8"))
+
+
+def _contains_sensitive_india_identifier(value: str) -> bool:
+    return bool(
+        _AUDIT_ABHA_ADDRESS_RE.search(value)
+        or _AUDIT_PAN_RE.search(value.upper())
+        or _AUDIT_LONG_INDIA_ID_RE.search(value)
+    )
+
+
+def _sanitize_audit_value(value: Any) -> Any:
+    """Hash raw text fields and opaque strings containing India identifiers."""
+
+    if isinstance(value, Mapping):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            name = str(key)
+            if name.strip().casefold() in _AUDIT_RAW_VALUE_KEYS:
+                if isinstance(item, str):
+                    sanitized[f"{name}_hash"] = hash_text(item)
+                else:
+                    sanitized[name] = _sanitize_audit_value(item)
+                continue
+            sanitized[name] = _sanitize_audit_value(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_audit_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_audit_value(item) for item in value]
+    if isinstance(value, str) and _contains_sensitive_india_identifier(value):
+        return f"redacted:{hash_text(value)}"
+    return copy.deepcopy(value)
 
 
 def _is_sha256_hash(value: Any) -> bool:
@@ -194,7 +248,7 @@ class DetectorInfo:
             "model_id": self.model_id,
             "model_format": self.model_format,
             "commit": self.commit,
-            "metadata": copy.deepcopy(self.metadata),
+            "metadata": _sanitize_audit_value(self.metadata),
         }
 
     @classmethod
@@ -227,6 +281,7 @@ class AuditSpan:
 
     def __post_init__(self) -> None:
         self._validate_offsets()
+        self.evidence = _sanitize_audit_value(self.evidence)
         self.context = self._serialized_context()
 
     def _validate_offsets(self, *, document_length: int | None = None) -> None:
@@ -263,7 +318,7 @@ class AuditSpan:
             "action": self.action,
             "surrogate": self.surrogate,
             "text_hash": self.text_hash,
-            "evidence": copy.deepcopy(self.evidence),
+            "evidence": _sanitize_audit_value(self.evidence),
             "context": self._serialized_context(document_length=document_length),
         }
 
@@ -385,9 +440,9 @@ class AuditReport:
         span_source = self._sorted_spans() if spans is None else spans
         payload = {
             "policy": self.policy,
-            "resolved_profile": copy.deepcopy(self.resolved_profile),
+            "resolved_profile": _sanitize_audit_value(self.resolved_profile),
             "detectors": [detector.to_dict() for detector in self.detectors],
-            "safety_sweep": copy.deepcopy(self.safety_sweep),
+            "safety_sweep": _sanitize_audit_value(self.safety_sweep),
             "spans": [
                 span.to_dict(document_length=self.document_length)
                 for span in span_source
@@ -396,7 +451,7 @@ class AuditReport:
                 str(label): float(value)
                 for label, value in sorted(self.thresholds.items())
             },
-            "residual_risk": copy.deepcopy(self.residual_risk),
+            "residual_risk": _sanitize_audit_value(self.residual_risk),
             "openmed_version": self.openmed_version,
             "manifest_hash": self.manifest_hash,
             "document_length": int(self.document_length),

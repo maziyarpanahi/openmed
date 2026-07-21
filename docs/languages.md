@@ -1,7 +1,7 @@
 # Per-Language PII De-identification
 
 OpenMed's PII detection and de-identification are multilingual. The list of
-model-backed language codes is the single source of truth in
+supported language codes is the single source of truth in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py),
 and each code wires up:
 
@@ -23,6 +23,35 @@ deidentify("Paciente Pedro Almeida, CPF 123.456.789-09", lang="pt", method="mask
 For the redaction methods (`mask`, `remove`, `replace`, `hash`, `shift_dates`),
 locale resolution, determinism, and cross-document surrogate vaults, see
 [PII Anonymization](anonymization.md).
+
+## Automatic language and script routing
+
+The staged privacy pipeline can choose a document pack automatically while
+preserving exact language decisions for every script run:
+
+```python
+from openmed.core.pipeline import Pipeline
+
+route = Pipeline(lang="auto").stage2_language_script(
+    "Patient stable. 患者发热。 रोगी स्थिर है।"
+)
+print(route.lang, route.model_name)
+print(route.metadata["runs"])
+```
+
+The core fallback is deterministic and dependency-free. It combines Unicode
+script runs with each `LanguagePack`'s candidate priority and context hints;
+for example, adjacent kana selects Japanese for Han runs, while standalone Han
+prefers Chinese and Devanagari currently prefers Hindi. Install
+`openmed[lid]` to enable the lazy, on-device `pycld2` adapter for ambiguous
+runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
+routing is first requested, and do not download or bundle model weights.
+
+!!! warning "Language-ID license boundary"
+    This router deliberately excludes CLD3, which is outside this roadmap
+    task's approved dependency scope. Non-commercial language-ID assets remain
+    prohibited; only permissively licensed implementations may be bundled or
+    referenced by the router.
 
 !!! note "Kept in sync with the code"
     The table below lists **every** code in `SUPPORTED_LANGUAGES` together with
@@ -49,12 +78,17 @@ locale resolution, determinism, and cross-document surrogate vaults, see
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | Pass `locale="pt_BR"` for CPF/CNPJ surrogates.               |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
+| `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
+| `zh`   | Chinese    | `OpenMed/privacy-filter-multilingual`                      | `zh_CN`      | Routing placeholder; no dedicated Chinese PII model yet.     |
 
-Codes outside this list (for example `zh`, `pl`, `lv`, `sk`, `ms`, `tl`, `da`)
-are **not** model-backed PII languages. Several of them still have
+Chinese segmentation and Han-script routing are supported, but the `zh`
+default remains an explicit multilingual placeholder rather than a claim that
+a dedicated Chinese PII model has shipped. Codes outside this list (for example
+`pl`, `lv`, `sk`, `ms`, `tl`, and `da`) are **not** model-backed PII languages.
+Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
 [PII Anonymization](anonymization.md#clinical-id-checksums) for the ID providers.
@@ -194,6 +228,15 @@ Before: Pacient Ion Popescu, CNP 1960101221144
 After:  Pacient [NAME], CNP [ID]
 ```
 
+### Swahili — `sw`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `sw`
+
+```text
+Before: Jina: Amina Hassan. Nambari ya kitambulisho 12345678
+After:  Jina: [NAME]. Nambari ya kitambulisho [ID]
+```
+
 ### Telugu — `te`
 
 - Model: `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1` · locale `en_IN`
@@ -221,3 +264,16 @@ After:  ผู้ป่วย [NAME] โทร [PHONE]
 Before: Hasta Ayşe Yılmaz, TCKN 10000000146
 After:  Hasta [NAME], TCKN [ID]
 ```
+
+### Chinese — `zh`
+
+- Model placeholder: `OpenMed/privacy-filter-multilingual` · locale `zh_CN`
+
+```text
+Before: 患者王芳，电话 13800138000
+After:  患者[NAME]，电话 [PHONE]
+```
+
+The default entry is an API-compatible fallback. Supply a validated Chinese
+PII model explicitly for production detection; the segmentation and exact
+offset guarantees do not imply dedicated Chinese model weights.

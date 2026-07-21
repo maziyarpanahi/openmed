@@ -14,6 +14,7 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 
 from __future__ import annotations
 
+import re
 from typing import Callable, Dict
 
 from .. import labels as L
@@ -33,15 +34,104 @@ Generator = Callable[..., str]
 # ---------------------------------------------------------------------------
 
 
+_HAN_NAME_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_ZH_GIVEN_NAME_FALLBACK = tuple("清宁安和嘉悦晨星岚澄涵瑞瑶璟")
+
+
+def _is_zh_cn(locale: str) -> bool:
+    return locale.replace("-", "_").casefold() == "zh_cn"
+
+
+def _han_characters(value: str) -> str:
+    return "".join(_HAN_NAME_RE.findall(value or ""))
+
+
+def _zh_surname_pools():
+    from ..pii_i18n import CHINESE_COMPOUND_SURNAMES, CHINESE_SINGLE_SURNAMES
+
+    return (
+        tuple(sorted(CHINESE_SINGLE_SURNAMES)),
+        tuple(sorted(CHINESE_COMPOUND_SURNAMES)),
+    )
+
+
+def _draw_zh_surname(faker, *, compound: bool, forbidden: set[str]) -> str:
+    single_surnames, compound_surnames = _zh_surname_pools()
+    pool = compound_surnames if compound else single_surnames
+    eligible = tuple(
+        surname for surname in pool if not set(surname).intersection(forbidden)
+    )
+    return faker.random_element(eligible or pool)
+
+
+def _draw_zh_given_name(faker, *, length: int, forbidden: set[str]) -> str:
+    sampled_characters: list[str] = []
+    for _ in range(128):
+        candidate = _han_characters(faker.first_name())
+        sampled_characters.extend(candidate)
+        if len(candidate) == length and not set(candidate).intersection(forbidden):
+            return candidate
+
+    eligible = [
+        char
+        for char in (*sampled_characters, *_ZH_GIVEN_NAME_FALLBACK)
+        if char not in forbidden
+    ]
+    if not eligible:
+        raise RuntimeError("could not generate a non-leaking Chinese given name")
+    return "".join(faker.random.choice(eligible) for _ in range(length))
+
+
+def _gen_zh_person(faker, original: str) -> str:
+    source = _han_characters(original)
+    source_characters = set(source)
+    _single_surnames, compound_surnames = _zh_surname_pools()
+    compound = any(source.startswith(surname) for surname in compound_surnames)
+    target_length = 3 if compound else max(2, min(len(source) or 2, 3))
+    given_length = target_length - (2 if compound else 1)
+
+    for _ in range(64):
+        surname = _draw_zh_surname(
+            faker,
+            compound=compound,
+            forbidden=source_characters,
+        )
+        given_name = _draw_zh_given_name(
+            faker,
+            length=given_length,
+            forbidden=source_characters | set(surname),
+        )
+        candidate = f"{surname}{given_name}"
+        if candidate != source and not set(candidate).intersection(source_characters):
+            return candidate
+    raise RuntimeError("could not generate a distinct Chinese person surrogate")
+
+
 def _gen_person(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        return _gen_zh_person(faker, original)
     return faker.name()
 
 
 def _gen_first_name(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        source = _han_characters(original)
+        return _draw_zh_given_name(
+            faker,
+            length=max(1, min(len(source) or 1, 2)),
+            forbidden=set(source),
+        )
     return faker.first_name()
 
 
 def _gen_last_name(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        source = _han_characters(original)
+        return _draw_zh_surname(
+            faker,
+            compound=len(source) >= 2,
+            forbidden=set(source),
+        )
     return faker.last_name()
 
 
@@ -68,6 +158,10 @@ def _gen_email(faker, original, *, locale):
 
 
 def _gen_phone(faker, original, *, locale):
+    if locale in {"en_NG", "ha_NG", "ig_NG", "yo_NG"} and hasattr(
+        faker, "ng_mobile_number"
+    ):
+        return faker.ng_mobile_number(original)
     if any(ch.isdigit() for ch in original):
         return preserve_phone_format(original, rng=faker.random)
     return faker.phone_number()
@@ -161,6 +255,13 @@ def _gen_age(faker, original, *, locale):
 # When the locale-appropriate ID method exists, we call it; otherwise we
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
+    "en_NG": "nigeria_nin",
+    "ha_NG": "nigeria_nin",
+    "ig_NG": "nigeria_nin",
+    "yo_NG": "nigeria_nin",
+    "en_GH": "ghana_card_pin",
+    "en_KE": "kenya_national_id",
+    "sw": "kenya_national_id",
     "pt_BR": "cpf",
     "pt_PT": "nif",
     "fr_FR": "ssn",
@@ -169,6 +270,7 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "nino",
@@ -194,6 +296,15 @@ _LOCALE_ID_METHODS = {
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
     "ur_PK": "cnic",
+}
+
+_INDIA_ID_METHODS = {
+    "ABHA_NUMBER": "abha_number",
+    "ABHA_ADDRESS": "abha_address",
+    "AADHAAR": "aadhaar",
+    "PAN": "pan",
+    "ABDM_HPR_ID": "abdm_hpr_id",
+    "ABDM_HFR_ID": "abdm_hfr_id",
 }
 
 
@@ -232,17 +343,104 @@ def _uscc_surrogate(faker, original):
     return generate_unified_social_credit_code(rng=faker.random)
 
 
+def _generate_distinct_chinese_resident_id(faker, original):
+    """Return a valid Chinese Resident ID that differs from ``original``."""
+    from openmed.core.pii_i18n import validate_chinese_resident_id
+
+    generate = getattr(faker, "chinese_resident_id")
+    for _ in range(10):
+        candidate = generate()
+        if candidate != original and validate_chinese_resident_id(candidate):
+            return candidate
+    raise RuntimeError("could not generate a distinct Chinese Resident ID")
+
+
 def _gen_id_num(faker, original, *, locale):
+    method = _LOCALE_ID_METHODS.get(locale)
+    if locale == "zh_CN" and method and hasattr(faker, method) and original:
+        from openmed.core.pii_i18n import validate_chinese_resident_id
+
+        if validate_chinese_resident_id(original.strip()):
+            return _generate_distinct_chinese_resident_id(faker, original)
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
     uscc = _uscc_surrogate(faker, original)
     if uscc is not None:
         return uscc
-    method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
+        if locale == "zh_CN":
+            return _generate_distinct_chinese_resident_id(faker, original)
+        if method == "nigeria_nin":
+            return getattr(faker, method)(original)
+        if locale in {"en_GH", "en_KE", "sw"}:
+            if locale in {"en_KE", "sw"} and re.fullmatch(
+                r"[0-9]{9}", original.strip()
+            ):
+                return faker.kenya_maisha_namba(original)
+            return getattr(faker, method)(original)
         return getattr(faker, method)()
     return preserve_id_pattern(original, rng=faker.random)
+
+
+def _gen_india_id(faker, original, *, locale, id_type):
+    method = _INDIA_ID_METHODS[id_type]
+    original_fingerprint = "".join(
+        char.casefold() for char in original if char.isalnum()
+    )
+    generated = ""
+    for _ in range(20):
+        generated = getattr(faker, method)()
+        generated_fingerprint = "".join(
+            char.casefold() for char in generated if char.isalnum()
+        )
+        if generated_fingerprint != original_fingerprint:
+            return generated
+    return generated
+
+
+def _gen_abha_number(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABHA_NUMBER")
+
+
+def _gen_abha_address(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABHA_ADDRESS")
+
+
+def _gen_aadhaar(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="AADHAAR")
+
+
+def _gen_pan(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="PAN")
+
+
+def _gen_abdm_hpr_id(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABDM_HPR_ID")
+
+
+def _gen_abdm_hfr_id(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABDM_HFR_ID")
+
+
+def _gen_ng_nin(faker, original, *, locale):
+    return faker.nigeria_nin(original)
+
+
+def _gen_ng_bvn(faker, original, *, locale):
+    return faker.nigeria_bvn(original)
+
+
+def _gen_ghana_card(faker, original, *, locale):
+    return faker.ghana_card_pin(original)
+
+
+def _gen_ke_national_id(faker, original, *, locale):
+    return faker.kenya_national_id(original)
+
+
+def _gen_ke_maisha_namba(faker, original, *, locale):
+    return faker.kenya_maisha_namba(original)
 
 
 def _gen_ssn(faker, original, *, locale):
@@ -513,6 +711,17 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     L.VEHICLE_REGISTRATION: _gen_vehicle_registration,
     L.IMEI: _gen_imei,
     L.OTHER: _gen_other,
+    "ABHA_NUMBER": _gen_abha_number,
+    "ABHA_ADDRESS": _gen_abha_address,
+    "AADHAAR": _gen_aadhaar,
+    "PAN": _gen_pan,
+    "ABDM_HPR_ID": _gen_abdm_hpr_id,
+    "ABDM_HFR_ID": _gen_abdm_hfr_id,
+    "NG_NIN": _gen_ng_nin,
+    "NG_BVN": _gen_ng_bvn,
+    "GH_GHANA_CARD": _gen_ghana_card,
+    "KE_NATIONAL_ID": _gen_ke_national_id,
+    "KE_MAISHA_NAMBA": _gen_ke_maisha_namba,
 }
 
 

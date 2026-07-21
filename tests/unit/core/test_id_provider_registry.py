@@ -28,6 +28,7 @@ EXPECTED_VALIDATOR_KEYS = (
     ("es", "nie"),
     ("nl", "bsn"),
     ("in", "aadhaar"),
+    ("zh", "resident_id"),
     ("id", "nik"),
     ("ms", "mykad"),
     ("tl", "philsys_psn"),
@@ -47,6 +48,11 @@ EXPECTED_VALIDATOR_KEYS = (
     ("vi", "cccd"),
     ("vi", "cmnd"),
     ("us", "npi"),
+    ("ng", "nin"),
+    ("ng", "bvn"),
+    ("gh", "ghana_card_pin"),
+    ("ke", "kenya_national_id"),
+    ("ke", "maisha_namba"),
 )
 
 
@@ -58,6 +64,7 @@ ROUND_TRIP_CASES = (
     ("es", "nie", "es_ES"),
     ("nl", "bsn", "nl_NL"),
     ("in", "aadhaar", "en_IN"),
+    ("zh", "resident_id", "zh_CN"),
     ("id", "nik", "id_ID"),
     ("ms", "mykad", "ms_MY"),
     ("tl", "philsys_psn", "fil_PH"),
@@ -77,6 +84,11 @@ ROUND_TRIP_CASES = (
     ("vi", "cccd", "vi_VN"),
     ("vi", "cmnd", "vi_VN"),
     ("us", "npi", "en_US"),
+    ("ng", "nin", "en_NG"),
+    ("ng", "bvn", "en_NG"),
+    ("gh", "ghana_card_pin", "en_US"),
+    ("ke", "kenya_national_id", "en_KE"),
+    ("ke", "maisha_namba", "en_KE"),
 )
 
 
@@ -132,6 +144,46 @@ class TestNationalIdRegistry:
             "en_IN",
             "aadhaar",
         )
+
+    @pytest.mark.parametrize("id_type", ("nin", "bvn"))
+    def test_nigerian_aliases_resolve_working_faker_methods(self, id_type):
+        specs = [
+            get_national_id(alias, id_type)
+            for alias in ("ng", "en_NG", "ha", "ig", "yo")
+        ]
+        assert all(spec is not None for spec in specs)
+        assert {spec.validate for spec in specs} == {specs[0].validate}
+
+        faker = Faker("en_NG")
+        register_clinical_providers(faker)
+        faker.seed_instance(840)
+        surrogate = getattr(faker, specs[0].faker_method)()
+        assert specs[0].validate(surrogate)
+
+    @pytest.mark.parametrize(
+        ("aliases", "id_type", "faker_method"),
+        (
+            (("gh", "en_GH"), "ghana_card_pin", "ghana_card_pin"),
+            (("ke", "en_KE", "sw"), "kenya_national_id", "kenya_national_id"),
+            (("ke", "en_KE", "sw"), "maisha_namba", "kenya_maisha_namba"),
+        ),
+    )
+    def test_ghana_kenya_aliases_resolve_working_specs(
+        self,
+        aliases,
+        id_type,
+        faker_method,
+    ):
+        specs = [get_national_id(alias, id_type) for alias in aliases]
+        assert all(spec is not None for spec in specs)
+        assert {spec.validate for spec in specs} == {specs[0].validate}
+        assert {spec.faker_method for spec in specs} == {faker_method}
+
+        faker = Faker("sw" if "sw" in aliases else "en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(841)
+        surrogate = getattr(faker, faker_method)()
+        assert specs[0].validate(surrogate)
 
     def test_unknown_lookup_returns_none(self):
         assert get_national_id("zz", "unknown") is None

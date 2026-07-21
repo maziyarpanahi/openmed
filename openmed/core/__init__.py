@@ -32,6 +32,14 @@ from .language_pack_coherence import (
     pack_coherence_report,
     require_language_pack_coherence,
 )
+from .language_router import (
+    DocumentLanguageDecision,
+    LanguageIdentifier,
+    LanguagePrediction,
+    LanguageRouter,
+    LanguageRun,
+    PyCLD2LanguageIdentifier,
+)
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
@@ -47,6 +55,8 @@ from .rtl_render import (
     wrap_mask,
 )
 from .script_detect import (
+    CJK_SCRIPTS,
+    INDIC_SCRIPTS,
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
     UNKNOWN_SCRIPT,
@@ -106,6 +116,8 @@ __all__ = [
     "save_profile",
     "delete_profile",
     "load_config_with_profile",
+    "CJK_SCRIPTS",
+    "INDIC_SCRIPTS",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
@@ -132,4 +144,10 @@ __all__ = [
     "incoherent_packs",
     "pack_coherence_report",
     "require_language_pack_coherence",
+    "LanguageIdentifier",
+    "LanguagePrediction",
+    "LanguageRun",
+    "DocumentLanguageDecision",
+    "LanguageRouter",
+    "PyCLD2LanguageIdentifier",
 ]

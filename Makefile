@@ -75,6 +75,9 @@ docs-serve: ## Run the MkDocs dev server with live reload
 docs-build: ## Build the MkDocs site (strict mode)
 	@echo "🏗️ Building documentation..."
 	uv run mkdocs build --strict
+	@echo "🔎 Verifying LLM documentation feeds..."
+	test -s site/docs/llms.txt
+	test -s site/docs/llms-full.txt
 
 docs-stage: docs-build ## Build docs and bundle them with the marketing site into site/
 	@echo "📦 Bundling marketing site with docs..."

@@ -38,6 +38,7 @@ nav:
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
+      - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
       - Detector Plugin SDK: plugin-sdk.md
@@ -165,6 +166,27 @@ extra:
 
 plugins:
   - search
+  - llmstxt:
+      markdown_description: >
+        OpenMed is a local-first healthcare NLP toolkit for clinical entity
+        extraction, de-identification, model discovery, and on-device or
+        self-hosted integrations.
+      full_output: llms-full.txt
+      sections:
+        Getting started:
+          - index.md: OpenMed documentation overview
+          - getting-started.md: Installation and first local workflow
+          - quickstarts.md: Persona quickstarts, including AI agent usage over MCP
+        APIs and de-identification:
+          - analyze-text.md: Top-level text analysis API
+          - api-reference.md: Public Python API reference
+          - api/deidentification.md: De-identification API reference
+          - output-formatting.md: Output formats and agent-facing tool schemas
+        Agents and tool surfaces:
+          - mcp-clients.md: MCP client setup and transport guidance
+          - rest-service.md: REST service endpoints and deployment
+          - rest-recipes.md: Copy-ready REST API recipes
+          - plugin-sdk.md: Detector plugin interfaces
   - git-revision-date-localized:
       enable_creation_date: true
       fallback_to_build_date: true

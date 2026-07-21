@@ -4,6 +4,12 @@ The helpers in this module are intentionally lightweight and stdlib-only. They
 use explicit Unicode block ranges plus :mod:`unicodedata` character categories
 to identify dominant scripts and preserve exact offsets while segmenting text
 into script-oriented runs.
+
+The curated confusable mappings are derived from Unicode UTS #39
+``confusables.txt`` version 17.0.0. Unicode data files are distributed under
+the Unicode License v3 (SPDX: ``Unicode-3.0``). The full data file is not
+embedded: only mappings needed for the supported Latin/Cyrillic/Greek/CJK PII
+evasion defense are retained.
 """
 
 from __future__ import annotations
@@ -16,6 +22,24 @@ from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
 UNKNOWN_SCRIPT = "Unknown"
 
+CJK_SCRIPTS = frozenset({"Han", "Hiragana/Katakana", "Hangul"})
+INDIC_SCRIPTS = frozenset(
+    {
+        "Devanagari",
+        "Bengali",
+        "Gurmukhi",
+        "Gujarati",
+        "Odia",
+        "Tamil",
+        "Telugu",
+        "Kannada",
+        "Malayalam",
+    }
+)
+CONFUSABLE_DATA_VERSION = "17.0.0"
+CONFUSABLE_DATA_URL = "https://www.unicode.org/Public/17.0.0/security/confusables.txt"
+CONFUSABLE_DATA_LICENSE = "Unicode-3.0"
+
 SUPPORTED_SCRIPTS = (
     "Latin",
     "Arabic",
@@ -24,7 +48,14 @@ SUPPORTED_SCRIPTS = (
     "Hangul",
     "Cyrillic",
     "Devanagari",
+    "Bengali",
+    "Gurmukhi",
+    "Gujarati",
+    "Odia",
+    "Tamil",
     "Telugu",
+    "Kannada",
+    "Malayalam",
     "Greek",
     "Hebrew",
     "Thai",
@@ -82,7 +113,29 @@ _CONFUSABLE_FOLD: dict[str, str] = {
     "\u0441": "c",
     "\u0445": "x",
     "\u0456": "i",
+    "\u3007": "O",
 }
+
+
+@dataclass(frozen=True)
+class MixedScriptSpan:
+    """An identifier-like source span containing more than one script."""
+
+    start: int
+    end: int
+    scripts: tuple[str, ...]
+    confusable_count: int = 0
+    invisible_count: int = 0
+
+    def to_metadata(self) -> dict[str, object]:
+        """Return a raw-text-free representation suitable for audit metadata."""
+        return {
+            "confusable_count": self.confusable_count,
+            "end": self.end,
+            "invisible_count": self.invisible_count,
+            "scripts": list(self.scripts),
+            "start": self.start,
+        }
 
 
 @dataclass(frozen=True)
@@ -97,6 +150,8 @@ class DetectionNormalization:
     stripped_combining_marks: int = 0
     folded_confusables: int = 0
     folded_native_digits: int = 0
+    indic_changes: int = 0
+    indic_scripts: tuple[str, ...] = ()
     scripts: tuple[str, ...] = ()
     mixed_script: bool = False
 
@@ -108,6 +163,7 @@ class DetectionNormalization:
             or self.stripped_combining_marks > 0
             or self.folded_confusables > 0
             or self.folded_native_digits > 0
+            or self.indic_changes > 0
         )
 
     def remap_span(self, start: int, end: int) -> tuple[int, int]:
@@ -134,6 +190,8 @@ class DetectionNormalization:
             "changed": self.changed,
             "folded_confusables": self.folded_confusables,
             "folded_native_digits": self.folded_native_digits,
+            "indic_changes": self.indic_changes,
+            "indic_scripts": list(self.indic_scripts),
             "mixed_script": self.mixed_script,
             "removed_zero_width": self.removed_zero_width,
             "scripts": list(self.scripts),
@@ -221,7 +279,14 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
             (0x11B00, 0x11B5F),
         ),
     ),
+    ("Bengali", ((0x0980, 0x09FF),)),
+    ("Gurmukhi", ((0x0A00, 0x0A7F),)),
+    ("Gujarati", ((0x0A80, 0x0AFF),)),
+    ("Odia", ((0x0B00, 0x0B7F),)),
+    ("Tamil", ((0x0B80, 0x0BFF),)),
     ("Telugu", ((0x0C00, 0x0C7F),)),
+    ("Kannada", ((0x0C80, 0x0CFF),)),
+    ("Malayalam", ((0x0D00, 0x0D7F),)),
     (
         "Greek",
         (
@@ -306,6 +371,67 @@ def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
 
 
+def confusable_skeleton(text: str) -> str:
+    """Return a curated UTS #39-style skeleton for PII matching.
+
+    The mapper is deliberately narrower than general-purpose Unicode
+    normalization: it folds the supported cross-script lookalikes and ASCII
+    full-width forms, and removes the invisible controls used by the evasion
+    generator. It does not case-fold or strip diacritics.
+    """
+
+    output: list[str] = []
+    for char in text:
+        if char in ZERO_WIDTH_CHARS:
+            continue
+        output.append(_fold_confusable_char(char))
+    return "".join(output)
+
+
+def mixed_script_spans(text: str) -> tuple[MixedScriptSpan, ...]:
+    """Return identifier-like spans that mix Unicode scripts.
+
+    Script changes separated by whitespace or ordinary punctuation are normal
+    multilingual prose and are not flagged. Invisible controls stay attached
+    to the surrounding token so an inserted zero-width character cannot split
+    an otherwise suspicious identifier.
+    """
+
+    findings: list[MixedScriptSpan] = []
+    token_start: int | None = None
+    for index in range(len(text) + 1):
+        char = text[index] if index < len(text) else ""
+        if char and _is_identifier_char(char):
+            if token_start is None:
+                token_start = index
+            continue
+        if token_start is None:
+            continue
+
+        token = text[token_start:index]
+        scripts = tuple(sorted(_script_counts(token)))
+        if len(scripts) > 1:
+            findings.append(
+                MixedScriptSpan(
+                    start=token_start,
+                    end=index,
+                    scripts=scripts,
+                    confusable_count=sum(
+                        _fold_confusable_char(item) != item for item in token
+                    ),
+                    invisible_count=sum(item in ZERO_WIDTH_CHARS for item in token),
+                )
+            )
+        token_start = None
+    return tuple(findings)
+
+
+def detect_mixed_script(text: str) -> bool:
+    """Return whether an identifier-like span mixes Unicode scripts."""
+
+    return bool(mixed_script_spans(text))
+
+
 def normalize_for_pii_detection(
     text: str,
     *,
@@ -313,43 +439,73 @@ def normalize_for_pii_detection(
 ) -> DetectionNormalization:
     """Fold adversarial Unicode artifacts while preserving offset remapping.
 
-    The defense strips zero-width controls and standalone combining marks, folds
-    common Latin-lookalike Greek/Cyrillic/full-width characters, folds Indic
-    decimal digits for ASCII validators, and records a script-consistency
-    summary without storing source text. ``width_convention`` selects the
-    CJK-safe width fold or strict per-character NFKC normalization.
+    Indic script runs first receive script-specific NFC canonicalization. The
+    defense then strips zero-width controls and standalone non-Indic combining
+    marks, folds common Latin-lookalike Greek/Cyrillic/full-width characters and
+    Indic decimal digits, and records a script-consistency summary without
+    storing source text. ``width_convention`` selects the CJK-safe width fold or
+    strict per-character NFKC normalization.
     """
 
-    # Keep the reusable width-normalization API in ``processing`` while
-    # composing its explicit source map with this existing detection defense.
-    # The local import avoids making the lightweight script helpers import the
+    # Local imports keep the lightweight script helpers from importing the
     # broader processing package during module initialization.
-    from ..processing.text import fold_indic_digits
+    from ..processing.text import INDIC_SCRIPTS, IndicNormalizer, fold_indic_digits
     from ..processing.zh_normalize import normalize_width
 
     scripts = tuple(sorted(_script_counts(text)))
-    width_normalization = normalize_width(text, convention=width_convention)
+    mixed_script = detect_mixed_script(text)
+    indic_normalizer = IndicNormalizer()
+    routed_chars: list[str] = []
+    routed_starts: list[int] = []
+    routed_ends: list[int] = []
+    indic_changes = 0
+    indic_scripts: list[str] = []
+    removed_zero_width = 0
+
+    for run_start, run_end, script in segment_by_script(text):
+        run = text[run_start:run_end]
+        if script in INDIC_SCRIPTS:
+            normalized = indic_normalizer.normalize_with_offsets(run, script=script)
+            routed_chars.extend(normalized.text)
+            routed_starts.extend(
+                run_start + offset for offset in normalized.offset_starts
+            )
+            routed_ends.extend(run_start + offset for offset in normalized.offset_ends)
+            indic_changes += normalized.changes
+            removed_zero_width += normalized.removed_joiners
+            if script not in indic_scripts:
+                indic_scripts.append(script)
+            continue
+
+        routed_chars.extend(run)
+        routed_starts.extend(range(run_start, run_end))
+        routed_ends.extend(range(run_start + 1, run_end + 1))
+
+    routed_text = "".join(routed_chars)
+    width_normalization = normalize_width(
+        routed_text,
+        convention=width_convention,
+    )
     digit_folding = fold_indic_digits(width_normalization.text)
     output: list[str] = []
     starts: list[int] = []
     ends: list[int] = []
-    removed_zero_width = 0
     stripped_combining_marks = 0
-    normalized_by_source: list[list[str]] = [[] for _ in text]
-    for char, (original_start, _original_end) in zip(
+    normalized_by_routed_source: list[list[str]] = [[] for _ in routed_text]
+    for char, (routed_start, _routed_end) in zip(
         width_normalization.text,
         width_normalization.char_origins,
     ):
-        normalized_by_source[original_start].append(char)
+        normalized_by_routed_source[routed_start].append(char)
     changed_source_indices = {
-        index
+        routed_starts[index]
         for index, (char, normalized_chars) in enumerate(
-            zip(text, normalized_by_source)
+            zip(routed_text, normalized_by_routed_source)
         )
         if "".join(normalized_chars) != char
     }
     folded_native_digit_sources = {
-        width_normalization.char_origins[index][0]
+        routed_starts[width_normalization.char_origins[index][0]]
         for index, (width_char, folded_char) in enumerate(
             zip(width_normalization.text, digit_folding.text)
         )
@@ -357,11 +513,16 @@ def normalize_for_pii_detection(
     }
 
     for index, char in enumerate(digit_folding.text):
-        original_start, original_end = width_normalization.char_origins[index]
+        routed_start, routed_end = width_normalization.char_origins[index]
+        original_start = routed_starts[routed_start]
+        original_end = routed_ends[routed_end - 1]
         if char in ZERO_WIDTH_CHARS:
             removed_zero_width += 1
             continue
-        if unicodedata.category(char) == "Mn":
+        if (
+            unicodedata.category(char) == "Mn"
+            and _script_for_char(char) not in INDIC_SCRIPTS
+        ):
             stripped_combining_marks += 1
             continue
 
@@ -382,17 +543,22 @@ def normalize_for_pii_detection(
         stripped_combining_marks=stripped_combining_marks,
         folded_confusables=len(changed_source_indices),
         folded_native_digits=len(folded_native_digit_sources),
+        indic_changes=indic_changes,
+        indic_scripts=tuple(indic_scripts),
         scripts=scripts,
-        mixed_script=len(scripts) > 1,
+        mixed_script=mixed_script,
     )
 
 
 def _script_for_char(char: str) -> str | None:
+    codepoint = ord(char)
+    if codepoint == 0x3007:
+        return "Han"
+
     category = unicodedata.category(char)
     if category[0] not in {"L", "M"}:
         return None
 
-    codepoint = ord(char)
     for script, ranges in _SCRIPT_RANGES:
         if any(start <= codepoint <= end for start, end in ranges):
             return script
@@ -421,14 +587,29 @@ def _fold_confusable_char(char: str) -> str:
     return char
 
 
+def _is_identifier_char(char: str) -> bool:
+    if char in ZERO_WIDTH_CHARS:
+        return True
+    return unicodedata.category(char)[0] in {"L", "M", "N"}
+
+
 __all__ = [
+    "CJK_SCRIPTS",
+    "CONFUSABLE_DATA_LICENSE",
+    "CONFUSABLE_DATA_URL",
+    "CONFUSABLE_DATA_VERSION",
     "DetectionNormalization",
+    "INDIC_SCRIPTS",
+    "MixedScriptSpan",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
     "ZERO_WIDTH_CHARS",
     "candidate_languages_for_script",
+    "confusable_skeleton",
+    "detect_mixed_script",
     "detect_script",
+    "mixed_script_spans",
     "normalize_for_pii_detection",
     "segment_by_script",
 ]

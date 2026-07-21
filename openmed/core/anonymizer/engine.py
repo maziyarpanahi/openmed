@@ -204,7 +204,11 @@ class Anonymizer:
         if self.config.consistent:
             faker.seed_instance(self._derive_seed(canonical, seed_value))
 
-        generator = LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"])
+        source_key = str(label).strip().upper().replace("-", "_").replace(" ", "_")
+        generator = LABEL_GENERATORS.get(
+            source_key,
+            LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"]),
+        )
         try:
             generated = generator(faker, generator_input, locale=effective_locale)
             return f"{generated}{honorific_suffix}"
@@ -322,6 +326,7 @@ _FORMAT_PRESERVE_DAY_FIRST_LOCALES = frozenset(
         "pt_PT",
         "pt_BR",
         "cs_CZ",
+        "sw",
     }
 )
 

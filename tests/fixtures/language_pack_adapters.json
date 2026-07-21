@@ -14,9 +14,11 @@
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
+    "sw": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
-    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1"
+    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "zh": "OpenMed/privacy-filter-multilingual"
   },
   "lang_to_locale": {
     "ar": "ar_EG",
@@ -30,11 +32,13 @@
     "et": "et_EE",
     "fi": "fi_FI",
     "fr": "fr_FR",
+    "ha": "ha_NG",
     "he": "he_IL",
     "hi": "hi_IN",
     "hr": "hr_HR",
     "hu": "hu_HU",
     "id": "id_ID",
+    "ig": "ig_NG",
     "it": "it_IT",
     "ja": "ja_JP",
     "ko": "ko_KR",
@@ -46,13 +50,15 @@
     "ro": "ro_RO",
     "sk": "sk_SK",
     "sr": "sr_RS",
+    "sw": "sw",
     "te": "en_IN",
     "th": "th_TH",
     "tl": "fil_PH",
     "tr": "tr_TR",
     "vi": "vi_VN",
-    "zh": "zh_CN",
     "ur": "ur_PK"
+    "yo": "yo_NG",
+    "zh": "zh_CN"
   },
   "national_id_only_languages": [
     "bg",
@@ -61,8 +67,10 @@
     "el",
     "et",
     "fi",
+    "ha",
     "hr",
     "hu",
+    "ig",
     "lv",
     "ms",
     "pl",
@@ -70,7 +78,8 @@
     "sr",
     "tl",
     "ur",
-    "vi"
+    "vi",
+    "yo"
   ],
   "national_id_providers": {
     "bg": [
@@ -113,6 +122,10 @@
       "fr_FR",
       "ssn"
     ],
+    "ha": [
+      "ha_NG",
+      "nigeria_nin"
+    ],
     "he": [
       "he_IL",
       "teudat_zehut"
@@ -132,6 +145,10 @@
     "id": [
       "id_ID",
       "indonesian_nik"
+    ],
+    "ig": [
+      "ig_NG",
+      "nigeria_nin"
     ],
     "it": [
       "it_IT",
@@ -173,6 +190,10 @@
       "sr_RS",
       "jmbg"
     ],
+    "sw": [
+      "sw",
+      "kenya_national_id"
+    ],
     "te": [
       "en_IN",
       "aadhaar"
@@ -196,22 +217,44 @@
     "vi": [
       "vi_VN",
       "vietnamese_cccd"
+    ],
+    "yo": [
+      "yo_NG",
+      "nigeria_nin"
+    ],
+    "zh": [
+      "zh_CN",
+      "chinese_resident_id"
     ]
   },
   "script_language_hints": {
     "Arabic": [
-      "ar"
+      "ar",
+      "ur"
+    ],
+    "Bengali": [
+      "bn",
+      "as"
     ],
     "Cyrillic": [
       "en"
     ],
     "Devanagari": [
-      "hi"
+      "hi",
+      "mr",
+      "ne"
     ],
     "Greek": [
       "en"
     ],
+    "Gujarati": [
+      "gu"
+    ],
+    "Gurmukhi": [
+      "pa"
+    ],
     "Han": [
+      "zh",
       "ja"
     ],
     "Hangul": [
@@ -223,6 +266,9 @@
     "Hiragana/Katakana": [
       "ja"
     ],
+    "Kannada": [
+      "kn"
+    ],
     "Latin": [
       "en",
       "fr",
@@ -231,7 +277,17 @@
       "es",
       "nl",
       "pt",
-      "tr"
+      "tr",
+      "sw"
+    ],
+    "Malayalam": [
+      "ml"
+    ],
+    "Odia": [
+      "or"
+    ],
+    "Tamil": [
+      "ta"
     ],
     "Telugu": [
       "te"
@@ -258,8 +314,10 @@
     "nl",
     "pt",
     "ro",
+    "sw",
     "te",
     "th",
-    "tr"
+    "tr",
+    "zh"
   ]
 }

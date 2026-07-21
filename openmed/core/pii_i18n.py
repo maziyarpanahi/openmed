@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from importlib import resources
 from typing import Dict, List, Optional
 
 from .anonymizer.providers.clinical_ids import (
@@ -31,9 +32,11 @@ from .anonymizer.providers.clinical_ids import (
     validate_uk_nino,
 )
 from .language_pack_catalog import (
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 
 # ---------------------------------------------------------------------------
@@ -58,6 +61,8 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "th": "Thai",
     "ko": "Korean",
     "ro": "Romanian",
+    "zh": "Chinese",
+    "sw": "Swahili",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -78,7 +83,47 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "th": "Thai-",
     "ko": "Korean-",
     "ro": "Romanian-",
+    "zh": "Chinese-",
+    "sw": "Swahili-",
 }
+
+# ---------------------------------------------------------------------------
+# Chinese personal-name assist data
+# ---------------------------------------------------------------------------
+
+_CHINESE_SURNAME_RESOURCE = "data/chinese_surnames.txt"
+_HAN_CHARACTER_CLASS = "\u3400-\u4dbf\u4e00-\u9fff"
+
+
+def _load_chinese_surnames() -> frozenset[str]:
+    """Load the packaged public-domain/CC0 Chinese surname gazetteer."""
+
+    resource = resources.files("openmed.clinical").joinpath(_CHINESE_SURNAME_RESOURCE)
+    with resource.open("r", encoding="utf-8") as handle:
+        surnames = {
+            line.strip()
+            for line in handle
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+    if not surnames or any(
+        re.fullmatch(rf"[{_HAN_CHARACTER_CLASS}]{{1,2}}", surname) is None
+        for surname in surnames
+    ):
+        raise RuntimeError("invalid packaged Chinese surname gazetteer")
+    return frozenset(surnames)
+
+
+CHINESE_SURNAMES = _load_chinese_surnames()
+"""Permissively licensed Chinese surname vocabulary with no patient data."""
+
+CHINESE_COMPOUND_SURNAMES = frozenset(
+    surname for surname in CHINESE_SURNAMES if len(surname) == 2
+)
+"""Common two-character Chinese surnames, such as ``欧阳`` and ``司马``."""
+
+CHINESE_SINGLE_SURNAMES = CHINESE_SURNAMES - CHINESE_COMPOUND_SURNAMES
+"""Single-character Chinese surnames used by the name-recognition assist."""
+
 
 # ---------------------------------------------------------------------------
 # Financial Identifier Validators
@@ -104,6 +149,110 @@ def validate_bic(text: str) -> bool:
 # ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
+
+
+def _is_nigeria_sequential_run(digits: str) -> bool:
+    """Return whether an 11-digit value contains a full ascending/descending run."""
+
+    return "0123456789" in digits or "9876543210" in digits
+
+
+def validate_nigeria_nin(text: str) -> bool:
+    """Validate the offline structural rules for a Nigerian NIN.
+
+    Nigerian National Identification Numbers contain exactly 11 ASCII digits
+    and have no public checksum. OpenMed therefore rejects only unmistakable
+    placeholder values: repeated single digits and complete ascending or
+    descending digit runs. Detection remains context-gated to avoid treating
+    arbitrary 11-digit values as identifiers.
+
+    Args:
+        text: Candidate containing exactly 11 ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has a non-trivial NIN structure.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{11}", digits) is None:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return not _is_nigeria_sequential_run(digits)
+
+
+def validate_nigeria_bvn(text: str) -> bool:
+    """Validate the offline structural rules for a Nigerian BVN.
+
+    Bank Verification Numbers contain exactly 11 ASCII digits. No public
+    checksum or leading-digit allocation rule is documented, so OpenMed uses
+    the same conservative non-triviality checks as NIN validation and keeps
+    detection context-gated.
+
+    Args:
+        text: Candidate containing exactly 11 ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has a non-trivial BVN structure.
+    """
+    return validate_nigeria_nin(text)
+
+
+def validate_ghana_card_pin(text: str) -> bool:
+    """Validate the documented offline structure of a Ghana Card PIN.
+
+    NIA documents the ``GHA-#########-#`` form and three-letter nationality
+    prefixes for resident cards, but does not publish an offline checksum
+    algorithm. Detection therefore remains context-gated; authoritative card
+    verification requires the NIA Identity Verification System Platform.
+
+    Args:
+        text: Candidate Ghana Card PIN.
+
+    Returns:
+        ``True`` when the candidate has the documented ASCII shape.
+    """
+    return bool(
+        isinstance(text, str)
+        and re.fullmatch(
+            r"[A-Z]{3}-[0-9]{9}-[0-9]",
+            text.strip().upper(),
+        )
+    )
+
+
+def validate_kenya_national_id(text: str) -> bool:
+    """Validate the offline structure of a legacy Kenyan national ID.
+
+    Kenya's second-generation identity numbers contain seven or eight digits
+    and have no public checksum. Recognition therefore requires identity
+    context at the pattern layer.
+
+    Args:
+        text: Candidate containing exactly seven or eight ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has the expected structure.
+    """
+    return (
+        isinstance(text, str) and re.fullmatch(r"[0-9]{7,8}", text.strip()) is not None
+    )
+
+
+def validate_kenya_maisha_namba(text: str) -> bool:
+    """Validate the documented nine-digit structure of a Kenya Maisha Namba.
+
+    The identifier has no public checksum, so recognition also requires nearby
+    Maisha, Huduma, or UPI context at the pattern layer.
+
+    Args:
+        text: Candidate containing exactly nine ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has the expected structure.
+    """
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{9}", text.strip()) is not None
 
 
 def validate_french_nir(text: str) -> bool:
@@ -381,7 +530,67 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
-_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+CHINESE_RESIDENT_ID_REGION_PREFIXES = frozenset(
+    {
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "21",
+        "22",
+        "23",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+    }
+)
+"""Mainland province-level prefixes from the GB/T 2260 code hierarchy.
+
+The full county-level table changes over time. OpenMed deliberately bundles
+only this small, stable first-level set and validates the remaining four
+digits structurally, avoiding a stale or restrictively licensed data asset.
+"""
+
+_CHINESE_RESIDENT_ID_WEIGHTS = (
+    7,
+    9,
+    10,
+    5,
+    8,
+    4,
+    2,
+    1,
+    6,
+    3,
+    7,
+    9,
+    10,
+    5,
+    8,
+    4,
+    2,
+)
 _CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
 
 def validate_pakistani_cnic(text: str) -> bool:
@@ -398,43 +607,78 @@ def validate_pakistani_cnic(text: str) -> bool:
     )
 
 
-def validate_chinese_resident_identity_card(text: str) -> bool:
-    """Validate a mainland China 18-digit resident identity card number.
+def chinese_resident_id_check_character(body: str) -> str:
+    """Return the ISO 7064 MOD 11-2 check character for a 17-digit body.
+
+    Args:
+        body: The first 17 digits of a Chinese Resident Identity Card number.
+
+    Returns:
+        The decimal check digit or uppercase ``"X"``.
+
+    Raises:
+        ValueError: If ``body`` is not exactly 17 ASCII digits.
+    """
+    if re.fullmatch(r"[0-9]{17}", body) is None:
+        raise ValueError("Chinese Resident ID body must contain 17 ASCII digits")
+
+    total = sum(
+        int(digit) * weight for digit, weight in zip(body, _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+
+
+def validate_chinese_resident_id(text: str) -> bool:
+    """Validate a mainland China 18-digit Resident Identity Card number.
 
     The second-generation resident identity card stores a six-digit address
     code, an eight-digit Gregorian birth date, a three-digit sequence, and a
-    MOD 11-2 checksum digit. OpenMed validates only these offline structural
-    and checksum properties; it does not bundle or query a region registry.
+    MOD 11-2 checksum character. Region validation deliberately uses the
+    stable province-level GB/T 2260 prefixes plus structural county digits,
+    rather than bundling a mutable full administrative-code dataset.
+
+    Args:
+        text: Candidate identifier. The final check character is
+            case-insensitive, but separators are not accepted.
+
+    Returns:
+        ``True`` only when format, region, birth date, sequence, and checksum
+        are all valid.
     """
-    cleaned = re.sub(r"[\s-]", "", text).upper()
-    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+    if not isinstance(text, str):
         return False
 
-    if cleaned[:6] == "000000":
+    cleaned = text.upper()
+    if re.fullmatch(r"[0-9]{17}[0-9X]", cleaned) is None:
+        return False
+
+    region_code = cleaned[:6]
+    prefecture_code = int(region_code[2:4])
+    if (
+        region_code[:2] not in CHINESE_RESIDENT_ID_REGION_PREFIXES
+        or (prefecture_code > 70 and prefecture_code != 90)
+        or prefecture_code == 0
+        or region_code[4:] == "00"
+    ):
         return False
 
     try:
-        year = int(cleaned[6:10])
-        month = int(cleaned[10:12])
-        day = int(cleaned[12:14])
+        birth_date = date.fromisoformat(
+            f"{cleaned[6:10]}-{cleaned[10:12]}-{cleaned[12:14]}"
+        )
     except ValueError:
         return False
 
-    import calendar
-
-    if month < 1 or month > 12 or day < 1:
-        return False
-    try:
-        if day > calendar.monthrange(year, month)[1]:
-            return False
-    except (ValueError, calendar.IllegalMonthError):
+    if birth_date > date.today() or cleaned[14:17] == "000":
         return False
 
-    total = sum(
-        int(digit) * weight
-        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
-    )
-    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+    return cleaned[-1] == chinese_resident_id_check_character(cleaned[:17])
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Compatibility alias for :func:`validate_chinese_resident_id`."""
+
+    return validate_chinese_resident_id(text)
 
 
 def validate_portuguese_cpf(text: str) -> bool:
@@ -1729,6 +1973,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "November",
         "Disember",
     ],
+    "sw": [
+        "Januari",
+        "Februari",
+        "Machi",
+        "Aprili",
+        "Mei",
+        "Juni",
+        "Julai",
+        "Agosti",
+        "Septemba",
+        "Oktoba",
+        "Novemba",
+        "Desemba",
+    ],
     "th": [
         "มกราคม",
         "กุมภาพันธ์",
@@ -1770,6 +2028,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "octombrie",
         "noiembrie",
         "decembrie",
+    ],
+    "zh": [
+        "一月",
+        "二月",
+        "三月",
+        "四月",
+        "五月",
+        "六月",
+        "七月",
+        "八月",
+        "九月",
+        "十月",
+        "十一月",
+        "十二月",
     ],
 }
 
@@ -1928,6 +2200,128 @@ def generate_mrz_td1(rng=None) -> str:
 # ---------------------------------------------------------------------------
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
+
+_NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Nigeria's NIN and BVN have no public checksums, so deterministic sweeps
+    # require explicit identifier context. NIN precedes phone detection so an
+    # explicitly labeled mobile-shaped identifier is consumed as an ID first.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "NG_NIN",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "nin",
+            "nimc",
+            "national identification",
+            "national identification number",
+            "national identity number",
+        ],
+        context_boost=0.45,
+        validator=validate_nigeria_nin,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "NG_BVN",
+        priority=13,
+        base_score=0.5,
+        context_words=[
+            "bvn",
+            "nibss",
+            "bank verification",
+            "bank verification number",
+        ],
+        context_boost=0.45,
+        validator=validate_nigeria_bvn,
+        safety_sweep_requires_context=True,
+    ),
+    # Nigerian mobile numbers use 070x/080x/081x/090x/091x domestically and
+    # drop the leading zero after the +234 country code.
+    PIIPattern(
+        r"(?<![0-9])(?:\+234[\s.-]?(?:70|80|81|90|91)[0-9]|"
+        r"0(?:70|80|81|90|91)[0-9])[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+        "NG_PHONE",
+        priority=12,
+        base_score=0.7,
+        context_words=[
+            "phone",
+            "mobile",
+            "telephone",
+            "contact",
+            "waya",
+            "ekwentị",
+            "foonu",
+        ],
+        context_boost=0.25,
+    ),
+]
+
+
+_GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
+    # GH_GHANA_CARD: documented country prefix + ten digits. With no published
+    # offline checksum, require explicit Ghana Card or NIA context.
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}-[0-9]{9}-[0-9](?![A-Z0-9])",
+        "GH_GHANA_CARD",
+        priority=15,
+        base_score=0.5,
+        context_words=[
+            "ghana card",
+            "ghana card pin",
+            "national identification authority",
+            "nia pin",
+        ],
+        context_boost=0.45,
+        validator=validate_ghana_card_pin,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+_KENYA_ID_PII_PATTERNS: List[PIIPattern] = [
+    # KE_MAISHA_NAMBA: structural UPI with mandatory nearby identifier context.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{9}(?![0-9])",
+        "KE_MAISHA_NAMBA",
+        priority=15,
+        base_score=0.5,
+        context_words=[
+            "maisha namba",
+            "maisha number",
+            "maisha card",
+            "huduma namba",
+            "huduma number",
+            "unique personal identifier",
+            "upi number",
+            "nambari ya maisha",
+        ],
+        context_boost=0.45,
+        validator=validate_kenya_maisha_namba,
+        safety_sweep_requires_context=True,
+    ),
+    # KE_NATIONAL_ID: legacy seven/eight-digit number. Without an identity
+    # keyword this shape is too common in labs, MRNs, and other clinical data.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{7,8}(?![0-9])",
+        "KE_NATIONAL_ID",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "id no",
+            "id number",
+            "national id",
+            "national identification number",
+            "identity card number",
+            "kitambulisho",
+            "nambari ya kitambulisho",
+            "nambari ya id",
+        ],
+        context_boost=0.45,
+        validator=validate_kenya_national_id,
+        safety_sweep_requires_context=True,
+    ),
+]
 
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
@@ -3329,6 +3723,65 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_CHINESE_SURNAME_ALTERNATION = "|".join(
+    re.escape(surname)
+    for surname in sorted(CHINESE_SURNAMES, key=lambda value: (-len(value), value))
+)
+
+# Chinese names are contiguous, so ordinary ``\b`` boundaries cannot separate a
+# family name from surrounding Han text. The left side accepts either a true Han
+# boundary or a strong clinical/name-field cue; the right side accepts normal
+# punctuation/whitespace plus common clinical continuations. The latter makes
+# ``患者王伟今日复诊`` resolve to ``王伟`` rather than ``王伟今``.
+_CHINESE_NAME_LEFT_BOUNDARY = (
+    rf"(?:(?<![{_HAN_CHARACTER_CLASS}])|(?<=患者)|(?<=病人)|(?<=病患)|"
+    r"(?<=姓名为)|(?<=姓名是)|(?<=姓名：)|(?<=姓名:))"
+)
+_CHINESE_NAME_RIGHT_BOUNDARY = (
+    rf"(?=$|[^{_HAN_CHARACTER_CLASS}]|今日|因|于|来|现|复诊|就诊|主诉|"
+    r"报告|表示|诉|接受|返回)"
+)
+
+_CHINESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9])[0-9]{17}[0-9Xx](?![0-9A-Za-z])",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "居民身份证",
+            "公民身份号码",
+            "身份证号码",
+            "身份证号",
+            "身份证",
+            "身份号码",
+            "证件号码",
+        ],
+        context_boost=0.5,
+        validator=validate_chinese_resident_id,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        _CHINESE_NAME_LEFT_BOUNDARY
+        + rf"(?:{_CHINESE_SURNAME_ALTERNATION})"
+        + rf"[{_HAN_CHARACTER_CLASS}]{{1,2}}"
+        + _CHINESE_NAME_RIGHT_BOUNDARY,
+        "person",
+        priority=12,
+        flags=0,
+        base_score=0.75,
+        context_words=[
+            "患者",
+            "病人",
+            "病患",
+            "姓名",
+            "就诊者",
+            "联系人",
+            "家属",
+        ],
+        context_boost=0.2,
+    ),
+]
 _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
@@ -4477,6 +4930,191 @@ _TAGALOG_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_SWAHILI_MONTH_PATTERN = (
+    r"Januari|Februari|Machi|Aprili|Mei|Juni|Julai|Agosti|Septemba|"
+    r"Oktoba|Novemba|Desemba"
+)
+
+_SWAHILI_DATE_CONTEXT = [
+    "tarehe",
+    "tarehe ya kuzaliwa",
+    "alizaliwa",
+    "kuzaliwa",
+    "date",
+    "date of birth",
+    "dob",
+    "born",
+    "admitted",
+    "discharged",
+]
+
+_SWAHILI_AGE_CONTEXT = [
+    "umri",
+    "umri wa miaka",
+    "miaka",
+    "age",
+    "aged",
+    "years old",
+]
+
+_SWAHILI_ID_CONTEXT = [
+    "nambari ya kitambulisho",
+    "namba ya kitambulisho",
+    "kitambulisho",
+    "nambari ya nida",
+    "namba ya nida",
+    "nida",
+    "national id",
+    "national identification number",
+    "identity number",
+    "id number",
+    "id no",
+]
+
+_SWAHILI_NHIF_CONTEXT = [
+    "nambari ya nhif",
+    "namba ya nhif",
+    "nhif nambari",
+    "nhif namba",
+    "nhif",
+    "nhif number",
+    "nhif member number",
+    "member number",
+    "health insurance number",
+]
+
+_SWAHILI_PHONE_CONTEXT = [
+    "simu",
+    "nambari ya simu",
+    "namba ya simu",
+    "piga simu",
+    "wasiliana",
+    "phone",
+    "phone number",
+    "mobile",
+    "call",
+    "contact",
+]
+
+_SWAHILI_NAME_CONTEXT = [
+    "jina",
+    "jina la mgonjwa",
+    "mgonjwa",
+    "name",
+    "patient name",
+    "patient",
+]
+
+_SWAHILI_PII_PATTERNS: List[PIIPattern] = [
+    # Explicitly labelled names are safe to sweep without guessing which
+    # capitalised words in a Latin-script, code-mixed note denote a person.
+    PIIPattern(
+        r"(?:(?<=Jina: )|(?<=Name: )|(?<=Jina la mgonjwa: )|"
+        r"(?<=Patient name: ))[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){1,3}\b",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_SWAHILI_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_SWAHILI_DATE_CONTEXT,
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_SWAHILI_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=_SWAHILI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Match only ages immediately attached to a bilingual age cue. A generic
+    # one-to-three-digit pattern would over-redact labs elsewhere in the note.
+    PIIPattern(
+        r"(?:(?<=Umri: )|(?<=Age: )|(?<=Umri wa miaka )|(?<=Aged ))"
+        r"(?:1[01]\d|[1-9]?\d)\b",
+        "age",
+        priority=11,
+        base_score=0.65,
+        context_words=_SWAHILI_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    # This offline pack has no checksum validation for NHIF member numbers.
+    # Restrict recognition to explicitly labelled six-to-ten-digit values to
+    # avoid treating clinical measurements as IDs.
+    PIIPattern(
+        r"(?<!\d)\d{6,10}(?!\d)",
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_SWAHILI_NHIF_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+    ),
+    # Tanzanian NIDA NIN: format-only recognition of the 20-digit value,
+    # including its commonly grouped 8-5-5-2 rendering. No checksum is claimed.
+    PIIPattern(
+        r"(?<!\d)\d{8}(?P<nida_sep>[ -]?)\d{5}(?P=nida_sep)"
+        r"\d{5}(?P=nida_sep)\d{2}(?!\d)",
+        "national_id",
+        priority=15,
+        base_score=0.5,
+        context_words=_SWAHILI_ID_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?:(?<=Anwani: )|(?<=Address: ))[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){0,4}\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=["anwani", "address", "barabara", "mtaa"],
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=7,
+        base_score=0.25,
+        context_words=["msimbo wa posta", "postal code", "postcode", "posta"],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    # East African mobile numbers in international form for Kenya, Tanzania,
+    # and Uganda. Each has a nine-digit national significant number.
+    PIIPattern(
+        r"(?<!\d)\+(?:254[\s.-]?(?:1|7)\d{2}|"
+        r"255[\s.-]?[67]\d{2}|256[\s.-]?7\d{2})"
+        r"[\s.-]?\d{3}[\s.-]?\d{3}(?!\d)",
+        "phone_number",
+        priority=12,
+        base_score=0.7,
+        context_words=_SWAHILI_PHONE_CONTEXT,
+        context_boost=0.25,
+    ),
+]
+
+_SWAHILI_AND_KENYA_PII_PATTERNS = [
+    *_SWAHILI_PII_PATTERNS,
+    *_KENYA_ID_PII_PATTERNS,
+]
+
+
 _DANISH_MONTH_PATTERN = (
     r"januar|februar|marts|april|maj|juni|juli|august|september|"
     r"oktober|november|december"
@@ -5128,6 +5766,9 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 
 
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "ha": _NIGERIAN_PII_PATTERNS,
+    "ig": _NIGERIAN_PII_PATTERNS,
+    "yo": _NIGERIAN_PII_PATTERNS,
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
@@ -5139,6 +5780,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
+    "zh": _CHINESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
@@ -5148,6 +5790,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
+    "sw": _SWAHILI_AND_KENYA_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
     "fi": _FINNISH_PII_PATTERNS,
@@ -5163,6 +5806,13 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "en_ng": _NIGERIAN_PII_PATTERNS,
+    "ha": _NIGERIAN_PII_PATTERNS,
+    "ig": _NIGERIAN_PII_PATTERNS,
+    "yo": _NIGERIAN_PII_PATTERNS,
+    "en_gh": _GHANA_CARD_PII_PATTERNS,
+    "en_ke": _KENYA_ID_PII_PATTERNS,
+    "sw": _SWAHILI_AND_KENYA_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
@@ -5579,6 +6229,34 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["Manila", "Quezon City", "Cebu City"],
         "ZIPCODE": ["1000", "1100", "6000"],
     },
+    "sw": {
+        "NAME": [
+            "Amina Hassan",
+            "Daniel Otieno",
+            "Wanjiku Njeri",
+            "Baraka Mushi",
+        ],
+        "FIRST_NAME": ["Amina", "Daniel", "Wanjiku", "Baraka"],
+        "LAST_NAME": ["Hassan", "Otieno", "Njeri", "Mushi"],
+        "EMAIL": ["mgonjwa@example.ke", "mawasiliano@example.tz"],
+        "PHONE": [
+            "+254 712 345 678",
+            "+255 754 321 098",
+            "+256 772 456 789",
+        ],
+        "ID_NUM": [
+            "12345678",
+            "987654321",
+            "19791103-12345-67890-12",
+        ],
+        "STREET_ADDRESS": ["Kenyatta Avenue 12", "Barabara ya Nyerere 45"],
+        "URL_PERSONAL": ["https://example.ke"],
+        "USERNAME": ["mgonjwa123", "mtumiaji456"],
+        "DATE": ["14/05/1988", "3 Novemba 1979"],
+        "AGE": ["29", "38", "47"],
+        "LOCATION": ["Nairobi", "Dar es Salaam", "Kampala", "Mombasa"],
+        "ZIPCODE": ["00100", "11101", "10101"],
+    },
     "da": {
         "NAME": ["Anna Nielsen", "Peter Jensen", "Mette Hansen", "Lars Andersen"],
         "FIRST_NAME": ["Anna", "Peter", "Mette", "Lars"],
@@ -5850,6 +6528,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Αθήνα", "Θεσσαλονίκη", "Πάτρα"],
         "ZIPCODE": ["104 31", "546 21", "262 21"],
+    },
+    "zh": {
+        "NAME": ["王芳", "李雷", "张伟", "刘洋"],
+        "FIRST_NAME": ["芳", "雷", "伟", "洋"],
+        "LAST_NAME": ["王", "李", "张", "刘"],
+        "EMAIL": ["patient@example.cn", "contact@example.org"],
+        "PHONE": ["13800138000", "13900139000"],
+        "ID_NUM": ["CN123456", "MRN-987654"],
+        "STREET_ADDRESS": ["北京市朝阳区健康路12号", "上海市和平路45号"],
+        "URL_PERSONAL": ["https://example.cn"],
+        "USERNAME": ["patient123", "user456"],
+        "DATE": ["2000年1月1日", "1985年3月15日"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["北京", "上海", "广州"],
+        "ZIPCODE": ["100000", "200000", "510000"],
     },
 }
 

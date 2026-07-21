@@ -8,12 +8,14 @@ from openmed.core.labels import CANONICAL_LABELS, ID_NUM
 from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_chinese_resident_id,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
@@ -44,6 +46,8 @@ _ID_VALIDATORS = {
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
+    "sw": validate_kenya_maisha_namba,
+    "zh": validate_chinese_resident_id,
 }
 
 _SCRIPT_RANGES = {
@@ -113,4 +117,4 @@ def test_non_latin_locale_templates_render_target_script(language):
 
 def test_locale_phi_generator_rejects_unsupported_language():
     with pytest.raises(ValueError, match="unsupported locale PHI language"):
-        LocalePhiGenerator(seed=1).generate("zh")
+        LocalePhiGenerator(seed=1).generate("xx")

@@ -11,6 +11,7 @@ from openmed.core.model_registry import (
     load_manifest_rows,
 )
 from openmed.core.pii_i18n import (
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
@@ -36,6 +37,10 @@ class TestRegistryCompleteness:
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
     def test_supported_language_has_pii_models(self, lang):
         models = get_pii_models_by_language(lang)
+        if lang in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES:
+            assert not models
+            assert get_default_pii_model(lang) == DEFAULT_PII_MODELS[lang]
+            return
         assert models, f"No PII models found for language {lang!r}"
         assert all(lang in info.languages for info in models.values())
 
@@ -64,6 +69,8 @@ class TestModelNaming:
 
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_specific_models_contain_language_name(self, lang):
+        if lang in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES:
+            pytest.skip("language intentionally uses a documented model placeholder")
         if lang in MULTILINGUAL_DEFAULT_LANGUAGES:
             pytest.skip("language intentionally defaults to multilingual family")
         language_name = LANGUAGE_NAMES[lang]
@@ -87,6 +94,9 @@ class TestModelNaming:
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_bucket_keys_use_language_prefix_when_specific(self, lang):
         models = get_pii_models_by_language(lang)
+        if lang in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES:
+            assert not models
+            return
         if lang in MULTILINGUAL_DEFAULT_LANGUAGES:
             assert any(
                 info.model_id == DEFAULT_PII_MODELS[lang] for info in models.values()

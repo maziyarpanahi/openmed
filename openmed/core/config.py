@@ -20,6 +20,10 @@ PROFILE_ENV_VAR = "OPENMED_PROFILE"
 # Environment variable for the PyTorch/Transformers attention backend.
 TORCH_ATTENTION_BACKEND_ENV_VAR = "OPENMED_TORCH_ATTENTION_BACKEND"
 
+CHINESE_SEGMENTATION_BACKEND_ENV_VAR = "OPENMED_CHINESE_SEGMENTATION_BACKEND"
+CHINESE_USER_DICT_ENV_VAR = "OPENMED_CHINESE_USER_DICT"
+CHINESE_PKUSEG_DOMAIN_ENV_VAR = "OPENMED_CHINESE_PKUSEG_DOMAIN"
+
 _xdg_config = os.getenv("XDG_CONFIG_HOME")
 if _xdg_config:
     _default_config_root = Path(_xdg_config)
@@ -83,6 +87,12 @@ class OpenMedConfig:
     # Optional list of terms to keep intact when remapping output onto medical tokens
     medical_tokenizer_exceptions: Optional[List[str]] = None
 
+    # Chinese word segmentation. jieba is lightweight and bundled; the other
+    # backends are optional and load only when explicitly selected.
+    chinese_segmentation_backend: str = "jieba"
+    chinese_user_dict_path: Optional[str] = None
+    chinese_pkuseg_domain: str = "medicine"
+
     # Protect common clinical vocabulary from PERSON/LOCATION/ORGANIZATION over-redaction
     clinical_protect_enabled: bool = True
     clinical_protect_terms: Optional[List[str]] = None
@@ -135,6 +145,28 @@ class OpenMedConfig:
             self.medical_tokenizer_exceptions = [
                 item.strip() for item in env_exceptions.split(",") if item.strip()
             ]
+
+        env_chinese_backend = os.getenv(CHINESE_SEGMENTATION_BACKEND_ENV_VAR)
+        if env_chinese_backend:
+            self.chinese_segmentation_backend = env_chinese_backend
+        self.chinese_segmentation_backend = (
+            self.chinese_segmentation_backend.strip().lower()
+        )
+        if self.chinese_segmentation_backend not in {"jieba", "pkuseg", "hanlp"}:
+            raise ValueError(
+                "chinese_segmentation_backend must be jieba, pkuseg, or hanlp"
+            )
+
+        env_chinese_user_dict = os.getenv(CHINESE_USER_DICT_ENV_VAR)
+        if env_chinese_user_dict:
+            self.chinese_user_dict_path = env_chinese_user_dict
+
+        env_pkuseg_domain = os.getenv(CHINESE_PKUSEG_DOMAIN_ENV_VAR)
+        if env_pkuseg_domain:
+            self.chinese_pkuseg_domain = env_pkuseg_domain
+        self.chinese_pkuseg_domain = self.chinese_pkuseg_domain.strip()
+        if not self.chinese_pkuseg_domain:
+            raise ValueError("chinese_pkuseg_domain must not be empty")
 
         env_protect = os.getenv("OPENMED_CLINICAL_PROTECT")
         if env_protect is not None:
@@ -202,6 +234,9 @@ class OpenMedConfig:
             "timeout",
             "use_medical_tokenizer",
             "medical_tokenizer_exceptions",
+            "chinese_segmentation_backend",
+            "chinese_user_dict_path",
+            "chinese_pkuseg_domain",
             "clinical_protect_enabled",
             "clinical_protect_terms",
             "clinical_protect_use_builtin",
@@ -264,6 +299,9 @@ class OpenMedConfig:
             "timeout": self.timeout,
             "use_medical_tokenizer": self.use_medical_tokenizer,
             "medical_tokenizer_exceptions": self.medical_tokenizer_exceptions,
+            "chinese_segmentation_backend": self.chinese_segmentation_backend,
+            "chinese_user_dict_path": self.chinese_user_dict_path,
+            "chinese_pkuseg_domain": self.chinese_pkuseg_domain,
             "clinical_protect_enabled": self.clinical_protect_enabled,
             "clinical_protect_terms": self.clinical_protect_terms,
             "clinical_protect_use_builtin": self.clinical_protect_use_builtin,
