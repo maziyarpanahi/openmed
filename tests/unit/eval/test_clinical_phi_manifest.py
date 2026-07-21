@@ -42,6 +42,7 @@ def test_clinical_phi_manifest_names_flagship_and_sources() -> None:
     assert source_ids == {
         "shield_public_sample",
         "synthetic_golden_deid",
+        "india_synthetic_clinical_deid",
         "i2b2_eval_only",
         "n2c2_eval_only",
     }

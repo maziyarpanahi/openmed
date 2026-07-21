@@ -55,6 +55,26 @@ and language coverage. The JSON and JSONL files are also compatible with
 `openmed.eval.harness.load_fixtures`; golden-specific expected output remains
 available through each fixture's metadata.
 
+## India Clinical De-Identification Corpus
+
+`fixtures/i18n/india_clinical_manifest.json` and
+`fixtures/i18n/india_clinical.jsonl` form a specialized synthetic-only corpus
+for India clinical de-identification evaluation. The three code-mixed notes
+cover Latin-script Hinglish, Devanagari, and Tamil; generated ABHA, Aadhaar,
+PAN, Indian phone, address, and PIN values; AYUSH terminology; and one
+fictional person represented by script-specific aliases across documents.
+
+Load the corpus with
+`openmed.eval.datasets.load_india_clinical_phi_corpus`. Its dedicated loader
+validates the safety manifest, exact span offsets, canonical labels, generated
+identifier shapes, address/PIN pairing, script coverage, and cross-document
+identity metadata. The JSONL file is intentionally excluded from the generic
+golden loader because its richer corpus schema is validated separately.
+
+The corpus contains no real PHI, production data, restricted corpus material,
+or DUA data. It is an assist-only, non-decisional evaluation fixture, not
+clinical ground truth, and must not be used to make patient-care decisions.
+
 ## Relation Gold Fixtures
 
 `fixtures/relation_gold.jsonl` contains synthetic-only relation extraction

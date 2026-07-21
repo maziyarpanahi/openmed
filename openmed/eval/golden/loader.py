@@ -37,10 +37,11 @@ _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
 _TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
-_NON_DEID_FIXTURE_NAMES = frozenset(
+_SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
         "context_multilingual.jsonl",
         "grounding_crosslingual.jsonl",
+        "india_clinical.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
         "surrogate_multilingual.jsonl",
@@ -170,7 +171,7 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
         *(
             path
             for path in fixture_path.glob("**/*.jsonl")
-            if path.name not in _NON_DEID_FIXTURE_NAMES
+            if path.name not in _SPECIALIZED_FIXTURE_NAMES
         ),
     ]
     if path is None:
