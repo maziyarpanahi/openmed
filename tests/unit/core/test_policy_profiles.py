@@ -6,7 +6,13 @@ import pytest
 
 from openmed.core.arbitration import MODE_HIGH_RECALL_UNION
 from openmed.core.cascade import R3_ACCURATE, CascadeRouter
-from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.labels import (
+    CANONICAL_LABELS,
+    CLINICAL_CONCEPT,
+    DIRECT_IDENTIFIER,
+    QUASI_IDENTIFIER,
+    policy_label_for,
+)
 from openmed.core.pii import deidentify
 from openmed.core.pipeline import Pipeline
 from openmed.core.policy import (
@@ -161,6 +167,44 @@ def test_australia_privacy_act_profile_alias_and_lint_load():
     assert profile.keep_mapping is False
     assert profile.reversible_id is False
     assert lint_policy("australia_privacy_act") == ()
+
+
+def test_china_pipl_profile_covers_sensitive_personal_information():
+    profile = load_policy("china_pipl")
+
+    assert profile.name == "china_pipl"
+    assert "china_pipl" in list_policies()
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+    assert profile.policy_label_actions == {
+        DIRECT_IDENTIFIER: "replace",
+        QUASI_IDENTIFIER: "mask",
+        CLINICAL_CONCEPT: "mask",
+    }
+    assert all(
+        profile.action_for(label) == "replace"
+        for label in CANONICAL_LABELS
+        if policy_label_for(label) == DIRECT_IDENTIFIER
+    )
+    assert profile.action_for("ID_NUM") == "replace"
+    assert profile.action_for("PHONE") == "replace"
+    assert profile.action_for("CREDIT_CARD") == "replace"
+    assert profile.action_for("PERSON") == "replace"
+    assert profile.action_for("CONDITION") == "mask"
+    assert profile.keep_mapping is True
+    assert profile.reversible_id is True
+    assert "de-identification does not remove" in profile.metadata["scope_note"]
+    assert profile.metadata["legal_basis"] == {
+        "sensitive_personal_information": "PIPL Article 28",
+        "anonymization_and_deidentification": "PIPL Articles 4 and 73",
+        "official_source": (
+            "https://www.miit.gov.cn/jgsj/zfs/fl/art/2022/"
+            "art_515a4b20c12f430eab54bb4f56d89f56.html"
+        ),
+    }
+    assert profile.metadata["legal_disclaimer"] == (
+        "This technical profile is not legal advice."
+    )
+    assert lint_policy("china_pipl") == ()
 
 
 def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):
