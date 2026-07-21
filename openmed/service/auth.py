@@ -444,6 +444,9 @@ class ServiceAuth:
 
         authorization = request.headers.get("authorization")
         if not authorization:
+            mtls_principal = request.scope.get("openmed.auth")
+            if isinstance(mtls_principal, AuthPrincipal):
+                return mtls_principal
             raise missing_credentials()
 
         scheme, _, value = authorization.strip().partition(" ")
