@@ -109,6 +109,16 @@ spacy = [
   "spacy>=3.5",
 ]
 
+zh = [
+  "jieba>=0.42",
+  "opencc>=1.1",
+  "pypinyin>=0.51",
+]
+
+indic = [
+  "indic-nlp-library>=0.92",
+]
+
 multimodal = [
   "numpy>=1.26",
   "pdfplumber>=0.11",

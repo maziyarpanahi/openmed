@@ -33,6 +33,30 @@ def test_current_non_dev_dependencies_are_permissive():
     } == set()
 
 
+def test_zh_and_indic_dependencies_have_reviewed_permissive_licenses():
+    results = policy.audit_pyproject(ROOT / "pyproject.toml")
+    language_results = {
+        result.entry.name: result
+        for result in results
+        if result.entry.group in {"zh", "indic"}
+    }
+
+    assert {name: result.license_text for name, result in language_results.items()} == {
+        "indic-nlp-library": "MIT",
+        "jieba": "MIT",
+        "opencc": "Apache-2.0",
+        "pypinyin": "MIT",
+    }
+    assert all(result.allowed for result in language_results.values())
+    assert not any(
+        policy.contains_marker(
+            result.license_text,
+            policy.DISALLOWED_LICENSE_MARKERS,
+        )
+        for result in language_results.values()
+    )
+
+
 def test_current_package_data_has_no_restricted_vocab_dumps():
     assert policy.audit_restricted_vocab_data(ROOT) == []
 

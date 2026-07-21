@@ -35,6 +35,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "indic": AdapterSpec(
+        name="indic",
+        module="openmed.interop.indic",
+        extra="indic",
+        description="Indic segmentation and transliteration helpers",
+    ),
     "duckdb": AdapterSpec(
         name="duckdb",
         module="openmed.interop.duckdb_udf",
@@ -106,6 +112,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.spacy_component",
         extra="spacy",
         description="spaCy pipeline component for OpenMed PII spans",
+    ),
+    "zh": AdapterSpec(
+        name="zh",
+        module="openmed.interop.zh",
+        extra="zh",
+        description="Chinese segmentation, script conversion, and pinyin helpers",
     ),
     "cdm_etl": AdapterSpec(
         name="cdm_etl",
