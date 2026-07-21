@@ -102,8 +102,8 @@ def _check_low_resource_envelope(checks: list[dict[str, Any]]) -> None:
     hint = None
     if not fits:
         hint = (
-            "This host has less than 4 GiB available; close other applications "
-            "before de-identification."
+            "This host has less than a 4 GiB effective memory limit; close other "
+            "applications before de-identification."
         )
     elif suggest:
         hint = "Set OPENMED_PROFILE=low_resource for CPU-only ONNX INT8 inference."
@@ -111,10 +111,10 @@ def _check_low_resource_envelope(checks: list[dict[str, Any]]) -> None:
     check = _check(
         "low_resource_memory",
         "PASS" if fits else "WARN",
-        f"available_ram={total_gib:.2f} GiB; fits_4gb_envelope={str(fits).lower()}",
+        f"effective_ram={total_gib:.2f} GiB; fits_4gb_envelope={str(fits).lower()}",
         hint,
     )
-    check["available_ram_bytes"] = total_bytes
+    check["effective_ram_bytes"] = total_bytes
     check["fits_low_resource"] = fits
     check["profile_suggested"] = suggest
     checks.append(check)

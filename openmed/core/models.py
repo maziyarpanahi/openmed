@@ -102,13 +102,13 @@ class ModelLoader:
         Args:
             config: OpenMed configuration. If None, uses global config.
         """
-        if not HF_AVAILABLE:
+        self.config = config or get_config()
+        if not HF_AVAILABLE and getattr(self.config, "backend", None) != "onnx":
             raise ImportError(
                 "HuggingFace transformers is required. "
                 "Install with: pip install transformers"
             )
 
-        self.config = config or get_config()
         configure_offline_mode(self.config)
         self._models: Dict[str, Any] = {}  # Cache for loaded models
         self._tokenizers: Dict[str, Any] = {}  # Cache for loaded tokenizers
@@ -508,16 +508,20 @@ class ModelLoader:
         tokenizer: Optional[Any] = None,
     ) -> Optional[int]:
         """Infer the maximum supported sequence length for a model/tokenizer."""
-        if not HF_AVAILABLE:
-            return None
-
         from ..processing.tokenization import infer_tokenizer_max_length
+
+        if tokenizer is not None:
+            inferred = infer_tokenizer_max_length(tokenizer)
+            if inferred is not None:
+                return inferred
+
+        if getattr(self.config, "backend", None) == "onnx" or not HF_AVAILABLE:
+            return None
 
         full_model_name = self._resolve_model_name(model_name)
         auth_kwargs = self._hub_auth_kwargs()
         local_loading_kwargs = self._local_loading_kwargs(full_model_name)
         pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
-
         if tokenizer is None:
             try:
                 _ensure_hf_auto_tokenizer()

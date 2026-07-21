@@ -26,6 +26,14 @@ def test_load_baseline_requires_positive_peak(tmp_path):
         low_resource_deid.load_baseline(baseline)
 
 
+def test_load_baseline_requires_model_revision(tmp_path):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"peak_rss_mib": 100}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="model_revision"):
+        low_resource_deid.load_baseline(baseline)
+
+
 def test_regression_gate_allows_ten_percent_growth():
     low_resource_deid.enforce_limits(
         {"peak_rss_mib": 110.0},
@@ -41,6 +49,16 @@ def test_regression_gate_rejects_more_than_ten_percent_growth():
             {"peak_rss_mib": 110.1},
             max_peak_rss_mib=2560.0,
             baseline={"peak_rss_mib": 100.0},
+            max_regression_percent=10.0,
+        )
+
+
+def test_regression_gate_rejects_model_revision_mismatch():
+    with pytest.raises(RuntimeError, match="model revision"):
+        low_resource_deid.enforce_limits(
+            {"peak_rss_mib": 100.0, "model_revision": "new"},
+            max_peak_rss_mib=2560.0,
+            baseline={"peak_rss_mib": 100.0, "model_revision": "baseline"},
             max_regression_percent=10.0,
         )
 

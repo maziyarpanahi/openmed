@@ -5,6 +5,7 @@
   "entity_count": 574,
   "measured_at": "2026-07-17",
   "model": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android",
+  "model_revision": "82f57fcab68125b05f1aa9fdd41319732358311b",
   "note_count": 100,
   "onnx_variant": "int8",
   "peak_rss_growth_mib": 1052.758,

@@ -16,7 +16,9 @@ OpenMed ships with five built-in profiles:
 
 The `low_resource` profile lazily loads the official small PII model, caps
 inference at one note per batch and one worker, and never falls back to the
-Torch backend. Install its runtime with `pip install "openmed[onnx-runtime]"`.
+Torch backend. The tested model snapshot is pinned for reproducible memory and
+accuracy behavior. Install its runtime with
+`pip install "openmed[onnx-runtime]"`.
 See the [low-resource benchmark](benchmarks/low-resource.md) for the memory
 envelope and reproduction commands.
 

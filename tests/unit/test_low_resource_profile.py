@@ -18,7 +18,11 @@ from openmed.core.backends import (
     OnnxTokenClassificationPipeline,
     get_backend,
 )
-from openmed.core.config import LOW_RESOURCE_PII_MODEL, OpenMedConfig
+from openmed.core.config import (
+    LOW_RESOURCE_PII_MODEL,
+    LOW_RESOURCE_PII_REVISION,
+    OpenMedConfig,
+)
 from openmed.core.models import ModelLoader
 from openmed.core.pipeline import Pipeline
 
@@ -51,6 +55,7 @@ def test_low_resource_profile_has_bounded_runtime_defaults():
     assert config.onnx_variant == "int8"
     assert config.onnx_intra_op_num_threads == 2
     assert config.pii_model == LOW_RESOURCE_PII_MODEL
+    assert config.pii_model_revision == LOW_RESOURCE_PII_REVISION
     assert config.timeout == 900
 
 
@@ -63,6 +68,7 @@ def test_environment_profile_applies_runtime_defaults(monkeypatch):
     assert config.backend == "onnx"
     assert config.onnx_variant == "int8"
     assert config.pii_model == LOW_RESOURCE_PII_MODEL
+    assert config.pii_model_revision == LOW_RESOURCE_PII_REVISION
 
 
 def test_pipeline_uses_profile_default_pii_model():
@@ -92,6 +98,15 @@ def test_missing_onnx_runtime_has_actionable_error():
     with patch.object(OnnxBackend, "is_available", return_value=False):
         with pytest.raises(RuntimeError, match=r"openmed\[onnx-runtime\]"):
             get_backend(config=config)
+
+
+def test_model_loader_allows_onnx_without_transformers():
+    config = OpenMedConfig.from_profile("low_resource")
+
+    with patch("openmed.core.models.HF_AVAILABLE", False):
+        loader = ModelLoader(config)
+
+    assert loader.config is config
 
 
 def test_onnx_pipeline_uses_standard_entity_schema():
@@ -128,6 +143,7 @@ def test_onnx_backend_requests_int8_cpu_session():
     assert pipeline.variant == "int8"
     kwargs = load_model.call_args.kwargs
     assert kwargs["variant"] == "int8"
+    assert kwargs["revision"] == LOW_RESOURCE_PII_REVISION
     assert kwargs["providers"] == ("CPUExecutionProvider",)
     assert kwargs["session_options"].intra_op_num_threads == 2
     assert kwargs["session_options"].inter_op_num_threads == 1
@@ -148,12 +164,16 @@ class RejectTorchImports(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, RejectTorchImports())
 from openmed.core.backends import OnnxBackend, get_backend
 from openmed.core.config import load_config_with_profile
+from openmed.core.models import ModelLoader
 
 config = load_config_with_profile()
 with patch.object(OnnxBackend, "is_available", return_value=True):
     backend = get_backend(config=config)
 assert isinstance(backend, OnnxBackend)
 assert config.onnx_variant == "int8"
+loader = ModelLoader(config)
+tokenizer = type("Tokenizer", (), {"model_max_length": 512, "init_kwargs": {}})()
+assert loader.get_max_sequence_length(config.pii_model, tokenizer=tokenizer) == 512
 assert "torch" not in sys.modules
 """
     env = os.environ.copy()
@@ -195,3 +215,7 @@ def test_low_resource_workflow_enforces_cgroup_and_regression_gate():
     assert "--max-peak-rss-mib 2560" in workflow
     assert "--max-regression-percent 10" in workflow
     assert "docs/benchmarks/low-resource-baseline.json" in workflow
+    assert LOW_RESOURCE_PII_REVISION in workflow
+    assert '"openmed/**"' in workflow
+    assert '"pyproject.toml"' in workflow
+    assert '"uv.lock"' in workflow

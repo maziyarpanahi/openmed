@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import sys
 import warnings
 from importlib.util import find_spec
 from typing import (
@@ -25,6 +26,18 @@ from .offline import configure_offline_mode, is_local_only
 
 logger = logging.getLogger(__name__)
 _warned_substitutions: set[str] = set()
+_MISSING_MODULE = object()
+
+
+def _module_available(module_name: str) -> bool:
+    """Return whether a module is loaded or importable without importing it."""
+    loaded = sys.modules.get(module_name, _MISSING_MODULE)
+    if loaded is not _MISSING_MODULE:
+        return loaded is not None
+    try:
+        return find_spec(module_name) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 @runtime_checkable
@@ -66,7 +79,7 @@ class HuggingFaceBackend:
     def is_available(self) -> bool:
         from openmed.core.models import HF_AVAILABLE
 
-        return HF_AVAILABLE
+        return HF_AVAILABLE and _module_available("torch")
 
     def create_pipeline(
         self,
@@ -163,15 +176,13 @@ class OnnxTokenClassificationPipeline:
 class OnnxBackend:
     """CPU-only ONNX Runtime backend with an INT8-capable model loader."""
 
-    _RUNTIME_MODULES = ("huggingface_hub", "numpy", "onnxruntime", "transformers")
+    _RUNTIME_MODULES = ("huggingface_hub", "numpy", "onnxruntime", "tokenizers")
 
     def __init__(self, config: Any = None) -> None:
         self._config = config
 
     def is_available(self) -> bool:
-        return all(
-            find_spec(module_name) is not None for module_name in self._RUNTIME_MODULES
-        )
+        return all(_module_available(name) for name in self._RUNTIME_MODULES)
 
     def create_pipeline(
         self,
@@ -203,6 +214,7 @@ class OnnxBackend:
         model = load_onnx_model(
             model_name,
             variant=variant,
+            revision=getattr(self._config, "pii_model_revision", None) or "main",
             cache_dir=getattr(self._config, "cache_dir", None),
             token=getattr(self._config, "hf_token", None),
             local_files_only=is_local_only(self._config),

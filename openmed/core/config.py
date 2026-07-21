@@ -19,6 +19,7 @@ PROFILE_ENV_VAR = "OPENMED_PROFILE"
 
 # Official CPU-oriented INT8 artifact used by the low-resource profile.
 LOW_RESOURCE_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android"
+LOW_RESOURCE_PII_REVISION = "82f57fcab68125b05f1aa9fdd41319732358311b"
 
 # Environment variable for the PyTorch/Transformers attention backend.
 TORCH_ATTENTION_BACKEND_ENV_VAR = "OPENMED_TORCH_ATTENTION_BACKEND"
@@ -69,6 +70,7 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "onnx_intra_op_num_threads": 2,
         "onnx_variant": "int8",
         "pii_model": LOW_RESOURCE_PII_MODEL,
+        "pii_model_revision": LOW_RESOURCE_PII_REVISION,
         "timeout": 900,
         "use_medical_tokenizer": False,
     },
@@ -124,6 +126,7 @@ class OpenMedConfig:
 
     # Optional profile-selected PII model and ONNX Runtime tuning.
     pii_model: Optional[str] = None
+    pii_model_revision: Optional[str] = None
     onnx_variant: str = "auto"
     onnx_intra_op_num_threads: Optional[int] = None
 
@@ -289,6 +292,7 @@ class OpenMedConfig:
             "num_workers",
             "lazy_model_loading",
             "pii_model",
+            "pii_model_revision",
             "onnx_variant",
             "onnx_intra_op_num_threads",
             "torch_attention_backend",
@@ -360,6 +364,7 @@ class OpenMedConfig:
             "num_workers": self.num_workers,
             "lazy_model_loading": self.lazy_model_loading,
             "pii_model": self.pii_model,
+            "pii_model_revision": self.pii_model_revision,
             "onnx_variant": self.onnx_variant,
             "onnx_intra_op_num_threads": self.onnx_intra_op_num_threads,
             "torch_attention_backend": self.torch_attention_backend,

@@ -6,25 +6,19 @@ on:
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
-      - "openmed/core/backends.py"
-      - "openmed/core/config.py"
-      - "openmed/core/models.py"
-      - "openmed/core/pii.py"
-      - "openmed/core/pipeline.py"
-      - "openmed/utils/profiling.py"
+      - "openmed/**"
+      - "pyproject.toml"
       - "scripts/benchmarks/low_resource_deid.py"
+      - "uv.lock"
   push:
     branches: [master]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
-      - "openmed/core/backends.py"
-      - "openmed/core/config.py"
-      - "openmed/core/models.py"
-      - "openmed/core/pii.py"
-      - "openmed/core/pipeline.py"
-      - "openmed/utils/profiling.py"
+      - "openmed/**"
+      - "pyproject.toml"
       - "scripts/benchmarks/low_resource_deid.py"
+      - "uv.lock"
 
 permissions:
   contents: read
@@ -38,6 +32,7 @@ jobs:
     env:
       CUDA_VISIBLE_DEVICES: ""
       OPENMED_PROFILE: low_resource
+      LOW_RESOURCE_PII_REVISION: 82f57fcab68125b05f1aa9fdd41319732358311b
     steps:
       - uses: actions/checkout@v7
 
@@ -58,6 +53,7 @@ jobs:
             OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android \
             model_int8.onnx config.json id2label.json \
             tokenizer.json tokenizer_config.json \
+            --revision "$LOW_RESOURCE_PII_REVISION" \
             --cache-dir ~/.cache/openmed
 
       - name: Run 4 GiB memory regression gate

@@ -58,6 +58,7 @@ def test_load_model_threads_bnb_4bit_quantization_config(monkeypatch) -> None:
 
 def test_create_pipeline_threads_bnb_4bit_model_kwargs(monkeypatch) -> None:
     _install_fake_bnb(monkeypatch)
+    monkeypatch.setattr("openmed.core.backends._module_available", lambda _: True)
     pipeline = Mock()
     monkeypatch.setattr(models_module, "pipeline", pipeline)
     monkeypatch.setattr(models_module, "HF_AVAILABLE", True)

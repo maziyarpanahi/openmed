@@ -5032,7 +5032,7 @@ onnx-runtime = [
     { name = "huggingface-hub" },
     { name = "numpy" },
     { name = "onnxruntime" },
-    { name = "transformers" },
+    { name = "tokenizers" },
 ]
 openvino = [
     { name = "nncf" },
@@ -5188,6 +5188,7 @@ requires-dist = [
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.7" },
     { name = "tokenizers", marker = "extra == 'hf'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'mlx'", specifier = ">=0.15" },
+    { name = "tokenizers", marker = "extra == 'onnx-runtime'", specifier = ">=0.15" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'coreml'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'gliner'", specifier = ">=2.0" },
@@ -5196,7 +5197,6 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'hf'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'mlx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.50" },
-    { name = "transformers", marker = "extra == 'onnx-runtime'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'openvino'", specifier = ">=4.50" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },

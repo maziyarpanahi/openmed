@@ -73,6 +73,9 @@ def load_baseline(path: Path) -> dict[str, Any]:
     peak = payload.get("peak_rss_mib")
     if not isinstance(peak, (int, float)) or peak <= 0:
         raise ValueError(f"{path} must contain a positive peak_rss_mib")
+    revision = payload.get("model_revision")
+    if not isinstance(revision, str) or not revision:
+        raise ValueError(f"{path} must contain a model_revision")
     return payload
 
 
@@ -90,6 +93,8 @@ def run_benchmark(note_count: int) -> dict[str, Any]:
         raise RuntimeError("low_resource must resolve to the ONNX INT8 backend")
     if config.device != "cpu":
         raise RuntimeError("low_resource must remain CPU-only")
+    if not config.pii_model_revision:
+        raise RuntimeError("low_resource must pin an immutable model revision")
 
     notes = synthetic_notes(note_count)
     loader = ModelLoader(config)
@@ -122,6 +127,7 @@ def run_benchmark(note_count: int) -> dict[str, Any]:
         "backend": config.backend,
         "onnx_variant": config.onnx_variant,
         "model": config.pii_model,
+        "model_revision": config.pii_model_revision,
         "note_count": note_count,
         "entity_count": entity_count,
         "duration_seconds": round(duration, 3),
@@ -150,6 +156,14 @@ def enforce_limits(
         )
     if baseline is None:
         return
+    expected_revision = baseline.get("model_revision")
+    if (
+        expected_revision is not None
+        and result.get("model_revision") != expected_revision
+    ):
+        raise RuntimeError(
+            "Benchmark model revision does not match the committed baseline"
+        )
     allowed = float(baseline["peak_rss_mib"]) * (1.0 + max_regression_percent / 100.0)
     if peak > allowed:
         raise RuntimeError(

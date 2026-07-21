@@ -3,7 +3,8 @@
 The `low_resource` profile is the CPU-only preset for machines with limited
 memory. It selects the official 44M-parameter PII model's INT8 ONNX artifact,
 uses `CPUExecutionProvider`, processes one note at a time, loads the model only
-on first use, and refuses to fall back to a Torch backend.
+on first use, pins the tested artifact revision, and refuses to fall back to a
+Torch backend.
 
 ## Resource envelope
 
@@ -23,7 +24,8 @@ the benchmark report.
 The recorded baseline was measured by CI run `29545929699` on 2026-07-17 with
 Python 3.11.15 on Linux x86-64. The fresh container was constrained to 4 GiB
 RAM, a 4 GiB combined memory/swap ceiling (so swap was disabled), two CPUs, and
-no visible GPU. The committed JSON baseline is
+no visible GPU. The model snapshot was pinned to commit
+`82f57fcab68125b05f1aa9fdd41319732358311b`. The committed JSON baseline is
 [`low-resource-baseline.json`](low-resource-baseline.json).
 
 CI enforces two independent limits:
@@ -48,6 +50,7 @@ Cache the exact model files used by the benchmark:
   OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android \
   model_int8.onnx config.json id2label.json \
   tokenizer.json tokenizer_config.json \
+  --revision 82f57fcab68125b05f1aa9fdd41319732358311b \
   --cache-dir ~/.cache/openmed
 ```
 
@@ -87,6 +90,7 @@ docker run --rm \
       OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android \
       model_int8.onnx config.json id2label.json \
       tokenizer.json tokenizer_config.json \
+      --revision 82f57fcab68125b05f1aa9fdd41319732358311b \
       --cache-dir /root/.cache/openmed && \
     /tmp/openmed-venv/bin/python \
       scripts/benchmarks/low_resource_deid.py \
