@@ -21,6 +21,7 @@ nav:
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - MCP Client Connections: mcp-clients.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
@@ -39,6 +40,7 @@ nav:
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
+      - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
       - Zero-shot NER How-to: zero-shot-howto.md
@@ -88,6 +90,7 @@ nav:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md
       - Onboarding: onboarding.md
+      - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md

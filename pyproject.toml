@@ -41,7 +41,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
-  "mypy==2.2.0",
+  "mypy==2.3.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "fastapi>=0.110",
@@ -58,7 +58,7 @@ dev = [
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
-  "ruff==0.15.20",
+  "ruff==0.15.22",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -247,6 +247,7 @@ docs = [
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-mcp = "openmed.mcp.server:main"
 
 [tool.hatch.build]
 include = [
