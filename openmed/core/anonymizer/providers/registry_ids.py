@@ -30,6 +30,7 @@ from typing import Any, Callable
 from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_bulgarian_egn,
+    validate_chinese_resident_id,
     validate_croatian_oib,
     validate_czech_rodne_cislo,
     validate_czechoslovak_rodne_cislo,
@@ -39,15 +40,20 @@ from openmed.core.pii_i18n import (
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_ghana_card_pin,
     validate_greek_amka,
     validate_hungarian_taj,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
+    validate_kenya_maisha_namba,
+    validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_nigeria_bvn,
+    validate_nigeria_nin,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_polish_pesel,
@@ -68,20 +74,24 @@ from openmed.core.pii_i18n import (
 
 from .clinical_ids import (
     AadhaarProvider,
+    ABDMProvider,
     AustralianMedicareProvider,
     AustralianTFNProvider,
     BCPHNProvider,
     BulgarianEgnProvider,
     CanadianSINProvider,
+    ChineseResidentIdProvider,
     DanishCPRProvider,
     EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
+    GhanaKenyaIdProvider,
     HungarianTAJProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
+    NigeriaIdProvider,
     NPIProvider,
     OntarioHealthCardProvider,
     PhilippinesIdProvider,
@@ -97,12 +107,16 @@ from .clinical_ids import (
     UKNINOProvider,
     VietnameseIdProvider,
     PakistaniCnicProvider,
+    validate_abdm_registry_id,
+    validate_abha_address,
+    validate_abha_number,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
     validate_canadian_sin,
     validate_npi,
     validate_ontario_health_card,
+    validate_pan,
 )
 
 NationalIdValidator = Callable[[str], bool]
@@ -241,6 +255,42 @@ def _register_aliases(
 
 
 def _register_builtin_specs() -> None:
+    nigeria_aliases = ("ng", "en_NG", "ha", "ha_NG", "ig", "ig_NG", "yo", "yo_NG")
+    _register_aliases(
+        nigeria_aliases,
+        id_type="nin",
+        validate=validate_nigeria_nin,
+        faker_method="nigeria_nin",
+        faker_provider=NigeriaIdProvider,
+    )
+    _register_aliases(
+        nigeria_aliases,
+        id_type="bvn",
+        validate=validate_nigeria_bvn,
+        faker_method="nigeria_bvn",
+        faker_provider=NigeriaIdProvider,
+    )
+    _register_aliases(
+        ("gh", "en_GH"),
+        id_type="ghana_card_pin",
+        validate=validate_ghana_card_pin,
+        faker_method="ghana_card_pin",
+        faker_provider=GhanaKenyaIdProvider,
+    )
+    _register_aliases(
+        ("ke", "en_KE", "sw"),
+        id_type="kenya_national_id",
+        validate=validate_kenya_national_id,
+        faker_method="kenya_national_id",
+        faker_provider=GhanaKenyaIdProvider,
+    )
+    _register_aliases(
+        ("ke", "en_KE", "sw"),
+        id_type="maisha_namba",
+        validate=validate_kenya_maisha_namba,
+        faker_method="kenya_maisha_namba",
+        faker_provider=GhanaKenyaIdProvider,
+    )
     _register_aliases(
         ("fr", "fr_FR"),
         id_type="nir",
@@ -286,6 +336,27 @@ def _register_builtin_specs() -> None:
         validate=validate_aadhaar,
         faker_method="aadhaar",
         faker_provider=AadhaarProvider,
+    )
+    for id_type, validate, faker_method in (
+        ("abha_number", validate_abha_number, "abha_number"),
+        ("abha_address", validate_abha_address, "abha_address"),
+        ("pan", validate_pan, "pan"),
+        ("abdm_hpr_id", validate_abdm_registry_id, "abdm_hpr_id"),
+        ("abdm_hfr_id", validate_abdm_registry_id, "abdm_hfr_id"),
+    ):
+        _register_aliases(
+            ("in", "hi", "te", "en_IN", "hi_IN"),
+            id_type=id_type,
+            validate=validate,
+            faker_method=faker_method,
+            faker_provider=ABDMProvider,
+        )
+    _register_aliases(
+        ("zh", "zh_CN", "cn"),
+        id_type="resident_id",
+        validate=validate_chinese_resident_id,
+        faker_method="chinese_resident_id",
+        faker_provider=ChineseResidentIdProvider,
     )
     _register_aliases(
         ("id", "id_ID"),

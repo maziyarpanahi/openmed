@@ -9,12 +9,15 @@ from datetime import date, datetime
 from math import ceil, isfinite
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from openmed.core.decoding.spans import iter_grapheme_cluster_spans
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.quality_gates import detect_overlapping_entities
+from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -91,6 +94,16 @@ class EvalSpan:
 
 
 @dataclass(frozen=True)
+class _GraphemeTally:
+    """Internal whole-grapheme counts for one gold span."""
+
+    matched: int
+    total: int
+    matched_by_script: Mapping[str, int]
+    total_by_script: Mapping[str, int]
+
+
+@dataclass(frozen=True)
 class RateMetric:
     """A metric represented as numerator / denominator."""
 
@@ -136,7 +149,11 @@ class F1Metrics:
 
 @dataclass(frozen=True)
 class LeakageMetrics:
-    """Character-weighted PHI leakage rate and required slices."""
+    """Grapheme-weighted PHI leakage rate and required slices.
+
+    The ``*_chars`` fields remain compatibility aliases, but their counts use
+    complete user-perceived grapheme clusters rather than Unicode code points.
+    """
 
     overall: float
     by_label: dict[str, float]
@@ -150,6 +167,19 @@ class LeakageMetrics:
     total_chars_by_language: dict[str, int]
     leaked_chars_by_device: dict[str, int]
     total_chars_by_device: dict[str, int]
+    by_script: dict[str, float] = field(default_factory=dict)
+    leaked_chars_by_script: dict[str, int] = field(default_factory=dict)
+    total_chars_by_script: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def leaked_graphemes(self) -> int:
+        """Return the number of leaked grapheme clusters."""
+        return self.leaked_chars
+
+    @property
+    def total_graphemes(self) -> int:
+        """Return the number of gold grapheme clusters."""
+        return self.total_chars
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -157,6 +187,10 @@ class LeakageMetrics:
             "by_label": self.by_label,
             "by_language": self.by_language,
             "by_device": self.by_device,
+            "by_script": self.by_script,
+            "unit": "grapheme_cluster",
+            "leaked_graphemes": self.leaked_graphemes,
+            "total_graphemes": self.total_graphemes,
             "leaked_chars": self.leaked_chars,
             "total_chars": self.total_chars,
             "leaked_chars_by_label": self.leaked_chars_by_label,
@@ -165,6 +199,36 @@ class LeakageMetrics:
             "total_chars_by_language": self.total_chars_by_language,
             "leaked_chars_by_device": self.leaked_chars_by_device,
             "total_chars_by_device": self.total_chars_by_device,
+            "leaked_graphemes_by_script": self.leaked_chars_by_script,
+            "total_graphemes_by_script": self.total_chars_by_script,
+            "leaked_chars_by_script": self.leaked_chars_by_script,
+            "total_chars_by_script": self.total_chars_by_script,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class MixedScriptLeakageMetrics:
+    """Leakage gate result for a confusable/mixed-script attack corpus."""
+
+    leakage: LeakageMetrics
+    ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING
+    pre_defense_baseline: float | None = None
+
+    @property
+    def passed(self) -> bool:
+        """Return whether leakage stays at or below the strict ceiling."""
+        return self.leakage.overall <= self.ceiling
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready gate payload."""
+        return {
+            **self.leakage.to_dict(),
+            "ceiling": self.ceiling,
+            "passed": self.passed,
+            "pre_defense_baseline": self.pre_defense_baseline,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -257,7 +321,7 @@ class AbstentionMetrics:
 
 @dataclass(frozen=True)
 class RecallSlices:
-    """Character recall sliced by label, language, and device."""
+    """Grapheme recall sliced by label, language, device, and script."""
 
     overall: float
     by_label: dict[str, float]
@@ -265,6 +329,19 @@ class RecallSlices:
     by_device: dict[str, float]
     covered_chars: int
     total_chars: int
+    by_script: dict[str, float] = field(default_factory=dict)
+    covered_chars_by_script: dict[str, int] = field(default_factory=dict)
+    total_chars_by_script: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def covered_graphemes(self) -> int:
+        """Return the number of fully covered gold grapheme clusters."""
+        return self.covered_chars
+
+    @property
+    def total_graphemes(self) -> int:
+        """Return the number of gold grapheme clusters."""
+        return self.total_chars
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -272,8 +349,16 @@ class RecallSlices:
             "by_label": self.by_label,
             "by_language": self.by_language,
             "by_device": self.by_device,
+            "by_script": self.by_script,
+            "unit": "grapheme_cluster",
+            "covered_graphemes": self.covered_graphemes,
+            "total_graphemes": self.total_graphemes,
             "covered_chars": self.covered_chars,
             "total_chars": self.total_chars,
+            "covered_graphemes_by_script": self.covered_chars_by_script,
+            "total_graphemes_by_script": self.total_chars_by_script,
+            "covered_chars_by_script": self.covered_chars_by_script,
+            "total_chars_by_script": self.total_chars_by_script,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -606,12 +691,12 @@ def compute_leakage_rate(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> LeakageMetrics:
-    """Compute first-class character-weighted PHI leakage.
+    """Compute first-class grapheme-cluster-weighted PHI leakage.
 
-    Leakage is the number of gold PHI characters not covered by any
-    same-label prediction divided by the total number of gold PHI characters.
+    Leakage is the number of gold PHI graphemes not fully covered by any
+    same-label prediction divided by the total number of gold PHI graphemes.
     The same numerator/denominator accounting is reported overall and by
-    label, language, and device.
+    label, language, device, and Unicode script.
     """
     gold = normalize_eval_spans(
         gold_spans,
@@ -626,12 +711,41 @@ def compute_leakage_rate(
         source_text=source_text,
     )
 
-    leaked_lengths: list[int] = []
-    for span in gold:
-        covered = _covered_char_count(span, predicted)
-        leaked_lengths.append(max(span.length - covered, 0))
+    leakage_tallies = [
+        _invert_grapheme_tally(_grapheme_coverage_tally(span, predicted))
+        for span in gold
+    ]
+    return _leakage_metrics_from_tallies(gold, leakage_tallies)
 
-    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+
+def compute_mixed_script_leakage(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING,
+    pre_defense_baseline: float | None = None,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> MixedScriptLeakageMetrics:
+    """Compute grapheme-cluster leakage and apply the evasion ceiling."""
+
+    if not 0.0 <= ceiling <= 1.0:
+        raise ValueError("mixed-script leakage ceiling must be between 0 and 1")
+    if pre_defense_baseline is not None and not 0.0 <= pre_defense_baseline <= 1.0:
+        raise ValueError("pre-defense leakage baseline must be between 0 and 1")
+    leakage = compute_leakage_rate(
+        gold_spans,
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    return MixedScriptLeakageMetrics(
+        leakage=leakage,
+        ceiling=ceiling,
+        pre_defense_baseline=pre_defense_baseline,
+    )
 
 
 def compute_extraction_reemission_leakage(
@@ -648,7 +762,7 @@ def compute_extraction_reemission_leakage(
     values, concept text, evidence spans, and FHIR-style resources. A gold PHI
     span is counted as leaked when its surface form is re-emitted in an output
     field or when an explicit output offset overlaps that gold span. Counts use
-    the same character-weighted numerator and denominator as
+    the same grapheme-weighted numerator and denominator as
     :func:`compute_leakage_rate`.
     """
     gold = normalize_eval_spans(
@@ -674,16 +788,16 @@ def compute_extraction_reemission_leakage(
             if overlap_start < overlap_end:
                 leaked_intervals[span_index].append((overlap_start, overlap_end))
 
-    leaked_lengths = [
-        _merged_interval_length(leaked_intervals.get(index, ()))
-        for index, _span in enumerate(gold)
+    leakage_tallies = [
+        _grapheme_overlap_tally(span, leaked_intervals.get(index, ()))
+        for index, span in enumerate(gold)
     ]
-    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+    return _leakage_metrics_from_tallies(gold, leakage_tallies)
 
 
-def _leakage_metrics_from_lengths(
+def _leakage_metrics_from_tallies(
     gold: Sequence[EvalSpan],
-    leaked_lengths: Sequence[int],
+    tallies: Sequence[_GraphemeTally],
 ) -> LeakageMetrics:
     leaked_by_label: defaultdict[str, int] = defaultdict(int)
     total_by_label: defaultdict[str, int] = defaultdict(int)
@@ -691,25 +805,32 @@ def _leakage_metrics_from_lengths(
     total_by_language: defaultdict[str, int] = defaultdict(int)
     leaked_by_device: defaultdict[str, int] = defaultdict(int)
     total_by_device: defaultdict[str, int] = defaultdict(int)
+    leaked_by_script: defaultdict[str, int] = defaultdict(int)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
 
     total_chars = 0
     leaked_chars = 0
-    for span, raw_leaked in zip(gold, leaked_lengths):
-        leaked = min(max(int(raw_leaked), 0), span.length)
-        total_chars += span.length
+    for span, tally in zip(gold, tallies):
+        leaked = min(max(int(tally.matched), 0), tally.total)
+        total_chars += tally.total
         leaked_chars += leaked
-        total_by_label[span.label] += span.length
+        total_by_label[span.label] += tally.total
         leaked_by_label[span.label] += leaked
-        total_by_language[span.language] += span.length
+        total_by_language[span.language] += tally.total
         leaked_by_language[span.language] += leaked
-        total_by_device[span.device] += span.length
+        total_by_device[span.device] += tally.total
         leaked_by_device[span.device] += leaked
+        for script, total in tally.total_by_script.items():
+            total_by_script[script] += int(total)
+        for script, script_leaked in tally.matched_by_script.items():
+            leaked_by_script[script] += int(script_leaked)
 
     label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, leaked_by_label)
     language_keys = _slice_keys(
         SUPPORTED_LANGUAGES, total_by_language, leaked_by_language
     )
     device_keys = _slice_keys(DEVICE_TIERS, total_by_device, leaked_by_device)
+    script_keys = tuple(sorted(set(total_by_script) | set(leaked_by_script)))
 
     return LeakageMetrics(
         overall=_safe_rate(leaked_chars, total_chars, zero_denominator=0.0),
@@ -718,6 +839,12 @@ def _leakage_metrics_from_lengths(
             language_keys, leaked_by_language, total_by_language, 0.0
         ),
         by_device=_rate_map(device_keys, leaked_by_device, total_by_device, 0.0),
+        by_script=_rate_map(
+            script_keys,
+            leaked_by_script,
+            total_by_script,
+            0.0,
+        ),
         leaked_chars=leaked_chars,
         total_chars=total_chars,
         leaked_chars_by_label=_count_map(label_keys, leaked_by_label),
@@ -726,6 +853,8 @@ def _leakage_metrics_from_lengths(
         total_chars_by_language=_count_map(language_keys, total_by_language),
         leaked_chars_by_device=_count_map(device_keys, leaked_by_device),
         total_chars_by_device=_count_map(device_keys, total_by_device),
+        leaked_chars_by_script=_count_map(script_keys, leaked_by_script),
+        total_chars_by_script=_count_map(script_keys, total_by_script),
     )
 
 
@@ -737,7 +866,7 @@ def compute_character_recall(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> RateMetric:
-    """Compute label-aware character recall over gold PHI spans."""
+    """Compute label-aware grapheme-cluster recall over gold PHI spans."""
     gold = normalize_eval_spans(
         gold_spans,
         default_language=default_language,
@@ -750,8 +879,9 @@ def compute_character_recall(
         default_device=default_device,
         source_text=source_text,
     )
-    total_chars = sum(span.length for span in gold)
-    covered_chars = sum(_covered_char_count(span, predicted) for span in gold)
+    tallies = [_grapheme_coverage_tally(span, predicted) for span in gold]
+    total_chars = sum(tally.total for tally in tallies)
+    covered_chars = sum(tally.matched for tally in tallies)
     return RateMetric(
         rate=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
         numerator=covered_chars,
@@ -767,7 +897,7 @@ def compute_recall_slices(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> RecallSlices:
-    """Compute character recall sliced by canonical labels, languages, devices."""
+    """Compute grapheme recall sliced by label, language, device, and script."""
     gold = normalize_eval_spans(
         gold_spans,
         default_language=default_language,
@@ -787,25 +917,33 @@ def compute_recall_slices(
     total_by_language: defaultdict[str, int] = defaultdict(int)
     covered_by_device: defaultdict[str, int] = defaultdict(int)
     total_by_device: defaultdict[str, int] = defaultdict(int)
+    covered_by_script: defaultdict[str, int] = defaultdict(int)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
 
     total_chars = 0
     covered_chars = 0
     for span in gold:
-        covered = _covered_char_count(span, predicted)
-        total_chars += span.length
+        tally = _grapheme_coverage_tally(span, predicted)
+        covered = tally.matched
+        total_chars += tally.total
         covered_chars += covered
-        total_by_label[span.label] += span.length
+        total_by_label[span.label] += tally.total
         covered_by_label[span.label] += covered
-        total_by_language[span.language] += span.length
+        total_by_language[span.language] += tally.total
         covered_by_language[span.language] += covered
-        total_by_device[span.device] += span.length
+        total_by_device[span.device] += tally.total
         covered_by_device[span.device] += covered
+        for script, total in tally.total_by_script.items():
+            total_by_script[script] += int(total)
+        for script, script_covered in tally.matched_by_script.items():
+            covered_by_script[script] += int(script_covered)
 
     label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, covered_by_label)
     language_keys = _slice_keys(
         SUPPORTED_LANGUAGES, total_by_language, covered_by_language
     )
     device_keys = _slice_keys(DEVICE_TIERS, total_by_device, covered_by_device)
+    script_keys = tuple(sorted(set(total_by_script) | set(covered_by_script)))
 
     return RecallSlices(
         overall=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
@@ -814,8 +952,16 @@ def compute_recall_slices(
             language_keys, covered_by_language, total_by_language, 1.0
         ),
         by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
+        by_script=_rate_map(
+            script_keys,
+            covered_by_script,
+            total_by_script,
+            1.0,
+        ),
         covered_chars=covered_chars,
         total_chars=total_chars,
+        covered_chars_by_script=_count_map(script_keys, covered_by_script),
+        total_chars_by_script=_count_map(script_keys, total_by_script),
     )
 
 
@@ -2169,6 +2315,18 @@ def _overlap_len(a: EvalSpan, b: EvalSpan) -> int:
 
 
 def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> int:
+    """Return fully covered graphemes (legacy private helper name)."""
+    return _grapheme_coverage_tally(gold_span, predicted).matched
+
+
+def _grapheme_count(gold_span: EvalSpan) -> int:
+    return len(_grapheme_units(gold_span))
+
+
+def _grapheme_coverage_tally(
+    gold_span: EvalSpan,
+    predicted: Sequence[EvalSpan],
+) -> _GraphemeTally:
     intervals: list[tuple[int, int]] = []
     for pred_span in predicted:
         if not _label_aware_overlap(gold_span, pred_span):
@@ -2177,7 +2335,98 @@ def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> i
         end = min(gold_span.end, pred_span.end)
         if start < end:
             intervals.append((start, end))
-    return _merged_interval_length(intervals)
+    merged = _merge_intervals(intervals)
+    units = _grapheme_units(gold_span)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
+    covered_by_script: defaultdict[str, int] = defaultdict(int)
+    covered = 0
+    for start, end, script in units:
+        total_by_script[script] += 1
+        if any(left <= start and end <= right for left, right in merged):
+            covered += 1
+            covered_by_script[script] += 1
+    return _GraphemeTally(
+        matched=covered,
+        total=len(units),
+        matched_by_script=dict(covered_by_script),
+        total_by_script=dict(total_by_script),
+    )
+
+
+def _grapheme_overlap_tally(
+    gold_span: EvalSpan,
+    intervals: Sequence[tuple[int, int]],
+) -> _GraphemeTally:
+    merged = _merge_intervals(intervals)
+    units = _grapheme_units(gold_span)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
+    leaked_by_script: defaultdict[str, int] = defaultdict(int)
+    leaked = 0
+    for start, end, script in units:
+        total_by_script[script] += 1
+        if any(max(start, left) < min(end, right) for left, right in merged):
+            leaked += 1
+            leaked_by_script[script] += 1
+    return _GraphemeTally(
+        matched=leaked,
+        total=len(units),
+        matched_by_script=dict(leaked_by_script),
+        total_by_script=dict(total_by_script),
+    )
+
+
+def _invert_grapheme_tally(tally: _GraphemeTally) -> _GraphemeTally:
+    scripts = set(tally.total_by_script) | set(tally.matched_by_script)
+    return _GraphemeTally(
+        matched=max(tally.total - tally.matched, 0),
+        total=tally.total,
+        matched_by_script={
+            script: max(
+                int(tally.total_by_script.get(script, 0))
+                - int(tally.matched_by_script.get(script, 0)),
+                0,
+            )
+            for script in scripts
+        },
+        total_by_script=dict(tally.total_by_script),
+    )
+
+
+def _grapheme_units(gold_span: EvalSpan) -> list[tuple[int, int, str]]:
+    surface = gold_span.text
+    if not surface or len(surface) != gold_span.length:
+        return [
+            (offset, offset + 1, UNKNOWN_SCRIPT)
+            for offset in range(gold_span.start, gold_span.end)
+        ]
+
+    script_runs = tuple(segment_by_script(surface))
+    units: list[tuple[int, int, str]] = []
+    for local_start, local_end in iter_grapheme_cluster_spans(surface):
+        script = _script_for_grapheme(local_start, local_end, script_runs)
+        units.append(
+            (
+                gold_span.start + local_start,
+                gold_span.start + local_end,
+                script,
+            )
+        )
+    return units
+
+
+def _script_for_grapheme(
+    start: int,
+    end: int,
+    script_runs: Sequence[tuple[int, int, str]],
+) -> str:
+    overlaps = [
+        (max(0, min(end, run_end) - max(start, run_start)), -run_start, script)
+        for run_start, run_end, script in script_runs
+        if max(start, run_start) < min(end, run_end)
+    ]
+    if not overlaps:
+        return UNKNOWN_SCRIPT
+    return max(overlaps)[2]
 
 
 _OFFSET_START_KEYS = (
@@ -2346,8 +2595,12 @@ def _surface_boundaries_match(
 
 
 def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
-    if not intervals:
-        return 0
+    return sum(end - start for start, end in _merge_intervals(intervals))
+
+
+def _merge_intervals(
+    intervals: Sequence[tuple[int, int]],
+) -> list[tuple[int, int]]:
     merged: list[tuple[int, int]] = []
     for start, end in sorted(intervals):
         if not merged or start > merged[-1][1]:
@@ -2355,7 +2608,7 @@ def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
         else:
             old_start, old_end = merged[-1]
             merged[-1] = (old_start, max(old_end, end))
-    return sum(end - start for start, end in merged)
+    return merged
 
 
 def _positions_for_spans(spans: Sequence[EvalSpan]) -> set[int]:
@@ -2666,6 +2919,7 @@ __all__ = [
     "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
     "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
+    "MIXED_SCRIPT_LEAKAGE_CEILING",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
@@ -2674,6 +2928,7 @@ __all__ = [
     "RateMetric",
     "F1Metrics",
     "LeakageMetrics",
+    "MixedScriptLeakageMetrics",
     "RecallSlices",
     "ConsistencyMetric",
     "LatencyMetrics",
@@ -2686,6 +2941,7 @@ __all__ = [
     "normalize_eval_spans",
     "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
+    "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
     "compute_recall_slices",

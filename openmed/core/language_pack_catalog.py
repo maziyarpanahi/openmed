@@ -19,7 +19,12 @@ from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackReg
 UNKNOWN_SCRIPT = "Unknown"
 UNROUTED_SCRIPT = "Unrouted"
 
-REGISTERED_SEGMENTERS = frozenset({"pysbd", "unicode-sentence"})
+REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
+
+# These built-in routes intentionally use a named fallback until a dedicated
+# PII model is published. They must not be represented as trained/model-backed
+# languages in release manifests.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"zh"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -35,6 +40,7 @@ def _pack(
     scripts: Sequence[str],
     *,
     national_id_provider: tuple[str, str] | None = None,
+    context_scripts: Sequence[str] = (),
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -48,6 +54,7 @@ def _pack(
         recognizers=("builtin-patterns", "model"),
         surrogate_locale=locale,
         national_id_providers=providers,
+        context_scripts=tuple(context_scripts),
     )
 
 
@@ -133,6 +140,16 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
+        context_scripts=("Hiragana/Katakana",),
+    ),
+    LanguagePack(
+        code="zh",
+        scripts=("Han",),
+        default_model="OpenMed/privacy-filter-multilingual",
+        segmenter_id="jieba",
+        recognizers=("builtin-patterns", "model"),
+        surrogate_locale="zh_CN",
+        national_id_providers={"chinese_resident_id": "zh_CN"},
     ),
     _pack(
         "tr",
@@ -169,6 +186,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         (UNROUTED_SCRIPT,),
         national_id_provider=("ro_RO", "romanian_cnp"),
     ),
+    _pack(
+        "sw",
+        "OpenMed/privacy-filter-multilingual",
+        "sw",
+        ("Latin",),
+        national_id_provider=("sw", "kenya_national_id"),
+    ),
 )
 
 
@@ -181,6 +205,9 @@ class NationalIdOnlyCapability:
 
 
 NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
+    "ha": NationalIdOnlyCapability("ha_NG", ("ha_NG", "nigeria_nin")),
+    "ig": NationalIdOnlyCapability("ig_NG", ("ig_NG", "nigeria_nin")),
+    "yo": NationalIdOnlyCapability("yo_NG", ("yo_NG", "nigeria_nin")),
     "pl": NationalIdOnlyCapability("pl_PL", ("pl_PL", "pesel")),
     "lv": NationalIdOnlyCapability("lv_LV", ("lv_LV", "personas_kods")),
     "sk": NationalIdOnlyCapability("sk_SK", ("sk_SK", "rodne_cislo")),
@@ -199,8 +226,24 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "pakistani_cnic")),
 }
 
-SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
-    "zh": "zh_CN",
+SUPPLEMENTAL_LOCALES: Mapping[str, str] = {}
+
+# Languages surfaced by script routing before a bundled default PII model or
+# complete language pack is available. Callers must supply their own model for
+# these codes; keeping them separate from ``SUPPORTED_LANGUAGES`` avoids
+# advertising model support that OpenMed does not ship yet.
+USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
+    "as",
+    "bn",
+    "gu",
+    "kn",
+    "ml",
+    "mr",
+    "ne",
+    "or",
+    "pa",
+    "ta",
+    "ur",
 }
 
 _SCRIPT_ORDER = (
@@ -211,12 +254,36 @@ _SCRIPT_ORDER = (
     "Hangul",
     "Cyrillic",
     "Devanagari",
+    "Bengali",
+    "Gurmukhi",
+    "Gujarati",
+    "Odia",
+    "Tamil",
     "Telugu",
+    "Kannada",
+    "Malayalam",
     "Greek",
     "Hebrew",
     "Thai",
     UNKNOWN_SCRIPT,
 )
+
+# Exact routing candidates for scripts that cover more languages than the
+# current bundled model-backed language packs. These codes are routing hints;
+# entries in ``USER_SUPPLIED_MODEL_LANGUAGES`` do not gain default models.
+_SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
+    "Arabic": ("ar", "ur"),
+    "Han": ("zh", "ja"),
+    "Devanagari": ("hi", "mr", "ne"),
+    "Bengali": ("bn", "as"),
+    "Gurmukhi": ("pa",),
+    "Gujarati": ("gu",),
+    "Odia": ("or",),
+    "Tamil": ("ta",),
+    "Telugu": ("te",),
+    "Kannada": ("kn",),
+    "Malayalam": ("ml",),
+}
 
 _LOCALE_ORDER = (
     "en",
@@ -235,6 +302,9 @@ _LOCALE_ORDER = (
     "tr",
     "id",
     "th",
+    "ha",
+    "ig",
+    "yo",
     "pl",
     "lv",
     "ko",
@@ -244,6 +314,7 @@ _LOCALE_ORDER = (
     "tl",
     "da",
     "ro",
+    "sw",
     "fi",
     "bg",
     "hr",
@@ -269,6 +340,9 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "he",
     "id",
     "th",
+    "ha",
+    "ig",
+    "yo",
     "pl",
     "lv",
     "ko",
@@ -278,6 +352,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "tl",
     "da",
     "ro",
+    "sw",
     "fi",
     "bg",
     "hr",
@@ -310,6 +385,8 @@ class LanguagePackAdapters:
         builtin_order: Sequence[str] = (),
         national_id_only: Mapping[str, NationalIdOnlyCapability] | None = None,
         supplemental_locales: Mapping[str, str] | None = None,
+        user_supplied_model_languages: Sequence[str] = (),
+        script_language_candidates: Mapping[str, Sequence[str]] | None = None,
     ) -> None:
         """Create and subscribe a live adapter bundle."""
 
@@ -317,6 +394,11 @@ class LanguagePackAdapters:
         self._builtin_order = tuple(builtin_order)
         self._national_id_only = dict(national_id_only or {})
         self._supplemental_locales = dict(supplemental_locales or {})
+        self._user_supplied_model_languages = set(user_supplied_model_languages)
+        self._script_language_candidates = {
+            script: tuple(codes)
+            for script, codes in (script_language_candidates or {}).items()
+        }
         self.supported_languages: set[str] = set()
         self.default_pii_models: dict[str, str] = {}
         self.lang_to_locale: dict[str, str] = {}
@@ -380,8 +462,17 @@ class LanguagePackAdapters:
             )
         )
         self.script_language_hints.clear()
+        routable_languages = (
+            self.supported_languages | self._user_supplied_model_languages
+        )
         for script in script_names:
-            hints = tuple(pack.code for pack in packs if script in pack.scripts)
+            configured_hints = self._script_language_candidates.get(script)
+            if configured_hints is None:
+                hints = tuple(pack.code for pack in packs if script in pack.scripts)
+            else:
+                hints = tuple(
+                    code for code in configured_hints if code in routable_languages
+                )
             if hints:
                 self.script_language_hints[script] = hints
 
@@ -403,6 +494,8 @@ LANGUAGE_PACK_ADAPTERS = LanguagePackAdapters(
     builtin_order=tuple(pack.code for pack in BUILTIN_LANGUAGE_PACKS),
     national_id_only=NATIONAL_ID_ONLY_CAPABILITIES,
     supplemental_locales=SUPPLEMENTAL_LOCALES,
+    user_supplied_model_languages=USER_SUPPLIED_MODEL_LANGUAGES,
+    script_language_candidates=_SCRIPT_LANGUAGE_CANDIDATES,
 )
 
 SUPPORTED_LANGUAGES = LANGUAGE_PACK_ADAPTERS.supported_languages
@@ -415,6 +508,7 @@ NATIONAL_ID_ONLY_LANGUAGES = set(NATIONAL_ID_ONLY_CAPABILITIES)
 
 __all__ = [
     "BUILTIN_LANGUAGE_PACKS",
+    "DEFAULT_MODEL_PLACEHOLDER_LANGUAGES",
     "DEFAULT_PII_MODELS",
     "LANG_TO_LOCALE",
     "LANGUAGE_PACK_ADAPTERS",
@@ -425,5 +519,6 @@ __all__ = [
     "REGISTERED_SEGMENTERS",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_LANGUAGES",
+    "USER_SUPPLIED_MODEL_LANGUAGES",
     "is_registered_segmenter",
 ]

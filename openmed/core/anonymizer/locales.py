@@ -10,6 +10,8 @@ Notes:
   callers as a ``UserWarning`` the first time it's used.
 - Portuguese defaults to ``pt_PT``; pass ``locale="pt_BR"`` explicitly to
   generate Brazilian-Portuguese surrogates (matters for CPF/CNPJ context).
+- Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
+  the surname-aware, Han-only surrogate generators rather than a Latin fallback.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -42,6 +44,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
 # keyed by the target country while allowing generic names/addresses to use a
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
+    "en_GH": "tw_GH",
     "ms_MY": "id_ID",
     "sr_RS": "hr_HR",
 }

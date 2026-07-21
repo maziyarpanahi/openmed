@@ -18,12 +18,14 @@ from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_chinese_resident_id,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
@@ -50,6 +52,8 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "th",
     "ko",
     "ro",
+    "sw",
+    "zh",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -236,6 +240,24 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Control la ",
         ".",
     ),
+    "zh": (
+        "临床记录：患者",
+        "出生于",
+        "。患者编号",
+        "。电话",
+        "。地址",
+        "。复诊日期",
+        "。",
+    ),
+    "sw": (
+        "Dokezo la kliniki: mgonjwa ",
+        " alizaliwa tarehe ",
+        ". Nambari ya mgonjwa ",
+        ". Simu ",
+        ". Anwani ",
+        ". Tarehe ya ufuatiliaji ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -254,6 +276,8 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
+    "sw": validate_kenya_maisha_namba,
+    "zh": validate_chinese_resident_id,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -272,6 +296,8 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "th": "pii_i18n.validate_thai_national_id",
     "ko": "pii_i18n.validate_korean_rrn",
     "ro": "pii_i18n.validate_romanian_cnp",
+    "sw": "pii_i18n.validate_kenya_maisha_namba",
+    "zh": "pii_i18n.validate_chinese_resident_id",
 }
 
 

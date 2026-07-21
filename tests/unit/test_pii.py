@@ -1805,6 +1805,39 @@ class TestAccentNormalization:
         assert result.entities[0].text == original[8:]
         assert result.metadata["unicode_defense"]["removed_zero_width"] == 1
 
+    @patch("openmed.analyze_text")
+    def test_unicode_defense_redacts_obfuscated_name_in_place(self, mock_analyze):
+        """Confusable and invisible attacks are redacted at source offsets."""
+        original = "Patient J\u200bohn D\u03bfe"
+        mock_analyze.return_value = PredictionResult(
+            text="Patient John Doe",
+            entities=[
+                EntityPrediction(
+                    text="John Doe",
+                    label="NAME",
+                    start=8,
+                    end=16,
+                    confidence=0.97,
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            original,
+            method="mask",
+            model_name="fixture-pii-model",
+            use_smart_merging=False,
+            use_safety_sweep=False,
+        )
+
+        assert mock_analyze.call_args[0][0] == "Patient John Doe"
+        assert result.deidentified_text == "Patient [NAME]"
+        assert result.pii_entities[0].start == 8
+        assert result.pii_entities[0].end == len(original)
+        assert result.pii_entities[0].original_text == original[8:]
+
 
 # ---------------------------------------------------------------------------
 # Integration Tests

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from openmed.core.language_pack import LanguagePack, LanguagePackRegistry
 from openmed.core.language_pack_catalog import (
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
     LANG_TO_LOCALE,
     NATIONAL_ID_ONLY_LANGUAGES,
@@ -37,7 +38,7 @@ def _snapshot() -> dict[str, object]:
     }
 
 
-def test_registry_adapters_match_pre_refactor_snapshot_byte_for_byte() -> None:
+def test_registry_adapters_match_committed_snapshot_byte_for_byte() -> None:
     rendered = json.dumps(_snapshot(), indent=2, sort_keys=True) + "\n"
     assert rendered == SNAPSHOT_PATH.read_text(encoding="utf-8")
 
@@ -112,6 +113,13 @@ def test_replacement_refreshes_existing_adapter_objects_in_place() -> None:
 
 
 def test_segmenter_resolver_rejects_undeclared_ids() -> None:
+    assert is_registered_segmenter("jieba")
     assert is_registered_segmenter("pysbd")
     assert is_registered_segmenter("unicode-sentence")
     assert not is_registered_segmenter("no-such-segmenter")
+
+
+def test_chinese_pack_keeps_placeholder_model_explicit() -> None:
+    assert DEFAULT_MODEL_PLACEHOLDER_LANGUAGES == {"zh"}
+    assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
+    assert SCRIPT_LANGUAGE_HINTS["Han"] == ("zh", "ja")

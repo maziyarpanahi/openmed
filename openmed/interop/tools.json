@@ -209,9 +209,11 @@
               "nl",
               "pt",
               "ro",
+              "sw",
               "te",
               "th",
-              "tr"
+              "tr",
+              "zh"
             ],
             "type": "string"
           },
@@ -453,9 +455,11 @@
               "nl",
               "pt",
               "ro",
+              "sw",
               "te",
               "th",
-              "tr"
+              "tr",
+              "zh"
             ],
             "type": "string"
           },

@@ -58,16 +58,50 @@ from .object_storage import (
 )
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
-from .text import TextProcessor, postprocess_text, preprocess_text
+from .text import (
+    INDIC_SCRIPTS,
+    IndicNormalization,
+    IndicNormalizer,
+    TextProcessor,
+    postprocess_text,
+    preprocess_text,
+)
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
+from .zh_segmentation import (
+    ChineseSegmentationConfig,
+    ChineseSegmenter,
+    HanLPSegmenter,
+    JiebaSegmenter,
+    PkusegSegmenter,
+    UserDictionaryEntry,
+    create_chinese_segmenter,
+    create_chinese_segmenter_from_config,
+    load_user_dictionary,
+    segmentation_boundary_f1,
+    validate_segmentation,
+)
 
 __all__ = [
     "TextProcessor",
+    "INDIC_SCRIPTS",
+    "IndicNormalization",
+    "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
     "TokenizationHelper",
     "infer_tokenizer_max_length",
+    "ChineseSegmenter",
+    "ChineseSegmentationConfig",
+    "JiebaSegmenter",
+    "PkusegSegmenter",
+    "HanLPSegmenter",
+    "UserDictionaryEntry",
+    "create_chinese_segmenter",
+    "create_chinese_segmenter_from_config",
+    "load_user_dictionary",
+    "segmentation_boundary_f1",
+    "validate_segmentation",
     "get_tokenizer",
     "clear_tokenizer_cache",
     "OutputFormatter",

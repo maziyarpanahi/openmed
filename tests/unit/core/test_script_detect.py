@@ -1,10 +1,21 @@
-from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
+)
 from openmed.core.script_detect import (
+    CONFUSABLE_DATA_LICENSE,
+    CONFUSABLE_DATA_URL,
+    CONFUSABLE_DATA_VERSION,
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
     UNKNOWN_SCRIPT,
     candidate_languages_for_script,
+    confusable_skeleton,
+    detect_mixed_script,
     detect_script,
+    mixed_script_spans,
     normalize_for_pii_detection,
     segment_by_script,
 )
@@ -33,7 +44,14 @@ def test_detect_script_classifies_single_script_samples():
         "환자 김민수": "Hangul",
         "Пациент Иван": "Cyrillic",
         "मरीज़ अनिता शर्मा": "Devanagari",
+        "রোগী অনিতা": "Bengali",
+        "ਮਰੀਜ਼ ਅਨੀਤਾ": "Gurmukhi",
+        "દર્દી અનીતા": "Gujarati",
+        "ରୋଗୀ ଅନିତା": "Odia",
+        "நோயாளி அனிதா": "Tamil",
         "రోగి సీత రెడ్డి": "Telugu",
+        "ರೋಗಿ ಅನಿತಾ": "Kannada",
+        "രോഗി അനിത": "Malayalam",
         "Ασθενής Νίκος": "Greek",
         "מטופל דוד כהן": "Hebrew",
         "ผู้ป่วย สมชาย": "Thai",
@@ -68,12 +86,72 @@ def test_segment_by_script_mixed_latin_han_offsets_cover_text():
 
 def test_script_language_hints_cover_detectable_scripts():
     expected_scripts = set(SUPPORTED_SCRIPTS) | {UNKNOWN_SCRIPT}
+    routing_languages = (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     assert expected_scripts <= set(SCRIPT_LANGUAGE_HINTS)
     for script in expected_scripts:
         hints = candidate_languages_for_script(script)
         assert hints
-        assert set(hints) <= SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        assert set(hints) <= routing_languages
+
+
+def test_indic_and_arabic_script_language_hints_are_exact():
+    expected_hints = {
+        "Devanagari": ("hi", "mr", "ne"),
+        "Bengali": ("bn", "as"),
+        "Gurmukhi": ("pa",),
+        "Gujarati": ("gu",),
+        "Odia": ("or",),
+        "Tamil": ("ta",),
+        "Telugu": ("te",),
+        "Kannada": ("kn",),
+        "Malayalam": ("ml",),
+        "Arabic": ("ar", "ur"),
+    }
+
+    for script, languages in expected_hints.items():
+        assert candidate_languages_for_script(script) == languages
+
+
+def test_routing_only_languages_do_not_claim_bundled_models():
+    expected_languages = {
+        "as",
+        "bn",
+        "gu",
+        "kn",
+        "ml",
+        "mr",
+        "ne",
+        "or",
+        "pa",
+        "ta",
+        "ur",
+    }
+
+    assert USER_SUPPLIED_MODEL_LANGUAGES == expected_languages
+    assert USER_SUPPLIED_MODEL_LANGUAGES.isdisjoint(DEFAULT_PII_MODELS)
+    assert candidate_languages_for_script("Latin") == (
+        "en",
+        "fr",
+        "de",
+        "it",
+        "es",
+        "nl",
+        "pt",
+        "tr",
+        "sw",
+    )
+
+
+def test_han_script_routes_to_chinese_candidate_language():
+    text = "患者王芳因心房颤动入院"
+
+    script = detect_script(text)
+
+    assert script == "Han"
+    assert candidate_languages_for_script(script)[0] == "zh"
 
 
 def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():
@@ -88,3 +166,48 @@ def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():
     assert normalized.folded_confusables == 1
     assert normalized.remap_span(8, 16) == (8, len(text))
     assert "Patient" not in normalized.to_metadata()
+
+
+def test_normalize_for_pii_detection_routes_indic_runs_and_preserves_marks():
+    text = "Patient न\u093cील ന്\u200d"
+    normalized = normalize_for_pii_detection(text)
+
+    assert normalized.text == "Patient ऩील ൻ"
+    assert normalized.indic_scripts == ("Devanagari", "Malayalam")
+    assert normalized.indic_changes > 0
+    assert normalized.removed_zero_width == 1
+    assert "ी" in normalized.text
+    name_start = normalized.text.index("ऩील")
+    assert normalized.remap_span(name_start, name_start + len("ऩील")) == (8, 12)
+
+
+def test_confusable_skeleton_covers_cross_script_width_and_invisible_attacks():
+    attacked = "J\u043ehn D\u03bfe D\u3007E \uff2d\uff32\uff2e A\u200b1001"
+
+    assert confusable_skeleton(attacked) == "John Doe DOE MRN A1001"
+    assert CONFUSABLE_DATA_VERSION == "17.0.0"
+    assert CONFUSABLE_DATA_LICENSE == "Unicode-3.0"
+    assert CONFUSABLE_DATA_URL.endswith("/17.0.0/security/confusables.txt")
+
+
+def test_mixed_script_detector_flags_only_identifier_local_script_mixing():
+    text = "Patient J\u043ehn met \u4f50\u85e4 after discharge"
+
+    findings = mixed_script_spans(text)
+
+    assert detect_mixed_script(text)
+    assert len(findings) == 1
+    assert findings[0].scripts == ("Cyrillic", "Latin")
+    assert text[findings[0].start : findings[0].end] == "J\u043ehn"
+    assert findings[0].confusable_count == 1
+    assert not detect_mixed_script("Patient John met \u4f50\u85e4 after discharge")
+
+
+def test_han_confusable_normalization_preserves_original_offsets():
+    text = "Patient D\u3007E arrived"
+    normalized = normalize_for_pii_detection(text)
+
+    assert normalized.text == "Patient DOE arrived"
+    assert normalized.mixed_script
+    assert normalized.remap_span(8, 11) == (8, 11)
+    assert text[slice(*normalized.remap_span(8, 11))] == "D\u3007E"
