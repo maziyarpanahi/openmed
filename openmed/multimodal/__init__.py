@@ -58,6 +58,7 @@ from .documents_docx import (
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .epub import extract_epub
+from .documents_rtf import extract_rtf
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 from .image import (
     ImageMetadataReport,
@@ -144,6 +145,7 @@ __all__ = [
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
     "extract_epub",
+    "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
