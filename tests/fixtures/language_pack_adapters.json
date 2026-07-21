@@ -196,6 +196,9 @@
     "Arabic": [
       "ar"
     ],
+    "Bengali": [
+      "hi"
+    ],
     "Cyrillic": [
       "en"
     ],
@@ -204,6 +207,12 @@
     ],
     "Greek": [
       "en"
+    ],
+    "Gujarati": [
+      "hi"
+    ],
+    "Gurmukhi": [
+      "hi"
     ],
     "Han": [
       "ja"
@@ -217,6 +226,9 @@
     "Hiragana/Katakana": [
       "ja"
     ],
+    "Kannada": [
+      "te"
+    ],
     "Latin": [
       "en",
       "fr",
@@ -226,6 +238,15 @@
       "nl",
       "pt",
       "tr"
+    ],
+    "Malayalam": [
+      "te"
+    ],
+    "Odia": [
+      "hi"
+    ],
+    "Tamil": [
+      "te"
     ],
     "Telugu": [
       "te"
