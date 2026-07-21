@@ -12,9 +12,11 @@ from typing import Any, Mapping, Sequence
 from openmed.core import pii as pii_module
 from openmed.core.labels import (
     CANONICAL_LABELS,
+    CLINICAL_CONCEPT,
     DIRECT_IDENTIFIER,
     HIPAA_SAFE_HARBOR_CLASSES,
     LABEL_TO_HIPAA,
+    QUASI_IDENTIFIER,
     policy_label_for,
 )
 from openmed.core.policy import PolicyName, PolicyProfile, load_policy
@@ -32,6 +34,13 @@ BUNDLED_DEIDENTIFICATION_POLICIES: tuple[str, ...] = tuple(
     policy.value for policy in PolicyName
 )
 EXPECTATION_SOURCE = "openmed.core.policy.PolicyProfile.action_for"
+BUNDLED_POLICY_LABEL_ACTION_REQUIREMENTS: Mapping[str, Mapping[str, str]] = {
+    PolicyName.CHINA_PIPL.value: {
+        DIRECT_IDENTIFIER: "replace",
+        QUASI_IDENTIFIER: "mask",
+        CLINICAL_CONCEPT: "mask",
+    }
+}
 
 
 @dataclass(frozen=True)
@@ -195,7 +204,7 @@ def evaluate_profile_compliance(
     """Evaluate one profile against policy compliance fixtures."""
     resolved = _resolve_profile(profile)
     expectations = derive_profile_expectations(resolved)
-    failures: list[PolicyComplianceFailure] = []
+    failures = _profile_action_requirement_failures(resolved, expectations)
     action_counts: Counter[str] = Counter()
     expected_action_counts: Counter[str] = Counter()
     residual_direct_identifier_count = 0
@@ -286,6 +295,33 @@ def evaluate_profile_compliance(
         missing_safe_harbor_classes=tuple(sorted(missing_safe_harbor_classes)),
         failures=tuple(failures),
     )
+
+
+def _profile_action_requirement_failures(
+    profile: PolicyProfile,
+    expectations: Mapping[str, PolicyActionExpectation],
+) -> list[PolicyComplianceFailure]:
+    requirements = BUNDLED_POLICY_LABEL_ACTION_REQUIREMENTS.get(profile.name, {})
+    failures: list[PolicyComplianceFailure] = []
+    for label, expectation in expectations.items():
+        required_action = requirements.get(expectation.policy_label)
+        if required_action is None or expectation.action == required_action:
+            continue
+        failures.append(
+            PolicyComplianceFailure(
+                fixture_id="__profile__",
+                label=label,
+                policy_label=expectation.policy_label,
+                hipaa_safe_harbor_class=expectation.hipaa_safe_harbor_class,
+                start=0,
+                end=0,
+                span_hash="",
+                expected_action=required_action,
+                observed_action=expectation.action,
+                reason="profile_action_requirement_mismatch",
+            )
+        )
+    return failures
 
 
 def run_policy_compliance(
@@ -531,6 +567,7 @@ def _action_counts(counter: Counter[str]) -> dict[str, int]:
 
 __all__ = [
     "BUNDLED_DEIDENTIFICATION_POLICIES",
+    "BUNDLED_POLICY_LABEL_ACTION_REQUIREMENTS",
     "EXPECTATION_SOURCE",
     "POLICY_COMPLIANCE",
     "POLICY_COMPLIANCE_FIXTURE_PATH",
