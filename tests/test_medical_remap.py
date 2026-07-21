@@ -1,8 +1,29 @@
 from openmed.processing.tokenization import (
     SpanToken,
+    grapheme_tokenize,
+    indic_grapheme_tokenize,
     medical_tokenize,
     remap_predictions_to_tokens,
 )
+
+
+def test_grapheme_tokenizers_keep_indic_aksharas_intact():
+    text = "Patient क्षमा வந்தார்"
+
+    grapheme_tokens = grapheme_tokenize(text)
+    indic_tokens = indic_grapheme_tokenize(text)
+    medical_tokens = medical_tokenize(text)
+
+    assert any(token.text == "क्ष" for token in grapheme_tokens)
+    assert [token.text for token in indic_tokens] == ["क्ष", "मा", "வ", "ந்தா", "ர்"]
+    assert [token.text for token in medical_tokens] == [
+        "Patient",
+        "क्ष",
+        "मा",
+        "வ",
+        "ந்தா",
+        "ர்",
+    ]
 
 
 def test_medical_tokenize_keeps_hyphen_chain():

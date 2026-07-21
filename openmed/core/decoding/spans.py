@@ -126,6 +126,66 @@ def snap_span_to_grapheme_boundaries(
     return snapped_start, boundaries[end_index]
 
 
+def iter_grapheme_clusters(text: str) -> Iterator[tuple[int, int]]:
+    """Yield extended grapheme-cluster offsets for ``text``.
+
+    Args:
+        text: Original, unnormalized Unicode text.
+
+    Yields:
+        Half-open ``(start, end)`` code-point offsets for each whole cluster.
+    """
+
+    yield from iter_grapheme_cluster_spans(text)
+
+
+def is_grapheme_boundary(index: int, text: str) -> bool:
+    """Return whether ``index`` is a grapheme boundary in ``text``.
+
+    Args:
+        index: Candidate Python code-point offset.
+        text: Original, unnormalized Unicode text.
+
+    Returns:
+        ``True`` when ``index`` is the start or end of a whole cluster.
+    """
+
+    if index < 0 or index > len(text):
+        return False
+    if index in {0, len(text)}:
+        return True
+    return any(end == index for _, end in iter_grapheme_cluster_spans(text))
+
+
+def is_indic_text(text: str) -> bool:
+    """Return whether ``text`` contains a supported Indic script run.
+
+    Args:
+        text: Text to inspect without normalization.
+
+    Returns:
+        ``True`` when the script detector finds one of the supported Indic
+        scripts.
+    """
+
+    return any(script in INDIC_SCRIPTS for _, _, script in segment_by_script(text))
+
+
+def snap_span_to_graphemes(start: int, end: int, text: str) -> tuple[int, int]:
+    """Snap a span outward using the canonical grapheme-boundary engine.
+
+    Args:
+        start: Inclusive Python code-point offset.
+        end: Exclusive Python code-point offset.
+        text: Original text referenced by the offsets.
+
+    Returns:
+        Clamped ``(start, end)`` offsets that do not bisect a cluster.
+    """
+
+    return snap_span_to_grapheme_boundaries(start, end, text)
+
+
 def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
     """Strip whole whitespace clusters from ``text[start:end]``.
 
@@ -207,7 +267,7 @@ def refine_privacy_filter_span(
             )
 
     scripts = {script for _, _, script in script_runs}
-    if scripts <= {"Latin", UNKNOWN_SCRIPT}:
+    if scripts <= {"Latin", UNKNOWN_SCRIPT} or scripts & INDIC_SCRIPTS:
         for suffix in (" and", " or"):
             if span_text.lower().endswith(suffix):
                 end -= len(suffix)
