@@ -20,6 +20,7 @@ import json
 import warnings
 
 import pytest
+from faker import Faker
 from faker.config import AVAILABLE_LOCALES
 
 from openmed.core.anonymizer import Anonymizer
@@ -31,6 +32,8 @@ from openmed.core.anonymizer.locales import (
     locale_coherence_report,
     resolve_locale,
 )
+from openmed.core.anonymizer.providers.clinical_ids import register_clinical_providers
+from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
@@ -143,6 +146,21 @@ class TestNationalIdRoundTrip:
                 f"{lang!r} surrogate {surrogate!r} (seed={seed}, locale={locale}) "
                 f"failed every registered validator "
                 f"{[v.__name__ for v in validators]}"
+            )
+
+    @pytest.mark.parametrize("id_type", ["curp", "rfc"])
+    def test_mexican_id_pair_round_trips_registered_validators(self, id_type):
+        spec = get_national_id("es_MX", id_type)
+        assert spec is not None
+
+        faker = Faker("es_MX")
+        register_clinical_providers(faker)
+        for seed in range(SAMPLE_SIZE):
+            faker.seed_instance(seed)
+            surrogate = getattr(faker, spec.faker_method)()
+            assert spec.validate(surrogate), (
+                f"es_MX/{id_type} surrogate {surrogate!r} (seed={seed}) "
+                "failed its registered validator"
             )
 
 
