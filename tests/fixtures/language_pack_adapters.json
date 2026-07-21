@@ -49,6 +49,7 @@
     "ro": "ro_RO",
     "sk": "sk_SK",
     "sr": "sr_RS",
+    "sw": "sw",
     "te": "en_IN",
     "th": "th_TH",
     "tl": "fil_PH",
@@ -73,6 +74,7 @@
     "pl",
     "sk",
     "sr",
+    "sw",
     "tl",
     "vi",
     "yo"
@@ -185,6 +187,10 @@
     "sr": [
       "sr_RS",
       "jmbg"
+    ],
+    "sw": [
+      "sw",
+      "kenya_national_id"
     ],
     "te": [
       "en_IN",

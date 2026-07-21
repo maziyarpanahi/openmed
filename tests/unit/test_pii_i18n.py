@@ -51,6 +51,7 @@ from openmed.core.pii_i18n import (
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_ghana_card_pin,
     validate_greek_amka,
     validate_hungarian_taj,
     validate_iban,
@@ -58,6 +59,8 @@ from openmed.core.pii_i18n import (
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
+    validate_kenya_maisha_namba,
+    validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
@@ -126,6 +129,7 @@ class TestConstants:
             "cs",
             "el",
             "vi",
+            "sw",
         }
 
     def test_language_names_keys(self):
@@ -4408,6 +4412,255 @@ class TestNigerianIdentifiers:
             assert result.pii_entities[0].label == entity["label"]
             assert entity["text"] not in result.deidentified_text
             assert result.pii_entities[0].redacted_text != entity["text"]
+
+
+class TestGhanaKenyaIdentifiers:
+    """Validator, pattern, provider, and fixture coverage for Ghana and Kenya."""
+
+    @staticmethod
+    def _faker(seed: int, locale: str = "en_KE") -> Faker:
+        faker = Faker(locale)
+        register_clinical_providers(faker)
+        faker.seed_instance(seed)
+        return faker
+
+    @staticmethod
+    def _fixture_rows():
+        return [
+            json.loads(line)
+            for line in Path("tests/fixtures/pii/gh_ke_synthetic_notes.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+
+    def test_ghana_card_validator_accepts_ghana_and_resident_prefixes(self):
+        assert validate_ghana_card_pin("GHA-012345678-9")
+        assert validate_ghana_card_pin("NGA-123456789-0")
+        assert validate_ghana_card_pin("nga-123456789-0")
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "GHA6899581872",
+            "GH-689958187-2",
+            "GHA-68995818-2",
+            "GHA-689958187-A",
+            "GHA-689958187-*",
+            "GHA-６８９９５８１８７-2",
+            None,
+        ),
+    )
+    def test_ghana_card_validator_rejects_bad_shape(self, value):
+        assert not validate_ghana_card_pin(value)
+
+    def test_one_thousand_ghana_surrogates_are_structurally_valid(self):
+        faker = self._faker(841)
+        for _ in range(1_000):
+            surrogate = faker.ghana_card_pin()
+            assert re.fullmatch(r"GHA-[0-9]{9}-[0-9]", surrogate)
+            assert validate_ghana_card_pin(surrogate)
+
+    def test_providers_are_deterministic_format_preserving_and_distinct(self):
+        first = self._faker(1418)
+        second = self._faker(1418)
+
+        ghana_source = "GHA-012345678-9"
+        ghana_first = first.ghana_card_pin(ghana_source)
+        ghana_second = second.ghana_card_pin(ghana_source)
+        assert ghana_first == ghana_second
+        assert ghana_first != ghana_source
+        assert re.fullmatch(r"GHA-[0-9]{9}-[0-9]", ghana_first)
+        assert validate_ghana_card_pin(ghana_first)
+
+        for source, method, validator in (
+            ("7654321", "kenya_national_id", validate_kenya_national_id),
+            ("12345678", "kenya_national_id", validate_kenya_national_id),
+            ("246813579", "kenya_maisha_namba", validate_kenya_maisha_namba),
+        ):
+            surrogate = getattr(first, method)(source)
+            assert surrogate != source
+            assert len(surrogate) == len(source)
+            assert validator(surrogate)
+
+    @pytest.mark.parametrize("value", ("1234567", "12345678"))
+    def test_kenya_national_id_validator_accepts_required_lengths(self, value):
+        assert validate_kenya_national_id(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("123456", "123456789", "1234 5678", "１２３４５６７", None),
+    )
+    def test_kenya_national_id_validator_rejects_other_shapes(self, value):
+        assert not validate_kenya_national_id(value)
+
+    def test_kenya_maisha_validator_is_strictly_nine_ascii_digits(self):
+        assert validate_kenya_maisha_namba("246813579")
+        assert not validate_kenya_maisha_namba("24681357")
+        assert not validate_kenya_maisha_namba("2468135790")
+        assert not validate_kenya_maisha_namba("２４６８１３５７９")
+        assert not validate_kenya_maisha_namba(None)
+
+    def test_kenyan_patterns_require_english_or_swahili_identity_context(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        patterns = LOCALE_PII_PATTERNS["en_ke"]
+        assert safety_sweep("12345678", [], patterns=patterns) == []
+        assert (
+            safety_sweep("Lab result 7654321; MRN-87654321.", [], patterns=patterns)
+            == []
+        )
+        assert safety_sweep("246813579", [], patterns=patterns) == []
+
+        cases = (
+            ("ID No: 12345678", "KE_NATIONAL_ID", "12345678"),
+            ("Nambari ya kitambulisho 7654321", "KE_NATIONAL_ID", "7654321"),
+            ("Maisha Namba: 246813579", "KE_MAISHA_NAMBA", "246813579"),
+            (
+                "Nambari ya Maisha 975318642",
+                "KE_MAISHA_NAMBA",
+                "975318642",
+            ),
+        )
+        for text, label, expected in cases:
+            entities = safety_sweep(text, [], patterns=patterns)
+            assert [(entity.label, entity.text) for entity in entities] == [
+                (label, expected)
+            ]
+
+    def test_ghana_pattern_requires_explicit_card_context(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        patterns = LOCALE_PII_PATTERNS["en_gh"]
+        assert safety_sweep("GHA-012345678-9", [], patterns=patterns) == []
+        entities = safety_sweep(
+            "Ghana Card PIN: GHA-012345678-9",
+            [],
+            patterns=patterns,
+        )
+        assert [(entity.label, entity.text) for entity in entities] == [
+            ("GH_GHANA_CARD", "GHA-012345678-9")
+        ]
+
+    def test_source_labels_normalize_and_route_to_distinct_surrogates(self):
+        from openmed.core.labels import ID_NUM, id_subtype_for, normalize_label
+
+        for label in ("GH_GHANA_CARD", "KE_NATIONAL_ID", "KE_MAISHA_NAMBA"):
+            assert normalize_label(label) == ID_NUM
+            assert id_subtype_for(label) == "national_id"
+
+        ghana = Anonymizer(locale="en_GH", consistent=True, seed=841).surrogate(
+            "GHA-012345678-9",
+            "GH_GHANA_CARD",
+        )
+        kenya_id = Anonymizer(locale="en_KE", consistent=True, seed=841).surrogate(
+            "12345678",
+            "KE_NATIONAL_ID",
+        )
+        maisha = Anonymizer(locale="en_KE", consistent=True, seed=841).surrogate(
+            "246813579",
+            "KE_MAISHA_NAMBA",
+        )
+        assert validate_ghana_card_pin(ghana)
+        assert validate_kenya_national_id(kenya_id)
+        assert validate_kenya_maisha_namba(maisha)
+
+    def test_locale_aliases_share_kenyan_patterns(self):
+        assert LOCALE_PII_PATTERNS["sw"] is LOCALE_PII_PATTERNS["en_ke"]
+        swahili_patterns = get_patterns_for_language("sw")
+        assert all(pattern in swahili_patterns for pattern in LOCALE_PII_PATTERNS["sw"])
+        assert LOCALE_PII_PATTERNS["en_gh"] is not LOCALE_PII_PATTERNS["en_ke"]
+
+    def test_synthetic_fixture_offsets_and_hard_negatives(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        rows = self._fixture_rows()
+        assert {row["id"] for row in rows} == {
+            "gh-synthetic-card-en",
+            "ke-synthetic-national-id-en",
+            "ke-synthetic-national-id-sw",
+            "ke-synthetic-maisha-en",
+            "ke-synthetic-maisha-sw",
+            "ke-synthetic-hard-negatives",
+        }
+
+        for row in rows:
+            assert row["metadata"]["synthetic"] is True
+            assert row["metadata"]["generated_only"] is True
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"]
+
+        hard_negative = next(
+            row for row in rows if row["id"] == "ke-synthetic-hard-negatives"
+        )
+        assert (
+            safety_sweep(
+                hard_negative["text"],
+                [],
+                patterns=LOCALE_PII_PATTERNS["en_ke"],
+            )
+            == []
+        )
+
+    def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        gold_count = 0
+        leaked_count = 0
+        for row in self._fixture_rows():
+            if not row["entities"]:
+                continue
+            language = row["language"]
+            lang = "en" if language.startswith("en_") else language
+            locale = language if language.startswith("en_") else None
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-16T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=lang,
+                locale=locale,
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=lang,
+                consistent=True,
+                seed=841,
+                locale=locale,
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["entities"])
+            for entity in row["entities"]:
+                gold_count += 1
+                leaked_count += int(entity["text"] in result.deidentified_text)
+            assert result.pii_entities[0].redacted_text != row["entities"][0]["text"]
+
+            replacement = result.pii_entities[0].redacted_text
+            if language == "en_GH":
+                assert validate_ghana_card_pin(replacement)
+            elif row["entities"][0]["label"] == "KE_MAISHA_NAMBA":
+                assert validate_kenya_maisha_namba(replacement)
+            else:
+                assert validate_kenya_national_id(replacement)
+                assert len(replacement) == len(row["entities"][0]["text"])
+
+        assert gold_count == 5
+        assert leaked_count / gold_count == 0
 
 
 if __name__ == "__main__":

@@ -259,6 +259,9 @@ _LOCALE_ID_METHODS = {
     "ha_NG": "nigeria_nin",
     "ig_NG": "nigeria_nin",
     "yo_NG": "nigeria_nin",
+    "en_GH": "ghana_card_pin",
+    "en_KE": "kenya_national_id",
+    "sw": "kenya_national_id",
     "pt_BR": "cpf",
     "pt_PT": "nif",
     "fr_FR": "ssn",
@@ -369,6 +372,12 @@ def _gen_id_num(faker, original, *, locale):
             return _generate_distinct_chinese_resident_id(faker, original)
         if method == "nigeria_nin":
             return getattr(faker, method)(original)
+        if locale in {"en_GH", "en_KE", "sw"}:
+            if locale in {"en_KE", "sw"} and re.fullmatch(
+                r"[0-9]{9}", original.strip()
+            ):
+                return faker.kenya_maisha_namba(original)
+            return getattr(faker, method)(original)
         return getattr(faker, method)()
     return preserve_id_pattern(original, rng=faker.random)
 
@@ -419,6 +428,18 @@ def _gen_ng_nin(faker, original, *, locale):
 
 def _gen_ng_bvn(faker, original, *, locale):
     return faker.nigeria_bvn(original)
+
+
+def _gen_ghana_card(faker, original, *, locale):
+    return faker.ghana_card_pin(original)
+
+
+def _gen_ke_national_id(faker, original, *, locale):
+    return faker.kenya_national_id(original)
+
+
+def _gen_ke_maisha_namba(faker, original, *, locale):
+    return faker.kenya_maisha_namba(original)
 
 
 def _gen_ssn(faker, original, *, locale):
@@ -697,6 +718,9 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     "ABDM_HFR_ID": _gen_abdm_hfr_id,
     "NG_NIN": _gen_ng_nin,
     "NG_BVN": _gen_ng_bvn,
+    "GH_GHANA_CARD": _gen_ghana_card,
+    "KE_NATIONAL_ID": _gen_ke_national_id,
+    "KE_MAISHA_NAMBA": _gen_ke_maisha_namba,
 }
 
 
