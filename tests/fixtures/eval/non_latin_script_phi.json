@@ -1,0 +1,53 @@
+{
+  "text": "John 王明 क्षिति రావు أحمد",
+  "gold_spans": [
+    {
+      "start": 0,
+      "end": 4,
+      "label": "PERSON",
+      "language": "en",
+      "script": "Latin"
+    },
+    {
+      "start": 5,
+      "end": 7,
+      "label": "PERSON",
+      "language": "zh",
+      "script": "Han"
+    },
+    {
+      "start": 8,
+      "end": 14,
+      "label": "PERSON",
+      "language": "hi",
+      "script": "Devanagari"
+    },
+    {
+      "start": 15,
+      "end": 19,
+      "label": "PERSON",
+      "language": "te",
+      "script": "Telugu"
+    },
+    {
+      "start": 20,
+      "end": 24,
+      "label": "PERSON",
+      "language": "ar",
+      "script": "Arabic"
+    }
+  ],
+  "predicted_spans_all_covered": [
+    {"start": 0, "end": 4, "label": "PERSON", "language": "en"},
+    {"start": 5, "end": 7, "label": "PERSON", "language": "zh"},
+    {"start": 8, "end": 14, "label": "PERSON", "language": "hi"},
+    {"start": 15, "end": 19, "label": "PERSON", "language": "te"},
+    {"start": 20, "end": 24, "label": "PERSON", "language": "ar"}
+  ],
+  "predicted_spans_telugu_drop": [
+    {"start": 0, "end": 4, "label": "PERSON", "language": "en"},
+    {"start": 5, "end": 7, "label": "PERSON", "language": "zh"},
+    {"start": 8, "end": 14, "label": "PERSON", "language": "hi"},
+    {"start": 20, "end": 24, "label": "PERSON", "language": "ar"}
+  ]
+}
