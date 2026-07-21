@@ -7,8 +7,8 @@ policy in memory, and returns deterministic JSON. Upload credentials, HTTP
 requests, and live DHIS2 metadata changes remain outside OpenMed.
 
 The output follows the DHIS2 structures used by the
-[`/api/dataValueSets`](https://docs.dhis2.org/en/develop/using-the-api/dhis-core-version-master/data.html)
-and [`/api/tracker`](https://docs.dhis2.org/en/develop/using-the-api/dhis-core-version-master/tracker.html)
+[`/api/dataValueSets`](https://docs.dhis2.org/en/develop/using-the-api/dhis-core-version-243/data.html)
+and [`/api/tracker`](https://docs.dhis2.org/en/develop/using-the-api/dhis-core-version-243/tracker.html)
 imports. `aggregate.json` is a local collection whose `dataValueSets` members
 are individual data-value-set request bodies; `tracker.json` contains the
 `trackedEntities` and `events` arrays accepted by the tracker import.
@@ -21,9 +21,10 @@ Run the steps in this order:
    workspace.
 2. Export a local `/api/organisationUnits` snapshot containing every referenced
    unit and its ancestors, with `id`, `level`, and `parent.id` fields.
-3. Run `export_dhis2`. Free text is de-identified first, fine-grained
-   `orgUnit` references are replaced with the configured ancestor, dates are
-   shifted or coarsened, and small aggregate cells are suppressed.
+3. Run `export_dhis2`. Free text is de-identified first, precise geometry is
+   removed, fine-grained `orgUnit` references are replaced with the configured
+   ancestor, dates are shifted or coarsened, and small aggregate cells are
+   suppressed.
 4. Inspect the endpoint payloads and the value-free manifest locally.
 5. Only then hand the endpoint bodies to the facility's existing authenticated
    uploader.
@@ -66,16 +67,20 @@ Path("tracker.json").write_text(result.tracker_json() + "\n")
 Path("manifest.json").write_text(result.manifest_json() + "\n")
 ```
 
-By default, `comment`, `storedBy`, and tracker attribute `value` strings pass
-through OpenMed's `hipaa_safe_harbor` de-identification pipeline. A caller may
-provide a local `text_redactor` callable when it already owns a warmed model or
-a stricter pipeline. The callable must return a string or an object with a
-`deidentified_text` string.
+By default, `comment`, `storedBy`, `completedBy`, tracker attribute and data-value
+`value` strings, and note `value` strings pass through OpenMed's
+`hipaa_safe_harbor` de-identification pipeline. Non-string values in these
+sensitive string fields fail closed, except for the `null` values DHIS2 uses to
+delete attributes and data values. A caller may provide a local `text_redactor`
+callable when it already owns a warmed model or a stricter pipeline. The
+callable must return a string or an object with a `deidentified_text` string.
 
 ## Geography, dates, and small cells
 
 - `generalization_level=3` replaces every level-4 facility UID with its level-3
   ancestor. References already at level 3 or above stay unchanged.
+- Exact `geometry`, `latitude`, and `longitude` fields are removed rather than
+  carried into the de-identified payload.
 - `date_mode="shift"` uses the same deterministic, per-record offset derivation
   as tabular quasi-identifier redaction. Set `date_shift_days` to reuse one
   explicit non-zero offset.
@@ -97,6 +102,7 @@ does not contain comments, attribute values, usernames, organisation-unit UIDs,
 or suppressed cell values. Before upload, verify at least:
 
 - `counts.org_units_generalized` matches the expected facility references;
+- `counts.precise_locations_removed` matches the expected coordinate fields;
 - `counts.suppressed_aggregate_values` matches the low-volume review;
 - `transformed_paths` covers all expected free-text and date fields;
 - the serialized endpoint payloads pass the facility's no-PHI gate and DHIS2

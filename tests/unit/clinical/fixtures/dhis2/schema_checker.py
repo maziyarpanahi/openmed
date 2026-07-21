@@ -41,6 +41,10 @@ def validate_tracker_payload(payload: Any) -> None:
         assert isinstance(event.get("dataValues"), list)
         for data_value in event["dataValues"]:
             _require_strings(data_value, "dataElement", "value")
+        if "notes" in event:
+            assert isinstance(event["notes"], list)
+            for note in event["notes"]:
+                _require_strings(note, "value")
 
 
 def _require_strings(value: Any, *keys: str) -> None:

@@ -12,7 +12,7 @@ import json
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -41,8 +41,13 @@ _DATE_FIELDS = frozenset(
         "updatedAtClient",
     }
 )
-_TEXT_FIELDS = frozenset({"comment", "storedBy"})
-_ISO_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(.*)$")
+_TEXT_FIELDS = frozenset({"comment", "completedBy", "storedBy"})
+_PRECISE_GEOGRAPHY_FIELDS = frozenset({"geometry", "latitude", "longitude"})
+_ISO_DATE_RE = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2})"
+    r"(?P<suffix>T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?"
+    r"(?:Z|[+-]\d{2}:?\d{2})?)?$"
+)
 _WEEKLY_PERIOD_RE = re.compile(r"^(\d{4})W(\d{1,2})$")
 _UNSET = cast(int | None, object())
 
@@ -95,8 +100,13 @@ class DHIS2ExportConfig:
                 raise ValueError("small_cell_threshold must be >= 0")
         if self.date_mode not in {"shift", "coarsen", "none"}:
             raise ValueError("date_mode must be 'shift', 'coarsen', or 'none'")
-        if self.date_shift_days == 0:
-            raise ValueError("date_shift_days must be non-zero")
+        if self.date_shift_days is not None:
+            if isinstance(self.date_shift_days, bool) or not isinstance(
+                self.date_shift_days, int
+            ):
+                raise TypeError("date_shift_days must be an integer or None")
+            if self.date_shift_days == 0:
+                raise ValueError("date_shift_days must be non-zero")
         if self.date_mode != "shift" and self.date_shift_days is not None:
             raise ValueError("date_shift_days requires date_mode='shift'")
         if self.period_granularity not in {"month", "year"}:
@@ -285,6 +295,7 @@ class _ManifestState:
     events: int = 0
     org_units_examined: int = 0
     org_units_generalized: int = 0
+    precise_locations_removed: int = 0
     text_values_examined: int = 0
     text_values_redacted: int = 0
     dates_examined: int = 0
@@ -325,6 +336,7 @@ class _ManifestState:
                 "events": self.events,
                 "org_units_examined": self.org_units_examined,
                 "org_units_generalized": self.org_units_generalized,
+                "precise_locations_removed": self.precise_locations_removed,
                 "text_values_examined": self.text_values_examined,
                 "text_values_redacted": self.text_values_redacted,
                 "dates_examined": self.dates_examined,
@@ -491,12 +503,17 @@ class DHIS2Exporter:
         state: _ManifestState,
         record_shift: int | None,
         aggregate_context: bool,
-        attribute_record: bool = False,
+        redact_value_record: bool = False,
     ) -> dict[str, Any]:
         output: dict[str, Any] = {}
         for key in sorted(value):
             item = value[key]
             child_path = f"{path}.{key}"
+            if key in _PRECISE_GEOGRAPHY_FIELDS:
+                if item is not None:
+                    state.precise_locations_removed += 1
+                    state.changed(child_path)
+                continue
             if key == "orgUnit":
                 output[key] = self._generalize_org_unit(
                     item,
@@ -509,7 +526,7 @@ class DHIS2Exporter:
                     path=child_path,
                     state=state,
                 )
-            elif key == "value" and attribute_record:
+            elif key == "value" and redact_value_record:
                 output[key] = self._redact_text_value(
                     item,
                     path=child_path,
@@ -535,9 +552,18 @@ class DHIS2Exporter:
                     state=state,
                     record_shift=record_shift,
                     aggregate_context=aggregate_context,
-                    attribute_records=True,
+                    redact_value_records=True,
                 )
                 output[key].sort(key=_attribute_sort_key)
+            elif key == "notes":
+                output[key] = self._transform_special_list(
+                    item,
+                    path=child_path,
+                    state=state,
+                    record_shift=record_shift,
+                    aggregate_context=aggregate_context,
+                    redact_value_records=True,
+                )
             elif key == "dataValues":
                 output[key] = self._transform_special_list(
                     item,
@@ -545,7 +571,7 @@ class DHIS2Exporter:
                     state=state,
                     record_shift=record_shift,
                     aggregate_context=aggregate_context,
-                    attribute_records=False,
+                    redact_value_records=not aggregate_context,
                 )
                 output[key].sort(key=_data_value_sort_key)
             else:
@@ -566,7 +592,7 @@ class DHIS2Exporter:
         state: _ManifestState,
         record_shift: int | None,
         aggregate_context: bool,
-        attribute_records: bool,
+        redact_value_records: bool,
     ) -> list[dict[str, Any]]:
         if not _is_sequence(value):
             raise DHIS2ExportError(f"{path} must be an array")
@@ -582,7 +608,7 @@ class DHIS2Exporter:
                     state=state,
                     record_shift=record_shift,
                     aggregate_context=aggregate_context,
-                    attribute_record=attribute_records,
+                    redact_value_record=redact_value_records,
                 )
             )
         return output
@@ -644,8 +670,10 @@ class DHIS2Exporter:
         path: str,
         state: _ManifestState,
     ) -> Any:
-        if value is None or not isinstance(value, str):
+        if value is None:
             return value
+        if not isinstance(value, str):
+            raise DHIS2ExportError(f"{path} must be a string or null")
         if not value:
             return value
         state.text_values_examined += 1
@@ -948,22 +976,26 @@ def _shift_iso_date(
     match = _ISO_DATE_RE.fullmatch(value)
     if match is None:
         raise DHIS2ExportError(f"{path} must start with an ISO YYYY-MM-DD date")
+    source_date = match.group("date")
+    suffix = match.group("suffix") or ""
     try:
-        date.fromisoformat(match.group(1))
+        date.fromisoformat(source_date)
+        if suffix:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise DHIS2ExportError(f"{path} contains an invalid ISO date") from exc
 
     from openmed.multimodal.tabular_csv import shift_quasi_identifier_date
 
     shifted = shift_quasi_identifier_date(
-        match.group(1),
+        source_date,
         shift_days=shift_days,
         keep_year=keep_year,
         lang=lang,
     )
     if shifted.startswith("["):
         raise DHIS2ExportError(f"{path} could not be shifted safely")
-    return shifted + match.group(2)
+    return shifted + suffix
 
 
 def _coarsen_iso_date(
@@ -975,15 +1007,18 @@ def _coarsen_iso_date(
     match = _ISO_DATE_RE.fullmatch(value)
     if match is None:
         raise DHIS2ExportError(f"{path} must start with an ISO YYYY-MM-DD date")
+    source_date = match.group("date")
+    suffix = match.group("suffix") or ""
     try:
-        parsed = date.fromisoformat(match.group(1))
+        parsed = date.fromisoformat(source_date)
+        if suffix:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise DHIS2ExportError(f"{path} contains an invalid ISO date") from exc
     if granularity == "year":
         coarsened = parsed.replace(month=1, day=1)
     else:
         coarsened = parsed.replace(day=1)
-    suffix = match.group(2)
     if suffix.startswith("T"):
         timezone_match = re.search(r"(Z|[+-]\d{2}:?\d{2})$", suffix)
         timezone = timezone_match.group(1) if timezone_match else ""

@@ -28,12 +28,29 @@
       "trackedEntity": "teSynthetic1",
       "orgUnit": "ouFacility2",
       "occurredAt": "2026-07-17T10:30:00.000Z",
+      "completedBy": "Nurse Amina Example",
       "storedBy": "Nurse Amina Example",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [36.8219, -1.2921]
+      },
+      "latitude": -1.2921,
+      "longitude": 36.8219,
+      "notes": [
+        {
+          "note": "noteSynth01",
+          "value": "Amina Example called from +254 712 345 678"
+        }
+      ],
       "dataValues": [
         {
           "dataElement": "deWeight001",
           "value": "62.5",
           "comment": "Amina Example called from +254 712 345 678"
+        },
+        {
+          "dataElement": "deNarrative1",
+          "value": "Amina Example confirmed ID-851-0001"
         }
       ]
     }

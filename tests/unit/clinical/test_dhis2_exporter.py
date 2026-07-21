@@ -99,6 +99,10 @@ def test_synthetic_payloads_round_trip_without_phi_or_fine_geography():
     assert result.tracker_payload["events"][0]["occurredAt"] == (
         "2026-07-31T10:30:00.000Z"
     )
+    event = result.tracker_payload["events"][0]
+    assert not {"geometry", "latitude", "longitude"}.intersection(event)
+    assert event["notes"][0]["value"] == "[NAME] called from [PHONE]"
+    assert event["dataValues"][0]["value"] == "[NAME] confirmed [ID]"
 
     serialized_output = result.aggregate_json() + result.tracker_json()
     assert_redacted(serialized_output, REDACTION_MAPPING)
@@ -116,6 +120,7 @@ def test_synthetic_payloads_round_trip_without_phi_or_fine_geography():
     assert counts["events"] == 1
     assert counts["org_units_examined"] == 3
     assert counts["org_units_generalized"] == 3
+    assert counts["precise_locations_removed"] == 3
     assert counts["dates_transformed"] == 1
     assert result.manifest["generalization_level"] == 3
     assert result.manifest["small_cell_threshold"] == 5
@@ -279,6 +284,50 @@ def test_unknown_org_unit_fails_closed_without_echoing_the_uid():
     assert "ouSecret999" not in str(exc_info.value)
 
 
+@pytest.mark.parametrize(
+    "target", ["storedBy", "comment", "attribute", "data_value", "note"]
+)
+def test_sensitive_text_values_fail_closed_on_non_strings(target: str):
+    tracker = _load_fixture("tracker_payload.json")
+    event = tracker["events"][0]
+    invalid_value = {"raw": "Amina Example"}
+    if target == "storedBy":
+        event["storedBy"] = invalid_value
+    elif target == "comment":
+        event["dataValues"][0]["comment"] = invalid_value
+    elif target == "attribute":
+        tracker["trackedEntities"][0]["attributes"][0]["value"] = invalid_value
+    elif target == "data_value":
+        event["dataValues"][0]["value"] = invalid_value
+    else:
+        event["notes"][0]["value"] = invalid_value
+
+    with pytest.raises(DHIS2ExportError, match="must be a string or null") as exc_info:
+        export_dhis2(
+            None,
+            tracker,
+            _load_fixture("organisation_units.json"),
+            text_redactor=_offline_redactor,
+        )
+
+    assert "Amina Example" not in str(exc_info.value)
+
+
+def test_malformed_datetime_suffix_fails_closed_without_echoing_raw_value():
+    tracker = _load_fixture("tracker_payload.json")
+    tracker["events"][0]["occurredAt"] = "2026-07-17 Amina Example"
+
+    with pytest.raises(DHIS2ExportError, match="ISO YYYY-MM-DD") as exc_info:
+        export_dhis2(
+            None,
+            tracker,
+            _load_fixture("organisation_units.json"),
+            text_redactor=_offline_redactor,
+        )
+
+    assert "Amina Example" not in str(exc_info.value)
+
+
 def test_snapshot_parent_links_and_levels_are_validated():
     missing_parent = {
         "organisationUnits": [
@@ -308,6 +357,8 @@ def test_snapshot_parent_links_and_levels_are_validated():
         ({"generalization_level": 0}, "generalization_level"),
         ({"small_cell_threshold": -1}, "small_cell_threshold"),
         ({"date_shift_days": 0}, "date_shift_days"),
+        ({"date_shift_days": True}, "date_shift_days"),
+        ({"date_shift_days": 1.5}, "date_shift_days"),
         (
             {"date_mode": "coarsen", "date_shift_days": 10},
             "requires date_mode",
