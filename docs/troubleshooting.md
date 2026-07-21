@@ -117,12 +117,21 @@ published OpenMed installation.
 | Dask / DuckDB | `dask` / `duckdb` | `pip install "openmed[dask]"` / `pip install "openmed[duckdb]"` |
 | spaCy component | `spacy` | `pip install "openmed[spacy]"` |
 | Presidio bridge | `presidio` | `pip install "openmed[presidio]"` |
+| Chinese segmentation, script conversion, and pinyin | `zh` | `pip install "openmed[zh]"` |
+| Indic segmentation and transliteration | `indic` | `pip install "openmed[indic]"` |
 | Grounding (rapidfuzz) | `grounding` | `pip install "openmed[grounding]"` |
 | LangChain / LlamaIndex | `langchain` / `llamaindex` | `pip install "openmed[langchain]"` / `pip install "openmed[llamaindex]"` |
 | Kafka / cloud object storage | `kafka` / `cloud` | `pip install "openmed[kafka]"` / `pip install "openmed[cloud]"` |
 | AWQ / GPTQ export | `awq` / `gptq` | `pip install "openmed[awq]"` / `pip install "openmed[gptq]"` |
 
 You can stack extras: `pip install "openmed[hf,service]"` or `pip install "openmed[hf,mlx,docs]"`.
+
+For a combined Chinese and Indic smoke check:
+
+```bash
+pip install "openmed[zh,indic]"
+python -c 'from openmed.interop import indic, zh; assert zh.segment("患者张伟") and indic.segment("रोगी रवि")'
+```
 
 ### `TesseractNotFoundError` / OCR reports no engine — the system binary is missing
 
