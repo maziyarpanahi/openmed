@@ -211,7 +211,8 @@
               "ro",
               "te",
               "th",
-              "tr"
+              "tr",
+              "zh"
             ],
             "type": "string"
           },
@@ -455,7 +456,8 @@
               "ro",
               "te",
               "th",
-              "tr"
+              "tr",
+              "zh"
             ],
             "type": "string"
           },

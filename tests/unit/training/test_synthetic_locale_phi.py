@@ -113,4 +113,4 @@ def test_non_latin_locale_templates_render_target_script(language):
 
 def test_locale_phi_generator_rejects_unsupported_language():
     with pytest.raises(ValueError, match="unsupported locale PHI language"):
-        LocalePhiGenerator(seed=1).generate("zh")
+        LocalePhiGenerator(seed=1).generate("xx")

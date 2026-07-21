@@ -99,6 +99,7 @@ class TestConstants:
             "th",
             "ko",
             "ro",
+            "zh",
         }
 
     def test_national_id_only_languages(self):
@@ -141,6 +142,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["th"] == "Thai-"
         assert LANGUAGE_MODEL_PREFIX["ko"] == "Korean-"
         assert LANGUAGE_MODEL_PREFIX["ro"] == "Romanian-"
+        assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
@@ -165,6 +167,7 @@ class TestConstants:
             == "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1"
         )
         assert DEFAULT_PII_MODELS["ro"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]

@@ -25,7 +25,10 @@ from openmed.core import model_registry, quality_gates
 from openmed.core import policy as policy_module
 from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.labels import normalize_label
-from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
 from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
@@ -1149,7 +1152,9 @@ def _manifest_surface_mismatches(
 
     supported_languages = _string_set(metadata.get("supported_languages"))
     if not supported_languages and default_manifest:
-        supported_languages = set(SUPPORTED_LANGUAGES)
+        supported_languages = set(SUPPORTED_LANGUAGES) - set(
+            DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+        )
     if supported_languages:
         manifest_languages = _manifest_pii_languages(rows)
         if manifest_languages != supported_languages:

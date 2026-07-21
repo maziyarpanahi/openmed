@@ -31,6 +31,7 @@ from .anonymizer.providers.clinical_ids import (
     validate_uk_nino,
 )
 from .language_pack_catalog import (
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
@@ -59,6 +60,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "th": "Thai",
     "ko": "Korean",
     "ro": "Romanian",
+    "zh": "Chinese",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -79,6 +81,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "th": "Thai-",
     "ko": "Korean-",
     "ro": "Romanian-",
+    "zh": "Chinese-",
 }
 
 # ---------------------------------------------------------------------------
@@ -1758,6 +1761,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "octombrie",
         "noiembrie",
         "decembrie",
+    ],
+    "zh": [
+        "一月",
+        "二月",
+        "三月",
+        "四月",
+        "五月",
+        "六月",
+        "七月",
+        "八月",
+        "九月",
+        "十月",
+        "十一月",
+        "十二月",
     ],
 }
 
@@ -5725,6 +5742,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Αθήνα", "Θεσσαλονίκη", "Πάτρα"],
         "ZIPCODE": ["104 31", "546 21", "262 21"],
+    },
+    "zh": {
+        "NAME": ["王芳", "李雷", "张伟", "刘洋"],
+        "FIRST_NAME": ["芳", "雷", "伟", "洋"],
+        "LAST_NAME": ["王", "李", "张", "刘"],
+        "EMAIL": ["patient@example.cn", "contact@example.org"],
+        "PHONE": ["13800138000", "13900139000"],
+        "ID_NUM": ["CN123456", "MRN-987654"],
+        "STREET_ADDRESS": ["北京市朝阳区健康路12号", "上海市和平路45号"],
+        "URL_PERSONAL": ["https://example.cn"],
+        "USERNAME": ["patient123", "user456"],
+        "DATE": ["2000年1月1日", "1985年3月15日"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["北京", "上海", "广州"],
+        "ZIPCODE": ["100000", "200000", "510000"],
     },
 }
 

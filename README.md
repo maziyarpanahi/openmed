@@ -505,9 +505,10 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ## Multilingual PII (17 model-backed languages)
 
-Extraction and de-identification support **17 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, and `tr`, with **600+ PII checkpoints** in total.
-These are the model-backed PII language allow-list.
+Extraction and de-identification support **18 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, `tr`, and `zh`, with **600+ PII checkpoints** in total.
+Chinese routing currently uses the documented multilingual default-model
+placeholder while dedicated Chinese model weights remain separate.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 

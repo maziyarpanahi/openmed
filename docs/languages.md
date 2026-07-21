@@ -1,7 +1,7 @@
 # Per-Language PII De-identification
 
 OpenMed's PII detection and de-identification are multilingual. The list of
-model-backed language codes is the single source of truth in
+supported language codes is the single source of truth in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py),
 and each code wires up:
 
@@ -52,9 +52,13 @@ locale resolution, determinism, and cross-document surrogate vaults, see
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
+| `zh`   | Chinese    | `OpenMed/privacy-filter-multilingual`                      | `zh_CN`      | Routing placeholder; no dedicated Chinese PII model yet.     |
 
-Codes outside this list (for example `zh`, `pl`, `lv`, `sk`, `ms`, `tl`, `da`)
-are **not** model-backed PII languages. Several of them still have
+Chinese segmentation and Han-script routing are supported, but the `zh`
+default remains an explicit multilingual placeholder rather than a claim that
+a dedicated Chinese PII model has shipped. Codes outside this list (for example
+`pl`, `lv`, `sk`, `ms`, `tl`, and `da`) are **not** model-backed PII languages.
+Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
 [PII Anonymization](anonymization.md#clinical-id-checksums) for the ID providers.
@@ -221,3 +225,16 @@ After:  ผู้ป่วย [NAME] โทร [PHONE]
 Before: Hasta Ayşe Yılmaz, TCKN 10000000146
 After:  Hasta [NAME], TCKN [ID]
 ```
+
+### Chinese — `zh`
+
+- Model placeholder: `OpenMed/privacy-filter-multilingual` · locale `zh_CN`
+
+```text
+Before: 患者王芳，电话 13800138000
+After:  患者[NAME]，电话 [PHONE]
+```
+
+The default entry is an API-compatible fallback. Supply a validated Chinese
+PII model explicitly for production detection; the segmentation and exact
+offset guarantees do not imply dedicated Chinese model weights.
