@@ -570,6 +570,22 @@ class AadhaarProvider(BaseProvider):
         digits.extend(self.generator.random.randint(0, 9) for _ in range(10))
         digits.append(_verhoeff_checksum(digits))
         return "".join(str(d) for d in digits)
+    
+
+# ---------------------------------------------------------------------------
+# Pakistani CNIC 
+# ---------------------------------------------------------------------------
+class PakistaniCnicProvider(BaseProvider):
+    def cnic(self) -> str:
+        province = self.random_int(1, 7)
+        district_tehsil = f"{self.random_int(1000, 9999):04d}"
+        region = f"{province}{district_tehsil}"
+        family = f"{self.random_int(0, 9999999):07d}"
+        sex_digit = self.random_int(0, 9)
+        return f"{region}-{family}-{sex_digit}"
+
+    def cnic_undashed(self) -> str:
+        return self.cnic().replace("-", "")
 
 
 # ---------------------------------------------------------------------------

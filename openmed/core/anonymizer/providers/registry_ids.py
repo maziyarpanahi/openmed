@@ -63,6 +63,7 @@ from openmed.core.pii_i18n import (
     validate_uk_nino,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
+    validate_pakistani_cnic,
 )
 
 from .clinical_ids import (
@@ -95,6 +96,7 @@ from .clinical_ids import (
     UKNHSNumberProvider,
     UKNINOProvider,
     VietnameseIdProvider,
+    PakistaniCnicProvider,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
@@ -523,6 +525,13 @@ def _register_builtin_specs() -> None:
         validate=validate_bc_phn,
         faker_method="bc_phn",
         faker_provider=BCPHNProvider,
+    )
+    _register_aliases(
+        ("ur","ur_PK"),
+        id_type="cnic",
+        validate=validate_pakistani_cnic,
+        faker_method="cnic",
+        faker_provider="PakistaniCnicProvider"
     )
 
 
