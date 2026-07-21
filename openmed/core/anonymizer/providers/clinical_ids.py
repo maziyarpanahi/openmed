@@ -567,15 +567,21 @@ def _verhoeff_checksum(digits: Sequence[int]) -> int:
     return _VERHOEFF_INV[c]
 
 
+def generate_aadhaar(*, rng: random.Random | None = None) -> str:
+    """Generate a 12-digit Aadhaar value with a valid Verhoeff checksum."""
+
+    source = rng or random.Random()
+    digits = [source.randint(2, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(10))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
 class AadhaarProvider(BaseProvider):
     """Generates 12-digit Aadhaar numbers with valid Verhoeff checksums."""
 
     def aadhaar(self) -> str:
-        # First digit cannot be 0 or 1 per UIDAI spec.
-        digits = [self.generator.random.randint(2, 9)]
-        digits.extend(self.generator.random.randint(0, 9) for _ in range(10))
-        digits.append(_verhoeff_checksum(digits))
-        return "".join(str(d) for d in digits)
+        return generate_aadhaar(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2387,6 +2393,7 @@ __all__ = [
     "generate_australian_medicare",
     "generate_australian_tfn",
     "generate_abha_number",
+    "generate_aadhaar",
     "generate_bc_phn",
     "generate_bic",
     "generate_bulgarian_egn",
