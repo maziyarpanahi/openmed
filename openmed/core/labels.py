@@ -1271,6 +1271,7 @@ CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "bod": BODY_SITE,
     "body": BODY_SITE,
     "body_site": BODY_SITE,
+    "bodysite": BODY_SITE,
     "dep": JOB_DEPARTMENT,
     "department": JOB_DEPARTMENT,
     "dis": CONDITION,
@@ -1282,6 +1283,7 @@ CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "ite": LAB_TEST,
     "item": LAB_TEST,
     "lab_test": LAB_TEST,
+    "labtest": LAB_TEST,
     "mic": MICROORGANISM,
     "microorganism": MICROORGANISM,
     "pro": PROCEDURE,
@@ -1360,9 +1362,8 @@ def normalize_label(label: str, lang: str = "en") -> str:
 
     Args:
         label: Source label as emitted by a model or registered in a config.
-        lang: ISO 639-1 language hint (currently unused but reserved for
-            language-conditional disambiguation, e.g. mapping ambiguous
-            tokens differently per locale).
+        lang: ISO 639 language hint used for language-conditional mappings,
+            including CMeEE labels for Chinese clinical NER.
 
     Returns:
         A canonical label in ``UPPER_SNAKE_CASE``.

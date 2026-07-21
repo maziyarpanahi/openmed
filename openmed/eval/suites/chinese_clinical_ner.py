@@ -89,8 +89,8 @@ def chinese_clinical_ner_metadata() -> dict[str, Any]:
         ),
         "language": "zh",
         "model_notice": (
-            "The bundled Chinese default is the multilingual privacy fallback, "
-            "not a dedicated Chinese clinical NER checkpoint."
+            "The bundled Chinese default is a documented multilingual routing "
+            "placeholder, not a dedicated Chinese clinical NER checkpoint."
         ),
         "redistribution": "no licensed corpus records or model weights are bundled",
         "suite": CHINESE_CLINICAL_NER,
@@ -117,6 +117,8 @@ def run_chinese_clinical_ner_suite(
 
     if not fixtures:
         raise ValueError("Chinese clinical NER suite requires at least one fixture")
+    if min_per_label_recall is not None and not 0.0 <= min_per_label_recall <= 1.0:
+        raise ValueError("min_per_label_recall must be between 0 and 1")
 
     predictions: dict[str, tuple[EvalSpan, ...]] = {}
     redacted_outputs: dict[str, str] = {}

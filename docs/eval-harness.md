@@ -11,12 +11,12 @@ applies a zero-tolerance PHI-token leakage gate to injected synthetic
 identifiers. Leakage findings contain hashes and offsets, never identifier
 text.
 
-The bundled Chinese PII default is the multilingual privacy fallback, not a
-dedicated Chinese clinical NER checkpoint. CMeEE, CBLUE, eHealth corpora, and
-related model weights are not redistributed: callers must provision licensed
-assets outside the repository and pass an explicit local path to
-`load_cmeee`. Missing paths and repository-internal real-data paths fail with
-license-boundary guidance.
+The bundled Chinese PII default is a documented multilingual routing
+placeholder, not a dedicated Chinese clinical NER checkpoint. CMeEE, CBLUE,
+eHealth corpora, and related model weights are not redistributed: callers must
+provision licensed assets outside the repository and pass an explicit local
+path to `load_cmeee`. Missing paths and repository-internal real-data paths fail
+with license-boundary guidance.
 
 ## Metric Bundle
 

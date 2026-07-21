@@ -26,7 +26,6 @@ from openmed.core.labels import (
     LAB_TEST,
     MEDICATION,
     MICROORGANISM,
-    ORGANIZATION,
     OTHER,
     PROCEDURE,
     normalize_label,

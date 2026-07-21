@@ -54,6 +54,22 @@ def test_cmeee_labels_normalize_through_chinese_core_mapping() -> None:
     assert all(CMEEE_EXPECTED[label] != OTHER for label in core_clinical)
 
 
+@pytest.mark.parametrize(
+    ("source_label", "expected"),
+    [
+        ("body_site", BODY_SITE),
+        ("Body Site", BODY_SITE),
+        ("lab_test", LAB_TEST),
+        ("Lab-Test", LAB_TEST),
+    ],
+)
+def test_cmeee_long_labels_normalize_for_chinese_locales(
+    source_label: str,
+    expected: str,
+) -> None:
+    assert normalize_label(source_label, lang="zh_CN") == expected
+
+
 def test_cmeee_real_loader_requires_an_explicit_external_path() -> None:
     with pytest.raises(MultilingualNerCorpusRequired, match="explicit local"):
         load_cmeee()
@@ -91,7 +107,19 @@ def test_synthetic_suite_reports_per_label_metrics_and_zero_leakage() -> None:
     assert report.metrics["per_label"][JOB_DEPARTMENT]["recall"] == 1.0
     assert report.metrics["per_label"][MICROORGANISM]["precision"] == 1.0
     assert "user-supplied local inputs" in report.metadata["data_boundary"]
-    assert "multilingual privacy fallback" in report.metadata["model_notice"]
+    assert "multilingual routing placeholder" in report.metadata["model_notice"]
+
+
+@pytest.mark.parametrize("threshold", [-0.01, 1.01, float("nan")])
+def test_suite_rejects_invalid_per_label_recall_threshold(threshold: float) -> None:
+    with pytest.raises(ValueError, match="min_per_label_recall"):
+        run_chinese_clinical_ner_suite(
+            load_chinese_clinical_ner_fixtures(),
+            model_name="synthetic-oracle",
+            runner=_identity_runner,
+            redactor=lambda fixture, predicted: "",
+            min_per_label_recall=threshold,
+        )
 
 
 def test_suite_raises_without_exposing_surviving_identifier_text() -> None:
