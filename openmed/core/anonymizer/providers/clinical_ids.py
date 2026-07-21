@@ -31,6 +31,7 @@ deterministic:
   - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
+  - Ghana Card PIN and Kenyan legacy/Maisha identity numbers
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
   - UK NHS Number, a patient health identifier validated with the NHS
@@ -959,6 +960,99 @@ class NigeriaIdProvider(BaseProvider):
     def ng_mobile_number(self, original: str | None = None) -> str:
         """Return a Nigerian mobile surrogate with a stable prefix class."""
         return generate_ng_mobile_number(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Ghana Card PIN and Kenyan identity numbers
+# ---------------------------------------------------------------------------
+
+
+def _numeric_surrogate(
+    original: str | None,
+    *,
+    length: int,
+    rng: random.Random,
+) -> str:
+    """Return a deterministic numeric surrogate distinct from ``original``."""
+    original_text = (original or "").strip()
+    candidate = ""
+    for _ in range(100):
+        candidate = "".join(str(rng.randint(0, 9)) for _ in range(length))
+        if candidate != original_text:
+            return candidate
+
+    value = (int(candidate or "0") + 1) % (10**length)
+    candidate = f"{value:0{length}d}"
+    if candidate == original_text:  # pragma: no cover - defensive wraparound
+        candidate = f"{(value + 1) % (10**length):0{length}d}"
+    return candidate
+
+
+def generate_ghana_card_pin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Ghana Card PIN surrogate.
+
+    A valid source's ICAO prefix is retained; otherwise ``GHA`` is used. The
+    generated presentation always preserves both hyphens and the documented
+    ``GHA-#########-#`` card form. NIA does not publish an offline checksum.
+
+    Args:
+        original: Optional source PIN whose country prefix should be retained.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A distinct, structurally valid Ghana Card PIN.
+    """
+    source = rng or random.Random()
+    original_text = (original or "").strip().upper()
+    match = re.fullmatch(r"([A-Z]{3})-([0-9]{9})-([0-9])", original_text)
+    prefix = match.group(1) if match is not None else "GHA"
+    original_digits = "" if match is None else f"{match.group(2)}{match.group(3)}"
+    digits = _numeric_surrogate(original_digits, length=10, rng=source)
+    return f"{prefix}-{digits[:9]}-{digits[9]}"
+
+
+def generate_kenya_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a distinct seven- or eight-digit Kenyan national ID."""
+    original_text = (original or "").strip()
+    length = len(original_text) if re.fullmatch(r"[0-9]{7,8}", original_text) else 8
+    return _numeric_surrogate(original_text, length=length, rng=rng or random.Random())
+
+
+def generate_kenya_maisha_namba(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a distinct nine-digit Kenya Maisha Namba surrogate."""
+    return _numeric_surrogate(
+        (original or "").strip(),
+        length=9,
+        rng=rng or random.Random(),
+    )
+
+
+class GhanaKenyaIdProvider(BaseProvider):
+    """Generate deterministic Ghanaian and Kenyan identity surrogates."""
+
+    def ghana_card_pin(self, original: str | None = None) -> str:
+        """Return a structurally valid Ghana Card PIN surrogate."""
+        return generate_ghana_card_pin(original, rng=self.generator.random)
+
+    def kenya_national_id(self, original: str | None = None) -> str:
+        """Return a seven- or eight-digit Kenyan national ID surrogate."""
+        return generate_kenya_national_id(original, rng=self.generator.random)
+
+    def kenya_maisha_namba(self, original: str | None = None) -> str:
+        """Return a nine-digit Kenya Maisha Namba surrogate."""
+        return generate_kenya_maisha_namba(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2201,6 +2295,7 @@ __all__ = [
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
+    "GhanaKenyaIdProvider",
     "HungarianTAJProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
@@ -2235,10 +2330,13 @@ __all__ = [
     "generate_danish_cpr",
     "generate_hungarian_taj",
     "generate_estonian_isikukood",
+    "generate_ghana_card_pin",
     "generate_iban",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
     "generate_jmbg",
+    "generate_kenya_maisha_namba",
+    "generate_kenya_national_id",
     "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",

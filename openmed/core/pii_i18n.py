@@ -197,6 +197,62 @@ def validate_nigeria_bvn(text: str) -> bool:
     return validate_nigeria_nin(text)
 
 
+def validate_ghana_card_pin(text: str) -> bool:
+    """Validate the documented offline structure of a Ghana Card PIN.
+
+    NIA documents the ``GHA-#########-#`` form and three-letter nationality
+    prefixes for resident cards, but does not publish an offline checksum
+    algorithm. Detection therefore remains context-gated; authoritative card
+    verification requires the NIA Identity Verification System Platform.
+
+    Args:
+        text: Candidate Ghana Card PIN.
+
+    Returns:
+        ``True`` when the candidate has the documented ASCII shape.
+    """
+    return bool(
+        isinstance(text, str)
+        and re.fullmatch(
+            r"[A-Z]{3}-[0-9]{9}-[0-9]",
+            text.strip().upper(),
+        )
+    )
+
+
+def validate_kenya_national_id(text: str) -> bool:
+    """Validate the offline structure of a legacy Kenyan national ID.
+
+    Kenya's second-generation identity numbers contain seven or eight digits
+    and have no public checksum. Recognition therefore requires identity
+    context at the pattern layer.
+
+    Args:
+        text: Candidate containing exactly seven or eight ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has the expected structure.
+    """
+    return (
+        isinstance(text, str) and re.fullmatch(r"[0-9]{7,8}", text.strip()) is not None
+    )
+
+
+def validate_kenya_maisha_namba(text: str) -> bool:
+    """Validate the documented nine-digit structure of a Kenya Maisha Namba.
+
+    The identifier has no public checksum, so recognition also requires nearby
+    Maisha, Huduma, or UPI context at the pattern layer.
+
+    Args:
+        text: Candidate containing exactly nine ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has the expected structure.
+    """
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{9}", text.strip()) is not None
+
+
 def validate_french_nir(text: str) -> bool:
     """Validate French NIR/INSEE number.
 
@@ -2169,6 +2225,72 @@ _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
             "foonu",
         ],
         context_boost=0.25,
+    ),
+]
+
+
+_GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
+    # GH_GHANA_CARD: documented country prefix + ten digits. With no published
+    # offline checksum, require explicit Ghana Card or NIA context.
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}-[0-9]{9}-[0-9](?![A-Z0-9])",
+        "GH_GHANA_CARD",
+        priority=15,
+        base_score=0.5,
+        context_words=[
+            "ghana card",
+            "ghana card pin",
+            "national identification authority",
+            "nia pin",
+        ],
+        context_boost=0.45,
+        validator=validate_ghana_card_pin,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+_KENYA_ID_PII_PATTERNS: List[PIIPattern] = [
+    # KE_MAISHA_NAMBA: structural UPI with mandatory nearby identifier context.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{9}(?![0-9])",
+        "KE_MAISHA_NAMBA",
+        priority=15,
+        base_score=0.5,
+        context_words=[
+            "maisha namba",
+            "maisha number",
+            "maisha card",
+            "huduma namba",
+            "huduma number",
+            "unique personal identifier",
+            "upi number",
+            "nambari ya maisha",
+        ],
+        context_boost=0.45,
+        validator=validate_kenya_maisha_namba,
+        safety_sweep_requires_context=True,
+    ),
+    # KE_NATIONAL_ID: legacy seven/eight-digit number. Without an identity
+    # keyword this shape is too common in labs, MRNs, and other clinical data.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{7,8}(?![0-9])",
+        "KE_NATIONAL_ID",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "id no",
+            "id number",
+            "national id",
+            "national identification number",
+            "identity card number",
+            "kitambulisho",
+            "nambari ya kitambulisho",
+            "nambari ya id",
+        ],
+        context_boost=0.45,
+        validator=validate_kenya_national_id,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -5360,6 +5482,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,
     "yo": _NIGERIAN_PII_PATTERNS,
+    "sw": _KENYA_ID_PII_PATTERNS,
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
@@ -5399,6 +5522,9 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,
     "yo": _NIGERIAN_PII_PATTERNS,
+    "en_gh": _GHANA_CARD_PII_PATTERNS,
+    "en_ke": _KENYA_ID_PII_PATTERNS,
+    "sw": _KENYA_ID_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
