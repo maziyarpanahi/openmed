@@ -127,13 +127,28 @@ def snap_span_to_grapheme_boundaries(
 
 
 def iter_grapheme_clusters(text: str) -> Iterator[tuple[int, int]]:
-    """Yield extended grapheme-cluster offsets for compatibility."""
+    """Yield extended grapheme-cluster offsets for ``text``.
+
+    Args:
+        text: Original, unnormalized Unicode text.
+
+    Yields:
+        Half-open ``(start, end)`` code-point offsets for each whole cluster.
+    """
 
     yield from iter_grapheme_cluster_spans(text)
 
 
 def is_grapheme_boundary(index: int, text: str) -> bool:
-    """Return whether ``index`` is a grapheme boundary in ``text``."""
+    """Return whether ``index`` is a grapheme boundary in ``text``.
+
+    Args:
+        index: Candidate Python code-point offset.
+        text: Original, unnormalized Unicode text.
+
+    Returns:
+        ``True`` when ``index`` is the start or end of a whole cluster.
+    """
 
     if index < 0 or index > len(text):
         return False
@@ -143,13 +158,30 @@ def is_grapheme_boundary(index: int, text: str) -> bool:
 
 
 def is_indic_text(text: str) -> bool:
-    """Return whether ``text`` contains a supported Indic script run."""
+    """Return whether ``text`` contains a supported Indic script run.
+
+    Args:
+        text: Text to inspect without normalization.
+
+    Returns:
+        ``True`` when the script detector finds one of the supported Indic
+        scripts.
+    """
 
     return any(script in INDIC_SCRIPTS for _, _, script in segment_by_script(text))
 
 
 def snap_span_to_graphemes(start: int, end: int, text: str) -> tuple[int, int]:
-    """Snap a span outward using the canonical grapheme-boundary engine."""
+    """Snap a span outward using the canonical grapheme-boundary engine.
+
+    Args:
+        start: Inclusive Python code-point offset.
+        end: Exclusive Python code-point offset.
+        text: Original text referenced by the offsets.
+
+    Returns:
+        Clamped ``(start, end)`` offsets that do not bisect a cluster.
+    """
 
     return snap_span_to_grapheme_boundaries(start, end, text)
 
@@ -420,6 +452,8 @@ def _is_extended_pictographic(codepoint: int) -> bool:
 
 def _in_ranges(codepoint: int, ranges: tuple[tuple[int, int], ...]) -> bool:
     return any(start <= codepoint <= end for start, end in ranges)
+
+
 def _byte_offset(text: str, char_offset: int) -> int:
     return len(text[: max(0, char_offset)].encode("utf-8"))
 

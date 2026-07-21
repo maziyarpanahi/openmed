@@ -506,7 +506,17 @@ def labels_to_char_spans(
     token_offsets: Sequence[Sequence[int]],
     text: str,
 ) -> list[tuple[int, int, int]]:
-    """Decode labels directly to grapheme-safe character span triples."""
+    """Decode labels directly to grapheme-safe character span triples.
+
+    Args:
+        labels_by_index: Predicted label id for each token index.
+        label_info: Parsed label scheme and span-label lookup.
+        token_offsets: Half-open source character offsets for each token.
+        text: Exact source text referenced by ``token_offsets``.
+
+    Returns:
+        ``(span_label, start, end)`` triples with safe character offsets.
+    """
 
     return token_spans_to_char_spans(
         labels_to_token_spans(labels_by_index, label_info),

@@ -244,9 +244,6 @@ def test_convert_android_profile_emits_int8_and_runs_certification(
             }
         )
 
-    def fake_convert_android_onnx_to_ort(*args, **kwargs):
-        return types.SimpleNamespace(skipped=True, ort_path=None)
-
     def fake_save_source_assets(model_id, output_dir, **kwargs):
         output_dir = Path(output_dir)
         config = {
@@ -277,9 +274,6 @@ def test_convert_android_profile_emits_int8_and_runs_certification(
     monkeypatch.setattr(module, "quantize_dynamic_int8", fake_quantize_dynamic_int8)
     monkeypatch.setattr(
         module, "validate_android_profile", fake_validate_android_profile
-    )
-    monkeypatch.setattr(
-        module, "convert_android_onnx_to_ort", fake_convert_android_onnx_to_ort
     )
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(

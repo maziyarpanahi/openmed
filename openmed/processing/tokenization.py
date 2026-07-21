@@ -9,6 +9,8 @@ from openmed.core.decoding.spans import is_indic_text, iter_grapheme_clusters
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizer
+
+
 logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
@@ -46,6 +48,12 @@ def grapheme_tokenize(text: str) -> List[SpanToken]:
     This output-oriented tokenizer preserves exact source offsets and keeps
     Indic aksharas, emoji ZWJ sequences, and combining-mark sequences intact.
     It does not create model input IDs.
+
+    Args:
+        text: Original, unnormalized Unicode text.
+
+    Returns:
+        Non-whitespace tokens with exact source code-point offsets.
     """
 
     return [
@@ -61,6 +69,12 @@ def indic_grapheme_tokenize(text: str) -> List[SpanToken]:
     Non-Indic clusters and whitespace are omitted. Offsets always refer to the
     original string, allowing callers to combine this producer with their
     existing tokenization for other scripts.
+
+    Args:
+        text: Original, unnormalized Unicode text.
+
+    Returns:
+        Indic grapheme tokens with exact source code-point offsets.
     """
 
     return [token for token in grapheme_tokenize(text) if is_indic_text(token.text)]

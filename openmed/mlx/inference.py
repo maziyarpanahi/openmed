@@ -565,19 +565,12 @@ class PrivacyFilterMLXPipeline:
         }
         token_spans = labels_to_token_spans(labels_by_index, self.label_info)
         token_offsets = list(zip(char_starts, char_ends))
+        char_spans = token_spans_to_char_spans(token_spans, token_offsets, text)
 
         entities: list[dict[str, Any]] = []
-        for span_label, token_start, token_end in token_spans:
-            if not (0 <= token_start < token_end <= len(char_starts)):
-                continue
-            char_spans = token_spans_to_char_spans(
-                [(span_label, token_start, token_end)],
-                token_offsets,
-                text,
-            )
-            if not char_spans:
-                continue
-            _, start, end = char_spans[0]
+        for token_span, char_span in zip(token_spans, char_spans):
+            _, token_start, token_end = token_span
+            span_label, start, end = char_span
             start, end = _trim_span_whitespace(start, end, text)
             if end <= start:
                 continue
