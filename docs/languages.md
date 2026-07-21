@@ -82,7 +82,9 @@ routing is first requested, and do not download or bundle model weights.
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
+| `xh`   | isiXhosa   | `OpenMed/privacy-filter-multilingual`                      | `xh_ZA`      | Nguni patterns; `zu_ZA` Faker approximation warns once.      |
 | `zh`   | Chinese    | `OpenMed/privacy-filter-multilingual`                      | `zh_CN`      | Routing placeholder; no dedicated Chinese PII model yet.     |
+| `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
 
 Chinese segmentation and Han-script routing are supported, but the `zh`
 default remains an explicit multilingual placeholder rather than a claim that
@@ -265,6 +267,16 @@ Before: Hasta Ayşe Yılmaz, TCKN 10000000146
 After:  Hasta [NAME], TCKN [ID]
 ```
 
+### isiXhosa — `xh`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `xh_ZA`
+  (`zu_ZA` is the documented Faker approximation)
+
+```text
+Before: Igama lesigulane: Xolani Qwabe. Inombolo yesazisi 7903116001080
+After:  Igama lesigulane: [NAME]. Inombolo yesazisi [ID]
+```
+
 ### Chinese — `zh`
 
 - Model placeholder: `OpenMed/privacy-filter-multilingual` · locale `zh_CN`
@@ -277,3 +289,12 @@ After:  患者[NAME]，电话 [PHONE]
 The default entry is an API-compatible fallback. Supply a validated Chinese
 PII model explicitly for production detection; the segmentation and exact
 offset guarantees do not imply dedicated Chinese model weights.
+
+### isiZulu — `zu`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `zu_ZA`
+
+```text
+Before: Igama lesiguli: Nomcebo Dlamini. Inombolo kamazisi 8001015009087
+After:  Igama lesiguli: [NAME]. Inombolo kamazisi [ID]
+```

@@ -88,6 +88,8 @@ const (
 	LangKO PIILanguage = "ko"
 	LangRO PIILanguage = "ro"
 	LangSW PIILanguage = "sw"
+	LangZU PIILanguage = "zu"
+	LangXH PIILanguage = "xh"
 	LangZH PIILanguage = "zh"
 )
 

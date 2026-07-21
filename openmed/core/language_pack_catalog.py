@@ -193,6 +193,20 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("sw", "kenya_national_id"),
     ),
+    _pack(
+        "zu",
+        "OpenMed/privacy-filter-multilingual",
+        "zu_ZA",
+        ("Latin",),
+        national_id_provider=("zu_ZA", "south_african_id"),
+    ),
+    _pack(
+        "xh",
+        "OpenMed/privacy-filter-multilingual",
+        "xh_ZA",
+        ("Latin",),
+        national_id_provider=("xh_ZA", "south_african_id"),
+    ),
 )
 
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -10,8 +13,13 @@ from openmed.core.labels import (
     CANONICAL_LABELS,
     CLINICAL_CONCEPT,
     DIRECT_IDENTIFIER,
+    LABEL_TO_POPIA,
+    NDPA_SENSITIVE_CLASS_LABELS,
+    NDPA_SENSITIVE_DATA_CLASSES,
+    POPIA_IDENTIFIER_CLASSES,
     QUASI_IDENTIFIER,
     id_subtype_for,
+    ndpa_classes_for,
     normalize_label,
     policy_label_for,
 )
@@ -26,8 +34,29 @@ from openmed.core.policy import (
     list_policies,
     load_policy,
 )
+from openmed.core.policy_lint import lint_policy as lint_policy_report
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 from openmed.processing.outputs import EntityPrediction, PredictionResult
+
+_KE_DPA_FIXTURE = Path(__file__).with_name("fixtures") / "ke_dpa_synthetic.json"
+_KE_DPA_SENSITIVE_CLASSES = {
+    "Race",
+    "Health status",
+    "Ethnic social origin",
+    "Conscience",
+    "Belief",
+    "Genetic data",
+    "Biometric data",
+    "Property details",
+    "Marital status",
+    "Family details",
+    "Sex",
+    "Sexual orientation",
+}
+
+
+def _ke_dpa_fixture() -> dict[str, object]:
+    return json.loads(_KE_DPA_FIXTURE.read_text(encoding="utf-8"))
 
 
 def _prediction(
@@ -85,6 +114,63 @@ def _span(label: str = "PERSON", score: float = 0.95) -> OpenMedSpan:
         score=score,
         detector="model:tiny",
     )
+
+
+def _popia_checklist_rows() -> dict[str, tuple[str, ...]]:
+    checklist_path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "compliance"
+        / "za-popia-identifier-checklist.md"
+    )
+    checklist = checklist_path.read_text(encoding="utf-8")
+    table = checklist.split("<!-- popia-identifier-table:start -->", 1)[1].split(
+        "<!-- popia-identifier-table:end -->",
+        1,
+    )[0]
+    rows: dict[str, tuple[str, ...]] = {}
+    for line in table.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        class_match = re.fullmatch(r"`([^`]+)`", cells[0])
+        assert class_match is not None
+        rows[class_match.group(1)] = tuple(re.findall(r"`([A-Z][A-Z0-9_]*)`", cells[2]))
+    return rows
+
+
+def _ng_ndpa_checklist_rows() -> dict[str, tuple[str, ...]]:
+    checklist_path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "compliance"
+        / "ng-ndpa-identifier-checklist.md"
+    )
+    checklist = checklist_path.read_text(encoding="utf-8")
+    table = checklist.split("<!-- ndpa-sensitive-data-table:start -->", 1)[1].split(
+        "<!-- ndpa-sensitive-data-table:end -->",
+        1,
+    )[0]
+    rows: dict[str, tuple[str, ...]] = {}
+    for line in table.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        class_match = re.fullmatch(r"`([^`]+)`", cells[0])
+        assert class_match is not None
+        rows[class_match.group(1)] = tuple(re.findall(r"`([A-Z][A-Z0-9_]*)`", cells[2]))
+    return rows
+
+
+def _ng_ndpa_fixture_cases() -> list[dict[str, object]]:
+    fixture_path = Path(__file__).parent / "fixtures" / "ng_ndpa_synthetic.json"
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    assert payload["synthetic"] is True
+    cases = payload["cases"]
+    assert isinstance(cases, list)
+    assert all(isinstance(case, dict) for case in cases)
+    return cases
 
 
 def test_all_policy_literals_load_and_gdpr_alias_resolves():
@@ -274,6 +360,320 @@ def test_indian_national_identifier_aliases_normalize_to_id_num(
 ):
     assert normalize_label(source_label) == "ID_NUM"
     assert id_subtype_for(source_label) == "national_id"
+
+
+def test_za_popia_profile_loads_with_special_information_defaults():
+    profile = load_policy("za_popia")
+
+    assert profile.name == "za_popia"
+    assert "za_popia" in list_policies()
+    assert profile.default_action == "replace"
+    assert profile.policy_label_actions == {
+        "DIRECT_IDENTIFIER": "replace",
+        "QUASI_IDENTIFIER": "replace",
+        "CLINICAL_CONCEPT": "mask",
+    }
+    assert profile.safety_sweep_mandatory is True
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert profile.strict_no_leak is True
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+
+    special_category_actions = {
+        label: profile.action_for(label)
+        for label in (
+            "ID_NUM",
+            "SSN",
+            "GENDER",
+            "EYE_COLOR",
+            "HEIGHT",
+            "CONDITION",
+            "GENE_SYMBOL",
+            "OTHER",
+        )
+    }
+    assert special_category_actions == {
+        "ID_NUM": "mask",
+        "SSN": "mask",
+        "GENDER": "mask",
+        "EYE_COLOR": "mask",
+        "HEIGHT": "mask",
+        "CONDITION": "mask",
+        "GENE_SYMBOL": "mask",
+        "OTHER": "mask",
+    }
+    assert lint_policy("za_popia") == ()
+    lint_report = lint_policy_report("za_popia")
+    assert lint_report["valid"] is True
+    assert lint_report["error_count"] == 0
+    assert lint_report["warning_count"] == 0
+
+
+def test_za_popia_checklist_classes_have_non_keep_canonical_coverage():
+    profile = load_policy("za_popia")
+    checklist_rows = _popia_checklist_rows()
+
+    assert set(checklist_rows) == set(POPIA_IDENTIFIER_CLASSES)
+    assert set(LABEL_TO_POPIA) == set(CANONICAL_LABELS)
+    assert {label for labels in checklist_rows.values() for label in labels} == set(
+        CANONICAL_LABELS
+    )
+
+    for popia_class, labels in checklist_rows.items():
+        assert labels
+        assert all(LABEL_TO_POPIA[label] == popia_class for label in labels)
+        assert all(profile.action_for(label) != "keep" for label in labels)
+
+
+@pytest.mark.parametrize(
+    ("text", "detections"),
+    [
+        (
+            "Clinic record for ID 8001015009087.",
+            [("8001015009087", "ID_NUM")],
+        ),
+        (
+            "Call the patient on +27 82 123 4567.",
+            [("+27 82 123 4567", "PHONE")],
+        ),
+        (
+            "Home address: 12 Vilakazi Street, Soweto.",
+            [("12 Vilakazi Street, Soweto", "STREET_ADDRESS")],
+        ),
+        (
+            "Patient Nkosinathi Dlamini attended the clinic.",
+            [("Nkosinathi Dlamini", "PERSON")],
+        ),
+        (
+            "Patient Annelie van der Merwe attended the clinic.",
+            [("Annelie van der Merwe", "PERSON")],
+        ),
+    ],
+    ids=("sa-id", "za-phone", "sa-address", "isizulu-name", "afrikaans-name"),
+)
+def test_za_popia_synthetic_clinical_fixtures_leave_zero_direct_identifiers(
+    monkeypatch,
+    text: str,
+    detections: list[tuple[str, str]],
+):
+    entities = [_entity(text, surface, label, 0.99) for surface, label in detections]
+    _patch_extract_many(monkeypatch, entities)
+
+    result = deidentify(
+        text,
+        policy="za_popia",
+        use_safety_sweep=False,
+        seed=42,
+    )
+    audit = deidentify(
+        text,
+        policy="za_popia",
+        use_safety_sweep=False,
+        seed=42,
+        audit=True,
+    )
+
+    assert result.mapping is None
+    assert all(surface not in result.deidentified_text for surface, _ in detections)
+    assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
+    assert audit.policy == "za_popia"
+    assert audit.safety_sweep["enabled"] is True
+    assert audit.residual_risk["risk_report"]["leakage_rate"] == 0.0
+    assert all(span.action != "keep" for span in audit.spans)
+
+
+def test_ng_ndpa_profile_loads_with_strict_sensitive_data_defaults():
+    profile = load_policy("ng_ndpa")
+
+    assert profile.name == "ng_ndpa"
+    assert "ng_ndpa" in list_policies()
+    assert profile.default_action == "replace"
+    assert profile.policy_label_actions == {
+        "DIRECT_IDENTIFIER": "replace",
+        "QUASI_IDENTIFIER": "mask",
+        "CLINICAL_CONCEPT": "mask",
+    }
+    assert profile.safety_sweep_mandatory is True
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert profile.strict_no_leak is True
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+
+    assert {
+        label: profile.action_for(label)
+        for label in (
+            "ID_NUM",
+            "ACCOUNT_NUMBER",
+            "EYE_COLOR",
+            "HEIGHT",
+            "CONDITION",
+            "GENE_SYMBOL",
+            "ORGANIZATION",
+            "OTHER",
+        )
+    } == {
+        "ID_NUM": "mask",
+        "ACCOUNT_NUMBER": "mask",
+        "EYE_COLOR": "mask",
+        "HEIGHT": "mask",
+        "CONDITION": "mask",
+        "GENE_SYMBOL": "mask",
+        "ORGANIZATION": "mask",
+        "OTHER": "mask",
+    }
+    assert lint_policy("ng_ndpa") == ()
+    lint_report = lint_policy_report("ng_ndpa")
+    assert lint_report["valid"] is True
+    assert lint_report["error_count"] == 0
+    assert lint_report["warning_count"] == 0
+
+
+def test_ng_ndpa_checklist_classes_have_non_keep_canonical_coverage():
+    profile = load_policy("ng_ndpa")
+    checklist_rows = _ng_ndpa_checklist_rows()
+
+    assert set(checklist_rows) == set(NDPA_SENSITIVE_DATA_CLASSES)
+    assert set(NDPA_SENSITIVE_CLASS_LABELS) == set(NDPA_SENSITIVE_DATA_CLASSES)
+
+    for ndpa_class, labels in checklist_rows.items():
+        assert labels
+        assert frozenset(labels) == NDPA_SENSITIVE_CLASS_LABELS[ndpa_class]
+        assert all(ndpa_class in ndpa_classes_for(label) for label in labels)
+        assert all(profile.action_for(label) != "keep" for label in labels)
+
+
+@pytest.mark.parametrize(
+    "case",
+    _ng_ndpa_fixture_cases(),
+    ids=lambda case: str(case["id"]),
+)
+def test_ng_ndpa_synthetic_fixtures_leave_zero_direct_identifiers(
+    monkeypatch,
+    case: dict[str, object],
+):
+    text = case["text"]
+    raw_detections = case["detections"]
+    assert isinstance(text, str)
+    assert isinstance(raw_detections, list)
+
+    detections: list[tuple[str, str]] = []
+    for detection in raw_detections:
+        assert isinstance(detection, dict)
+        surface = detection["surface"]
+        label = detection["label"]
+        assert isinstance(surface, str)
+        assert isinstance(label, str)
+        detections.append((surface, label))
+
+    entities = [_entity(text, surface, label, 0.99) for surface, label in detections]
+    _patch_extract_many(monkeypatch, entities)
+
+    result = deidentify(
+        text,
+        policy="ng_ndpa",
+        use_safety_sweep=False,
+        seed=42,
+    )
+    audit = deidentify(
+        text,
+        policy="ng_ndpa",
+        use_safety_sweep=False,
+        seed=42,
+        audit=True,
+    )
+
+    assert result.mapping is None
+    assert all(surface not in result.deidentified_text for surface, _ in detections)
+    assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
+    assert audit.policy == "ng_ndpa"
+    assert audit.safety_sweep["enabled"] is True
+    assert audit.residual_risk["risk_report"]["leakage_rate"] == 0.0
+    assert all(span.action != "keep" for span in audit.spans)
+
+
+def test_ke_dpa_profile_alias_posture_and_lint_load():
+    profile = load_policy("ke_dpa")
+
+    assert profile.name == "ke_dpa"
+    assert load_policy("kenya_dpa").name == "ke_dpa"
+    assert canonical_policy_name("kenya-dpa") == "ke_dpa"
+    assert "ke_dpa" in list_policies()
+    assert profile.strict_no_leak is True
+    assert profile.safety_sweep_mandatory is True
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert profile.action_for("ID_NUM") == "mask"
+    assert profile.action_for("LOCATION") == "mask"
+    assert profile.action_for("CONDITION") == "mask"
+    assert profile.action_for("OTHER") == "mask"
+    assert lint_policy("ke_dpa") == ()
+
+
+def test_ke_dpa_section_2_sensitive_classes_have_non_keep_actions():
+    fixture = _ke_dpa_fixture()
+    sensitive_classes = fixture["sensitive_classes"]
+    assert isinstance(sensitive_classes, list)
+    assert {item["dpa_class"] for item in sensitive_classes} == (
+        _KE_DPA_SENSITIVE_CLASSES
+    )
+
+    profile = load_policy("ke_dpa")
+    for item in sensitive_classes:
+        labels = item["canonical_labels"]
+        assert labels, item["dpa_class"]
+        for label in labels:
+            assert label in CANONICAL_LABELS, (item["dpa_class"], label)
+            assert profile.action_for(label) != "keep", (
+                item["dpa_class"],
+                label,
+            )
+
+
+def test_ke_dpa_synthetic_clinical_fixtures_have_zero_identifier_leakage(
+    monkeypatch,
+):
+    fixture = _ke_dpa_fixture()
+    records = fixture["records"]
+    assert isinstance(records, list)
+
+    for record in records:
+        text = record["text"]
+        entities = [
+            _entity(text, item["surface"], item["label"], 0.99)
+            for item in record["entities"]
+        ]
+        _patch_extract_many(monkeypatch, entities)
+
+        result = deidentify(
+            text,
+            policy="ke_dpa",
+            use_smart_merging=False,
+            use_safety_sweep=False,
+        )
+
+        for surface in record["direct_identifiers"]:
+            assert surface not in result.deidentified_text, (
+                record["fixture_id"],
+                surface,
+            )
+        for item in record["entities"]:
+            assert item["surface"] not in result.deidentified_text, (
+                record["fixture_id"],
+                item["surface"],
+            )
+
+        audit = deidentify(
+            text,
+            policy="ke_dpa",
+            use_smart_merging=False,
+            use_safety_sweep=False,
+            audit=True,
+        )
+
+        assert audit.policy == "ke_dpa"
+        assert audit.safety_sweep["enabled"] is True
+        assert audit.resolved_profile["use_safety_sweep"] is True
+        assert audit.residual_risk["risk_report"]["leakage_rate"] == 0.0
 
 
 def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):

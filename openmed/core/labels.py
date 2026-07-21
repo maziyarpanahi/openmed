@@ -359,6 +359,123 @@ HIPAA_SAFE_HARBOR_CLASSES: Final[FrozenSet[str]] = frozenset(
     }
 )
 
+POPIA_NAME: Final = "NAME"
+POPIA_CONTACT_DETAILS: Final = "CONTACT_DETAILS"
+POPIA_LOCATION_INFORMATION: Final = "LOCATION_INFORMATION"
+POPIA_IDENTIFYING_NUMBER: Final = "IDENTIFYING_NUMBER"
+POPIA_BIOMETRIC_INFORMATION: Final = "BIOMETRIC_INFORMATION"
+POPIA_ONLINE_IDENTIFIER: Final = "ONLINE_IDENTIFIER"
+POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES: Final = "DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES"
+POPIA_HEALTH_INFORMATION: Final = "HEALTH_INFORMATION"
+POPIA_OTHER_SPECIAL_INFORMATION: Final = "OTHER_SPECIAL_INFORMATION"
+
+POPIA_IDENTIFIER_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        POPIA_NAME,
+        POPIA_CONTACT_DETAILS,
+        POPIA_LOCATION_INFORMATION,
+        POPIA_IDENTIFYING_NUMBER,
+        POPIA_BIOMETRIC_INFORMATION,
+        POPIA_ONLINE_IDENTIFIER,
+        POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+        POPIA_HEALTH_INFORMATION,
+        POPIA_OTHER_SPECIAL_INFORMATION,
+    }
+)
+
+NDPA_GENETIC_AND_BIOMETRIC_DATA: Final = "GENETIC_AND_BIOMETRIC_DATA"
+NDPA_RACE_OR_ETHNIC_ORIGIN: Final = "RACE_OR_ETHNIC_ORIGIN"
+NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS: Final = "RELIGIOUS_OR_SIMILAR_BELIEFS"
+NDPA_HEALTH_STATUS: Final = "HEALTH_STATUS"
+NDPA_SEX_LIFE: Final = "SEX_LIFE"
+NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS: Final = "POLITICAL_OPINIONS_OR_AFFILIATIONS"
+NDPA_TRADE_UNION_MEMBERSHIPS: Final = "TRADE_UNION_MEMBERSHIPS"
+NDPA_OTHER_COMMISSION_PRESCRIBED_DATA: Final = "OTHER_COMMISSION_PRESCRIBED_DATA"
+
+NDPA_SENSITIVE_DATA_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        NDPA_GENETIC_AND_BIOMETRIC_DATA,
+        NDPA_RACE_OR_ETHNIC_ORIGIN,
+        NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS,
+        NDPA_HEALTH_STATUS,
+        NDPA_SEX_LIFE,
+        NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS,
+        NDPA_TRADE_UNION_MEMBERSHIPS,
+        NDPA_OTHER_COMMISSION_PRESCRIBED_DATA,
+    }
+)
+
+NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
+    NDPA_GENETIC_AND_BIOMETRIC_DATA: frozenset(
+        {
+            ID_NUM,
+            EYE_COLOR,
+            HEIGHT,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+        }
+    ),
+    NDPA_RACE_OR_ETHNIC_ORIGIN: frozenset({OTHER}),
+    NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS: frozenset({OTHER}),
+    NDPA_HEALTH_STATUS: frozenset(
+        {
+            ID_NUM,
+            MICROORGANISM,
+            ANTIBIOTIC,
+            SUSCEPTIBILITY,
+            CONDITION,
+            MEDICATION,
+            LAB_TEST,
+            PROCEDURE,
+            BODY_SITE,
+            ANESTHESIA_TYPE,
+            ANESTHETIC_AGENT,
+            AIRWAY_MANAGEMENT,
+            ASA_CLASS,
+            DIET_TYPE,
+            NUTRITION_TARGET,
+            FEEDING_ROUTE,
+            NUTRITIONAL_STATUS,
+            VACCINE_NAME,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
+            VACCINE_LOT,
+            VACCINE_SERIES,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+            GLYCEMIC_MEASURE,
+            THYROID_MEASURE,
+            HORMONE_LEVEL,
+            INSULIN_REGIMEN,
+            ENDOSCOPIC_FINDING,
+            GI_SYMPTOM,
+            GI_SCORE,
+            POLYP_DESCRIPTOR,
+            CKD_STAGE,
+            DIALYSIS_MODALITY,
+            RENAL_FUNCTION_MEASURE,
+            URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
+            GROWTH_PARAMETER,
+            GROWTH_PERCENTILE,
+            DEVELOPMENTAL_MILESTONE,
+        }
+    ),
+    NDPA_SEX_LIFE: frozenset({GENDER, OTHER}),
+    NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS: frozenset({ORGANIZATION, OTHER}),
+    NDPA_TRADE_UNION_MEMBERSHIPS: frozenset({ORGANIZATION, JOB_DEPARTMENT, OTHER}),
+    NDPA_OTHER_COMMISSION_PRESCRIBED_DATA: frozenset({OTHER}),
+}
+
 _NO_SYSTEM_HINTS: Final[tuple[str, ...]] = ()
 
 
@@ -648,10 +765,121 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
 
+LABEL_TO_POPIA: Final[Mapping[str, str]] = {
+    # People
+    PERSON: POPIA_NAME,
+    FIRST_NAME: POPIA_NAME,
+    LAST_NAME: POPIA_NAME,
+    MIDDLE_NAME: POPIA_NAME,
+    PREFIX: POPIA_NAME,
+    USERNAME: POPIA_ONLINE_IDENTIFIER,
+    # Contact
+    EMAIL: POPIA_CONTACT_DETAILS,
+    PHONE: POPIA_CONTACT_DETAILS,
+    URL: POPIA_ONLINE_IDENTIFIER,
+    # Location
+    LOCATION: POPIA_LOCATION_INFORMATION,
+    STREET_ADDRESS: POPIA_LOCATION_INFORMATION,
+    BUILDING_NUMBER: POPIA_LOCATION_INFORMATION,
+    ZIPCODE: POPIA_LOCATION_INFORMATION,
+    GPS_COORDINATES: POPIA_LOCATION_INFORMATION,
+    ORDINAL_DIRECTION: POPIA_LOCATION_INFORMATION,
+    # Time and demographic attributes
+    DATE: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    DATE_OF_BIRTH: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    TIME: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    AGE: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    # Identifiers
+    ID_NUM: POPIA_IDENTIFYING_NUMBER,
+    SSN: POPIA_IDENTIFYING_NUMBER,
+    ACCOUNT_NUMBER: POPIA_IDENTIFYING_NUMBER,
+    PASSWORD: POPIA_ONLINE_IDENTIFIER,
+    PIN: POPIA_IDENTIFYING_NUMBER,
+    API_KEY: POPIA_ONLINE_IDENTIFIER,
+    # Financial information and account identifiers
+    CREDIT_CARD: POPIA_IDENTIFYING_NUMBER,
+    CREDIT_CARD_ISSUER: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    CVV: POPIA_IDENTIFYING_NUMBER,
+    IBAN: POPIA_IDENTIFYING_NUMBER,
+    BIC: POPIA_IDENTIFYING_NUMBER,
+    AMOUNT: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    CURRENCY: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    BITCOIN_ADDRESS: POPIA_IDENTIFYING_NUMBER,
+    ETHEREUM_ADDRESS: POPIA_IDENTIFYING_NUMBER,
+    LITECOIN_ADDRESS: POPIA_IDENTIFYING_NUMBER,
+    MASKED_NUMBER: POPIA_IDENTIFYING_NUMBER,
+    # Demographic and physical attributes
+    GENDER: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    EYE_COLOR: POPIA_BIOMETRIC_INFORMATION,
+    HEIGHT: POPIA_BIOMETRIC_INFORMATION,
+    # Employment history
+    ORGANIZATION: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    JOB_TITLE: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    JOB_DEPARTMENT: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    OCCUPATION: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    # Online and device identifiers
+    IP_ADDRESS: POPIA_ONLINE_IDENTIFIER,
+    MAC_ADDRESS: POPIA_ONLINE_IDENTIFIER,
+    USER_AGENT: POPIA_ONLINE_IDENTIFIER,
+    VIN: POPIA_IDENTIFYING_NUMBER,
+    VEHICLE_REGISTRATION: POPIA_IDENTIFYING_NUMBER,
+    IMEI: POPIA_ONLINE_IDENTIFIER,
+    # Health information
+    MICROORGANISM: POPIA_HEALTH_INFORMATION,
+    ANTIBIOTIC: POPIA_HEALTH_INFORMATION,
+    SUSCEPTIBILITY: POPIA_HEALTH_INFORMATION,
+    CONDITION: POPIA_HEALTH_INFORMATION,
+    MEDICATION: POPIA_HEALTH_INFORMATION,
+    LAB_TEST: POPIA_HEALTH_INFORMATION,
+    PROCEDURE: POPIA_HEALTH_INFORMATION,
+    BODY_SITE: POPIA_HEALTH_INFORMATION,
+    ANESTHESIA_TYPE: POPIA_HEALTH_INFORMATION,
+    ANESTHETIC_AGENT: POPIA_HEALTH_INFORMATION,
+    AIRWAY_MANAGEMENT: POPIA_HEALTH_INFORMATION,
+    ASA_CLASS: POPIA_HEALTH_INFORMATION,
+    DIET_TYPE: POPIA_HEALTH_INFORMATION,
+    NUTRITION_TARGET: POPIA_HEALTH_INFORMATION,
+    FEEDING_ROUTE: POPIA_HEALTH_INFORMATION,
+    NUTRITIONAL_STATUS: POPIA_HEALTH_INFORMATION,
+    VACCINE_NAME: POPIA_HEALTH_INFORMATION,
+    DOSE_NUMBER: POPIA_HEALTH_INFORMATION,
+    ADMINISTRATION_ROUTE: POPIA_HEALTH_INFORMATION,
+    VACCINE_LOT: POPIA_HEALTH_INFORMATION,
+    VACCINE_SERIES: POPIA_HEALTH_INFORMATION,
+    GENE_SYMBOL: POPIA_HEALTH_INFORMATION,
+    VARIANT_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
+    PROTEIN_CHANGE: POPIA_HEALTH_INFORMATION,
+    ZYGOSITY: POPIA_HEALTH_INFORMATION,
+    CLINICAL_SIGNIFICANCE: POPIA_HEALTH_INFORMATION,
+    GLYCEMIC_MEASURE: POPIA_HEALTH_INFORMATION,
+    THYROID_MEASURE: POPIA_HEALTH_INFORMATION,
+    HORMONE_LEVEL: POPIA_HEALTH_INFORMATION,
+    INSULIN_REGIMEN: POPIA_HEALTH_INFORMATION,
+    ENDOSCOPIC_FINDING: POPIA_HEALTH_INFORMATION,
+    GI_SYMPTOM: POPIA_HEALTH_INFORMATION,
+    GI_SCORE: POPIA_HEALTH_INFORMATION,
+    POLYP_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
+    CKD_STAGE: POPIA_HEALTH_INFORMATION,
+    DIALYSIS_MODALITY: POPIA_HEALTH_INFORMATION,
+    RENAL_FUNCTION_MEASURE: POPIA_HEALTH_INFORMATION,
+    URINE_FINDING: POPIA_HEALTH_INFORMATION,
+    SPIROMETRY_MEASURE: POPIA_HEALTH_INFORMATION,
+    OXYGEN_SUPPORT: POPIA_HEALTH_INFORMATION,
+    RESPIRATORY_FINDING: POPIA_HEALTH_INFORMATION,
+    DYSPNEA_GRADE: POPIA_HEALTH_INFORMATION,
+    GROWTH_PARAMETER: POPIA_HEALTH_INFORMATION,
+    GROWTH_PERCENTILE: POPIA_HEALTH_INFORMATION,
+    DEVELOPMENTAL_MILESTONE: POPIA_HEALTH_INFORMATION,
+    # Catch-all for special personal information without a dedicated label
+    OTHER: POPIA_OTHER_SPECIAL_INFORMATION,
+}
+
 
 def _validate_label_metadata() -> None:
     metadata_labels = set(LABEL_METADATA)
     hipaa_labels = set(LABEL_TO_HIPAA)
+    popia_labels = set(LABEL_TO_POPIA)
+    ndpa_classes = set(NDPA_SENSITIVE_CLASS_LABELS)
     if metadata_labels != CANONICAL_LABELS:
         missing = sorted(CANONICAL_LABELS - metadata_labels)
         extra = sorted(metadata_labels - CANONICAL_LABELS)
@@ -666,6 +894,28 @@ def _validate_label_metadata() -> None:
             "LABEL_TO_HIPAA must cover CANONICAL_LABELS exactly; "
             f"missing={missing}, extra={extra}"
         )
+    if popia_labels != CANONICAL_LABELS:
+        missing = sorted(CANONICAL_LABELS - popia_labels)
+        extra = sorted(popia_labels - CANONICAL_LABELS)
+        raise RuntimeError(
+            "LABEL_TO_POPIA must cover CANONICAL_LABELS exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    if ndpa_classes != set(NDPA_SENSITIVE_DATA_CLASSES):
+        missing = sorted(set(NDPA_SENSITIVE_DATA_CLASSES) - ndpa_classes)
+        extra = sorted(ndpa_classes - set(NDPA_SENSITIVE_DATA_CLASSES))
+        raise RuntimeError(
+            "NDPA_SENSITIVE_CLASS_LABELS must cover NDPA classes exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    for ndpa_class, labels in NDPA_SENSITIVE_CLASS_LABELS.items():
+        if not labels:
+            raise RuntimeError(f"{ndpa_class} requires a canonical label anchor")
+        unknown_labels = sorted(set(labels) - CANONICAL_LABELS)
+        if unknown_labels:
+            raise RuntimeError(
+                f"{ndpa_class} has unknown canonical labels {unknown_labels}"
+            )
     for label, metadata in LABEL_METADATA.items():
         policy_label = metadata["policy_label"]
         risk_level = metadata["risk_level"]
@@ -683,6 +933,9 @@ def _validate_label_metadata() -> None:
     for label, hipaa_class in LABEL_TO_HIPAA.items():
         if hipaa_class not in HIPAA_SAFE_HARBOR_CLASSES:
             raise RuntimeError(f"{label} has invalid HIPAA class {hipaa_class!r}")
+    for label, popia_class in LABEL_TO_POPIA.items():
+        if popia_class not in POPIA_IDENTIFIER_CLASSES:
+            raise RuntimeError(f"{label} has invalid POPIA class {popia_class!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -1143,6 +1396,21 @@ def hipaa_class_for(label: str, lang: str = "en") -> str:
     return LABEL_TO_HIPAA[normalize_label(label, lang=lang)]
 
 
+def popia_class_for(label: str, lang: str = "en") -> str:
+    """Return the POPIA identifier class for a normalized label."""
+    return LABEL_TO_POPIA[normalize_label(label, lang=lang)]
+
+
+def ndpa_classes_for(label: str, lang: str = "en") -> FrozenSet[str]:
+    """Return NDPA sensitive-data classes anchored by a normalized label."""
+    canonical = normalize_label(label, lang=lang)
+    return frozenset(
+        ndpa_class
+        for ndpa_class, labels in NDPA_SENSITIVE_CLASS_LABELS.items()
+        if canonical in labels
+    )
+
+
 _validate_label_metadata()
 
 __all__ = [
@@ -1159,6 +1427,8 @@ __all__ = [
     "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
+    "LABEL_TO_POPIA",
+    "NDPA_SENSITIVE_CLASS_LABELS",
     "POLICY_LABELS",
     "DIRECT_IDENTIFIER",
     "QUASI_IDENTIFIER",
@@ -1169,10 +1439,22 @@ __all__ = [
     "RISK_HIGH",
     "CLINICAL_SYSTEM_HINTS",
     "HIPAA_SAFE_HARBOR_CLASSES",
+    "POPIA_IDENTIFIER_CLASSES",
+    "NDPA_SENSITIVE_DATA_CLASSES",
+    "NDPA_GENETIC_AND_BIOMETRIC_DATA",
+    "NDPA_RACE_OR_ETHNIC_ORIGIN",
+    "NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS",
+    "NDPA_HEALTH_STATUS",
+    "NDPA_SEX_LIFE",
+    "NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS",
+    "NDPA_TRADE_UNION_MEMBERSHIPS",
+    "NDPA_OTHER_COMMISSION_PRESCRIBED_DATA",
     "policy_label_for",
     "risk_level_for",
     "system_hints_for",
     "hipaa_class_for",
+    "popia_class_for",
+    "ndpa_classes_for",
     # canonical label constants
     "PERSON",
     "FIRST_NAME",

@@ -1,14 +1,93 @@
-"""PHI-safe training data provenance manifests."""
+"""PHI-safe dataset provenance and training data manifests."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 TRAINING_DATA_MANIFEST_SCHEMA_VERSION = "openmed.training_data_manifest.v1"
+DATASET_PROVENANCE_SCHEMA_VERSION = "openmed.eval.dataset_provenance.v1"
+
+
+@dataclass(frozen=True)
+class DatasetProvenance:
+    """License and content-addressed provenance for an eval dataset source."""
+
+    dataset_id: str
+    license_id: str
+    source: str
+    content_hash: str
+    version: str
+    split: str
+    languages: tuple[str, ...] = ()
+    schema_version: str = DATASET_PROVENANCE_SCHEMA_VERSION
+
+    @property
+    def source_hash(self) -> str:
+        """Return the content hash under the legacy source-hash name."""
+
+        return self.content_hash
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, raw-text-free provenance payload."""
+
+        return {
+            "content_hash": self.content_hash,
+            "dataset_id": self.dataset_id,
+            "languages": list(self.languages),
+            "license_id": self.license_id,
+            "schema_version": self.schema_version,
+            "source": self.source,
+            "source_hash": self.source_hash,
+            "split": self.split,
+            "version": self.version,
+        }
+
+
+def build_dataset_provenance(
+    *,
+    dataset_id: str,
+    license_id: str,
+    source: str,
+    content_path: str | Path,
+    version: str,
+    split: str,
+    languages: Iterable[str] = (),
+) -> DatasetProvenance:
+    """Build raw-text-free provenance for a local eval dataset source."""
+
+    return DatasetProvenance(
+        dataset_id=_required_string(dataset_id, "dataset_id"),
+        license_id=_required_string(license_id, "license_id"),
+        source=_required_string(source, "source"),
+        content_hash=compute_dataset_content_hash(content_path),
+        version=_required_string(version, "version"),
+        split=_required_string(split, "split"),
+        languages=tuple(
+            sorted({_required_string(language, "language") for language in languages})
+        ),
+    )
+
+
+def compute_dataset_content_hash(path: str | Path) -> str:
+    """Hash a dataset file or directory without retaining its bytes."""
+
+    source_path = Path(path)
+    if not source_path.exists():
+        raise FileNotFoundError(f"dataset source does not exist: {source_path}")
+    if source_path.is_file():
+        return _hash_bytes(source_path.read_bytes())
+
+    entries = {
+        child.relative_to(source_path).as_posix(): _hash_bytes(child.read_bytes())
+        for child in sorted(source_path.rglob("*"))
+        if child.is_file()
+    }
+    return _hash_json({"files": entries})
 
 
 def build_training_data_manifest(
@@ -187,6 +266,10 @@ def _hash_text(value: str) -> str:
     return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
 
 
+def _hash_bytes(value: bytes) -> str:
+    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+
+
 def _hash_json(value: Mapping[str, Any]) -> str:
     encoded = json.dumps(
         value,
@@ -198,8 +281,12 @@ def _hash_json(value: Mapping[str, Any]) -> str:
 
 
 __all__ = [
+    "DATASET_PROVENANCE_SCHEMA_VERSION",
     "TRAINING_DATA_MANIFEST_SCHEMA_VERSION",
+    "DatasetProvenance",
+    "build_dataset_provenance",
     "build_training_data_manifest",
+    "compute_dataset_content_hash",
     "compute_training_data_manifest_hash",
     "write_training_data_manifest",
 ]

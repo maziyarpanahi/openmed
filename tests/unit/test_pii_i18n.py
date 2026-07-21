@@ -108,6 +108,8 @@ class TestConstants:
             "ko",
             "ro",
             "sw",
+            "zu",
+            "xh",
             "zh",
         }
 
@@ -156,6 +158,8 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["ko"] == "Korean-"
         assert LANGUAGE_MODEL_PREFIX["ro"] == "Romanian-"
         assert LANGUAGE_MODEL_PREFIX["sw"] == "Swahili-"
+        assert LANGUAGE_MODEL_PREFIX["zu"] == "isiZulu-"
+        assert LANGUAGE_MODEL_PREFIX["xh"] == "isiXhosa-"
         assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
 
     def test_default_pii_models_all_languages(self):
@@ -182,6 +186,8 @@ class TestConstants:
         )
         assert DEFAULT_PII_MODELS["ro"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["sw"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["zu"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["xh"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
