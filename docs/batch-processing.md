@@ -49,6 +49,103 @@ result = processor.process_directory(
 )
 ```
 
+## Crash-safe checkpoints and resume
+
+Long-running batches can durably commit progress every N items. A checkpoint
+contains only hashes, item indexes and statuses, committed-output byte offsets,
+and output hashes. It never stores raw input text, source paths, model output,
+or entity values.
+
+```python
+from pathlib import Path
+
+from openmed import BatchProcessor
+
+processor = BatchProcessor(
+    model_name="disease_detection_superclinical",
+    checkpoint_interval=25,
+)
+
+result = processor.process_texts(
+    texts,
+    output_path=Path("results.json"),
+    checkpoint_path=Path("results.checkpoint.json"),
+)
+```
+
+If the process or host stops, rerun the same batch with the same ordered input,
+model settings, output format, and paths:
+
+```python
+result = processor.process_texts(
+    texts,
+    output_path=Path("results.json"),
+    checkpoint_path=Path("results.checkpoint.json"),
+    resume_from_checkpoint=True,
+)
+```
+
+`BatchProcessor.resume_from_checkpoint()` is also available when the caller
+already has `BatchItem` objects. Resume verifies the input and configuration
+fingerprints, the committed journal prefix, and the final output when the
+checkpoint is complete. It refuses to continue if an output is missing,
+truncated, or has a different SHA-256 digest.
+
+Each checkpoint first writes and fsyncs a same-directory part file, atomically
+renames it, and then atomically commits the checkpoint that points to its valid
+byte prefix. If power fails between those commits, resume discards the
+uncommitted tail. At most `checkpoint_interval` items are processed again.
+Final result files also use temp-file, fsync, and atomic-rename semantics.
+
+The checkpoint JSON is PHI-free. For `process_texts`, `process_files`, and
+`process_directory`, `<checkpoint-path>.part` is the committed result journal
+and has the same sensitivity as the requested result file; protect it with the
+same permissions. The `openmed pii batch` journal is status-only, while each
+de-identified output file is hashed and verified separately.
+
+The general CLI enables checkpoints whenever `--output` is present:
+
+```bash
+openmed batch \
+  --input-dir /data/notes \
+  --output /data/results.json \
+  --output-format json \
+  --checkpoint-interval 25
+
+# After an interruption, repeat the same command and add --resume.
+openmed batch \
+  --input-dir /data/notes \
+  --output /data/results.json \
+  --output-format json \
+  --checkpoint-interval 25 \
+  --resume
+```
+
+Use `--checkpoint-path` to override the default
+`<output>.checkpoint.json`. `--resume` requires `--output` so the committed
+result can be verified.
+
+For atomic per-file de-identification:
+
+```bash
+openmed pii batch \
+  --input-dir /data/raw-notes \
+  --output-dir /data/deidentified \
+  --checkpoint-interval 25
+
+# Resume after a power failure.
+openmed pii batch \
+  --input-dir /data/raw-notes \
+  --output-dir /data/deidentified \
+  --checkpoint-interval 25 \
+  --resume
+```
+
+The PII command defaults to
+`<output-dir>/.openmed-batch.checkpoint.json`. On resume, every file recorded as
+complete must still match its committed size and hash; a changed output stops
+the run with a clear integrity error instead of silently mixing results.
+
 ## Operations
 
 `BatchProcessor` supports three operations:

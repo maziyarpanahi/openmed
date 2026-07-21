@@ -393,6 +393,22 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Suppress progress output.",
     )
+    batch_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the checkpoint associated with --output.",
+    )
+    batch_parser.add_argument(
+        "--checkpoint-path",
+        type=Path,
+        help="Checkpoint path (default: <output>.checkpoint.json).",
+    )
+    batch_parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=10,
+        help="Commit progress after this many items (default: 10).",
+    )
     batch_parser.set_defaults(handler=_handle_batch)
 
 
@@ -654,6 +670,24 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
         type=float,
         default=0.7,
         help="Minimum confidence for redaction.",
+    )
+    batch_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the output directory checkpoint.",
+    )
+    batch_parser.add_argument(
+        "--checkpoint-path",
+        type=Path,
+        help=(
+            "Checkpoint path (default: <output-dir>/.openmed-batch.checkpoint.json)."
+        ),
+    )
+    batch_parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=10,
+        help="Commit progress after this many files (default: 10).",
     )
     batch_parser.set_defaults(handler=_handle_pii_batch)
 
@@ -1428,6 +1462,17 @@ def _handle_batch(args: argparse.Namespace) -> int:
 
     _, _, _, BatchProcessor = _lazy_api()
 
+    if args.checkpoint_interval < 1:
+        sys.stderr.write("--checkpoint-interval must be positive\n")
+        return 2
+    if (args.resume or args.checkpoint_path is not None) and args.output is None:
+        sys.stderr.write("--resume and --checkpoint-path require --output\n")
+        return 2
+
+    checkpoint_path = None
+    if args.output is not None:
+        checkpoint_path = args.checkpoint_path or Path(f"{args.output}.checkpoint.json")
+
     continue_on_error = not args.stop_on_error if args.stop_on_error else True
 
     processor = BatchProcessor(
@@ -1436,6 +1481,7 @@ def _handle_batch(args: argparse.Namespace) -> int:
         confidence_threshold=args.confidence_threshold or 0.0,
         group_entities=args.group_entities,
         continue_on_error=continue_on_error,
+        checkpoint_interval=args.checkpoint_interval,
     )
 
     def progress_callback(current: int, total: int, result: Any) -> None:
@@ -1451,11 +1497,19 @@ def _handle_batch(args: argparse.Namespace) -> int:
             result = processor.process_texts(
                 args.texts,
                 progress_callback=progress_callback if not args.quiet else None,
+                output_path=args.output,
+                checkpoint_path=checkpoint_path,
+                resume_from_checkpoint=args.resume,
+                output_format=args.output_format,
             )
         elif args.input_files:
             result = processor.process_files(
                 args.input_files,
                 progress_callback=progress_callback if not args.quiet else None,
+                output_path=args.output,
+                checkpoint_path=checkpoint_path,
+                resume_from_checkpoint=args.resume,
+                output_format=args.output_format,
             )
         elif args.input_dir:
             if not args.input_dir.is_dir():
@@ -1469,6 +1523,10 @@ def _handle_batch(args: argparse.Namespace) -> int:
                 pattern=args.pattern,
                 recursive=args.recursive,
                 progress_callback=progress_callback if not args.quiet else None,
+                output_path=args.output,
+                checkpoint_path=checkpoint_path,
+                resume_from_checkpoint=args.resume,
+                output_format=args.output_format,
             )
         else:
             raise CliError("No input provided.", code="no_input", exit_code=EXIT_USAGE)
@@ -1492,14 +1550,6 @@ def _handle_batch(args: argparse.Namespace) -> int:
         output = result.summary()
 
     if args.output:
-        try:
-            args.output.write_text(output, encoding="utf-8")
-        except OSError as exc:
-            raise CliError(
-                f"Failed to write output: {exc}",
-                code="write_failed",
-                exit_code=EXIT_ERROR,
-            )
         human = f"Results written to: {args.output}"
     else:
         human = output
@@ -3343,8 +3393,6 @@ def _handle_pii_deidentify(args: argparse.Namespace) -> int:
 
 def _handle_pii_batch(args: argparse.Namespace) -> int:
     """Handle batch PII de-identification command."""
-    from ..core.pii import deidentify
-
     config = _load_and_apply_config(args)
 
     if not args.input_dir.is_dir():
@@ -3353,15 +3401,19 @@ def _handle_pii_batch(args: argparse.Namespace) -> int:
             code="not_a_directory",
             exit_code=EXIT_ERROR,
         )
+    if args.checkpoint_interval < 1:
+        raise CliError(
+            "--checkpoint-interval must be positive",
+            code="invalid_argument",
+            exit_code=EXIT_USAGE,
+        )
 
-    # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Find files to process
     if args.recursive:
-        files = list(args.input_dir.rglob(args.pattern))
+        files = sorted(args.input_dir.rglob(args.pattern))
     else:
-        files = list(args.input_dir.glob(args.pattern))
+        files = sorted(args.input_dir.glob(args.pattern))
 
     if not files:
         raise CliError(
@@ -3370,61 +3422,62 @@ def _handle_pii_batch(args: argparse.Namespace) -> int:
             exit_code=EXIT_ERROR,
         )
 
-    # Process files
-    processed = 0
-    failed = 0
-    file_results: list[dict[str, Any]] = []
     json_mode = wants_json(args)
+    checkpoint_path = args.checkpoint_path or (
+        args.output_dir / ".openmed-batch.checkpoint.json"
+    )
+    _, _, _, BatchProcessor = _lazy_api()
+    processor = BatchProcessor(
+        model_name=args.model,
+        operation="deidentify",
+        config=config,
+        confidence_threshold=args.confidence_threshold,
+        checkpoint_interval=args.checkpoint_interval,
+        method=args.method,
+    )
 
-    for input_file in files:
-        try:
-            text = input_file.read_text(encoding="utf-8")
-
-            result = deidentify(
-                text,
-                method=args.method,
-                model_name=args.model,
-                confidence_threshold=args.confidence_threshold,
-                config=config,
+    def progress_callback(current: int, total: int, item_result: Any) -> None:
+        if json_mode:
+            return
+        if item_result and item_result.success:
+            result_value = item_result.result
+            if isinstance(result_value, MappingABC):
+                entities = result_value.get("pii_entities", [])
+            else:
+                entities = getattr(result_value, "pii_entities", [])
+            sys.stdout.write(
+                f"[{current}/{total}] {item_result.id}: "
+                f"{len(entities)} entities redacted\n"
             )
+        else:
+            item_id = item_result.id if item_result else "?"
+            sys.stderr.write(f"[{current}/{total}] {item_id}: failed\n")
 
-            # Preserve directory structure
-            relative_path = input_file.relative_to(args.input_dir)
-            output_file = args.output_dir / relative_path
-            output_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = processor.process_files_to_directory(
+            files,
+            input_root=args.input_dir,
+            output_dir=args.output_dir,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=args.resume,
+            progress_callback=progress_callback,
+        )
+    except Exception as exc:
+        raise CliError(
+            f"Batch processing failed: {exc}",
+            code="batch_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-            output_file.write_text(result.deidentified_text, encoding="utf-8")
-
-            processed += 1
-            entities = len(result.pii_entities)
-            file_results.append(
-                {"file": str(input_file), "entities_redacted": entities, "ok": True}
-            )
-            if not json_mode:
-                sys.stdout.write(
-                    f"[{processed}/{len(files)}] {input_file.name}: "
-                    f"{entities} entities redacted\n"
-                )
-
-        except Exception as exc:
-            failed += 1
-            file_results.append(
-                {"file": str(input_file), "ok": False, "error": str(exc)}
-            )
-            sys.stderr.write(f"Failed to process {input_file}: {exc}\n")
-
-    payload = {
-        "processed": processed,
-        "failed": failed,
-        "output_dir": str(args.output_dir),
-        "files": file_results,
-    }
+    payload = result.to_dict()
+    payload["output_dir"] = str(args.output_dir)
     human = (
-        f"\nProcessed {processed} files, {failed} failed\n"
+        f"\nProcessed {result.successful_items} files, "
+        f"{result.failed_items} failed\n"
         f"Output directory: {args.output_dir}"
     )
     emit(args, payload, human=human)
-    return 0 if failed == 0 else 1
+    return 0 if result.failed_items == 0 else 1
 
 
 if __name__ == "__main__":  # pragma: no cover
