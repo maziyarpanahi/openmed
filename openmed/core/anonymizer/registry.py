@@ -286,6 +286,15 @@ _LOCALE_ID_METHODS = {
     "vi_VN": "vietnamese_cccd",
 }
 
+_INDIA_ID_METHODS = {
+    "ABHA_NUMBER": "abha_number",
+    "ABHA_ADDRESS": "abha_address",
+    "AADHAAR": "aadhaar",
+    "PAN": "pan",
+    "ABDM_HPR_ID": "abdm_hpr_id",
+    "ABDM_HFR_ID": "abdm_hfr_id",
+}
+
 
 _MRZ_CHARSET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
 
@@ -352,6 +361,46 @@ def _gen_id_num(faker, original, *, locale):
             return _generate_distinct_chinese_resident_id(faker, original)
         return getattr(faker, method)()
     return preserve_id_pattern(original, rng=faker.random)
+
+
+def _gen_india_id(faker, original, *, locale, id_type):
+    method = _INDIA_ID_METHODS[id_type]
+    original_fingerprint = "".join(
+        char.casefold() for char in original if char.isalnum()
+    )
+    generated = ""
+    for _ in range(20):
+        generated = getattr(faker, method)()
+        generated_fingerprint = "".join(
+            char.casefold() for char in generated if char.isalnum()
+        )
+        if generated_fingerprint != original_fingerprint:
+            return generated
+    return generated
+
+
+def _gen_abha_number(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABHA_NUMBER")
+
+
+def _gen_abha_address(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABHA_ADDRESS")
+
+
+def _gen_aadhaar(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="AADHAAR")
+
+
+def _gen_pan(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="PAN")
+
+
+def _gen_abdm_hpr_id(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABDM_HPR_ID")
+
+
+def _gen_abdm_hfr_id(faker, original, *, locale):
+    return _gen_india_id(faker, original, locale=locale, id_type="ABDM_HFR_ID")
 
 
 def _gen_ssn(faker, original, *, locale):
@@ -622,6 +671,12 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     L.VEHICLE_REGISTRATION: _gen_vehicle_registration,
     L.IMEI: _gen_imei,
     L.OTHER: _gen_other,
+    "ABHA_NUMBER": _gen_abha_number,
+    "ABHA_ADDRESS": _gen_abha_address,
+    "AADHAAR": _gen_aadhaar,
+    "PAN": _gen_pan,
+    "ABDM_HPR_ID": _gen_abdm_hpr_id,
+    "ABDM_HFR_ID": _gen_abdm_hfr_id,
 }
 
 
