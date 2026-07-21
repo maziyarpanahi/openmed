@@ -15,8 +15,15 @@ _SYNTHETIC_CLUSTERS = (
     "क्षि",  # Devanagari consonant + virama + consonant + dependent vowel
     "क्\u200dष",  # Devanagari conjunct with an explicit ZWJ
     "कि",  # Devanagari spacing-mark vowel
+    "ক্ষি",  # Bengali conjunct
+    "ਕ੍ਸ਼ਿ",  # Gurmukhi conjunct
+    "ક્ષિ",  # Gujarati conjunct
+    "କ୍ଷି",  # Odia conjunct
+    "க்ஷி",  # Tamil conjunct
     "త్రా",  # Telugu consonant + virama + consonant + dependent vowel
     "తా",  # Telugu dependent vowel
+    "ಕ್ಷಿ",  # Kannada conjunct
+    "ക്ഷി",  # Malayalam conjunct
     "患",
     "者",
     "か",
@@ -157,6 +164,14 @@ def test_grapheme_iterator_handles_core_uax29_sequences():
     clusters = [text[start:end] for start, end in iter_grapheme_cluster_spans(text)]
 
     assert clusters == ["\r\n", "🇫🇷", "👩\u200d⚕️", "각"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["क्षि", "ক্ষি", "ਕ੍ਸ਼ਿ", "ક્ષિ", "କ୍ଷି", "க்ஷி", "క్షి", "ಕ್ಷಿ", "ക്ഷി"],
+)
+def test_grapheme_iterator_keeps_supported_indic_conjuncts_whole(text):
+    assert list(iter_grapheme_cluster_spans(text)) == [(0, len(text))]
 
 
 def _legacy_codepoint_whitespace_trim(

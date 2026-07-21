@@ -17,7 +17,19 @@ from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 UNKNOWN_SCRIPT = "Unknown"
 
 CJK_SCRIPTS = frozenset({"Han", "Hiragana/Katakana", "Hangul"})
-INDIC_SCRIPTS = frozenset({"Devanagari", "Telugu"})
+INDIC_SCRIPTS = frozenset(
+    {
+        "Devanagari",
+        "Bengali",
+        "Gurmukhi",
+        "Gujarati",
+        "Odia",
+        "Tamil",
+        "Telugu",
+        "Kannada",
+        "Malayalam",
+    }
+)
 
 SUPPORTED_SCRIPTS = (
     "Latin",

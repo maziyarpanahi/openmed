@@ -24,7 +24,39 @@ from ..script_detect import (
 )
 
 _GRAPHEME_CONTROL_CATEGORIES: Final = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
-_INDIC_LINKERS: Final = frozenset({"\u094d", "\u0c4d"})
+_INDIC_LINKERS: Final = frozenset(
+    {
+        "\u094d",  # Devanagari sign virama
+        "\u09cd",  # Bengali sign virama
+        "\u0a4d",  # Gurmukhi sign virama
+        "\u0acd",  # Gujarati sign virama
+        "\u0b4d",  # Odia sign virama
+        "\u0bcd",  # Tamil sign virama
+        "\u0c4d",  # Telugu sign virama
+        "\u0ccd",  # Kannada sign virama
+        "\u0d4d",  # Malayalam sign virama
+    }
+)
+_INDIC_CONSONANT_RANGES: Final = (
+    (0x0915, 0x0939),
+    (0x0958, 0x095F),
+    (0x0978, 0x097F),
+    (0x0995, 0x09B9),
+    (0x09DC, 0x09DF),
+    (0x09F0, 0x09F1),
+    (0x0A15, 0x0A39),
+    (0x0A59, 0x0A5E),
+    (0x0A95, 0x0AB9),
+    (0x0B15, 0x0B39),
+    (0x0B5C, 0x0B5D),
+    (0x0B5F, 0x0B5F),
+    (0x0B95, 0x0BB9),
+    (0x0C15, 0x0C39),
+    (0x0C58, 0x0C5A),
+    (0x0C95, 0x0CB9),
+    (0x0CDC, 0x0CDE),
+    (0x0D15, 0x0D3A),
+)
 _SCRIPT_REFINEMENT_GUARDS: Final = CJK_SCRIPTS | INDIC_SCRIPTS
 _PREPEND_RANGES: Final = (
     (0x0600, 0x0605),
@@ -317,14 +349,7 @@ def _continues_indic_conjunct(text: str, index: int) -> bool:
 
 
 def _is_indic_consonant(char: str) -> bool:
-    codepoint = ord(char)
-    return (
-        0x0915 <= codepoint <= 0x0939
-        or 0x0958 <= codepoint <= 0x095F
-        or 0x0978 <= codepoint <= 0x097F
-        or 0x0C15 <= codepoint <= 0x0C39
-        or 0x0C58 <= codepoint <= 0x0C5A
-    )
+    return _in_ranges(ord(char), _INDIC_CONSONANT_RANGES)
 
 
 def _extended_pictographic_before_zwj(text: str, zwj_index: int) -> bool:
