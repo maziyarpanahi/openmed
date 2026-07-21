@@ -21,10 +21,17 @@ WILDCARD_LANGUAGE = "*"
 DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING = 0.05
 DEFAULT_SCRIPT_LEAKAGE_CEILING = 0.01
 DEFAULT_SCRIPT_RECALL_FLOORS: Mapping[str, float] = {
+    "Bengali": 0.99,
     "Devanagari": 0.99,
+    "Gurmukhi": 0.99,
+    "Gujarati": 0.99,
     "Han": 0.99,
     "Hangul": 0.99,
     "Hiragana/Katakana": 0.99,
+    "Kannada": 0.99,
+    "Malayalam": 0.99,
+    "Odia": 0.99,
+    "Tamil": 0.99,
     "Telugu": 0.99,
 }
 

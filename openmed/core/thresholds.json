@@ -5,10 +5,17 @@
     "balanced": {
       "recall_floor": 0.97,
       "script_recall_floors": {
+        "Bengali": 0.99,
         "Devanagari": 0.99,
+        "Gurmukhi": 0.99,
+        "Gujarati": 0.99,
         "Han": 0.99,
         "Hangul": 0.99,
         "Hiragana/Katakana": 0.99,
+        "Kannada": 0.99,
+        "Malayalam": 0.99,
+        "Odia": 0.99,
+        "Tamil": 0.99,
         "Telugu": 0.99
       },
       "script_leakage_ceiling": 0.01,
@@ -56,10 +63,17 @@
     "strict_no_leak": {
       "recall_floor": 0.995,
       "script_recall_floors": {
+        "Bengali": 0.995,
         "Devanagari": 0.995,
+        "Gurmukhi": 0.995,
+        "Gujarati": 0.995,
         "Han": 0.995,
         "Hangul": 0.995,
         "Hiragana/Katakana": 0.995,
+        "Kannada": 0.995,
+        "Malayalam": 0.995,
+        "Odia": 0.995,
+        "Tamil": 0.995,
         "Telugu": 0.995
       },
       "script_leakage_ceiling": 0.005,

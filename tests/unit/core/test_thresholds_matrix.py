@@ -7,6 +7,7 @@ from openmed.core.arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION, arbi
 from openmed.core.cascade import R2_BASE, CascadeRouter
 from openmed.core.pipeline import Pipeline
 from openmed.core.schemas.span import ACTION_VALUES, OpenMedSpan, hmac_text_hash
+from openmed.core.script_detect import INDIC_SCRIPTS
 from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     fit_thresholds,
@@ -80,6 +81,7 @@ def test_profiles_define_configurable_strict_cjk_and_indic_floors():
     matrix = load_thresholds()
     floors = profile_script_recall_floors("balanced", matrix=matrix)
 
+    assert INDIC_SCRIPTS <= floors.keys()
     assert floors["Han"] >= 0.99
     assert floors["Devanagari"] >= 0.99
     assert floors["Telugu"] >= 0.99
