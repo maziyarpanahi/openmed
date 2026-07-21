@@ -28,6 +28,8 @@ export type PIILanguage =
   | "ko"
   | "ro"
   | "sw"
+  | "zu"
+  | "xh"
   | "zh";
 
 export type DeidentificationMethod =

@@ -32,6 +32,7 @@ from openmed.core.pii_i18n import (
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_za_id_number,
 )
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
@@ -53,6 +54,8 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "ko",
     "ro",
     "sw",
+    "zu",
+    "xh",
     "zh",
 )
 
@@ -258,6 +261,24 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Tarehe ya ufuatiliaji ",
         ".",
     ),
+    "zu": (
+        "Inothi lomtholampilo: isiguli ",
+        " sazalwa ngo ",
+        ". Inombolo kamazisi ",
+        ". Ucingo ",
+        ". Ikheli ",
+        ". Usuku lokulandelela ",
+        ".",
+    ),
+    "xh": (
+        "Inqaku lekliniki: isigulane ",
+        " sazalwa ngo ",
+        ". Inombolo yesazisi ",
+        ". Ifowuni ",
+        ". Idilesi ",
+        ". Umhla wokulandelela ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -277,6 +298,8 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
     "sw": validate_kenya_maisha_namba,
+    "zu": validate_za_id_number,
+    "xh": validate_za_id_number,
     "zh": validate_chinese_resident_id,
 }
 
@@ -297,6 +320,8 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "ko": "pii_i18n.validate_korean_rrn",
     "ro": "pii_i18n.validate_romanian_cnp",
     "sw": "pii_i18n.validate_kenya_maisha_namba",
+    "zu": "pii_i18n.validate_za_id_number",
+    "xh": "pii_i18n.validate_za_id_number",
     "zh": "pii_i18n.validate_chinese_resident_id",
 }
 

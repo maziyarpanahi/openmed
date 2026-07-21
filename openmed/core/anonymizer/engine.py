@@ -327,6 +327,8 @@ _FORMAT_PRESERVE_DAY_FIRST_LOCALES = frozenset(
         "pt_BR",
         "cs_CZ",
         "sw",
+        "zu_ZA",
+        "xh_ZA",
     }
 )
 

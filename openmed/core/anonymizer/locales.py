@@ -37,7 +37,7 @@ from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
+_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr", "xh"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -47,6 +47,7 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "en_GH": "tw_GH",
     "ms_MY": "id_ID",
     "sr_RS": "hr_HR",
+    "xh_ZA": "zu_ZA",
 }
 
 
