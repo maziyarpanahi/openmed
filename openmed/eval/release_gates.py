@@ -30,6 +30,8 @@ from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
     profile_recall_floor,
+    profile_script_leakage_ceiling,
+    profile_script_recall_floors,
     validate_threshold_matrix,
 )
 from openmed.eval.fairness import DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR
@@ -53,6 +55,7 @@ RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
+CROSS_SCRIPT_GATE = "cross_script"
 
 G1A_V16_RECALL_FLOOR = 0.990
 G1A_V20_RECALL_FLOOR = 0.995
@@ -294,10 +297,14 @@ class GateReport:
     stability_summary: Mapping[str, Any] = field(default_factory=dict)
     repro_hash: str = ""
     signature: AuditSignature | None = None
+    per_script_recall: Mapping[str, float] = field(default_factory=dict)
+    per_script_leakage: Mapping[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.per_label_recall = _float_map(self.per_label_recall)
         self.per_label_precision = _float_map(self.per_label_precision)
+        self.per_script_recall = _numeric_map(self.per_script_recall)
+        self.per_script_leakage = _numeric_map(self.per_script_leakage)
         self.blocked_formats = tuple(self.blocked_formats)
         self.gate_results = tuple(self.gate_results)
         self.stability_summary = _mapping(self.stability_summary)
@@ -337,6 +344,9 @@ class GateReport:
             "target_leakage_rate": float(self.target_leakage_rate),
             "blocked_formats": list(self.blocked_formats),
         }
+        if self.per_script_recall or self.per_script_leakage:
+            payload["per_script_recall"] = _numeric_map(self.per_script_recall)
+            payload["per_script_leakage"] = _numeric_map(self.per_script_leakage)
         if self.stability_summary:
             payload["stability_summary"] = _plain(self.stability_summary)
         if include_repro_hash:
@@ -405,6 +415,8 @@ class GateReport:
             eval_set_hash=str(data.get("eval_set_hash", "")),
             leakage_fixture_hash=str(data.get("leakage_fixture_hash", "")),
             decision=str(data.get("decision", QUARANTINED)),
+            per_script_recall=_mapping(data.get("per_script_recall")),
+            per_script_leakage=_mapping(data.get("per_script_leakage")),
             gate_results=tuple(
                 GateCheck.from_dict(item)
                 for item in data.get("gate_results", [])
@@ -544,6 +556,9 @@ class ReleaseGate:
 
         per_label_recall, recall_denominators = _per_label_recall(metrics, metadata)
         per_label_precision = _per_label_precision(metrics, metadata)
+        per_script_recall, per_script_leakage, script_denominators = (
+            _per_script_metrics(metrics, metadata)
+        )
         critical_leakage_count = _critical_leakage_count(metrics, metadata)
         residual_leakage_rate = _residual_leakage_rate(metrics, metadata)
         quant_delta_result = evaluate_quant_recall_delta(
@@ -577,6 +592,17 @@ class ReleaseGate:
         )
         checks.append(self._g1b_check(per_label_recall, recall_denominators))
         checks.append(self._g2_check(per_label_recall, recall_denominators))
+        checks.append(
+            _cross_script_check(
+                per_script_recall,
+                per_script_leakage,
+                script_denominators,
+                threshold_profile=(
+                    profile.threshold_profile if profile is not None else ""
+                ),
+                threshold_matrix=threshold_matrix,
+            )
+        )
         checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g11_critical_finding_recall_check(metrics, metadata))
@@ -642,6 +668,8 @@ class ReleaseGate:
             eval_set_hash=identity["eval_set_hash"],
             leakage_fixture_hash=identity["leakage_fixture_hash"],
             decision=decision,
+            per_script_recall=per_script_recall,
+            per_script_leakage=per_script_leakage,
             gate_results=tuple(checks),
             policy=(profile.name if profile is not None else policy_name),
             threshold_profile=(
@@ -798,6 +826,8 @@ def apply_flakiness_quarantine(
         eval_set_hash=report.eval_set_hash,
         leakage_fixture_hash=report.leakage_fixture_hash,
         decision=decision,
+        per_script_recall=report.per_script_recall,
+        per_script_leakage=report.per_script_leakage,
         gate_results=tuple(checks),
         policy=report.policy,
         threshold_profile=report.threshold_profile,
@@ -1750,6 +1780,93 @@ def _recall_floor_check(
         details={
             "floor": floor,
             "applicable_labels": applicable,
+            "violations": violations,
+        },
+    )
+
+
+def _cross_script_check(
+    per_script_recall: Mapping[str, float],
+    per_script_leakage: Mapping[str, float],
+    denominators: Mapping[str, int],
+    *,
+    threshold_profile: str,
+    threshold_matrix: Mapping[str, Any] | None,
+) -> GateCheck:
+    if threshold_matrix is None or not threshold_profile:
+        return GateCheck(
+            CROSS_SCRIPT_GATE,
+            False,
+            reason="per-script thresholds could not be resolved",
+        )
+
+    try:
+        recall_floors = profile_script_recall_floors(
+            threshold_profile,
+            matrix=threshold_matrix,
+        )
+        leakage_ceiling = profile_script_leakage_ceiling(
+            threshold_profile,
+            matrix=threshold_matrix,
+        )
+    except Exception as exc:
+        return GateCheck(
+            CROSS_SCRIPT_GATE,
+            False,
+            reason=f"could not resolve per-script thresholds: {exc}",
+        )
+
+    applicable = tuple(
+        sorted(
+            script
+            for script in recall_floors
+            if denominators.get(script, 0) > 0
+            and (script in per_script_recall or script in per_script_leakage)
+        )
+    )
+    violations: dict[str, dict[str, float | str]] = {}
+    diagnostics: list[str] = []
+    for script in applicable:
+        observed_recall = per_script_recall.get(script)
+        observed_leakage = per_script_leakage.get(script)
+        floor = recall_floors[script]
+        script_violations: dict[str, float | str] = {}
+        if observed_recall is None:
+            script_violations["recall"] = "missing"
+            script_violations["recall_floor"] = floor
+            diagnostics.append(f"{script} recall is missing (floor {floor:.4f})")
+        elif observed_recall + 1e-12 < floor:
+            script_violations["recall"] = observed_recall
+            script_violations["recall_floor"] = floor
+            diagnostics.append(
+                f"{script} recall {observed_recall:.4f} is below {floor:.4f}"
+            )
+        if observed_leakage is None:
+            script_violations["leakage_rate"] = "missing"
+            script_violations["leakage_ceiling"] = leakage_ceiling
+            diagnostics.append(
+                f"{script} leakage is missing (ceiling {leakage_ceiling:.4f})"
+            )
+        elif observed_leakage > leakage_ceiling + 1e-12:
+            script_violations["leakage_rate"] = observed_leakage
+            script_violations["leakage_ceiling"] = leakage_ceiling
+            diagnostics.append(
+                f"{script} leakage {observed_leakage:.4f} exceeds {leakage_ceiling:.4f}"
+            )
+        if script_violations:
+            violations[script] = script_violations
+
+    return GateCheck(
+        CROSS_SCRIPT_GATE,
+        not violations,
+        reason=("ok" if not violations else "; ".join(diagnostics)),
+        details={
+            "applicable_scripts": applicable,
+            "recall_floors": recall_floors,
+            "leakage_ceiling": leakage_ceiling,
+            "per_script_recall": per_script_recall,
+            "per_script_leakage": per_script_leakage,
+            "total_graphemes_by_script": denominators,
             "violations": violations,
         },
     )
@@ -2960,6 +3077,52 @@ def _per_label_precision(
     return result
 
 
+def _per_script_metrics(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, float], dict[str, float], dict[str, int]]:
+    recall = _numeric_map(
+        _first_mapping(
+            metadata.get("per_script_recall"),
+            metrics.get("per_script_recall"),
+            _nested(metrics, "recall_slices", "by_script"),
+            _nested(metrics, "character_recall", "by_script"),
+        )
+    )
+    leakage = _numeric_map(
+        _first_mapping(
+            metadata.get("per_script_leakage"),
+            metrics.get("per_script_leakage"),
+            _nested(metrics, "leakage", "by_script"),
+            _nested(metrics, "leakage_rate", "by_script"),
+        )
+    )
+    denominators = _first_mapping(
+        metadata.get("total_graphemes_by_script"),
+        metadata.get("total_chars_by_script"),
+        _nested(metrics, "recall_slices", "total_graphemes_by_script"),
+        _nested(metrics, "recall_slices", "total_chars_by_script"),
+        _nested(metrics, "leakage", "total_graphemes_by_script"),
+        _nested(metrics, "leakage", "total_chars_by_script"),
+    )
+    parsed_denominators = {
+        str(script): int(value)
+        for script, value in denominators.items()
+        if _optional_int(value) is not None
+    }
+    scripts = set(recall) | set(leakage)
+    for script in scripts:
+        if script not in recall and script in leakage:
+            recall[script] = max(0.0, 1.0 - leakage[script])
+        if script not in leakage and script in recall:
+            leakage[script] = max(0.0, 1.0 - recall[script])
+    return (
+        {key: recall[key] for key in sorted(recall)},
+        {key: leakage[key] for key in sorted(leakage)},
+        {key: parsed_denominators[key] for key in sorted(parsed_denominators)},
+    )
+
+
 def _critical_leakage_count(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -3620,6 +3783,7 @@ def _tracking_issue_body(
 
 
 __all__ = [
+    "CROSS_SCRIPT_GATE",
     "G1A_V16_RECALL_FLOOR",
     "G1A_V20_RECALL_FLOOR",
     "G1B_RECALL_FLOOR",
