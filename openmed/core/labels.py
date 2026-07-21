@@ -1264,6 +1264,34 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "pediatricfinding": CONDITION,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
+# CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
+# clinical NER. Equipment remains an explicit ``OTHER`` mapping because the
+# current canonical taxonomy has no medical-device concept label.
+CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
+    "bod": BODY_SITE,
+    "body": BODY_SITE,
+    "body_site": BODY_SITE,
+    "bodysite": BODY_SITE,
+    "dep": JOB_DEPARTMENT,
+    "department": JOB_DEPARTMENT,
+    "dis": CONDITION,
+    "disease": CONDITION,
+    "dru": MEDICATION,
+    "drug": MEDICATION,
+    "equ": OTHER,
+    "equipment": OTHER,
+    "ite": LAB_TEST,
+    "item": LAB_TEST,
+    "lab_test": LAB_TEST,
+    "labtest": LAB_TEST,
+    "mic": MICROORGANISM,
+    "microorganism": MICROORGANISM,
+    "pro": PROCEDURE,
+    "procedure": PROCEDURE,
+    "sym": CONDITION,
+    "symptom": CONDITION,
+}
+
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
@@ -1334,9 +1362,8 @@ def normalize_label(label: str, lang: str = "en") -> str:
 
     Args:
         label: Source label as emitted by a model or registered in a config.
-        lang: ISO 639-1 language hint (currently unused but reserved for
-            language-conditional disambiguation, e.g. mapping ambiguous
-            tokens differently per locale).
+        lang: ISO 639 language hint used for language-conditional mappings,
+            including CMeEE labels for Chinese clinical NER.
 
     Returns:
         A canonical label in ``UPPER_SNAKE_CASE``.
@@ -1346,6 +1373,11 @@ def normalize_label(label: str, lang: str = "en") -> str:
     key = _key(label)
     if not key:
         return OTHER
+    language = str(lang).strip().replace("-", "_").split("_", 1)[0].casefold()
+    if language == "zh":
+        cmeee = CMEEE_LABEL_TO_CANONICAL.get(key)
+        if cmeee is not None:
+            return cmeee
     canonical = _ALIAS_MAP.get(key)
     if canonical is not None:
         return canonical
@@ -1416,6 +1448,7 @@ _validate_label_metadata()
 __all__ = [
     "CANONICAL_LABELS",
     "normalize_label",
+    "CMEEE_LABEL_TO_CANONICAL",
     "id_subtype_for",
     "ID_ALIAS_SUBTYPES",
     "ID_SUBTYPES",

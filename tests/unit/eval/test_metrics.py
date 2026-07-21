@@ -46,6 +46,7 @@ def test_eval_modules_import_cleanly():
         "biomedical-ner",
         "multilingual-clinical-ner",
         "masakhaner",
+        "chinese-clinical-ner",
         "multimodal_dicom",
     )
 
