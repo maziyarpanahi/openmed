@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from openmed.core.decoding.spans import iter_grapheme_clusters
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.manifest_schema import (
     LANGUAGE_SCRIPT_TARGETS,
@@ -725,25 +725,9 @@ def _is_byte_fallback_token(token: str, *, byte_level: bool) -> bool:
 
 
 def _grapheme_count(text: str) -> int:
-    count = 0
-    join_next = False
-    for character in text:
-        if character.isspace():
-            join_next = False
-            continue
-        name = unicodedata.name(character, "")
-        combining = bool(unicodedata.combining(character))
-        variation_selector = name.startswith("VARIATION SELECTOR")
-        zero_width_joiner = character == "\u200d"
-        if count == 0:
-            count = 1
-        elif not (combining or variation_selector or zero_width_joiner or join_next):
-            count += 1
-        was_joined = join_next
-        join_next = zero_width_joiner or "VIRAMA" in name or "HALANT" in name
-        if was_joined and not (combining or variation_selector or zero_width_joiner):
-            join_next = False
-    return count
+    return sum(
+        not text[start:end].isspace() for start, end in iter_grapheme_clusters(text)
+    )
 
 
 def _claimed_script_targets(languages: object) -> set[str]:
@@ -786,8 +770,7 @@ def _refresh_model_audit_claims(
     claimed_scripts = _claimed_script_targets(languages)
     current_languages = (
         list(languages)
-        if isinstance(languages, Sequence)
-        and not isinstance(languages, (str, bytes))
+        if isinstance(languages, Sequence) and not isinstance(languages, (str, bytes))
         else []
     )
     scripts = value["scripts"]

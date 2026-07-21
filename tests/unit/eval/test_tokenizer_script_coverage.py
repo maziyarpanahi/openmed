@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from openmed.core.manifest_schema import SCRIPT_COVERAGE_TARGETS
 from openmed.eval.coverage import (
+    _grapheme_count,
     _is_byte_fallback_token,
     audit_pii_tokenizers,
     audit_tokenizer_scripts,
@@ -61,6 +62,12 @@ def test_byte_level_utf8_fragments_count_as_fallback_only_for_byte_backend() -> 
     assert _is_byte_fallback_token("à¬", byte_level=True) is True
     assert _is_byte_fallback_token("à¬¦", byte_level=True) is False
     assert _is_byte_fallback_token("à¬", byte_level=False) is False
+
+
+def test_grapheme_count_uses_shared_extended_cluster_boundaries() -> None:
+    assert _grapheme_count("நோயாளர்") == 4
+    assert _grapheme_count("क्‍ष") == 1
+    assert _grapheme_count("👩‍⚕️ A") == 2
 
 
 def test_audit_covers_every_pii_row_and_all_scripts() -> None:
