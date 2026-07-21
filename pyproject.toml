@@ -238,7 +238,7 @@ onnx-runtime = [
   "huggingface-hub>=0.30",
   "numpy>=1.26",
   "onnxruntime>=1.16",
-  "transformers>=4.50",
+  "tokenizers>=0.15",
 ]
 
 openvino = [

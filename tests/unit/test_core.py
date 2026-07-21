@@ -161,6 +161,7 @@ class TestModelLoader:
         )
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.pipeline")
     def test_create_pipeline_uses_local_files_only_for_local_path(
         self,
@@ -529,6 +530,7 @@ class TestAnalyzeTextBehaviour:
             loader.load_model("nonexistent-model")
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.pipeline")
     def test_create_pipeline(self, mock_pipeline):
         """Test pipeline creation."""
@@ -551,6 +553,7 @@ class TestAnalyzeTextBehaviour:
             mock_pipeline.assert_called_once()
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.pipeline")
     def test_create_pipeline_reuses_cached_pipeline(self, mock_pipeline):
         """Repeated pipeline creation should reuse the cached pipeline."""

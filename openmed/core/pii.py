@@ -899,6 +899,8 @@ def extract_pii(
     *,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
+    batch_size: Optional[int] = None,
+    num_workers: Optional[int] = None,
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
 ) -> PredictionResult:
@@ -929,6 +931,8 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
+        batch_size: Optional backend inference batch size.
+        num_workers: Optional backend inference worker count.
         custom_recognizer: Optional deny-list/allow-list recognizer config,
             ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
             matches are added with ``custom:deny`` provenance; allow-list
@@ -977,6 +981,11 @@ def extract_pii(
         final_result = cache.get(cache_key)
         if final_result is not None:
             return final_result
+    runtime_kwargs = {}
+    if batch_size is not None:
+        runtime_kwargs["batch_size"] = batch_size
+    if num_workers is not None:
+        runtime_kwargs["num_workers"] = num_workers
     final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
@@ -989,6 +998,7 @@ def extract_pii(
         loader=loader,
         custom_recognizer=custom_recognizer,
         abdm=abdm,
+        **runtime_kwargs,
     )[0]
     if cache_results:
         cache.set(cache_key, final_result)

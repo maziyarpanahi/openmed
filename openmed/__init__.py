@@ -121,13 +121,16 @@ from .processing.advanced_ner import (
 )
 from .processing.outputs import PredictionResult
 from .utils import (
+    PeakRSSMeasurement,
     Profiler,
     ProfileReport,
     Timer,
     disable_profiling,
     enable_profiling,
     get_logger,
+    get_peak_rss_bytes,
     get_profile_report,
+    measure_peak_rss,
     profile,
     setup_logging,
     timed,
@@ -709,10 +712,13 @@ __all__ = [
     # Profiling utilities
     "Profiler",
     "ProfileReport",
+    "PeakRSSMeasurement",
     "Timer",
     "enable_profiling",
     "disable_profiling",
     "get_profile_report",
+    "get_peak_rss_bytes",
+    "measure_peak_rss",
     "profile",
     "timed",
     # PII detection and de-identification
