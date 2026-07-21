@@ -64,6 +64,7 @@ from .result_cache import (
 # Type alias for de-identification methods
 DEIDENTIFICATION_METHODS = (
     "mask",
+    "aadhaar_mask",
     "remove",
     "replace",
     "hash",
@@ -72,6 +73,7 @@ DEIDENTIFICATION_METHODS = (
 )
 DeidentificationMethod = Literal[
     "mask",
+    "aadhaar_mask",
     "remove",
     "replace",
     "hash",
@@ -1925,6 +1927,8 @@ def deidentify(
     Implements multiple de-identification strategies for HIPAA compliance:
 
     - **mask**: Replace with placeholders like [NAME], [EMAIL], etc.
+    - **aadhaar_mask**: Render valid Aadhaar values as ``XXXX XXXX NNNN``;
+      use ordinary placeholders for every other entity
     - **remove**: Remove PII text entirely (empty string)
     - **replace**: Replace with fake but realistic data
     - **hash**: Replace with consistent hashed values for entity linking
@@ -1937,8 +1941,8 @@ def deidentify(
 
     Args:
         text: Input text to de-identify
-        method: De-identification method (mask, remove, replace, hash,
-            shift_dates, format_preserve)
+        method: De-identification method (mask, aadhaar_mask, remove, replace,
+            hash, shift_dates, format_preserve)
         model_name: PII detection model
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
@@ -2145,6 +2149,16 @@ def _redact_entity(
     """
     if method == "mask":
         # Replace with placeholder
+        return _mask_placeholder(entity)
+
+    elif method == "aadhaar_mask":
+        original = entity.original_text or entity.text
+        from .pii_i18n import validate_aadhaar
+
+        if validate_aadhaar(original):
+            from .anonymizer.format_preserve import mask_aadhaar
+
+            return mask_aadhaar(original)
         return _mask_placeholder(entity)
 
     elif method == "remove":

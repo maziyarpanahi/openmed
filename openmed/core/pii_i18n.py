@@ -569,19 +569,22 @@ def validate_aadhaar(text: str) -> bool:
     Verhoeff check digit.
 
     Args:
-        text: Aadhaar string (may contain spaces or separators)
+        text: Aadhaar string, either as 12 digits or in the UIDAI 4-4-4
+            display form.
 
     Returns:
         True if the Aadhaar passes the Verhoeff checksum
     """
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 12:
+    candidate = text.strip()
+    if (
+        re.fullmatch(
+            r"[2-9][0-9]{11}|[2-9][0-9]{3} [0-9]{4} [0-9]{4}",
+            candidate,
+        )
+        is None
+    ):
         return False
-
-    # First digit cannot be 0 or 1
-    if digits[0] in ("0", "1"):
-        return False
+    digits = candidate.replace(" ", "")
 
     # Verhoeff checksum
     c = 0
@@ -2660,6 +2663,36 @@ MRZ_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# Aadhaar is language-agnostic in Indian clinical notes: English labels and
+# Romanized code-mixed text are common alongside Devanagari or Telugu cues.
+# The strict validator gate prevents phone-like or random 12-digit values from
+# being promoted to a national identifier by this deterministic recognizer.
+AADHAAR_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9])[2-9][0-9]{3}(?P<aadhaar_sep> ?)[0-9]{4}"
+        r"(?P=aadhaar_sep)[0-9]{4}(?![0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.55,
+        context_words=[
+            "आधार",
+            "यूआईडीएआई",
+            "पहचान",
+            "aadhaar",
+            "aadhar",
+            "uid",
+            "uidai",
+            "unique identification",
+            "ఆధార్",
+            "గుర్తింపు",
+        ],
+        context_boost=0.4,
+        validator=validate_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+    ),
+]
+
 _FRENCH_PII_PATTERNS: List[PIIPattern] = [
     # French dates DD/MM/YYYY
     PIIPattern(
@@ -3378,22 +3411,6 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
         safety_sweep_requires_context=True,
     ),
-    # Aadhaar (12 digits, possibly spaced as 4-4-4)
-    PIIPattern(
-        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
-        "national_id",
-        priority=9,
-        base_score=0.4,
-        context_words=[
-            "\u0906\u0927\u093e\u0930",
-            "aadhaar",
-            "\u092f\u0942\u0906\u0908\u0921\u0940\u090f\u0906\u0908",
-            "uid",
-            "\u092a\u0939\u091a\u093e\u0928",
-        ],
-        context_boost=0.45,
-        validator=validate_aadhaar,
-    ),
 ]
 
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
@@ -3461,21 +3478,6 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
-    ),
-    # Aadhaar (12 digits, possibly spaced as 4-4-4)
-    PIIPattern(
-        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
-        "national_id",
-        priority=9,
-        base_score=0.4,
-        context_words=[
-            "\u0c06\u0c27\u0c3e\u0c30\u0c4d",
-            "aadhaar",
-            "uid",
-            "\u0c17\u0c41\u0c30\u0c4d\u0c24\u0c3f\u0c02\u0c2a\u0c41",
-        ],
-        context_boost=0.45,
-        validator=validate_aadhaar,
     ),
 ]
 
@@ -6011,8 +6013,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "es": _SPANISH_PII_PATTERNS,
     "pt": _PORTUGUESE_PII_PATTERNS,
     "nl": _DUTCH_PII_PATTERNS,
-    "hi": _HINDI_PII_PATTERNS,
-    "te": _TELUGU_PII_PATTERNS,
+    # Keep Aadhaar discoverable through the historical per-language mapping
+    # while get_patterns_for_language deduplicates the universal rule.
+    "hi": [*_HINDI_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
+    "te": [*_TELUGU_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
@@ -6889,13 +6893,20 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
 
     from .pii_entity_merger import PII_PATTERNS
 
-    # English patterns serve as universal base
-    # MRZ and USCC patterns are language-agnostic, so they join the universal base.
-    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS + USCC_PII_PATTERNS
+    # English patterns serve as universal base. MRZ, USCC, and Aadhaar patterns
+    # are language-agnostic, so they join the universal base for every route.
+    base = (
+        list(PII_PATTERNS) + MRZ_PII_PATTERNS + USCC_PII_PATTERNS + AADHAAR_PII_PATTERNS
+    )
 
     combined = base
     if base_lang != "en":
-        combined = combined + LANGUAGE_PII_PATTERNS.get(base_lang, [])
+        language_patterns = LANGUAGE_PII_PATTERNS.get(base_lang, [])
+        combined = combined + [
+            pattern
+            for pattern in language_patterns
+            if not any(pattern is existing for existing in combined)
+        ]
 
     for locale_key in _locale_pattern_keys(lang, locale):
         combined = combined + LOCALE_PII_PATTERNS.get(locale_key, [])

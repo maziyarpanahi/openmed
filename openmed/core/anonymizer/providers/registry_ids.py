@@ -340,7 +340,7 @@ def _register_builtin_specs() -> None:
         faker_method="ssn",
     )
     _register_aliases(
-        ("in", "hi", "te", "en_IN", "hi_IN"),
+        ("in", "india", "en", "hi", "te", "en_IN", "hi_IN", "te_IN"),
         id_type="aadhaar",
         validate=validate_aadhaar,
         faker_method="aadhaar",

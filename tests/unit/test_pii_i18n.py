@@ -28,6 +28,7 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 )
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
+    AADHAAR_PII_PATTERNS,
     DEFAULT_PII_MODELS,
     LANGUAGE_FAKE_DATA,
     LANGUAGE_MODEL_PREFIX,
@@ -2183,122 +2184,30 @@ class TestGetPatternsForLanguage:
     def test_english_returns_base_patterns(self):
         patterns = get_patterns_for_language("en")
         assert len(patterns) == (
-            len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
+            len(PII_PATTERNS)
+            + len(MRZ_PII_PATTERNS)
+            + len(USCC_PII_PATTERNS)
+            + len(AADHAAR_PII_PATTERNS)
         )
 
-    def test_french_includes_base_and_language(self):
-        fr_patterns = get_patterns_for_language("fr")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["fr"])
-        assert len(fr_patterns) == base_count + lang_count
-
-    def test_german_includes_base_and_language(self):
-        de_patterns = get_patterns_for_language("de")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["de"])
-        assert len(de_patterns) == base_count + lang_count
-
-    def test_italian_includes_base_and_language(self):
-        it_patterns = get_patterns_for_language("it")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["it"])
-        assert len(it_patterns) == base_count + lang_count
-
-    def test_spanish_includes_base_and_language(self):
-        es_patterns = get_patterns_for_language("es")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["es"])
-        assert len(es_patterns) == base_count + lang_count
-
-    def test_portuguese_includes_base_and_language(self):
-        pt_patterns = get_patterns_for_language("pt")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["pt"])
-        assert len(pt_patterns) == base_count + lang_count
-
-    def test_dutch_includes_base_and_language(self):
-        nl_patterns = get_patterns_for_language("nl")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["nl"])
-        assert len(nl_patterns) == base_count + lang_count
-
-    def test_hindi_includes_base_and_language(self):
-        hi_patterns = get_patterns_for_language("hi")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["hi"])
-        assert len(hi_patterns) == base_count + lang_count
-
-    def test_telugu_includes_base_and_language(self):
-        te_patterns = get_patterns_for_language("te")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["te"])
-        assert len(te_patterns) == base_count + lang_count
-
-    def test_arabic_includes_base_and_language(self):
-        ar_patterns = get_patterns_for_language("ar")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["ar"])
-        assert len(ar_patterns) == base_count + lang_count
-
-    def test_hebrew_includes_base_and_language(self):
-        he_patterns = get_patterns_for_language("he")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["he"])
-        assert len(he_patterns) == base_count + lang_count
-
-    def test_japanese_includes_base_and_language(self):
-        ja_patterns = get_patterns_for_language("ja")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["ja"])
-        assert len(ja_patterns) == base_count + lang_count
-
-    def test_turkish_includes_base_and_language(self):
-        tr_patterns = get_patterns_for_language("tr")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["tr"])
-        assert len(tr_patterns) == base_count + lang_count
-
-    def test_thai_includes_base_and_language(self):
-        th_patterns = get_patterns_for_language("th")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["th"])
-        assert len(th_patterns) == base_count + lang_count
-
-    def test_indonesian_includes_base_and_language(self):
-        id_patterns = get_patterns_for_language("id")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["id"])
-        assert len(id_patterns) == base_count + lang_count
-
-    def test_slovak_includes_base_and_language(self):
-        sk_patterns = get_patterns_for_language("sk")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["sk"])
-        assert len(sk_patterns) == base_count + lang_count
-
-    def test_malay_includes_base_and_language(self):
-        ms_patterns = get_patterns_for_language("ms")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["ms"])
-        assert len(ms_patterns) == base_count + lang_count
-
-    def test_tagalog_includes_base_and_language(self):
-        tl_patterns = get_patterns_for_language("tl")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["tl"])
-        assert len(tl_patterns) == base_count + lang_count
-
-    def test_danish_includes_base_and_language(self):
-        da_patterns = get_patterns_for_language("da")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["da"])
-        assert len(da_patterns) == base_count + lang_count
-
-    def test_korean_includes_base_and_language(self):
-        ko_patterns = get_patterns_for_language("ko")
-        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS) + len(USCC_PII_PATTERNS)
-        lang_count = len(LANGUAGE_PII_PATTERNS["ko"])
-        assert len(ko_patterns) == base_count + lang_count
+    @pytest.mark.parametrize(
+        "lang",
+        sorted((SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES) - {"en"}),
+    )
+    def test_language_includes_universal_base_and_language_patterns(self, lang):
+        patterns = get_patterns_for_language(lang)
+        base_count = (
+            len(PII_PATTERNS)
+            + len(MRZ_PII_PATTERNS)
+            + len(USCC_PII_PATTERNS)
+            + len(AADHAAR_PII_PATTERNS)
+        )
+        universal_patterns = MRZ_PII_PATTERNS + USCC_PII_PATTERNS + AADHAAR_PII_PATTERNS
+        language_count = sum(
+            not any(pattern is universal for universal in universal_patterns)
+            for pattern in LANGUAGE_PII_PATTERNS[lang]
+        )
+        assert len(patterns) == base_count + language_count
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
