@@ -8,10 +8,12 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 TRAINING_PROVENANCE_FILENAME = "training_provenance.json"
 TRAINING_PROVENANCE_SCHEMA_VERSION = "openmed.training_provenance.v1"
+
+SPAN_SET_HASH_SCHEMA_VERSION = "openmed.span_set.v1"
 
 _SHA256_DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-f]{64}$")
 _MODEL_CARD_REPRO_HASH_RE = re.compile(
@@ -261,6 +263,125 @@ def resolve_git_sha(*, cwd: str | Path | None = None) -> str:
     return result.stdout.strip() or "unknown"
 
 
+def canonicalize_span_records(spans: Iterable[Any]) -> list[dict[str, Any]]:
+    """Return a deterministically ordered, PHI-free view of detected spans.
+
+    Each record captures only offsets, canonical label, confidence, and the
+    applied replacement action/surrogate metadata -- never the raw entity text
+    or the raw replacement value. The output is sorted by ``(start, end, label)``
+    so that dict/set iteration order in the caller cannot leak into the hash.
+
+    Args:
+        spans: Iterable of span-like objects exposing ``start``/``end``/``label``
+            attributes (for example :class:`PIIEntity`) or the equivalent
+            mapping keys.
+
+    Returns:
+        A list of plain dictionaries safe to hash or serialize.
+    """
+
+    records = [_span_record(span) for span in spans]
+    records.sort(
+        key=lambda record: (
+            record["start"],
+            record["end"],
+            record["label"],
+            record["action"],
+        )
+    )
+    return records
+
+
+def compute_span_set_hash(
+    spans: Iterable[Any],
+    *,
+    text_length: int | None = None,
+    method: str | None = None,
+) -> str:
+    """Return ``sha256:<digest>`` over the canonical span set and replacements.
+
+    This extends the release reproducibility hash to per-request de-identification
+    output. It folds in the full span set (offsets, labels, confidences) and the
+    applied replacement action/surrogate digest so that any run-to-run drift in
+    detected spans or applied replacements changes the hash. No raw PHI enters the
+    digest: only offsets, labels, confidences, and salted hashes of surrogate
+    values are included.
+
+    Args:
+        spans: Iterable of span-like objects (see :func:`canonicalize_span_records`).
+        text_length: Optional length of the source text, bound into the payload so
+            that identical span sets over different-length documents differ.
+        method: Optional de-identification method label bound into the payload.
+
+    Returns:
+        A ``sha256:`` prefixed lowercase hex digest.
+    """
+
+    payload = {
+        "schema_version": SPAN_SET_HASH_SCHEMA_VERSION,
+        "method": method,
+        "spans": canonicalize_span_records(spans),
+        "text_length": text_length,
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def _span_record(span: Any) -> dict[str, Any]:
+    start = _span_attr(span, "start")
+    end = _span_attr(span, "end")
+    label = _span_attr(span, "label")
+    confidence = _span_attr(span, "confidence")
+    action = _span_attr(span, "action")
+    surrogate = _span_attr(span, "surrogate")
+    redacted = _span_attr(span, "redacted_text")
+
+    replacement_digest = None
+    replacement_source = surrogate if surrogate is not None else redacted
+    if replacement_source is not None:
+        # Hash the applied replacement so that surrogate drift is caught without
+        # ever storing the raw replacement value (which may echo synthetic PHI).
+        replacement_digest = hashlib.sha256(
+            str(replacement_source).encode("utf-8")
+        ).hexdigest()
+
+    return {
+        "start": _coerce_int(start),
+        "end": _coerce_int(end),
+        "label": str(label) if label is not None else "",
+        "confidence": _coerce_confidence(confidence),
+        "action": str(action) if action is not None else "",
+        "replacement_digest": replacement_digest,
+    }
+
+
+def _span_attr(span: Any, name: str) -> Any:
+    if isinstance(span, Mapping):
+        return span.get(name)
+    return getattr(span, name, None)
+
+
+def _coerce_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ReproducibilityVerificationError("span offsets must be integers")
+    return int(value)
+
+
+def _coerce_confidence(value: Any) -> float | None:
+    if value is None:
+        return None
+    # Round to a fixed precision so that platform float formatting cannot leak
+    # non-significant digits into the deterministic hash.
+    return round(float(value), 6)
+
+
 def _normalise_component(value: Any) -> Any:
     if isinstance(value, Path):
         return _path_component(value)
@@ -409,13 +530,16 @@ def _file_sha256(path: Path) -> str:
 
 
 __all__ = [
+    "SPAN_SET_HASH_SCHEMA_VERSION",
     "TRAINING_PROVENANCE_FILENAME",
     "TRAINING_PROVENANCE_SCHEMA_VERSION",
     "ReproducibilityVerificationError",
     "build_training_provenance",
+    "canonicalize_span_records",
     "compute_environment_lock_digest",
     "compute_file_digest",
     "compute_reproducibility_hash",
+    "compute_span_set_hash",
     "compute_training_reproducibility_hash",
     "load_training_provenance",
     "resolve_git_sha",
