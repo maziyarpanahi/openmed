@@ -388,8 +388,10 @@ as its source of truth and supports **21 supported PII language codes**:
 Chinese routing currently uses the documented multilingual default-model
 placeholder; dedicated Chinese model weights are not bundled.
 Additional validator-backed national-ID providers cover ID-only locales such as
-Polish, Latvian, Slovak, Malay, Filipino, and Danish without adding
-default PII models for those language codes.
+Polish, Latvian, Slovak, Malay, Filipino, Danish, and Urdu without adding
+default PII models for those language codes. Urdu's conceptual `ur_PK` locale
+uses Faker's installed `en_PK` backend for general surrogate data while CNIC
+generation remains provider-backed and format-valid.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 

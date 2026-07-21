@@ -653,18 +653,24 @@ _CHINESE_RESIDENT_ID_WEIGHTS = (
 )
 _CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
 
+_PAKISTANI_CNIC_EASTERN_DIGITS = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹",
+    "0123456789",
+)
+_PAKISTANI_CNIC_RE = re.compile(r"(?:[0-9]{5}-[0-9]{7}-[0-9]|[0-9]{13})")
+
+
 def validate_pakistani_cnic(text: str) -> bool:
+    """Validate the public dashed or undashed Pakistani CNIC format.
+
+    Persian/Eastern Arabic-Indic digits are normalized to ASCII before the
+    structural check. CNIC has no public checksum, so this intentionally does
+    not claim that a matching value was issued by NADRA.
+    """
     if not isinstance(text, str):
         return False
-    # Matches Western digits (0-9) and Eastern Arabic-Indic digits (۰-۹),
-    # issued CNIC cards by NADRA themselves use Western digits.
-    digit = r"[0-9\u06F0-\u06F9]"
-    dashed = rf"{digit}{{5}}-{digit}{{7}}-{digit}"
-    undashed = rf"{digit}{{13}}"
-    return (
-        re.fullmatch(dashed, text) is not None
-        or re.fullmatch(undashed, text) is not None
-    )
+    normalized = text.translate(_PAKISTANI_CNIC_EASTERN_DIGITS)
+    return _PAKISTANI_CNIC_RE.fullmatch(normalized) is not None
 
 
 def chinese_resident_id_check_character(body: str) -> str:
@@ -3569,16 +3575,16 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
 
 _URDU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
         "date",
         priority=9,
         base_score=0.6,
         context_words=[
-            "\u062a\u0627\u0631\u06cc\u062e",          
-            "\u067e\u06cc\u062f\u0627\u0626\u0634",      
-            "\u062a\u0627\u0631\u06cc\u062e \u067e\u06cc\u062f\u0627\u0626\u0634", 
-            "\u062f\u0627\u062e\u0644\u06c1",          
-            "\u0688\u0633\u0686\u0627\u0631\u062c",      
+            "\u062a\u0627\u0631\u06cc\u062e",
+            "\u067e\u06cc\u062f\u0627\u0626\u0634",
+            "\u062a\u0627\u0631\u06cc\u062e \u067e\u06cc\u062f\u0627\u0626\u0634",
+            "\u062f\u0627\u062e\u0644\u06c1",
+            "\u0688\u0633\u0686\u0627\u0631\u062c",
         ],
         context_boost=0.3,
     ),
@@ -3588,9 +3594,9 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         priority=8,
         base_score=0.45,
         context_words=[
-            "\u0641\u0648\u0646",       
-            "\u0645\u0648\u0628\u0627\u0626\u0644", 
-            "\u0631\u0627\u0628\u0637\u06c1",  
+            "\u0641\u0648\u0646",
+            "\u0645\u0648\u0628\u0627\u0626\u0644",
+            "\u0631\u0627\u0628\u0637\u06c1",
         ],
         context_boost=0.4,
     ),
@@ -3606,9 +3612,9 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         priority=9,
         base_score=0.4,
         context_words=[
-            "\u0634\u0646\u0627\u062e\u062a\u06cc \u06a9\u0627\u0631\u0688",       
-            "\u0642\u0648\u0645\u06cc \u0634\u0646\u0627\u062e\u062a\u06cc \u06a9\u0627\u0631\u0688",  
-            "\u06a9\u0627\u0631\u0688 \u0646\u0645\u0628\u0631",  
+            "\u0634\u0646\u0627\u062e\u062a\u06cc \u06a9\u0627\u0631\u0688",
+            "\u0642\u0648\u0645\u06cc \u0634\u0646\u0627\u062e\u062a\u06cc \u06a9\u0627\u0631\u0688",
+            "\u06a9\u0627\u0631\u0688 \u0646\u0645\u0628\u0631",
         ],
         context_boost=0.5,
         validator=validate_pakistani_cnic,
@@ -3620,8 +3626,8 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         priority=7,
         base_score=0.6,
         context_words=[
-            "\u067e\u062a\u06c1",    
-            "\u0631\u06c1\u0627\u0626\u0634", 
+            "\u067e\u062a\u06c1",
+            "\u0631\u06c1\u0627\u0626\u0634",
         ],
         context_boost=0.25,
         flags=re.IGNORECASE,
@@ -3632,8 +3638,8 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         priority=6,
         base_score=0.25,
         context_words=[
-            "\u067e\u0648\u0633\u0679\u0644 \u06a9\u0648\u0688", 
-            "\u0632\u067e \u06a9\u0648\u0688",                   
+            "\u067e\u0648\u0633\u0679\u0644 \u06a9\u0648\u0688",
+            "\u0632\u067e \u06a9\u0648\u0688",
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
@@ -6285,19 +6291,19 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
             "\u0627\u062d\u0645\u062f \u0639\u0644\u06cc",
             "\u0641\u0627\u0637\u0645\u06c1 \u062e\u0627\u0646",
             "\u0626\u0644\u0627\u0644 \u062d\u0633\u06cc\u0646",
-            "\u0639\u0644\u06cc\u0627\u0646\u0020\u067e\u0631\u06cc\u0645\u0627\u0646\u06cc",
+            "\u0633\u0627\u0631\u0627 \u0627\u062d\u0645\u062f",
         ],
         "FIRST_NAME": [
             "\u0627\u062d\u0645\u062f",
             "\u0641\u0627\u0637\u0645\u06c1",
             "\u0626\u0644\u0627\u0644",
-            "\u0639\u0644\u06cc\u0627\u0646",
+            "\u0633\u0627\u0631\u0627",
         ],
         "LAST_NAME": [
             "\u0639\u0644\u06cc",
             "\u062e\u0627\u0646",
             "\u062d\u0633\u06cc\u0646",
-            "\u067e\u0631\u06cc\u0645\u0627\u0646\u06cc",
+            "\u0627\u062d\u0645\u062f",
         ],
         "EMAIL": ["patient@example.pk", "contact@example.org"],
         "PHONE": ["+92 300 1234567", "021 34567890"],

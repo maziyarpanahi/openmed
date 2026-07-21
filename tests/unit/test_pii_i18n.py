@@ -66,6 +66,7 @@ from openmed.core.pii_i18n import (
     validate_malaysian_mykad,
     validate_nigeria_bvn,
     validate_nigeria_nin,
+    validate_pakistani_cnic,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cnpj,
@@ -77,7 +78,6 @@ from openmed.core.pii_i18n import (
     validate_turkish_tckn,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
-    validate_pakistani_cnic,
 )
 
 # ---------------------------------------------------------------------------
@@ -3369,20 +3369,31 @@ def test_croatian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
     assert added_count == len(row["gold_spans"])
     for span in row["gold_spans"]:
         assert span["text"] not in result.deidentified_text
-        
-        
-def test_validate_pakistani_cnic():
-    assert validate_pakistani_cnic("12345-6789012-3")
-    assert validate_pakistani_cnic("1234567890123")
-    assert validate_pakistani_cnic("۱۲۳۴۵-۶۷۸۹۰۱۲-۳")
-    assert validate_pakistani_cnic("۱۲۳۴۵۶۷۸۹۰۱۲۳")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "12345-6789012-3",
+        "1234567890123",
+        "۱۲۳۴۵-۶۷۸۹۰۱۲-۳",
+        "۱۲۳۴۵۶۷۸۹۰۱۲۳",
+    ],
+)
+def test_validate_pakistani_cnic(value):
+    assert validate_pakistani_cnic(value)
+
+
+def test_validate_pakistani_cnic_rejects_invalid_shapes():
     assert not validate_pakistani_cnic("1234-56789012-3")
     assert not validate_pakistani_cnic("123456789012")
     assert not validate_pakistani_cnic("abcdefghijklm")
     assert not validate_pakistani_cnic(None)
-    
-    
+
+
 def test_urdu_national_id_safety_sweep_requires_context():
+    from openmed.core.safety_sweep import safety_sweep
+
     patterns = get_patterns_for_language("ur")
     national_id_patterns = [
         pattern for pattern in patterns if pattern.entity_type == "national_id"
@@ -3391,39 +3402,45 @@ def test_urdu_national_id_safety_sweep_requires_context():
     assert all(
         pattern.safety_sweep_requires_context for pattern in national_id_patterns
     )
-    
+    assert safety_sweep("12345-6789012-3", [], lang="ur") == []
+
+
 def test_generated_urdu_surrogate_passes_validator():
     assert LANG_TO_LOCALE["ur"] == "ur_PK"
     anonymizer = Anonymizer(lang="ur", consistent=True, seed=42)
-    surrogate = anonymizer.surrogate("12345-6789012-3", "national_id")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        surrogate = anonymizer.surrogate("12345-6789012-3", "national_id")
     assert validate_pakistani_cnic(surrogate) is True
-    
-    
-def test_urdu_cnic_pattern_dashed():
-    patterns = [
-        p for p in LANGUAGE_PII_PATTERNS["ur"] if p.entity_type == "national_id"
-    ]
-    text = "12345-6789012-3"
-    matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
-    assert matched, "Urdu CNIC pattern should match dashed format"
-    
-
-def test_urdu_cnic_pattern_undashed():
-    patterns = [
-        p for p in LANGUAGE_PII_PATTERNS["ur"] if p.entity_type == "national_id"
-    ]
-    text = "1234567890123"
-    matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
-    assert matched, "Urdu CNIC pattern should match undashed format"
 
 
-def test_urdu_cnic_pattern_matches_eastern_digits():
-    patterns = [
-        p for p in LANGUAGE_PII_PATTERNS["ur"] if p.entity_type == "national_id"
+@pytest.mark.parametrize(
+    "value",
+    [
+        "12345-6789012-3",
+        "1234567890123",
+        "۱۲۳۴۵-۶۷۸۹۰۱۲-۳",
+        "۱۲۳۴۵۶۷۸۹۰۱۲۳",
+    ],
+)
+def test_urdu_cnic_safety_sweep_preserves_exact_offsets(value):
+    from openmed.core.safety_sweep import safety_sweep
+
+    text = f"شناختی کارڈ: {value}"
+    expected_start = text.index(value)
+    matches = [
+        entity
+        for entity in safety_sweep(text, [], lang="ur")
+        if entity.label == "national_id"
     ]
-    text = "۱۲۳۴۵-۶۷۸۹۰۱۲-۳"
-    matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
-    assert matched, "Urdu CNIC pattern should match Eastern Arabic-Indic digits"
+
+    assert len(matches) == 1
+    match = matches[0]
+    assert (match.start, match.end, match.text) == (
+        expected_start,
+        expected_start + len(value),
+        value,
+    )
 
 
 def test_urdu_i18n_golden_fixture_offsets():
@@ -3448,6 +3465,7 @@ def test_urdu_i18n_golden_fixture_offsets():
         if span["label"] == "ID_NUM"
     }
     assert validate_pakistani_cnic(ids_by_type["cnic"])
+
 
 def test_urdu_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
     from openmed.core.pii import (
@@ -3494,9 +3512,31 @@ def test_urdu_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
     )
 
     assert added_count == len(row["gold_spans"])
+    label_map = {
+        "DATE": "date",
+        "PHONE": "phone_number",
+        "ID_NUM": "national_id",
+        "STREET_ADDRESS": "street_address",
+        "ZIPCODE": "postcode",
+    }
+    expected_spans = {
+        (label_map[span["label"]], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    actual_spans = {
+        (entity.label, entity.start, entity.end, entity.text)
+        for entity in swept_result.entities
+    }
+    assert actual_spans == expected_spans
+    canonicalized_text = result.deidentified_text
+    for canonical_label, internal_label in label_map.items():
+        canonicalized_text = canonicalized_text.replace(
+            f"[{internal_label}]",
+            f"[{canonical_label}]",
+        )
+    assert canonicalized_text == row["metadata"]["expected_output"]["text"]
     for span in row["gold_spans"]:
         assert span["text"] not in result.deidentified_text
-
 
 
 def test_validate_bulgarian_egn():

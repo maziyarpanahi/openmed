@@ -237,7 +237,7 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "cs": NationalIdOnlyCapability("cs_CZ", ("cs_CZ", "rodne_cislo")),
     "el": NationalIdOnlyCapability("el_GR", ("el_GR", "ssn")),
     "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
-    "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "pakistani_cnic")),
+    "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
 }
 
 SUPPLEMENTAL_LOCALES: Mapping[str, str] = {}
