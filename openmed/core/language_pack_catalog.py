@@ -40,6 +40,7 @@ def _pack(
     scripts: Sequence[str],
     *,
     national_id_provider: tuple[str, str] | None = None,
+    context_scripts: Sequence[str] = (),
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -53,6 +54,7 @@ def _pack(
         recognizers=("builtin-patterns", "model"),
         surrogate_locale=locale,
         national_id_providers=providers,
+        context_scripts=tuple(context_scripts),
     )
 
 
@@ -138,6 +140,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
+        context_scripts=("Hiragana/Katakana",),
     ),
     LanguagePack(
         code="zh",

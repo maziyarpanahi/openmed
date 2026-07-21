@@ -36,6 +36,19 @@ def _freeze_names(value: Iterable[str], field_name: str) -> tuple[str, ...]:
     return names
 
 
+def _freeze_optional_names(
+    value: Iterable[str],
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raise TypeError(f"{field_name} must be an iterable of strings, not a string")
+
+    names = tuple(_require_text(item, field_name) for item in value)
+    if len(set(names)) != len(names):
+        raise ValueError(f"{field_name} must not contain duplicate values")
+    return names
+
+
 def _freeze_text_mapping(
     value: Mapping[str, str],
     field_name: str,
@@ -68,6 +81,23 @@ def _freeze_recall_floors(
     return MappingProxyType(frozen)
 
 
+def _freeze_candidate_priorities(
+    value: Mapping[str, int],
+    scripts: tuple[str, ...],
+) -> Mapping[str, int]:
+    frozen: dict[str, int] = {}
+    for key, item in value.items():
+        script = _require_text(key, "candidate_priority key")
+        if script not in scripts:
+            raise ValueError(
+                f"candidate priority script {script!r} is not declared by the pack"
+            )
+        if isinstance(item, bool) or not isinstance(item, int):
+            raise TypeError("candidate priorities must be integers")
+        frozen[script] = item
+    return MappingProxyType(frozen)
+
+
 @dataclass(frozen=True, slots=True)
 class LanguagePack:
     """Describe one language's model, routing, surrogate, and safety hooks.
@@ -83,6 +113,9 @@ class LanguagePack:
             the locales that supply them.
         policy_overrides: Mapping of policy keys to pack-specific values.
         recall_floor_overrides: Mapping of canonical labels to probabilities.
+        candidate_priority: Per-script deterministic routing priorities. Higher
+            values win when a script maps to more than one registered pack.
+        context_scripts: Neighboring scripts that strongly identify this pack.
 
     Collection inputs are copied into immutable tuples or read-only mappings,
     so callers cannot mutate a registered pack through an object they retained.
@@ -97,6 +130,8 @@ class LanguagePack:
     national_id_providers: Mapping[str, str] = field(default_factory=dict)
     policy_overrides: Mapping[str, str] = field(default_factory=dict)
     recall_floor_overrides: Mapping[str, float] = field(default_factory=dict)
+    candidate_priority: Mapping[str, int] = field(default_factory=dict)
+    context_scripts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate and freeze the complete pack declaration."""
@@ -144,6 +179,21 @@ class LanguagePack:
             "recall_floor_overrides",
             _freeze_recall_floors(self.recall_floor_overrides),
         )
+        object.__setattr__(
+            self,
+            "candidate_priority",
+            _freeze_candidate_priorities(self.candidate_priority, self.scripts),
+        )
+        object.__setattr__(
+            self,
+            "context_scripts",
+            _freeze_optional_names(self.context_scripts, "context_scripts"),
+        )
+
+    def priority_for(self, script: str) -> int:
+        """Return the pack's deterministic routing priority for ``script``."""
+
+        return self.candidate_priority.get(script, 0)
 
 
 class LanguagePackRegistry:
@@ -235,6 +285,13 @@ class LanguagePackRegistry:
         with self._lock:
             codes = tuple(sorted(self._packs))
         return iter(codes)
+
+    def iter_packs(self) -> Iterator[LanguagePack]:
+        """Iterate over a stable, code-sorted snapshot of registered packs."""
+
+        with self._lock:
+            packs = tuple(self._packs[code] for code in sorted(self._packs))
+        return iter(packs)
 
 
 LANGUAGE_PACK_REGISTRY = LanguagePackRegistry()

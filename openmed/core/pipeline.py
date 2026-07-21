@@ -14,6 +14,7 @@ from typing import Any, Callable, Iterator, Literal, Mapping, Optional, Sequence
 
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
+from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
 
@@ -129,6 +130,7 @@ class LanguageRoute:
     script: str
     model_name: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    decision: DocumentLanguageDecision | None = None
 
 
 @dataclass(frozen=True)
@@ -245,6 +247,7 @@ class Pipeline:
         model_detector: ModelDetector | None = None,
         clinical_model_detector: ModelDetector | None = None,
         cascade_router: Any = None,
+        language_router: LanguageRouter | None = None,
         arbitration: SpanHook | None = None,
         arbitration_mode: str | None = None,
         strict_no_leak: bool = False,
@@ -286,6 +289,9 @@ class Pipeline:
         self.model_detector = model_detector
         self.clinical_model_detector = clinical_model_detector
         self.cascade_router = cascade_router
+        self.language_router = language_router
+        if self.language_router is None and lang == "auto":
+            self.language_router = LanguageRouter()
         self.arbitration = arbitration
         self.arbitration_mode = arbitration_mode
         self.strict_no_leak = strict_no_leak
@@ -812,9 +818,33 @@ class Pipeline:
     def stage2_language_script(self, text: str) -> LanguageRoute:
         from . import pii
         from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+        from .script_detect import detect_script
 
-        script = _detect_script(text)
-        lang = _lang_from_script(script) if self.lang == "auto" else self.lang
+        if self.lang == "auto":
+            router = self.language_router or LanguageRouter()
+            decision = router.route(text)
+            lang = decision.language
+            script = decision.dominant_script
+            model_name = pii._resolve_effective_pii_model(self.model_name, lang)
+            return LanguageRoute(
+                lang=lang,
+                script=script,
+                model_name=model_name,
+                decision=decision,
+                metadata={
+                    "available_default_model": decision.dominant_pack.default_model,
+                    "dominant_pack": decision.dominant_pack.code,
+                    "routing_confidence": decision.confidence,
+                    "lid_backend": decision.lid_backend,
+                    "runs": [_language_run_metadata(run) for run in decision.runs],
+                    "run_overrides": [
+                        _language_run_metadata(run) for run in decision.overrides
+                    ],
+                },
+            )
+
+        script = detect_script(text)
+        lang = self.lang
         if lang not in SUPPORTED_LANGUAGES:
             raise ValueError(
                 f"Unsupported language '{lang}'. "
@@ -916,7 +946,7 @@ class Pipeline:
 
         return pii.extract_pii(
             text,
-            self.model_name,
+            route.model_name,
             self.confidence_threshold,
             self.config,
             self.use_smart_merging,
@@ -1528,27 +1558,17 @@ def _remap_section_to_normalized(section: Any, offset_map: OffsetMap) -> Any:
     return data
 
 
-def _detect_script(text: str) -> str:
-    for char in text:
-        codepoint = ord(char)
-        if 0x0600 <= codepoint <= 0x06FF:
-            return "arabic"
-        if 0x3040 <= codepoint <= 0x30FF or 0x4E00 <= codepoint <= 0x9FFF:
-            return "japanese"
-        if 0x0900 <= codepoint <= 0x097F:
-            return "devanagari"
-        if 0x0C00 <= codepoint <= 0x0C7F:
-            return "telugu"
-    return "latin"
+def _language_run_metadata(run: Any) -> dict[str, object]:
+    """Return PHI-free, offset-only metadata for one language run."""
 
-
-def _lang_from_script(script: str) -> str:
     return {
-        "arabic": "ar",
-        "japanese": "ja",
-        "devanagari": "hi",
-        "telugu": "te",
-    }.get(script, "en")
+        "start": run.start,
+        "end": run.end,
+        "script": run.script,
+        "language": run.language,
+        "confidence": run.confidence,
+        "source": run.source,
+    }
 
 
 def _deterministic_patterns(lang: str) -> list[PIIPattern]:

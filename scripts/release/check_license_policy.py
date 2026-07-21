@@ -108,6 +108,7 @@ REVIEWED_LICENSES = {
     "prefect": "Apache-2.0",
     "presidio-analyzer": "MIT",
     "pyarrow": "Apache-2.0",
+    "pycld2": "Apache-2.0",
     "protobuf": "BSD-3-Clause",
     "pydicom": "MIT",
     "pydeid": "MIT",
