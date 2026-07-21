@@ -107,14 +107,38 @@ print(result.deidentified_text)
 `shift_dates`) — see the [Anonymization quickstart](anonymization.md#quickstart-choosing-a-method)
 for a runnable example of each, plus how to reverse one with `reidentify()`.
 
-## 4. Copy code snippets from the docs
+## 4. Pull a model reliably for offline use
+
+Use the model pull command to warm the Hugging Face cache before working
+offline. Downloads resume after interrupted transfers, retry transient network
+failures, and verify every file against Hub metadata:
+
+```bash
+openmed models pull disease_detection_superclinical
+```
+
+On a metered or unstable connection, pin the revision, limit transfer speed,
+and tune the retry count explicitly:
+
+```bash
+openmed models pull disease_detection_superclinical \
+  --revision main \
+  --max-bandwidth 524288 \
+  --retries 5
+```
+
+Progress contains only repository filenames and byte/file totals. After the
+pull completes, set `OPENMED_OFFLINE=1`; the same command then performs a
+cache-only lookup and never attempts a network connection.
+
+## 5. Copy code snippets from the docs
 
 All code blocks ship with Material for MkDocs copy buttons. Invoking the command palette (`/` or `cmd/ctrl + K`) lets you
 search for “GLiNER,” “OpenMedConfig,” or “token classification,” then copy the snippet that appears in the preview pane.
 If you rely on AI copilots (ChatGPT, Copilot, etc.), point them at the published docs URL so they crawl the same
 structured Markdown and surface canonical answers.
 
-## 5. Optional: pin configuration
+## 6. Optional: pin configuration
 
 ```python
 from openmed.core import OpenMedConfig, ModelLoader
