@@ -51,7 +51,8 @@
     "tl": "fil_PH",
     "tr": "tr_TR",
     "vi": "vi_VN",
-    "zh": "zh_CN"
+    "zh": "zh_CN",
+    "ur": "ur_PK"
   },
   "national_id_only_languages": [
     "bg",
@@ -68,6 +69,7 @@
     "sk",
     "sr",
     "tl",
+    "ur",
     "vi"
   ],
   "national_id_providers": {
@@ -186,6 +188,10 @@
     "tr": [
       "tr_TR",
       "ssn"
+    ],
+    "ur": [
+      "ur_PK",
+      "cnic"
     ],
     "vi": [
       "vi_VN",

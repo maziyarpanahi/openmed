@@ -70,6 +70,7 @@ from openmed.core.pii_i18n import (
     validate_turkish_tckn,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
+    validate_pakistani_cnic,
 )
 
 # ---------------------------------------------------------------------------
@@ -118,6 +119,7 @@ class TestConstants:
             "cs",
             "el",
             "vi",
+            "ur",
         }
 
     def test_language_names_keys(self):
@@ -3345,6 +3347,134 @@ def test_croatian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
     assert added_count == len(row["gold_spans"])
     for span in row["gold_spans"]:
         assert span["text"] not in result.deidentified_text
+        
+        
+def test_validate_pakistani_cnic():
+    assert validate_pakistani_cnic("12345-6789012-3")
+    assert validate_pakistani_cnic("1234567890123")
+    assert validate_pakistani_cnic("۱۲۳۴۵-۶۷۸۹۰۱۲-۳")
+    assert validate_pakistani_cnic("۱۲۳۴۵۶۷۸۹۰۱۲۳")
+    assert not validate_pakistani_cnic("1234-56789012-3")
+    assert not validate_pakistani_cnic("123456789012")
+    assert not validate_pakistani_cnic("abcdefghijklm")
+    assert not validate_pakistani_cnic(None)
+    
+    
+def test_urdu_national_id_safety_sweep_requires_context():
+    patterns = get_patterns_for_language("ur")
+    national_id_patterns = [
+        pattern for pattern in patterns if pattern.entity_type == "national_id"
+    ]
+    assert national_id_patterns
+    assert all(
+        pattern.safety_sweep_requires_context for pattern in national_id_patterns
+    )
+    
+def test_generated_urdu_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["ur"] == "ur_PK"
+    anonymizer = Anonymizer(lang="ur", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("12345-6789012-3", "national_id")
+    assert validate_pakistani_cnic(surrogate) is True
+    
+    
+def test_urdu_cnic_pattern_dashed():
+    patterns = [
+        p for p in LANGUAGE_PII_PATTERNS["ur"] if p.entity_type == "national_id"
+    ]
+    text = "12345-6789012-3"
+    matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+    assert matched, "Urdu CNIC pattern should match dashed format"
+    
+
+def test_urdu_cnic_pattern_undashed():
+    patterns = [
+        p for p in LANGUAGE_PII_PATTERNS["ur"] if p.entity_type == "national_id"
+    ]
+    text = "1234567890123"
+    matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+    assert matched, "Urdu CNIC pattern should match undashed format"
+
+
+def test_urdu_cnic_pattern_matches_eastern_digits():
+    patterns = [
+        p for p in LANGUAGE_PII_PATTERNS["ur"] if p.entity_type == "national_id"
+    ]
+    text = "۱۲۳۴۵-۶۷۸۹۰۱۲-۳"
+    matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+    assert matched, "Urdu CNIC pattern should match Eastern Arabic-Indic digits"
+
+
+def test_urdu_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ur.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    row = next(row for row in rows if row["id"] == "golden-i18n-ur-clinical-pii")
+    assert row["language"] == "ur"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    for span in row["gold_spans"]:
+        assert text[span["start"] : span["end"]] == span["text"], span
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_pakistani_cnic(ids_by_type["cnic"])
+
+def test_urdu_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ur.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-03T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="ur",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="ur",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
 
 
 def test_validate_bulgarian_egn():
