@@ -728,7 +728,7 @@ def compute_mixed_script_leakage(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> MixedScriptLeakageMetrics:
-    """Compute character leakage and apply the mixed-script evasion ceiling."""
+    """Compute grapheme-cluster leakage and apply the evasion ceiling."""
 
     if not 0.0 <= ceiling <= 1.0:
         raise ValueError("mixed-script leakage ceiling must be between 0 and 1")

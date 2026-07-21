@@ -189,6 +189,7 @@ def test_confusable_attack_corpus_and_gate_cover_all_required_evasions():
     assert report.pre_defense_leakage.leakage.overall > 0.5
     assert report.post_defense_leakage.leakage.overall <= 0.01
     assert report.post_defense_leakage.leakage.leaked_chars == 0
+    assert report.post_defense_leakage.to_dict()["unit"] == "grapheme_cluster"
     assert report.passed
     assert not report.violations
     assert "JOHN DOE" not in json.dumps(report.to_dict(), sort_keys=True)
