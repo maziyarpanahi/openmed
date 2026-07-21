@@ -38,6 +38,7 @@ nav:
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
+      - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
       - Detector Plugin SDK: plugin-sdk.md

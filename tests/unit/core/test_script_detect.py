@@ -33,7 +33,14 @@ def test_detect_script_classifies_single_script_samples():
         "환자 김민수": "Hangul",
         "Пациент Иван": "Cyrillic",
         "मरीज़ अनिता शर्मा": "Devanagari",
+        "রোগী অনিতা": "Bengali",
+        "ਮਰੀਜ਼ ਅਨੀਤਾ": "Gurmukhi",
+        "દર્દી અનીતા": "Gujarati",
+        "ରୋଗୀ ଅନିତା": "Odia",
+        "நோயாளி அனிதா": "Tamil",
         "రోగి సీత రెడ్డి": "Telugu",
+        "ರೋಗಿ ಅನಿತಾ": "Kannada",
+        "രോഗി അനിത": "Malayalam",
         "Ασθενής Νίκος": "Greek",
         "מטופל דוד כהן": "Hebrew",
         "ผู้ป่วย สมชาย": "Thai",
@@ -88,3 +95,16 @@ def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():
     assert normalized.folded_confusables == 1
     assert normalized.remap_span(8, 16) == (8, len(text))
     assert "Patient" not in normalized.to_metadata()
+
+
+def test_normalize_for_pii_detection_routes_indic_runs_and_preserves_marks():
+    text = "Patient न\u093cील ന്\u200d"
+    normalized = normalize_for_pii_detection(text)
+
+    assert normalized.text == "Patient ऩील ൻ"
+    assert normalized.indic_scripts == ("Devanagari", "Malayalam")
+    assert normalized.indic_changes > 0
+    assert normalized.removed_zero_width == 1
+    assert "ी" in normalized.text
+    name_start = normalized.text.index("ऩील")
+    assert normalized.remap_span(name_start, name_start + len("ऩील")) == (8, 12)
