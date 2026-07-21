@@ -63,6 +63,8 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ro": "Romanian",
     "zh": "Chinese",
     "sw": "Swahili",
+    "zu": "isiZulu",
+    "xh": "isiXhosa",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -85,6 +87,8 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ro": "Romanian-",
     "zh": "Chinese-",
     "sw": "Swahili-",
+    "zu": "isiZulu-",
+    "xh": "isiXhosa-",
 }
 
 # ---------------------------------------------------------------------------
@@ -144,6 +148,62 @@ def validate_bic(text: str) -> bool:
     from .anonymizer.providers import clinical_ids
 
     return clinical_ids.validate_bic(text)
+
+
+def validate_za_id_number(text: str) -> bool:
+    """Validate a South African 13-digit identity number.
+
+    South African identity numbers use ``YYMMDDSSSSCAZ``: an embedded birth
+    date, a four-digit sequence, a citizenship digit (``0`` or ``1``), a
+    legacy classification digit, and a final Luhn check digit. The two-digit
+    year has no century marker, so the date is accepted when it exists in
+    either the 1900s or 2000s.
+
+    Args:
+        text: Candidate containing exactly 13 ASCII digits.
+
+    Returns:
+        ``True`` when the shape, date, citizenship digit, and checksum are
+        valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{13}", digits) is None:
+        return False
+
+    year = int(digits[:2])
+    month = int(digits[2:4])
+    day = int(digits[4:6])
+    if not any(
+        _is_valid_calendar_date(century + year, month, day) for century in (1900, 2000)
+    ):
+        return False
+    if digits[10] not in {"0", "1"}:
+        return False
+
+    total = 0
+    for index, value in enumerate(digits):
+        digit = int(value)
+        if index % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return total % 10 == 0
+
+
+def _is_valid_calendar_date(year: int, month: int, day: int) -> bool:
+    """Return whether ``year``/``month``/``day`` form a Gregorian date."""
+    try:
+        date(year, month, day)
+    except ValueError:
+        return False
+    return True
+
+
+validate_south_african_id = validate_za_id_number
 
 
 # ---------------------------------------------------------------------------
@@ -1973,6 +2033,34 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Oktoba",
         "Novemba",
         "Desemba",
+    ],
+    "zu": [
+        "Januwari",
+        "Februwari",
+        "Mashi",
+        "Ephreli",
+        "Meyi",
+        "Juni",
+        "Julayi",
+        "Agasti",
+        "Septhemba",
+        "Okthoba",
+        "Novemba",
+        "Disemba",
+    ],
+    "xh": [
+        "Janyuwari",
+        "Februwari",
+        "Matshi",
+        "Epreli",
+        "Meyi",
+        "Juni",
+        "Julayi",
+        "Agasti",
+        "Septemba",
+        "Okthobha",
+        "Novemba",
+        "Disemba",
     ],
     "th": [
         "มกราคม",
@@ -5028,6 +5116,148 @@ _SWAHILI_AND_KENYA_PII_PATTERNS = [
     *_KENYA_ID_PII_PATTERNS,
 ]
 
+_NGUNI_NAME_CONTEXT = [
+    "igama",
+    "igama lesiguli",
+    "igama lesigulane",
+    "name",
+    "patient name",
+]
+
+_NGUNI_DATE_CONTEXT = [
+    "usuku lokuzalwa",
+    "umhla wokuzalwa",
+    "wazalwa",
+    "date of birth",
+    "dob",
+    "born",
+]
+
+_NGUNI_AGE_CONTEXT = ["iminyaka", "ubudala", "age", "aged", "years old"]
+
+_NGUNI_ID_CONTEXT = [
+    "inombolo kamazisi",
+    "umazisi",
+    "inombolo yesazisi",
+    "isazisi",
+    "south african id",
+    "sa id",
+    "identity number",
+    "id number",
+]
+
+_NGUNI_MEDICAL_AID_CONTEXT = [
+    "inombolo yosizo lwezempilo",
+    "usizo lwezempilo",
+    "inombolo yoncedo lwezonyango",
+    "uncedo lwezonyango",
+    "medical aid",
+    "medical aid number",
+    "medical aid member number",
+    "membership number",
+]
+
+_NGUNI_PHONE_CONTEXT = [
+    "ucingo",
+    "umakhalekhukhwini",
+    "ifowuni",
+    "inombolo yefowuni",
+    "phone",
+    "mobile",
+    "call",
+    "contact",
+]
+
+_NGUNI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?:(?<=Igama: )|(?<=Igama lesiguli: )|(?<=Igama lesigulane: )|"
+        r"(?<=Name: )|(?<=Patient name: ))[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){1,3}\b",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_NGUNI_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b(?:0?[1-9]|[12][0-9]|3[01])[./-]"
+        r"(?:0?[1-9]|1[0-2])[./-](?:19|20)[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_NGUNI_DATE_CONTEXT,
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?:(?<=Iminyaka )|(?<=Ubudala: )|(?<=Age: )|(?<=Aged ))"
+        r"(?:1[01][0-9]|120|[1-9]?[0-9])\b",
+        "age",
+        priority=11,
+        base_score=0.65,
+        context_words=_NGUNI_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{13}(?![0-9])",
+        "national_id",
+        priority=15,
+        base_score=0.75,
+        context_words=_NGUNI_ID_CONTEXT,
+        context_boost=0.2,
+        validator=validate_za_id_number,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])(?:[A-Z]{2,5}[- ]?)?[0-9]{6,12}(?![A-Z0-9])",
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_NGUNI_MEDICAL_AID_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=Ikheli: )|(?<=Idilesi: )|(?<=Address: ))"
+        r"[0-9]{1,5}\s+[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){0,4}\b",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=["ikheli", "idilesi", "address"],
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{4}(?![0-9])",
+        "postcode",
+        priority=7,
+        base_score=0.25,
+        context_words=[
+            "ikhodi yeposi",
+            "ikhowudi yeposi",
+            "postal code",
+            "postcode",
+        ],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])(?:\+?27[\s.-]?[678][0-9]|0[678][0-9])"
+        r"[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+        "phone_number",
+        priority=12,
+        base_score=0.7,
+        context_words=_NGUNI_PHONE_CONTEXT,
+        context_boost=0.25,
+    ),
+]
+
 
 _DANISH_MONTH_PATTERN = (
     r"januar|februar|marts|april|maj|juni|juli|august|september|"
@@ -5705,6 +5935,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
     "sw": _SWAHILI_AND_KENYA_PII_PATTERNS,
+    "zu": _NGUNI_PII_PATTERNS,
+    "xh": _NGUNI_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
     "fi": _FINNISH_PII_PATTERNS,
@@ -5726,6 +5958,8 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gh": _GHANA_CARD_PII_PATTERNS,
     "en_ke": _KENYA_ID_PII_PATTERNS,
     "sw": _SWAHILI_AND_KENYA_PII_PATTERNS,
+    "zu": _NGUNI_PII_PATTERNS,
+    "xh": _NGUNI_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
@@ -6130,6 +6364,46 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["29", "38", "47"],
         "LOCATION": ["Nairobi", "Dar es Salaam", "Kampala", "Mombasa"],
         "ZIPCODE": ["00100", "11101", "10101"],
+    },
+    "zu": {
+        "NAME": [
+            "Nomcebo Dlamini",
+            "Xolani Khumalo",
+            "Qhawe Ndlovu",
+            "Cebisile Zulu",
+        ],
+        "FIRST_NAME": ["Nomcebo", "Xolani", "Qhawe", "Cebisile"],
+        "LAST_NAME": ["Dlamini", "Khumalo", "Ndlovu", "Zulu"],
+        "EMAIL": ["isiguli@example.co.za", "xhumana@example.org"],
+        "PHONE": ["+27 82 123 4567", "071 987 6543"],
+        "ID_NUM": ["8001015009087", "9003030123082"],
+        "STREET_ADDRESS": ["12 Umgeni Road", "45 Vilakazi Street"],
+        "URL_PERSONAL": ["https://example.co.za"],
+        "USERNAME": ["isiguli123", "nomcebo88"],
+        "DATE": ["14/05/1988", "03/11/1979"],
+        "AGE": ["38", "47", "29"],
+        "LOCATION": ["Durban", "Umlazi", "East London", "Gqeberha"],
+        "ZIPCODE": ["4001", "4066", "5201", "6001"],
+    },
+    "xh": {
+        "NAME": [
+            "Xolani Qwabe",
+            "Qhawe Mbeki",
+            "Nomcebo Gcaleka",
+            "Zukiswa Nqatha",
+        ],
+        "FIRST_NAME": ["Xolani", "Qhawe", "Nomcebo", "Zukiswa"],
+        "LAST_NAME": ["Qwabe", "Mbeki", "Gcaleka", "Nqatha"],
+        "EMAIL": ["isigulane@example.co.za", "qhagamshelana@example.org"],
+        "PHONE": ["+27 71 234 5678", "083 765 4321"],
+        "ID_NUM": ["7903116001080", "0102034000186"],
+        "STREET_ADDRESS": ["18 Oxford Street", "27 Govan Mbeki Avenue"],
+        "URL_PERSONAL": ["https://example.co.za"],
+        "USERNAME": ["isigulane123", "qhawe79"],
+        "DATE": ["03/11/1979", "21/06/1991"],
+        "AGE": ["47", "35", "29"],
+        "LOCATION": ["East London", "Gqeberha", "Durban", "Umlazi"],
+        "ZIPCODE": ["5201", "6001", "4001", "4066"],
     },
     "da": {
         "NAME": ["Anna Nielsen", "Peter Jensen", "Mette Hansen", "Lars Andersen"],

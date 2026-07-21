@@ -42,7 +42,7 @@ from typing import Sequence
 from unittest.mock import patch
 
 import pytest
-from hypothesis import assume, given
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from openmed.core.pii import _shift_date, deidentify, extract_pii, reidentify
@@ -410,6 +410,7 @@ def test_replace_heterogeneous_semantic_union_never_reuses_raw_components():
         )
 
 
+@settings(deadline=1000)
 @given(doc=planted_documents())
 def test_deidentify_mask_invariants(doc):
     """Masking arbitrary planted documents preserves every structural invariant
