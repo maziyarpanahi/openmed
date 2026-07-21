@@ -41,6 +41,7 @@ from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
 )
+from .decoding import remap_normalized_span
 from .offline import network_blocked_if_offline
 from .script_detect import DetectionNormalization, normalize_for_pii_detection
 
@@ -655,12 +656,17 @@ def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
     for entity in result.entities:
         start = int(entity.start or 0)
         end = int(entity.end or start)
-        original_start, original_end = normalization.remap_span(start, end)
+        original_start, original_end, original_surface = remap_normalized_span(
+            start,
+            end,
+            prepared.original_text,
+            normalization,
+        )
         metadata = dict(entity.metadata or {})
         metadata.setdefault("unicode_defense", normalization.to_metadata())
         entities.append(
             EntityPrediction(
-                text=prepared.original_text[original_start:original_end],
+                text=original_surface,
                 label=entity.label,
                 start=original_start,
                 end=original_end,
