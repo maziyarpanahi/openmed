@@ -9,6 +9,7 @@ from openmed.core import model_registry
 from openmed.core.manifest_schema import (
     MANIFEST_FIELDS,
     REQUIRED_FIELDS,
+    SCRIPT_COVERAGE_TARGETS,
     validate_manifest_row,
 )
 from scripts.manifest import generate_manifest
@@ -75,16 +76,29 @@ def test_enriched_manifest_row_loads_and_validates(tmp_path):
     assert info.latency_ms == {"iphone_15_pro": 18.4, "m2_air": 7.0}
     assert info.peak_ram_mb == {"iphone_15_pro": 512.0, "m2_air": 384.5}
     assert info.recommended_tier == "phone"
+    assert info.script_coverage == row["script_coverage"]
 
 
-def test_legacy_manifest_row_without_enrichment_fields_validates():
+def test_pii_manifest_row_without_script_coverage_fails():
     row = _manifest_row_fixture()
+    del row["script_coverage"]
 
-    assert validate_manifest_row(row, line_number=1) == []
-    info = model_registry._build_registry([row])["pii_fixture_tiny_65m"]
-    assert info.latency_ms == {}
-    assert info.peak_ram_mb == {}
-    assert info.recommended_tier is None
+    assert [str(item) for item in validate_manifest_row(row, line_number=1)] == [
+        "line 1: PII entry missing required key: script_coverage"
+    ]
+
+
+def test_script_coverage_verdict_matches_claimed_language_threshold():
+    row = _manifest_row_fixture(languages=["hi"])
+    row["script_coverage"] = _script_coverage_fixture(["hi"])
+    row["script_coverage"]["devanagari"]["unk_rate"] = 0.010001
+
+    violations = validate_manifest_row(row, line_number=1)
+
+    assert [str(item) for item in violations] == [
+        "line 1: script_coverage.devanagari.verdict must be unsupported for the "
+        "declared languages and UNK rate"
+    ]
 
 
 def test_manifest_schema_accepts_mlx_4bit_format():
@@ -183,6 +197,18 @@ def test_manifest_generator_infers_korean_from_repo_name():
     ) == ["ko"]
 
 
+def test_manifest_generator_preserves_script_coverage(tmp_path):
+    output = tmp_path / "models.jsonl"
+    previous = _manifest_row_fixture()
+    generate_manifest.write_jsonl([previous], output)
+    refreshed = _manifest_row_fixture()
+    del refreshed["script_coverage"]
+
+    rows = generate_manifest.preserve_existing_enrichment([refreshed], output)
+
+    assert rows[0]["script_coverage"] == previous["script_coverage"]
+
+
 def test_only_manifest_generator_lists_org_models():
     allowed = {
         ROOT / "scripts" / "manifest" / "generate_manifest.py",
@@ -236,9 +262,23 @@ def _manifest_row_fixture(**overrides):
             "sha256:1111111111111111111111111111111111111111111111111111111111111111"
         ),
         "released": "2026-06-24",
+        "script_coverage": _script_coverage_fixture(["en"]),
     }
     row.update(overrides)
     return row
+
+
+def _script_coverage_fixture(languages):
+    claimed = {"devanagari" for language in languages if language == "hi"}
+    return {
+        script: {
+            "unk_rate": 0.0,
+            "byte_fallback_rate": 0.0,
+            "tokens_per_grapheme": 1.0,
+            "verdict": "supported" if script in claimed else "unclaimed",
+        }
+        for script in SCRIPT_COVERAGE_TARGETS
+    }
 
 
 def _training_provenance_fixture(reproducibility_hash: str):

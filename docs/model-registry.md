@@ -30,7 +30,7 @@ for model_key, info, reason in suggestions:
 ```
 
 - `ModelInfo` objects include `display_name`, `category`, `entity_types`, size hints, benchmark data, optional latency/RAM
-  maps, optional recommended tier, and a default confidence threshold.
+  maps, optional recommended tier, audited `script_coverage`, and a default confidence threshold.
 - `get_model_suggestions` leans on lightweight heuristics to recommend models based on text snippets or hints (disease,
   pharma, oncology, etc.).
 
@@ -40,6 +40,9 @@ for model_key, info, reason in suggestions:
   model can fit on CPU-only infrastructure or a target device tier.
 - `entity_types` feed dropdowns or filter chips in your frontend.
 - `recommended_confidence` can drive slider defaults or guardrails on API calls (pass it to `analyze_text`).
+- `get_pii_models_by_language` excludes any model whose audited tokenizer is explicitly `unsupported` for a script
+  claimed by that language. The underlying UNK, byte-fallback, and tokens-per-grapheme measurements remain available on
+  `ModelInfo.script_coverage` for diagnostics and UI warnings.
 
 ## Keeping the registry fresh
 
@@ -51,7 +54,8 @@ include:
 
 1. The full HF model id (`OpenMed/...`) and core release metadata.
 2. Representative canonical entity labels.
-3. Optional benchmark, latency, RAM, and recommended-tier enrichment.
+3. Required 11-script tokenizer coverage for PII-family entries, plus optional benchmark, latency, RAM, and
+   recommended-tier enrichment.
 
 CI will enforce type safety through the unit tests, and the docs automatically pick up the new entry via the examples
 above.

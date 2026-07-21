@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
+from openmed.core.decoding.spans import iter_grapheme_clusters
 from openmed.core.labels import CANONICAL_LABELS
-from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.manifest_schema import (
+    LANGUAGE_SCRIPT_TARGETS,
+    SCRIPT_COVERAGE_TARGETS,
+    SCRIPT_COVERAGE_UNK_THRESHOLD,
+)
+from openmed.core.pii_i18n import (
+    SUPPORTED_LANGUAGES,
+    TOKENIZER_SCRIPT_FAKE_DATA,
+)
 from openmed.eval.golden import (
     GOLDEN_CATEGORIES,
     HARD_NEGATIVE_CATEGORY,
@@ -332,9 +344,464 @@ def _difficulty_buckets(
     return buckets
 
 
+_BYTE_FALLBACK_TOKEN_RE = re.compile(
+    r"^(?:<0x[0-9a-f]{2}>|\[0x[0-9a-f]{2}\])$",
+    re.IGNORECASE,
+)
+
+
+def _gpt2_byte_decoder() -> dict[str, int]:
+    byte_values = list(range(ord("!"), ord("~") + 1))
+    byte_values.extend(range(ord("¡"), ord("¬") + 1))
+    byte_values.extend(range(ord("®"), ord("ÿ") + 1))
+    unicode_values = list(byte_values)
+    offset = 0
+    for byte_value in range(256):
+        if byte_value in byte_values:
+            continue
+        byte_values.append(byte_value)
+        unicode_values.append(256 + offset)
+        offset += 1
+    return {
+        chr(unicode_value): byte_value
+        for byte_value, unicode_value in zip(byte_values, unicode_values)
+    }
+
+
+_GPT2_BYTE_DECODER = _gpt2_byte_decoder()
+
+
+@dataclass(frozen=True)
+class TokenizerCoverageReport:
+    """Tokenizer representation metrics for every PII manifest entry."""
+
+    models: Mapping[str, Mapping[str, object]]
+    model_count: int
+    script_count: int = len(SCRIPT_COVERAGE_TARGETS)
+    schema_version: int = 1
+    unk_threshold: float = SCRIPT_COVERAGE_UNK_THRESHOLD
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a deterministic JSON-ready report."""
+        return {
+            "schema_version": self.schema_version,
+            "unk_threshold": self.unk_threshold,
+            "model_count": self.model_count,
+            "script_count": self.script_count,
+            "scripts": list(SCRIPT_COVERAGE_TARGETS),
+            "models": {
+                model_id: dict(value) for model_id, value in self.models.items()
+            },
+        }
+
+    def to_markdown(self) -> str:
+        """Render the model-by-script audit as a Markdown table."""
+        flagged = 0
+        unsupported = 0
+        rows: list[str] = []
+        for model_id, result in self.models.items():
+            languages = ", ".join(str(item) for item in result.get("languages", []))
+            scripts = result.get("scripts", {})
+            if not isinstance(scripts, Mapping):
+                continue
+            for script in SCRIPT_COVERAGE_TARGETS:
+                metrics = scripts.get(script, {})
+                if not isinstance(metrics, Mapping):
+                    continue
+                unk_rate = float(metrics.get("unk_rate", 0.0))
+                byte_rate = float(metrics.get("byte_fallback_rate", 0.0))
+                tokens_per_grapheme = float(metrics.get("tokens_per_grapheme", 0.0))
+                verdict = str(metrics.get("verdict", "unclaimed"))
+                threshold_flag = "FLAG" if unk_rate > self.unk_threshold else ""
+                flagged += bool(threshold_flag)
+                unsupported += verdict == "unsupported"
+                rows.append(
+                    f"| `{model_id}` | {languages} | `{script}` | "
+                    f"{unk_rate * 100:.2f}% | {byte_rate * 100:.2f}% | "
+                    f"{tokens_per_grapheme:.3f} | {verdict} | {threshold_flag} |"
+                )
+
+        lines = [
+            "# PII Tokenizer Script Coverage Audit",
+            "",
+            (
+                f"This committed audit covers {self.model_count} PII-family models "
+                f"across {self.script_count} script targets. The unsupported threshold "
+                f"is strictly greater than {self.unk_threshold * 100:.0f}% UNK tokens "
+                "on a script claimed by the model's declared language."
+            ),
+            "",
+            f"- Model-script pairs above the UNK threshold: {flagged}",
+            f"- Claimed model-script pairs marked unsupported: {unsupported}",
+            "",
+            "| Model | Languages | Script | UNK | Byte fallback | Tokens/grapheme | Verdict | Threshold flag |",
+            "|---|---|---|---:|---:|---:|---|---|",
+            *rows,
+            "",
+        ]
+        return "\n".join(lines)
+
+
+def audit_pii_tokenizers(
+    manifest_rows: Sequence[Mapping[str, object]],
+    *,
+    tokenizer_loader: Callable[[str], object],
+    existing_models: Mapping[str, Mapping[str, object]] | None = None,
+    on_model: Callable[[str, Mapping[str, object]], None] | None = None,
+    max_workers: int = 1,
+) -> TokenizerCoverageReport:
+    """Audit every PII manifest tokenizer against all configured scripts.
+
+    The tokenizer loader is injected so default unit tests do not import or
+    download optional model dependencies.
+    """
+    pii_rows = [row for row in manifest_rows if row.get("family") == "PII"]
+    models: dict[str, Mapping[str, object]] = dict(existing_models or {})
+    expected_ids = {
+        str(row.get("repo_id"))
+        for row in pii_rows
+        if isinstance(row.get("repo_id"), str)
+    }
+    models = {
+        model_id: value
+        for model_id, value in models.items()
+        if model_id in expected_ids
+    }
+
+    pending_rows: list[Mapping[str, object]] = []
+    for row in pii_rows:
+        model_id = row.get("repo_id")
+        if not isinstance(model_id, str) or not model_id:
+            raise ValueError("every PII manifest row must have a non-empty repo_id")
+        existing = models.get(model_id)
+        if _complete_model_audit(existing):
+            models[model_id] = _refresh_model_audit_claims(
+                existing,
+                languages=row.get("languages"),
+            )
+            continue
+        pending_rows.append(row)
+
+    if max_workers < 1:
+        raise ValueError("max_workers must be at least 1")
+    if max_workers == 1:
+        audited = (
+            _audit_pii_row(row, tokenizer_loader=tokenizer_loader)
+            for row in pending_rows
+        )
+        for model_id, result in audited:
+            models[model_id] = result
+            if on_model is not None:
+                on_model(model_id, result)
+    else:
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        futures = {}
+        try:
+            futures = {
+                executor.submit(
+                    _audit_pii_row,
+                    row,
+                    tokenizer_loader=tokenizer_loader,
+                ): row
+                for row in pending_rows
+            }
+            for future in as_completed(futures):
+                model_id, result = future.result()
+                models[model_id] = result
+                if on_model is not None:
+                    on_model(model_id, result)
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)
+
+    ordered_models = {
+        str(row["repo_id"]): models[str(row["repo_id"])]
+        for row in pii_rows
+        if str(row["repo_id"]) in models
+    }
+    if len(ordered_models) != len(pii_rows):
+        raise RuntimeError(
+            f"audit covered {len(ordered_models)} of {len(pii_rows)} PII entries"
+        )
+    return TokenizerCoverageReport(
+        models=ordered_models,
+        model_count=len(ordered_models),
+    )
+
+
+def _audit_pii_row(
+    row: Mapping[str, object],
+    *,
+    tokenizer_loader: Callable[[str], object],
+) -> tuple[str, Mapping[str, object]]:
+    model_id = str(row["repo_id"])
+    try:
+        tokenizer = tokenizer_loader(model_id)
+        scripts = audit_tokenizer_scripts(
+            tokenizer,
+            languages=row.get("languages"),
+        )
+    except Exception as exc:
+        raise RuntimeError(f"tokenizer audit failed for {model_id}: {exc}") from exc
+    return model_id, {
+        "languages": list(row.get("languages") or []),
+        "tokenizer_source": model_id,
+        "scripts": scripts,
+    }
+
+
+def audit_tokenizer_scripts(
+    tokenizer: object,
+    *,
+    languages: object = None,
+    probes: Mapping[str, Mapping[str, Sequence[str]]] = TOKENIZER_SCRIPT_FAKE_DATA,
+) -> dict[str, dict[str, float | str]]:
+    """Measure one tokenizer over all 11 synthetic script probe corpora."""
+    claimed_scripts = _claimed_script_targets(languages)
+    results: dict[str, dict[str, float | str]] = {}
+    for script in SCRIPT_COVERAGE_TARGETS:
+        categories = probes.get(script)
+        if not isinstance(categories, Mapping):
+            raise ValueError(f"missing tokenizer probes for script: {script}")
+        texts = [text for values in categories.values() for text in values]
+        metrics = _tokenizer_metrics(tokenizer, texts)
+        verdict = "unclaimed"
+        if script in claimed_scripts:
+            verdict = (
+                "unsupported"
+                if metrics["unk_rate"] > SCRIPT_COVERAGE_UNK_THRESHOLD
+                else "supported"
+            )
+        results[script] = {**metrics, "verdict": verdict}
+    return results
+
+
+def update_manifest_script_coverage(
+    manifest_rows: Sequence[Mapping[str, object]],
+    report: TokenizerCoverageReport,
+) -> list[dict[str, object]]:
+    """Return manifest rows populated from a complete tokenizer audit."""
+    updated: list[dict[str, object]] = []
+    covered_ids: set[str] = set()
+    for source in manifest_rows:
+        row = dict(source)
+        if row.get("family") != "PII":
+            updated.append(row)
+            continue
+        model_id = row.get("repo_id")
+        result = report.models.get(str(model_id))
+        if not isinstance(result, Mapping):
+            raise ValueError(f"audit report is missing PII model: {model_id}")
+        scripts = result.get("scripts")
+        if not isinstance(scripts, Mapping) or set(scripts) != set(
+            SCRIPT_COVERAGE_TARGETS
+        ):
+            raise ValueError(f"audit report is incomplete for PII model: {model_id}")
+        row["script_coverage"] = {
+            script: dict(scripts[script]) for script in SCRIPT_COVERAGE_TARGETS
+        }
+        covered_ids.add(str(model_id))
+        updated.append(row)
+
+    expected_ids = {
+        str(row.get("repo_id")) for row in manifest_rows if row.get("family") == "PII"
+    }
+    if covered_ids != expected_ids:
+        raise ValueError("audit report does not cover 100% of PII manifest entries")
+    return updated
+
+
+def load_transformers_tokenizer(model_id: str) -> object:
+    """Load a tokenizer through the optional ``hf`` dependency group."""
+    try:
+        from transformers import AutoTokenizer
+    except ImportError as exc:  # pragma: no cover - depends on optional extra
+        raise RuntimeError(
+            'tokenizer audit requires the "hf" extra: uv pip install -e ".[hf]"'
+        ) from exc
+    return AutoTokenizer.from_pretrained(
+        model_id,
+        use_fast=True,
+        trust_remote_code=False,
+    )
+
+
+def _tokenizer_metrics(
+    tokenizer: object,
+    texts: Sequence[str],
+) -> dict[str, float]:
+    token_count = 0
+    unknown_count = 0
+    byte_fallback_count = 0
+    grapheme_count = 0
+    byte_level = _uses_byte_level_tokenization(tokenizer)
+    for text in texts:
+        token_ids, tokens = _encode_tokens(tokenizer, text)
+        token_count += len(token_ids)
+        unknown_count += _unknown_token_count(tokenizer, token_ids, tokens)
+        byte_fallback_count += sum(
+            _is_byte_fallback_token(token, byte_level=byte_level) for token in tokens
+        )
+        grapheme_count += _grapheme_count(text)
+
+    return {
+        "unk_rate": round(unknown_count / token_count if token_count else 0.0, 6),
+        "byte_fallback_rate": round(
+            byte_fallback_count / token_count if token_count else 0.0,
+            6,
+        ),
+        "tokens_per_grapheme": round(
+            token_count / grapheme_count if grapheme_count else 0.0,
+            6,
+        ),
+    }
+
+
+def _encode_tokens(tokenizer: object, text: str) -> tuple[list[int], list[str]]:
+    if not callable(tokenizer):
+        raise TypeError("tokenizer must be callable")
+    encoded = tokenizer(text, add_special_tokens=False)
+    if not isinstance(encoded, Mapping) or "input_ids" not in encoded:
+        raise TypeError("tokenizer output must contain input_ids")
+    raw_ids = encoded["input_ids"]
+    if hasattr(raw_ids, "tolist"):
+        raw_ids = raw_ids.tolist()
+    if isinstance(raw_ids, list) and raw_ids and isinstance(raw_ids[0], list):
+        raw_ids = raw_ids[0]
+    if not isinstance(raw_ids, list):
+        raise TypeError("tokenizer input_ids must be a list")
+    token_ids = [int(token_id) for token_id in raw_ids]
+    converter = getattr(tokenizer, "convert_ids_to_tokens", None)
+    if not callable(converter):
+        raise TypeError("tokenizer must implement convert_ids_to_tokens")
+    raw_tokens = converter(token_ids)
+    if isinstance(raw_tokens, str):
+        raw_tokens = [raw_tokens]
+    tokens = [str(token) for token in raw_tokens]
+    if len(tokens) != len(token_ids):
+        raise ValueError("tokenizer returned a different number of tokens and IDs")
+    return token_ids, tokens
+
+
+def _unknown_token_count(
+    tokenizer: object,
+    token_ids: Sequence[int],
+    tokens: Sequence[str],
+) -> int:
+    unk_id = getattr(tokenizer, "unk_token_id", None)
+    if isinstance(unk_id, int):
+        return sum(token_id == unk_id for token_id in token_ids)
+    unk_token = getattr(tokenizer, "unk_token", None)
+    if isinstance(unk_token, str):
+        return sum(token == unk_token for token in tokens)
+    return 0
+
+
+def _uses_byte_level_tokenization(tokenizer: object) -> bool:
+    backend = getattr(tokenizer, "backend_tokenizer", None)
+    pre_tokenizer = getattr(backend, "pre_tokenizer", None)
+    decoder = getattr(backend, "decoder", None)
+    return "ByteLevel" in f"{pre_tokenizer!r} {decoder!r}"
+
+
+def _is_byte_fallback_token(token: str, *, byte_level: bool) -> bool:
+    if _BYTE_FALLBACK_TOKEN_RE.fullmatch(token):
+        return True
+    if not byte_level:
+        return False
+    try:
+        raw_bytes = bytes(_GPT2_BYTE_DECODER[character] for character in token)
+    except KeyError:
+        return False
+    try:
+        raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return True
+    return False
+
+
+def _grapheme_count(text: str) -> int:
+    return sum(
+        not text[start:end].isspace() for start, end in iter_grapheme_clusters(text)
+    )
+
+
+def _claimed_script_targets(languages: object) -> set[str]:
+    if not isinstance(languages, Sequence) or isinstance(languages, (str, bytes)):
+        return set()
+    claimed: set[str] = set()
+    for language in languages:
+        if not isinstance(language, str):
+            continue
+        normalized = language.lower().replace("_", "-")
+        claimed.update(LANGUAGE_SCRIPT_TARGETS.get(normalized, ()))
+    return claimed
+
+
+def _complete_model_audit(value: object) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    scripts = value.get("scripts")
+    if not isinstance(scripts, Mapping) or set(scripts) != set(SCRIPT_COVERAGE_TARGETS):
+        return False
+    return all(
+        isinstance(scripts[script], Mapping)
+        and {
+            "unk_rate",
+            "byte_fallback_rate",
+            "tokens_per_grapheme",
+            "verdict",
+        }
+        <= set(scripts[script])
+        for script in SCRIPT_COVERAGE_TARGETS
+    )
+
+
+def _refresh_model_audit_claims(
+    value: Mapping[str, object],
+    *,
+    languages: object,
+) -> dict[str, object]:
+    """Reconcile resumed audit verdicts with current manifest language claims."""
+    claimed_scripts = _claimed_script_targets(languages)
+    current_languages = (
+        list(languages)
+        if isinstance(languages, Sequence) and not isinstance(languages, (str, bytes))
+        else []
+    )
+    scripts = value["scripts"]
+    assert isinstance(scripts, Mapping)  # guarded by _complete_model_audit
+    refreshed_scripts: dict[str, dict[str, object]] = {}
+    for script in SCRIPT_COVERAGE_TARGETS:
+        metrics = dict(scripts[script])
+        verdict = "unclaimed"
+        if script in claimed_scripts:
+            verdict = (
+                "unsupported"
+                if float(metrics["unk_rate"]) > SCRIPT_COVERAGE_UNK_THRESHOLD
+                else "supported"
+            )
+        metrics["verdict"] = verdict
+        refreshed_scripts[script] = metrics
+    return {
+        **value,
+        "languages": current_languages,
+        "scripts": refreshed_scripts,
+    }
+
+
 __all__ = [
     "FixtureCoverageReport",
     "GOLDEN_EDGE_CASE_CATEGORIES",
+    "TokenizerCoverageReport",
+    "audit_pii_tokenizers",
+    "audit_tokenizer_scripts",
     "fixture_coverage_report",
     "golden_fixture_coverage_report",
+    "load_transformers_tokenizer",
+    "update_manifest_script_coverage",
 ]

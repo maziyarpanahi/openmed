@@ -69,6 +69,18 @@ def test_module_validator_exits_zero_for_committed_manifest(
     assert captured.err == ""
 
 
+def test_pii_entry_without_script_coverage_fails_validation(tmp_path: Path) -> None:
+    row = _row(family="PII", canonical_labels=["PERSON"])
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    result = validate_manifest_file(manifest)
+
+    assert [str(violation) for violation in result.violations] == [
+        "line 1: PII entry missing required key: script_coverage"
+    ]
+
+
 def test_openmed_models_validate_shares_validator_verdict(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

@@ -174,7 +174,10 @@ def test_convert_can_include_transformersjs_bundle(
 
 
 def test_manifest_schema_accepts_transformersjs_format() -> None:
-    from openmed.core.manifest_schema import validate_manifest_row
+    from openmed.core.manifest_schema import (
+        SCRIPT_COVERAGE_TARGETS,
+        validate_manifest_row,
+    )
 
     row = {
         "repo_id": "OpenMed/test-model-v1-transformersjs",
@@ -192,6 +195,15 @@ def test_manifest_schema_accepts_transformersjs_format() -> None:
         "license": "apache-2.0",
         "reproducibility_hash": "sha256:" + "0" * 64,
         "released": "2026-06-28",
+        "script_coverage": {
+            script: {
+                "unk_rate": 0.0,
+                "byte_fallback_rate": 0.0,
+                "tokens_per_grapheme": 1.0,
+                "verdict": "unclaimed",
+            }
+            for script in SCRIPT_COVERAGE_TARGETS
+        },
     }
 
     assert validate_manifest_row(row, line_number=1) == []
