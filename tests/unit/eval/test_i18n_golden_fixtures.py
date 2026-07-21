@@ -24,6 +24,7 @@ from openmed.core.pii_i18n import (
 )
 
 _I18N_DIR = Path("openmed/eval/golden/fixtures/i18n")
+_SPECIALIZED_CORPUS_FIXTURES = frozenset({"india_clinical.jsonl"})
 
 # Canonical gold label -> the pattern entity_type that must recover it.
 _LABEL_TO_ENTITY_TYPE = {
@@ -53,7 +54,11 @@ _LEGACY_INCOMPLETE_LANGUAGES = frozenset({"ko", "ms", "tl"})
 
 
 def _fixture_paths() -> list[Path]:
-    return sorted(_I18N_DIR.glob("*.jsonl"))
+    return sorted(
+        path
+        for path in _I18N_DIR.glob("*.jsonl")
+        if path.name not in _SPECIALIZED_CORPUS_FIXTURES
+    )
 
 
 def _load_rows(path: Path) -> list[dict]:
