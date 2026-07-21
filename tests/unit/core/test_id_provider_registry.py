@@ -48,6 +48,8 @@ EXPECTED_VALIDATOR_KEYS = (
     ("vi", "cccd"),
     ("vi", "cmnd"),
     ("us", "npi"),
+    ("ng", "nin"),
+    ("ng", "bvn"),
 )
 
 
@@ -79,6 +81,8 @@ ROUND_TRIP_CASES = (
     ("vi", "cccd", "vi_VN"),
     ("vi", "cmnd", "vi_VN"),
     ("us", "npi", "en_US"),
+    ("ng", "nin", "en_NG"),
+    ("ng", "bvn", "en_NG"),
 )
 
 
@@ -134,6 +138,21 @@ class TestNationalIdRegistry:
             "en_IN",
             "aadhaar",
         )
+
+    @pytest.mark.parametrize("id_type", ("nin", "bvn"))
+    def test_nigerian_aliases_resolve_working_faker_methods(self, id_type):
+        specs = [
+            get_national_id(alias, id_type)
+            for alias in ("ng", "en_NG", "ha", "ig", "yo")
+        ]
+        assert all(spec is not None for spec in specs)
+        assert {spec.validate for spec in specs} == {specs[0].validate}
+
+        faker = Faker("en_NG")
+        register_clinical_providers(faker)
+        faker.seed_instance(840)
+        surrogate = getattr(faker, specs[0].faker_method)()
+        assert specs[0].validate(surrogate)
 
     def test_unknown_lookup_returns_none(self):
         assert get_national_id("zz", "unknown") is None

@@ -268,10 +268,12 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "el": "dmy",
     "fa": "ymd",
     "fi": "dmy",
+    "ha": "dmy",
     "he": "dmy",
     "hr": "dmy",
     "hu": "ymd",
     "id": "dmy",
+    "ig": "dmy",
     "ms": "dmy",
     "no": "dmy",
     "pl": "dmy",
@@ -286,6 +288,7 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "et": "dmy",
     "uk": "dmy",
     "vi": "dmy",
+    "yo": "dmy",
     "zh": "ymd",
 }
 
@@ -324,10 +327,12 @@ LOCALE_NUMBER_SEP: Final[Mapping[str, NumberSeparators]] = {
     "el": _COMMA_DECIMAL_DOT_GROUPS,
     "fa": _ARABIC_NUMBER_SEPARATORS,
     "fi": _COMMA_DECIMAL_SPACE_GROUPS,
+    "ha": _DOT_DECIMAL_COMMA_GROUPS,
     "he": _DOT_DECIMAL_COMMA_GROUPS,
     "hr": _COMMA_DECIMAL_DOT_GROUPS,
     "hu": _COMMA_DECIMAL_SPACE_GROUPS,
     "id": _COMMA_DECIMAL_DOT_GROUPS,
+    "ig": _DOT_DECIMAL_COMMA_GROUPS,
     "ms": _DOT_DECIMAL_COMMA_GROUPS,
     "no": _COMMA_DECIMAL_SPACE_GROUPS,
     "pl": _COMMA_DECIMAL_SPACE_GROUPS,
@@ -342,6 +347,7 @@ LOCALE_NUMBER_SEP: Final[Mapping[str, NumberSeparators]] = {
     "et": _COMMA_DECIMAL_SPACE_GROUPS,
     "uk": _COMMA_DECIMAL_SPACE_GROUPS,
     "vi": _COMMA_DECIMAL_DOT_GROUPS,
+    "yo": _DOT_DECIMAL_COMMA_GROUPS,
     "zh": _DOT_DECIMAL_COMMA_GROUPS,
 }
 
