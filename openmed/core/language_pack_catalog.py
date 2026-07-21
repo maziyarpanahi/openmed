@@ -19,7 +19,12 @@ from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackReg
 UNKNOWN_SCRIPT = "Unknown"
 UNROUTED_SCRIPT = "Unrouted"
 
-REGISTERED_SEGMENTERS = frozenset({"pysbd", "unicode-sentence"})
+REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
+
+# These built-in routes intentionally use a named fallback until a dedicated
+# PII model is published. They must not be represented as trained/model-backed
+# languages in release manifests.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"zh"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -134,6 +139,14 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
     ),
+    LanguagePack(
+        code="zh",
+        scripts=("Han",),
+        default_model="OpenMed/privacy-filter-multilingual",
+        segmenter_id="jieba",
+        recognizers=("builtin-patterns", "model"),
+        surrogate_locale="zh_CN",
+    ),
     _pack(
         "tr",
         "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
@@ -198,9 +211,7 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
 }
 
-SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
-    "zh": "zh_CN",
-}
+SUPPLEMENTAL_LOCALES: Mapping[str, str] = {}
 
 # Languages surfaced by script routing before a bundled default PII model or
 # complete language pack is available. Callers must supply their own model for
@@ -247,6 +258,7 @@ _SCRIPT_ORDER = (
 # entries in ``USER_SUPPLIED_MODEL_LANGUAGES`` do not gain default models.
 _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
     "Arabic": ("ar", "ur"),
+    "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
     "Bengali": ("bn", "as"),
     "Gurmukhi": ("pa",),
@@ -471,6 +483,7 @@ NATIONAL_ID_ONLY_LANGUAGES = set(NATIONAL_ID_ONLY_CAPABILITIES)
 
 __all__ = [
     "BUILTIN_LANGUAGE_PACKS",
+    "DEFAULT_MODEL_PLACEHOLDER_LANGUAGES",
     "DEFAULT_PII_MODELS",
     "LANG_TO_LOCALE",
     "LANGUAGE_PACK_ADAPTERS",

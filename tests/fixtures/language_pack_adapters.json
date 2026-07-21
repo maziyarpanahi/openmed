@@ -16,7 +16,8 @@
     "ro": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
-    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1"
+    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "zh": "OpenMed/privacy-filter-multilingual"
   },
   "lang_to_locale": {
     "ar": "ar_EG",
@@ -219,6 +220,7 @@
       "pa"
     ],
     "Han": [
+      "zh",
       "ja"
     ],
     "Hangul": [
@@ -279,6 +281,7 @@
     "ro",
     "te",
     "th",
-    "tr"
+    "tr",
+    "zh"
   ]
 }

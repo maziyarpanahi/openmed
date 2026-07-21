@@ -28,6 +28,7 @@ keywords = [
 dependencies = [
   "pysbd>=0.3.4,<0.4",
   "faker>=22.0",
+  "jieba>=0.42.1,<0.43",
   "pyyaml>=6.0",
 ]
 
@@ -122,6 +123,14 @@ multimodal = [
 # it is opt-in rather than bundled into the general multimodal extra.
 ocr-paddle = [
   "paddleocr>=2.7",
+]
+
+zh-pkuseg = [
+  "pkuseg>=0.0.25,<0.1",
+]
+
+zh-hanlp = [
+  "hanlp>=2.1,<3",
 ]
 
 awq = [
