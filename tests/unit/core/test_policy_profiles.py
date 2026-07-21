@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +12,8 @@ from openmed.core.labels import (
     CANONICAL_LABELS,
     CLINICAL_CONCEPT,
     DIRECT_IDENTIFIER,
+    LABEL_TO_POPIA,
+    POPIA_IDENTIFIER_CLASSES,
     QUASI_IDENTIFIER,
     id_subtype_for,
     normalize_label,
@@ -26,6 +30,7 @@ from openmed.core.policy import (
     list_policies,
     load_policy,
 )
+from openmed.core.policy_lint import lint_policy as lint_policy_report
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
@@ -85,6 +90,29 @@ def _span(label: str = "PERSON", score: float = 0.95) -> OpenMedSpan:
         score=score,
         detector="model:tiny",
     )
+
+
+def _popia_checklist_rows() -> dict[str, tuple[str, ...]]:
+    checklist_path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "compliance"
+        / "za-popia-identifier-checklist.md"
+    )
+    checklist = checklist_path.read_text(encoding="utf-8")
+    table = checklist.split("<!-- popia-identifier-table:start -->", 1)[1].split(
+        "<!-- popia-identifier-table:end -->",
+        1,
+    )[0]
+    rows: dict[str, tuple[str, ...]] = {}
+    for line in table.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        class_match = re.fullmatch(r"`([^`]+)`", cells[0])
+        assert class_match is not None
+        rows[class_match.group(1)] = tuple(re.findall(r"`([A-Z][A-Z0-9_]*)`", cells[2]))
+    return rows
 
 
 def test_all_policy_literals_load_and_gdpr_alias_resolves():
@@ -274,6 +302,126 @@ def test_indian_national_identifier_aliases_normalize_to_id_num(
 ):
     assert normalize_label(source_label) == "ID_NUM"
     assert id_subtype_for(source_label) == "national_id"
+
+
+def test_za_popia_profile_loads_with_special_information_defaults():
+    profile = load_policy("za_popia")
+
+    assert profile.name == "za_popia"
+    assert "za_popia" in list_policies()
+    assert profile.default_action == "replace"
+    assert profile.policy_label_actions == {
+        "DIRECT_IDENTIFIER": "replace",
+        "QUASI_IDENTIFIER": "replace",
+        "CLINICAL_CONCEPT": "mask",
+    }
+    assert profile.safety_sweep_mandatory is True
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert profile.strict_no_leak is True
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+
+    special_category_actions = {
+        label: profile.action_for(label)
+        for label in (
+            "ID_NUM",
+            "SSN",
+            "GENDER",
+            "EYE_COLOR",
+            "HEIGHT",
+            "CONDITION",
+            "GENE_SYMBOL",
+            "OTHER",
+        )
+    }
+    assert special_category_actions == {
+        "ID_NUM": "mask",
+        "SSN": "mask",
+        "GENDER": "mask",
+        "EYE_COLOR": "mask",
+        "HEIGHT": "mask",
+        "CONDITION": "mask",
+        "GENE_SYMBOL": "mask",
+        "OTHER": "mask",
+    }
+    assert lint_policy("za_popia") == ()
+    lint_report = lint_policy_report("za_popia")
+    assert lint_report["valid"] is True
+    assert lint_report["error_count"] == 0
+    assert lint_report["warning_count"] == 0
+
+
+def test_za_popia_checklist_classes_have_non_keep_canonical_coverage():
+    profile = load_policy("za_popia")
+    checklist_rows = _popia_checklist_rows()
+
+    assert set(checklist_rows) == set(POPIA_IDENTIFIER_CLASSES)
+    assert set(LABEL_TO_POPIA) == set(CANONICAL_LABELS)
+    assert {label for labels in checklist_rows.values() for label in labels} == set(
+        CANONICAL_LABELS
+    )
+
+    for popia_class, labels in checklist_rows.items():
+        assert labels
+        assert all(LABEL_TO_POPIA[label] == popia_class for label in labels)
+        assert all(profile.action_for(label) != "keep" for label in labels)
+
+
+@pytest.mark.parametrize(
+    ("text", "detections"),
+    [
+        (
+            "Clinic record for ID 8001015009087.",
+            [("8001015009087", "ID_NUM")],
+        ),
+        (
+            "Call the patient on +27 82 123 4567.",
+            [("+27 82 123 4567", "PHONE")],
+        ),
+        (
+            "Home address: 12 Vilakazi Street, Soweto.",
+            [("12 Vilakazi Street, Soweto", "STREET_ADDRESS")],
+        ),
+        (
+            "Patient Nkosinathi Dlamini attended the clinic.",
+            [("Nkosinathi Dlamini", "PERSON")],
+        ),
+        (
+            "Patient Annelie van der Merwe attended the clinic.",
+            [("Annelie van der Merwe", "PERSON")],
+        ),
+    ],
+    ids=("sa-id", "za-phone", "sa-address", "isizulu-name", "afrikaans-name"),
+)
+def test_za_popia_synthetic_clinical_fixtures_leave_zero_direct_identifiers(
+    monkeypatch,
+    text: str,
+    detections: list[tuple[str, str]],
+):
+    entities = [_entity(text, surface, label, 0.99) for surface, label in detections]
+    _patch_extract_many(monkeypatch, entities)
+
+    result = deidentify(
+        text,
+        policy="za_popia",
+        use_safety_sweep=False,
+        seed=42,
+    )
+    audit = deidentify(
+        text,
+        policy="za_popia",
+        use_safety_sweep=False,
+        seed=42,
+        audit=True,
+    )
+
+    assert result.mapping is None
+    assert all(surface not in result.deidentified_text for surface, _ in detections)
+    assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
+    assert audit.policy == "za_popia"
+    assert audit.safety_sweep["enabled"] is True
+    assert audit.residual_risk["risk_report"]["leakage_rate"] == 0.0
+    assert all(span.action != "keep" for span in audit.spans)
 
 
 def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):
