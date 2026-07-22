@@ -70,6 +70,7 @@ content-security policy blocks the optional inline styling.
 | --- | --- |
 | `examples/pii_model_comparison.py` | Compares multiple PII models across shared sample text and summarizes extraction quality. |
 | `examples/pii_batch_processing.py` | Runs batch PII extraction and de-identification with `BatchProcessor(operation=...)`. |
+| `examples/sms_deid_helpdesk_logs.py` | Redacts RapidPro-style JSON or generic CSV helpdesk exports with the `short_text` preset, contact pseudonymization, timestamp coarsening, and bounded batches. |
 | `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
 | `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
 | `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
