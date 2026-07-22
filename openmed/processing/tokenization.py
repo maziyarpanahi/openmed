@@ -2,10 +2,15 @@
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
-from openmed.core.decoding.spans import is_indic_text, iter_grapheme_clusters
+from openmed.core.decoding.spans import (
+    is_grapheme_boundary,
+    is_indic_text,
+    iter_grapheme_clusters,
+)
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizer
@@ -33,6 +38,7 @@ _MEDICAL_TOKEN_PATTERN = re.compile(
     r"|[A-Za-z0-9]+(?:/[A-Za-z0-9µ]+)+"  # ratios like mg/kg, mmHg/...
     r"|[^ \t\r\n]"  # any other non-space char as its own token
 )
+_NUMERIC_CONNECTORS = frozenset({"/", "-", ".", ",", ":"})
 
 
 @dataclass(frozen=True)
@@ -80,51 +86,82 @@ def indic_grapheme_tokenize(text: str) -> List[SpanToken]:
     return [token for token in grapheme_tokenize(text) if is_indic_text(token.text)]
 
 
-def medical_tokenize(
+def _append_token(tokens: List[SpanToken], text: str, start: int, end: int) -> None:
+    if start < end and not text[start:end].isspace():
+        tokens.append(SpanToken(text[start:end], start, end))
+
+
+def _cluster_kind(cluster: str) -> str:
+    if cluster.isspace():
+        return "space"
+    if all(char.isdecimal() for char in cluster):
+        return "number"
+    if any(unicodedata.category(char).startswith("L") for char in cluster):
+        return "word"
+    if cluster in _NUMERIC_CONNECTORS:
+        return "connector"
+    return "punctuation"
+
+
+def indic_word_tokenize(text: str) -> List[SpanToken]:
+    """Tokenize mixed Indic text without bisecting a grapheme cluster.
+
+    Letter clusters are grouped into words, native or ASCII digit runs retain
+    internal date/number separators, and punctuation is emitted at its own
+    boundary. Returned spans always index ``text`` exactly.
+    """
+
+    clusters = list(iter_grapheme_clusters(text))
+    tokens: List[SpanToken] = []
+    token_start: Optional[int] = None
+    token_end = 0
+    token_kind: Optional[str] = None
+
+    for cluster_index, (start, end) in enumerate(clusters):
+        cluster = text[start:end]
+        kind = _cluster_kind(cluster)
+        next_kind = (
+            _cluster_kind(text[slice(*clusters[cluster_index + 1])])
+            if cluster_index + 1 < len(clusters)
+            else None
+        )
+
+        if kind == "connector" and token_kind == "number" and next_kind == "number":
+            token_end = end
+            continue
+
+        if kind in {"word", "number"}:
+            if token_start is not None and token_kind != kind:
+                _append_token(tokens, text, token_start, token_end)
+                token_start = None
+            if token_start is None:
+                token_start = start
+                token_kind = kind
+            token_end = end
+            continue
+
+        if token_start is not None:
+            _append_token(tokens, text, token_start, token_end)
+            token_start = None
+            token_kind = None
+
+        if kind == "punctuation" or kind == "connector":
+            _append_token(tokens, text, start, end)
+
+    if token_start is not None:
+        _append_token(tokens, text, token_start, token_end)
+
+    return tokens
+
+
+def _regex_medical_tokens(
     text: str,
     *,
-    exceptions: Optional[Iterable[str]] = None,
+    offset: int = 0,
 ) -> List[SpanToken]:
-    """Tokenize clinical text into stable span tokens for output remapping.
-
-    This tokenizer is **not** used to create model input ids. It is used to produce
-    user-facing token boundaries and to remap model predictions back onto medical-friendly
-    spans.
-    """
-    exceptions_set = {e for e in (exceptions or []) if e}
-    if not exceptions_set:
-        return _medical_tokens_in_segment(text)
-
-    protected: List[Tuple[int, int]] = []
-    for exc in sorted(exceptions_set, key=len, reverse=True):
-        start = 0
-        while True:
-            idx = text.find(exc, start)
-            if idx == -1:
-                break
-            span = (idx, idx + len(exc))
-            if any(not (span[1] <= a or span[0] >= b) for a, b in protected):
-                start = idx + 1
-                continue
-            protected.append(span)
-            start = idx + len(exc)
-
-    if not protected:
-        return _medical_tokens_in_segment(text)
-
-    protected.sort()
-    tokens: List[SpanToken] = []
-    cursor = 0
-    for s, e in protected:
-        if cursor < s:
-            tokens.extend(_medical_tokens_in_segment(text[cursor:s], offset=cursor))
-        tokens.append(SpanToken(text[s:e], s, e))
-        cursor = e
-    if cursor < len(text):
-        tokens.extend(_medical_tokens_in_segment(text[cursor:], offset=cursor))
-
     return [
-        t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start
+        SpanToken(match.group(0), offset + match.start(), offset + match.end())
+        for match in _MEDICAL_TOKEN_PATTERN.finditer(text)
     ]
 
 
@@ -159,10 +196,61 @@ def _medical_tokens_in_segment(text: str, *, offset: int = 0) -> List[SpanToken]
     return tokens
 
 
-def _regex_medical_tokens(text: str, *, offset: int) -> List[SpanToken]:
+def medical_tokenize(
+    text: str,
+    *,
+    exceptions: Optional[Iterable[str]] = None,
+) -> List[SpanToken]:
+    """Tokenize clinical text into stable span tokens for output remapping.
+
+    This tokenizer is **not** used to create model input ids. It is used to produce
+    user-facing token boundaries and to remap model predictions back onto medical-friendly
+    spans.
+    """
+    exceptions_set = {e for e in (exceptions or []) if e}
+    if not exceptions_set:
+        return _medical_tokens_in_segment(text)
+
+    protected: List[Tuple[int, int]] = []
+    grapheme_boundaries = {0, len(text)}
+    grapheme_boundaries.update(end for _, end in iter_grapheme_clusters(text))
+    for exc in sorted(exceptions_set, key=len, reverse=True):
+        start = 0
+        while True:
+            idx = text.find(exc, start)
+            if idx == -1:
+                break
+            span = (idx, idx + len(exc))
+            if not (
+                is_grapheme_boundary(span[0], text)
+                and is_grapheme_boundary(span[1], text)
+                and span[0] in grapheme_boundaries
+                and span[1] in grapheme_boundaries
+            ):
+                start = idx + 1
+                continue
+            if any(not (span[1] <= a or span[0] >= b) for a, b in protected):
+                start = idx + 1
+                continue
+            protected.append(span)
+            start = idx + len(exc)
+
+    if not protected:
+        return _medical_tokens_in_segment(text)
+
+    protected.sort()
+    tokens: List[SpanToken] = []
+    cursor = 0
+    for s, e in protected:
+        if cursor < s:
+            tokens.extend(_medical_tokens_in_segment(text[cursor:s], offset=cursor))
+        tokens.append(SpanToken(text[s:e], s, e))
+        cursor = e
+    if cursor < len(text):
+        tokens.extend(_medical_tokens_in_segment(text[cursor:], offset=cursor))
+
     return [
-        SpanToken(match.group(0), offset + match.start(), offset + match.end())
-        for match in _MEDICAL_TOKEN_PATTERN.finditer(text)
+        t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start
     ]
 
 
