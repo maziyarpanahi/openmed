@@ -103,17 +103,22 @@ def test_indic_word_tokenizer_preserves_date_identifier_and_conjunct():
     assert conjunct_clusters[0].startswith("क्ष")
 
 
-def test_medical_tokenizer_routes_indic_runs_and_keeps_latin_exception_shape():
+def test_word_tokenizer_groups_indic_runs_without_changing_medical_tokens():
     text = "COVID-19 के बाद क्षेत्र जाँच १२/०५/२०२६।"
 
-    tokens = medical_tokenize(text)
-    token_texts = [token.text for token in tokens]
+    word_tokens = indic_word_tokenize(text)
+    medical_tokens = medical_tokenize(text)
+    word_token_texts = [token.text for token in word_tokens]
+    medical_token_texts = [token.text for token in medical_tokens]
 
-    assert "COVID-19" in token_texts
-    assert "क्षेत्र" in token_texts
-    assert "१२/०५/२०२६" in token_texts
-    assert all(is_grapheme_boundary(token.start, text) for token in tokens)
-    assert all(is_grapheme_boundary(token.end, text) for token in tokens)
+    assert "क्षेत्र" in word_token_texts
+    assert "१२/०५/२०२६" in word_token_texts
+    assert "COVID-19" in medical_token_texts
+    assert "क्षेत्र" not in medical_token_texts
+    assert any(token.startswith("क्ष") for token in medical_token_texts)
+    for token in word_tokens + medical_tokens:
+        assert is_grapheme_boundary(token.start, text)
+        assert is_grapheme_boundary(token.end, text)
 
 
 def test_latin_only_text_stays_on_pysbd_path():

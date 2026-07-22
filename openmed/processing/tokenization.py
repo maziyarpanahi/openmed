@@ -165,96 +165,34 @@ def _regex_medical_tokens(
     ]
 
 
-def _is_indic_word_cluster(cluster: str) -> bool:
-    return is_indic_text(cluster) and any(
-        unicodedata.category(char)[0] in {"L", "M"} for char in cluster
-    )
-
-
-def _is_native_decimal_cluster(cluster: str) -> bool:
-    return all(char.isdecimal() for char in cluster) and any(
-        ord(char) > 0x7F for char in cluster
-    )
-
-
-def _is_indic_punctuation_cluster(cluster: str) -> bool:
-    return is_indic_text(cluster) and all(
-        unicodedata.category(char)[0] in {"P", "S"} for char in cluster
-    )
-
-
-def _consume_number(
-    text: str,
-    clusters: List[Tuple[int, int]],
-    start_index: int,
-) -> int:
-    end_index = start_index + 1
-    while end_index < len(clusters):
-        cluster = text[slice(*clusters[end_index])]
-        if all(char.isdecimal() for char in cluster):
-            end_index += 1
-            continue
-        following_index = end_index + 1
-        if (
-            cluster in _NUMERIC_CONNECTORS
-            and following_index < len(clusters)
-            and all(
-                char.isdecimal() for char in text[slice(*clusters[following_index])]
-            )
-        ):
-            end_index += 1
-            continue
-        break
-    return end_index
-
-
-def _medical_tokens_in_segment(
-    text: str,
-    *,
-    offset: int = 0,
-) -> List[SpanToken]:
-    if not is_indic_text(text):
-        return _regex_medical_tokens(text, offset=offset)
-
-    clusters = list(iter_grapheme_clusters(text))
+def _medical_tokens_in_segment(text: str, *, offset: int = 0) -> List[SpanToken]:
     tokens: List[SpanToken] = []
-    cursor = 0
-    cluster_index = 0
+    non_indic_start = 0
 
-    while cluster_index < len(clusters):
-        start, end = clusters[cluster_index]
-        cluster = text[start:end]
-        region_end_index: Optional[int] = None
-
-        if _is_indic_word_cluster(cluster):
-            region_end_index = cluster_index + 1
-            while region_end_index < len(clusters):
-                next_cluster = text[slice(*clusters[region_end_index])]
-                if _cluster_kind(next_cluster) != "word":
-                    break
-                region_end_index += 1
-        elif _is_native_decimal_cluster(cluster):
-            region_end_index = _consume_number(text, clusters, cluster_index)
-        elif _is_indic_punctuation_cluster(cluster):
-            region_end_index = cluster_index + 1
-
-        if region_end_index is None:
-            cluster_index += 1
+    for cluster_start, cluster_end in iter_grapheme_clusters(text):
+        cluster = text[cluster_start:cluster_end]
+        if not is_indic_text(cluster):
             continue
-
-        if cursor < start:
+        if non_indic_start < cluster_start:
             tokens.extend(
-                _regex_medical_tokens(text[cursor:start], offset=offset + cursor)
+                _regex_medical_tokens(
+                    text[non_indic_start:cluster_start],
+                    offset=offset + non_indic_start,
+                )
             )
-        region_end = clusters[region_end_index - 1][1]
-        tokens.append(
-            SpanToken(text[start:region_end], offset + start, offset + region_end)
-        )
-        cursor = region_end
-        cluster_index = region_end_index
+        if not cluster.isspace():
+            tokens.append(
+                SpanToken(cluster, offset + cluster_start, offset + cluster_end)
+            )
+        non_indic_start = cluster_end
 
-    if cursor < len(text):
-        tokens.extend(_regex_medical_tokens(text[cursor:], offset=offset + cursor))
+    if non_indic_start < len(text):
+        tokens.extend(
+            _regex_medical_tokens(
+                text[non_indic_start:],
+                offset=offset + non_indic_start,
+            )
+        )
     return tokens
 
 
