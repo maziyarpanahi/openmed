@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import tempfile
+import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -557,9 +558,22 @@ ConsistencySnapshot = Mapping[str, str]
 
 
 def _contains_source_surface(candidate: str, source_text: str) -> bool:
-    if candidate == source_text:
+    folded_candidate = unicodedata.normalize("NFKC", candidate).casefold()
+    folded_source = unicodedata.normalize("NFKC", source_text).casefold()
+    if folded_candidate == folded_source:
         return True
-    return len(source_text) >= 4 and source_text in candidate
+    return len(folded_source) >= 4 and folded_source in folded_candidate
+
+
+def _matches_required_script(candidate: str, required_script: str | None) -> bool:
+    if required_script is None:
+        return True
+    if required_script.casefold() != "latin":
+        raise ValueError("required_script currently supports only 'Latin'")
+    letters = [char for char in candidate if char.isalpha()]
+    return bool(letters) and all(
+        "LATIN" in unicodedata.name(char, "") for char in letters
+    )
 
 
 class SurrogateVault:
@@ -688,24 +702,38 @@ class SurrogateVault:
         label: str,
         lang: str = "en",
         create_surrogate: SurrogateFactory,
+        required_script: str | None = None,
     ) -> str:
-        """Return a stable surrogate, creating and storing it if needed."""
+        """Return a stable surrogate, optionally constrained to one script run."""
 
         source = _source(source_text=source_text, label=label, lang=lang)
         key = self._key_for_epoch(source, self._epoch_manager.current_key)
         existing = self.store.get(key)
         if existing is not None:
+            if not _matches_required_script(existing, required_script):
+                raise ValueError("existing surrogate does not satisfy required_script")
             return existing
         legacy_key = self._legacy_key_for_epoch(source, self._epoch_manager.current_key)
         if legacy_key != key:
             existing = self.store.get(legacy_key)
             if existing is not None:
+                if not _matches_required_script(existing, required_script):
+                    raise ValueError(
+                        "existing legacy surrogate does not satisfy required_script"
+                    )
                 try:
                     self.store.set(key, existing, key_id=self.current_key_id)
                 except ValueError:
                     normalized_existing = self.store.get(key)
                     if normalized_existing is None:
                         raise
+                    if not _matches_required_script(
+                        normalized_existing,
+                        required_script,
+                    ):
+                        raise ValueError(
+                            "existing surrogate does not satisfy required_script"
+                        )
                     return normalized_existing
                 return existing
 
@@ -718,7 +746,11 @@ class SurrogateVault:
             candidate = create_surrogate(attempt)
             if not candidate:
                 continue
-            if _contains_source_surface(candidate, source_text) or candidate in used:
+            if (
+                _contains_source_surface(candidate, source_text)
+                or candidate in used
+                or not _matches_required_script(candidate, required_script)
+            ):
                 continue
             surrogate = candidate
             break
@@ -726,9 +758,15 @@ class SurrogateVault:
         if not surrogate:
             suffix = key.text_hash.rsplit(":", 1)[-1][:8]
             base = create_surrogate(0) or key.canonical_label
-            if _contains_source_surface(base, source_text) or base in used:
+            if (
+                _contains_source_surface(base, source_text)
+                or base in used
+                or not _matches_required_script(base, required_script)
+            ):
                 base = key.canonical_label
             surrogate = f"{base}_{suffix}"
+            if not _matches_required_script(surrogate, required_script):
+                raise ValueError("unable to create a surrogate in required_script")
 
         self.store.set(key, surrogate, key_id=self.current_key_id)
         return surrogate

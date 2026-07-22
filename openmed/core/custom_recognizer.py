@@ -24,6 +24,41 @@ PAN = "PAN"
 ABDM_HPR_ID = "ABDM_HPR_ID"
 ABDM_HFR_ID = "ABDM_HFR_ID"
 
+DEFAULT_HINGLISH_GIVEN_NAMES: tuple[str, ...] = (
+    "Amit",
+    "Anaya",
+    "Arjun",
+    "Asha",
+    "Imran",
+    "Kavita",
+    "Meera",
+    "Neha",
+    "Priya",
+    "Rahul",
+    "Rohan",
+    "Sita",
+    "Vikram",
+)
+DEFAULT_HINGLISH_FAMILY_NAMES: tuple[str, ...] = (
+    "Gupta",
+    "Iyer",
+    "Khan",
+    "Nair",
+    "Patel",
+    "Reddy",
+    "Sharma",
+    "Singh",
+    "Verma",
+)
+DEFAULT_HINGLISH_NAME_ALLOW: tuple[str, ...] = (
+    "clinic",
+    "doctor",
+    "hospital",
+    "mobile",
+    "naam",
+    "patient",
+)
+
 
 @dataclass(frozen=True)
 class CustomMatch:
@@ -480,6 +515,70 @@ def coerce_custom_recognizer(config: Any) -> CustomRecognizer | None:
     return CustomRecognizer.from_config(config)
 
 
+def build_transliterated_name_recognizer(
+    config: Mapping[str, Any] | str | Path | CustomRecognizer | None = None,
+) -> CustomRecognizer:
+    """Build the config-driven Latin-script Indian name allow/deny bridge.
+
+    The optional mapping may contain a top-level ``transliterated_names`` block
+    or directly provide ``given_names``, ``family_names``, ``deny``, ``allow``,
+    and ``include_defaults``. Deny entries are surfaced as ``NAME`` entities;
+    allow entries suppress matching bridge terms. Defaults are deliberately
+    small and conservative, and callers can disable them with
+    ``include_defaults=False``.
+    """
+    if isinstance(config, CustomRecognizer):
+        return config
+
+    payload = _load_config(config) if config is not None else {}
+    nested = payload.get("transliterated_names")
+    block = nested if isinstance(nested, Mapping) else payload
+    include_defaults = bool(block.get("include_defaults", True))
+
+    given_names = [
+        *(DEFAULT_HINGLISH_GIVEN_NAMES if include_defaults else ()),
+        *_name_values(block.get("given_names", block.get("given"))),
+    ]
+    family_names = [
+        *(DEFAULT_HINGLISH_FAMILY_NAMES if include_defaults else ()),
+        *_name_values(block.get("family_names", block.get("family"))),
+    ]
+    deny_names = _name_values(block.get("deny"))
+    allow_names = [
+        *(DEFAULT_HINGLISH_NAME_ALLOW if include_defaults else ()),
+        *_name_values(block.get("allow")),
+    ]
+
+    deny_patterns = []
+    for category, values in (
+        ("given", given_names),
+        ("family", family_names),
+        ("deny", deny_names),
+    ):
+        for index, value in enumerate(_dedupe_name_values(values)):
+            deny_patterns.append(
+                {
+                    "pattern": _whole_name_pattern(value),
+                    "label": "NAME",
+                    "confidence": 0.98,
+                    "id": f"hinglish_{category}_{index}",
+                }
+            )
+
+    allow_patterns = [
+        {
+            "pattern": _whole_name_pattern(value),
+            "id": f"hinglish_allow_{index}",
+        }
+        for index, value in enumerate(_dedupe_name_values(allow_names))
+    ]
+    return CustomRecognizer(
+        deny_patterns=deny_patterns,
+        allow_patterns=allow_patterns,
+        case_sensitive=False,
+    )
+
+
 def _load_config(config: Mapping[str, Any] | str | Path) -> Mapping[str, Any]:
     if isinstance(config, Mapping):
         return config
@@ -498,6 +597,37 @@ def _load_config(config: Mapping[str, Any] | str | Path) -> Mapping[str, Any]:
     if not isinstance(payload, Mapping):
         raise ValueError("custom recognizer config must be a mapping")
     return payload
+
+
+def _name_values(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, Sequence):
+        values = list(value)
+    else:
+        raise TypeError("transliterated name lists must be strings or sequences")
+
+    normalized: list[str] = []
+    for item in values:
+        name = str(item).strip()
+        if not name or not any(char.isalpha() for char in name):
+            raise ValueError("transliterated names must contain letters")
+        normalized.append(name)
+    return normalized
+
+
+def _dedupe_name_values(values: Sequence[str]) -> tuple[str, ...]:
+    deduped: dict[str, str] = {}
+    for value in values:
+        deduped.setdefault(value.casefold(), value)
+    return tuple(deduped[key] for key in sorted(deduped))
+
+
+def _whole_name_pattern(value: str) -> str:
+    escaped = re.escape(value).replace(r"\ ", r"\s+")
+    return rf"(?<![A-Za-z]){escaped}(?![A-Za-z])"
 
 
 def _case_sensitive(config: Mapping[str, Any]) -> bool:
@@ -723,6 +853,7 @@ __all__ = [
     "CustomRecognizer",
     "PAN",
     "abdm_mode_enabled",
+    "build_transliterated_name_recognizer",
     "coerce_custom_recognizer",
     "with_abdm_recognizer",
 ]

@@ -18,9 +18,11 @@ Health identifiers for HIPAA cross-map consumers:
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
 from importlib import resources
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
     validate_australian_medicare,
@@ -3903,6 +3905,99 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+# Roman-script Hindi cues are intentionally separate from the Devanagari Hindi
+# pack. They are activated only by the explicit code-mixed route with at least
+# one caller-supplied Hindi token tag, so ordinary English routing cannot pick
+# them up accidentally.
+HINGLISH_PII_PATTERNS_VERSION = "hinglish-pii-v1"
+_HINGLISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?:(?<=patient ka naam )|(?<=patient kaa naam )|(?<=naam )|"
+        r"(?<=naam: )|(?<=naam ka ))"
+        r"[A-Za-z][A-Za-z'\N{RIGHT SINGLE QUOTATION MARK}-]{1,39}"
+        r"(?:\s+(?!(?:aur|umar|mobile|janm|janam|pata|hai|ko|ki|ka|ke|"
+        r"saal|varsh|mein|likha)\b)"
+        r"[A-Za-z][A-Za-z'\N{RIGHT SINGLE QUOTATION MARK}-]{1,39})?",
+        "name",
+        priority=10,
+        base_score=0.9,
+        context_words=["naam", "naam ka", "patient ka naam"],
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=umar )|(?<=umar: ))(?:1[01]\d|120|[1-9]?\d)"
+        r"(?=\s*(?:saal|varsh)\b)",
+        "age",
+        priority=10,
+        base_score=0.9,
+        context_words=["umar", "saal", "varsh"],
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=mobile )|(?<=mobile: )|(?<=mobail )|(?<=phone )|"
+        r"(?<=sampark ))(?:\+91[\s-]?)?[6-9]\d{4}[\s.-]?\d{5}\b",
+        "phone_number",
+        priority=9,
+        base_score=0.85,
+        context_words=["mobile", "mobail", "phone", "sampark"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=janm )|(?<=janm: )|(?<=janam )|(?<=janam: )|"
+        r"(?<=janm tareekh )|(?<=janam tareekh ))"
+        r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.85,
+        context_words=["janm", "janam", "janm tareekh", "janam tareekh"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=janm )|(?<=janam )|(?<=janm tareekh )|"
+        r"(?<=janam tareekh ))\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|"
+        r"Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|"
+        r"Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.85,
+        context_words=["janm", "janam", "janm tareekh", "janam tareekh"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=pata )|(?<=pata: ))\d{1,5}\s+"
+        r"[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,4}"
+        r"(?=(?:[,.;]|\s+(?:hai|par)\b|$))",
+        "street_address",
+        priority=8,
+        base_score=0.85,
+        context_words=["pata", "address"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=pata pin )|(?<=pata pin: )|(?<=pin ))\d{6}\b",
+        "postcode",
+        priority=8,
+        base_score=0.8,
+        context_words=["pata", "pin", "pin code"],
+        context_boost=0.2,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -7764,3 +7859,112 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
         ]
 
     return combined
+
+
+@dataclass(frozen=True)
+class CodeMixedTokenTag:
+    """One raw-text-free token language tag with exact character offsets."""
+
+    start: int
+    end: int
+    label: str
+
+
+_CODE_MIXED_LABEL_ALIASES = {
+    "en": "en",
+    "english": "en",
+    "hi": "hi",
+    "hi_latn": "hi",
+    "hinglish": "hi",
+    "ne": "ne",
+    "named_entity": "ne",
+    "other": "other",
+    "univ": "univ",
+    "universal": "univ",
+}
+
+
+def normalize_code_mixed_token_tags(
+    text: str,
+    token_language_tags: Sequence[Any],
+) -> tuple[CodeMixedTokenTag, ...]:
+    """Validate and normalize caller-supplied code-mixed token tags.
+
+    Tags may be mappings or objects with ``start``, ``end``, and ``label``
+    fields. Returned records contain offsets and normalized labels only; token
+    surfaces are never copied into metadata or logs.
+    """
+    if isinstance(token_language_tags, (str, bytes)):
+        raise TypeError("token_language_tags must be a sequence of tag records")
+
+    normalized: list[CodeMixedTokenTag] = []
+    previous_end = 0
+    for index, raw_tag in enumerate(token_language_tags):
+        if isinstance(raw_tag, Mapping):
+            start = raw_tag.get("start")
+            end = raw_tag.get("end")
+            raw_label = raw_tag.get("label", raw_tag.get("lang"))
+        else:
+            start = getattr(raw_tag, "start", None)
+            end = getattr(raw_tag, "end", None)
+            raw_label = getattr(raw_tag, "label", getattr(raw_tag, "lang", None))
+
+        if not isinstance(start, int) or not isinstance(end, int):
+            raise TypeError(
+                f"token_language_tags[{index}] requires integer start/end offsets"
+            )
+        if start < 0 or end <= start or end > len(text):
+            raise ValueError(
+                f"token_language_tags[{index}] offsets must satisfy "
+                f"0 <= start < end <= {len(text)}"
+            )
+        if normalized and start < previous_end:
+            raise ValueError("token language tags must be ordered and non-overlapping")
+
+        label_key = str(raw_label or "").strip().replace("-", "_").casefold()
+        label = _CODE_MIXED_LABEL_ALIASES.get(label_key)
+        if label is None:
+            raise ValueError(
+                f"unsupported token language label {raw_label!r}; expected one of "
+                "en, hi, ne, univ, or other"
+            )
+        normalized.append(CodeMixedTokenTag(start=start, end=end, label=label))
+        previous_end = end
+
+    if not normalized:
+        raise ValueError("token_language_tags must contain at least one tag")
+    return tuple(normalized)
+
+
+def code_mixed_route_active(
+    text: str,
+    token_language_tags: Sequence[Any],
+) -> bool:
+    """Return whether validated tags activate Roman-script Hindi patterns."""
+    return any(
+        tag.label == "hi"
+        for tag in normalize_code_mixed_token_tags(text, token_language_tags)
+    )
+
+
+def get_hinglish_patterns_for_token_tags(
+    text: str,
+    token_language_tags: Sequence[Any],
+) -> List[PIIPattern]:
+    """Return the Hinglish bank only when supplied tags contain Hindi tokens."""
+    if not code_mixed_route_active(text, token_language_tags):
+        return []
+    return list(_HINGLISH_PII_PATTERNS)
+
+
+def get_patterns_for_code_mixed_tags(
+    text: str,
+    token_language_tags: Sequence[Any],
+    *,
+    base_lang: str = "en",
+    locale: str | None = None,
+) -> List[PIIPattern]:
+    """Combine the base language pack with explicitly gated Hinglish patterns."""
+    patterns = list(get_patterns_for_language(base_lang, locale=locale))
+    patterns.extend(get_hinglish_patterns_for_token_tags(text, token_language_tags))
+    return patterns
