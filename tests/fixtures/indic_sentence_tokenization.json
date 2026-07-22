@@ -1,0 +1,24 @@
+{
+  "note": "All names, dates, and identifiers in this fixture are synthetic.",
+  "sentences": {
+    "text": "डॉ. सीमा ने जाँच की। रुग्णाची नोंद पूर्ण आहे॥ ডাঃ সেন রোগীকে দেখেছেন।",
+    "expected": [
+      "डॉ. सीमा ने जाँच की। ",
+      "रुग्णाची नोंद पूर्ण आहे॥ ",
+      "ডাঃ সেন রোগীকে দেখেছেন।"
+    ]
+  },
+  "words": {
+    "text": "भर्ती दिनांक १२/०५/२०२६, आईडी १२३४५६, क्षेत्र सुरक्षित।",
+    "date": "१२/०५/२०२६",
+    "identifier": "१२३४५६",
+    "conjunct_word": "क्षेत्र"
+  },
+  "mixed": {
+    "text": "Follow-up ID १२३: రోగి స్థిరంగా ఉన్నారు। Review in २ days.",
+    "expected": [
+      "Follow-up ID १२३: రోగి స్థిరంగా ఉన్నారు। ",
+      "Review in २ days."
+    ]
+  }
+}
