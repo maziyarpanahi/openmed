@@ -613,9 +613,7 @@ _ABHA_ADDRESS_RE = re.compile(
     r"^[a-z][a-z0-9]*(?:\.[a-z0-9]+)*@[a-z][a-z0-9-]{1,31}$",
     re.IGNORECASE,
 )
-_PAN_RE = re.compile(r"^[A-Z]{3}[ABCFGHLJPT][A-Z][0-9]{4}[A-Z]$")
 _ABDM_REGISTRY_ID_RE = re.compile(r"^(?:HPR|HFR)-[A-Z0-9][A-Z0-9-]{5,31}$")
-_PAN_HOLDER_TYPES = "ABCFGHLJPT"
 
 
 def validate_abha_number(text: str) -> bool:
@@ -640,12 +638,6 @@ def validate_abha_address(text: str) -> bool:
         return False
     handle, _domain = value.split("@", 1)
     return 4 <= len(handle) <= 32 and not handle.endswith(".")
-
-
-def validate_pan(text: str) -> bool:
-    """Validate the ten-character structural format of an Indian PAN."""
-
-    return bool(_PAN_RE.fullmatch(str(text or "").strip().upper()))
 
 
 def validate_abdm_registry_id(text: str) -> bool:
@@ -829,11 +821,11 @@ def generate_indian_phone(*, rng: random.Random | None = None) -> str:
 
 
 def pan_check_letter(body9: str) -> str:
-    """Return the check letter for OpenMed's reserved synthetic PAN series.
+    """Return the check letter for OpenMed's synthetic PAN series.
 
     India's allocated PAN check-letter algorithm is not public. Synthetic PANs
-    therefore use the reserved ``OMD`` prefix and this deterministic local
-    checksum; non-synthetic PANs are validated by their public structure only.
+    therefore use the project-specific ``OMD`` prefix and this deterministic
+    local checksum; non-synthetic PANs are validated by public structure only.
     """
 
     body = str(body9).strip().upper()
@@ -862,7 +854,7 @@ def validate_pan(text: str) -> bool:
 
 
 def generate_pan(*, rng: random.Random | None = None) -> str:
-    """Generate a structurally valid PAN in the reserved synthetic series."""
+    """Generate a structurally valid PAN in OpenMed's synthetic series."""
 
     source = rng or random.Random()
     body = (
@@ -3198,7 +3190,6 @@ __all__ = [
     "validate_ontario_health_card",
     "validate_pan",
     "validate_phone_us",
-    "validate_pan",
     "validate_ssn",
     "validate_uk_nhs_number",
     "validate_uk_nino",
