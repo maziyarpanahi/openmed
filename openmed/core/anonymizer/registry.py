@@ -162,6 +162,13 @@ def _gen_email(faker, original, *, locale):
 
 
 def _gen_phone(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        from openmed.core.pii_i18n import validate_chinese_mobile_number
+
+        if validate_chinese_mobile_number(original):
+            from .providers.clinical_ids import generate_chinese_mobile_number
+
+            return generate_chinese_mobile_number(original, rng=faker.random)
     if locale in {"en_NG", "ha_NG", "ig_NG", "yo_NG"} and hasattr(
         faker, "ng_mobile_number"
     ):
@@ -482,6 +489,19 @@ def _gen_id_num(faker, original, *, locale):
     uscc = _uscc_surrogate(faker, original)
     if uscc is not None:
         return uscc
+    if _is_zh_cn(locale):
+        from openmed.core.pii_i18n import (
+            validate_chinese_passport,
+            validate_hong_kong_macau_permit,
+            validate_taiwan_compatriot_permit,
+        )
+
+        if validate_chinese_passport(original):
+            return faker.chinese_passport(original)
+        if validate_hong_kong_macau_permit(original):
+            return faker.hong_kong_macau_permit(original)
+        if validate_taiwan_compatriot_permit(original):
+            return faker.taiwan_compatriot_permit(original)
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
@@ -593,6 +613,13 @@ def _gen_api_key(faker, original, *, locale):
 
 
 def _gen_credit_card(faker, original, *, locale):
+    if _is_zh_cn(locale):
+        from openmed.core.pii_i18n import validate_chinese_bank_card
+
+        if validate_chinese_bank_card(original):
+            from .providers.clinical_ids import generate_chinese_bank_card
+
+            return generate_chinese_bank_card(original, rng=faker.random)
     return faker.credit_card_number()
 
 

@@ -171,6 +171,12 @@ ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
 ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
 #: China Unified Social Credit Code (organization-linked); normalizes to ID_NUM.
 ID_SUBTYPE_SOCIAL_CREDIT_CODE: Final = "social_credit_code"
+#: Mainland China passport number; normalizes to ID_NUM.
+ID_SUBTYPE_CHINESE_PASSPORT: Final = "chinese_passport"
+#: Mainland Travel Permit for Hong Kong/Macau residents; normalizes to ID_NUM.
+ID_SUBTYPE_HONG_KONG_MACAU_PERMIT: Final = "hong_kong_macau_permit"
+#: Mainland Travel Permit for Taiwan residents; normalizes to ID_NUM.
+ID_SUBTYPE_TAIWAN_PERMIT: Final = "taiwan_permit"
 ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
     {
         ID_SUBTYPE_MRN,
@@ -179,6 +185,9 @@ ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
         ID_SUBTYPE_SSN_ADJACENT,
         ID_SUBTYPE_PASSPORT_MRZ,
         ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+        ID_SUBTYPE_CHINESE_PASSPORT,
+        ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+        ID_SUBTYPE_TAIWAN_PERMIT,
     }
 )
 
@@ -1014,6 +1023,14 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "id": ID_NUM,
     "identifier": ID_NUM,
     "passportmrz": ID_NUM,
+    "chinesepassport": ID_NUM,
+    "prcpassport": ID_NUM,
+    "homereturnpermit": ID_NUM,
+    "hkmacaupermit": ID_NUM,
+    "mainlandtravelpermithongkongmacau": ID_NUM,
+    "taiwancompatriotpermit": ID_NUM,
+    "taiwanpermit": ID_NUM,
+    "mainlandtravelpermittaiwan": ID_NUM,
     "socialcreditcode": ID_NUM,
     "unifiedsocialcreditcode": ID_NUM,
     "uscc": ID_NUM,
@@ -1306,6 +1323,14 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
     "passportmrz": ID_SUBTYPE_PASSPORT_MRZ,
+    "chinesepassport": ID_SUBTYPE_CHINESE_PASSPORT,
+    "prcpassport": ID_SUBTYPE_CHINESE_PASSPORT,
+    "homereturnpermit": ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+    "hkmacaupermit": ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+    "mainlandtravelpermithongkongmacau": ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+    "taiwancompatriotpermit": ID_SUBTYPE_TAIWAN_PERMIT,
+    "taiwanpermit": ID_SUBTYPE_TAIWAN_PERMIT,
+    "mainlandtravelpermittaiwan": ID_SUBTYPE_TAIWAN_PERMIT,
     "socialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
     "unifiedsocialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
     "uscc": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
@@ -1468,6 +1493,9 @@ __all__ = [
     "ID_SUBTYPE_SSN_ADJACENT",
     "ID_SUBTYPE_PASSPORT_MRZ",
     "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
+    "ID_SUBTYPE_CHINESE_PASSPORT",
+    "ID_SUBTYPE_HONG_KONG_MACAU_PERMIT",
+    "ID_SUBTYPE_TAIWAN_PERMIT",
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
     "LABEL_TO_POPIA",
