@@ -23,8 +23,9 @@ coverage, and stronger release evidence:
 - **22 supported PII language codes: am, ar, de, en, es, fr, he, hi, id, it, ja,
   ko, nl, pt, ro, sw, te, th, tr, xh, zh, and zu**, with Chinese using the documented
   multilingual default-model placeholder, locale-aware validation and surrogate
-  generation, plus additional
-  validator-backed national-ID coverage for ID-only locales.
+  generation. A user-configured Indic NER adapter adds nine optional routes and
+  can also serve Hindi and Telugu. Additional validator-backed national-ID
+  coverage remains available for ID-only locales.
 - **Release evidence** for leakage heatmaps, model scorecards, threshold
   sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, signed
   images, SLSA provenance, secret scanning, and reproducible dependency locks.

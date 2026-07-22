@@ -43,7 +43,9 @@ ZH_CN_ADDRESS_LOCALE: Final = "zh_CN"
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"af", "am", "te", "ms", "sr", "ur", "xh"})
+_APPROXIMATE_LOCALES: Final = frozenset(
+    {"af", "am", "as", "kn", "ml", "mr", "ms", "pa", "sr", "te", "ur", "xh"}
+)
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -53,10 +55,15 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "af_ZA": "zu_ZA",
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
+    "as_IN": "bn_BD",
     "en_ZA": "zu_ZA",
     "en_GH": "tw_GH",
     "fr_MA": "fr_FR",
+    "kn_IN": "en_IN",
+    "ml_IN": "en_IN",
+    "mr_IN": "hi_IN",
     "ms_MY": "id_ID",
+    "pa_IN": "en_IN",
     "sr_RS": "hr_HR",
     "ur_PK": "en_PK",
     "xh_ZA": "zu_ZA",
@@ -191,12 +198,16 @@ def locale_coherence_report() -> list[dict[str, object]]:
         validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
     """
     from ..pii_i18n import (  # lazy: avoid import cycle
+        INDIC_NER_LANGUAGES,
         NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
     )
 
     rows: list[dict[str, object]] = []
-    for lang in sorted(SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES):
+    reported_languages = (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    )
+    for lang in sorted(reported_languages):
         provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
         id_locale, id_method = provider if provider else (None, None)
         rows.append(

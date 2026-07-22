@@ -6,6 +6,7 @@ from openmed.core.anonymizer.locales import NATIONAL_ID_PROVIDERS
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import CANONICAL_LABELS, ID_NUM
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
     validate_chinese_resident_id,
@@ -67,7 +68,9 @@ _SCRIPT_RANGES = {
 
 
 def test_supported_languages_match_wired_language_set():
-    assert set(SUPPORTED_LOCALE_PHI_LANGUAGES) == SUPPORTED_LANGUAGES
+    assert set(SUPPORTED_LOCALE_PHI_LANGUAGES) == (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    )
 
 
 @pytest.mark.parametrize("language", SUPPORTED_LOCALE_PHI_LANGUAGES)

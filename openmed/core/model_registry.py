@@ -142,17 +142,26 @@ _VERSION_RE = re.compile(r"^v\d+$", re.IGNORECASE)
 
 _LANGUAGE_NAME_TO_CODE = {
     "arabic": "ar",
+    "assamese": "as",
+    "bengali": "bn",
     "dutch": "nl",
     "english": "en",
     "french": "fr",
     "german": "de",
+    "gujarati": "gu",
     "hebrew": "he",
     "hindi": "hi",
     "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
+    "kannada": "kn",
+    "malayalam": "ml",
+    "marathi": "mr",
+    "odia": "or",
     "portuguese": "pt",
+    "punjabi": "pa",
     "spanish": "es",
+    "tamil": "ta",
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
@@ -1011,17 +1020,16 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         and lang in (info.languages or [])
         and _supports_pii_language(info, lang)
     }
-    if language_models:
-        return language_models
+    optional_indic = _configured_indic_pii_model(lang)
 
     from .pii_i18n import DEFAULT_PII_MODELS
 
     default_model_id = DEFAULT_PII_MODELS.get(lang)
     if not default_model_id:
-        return {}
+        return optional_indic
     # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
     # so language-pack callers can reuse multilingual privacy filters safely.
-    return {
+    fallback_models = {
         key: info
         for key, info in OPENMED_MODELS.items()
         if key.startswith("pii_")
@@ -1029,6 +1037,34 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         and info.model_id == default_model_id
         and lang in (info.languages or [])
         and _supports_pii_language(info, lang)
+    }
+    return {**language_models, **fallback_models, **optional_indic}
+
+
+def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
+    from ..ner.families.indic import configured_indic_ner_model
+    from .pii_i18n import INDIC_NER_LANGUAGES, LANGUAGE_NAMES
+
+    if lang not in INDIC_NER_LANGUAGES:
+        return {}
+    model_id = configured_indic_ner_model()
+    if model_id is None:
+        return {}
+    return {
+        f"pii_{lang}_indic_ner": ModelInfo(
+            model_id=model_id,
+            display_name=f"{LANGUAGE_NAMES[lang]} Indic NER (optional)",
+            category="Privacy",
+            specialization="Indic PER/LOC/ORG de-identification",
+            description="User-configured CoNLL-2003 Indic NER adapter",
+            entity_types=["PERSON", "LOCATION", "ORGANIZATION"],
+            size_category="Unknown",
+            recommended_confidence=0.50,
+            family="IndicNER",
+            task="token-classification",
+            languages=[lang],
+            formats=["transformers"],
+        )
     }
 
 
@@ -1043,6 +1079,11 @@ def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
 
 def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language."""
-    from .pii_i18n import DEFAULT_PII_MODELS
+    from .pii_i18n import DEFAULT_PII_MODELS, OPTIONAL_PII_MODEL
 
-    return DEFAULT_PII_MODELS.get(lang)
+    model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id != OPTIONAL_PII_MODEL:
+        return model_id
+    from ..ner.families.indic import configured_indic_ner_model
+
+    return configured_indic_ner_model()

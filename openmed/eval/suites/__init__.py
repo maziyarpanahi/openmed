@@ -62,6 +62,12 @@ from openmed.eval.suites.multimodal_dicom import (
     multimodal_dicom_metadata,
     run_multimodal_dicom,
 )
+from openmed.eval.suites.naamapadam import (
+    NAAMAPADAM,
+    load_naamapadam_fixtures,
+    naamapadam_suite_metadata,
+    run_naamapadam,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -95,6 +101,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     BIOMEDICAL_NER,
     MULTILINGUAL_NER,
     MASAKHANER,
+    NAAMAPADAM,
     CHINESE_CLINICAL_NER,
     MULTIMODAL_DICOM,
 )
@@ -134,6 +141,9 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     if suite == MASAKHANER:
         paths = kwargs.pop("paths", kwargs.pop("path", None))
         return load_masakhaner_fixtures(paths=paths, **kwargs)
+    if suite == NAAMAPADAM:
+        path = kwargs.pop("path", None)
+        return load_naamapadam_fixtures(**({"path": path} if path else {}))
     if suite == CHINESE_CLINICAL_NER:
         return load_chinese_clinical_ner_fixtures(kwargs.get("path"))
     if suite == MULTIMODAL_DICOM:
@@ -161,6 +171,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return multilingual_ner_suite_metadata(**kwargs)
     if suite == MASAKHANER:
         return masakhaner_suite_metadata(**kwargs)
+    if suite == NAAMAPADAM:
+        return naamapadam_suite_metadata()
     if suite == CHINESE_CLINICAL_NER:
         return chinese_clinical_ner_metadata()
     if suite == MULTIMODAL_DICOM:
@@ -178,6 +190,7 @@ __all__ = [
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
     "MASAKHANER",
+    "NAAMAPADAM",
     "CHINESE_CLINICAL_NER",
     "MULTIMODAL_DICOM",
     "RELATIONS",
@@ -221,6 +234,9 @@ __all__ = [
     "score_relation_fixtures",
     "run_biomedical_ner_benchmark",
     "run_masakhaner_benchmark",
+    "load_naamapadam_fixtures",
+    "naamapadam_suite_metadata",
+    "run_naamapadam",
     "load_multimodal_dicom_fixtures",
     "multimodal_dicom_metadata",
     "run_multimodal_dicom",

@@ -44,7 +44,27 @@ from .language_pack_catalog import (
 # Constants
 # ---------------------------------------------------------------------------
 
+# Naamapadam languages supported by the optional Indic NER adapter. Existing
+# Hindi and Telugu defaults remain available; the shared CoNLL adapter is an
+# additional opt-in model family for all 11 languages.
+INDIC_NER_LANGUAGES = frozenset(
+    {"as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+)
+INDIC_NER_MODEL_ENV = "OPENMED_INDIC_NER_MODEL"
+OPTIONAL_PII_MODEL = f"env:{INDIC_NER_MODEL_ENV}"
+OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
+
+# The central catalog keeps user-supplied model routes separate from bundled
+# language packs. This compatibility map lets the 11 optional Indic routes
+# resolve explicitly configured weights without advertising them as built-in
+# language packs.
+DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
+for _language in INDIC_NER_LANGUAGES - {"hi", "te"}:
+    DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
+
 LANGUAGE_NAMES: Dict[str, str] = {
+    "as": "Assamese",
+    "bn": "Bengali",
     "en": "English",
     "fr": "French",
     "de": "German",
@@ -52,6 +72,13 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "es": "Spanish",
     "nl": "Dutch",
     "hi": "Hindi",
+    "gu": "Gujarati",
+    "kn": "Kannada",
+    "ml": "Malayalam",
+    "mr": "Marathi",
+    "or": "Odia",
+    "pa": "Punjabi",
+    "ta": "Tamil",
     "te": "Telugu",
     "am": "Amharic",
     "pt": "Portuguese",
@@ -70,6 +97,8 @@ LANGUAGE_NAMES: Dict[str, str] = {
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
+    "as": "Assamese-",
+    "bn": "Bengali-",
     "en": "",
     "fr": "French-",
     "de": "German-",
@@ -77,6 +106,13 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "es": "Spanish-",
     "nl": "Dutch-",
     "hi": "Hindi-",
+    "gu": "Gujarati-",
+    "kn": "Kannada-",
+    "ml": "Malayalam-",
+    "mr": "Marathi-",
+    "or": "Odia-",
+    "pa": "Punjabi-",
+    "ta": "Tamil-",
     "te": "Telugu-",
     "am": "Amharic-",
     "pt": "Portuguese-",
@@ -2097,6 +2133,34 @@ def validate_romanian_cnp(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
+    "as": [
+        "জানুৱাৰী",
+        "ফেব্ৰুৱাৰী",
+        "মাৰ্চ",
+        "এপ্ৰিল",
+        "মে",
+        "জুন",
+        "জুলাই",
+        "আগষ্ট",
+        "ছেপ্টেম্বৰ",
+        "অক্টোবৰ",
+        "নৱেম্বৰ",
+        "ডিচেম্বৰ",
+    ],
+    "bn": [
+        "জানুয়ারি",
+        "ফেব্রুয়ারি",
+        "মার্চ",
+        "এপ্রিল",
+        "মে",
+        "জুন",
+        "জুলাই",
+        "আগস্ট",
+        "সেপ্টেম্বর",
+        "অক্টোবর",
+        "নভেম্বর",
+        "ডিসেম্বর",
+    ],
     "en": [
         "January",
         "February",
@@ -2208,6 +2272,104 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0905\u0915\u094d\u091f\u0942\u092c\u0930",
         "\u0928\u0935\u0902\u092c\u0930",
         "\u0926\u093f\u0938\u0902\u092c\u0930",
+    ],
+    "gu": [
+        "જાન્યુઆરી",
+        "ફેબ્રુઆરી",
+        "માર્ચ",
+        "એપ્રિલ",
+        "મે",
+        "જૂન",
+        "જુલાઈ",
+        "ઑગસ્ટ",
+        "સપ્ટેમ્બર",
+        "ઑક્ટોબર",
+        "નવેમ્બર",
+        "ડિસેમ્બર",
+    ],
+    "kn": [
+        "ಜನವರಿ",
+        "ಫೆಬ್ರವರಿ",
+        "ಮಾರ್ಚ್",
+        "ಏಪ್ರಿಲ್",
+        "ಮೇ",
+        "ಜೂನ್",
+        "ಜುಲೈ",
+        "ಆಗಸ್ಟ್",
+        "ಸೆಪ್ಟೆಂಬರ್",
+        "ಅಕ್ಟೋಬರ್",
+        "ನವೆಂಬರ್",
+        "ಡಿಸೆಂಬರ್",
+    ],
+    "ml": [
+        "ജനുവരി",
+        "ഫെബ്രുവരി",
+        "മാർച്ച്",
+        "ഏപ്രിൽ",
+        "മേയ്",
+        "ജൂൺ",
+        "ജൂലൈ",
+        "ഓഗസ്റ്റ്",
+        "സെപ്റ്റംബർ",
+        "ഒക്ടോബർ",
+        "നവംബർ",
+        "ഡിസംബർ",
+    ],
+    "mr": [
+        "जानेवारी",
+        "फेब्रुवारी",
+        "मार्च",
+        "एप्रिल",
+        "मे",
+        "जून",
+        "जुलै",
+        "ऑगस्ट",
+        "सप्टेंबर",
+        "ऑक्टोबर",
+        "नोव्हेंबर",
+        "डिसेंबर",
+    ],
+    "or": [
+        "ଜାନୁଆରୀ",
+        "ଫେବୃଆରୀ",
+        "ମାର୍ଚ୍ଚ",
+        "ଏପ୍ରିଲ",
+        "ମେ",
+        "ଜୁନ",
+        "ଜୁଲାଇ",
+        "ଅଗଷ୍ଟ",
+        "ସେପ୍ଟେମ୍ବର",
+        "ଅକ୍ଟୋବର",
+        "ନଭେମ୍ବର",
+        "ଡିସେମ୍ବର",
+    ],
+    "pa": [
+        "ਜਨਵਰੀ",
+        "ਫ਼ਰਵਰੀ",
+        "ਮਾਰਚ",
+        "ਅਪ੍ਰੈਲ",
+        "ਮਈ",
+        "ਜੂਨ",
+        "ਜੁਲਾਈ",
+        "ਅਗਸਤ",
+        "ਸਤੰਬਰ",
+        "ਅਕਤੂਬਰ",
+        "ਨਵੰਬਰ",
+        "ਦਸੰਬਰ",
+    ],
+    "ta": [
+        "ஜனவரி",
+        "பிப்ரவரி",
+        "மார்ச்",
+        "ஏப்ரல்",
+        "மே",
+        "ஜூன்",
+        "ஜூலை",
+        "ஆகஸ்ட்",
+        "செப்டம்பர்",
+        "அக்டோபர்",
+        "நவம்பர்",
+        "டிசம்பர்",
     ],
     "te": [
         "\u0c1c\u0c28\u0c35\u0c30\u0c3f",
@@ -7444,6 +7606,75 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 }
 
 
+LANGUAGE_FAKE_DATA.update(
+    {
+        "as": {
+            "NAME": ["অৰুণ দাস"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["গুৱাহাটী"],
+        },
+        "bn": {
+            "NAME": ["অরুণ দাস"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["কলকাতা"],
+        },
+        "gu": {
+            "NAME": ["આરવ પટેલ"],
+            "EMAIL": ["dardi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["અમદાવાદ"],
+        },
+        "kn": {
+            "NAME": ["ಅರುಣ್ ಕುಮಾರ್"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["ಬೆಂಗಳೂರು"],
+        },
+        "ml": {
+            "NAME": ["അരുൺ കുമാർ"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["കൊച്ചി"],
+        },
+        "mr": {
+            "NAME": ["आरव पाटील"],
+            "EMAIL": ["rugna@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["पुणे"],
+        },
+        "or": {
+            "NAME": ["ଅରୁଣ ଦାସ"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["ଭୁବନେଶ୍ୱର"],
+        },
+        "pa": {
+            "NAME": ["ਅਰੁਣ ਸਿੰਘ"],
+            "EMAIL": ["mareez@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["ਅੰਮ੍ਰਿਤਸਰ"],
+        },
+        "ta": {
+            "NAME": ["அருண் குமார்"],
+            "EMAIL": ["noyali@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["சென்னை"],
+        },
+    }
+)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -7498,7 +7729,9 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     Raises:
         ValueError: If the language is not supported
     """
-    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    supported_pattern_languages = (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    )
     base_lang = _normalize_pattern_language(lang)
     if base_lang not in supported_pattern_languages:
         raise ValueError(

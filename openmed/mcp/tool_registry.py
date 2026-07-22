@@ -9,7 +9,11 @@ from dataclasses import dataclass
 from inspect import Parameter, Signature
 from typing import Any, Optional
 
-from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -595,7 +599,7 @@ _KEEP_ALIVE_PARAMETER = _parameter(
 )
 _LANG_PARAMETER = _parameter(
     "lang",
-    _schema("string", enum=sorted(SUPPORTED_LANGUAGES)),
+    _schema("string", enum=sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)),
     str,
     "en",
     "PII language code.",

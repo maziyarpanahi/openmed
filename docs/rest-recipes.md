@@ -177,7 +177,10 @@ Detect personally identifiable information. Unless `model_name` is set, OpenMed
 selects the recommended PII model for `lang`. The 22 supported PII language
 codes: `am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
 `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`. Chinese currently uses the documented
-multilingual default-model placeholder. `confidence_threshold` defaults to `0.5`.
+multilingual default-model placeholder. The API also accepts nine optional
+Indic routes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) when
+`OPENMED_INDIC_NER_MODEL` or an explicit model is configured; Hindi and Telugu
+can use that adapter too. `confidence_threshold` defaults to `0.5`.
 
 ```bash
 curl -sS --max-time 310 -X POST "$OPENMED_URL/pii/extract" \
