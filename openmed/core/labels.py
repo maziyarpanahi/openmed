@@ -314,10 +314,8 @@ SNOMED: Final = "SNOMED"
 CLINICAL_SYSTEM_HINTS: Final[tuple[str, ...]] = (
     SNOMED,
     ICD_10_CM,
-    CHINESE_ICD_10,
     HPO,
     RXNORM,
-    CHINESE_DRUG,
     LOINC,
 )
 

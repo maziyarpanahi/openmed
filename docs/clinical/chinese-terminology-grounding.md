@@ -55,6 +55,10 @@ that explains that OpenMed has no bundled fallback. Set `fuzzy=False` when only
 exact matches are acceptable, or adjust `min_score` from its conservative
 default of `0.8` for a vocabulary-specific validation study.
 
+Dictionary values can be emitted in grounding metadata. Supply terminology
+only: do not put patient names, identifiers, or other PHI in `code`, `display`,
+or `aliases` fields.
+
 Matched spans gain only `system`, `code`, and `display` metadata. Their text,
 start/end offsets, confidence, and any de-identification action remain
 unchanged. Result-level metadata emits the medical-device disclaimer and the

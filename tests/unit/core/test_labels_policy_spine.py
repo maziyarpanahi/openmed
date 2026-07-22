@@ -5,12 +5,18 @@ from collections import Counter
 from openmed.core.labels import (
     AGE,
     CANONICAL_LABELS,
+    CHINESE_DRUG,
+    CHINESE_ICD_10,
     CLINICAL_CONCEPT,
     CLINICAL_SYSTEM_HINTS,
+    CONDITION,
     DIRECT_IDENTIFIER,
+    GI_SYMPTOM,
     HIPAA_SAFE_HARBOR_CLASSES,
     LABEL_METADATA,
     LABEL_TO_HIPAA,
+    MEDICATION,
+    OTHER,
     POLICY_LABELS,
     QUASI_IDENTIFIER,
     RISK_LEVELS,
@@ -23,7 +29,10 @@ from openmed.core.labels import (
     system_hints_for,
 )
 
-ALLOWED_SYSTEM_HINTS = set(CLINICAL_SYSTEM_HINTS)
+ALLOWED_SYSTEM_HINTS = set(CLINICAL_SYSTEM_HINTS) | {
+    CHINESE_DRUG,
+    CHINESE_ICD_10,
+}
 
 
 def test_metadata_tables_cover_canonical_labels_exactly():
@@ -59,6 +68,15 @@ def test_accessors_normalize_before_lookup():
     assert normalize_label("not_a_real_label") == "OTHER"
     assert policy_label_for("not_a_real_label") == CLINICAL_CONCEPT
     assert set(system_hints_for("not_a_real_label")) <= ALLOWED_SYSTEM_HINTS
+
+
+def test_chinese_system_hints_are_scoped_to_supported_labels():
+    assert CHINESE_ICD_10 in system_hints_for(CONDITION)
+    assert CHINESE_DRUG in system_hints_for(MEDICATION)
+
+    for generic_label in (GI_SYMPTOM, OTHER):
+        assert CHINESE_ICD_10 not in system_hints_for(generic_label)
+        assert CHINESE_DRUG not in system_hints_for(generic_label)
 
 
 def test_acceptance_specific_direct_and_quasi_labels():
