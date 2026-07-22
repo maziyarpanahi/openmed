@@ -37,6 +37,7 @@ class PolicyName(str, Enum):
     ZA_POPIA = "za_popia"
     NG_NDPA = "ng_ndpa"
     KENYA_DPA = "ke_dpa"
+    INDIA_HEALTH_ID = "india_health_id"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
@@ -47,6 +48,8 @@ POLICY_ALIASES: Mapping[str, str] = {
     "kenya_dpa": PolicyName.KENYA_DPA.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
     "uk_ico": PolicyName.UK_ICO_ANONYMISATION.value,
+    "india_health_ids": PolicyName.INDIA_HEALTH_ID.value,
+    "abha": PolicyName.INDIA_HEALTH_ID.value,
 }
 
 _ARBITRATION_MODES = frozenset({MODE_BALANCED, MODE_HIGH_RECALL_UNION})

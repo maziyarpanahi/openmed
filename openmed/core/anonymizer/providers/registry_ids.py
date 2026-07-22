@@ -46,6 +46,7 @@ from openmed.core.pii_i18n import (
     validate_greek_amka,
     validate_hong_kong_macau_permit,
     validate_hungarian_taj,
+    validate_indian_ration_card,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
@@ -73,6 +74,7 @@ from openmed.core.pii_i18n import (
     validate_turkish_tckn,
     validate_uk_nhs_number,
     validate_uk_nino,
+    validate_upi_id,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
     validate_za_id_number,
@@ -94,6 +96,7 @@ from .clinical_ids import (
     GermanSteuerIdProvider,
     GhanaKenyaIdProvider,
     HungarianTAJProvider,
+    IndiaHealthIdProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
@@ -409,6 +412,20 @@ def _register_builtin_specs() -> None:
         validate=validate_chinese_resident_id,
         faker_method="chinese_resident_id",
         faker_provider=ChineseResidentIdProvider,
+    )
+    _register_aliases(
+        ("in", "hi", "te", "en_IN", "hi_IN"),
+        id_type="upi_id",
+        validate=validate_upi_id,
+        faker_method="upi_id",
+        faker_provider=IndiaHealthIdProvider,
+    )
+    _register_aliases(
+        ("in", "hi", "te", "en_IN", "hi_IN"),
+        id_type="ration_card",
+        validate=validate_indian_ration_card,
+        faker_method="indian_ration_card",
+        faker_provider=IndiaHealthIdProvider,
     )
     _register_aliases(
         ("id", "id_ID"),

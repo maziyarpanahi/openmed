@@ -60,6 +60,13 @@ from openmed.eval.suites.code_mixed_routing import (
     evaluate_code_mixed_routing,
     load_code_mixed_fixtures,
 )
+from openmed.eval.suites.india_health_ids import (
+    INDIA_HEALTH_ID_LEAKAGE,
+    assert_india_health_id_leakage_gate,
+    india_health_id_metadata,
+    load_india_health_id_fixtures,
+    run_india_health_id_leakage_gate,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -110,6 +117,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     CHINESE_CLINICAL_NER,
     MULTIMODAL_DICOM,
     CODE_MIXED_ROUTING,
+    INDIA_HEALTH_ID_LEAKAGE,
 )
 
 
@@ -156,6 +164,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_multimodal_dicom_fixtures(**kwargs)
     if suite == CODE_MIXED_ROUTING:
         return load_code_mixed_fixtures(kwargs.get("path"))
+    if suite == INDIA_HEALTH_ID_LEAKAGE:
+        return load_india_health_id_fixtures(**kwargs)
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -194,6 +204,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
                 "entity_leakage_max": 0,
             },
         }
+    if suite == INDIA_HEALTH_ID_LEAKAGE:
+        return india_health_id_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -211,6 +223,7 @@ __all__ = [
     "CHINESE_CLINICAL_NER",
     "MULTIMODAL_DICOM",
     "CODE_MIXED_ROUTING",
+    "INDIA_HEALTH_ID_LEAKAGE",
     "RELATIONS",
     "RelationFixture",
     "RelationTrap",
@@ -261,4 +274,8 @@ __all__ = [
     "generate_synthetic_dicom_corpus",
     "evaluate_code_mixed_routing",
     "load_code_mixed_fixtures",
+    "assert_india_health_id_leakage_gate",
+    "india_health_id_metadata",
+    "load_india_health_id_fixtures",
+    "run_india_health_id_leakage_gate",
 ]

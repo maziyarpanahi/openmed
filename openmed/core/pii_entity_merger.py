@@ -35,6 +35,7 @@ class PIIPattern:
     - validator: Optional checksum/validation function to confirm matches
     - reject_on_validation_failure: Drop regex matches whose validator fails,
       rather than retaining them with a reduced confidence score
+    - context_required: Require nearby context for semantic-only recognition
     - safety_sweep_requires_context: Require nearby context before the
       deterministic safety sweep accepts this pattern
 
@@ -61,6 +62,7 @@ class PIIPattern:
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
+    context_required: bool = False
     safety_sweep_requires_context: bool = False
     reject_on_validation_failure: bool = False
 
@@ -652,6 +654,8 @@ def find_semantic_units(
             # Check for context words (like Presidio)
             if has_context:
                 score = min(1.0, score + pii_pattern.context_boost)
+            if pii_pattern.context_required and not has_context:
+                continue
 
             # Validate if validator exists
             validated = True
