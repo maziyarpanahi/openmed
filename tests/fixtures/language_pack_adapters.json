@@ -23,6 +23,7 @@
     "zu": "OpenMed/privacy-filter-multilingual"
   },
   "lang_to_locale": {
+    "af": "af_ZA",
     "ar": "ar_EG",
     "bg": "bg_BG",
     "cs": "cs_CZ",
@@ -65,6 +66,7 @@
     "zu": "zu_ZA"
   },
   "national_id_only_languages": [
+    "af",
     "bg",
     "cs",
     "da",
@@ -86,6 +88,10 @@
     "yo"
   ],
   "national_id_providers": {
+    "af": [
+      "af_ZA",
+      "south_african_id"
+    ],
     "bg": [
       "bg_BG",
       "egn"
