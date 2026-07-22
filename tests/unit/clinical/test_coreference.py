@@ -160,3 +160,41 @@ def test_invalid_offsets_duplicates_and_threshold_are_rejected() -> None:
         resolve_coreference([span, span], case["text"])
     with pytest.raises(ValueError, match="between 0 and 1"):
         resolve_coreference([span], case["text"], threshold=1.1)
+
+
+def test_mixed_document_ids_are_rejected() -> None:
+    case = _load_cases()[0]
+    first, second = _spans_for(case)[:2]
+    other_document = OpenMedSpan.from_dict(
+        {**second.to_dict(), "doc_id": "another-document"}
+    )
+
+    with pytest.raises(ValueError, match="one document"):
+        resolve_coreference([first, other_document], case["text"])
+
+
+def test_overlapping_spans_do_not_form_antecedent_links() -> None:
+    text = "rash."
+    spans = [
+        OpenMedSpan(
+            doc_id="overlap",
+            start=0,
+            end=4,
+            text_hash=hmac_text_hash("rash", "synthetic-fixture-secret"),
+            entity_type="condition",
+            canonical_label="CONDITION",
+        ),
+        OpenMedSpan(
+            doc_id="overlap",
+            start=0,
+            end=5,
+            text_hash=hmac_text_hash("rash.", "synthetic-fixture-secret"),
+            entity_type="condition",
+            canonical_label="CONDITION",
+        ),
+    ]
+
+    chains, index = resolve_coreference(spans, text)
+
+    assert len(chains) == 2
+    assert index[("overlap", (0, 4))] != index[("overlap", (0, 5))]

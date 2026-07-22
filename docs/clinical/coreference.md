@@ -83,7 +83,9 @@ interfaces can recover a chain without storing a raw mention surface.
 Mentions are processed in document order, and a reference can link only to an
 earlier compatible mention. This antecedent-only rule rejects cataphora such as
 "It resolved before the rash was documented." A pronoun with no antecedent
-remains a singleton chain.
+remains a singleton chain and cannot act as the anchor for another unresolved
+pronoun. Overlapping spans are not treated as successive mentions, and mixed
+document ids are rejected because each resolution pass is single-document.
 
 For compatible antecedents, the resolver combines:
 

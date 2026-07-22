@@ -237,7 +237,8 @@ def resolve_coreference(
     Raises:
         TypeError: If ``text`` or a span has the wrong type.
         ValueError: If offsets are invalid, duplicate span keys are supplied,
-            or ``threshold`` is outside ``[0, 1]``.
+            spans refer to more than one document, or ``threshold`` is outside
+            ``[0, 1]``.
     """
 
     if not isinstance(text, str):
@@ -263,6 +264,7 @@ def resolve_coreference(
         )
     )
     _validate_unique_keys(mentions)
+    _validate_single_document(mentions)
 
     parents = list(range(len(mentions)))
     link_scores: dict[int, float] = {}
@@ -376,6 +378,10 @@ def _link_score(
     representative: _Mention,
     current: _Mention,
 ) -> float | None:
+    if antecedent.span.end > current.span.start:
+        return None
+    if representative.form == "pronoun":
+        return None
     if antecedent.experiencer != current.experiencer:
         return None
 
@@ -699,6 +705,11 @@ def _validate_unique_keys(mentions: tuple[_Mention, ...]) -> None:
     keys = [mention.key for mention in mentions]
     if len(keys) != len(set(keys)):
         raise ValueError("coreference spans must have unique document offsets")
+
+
+def _validate_single_document(mentions: tuple[_Mention, ...]) -> None:
+    if len({mention.span.doc_id for mention in mentions}) != 1:
+        raise ValueError("coreference spans must belong to one document")
 
 
 def _find(parents: list[int], item: int) -> int:

@@ -53,6 +53,34 @@
       "representative": "Aspirin"
     },
     {
+      "id": "repeated_medication_and_pronoun",
+      "text": "Aspirin was started. Aspirin was continued. It was tolerated.",
+      "mentions": [
+        {
+          "surface": "Aspirin",
+          "occurrence": 0,
+          "canonical_label": "MEDICATION",
+          "section": "Plan",
+          "gold_chain": "aspirin"
+        },
+        {
+          "surface": "Aspirin",
+          "occurrence": 1,
+          "canonical_label": "MEDICATION",
+          "section": "Plan",
+          "gold_chain": "aspirin"
+        },
+        {
+          "surface": "It",
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "Plan",
+          "gold_chain": "aspirin"
+        }
+      ],
+      "representative": "Aspirin"
+    },
+    {
       "id": "patient_anchor_and_person_pronoun",
       "text": "John Doe arrived. The patient reported pain. He was stable.",
       "mentions": [
@@ -126,6 +154,28 @@
           "entity_type": "pronoun",
           "section": "HPI",
           "gold_chain": "unresolved-pronoun"
+        }
+      ]
+    },
+    {
+      "id": "unresolved_pronouns_do_not_anchor_each_other",
+      "text": "It improved. It resolved.",
+      "mentions": [
+        {
+          "surface": "It",
+          "occurrence": 0,
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "HPI",
+          "gold_chain": "unresolved-pronoun-1"
+        },
+        {
+          "surface": "It",
+          "occurrence": 1,
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "HPI",
+          "gold_chain": "unresolved-pronoun-2"
         }
       ]
     },
