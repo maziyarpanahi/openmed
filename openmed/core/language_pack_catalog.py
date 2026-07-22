@@ -219,6 +219,7 @@ class NationalIdOnlyCapability:
 
 
 NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
+    "af": NationalIdOnlyCapability("af_ZA", ("af_ZA", "south_african_id")),
     "ha": NationalIdOnlyCapability("ha_NG", ("ha_NG", "nigeria_nin")),
     "ig": NationalIdOnlyCapability("ig_NG", ("ig_NG", "nigeria_nin")),
     "yo": NationalIdOnlyCapability("yo_NG", ("yo_NG", "nigeria_nin")),
@@ -329,6 +330,7 @@ _LOCALE_ORDER = (
     "da",
     "ro",
     "sw",
+    "af",
     "fi",
     "bg",
     "hr",
@@ -367,6 +369,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "da",
     "ro",
     "sw",
+    "af",
     "fi",
     "bg",
     "hr",

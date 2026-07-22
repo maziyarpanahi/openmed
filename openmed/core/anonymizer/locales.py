@@ -37,13 +37,15 @@ from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr", "ur", "xh"})
+_APPROXIMATE_LOCALES: Final = frozenset({"af", "te", "ms", "sr", "ur", "xh"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
 # keyed by the target country while allowing generic names/addresses to use a
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
+    "af_ZA": "zu_ZA",
+    "en_ZA": "zu_ZA",
     "en_GH": "tw_GH",
     "ms_MY": "id_ID",
     "sr_RS": "hr_HR",

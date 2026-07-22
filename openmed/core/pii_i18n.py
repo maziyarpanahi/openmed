@@ -5336,6 +5336,7 @@ _NGUNI_DATE_CONTEXT = [
 _NGUNI_AGE_CONTEXT = ["iminyaka", "ubudala", "age", "aged", "years old"]
 
 _NGUNI_ID_CONTEXT = [
+    "identiteitsnommer",
     "inombolo kamazisi",
     "umazisi",
     "inombolo yesazisi",
@@ -5358,6 +5359,7 @@ _NGUNI_MEDICAL_AID_CONTEXT = [
 ]
 
 _NGUNI_PHONE_CONTEXT = [
+    "selfoon",
     "ucingo",
     "umakhalekhukhwini",
     "ifowuni",
@@ -6110,6 +6112,7 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 
 
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "af": _NGUNI_PII_PATTERNS,
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,
     "yo": _NIGERIAN_PII_PATTERNS,
@@ -6154,6 +6157,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "en_za": _NGUNI_PII_PATTERNS,
+    "af": _NGUNI_PII_PATTERNS,
     "en_ng": _NIGERIAN_PII_PATTERNS,
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,

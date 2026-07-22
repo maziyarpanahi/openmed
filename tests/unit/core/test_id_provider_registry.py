@@ -53,6 +53,7 @@ EXPECTED_VALIDATOR_KEYS = (
     ("gh", "ghana_card_pin"),
     ("ke", "kenya_national_id"),
     ("ke", "maisha_namba"),
+    ("za", "sa_id_number"),
 )
 
 
@@ -89,6 +90,7 @@ ROUND_TRIP_CASES = (
     ("gh", "ghana_card_pin", "en_US"),
     ("ke", "kenya_national_id", "en_KE"),
     ("ke", "maisha_namba", "en_KE"),
+    ("za", "sa_id_number", "zu_ZA"),
 )
 
 
@@ -144,6 +146,16 @@ class TestNationalIdRegistry:
             "en_IN",
             "aadhaar",
         )
+
+    def test_south_african_aliases_resolve_matching_specs(self):
+        aliases = ("za", "en_ZA", "af", "af_ZA", "zu", "zu_ZA", "xh", "xh_ZA")
+        specs = [get_national_id(alias, "sa_id_number") for alias in aliases]
+
+        assert all(spec is not None for spec in specs)
+        assert len({spec.validate for spec in specs if spec is not None}) == 1
+        assert {spec.faker_method for spec in specs if spec is not None} == {
+            "south_african_id"
+        }
 
     @pytest.mark.parametrize("id_type", ("nin", "bvn"))
     def test_nigerian_aliases_resolve_working_faker_methods(self, id_type):
