@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic Hausa (`ha`) PII pack for Boko and numeric Ajami text,
+  including Nigerian NINs, Nigerian and Nigerien phone numbers, exact-offset
+  native-digit matching, `ha_NG` surrogates, and Arabic-script arbitration
+  without claiming Ajami lexical coverage (#1439).
 - Added build-generated `llms.txt` and `llms-full.txt` documentation feeds with
   curated quickstart, API, de-identification, agent, MCP, and REST coverage,
   plus strict local and Pages build checks (#1787).
