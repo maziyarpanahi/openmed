@@ -182,6 +182,13 @@ from .problem_list import (
     clinical_status_from_assertion,
     deduplicate_problem_list,
 )
+from .radiology_finding import (
+    RADIOLOGY_FINDING_ADVISORY,
+    Laterality,
+    ProvenanceSpan,
+    RadiologyFinding,
+    extract_radiology_findings,
+)
 from .radiology_report import (
     RADIOLOGY_REPORT_ADVISORY,
     RadiologyReportTemplate,
@@ -423,8 +430,13 @@ __all__ = [
     "REFUTED",
     "PROBLEM_CLINICAL_STATUS_VALUES",
     "PROBLEM_LIST_RECONCILIATION_ADVISORY",
+    "RADIOLOGY_FINDING_ADVISORY",
     "RADIOLOGY_REPORT_ADVISORY",
+    "Laterality",
+    "ProvenanceSpan",
+    "RadiologyFinding",
     "RadiologyReportTemplate",
+    "extract_radiology_findings",
     "parse_radiology_report",
     "ProblemClinicalStatus",
     "ProblemMention",

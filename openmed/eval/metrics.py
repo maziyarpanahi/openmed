@@ -2315,6 +2315,49 @@ def stated_category_accuracy(
     )
 
 
+_RADIOLOGY_FINDING_TUPLE_FIELDS = (
+    "finding",
+    "laterality",
+    "size_value",
+    "size_unit",
+    "location",
+)
+
+
+def _radiology_finding_tuple(item: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Return the deterministic evaluation key for one radiology finding."""
+    return tuple(item.get(field) for field in _RADIOLOGY_FINDING_TUPLE_FIELDS)
+
+
+def radiology_finding_tuple_f1(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> F1Metrics:
+    """Compute exact tuple precision, recall, and F1 for radiology findings.
+
+    A match requires equality of ``(finding, laterality, size_value,
+    size_unit, location)``. ``radlex_code`` and provenance are deliberately
+    excluded: callers may use different caller-supplied terminology mappings
+    and source offsets while agreeing on the extracted clinical attributes.
+    Duplicate tuples are counted with multiset semantics.
+    """
+    predicted_counts: dict[tuple[Any, ...], int] = defaultdict(int)
+    gold_counts: dict[tuple[Any, ...], int] = defaultdict(int)
+    for item in predicted:
+        predicted_counts[_radiology_finding_tuple(item)] += 1
+    for item in gold:
+        gold_counts[_radiology_finding_tuple(item)] += 1
+    true_positives = sum(
+        min(count, gold_counts.get(key, 0))
+        for key, count in predicted_counts.items()
+    )
+    return _f1_from_counts(
+        true_positives,
+        sum(predicted_counts.values()),
+        sum(gold_counts.values()),
+    )
+
+
 def _bounded_unit_interval(value: Any, field_name: str) -> float:
     result = float(value)
     if not isfinite(result) or not 0.0 <= result <= 1.0:
@@ -3017,6 +3060,7 @@ __all__ = [
     "compute_exact_span_f1",
     "section_boundary_accuracy",
     "stated_category_accuracy",
+    "radiology_finding_tuple_f1",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
