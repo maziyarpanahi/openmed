@@ -561,6 +561,64 @@ def _mpesa_surrogate(faker, original):
     return faker.mpesa_transaction_code(original)
 
 
+def _gen_mobile_money_identifier(
+    faker,
+    original: str,
+    *,
+    method: str,
+    validator: Callable[[str], bool],
+) -> str:
+    """Generate a provider-specific billing identifier when shape-valid."""
+
+    if validator(original) and hasattr(faker, method):
+        return str(getattr(faker, method)(original))
+    return preserve_id_pattern(original, rng=faker.random)
+
+
+def _gen_mobile_money_paybill(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_mobile_money_paybill
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="mobile_money_paybill",
+        validator=validate_mobile_money_paybill,
+    )
+
+
+def _gen_mobile_money_till(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_mobile_money_till
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="mobile_money_till",
+        validator=validate_mobile_money_till,
+    )
+
+
+def _gen_mobile_money_agent(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_mobile_money_paybill
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="mobile_money_agent",
+        validator=validate_mobile_money_paybill,
+    )
+
+
+def _gen_momo_reference(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_momo_reference
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="momo_reference",
+        validator=validate_momo_reference,
+    )
+
+
 def _generate_distinct_chinese_resident_id(faker, original):
     """Return a valid Chinese Resident ID that differs from ``original``."""
     from openmed.core.pii_i18n import validate_chinese_resident_id
@@ -1038,6 +1096,10 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     "GH_GHANA_CARD": _gen_ghana_card,
     "KE_NATIONAL_ID": _gen_ke_national_id,
     "KE_MAISHA_NAMBA": _gen_ke_maisha_namba,
+    "MOBILE_MONEY_PAYBILL": _gen_mobile_money_paybill,
+    "MOBILE_MONEY_TILL": _gen_mobile_money_till,
+    "MOBILE_MONEY_AGENT": _gen_mobile_money_agent,
+    "MOMO_REFERENCE": _gen_momo_reference,
 }
 
 LANGUAGE_PACK_GENERATORS: Dict[tuple[str, str, str], Generator] = {}
