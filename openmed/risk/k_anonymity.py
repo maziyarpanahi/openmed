@@ -90,6 +90,7 @@ class SuppressionProposal:
     """
 
     target_k: int
+    quasi_identifiers: tuple[str, ...]
     source_record_count: int
     row_indices: tuple[int, ...]
     retained_count: int
@@ -122,6 +123,7 @@ class SuppressionProposal:
         return {
             "strategy": "minimal_whole_row_suppression",
             "target_k": int(self.target_k),
+            "quasi_identifiers": list(self.quasi_identifiers),
             "source_record_count": int(self.source_record_count),
             "row_indices": list(self.row_indices),
             "suppressed_count": self.suppressed_count,
@@ -178,6 +180,7 @@ class KAnonymityEngine:
         after = _analyze_rows(retained, self.quasi_identifiers, self.target_k)
         return SuppressionProposal(
             target_k=self.target_k,
+            quasi_identifiers=self.quasi_identifiers,
             source_record_count=len(rows),
             row_indices=before.violating_rows,
             retained_count=len(retained),
@@ -235,18 +238,31 @@ def apply_suppression(
                 "Target k cannot be reached by row suppression without removing "
                 "every record."
             )
+        _validate_columns(rows, proposal.quasi_identifiers)
+        current = _analyze_rows(
+            rows,
+            proposal.quasi_identifiers,
+            proposal.target_k,
+        )
+        if current.violating_rows != proposal.row_indices:
+            raise ValueError(
+                "Suppression proposal does not match the supplied table's "
+                "equivalence classes."
+            )
+        if len(current.violating_rows) == len(rows):
+            raise ValueError(
+                "Target k cannot be reached by row suppression without removing "
+                "every record."
+            )
         row_indices = proposal.row_indices
     else:
         row_indices = tuple(proposal)
 
-    invalid = sorted(
-        {
-            index
-            for index in row_indices
-            if type(index) is not int or index < 0 or index >= len(rows)
-        },
-        key=str,
-    )
+    invalid = [
+        index
+        for index in row_indices
+        if type(index) is not int or index < 0 or index >= len(rows)
+    ]
     if invalid:
         raise ValueError(f"Suppression row indices are out of range: {invalid!r}")
 
@@ -260,18 +276,26 @@ def _analyze_rows(
     target_k: int,
 ) -> KAnonymityReport:
     measurement = kanon_report(rows, quasi_identifiers=quasi_identifiers)
+    class_rows = []
+    for equivalence_class in measurement["equivalence_classes"]:
+        row_indices = tuple(
+            sorted(int(index) for index in equivalence_class["members"])
+        )
+        class_rows.append(
+            EquivalenceClass(
+                class_hash=stable_hash(
+                    {
+                        "kind": "k-anonymity-equivalence-class",
+                        "row_indices": row_indices,
+                    }
+                ),
+                size=int(equivalence_class["size"]),
+                row_indices=row_indices,
+            )
+        )
     classes = tuple(
         sorted(
-            (
-                EquivalenceClass(
-                    class_hash=stable_hash(equivalence_class["key"]),
-                    size=int(equivalence_class["size"]),
-                    row_indices=tuple(
-                        sorted(int(index) for index in equivalence_class["members"])
-                    ),
-                )
-                for equivalence_class in measurement["equivalence_classes"]
-            ),
+            class_rows,
             key=lambda equivalence_class: (
                 equivalence_class.row_indices[0],
                 equivalence_class.class_hash,
@@ -327,9 +351,30 @@ def _validate_columns(
     if not rows:
         return
     available = {str(field) for row in rows for field in row}
-    missing = sorted(set(quasi_identifiers) - available)
+    unknown = sorted(set(quasi_identifiers) - available)
+    if unknown:
+        raise ValueError(f"Unknown quasi-identifier columns: {unknown!r}")
+
+    missing: dict[str, list[int]] = {}
+    unsupported: dict[str, list[int]] = {}
+    for row_index, row in enumerate(rows):
+        fields = {str(field): value for field, value in row.items()}
+        for quasi_identifier in quasi_identifiers:
+            if quasi_identifier not in fields:
+                missing.setdefault(quasi_identifier, []).append(row_index)
+                continue
+            value = fields[quasi_identifier]
+            if value is not None and not isinstance(value, (str, int, float, bool)):
+                unsupported.setdefault(quasi_identifier, []).append(row_index)
     if missing:
-        raise ValueError(f"Unknown quasi-identifier columns: {missing!r}")
+        raise ValueError(
+            f"Declared quasi-identifier columns are missing from rows: {missing!r}"
+        )
+    if unsupported:
+        raise TypeError(
+            "Declared quasi-identifiers require scalar values; unsupported rows: "
+            f"{unsupported!r}"
+        )
 
 
 def _materialize_rows(records: Any) -> list[dict[str, Any]]:

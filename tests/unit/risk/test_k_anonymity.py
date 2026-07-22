@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from openmed.core.audit import stable_hash
 from openmed.risk import (
     KAnonymityEngine,
     analyze_k_anonymity,
@@ -97,6 +98,9 @@ def test_report_is_deterministic_json_safe_and_does_not_emit_raw_qi_values() -> 
         item["class_hash"].startswith("sha256:")
         for item in first["equivalence_classes"]
     )
+    assert stable_hash([["age", "30"], ["zip", "10001"]]) not in {
+        item["class_hash"] for item in first["equivalence_classes"]
+    }
 
 
 def test_infeasible_suppression_does_not_claim_an_empty_table_meets_target() -> None:
@@ -109,6 +113,16 @@ def test_infeasible_suppression_does_not_claim_an_empty_table_meets_target() -> 
     assert proposal.feasible is False
     with pytest.raises(ValueError, match="without removing every record"):
         proposal.apply(rows)
+
+
+def test_empty_table_reports_zero_k_without_claiming_success() -> None:
+    report = analyze_k_anonymity([], ["age"], target_k=2)
+    proposal = propose_suppression([], ["age"], target_k=2)
+
+    assert report.achieved_k == 0
+    assert report.smallest_class_size == 0
+    assert report.meets_target is False
+    assert proposal.feasible is False
 
 
 class _FrameLike:
@@ -126,6 +140,28 @@ def test_operates_in_process_on_dataframe_like_input() -> None:
     report = KAnonymityEngine(["age", "zip"], target_k=2).analyze(frame)
 
     assert report.violating_rows == (5,)
+
+
+def test_proposal_cannot_be_applied_to_a_different_same_length_table() -> None:
+    proposal = propose_suppression(
+        [{"age": 1}, {"age": 2}, {"age": 2}],
+        ["age"],
+        target_k=2,
+    )
+    different_rows = [{"age": 1}, {"age": 1}, {"age": 2}]
+
+    with pytest.raises(ValueError, match="does not match"):
+        proposal.apply(different_rows)
+
+
+def test_every_row_must_contain_scalar_quasi_identifiers() -> None:
+    with pytest.raises(ValueError, match=r"'zip': \[1\]"):
+        analyze_k_anonymity(
+            [{"age": 30, "zip": "10001"}, {"age": 30}],
+            ["age", "zip"],
+        )
+    with pytest.raises(TypeError, match=r"'age': \[0\]"):
+        analyze_k_anonymity([{"age": [30]}], ["age"])
 
 
 @pytest.mark.parametrize("target_k", [0, -1, 1.5, True])
