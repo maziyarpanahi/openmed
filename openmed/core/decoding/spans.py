@@ -8,7 +8,6 @@ dependencies.
 
 from __future__ import annotations
 
-import bisect
 import hashlib
 import re
 import unicodedata
@@ -114,16 +113,18 @@ def snap_span_to_grapheme_boundaries(
     text_length = len(text)
     safe_start = max(0, min(int(start), text_length))
     safe_end = max(safe_start, min(int(end), text_length))
-    boundaries = [0]
-    boundaries.extend(end for _, end in iter_grapheme_cluster_spans(text))
-
-    start_index = bisect.bisect_right(boundaries, safe_start) - 1
-    snapped_start = boundaries[start_index]
+    snapped_start = safe_start
+    while 0 < snapped_start < text_length and not _has_grapheme_break(
+        text, snapped_start
+    ):
+        snapped_start -= 1
     if safe_start == safe_end:
         return snapped_start, snapped_start
 
-    end_index = bisect.bisect_left(boundaries, safe_end)
-    return snapped_start, boundaries[end_index]
+    snapped_end = safe_end
+    while snapped_end < text_length and not _has_grapheme_break(text, snapped_end):
+        snapped_end += 1
+    return snapped_start, snapped_end
 
 
 def iter_grapheme_clusters(text: str) -> Iterator[tuple[int, int]]:

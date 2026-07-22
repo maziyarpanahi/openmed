@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Yoruba (`yo`) PII pack with NFC, NFD, and unmarked context support,
+  native `yo_NG` surrogates, and grapheme-safe normalized span remapping and
+  replacement boundaries for stacked dot-below and tone marks (#1440).
 - Added a deterministic Hausa (`ha`) PII pack for Boko and numeric Ajami text,
   including Nigerian NINs, Nigerian and Nigerien phone numbers, exact-offset
   native-digit matching, `ha_NG` surrogates, and Arabic-script arbitration

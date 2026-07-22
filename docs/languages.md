@@ -148,6 +148,12 @@ NINs, and Nigerian/Nigerien phones. Ajami coverage is intentionally limited to
 numeric patterns—phones, NINs, and dates written with Western or Arabic-Indic
 digits—and does not claim Ajami lexical recognition or transliteration.
 
+Yoruba (`yo`) is available through that deterministic pattern-pack path with a
+native `yo_NG` surrogate locale. It covers Nigeria NINs and `+234` phones with
+tone-marked, decomposed, or unmarked context cues, and replacement spans expand
+to whole base-plus-diacritic clusters so dot-below and tone marks cannot be
+orphaned.
+
 ## Worked examples
 
 Each example de-identifies synthetic, non-PHI text with `method="mask"`. The

@@ -18,6 +18,7 @@ Health identifiers for HIPAA cross-map consumers:
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -3302,6 +3303,13 @@ _MOROCCO_CIN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+NIGERIA_NIN_PATTERN = r"(?<!\d)\d{11}(?!\d)"
+_NIGERIA_INTERNATIONAL_PHONE_BODY = (
+    r"(?:234|٢٣٤|۲۳۴)[\s.-]?[789٧٨٩۷۸۹]\d{2}[\s.-]?\d{3}[\s.-]?\d{4}"
+)
+NIGERIA_PHONE_PATTERN = rf"(?<!\w)\+{_NIGERIA_INTERNATIONAL_PHONE_BODY}(?!\d)"
+
+
 _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
     # Nigeria's NIN and BVN have no public checksums, so deterministic sweeps
     # require explicit identifier context. NIN precedes phone detection so an
@@ -3388,8 +3396,8 @@ _HAUSA_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
     PIIPattern(
-        r"(?<!\w)\+(?:(?:234|٢٣٤|۲۳۴)[\s.-]?[789٧٨٩۷۸۹]\d{2}"
-        r"[\s.-]?\d{3}[\s.-]?\d{4}|(?:227|٢٢٧|۲۲۷)[\s.-]?\d{2}"
+        rf"(?<!\w)\+(?:{_NIGERIA_INTERNATIONAL_PHONE_BODY}|"
+        r"(?:227|٢٢٧|۲۲۷)[\s.-]?\d{2}"
         r"(?:[\s.-]?\d{2}){3})(?!\d)",
         "phone_number",
         priority=10,
@@ -3402,12 +3410,113 @@ _HAUSA_PII_PATTERNS: List[PIIPattern] = [
     # ``\d`` is intentional so exact-offset Ajami spans using native digits
     # are covered without normalizing or rewriting the source text.
     PIIPattern(
-        r"(?<!\d)\d{11}(?!\d)",
+        NIGERIA_NIN_PATTERN,
         "national_id",
         priority=9,
         base_score=0.5,
         context_words=["nin", "lambar nin", "lambar shaida", "lambar ƙasa", "lamba"],
         context_boost=0.4,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Yoruba PII patterns
+# ---------------------------------------------------------------------------
+
+
+def _diacritic_context_variants(*values: str) -> List[str]:
+    """Return NFC, NFD, and mark-stripped variants without duplicates."""
+
+    variants: List[str] = []
+    for value in values:
+        nfc = unicodedata.normalize("NFC", value)
+        nfd = unicodedata.normalize("NFD", nfc)
+        unmarked = "".join(
+            char for char in nfd if not unicodedata.category(char).startswith("M")
+        )
+        for variant in (nfc, nfd, unmarked):
+            if variant not in variants:
+                variants.append(variant)
+    return variants
+
+
+_YORUBA_DATE_CONTEXT = _diacritic_context_variants("ọjọ́ ìbí", "ọjọ́ tí a bí", "ọjọ́")
+_YORUBA_PHONE_CONTEXT = _diacritic_context_variants(
+    "nọ́ńbà tẹlifóònù",
+    "nọ́mbà tẹlifóònù",
+    "tẹlifóònù",
+    "fóònù alágbèéká",
+)
+_YORUBA_NIN_CONTEXT = _diacritic_context_variants(
+    "nin",
+    "nọ́mbà nin",
+    "nọ́mbà ìdánimọ̀",
+    "ìdánimọ̀ orílẹ̀-èdè",
+)
+_YORUBA_ADDRESS_CONTEXT = _diacritic_context_variants("àdírẹ́sì", "òpópónà", "ọ̀nà")
+_YORUBA_POSTCODE_CONTEXT = _diacritic_context_variants(
+    "kóòdù ìfìwéránṣẹ́",
+    "kóòdù ìfìwéránṣẹ",
+)
+_YORUBA_STREET_DESIGNATOR_PATTERN = "|".join(
+    re.escape(value)
+    for value in sorted(
+        _diacritic_context_variants("òpópónà", "ọ̀nà"),
+        key=len,
+        reverse=True,
+    )
+)
+
+_YORUBA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.55,
+        context_words=_YORUBA_DATE_CONTEXT,
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_PHONE_PATTERN,
+        "phone_number",
+        priority=13,
+        base_score=0.6,
+        context_words=_YORUBA_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_NIN_PATTERN,
+        "national_id",
+        priority=15,
+        base_score=0.45,
+        context_words=_YORUBA_NIN_CONTEXT,
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)\d{1,5}[A-Za-z]?(?:[/.-]\d{1,5}[A-Za-z]?)?\s+(?:"
+        + _YORUBA_STREET_DESIGNATOR_PATTERN
+        + r")\s+[^\n,;]{2,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=_YORUBA_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=_YORUBA_POSTCODE_CONTEXT,
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -7653,7 +7762,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
     "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
     "ig": _NIGERIAN_PII_PATTERNS,
-    "yo": _NIGERIAN_PII_PATTERNS,
+    "yo": [*_NIGERIAN_PII_PATTERNS, *_YORUBA_PII_PATTERNS],
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
@@ -8550,6 +8659,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["42", "58", "73"],
         "LOCATION": ["Kano", "Kaduna", "Sokoto", "Niamey"],
         "ZIPCODE": ["700001", "800001", "840001"],
+    },
+    "yo": {
+        "NAME": [
+            "Adéọlá Ọládìpọ̀",
+            "Bọ́láńlé Adébáyọ̀",
+            "Olúwafẹ́mi Ọlátúndé",
+            "Mọ́rẹ́nikẹ́ Adéṣínà",
+        ],
+        "FIRST_NAME": ["Adéọlá", "Bọ́láńlé", "Olúwafẹ́mi", "Mọ́rẹ́nikẹ́"],
+        "LAST_NAME": ["Ọládìpọ̀", "Adébáyọ̀", "Ọlátúndé", "Adéṣínà"],
+        "EMAIL": ["alaisan@example.ng", "iwosan@example.org"],
+        "PHONE": ["+234 803 123 4567", "+234-907-654-3210"],
+        "ID_NUM": ["12345678901", "10987654321"],
+        "STREET_ADDRESS": ["12 Òpópónà Ọbáfẹ́mi", "45 Ọ̀nà Adéyẹmí"],
+        "URL_PERSONAL": ["https://example.ng"],
+        "USERNAME": ["alaisan123", "olumulo456"],
+        "DATE": ["14/03/1984", "01/01/2000"],
+        "AGE": ["42", "58", "73"],
+        "LOCATION": ["Èkó", "Ìbàdàn", "Ilé-Ifẹ̀", "Abẹ́òkúta"],
+        "ZIPCODE": ["100001", "200001", "220001"],
     },
     "zh": {
         "NAME": ["王芳", "李雷", "张伟", "刘洋"],

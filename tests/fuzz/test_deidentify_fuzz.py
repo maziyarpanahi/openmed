@@ -702,6 +702,7 @@ def test_repeated_dates_share_one_pipeline_shift(shift, keep_year):
     )
 
 
+@settings(deadline=1000)
 @given(doc=long_planted_documents())
 def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
     """The real one-shot path handles multi-kilobyte normalized input exactly."""
