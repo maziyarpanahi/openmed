@@ -1,7 +1,21 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
-from .registry import available_linkers, get_linker, register_linker
+from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
+from .registry import (
+    InvalidVocabularyLoaderError,
+    RestrictedVocabularyLoaderError,
+    VocabularyLoader,
+    VocabularyLoaderRegistry,
+    VocabularyRegistryError,
+    available_linkers,
+    available_loaders,
+    get_linker,
+    get_loader,
+    register_linker,
+    register_loader,
+    validate_vocabulary_loader,
+)
 from .types import Candidate
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -20,19 +34,32 @@ from .vocab import (
 
 __all__ = [
     "Candidate",
+    "ConceptMatch",
     "FREE_VOCAB_SYSTEMS",
+    "InvalidVocabularyLoaderError",
+    "LexicalConcept",
+    "LexicalMatcher",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RestrictedVocabularyError",
+    "RestrictedVocabularyLoaderError",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
     "VocabSource",
     "VocabularyChecksumError",
     "VocabularyIndex",
+    "VocabularyLoader",
+    "VocabularyLoaderRegistry",
     "VocabularyNotFoundError",
+    "VocabularyRegistryError",
     "available_linkers",
+    "available_loaders",
     "get_index",
     "get_linker",
+    "get_loader",
     "normalize_language",
+    "normalize_term",
     "register_linker",
+    "register_loader",
+    "validate_vocabulary_loader",
 ]
