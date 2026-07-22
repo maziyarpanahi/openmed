@@ -38,6 +38,8 @@ class PolicyName(str, Enum):
     NG_NDPA = "ng_ndpa"
     KENYA_DPA = "ke_dpa"
     INDIA_HEALTH_ID = "india_health_id"
+    EG_PDPL = "eg_pdpl"
+    MA_LAW_09_08 = "ma_law_09_08"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)

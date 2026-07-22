@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context-only Senegal CNI and Angola BI detection. Arabic regional overrides
   now also document `ar-DZ` and `ar-MA`; unavailable Faker backends retain the
   existing one-time-warning fallback to `ar_EG` (#1443).
+- Added conservative Egypt PDPL and Morocco Law 09-08 policy profiles with
+  complete mask action maps, no reversible mappings, mandatory safety sweeps,
+  declarative `ar_EG`/`ar_MA` clinical identifier formats, and a decision-support
+  compliance checklist covering sensitive-data and transfer controls (#1444).
 - Added a release evidence job that keylessly signs each wheel and source
   distribution with Sigstore and attaches the SLSA provenance bundle, the
   release artifact digest manifest, and the Sigstore bundles to the tagged

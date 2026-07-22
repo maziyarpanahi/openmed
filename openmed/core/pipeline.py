@@ -576,6 +576,7 @@ class Pipeline:
                 pii_result = self.stage5_fast_pii_model(
                     normalized.normalized_text,
                     route,
+                    locale=context.locale,
                     token_language_tags=context.token_language_tags,
                 )
                 self._apply_calibration_thresholds(pii_result, route)
@@ -1017,6 +1018,7 @@ class Pipeline:
         text: str,
         route: LanguageRoute,
         *,
+        locale: str | None = None,
         token_language_tags: Sequence[Any] = (),
     ) -> Any:
         code_mixed_kwargs = (
@@ -1036,6 +1038,7 @@ class Pipeline:
                 config=self.config,
                 use_smart_merging=self.use_smart_merging,
                 lang=route.lang,
+                locale=locale,
                 normalize_accents=self.normalize_accents,
                 loader=self.loader,
                 **code_mixed_kwargs,
@@ -1051,6 +1054,7 @@ class Pipeline:
                 self.config,
                 self.use_smart_merging,
                 lang=route.lang,
+                locale=locale,
                 normalize_accents=self.normalize_accents,
                 loader=self.loader,
                 code_mixed=True,
@@ -1064,6 +1068,7 @@ class Pipeline:
             self.config,
             self.use_smart_merging,
             lang=route.lang,
+            locale=locale,
             normalize_accents=self.normalize_accents,
             preserve_whitespace=self.preserve_whitespace,
             loader=self.loader,
