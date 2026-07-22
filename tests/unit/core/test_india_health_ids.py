@@ -230,7 +230,7 @@ def test_india_health_id_policy_masks_sweep_entities_even_with_replace_method() 
     india_entities = [
         entity
         for entity in result.pii_entities
-        if (entity.metadata or {}).get("id_subtype")
+        if ((entity.metadata or {}).get("safety_sweep") or {}).get("entity_type")
         in {"abha_number", "abha_address", "upi_id", "ration_card"}
     ]
     assert len(india_entities) == 4
