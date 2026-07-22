@@ -1,9 +1,18 @@
-"""License metadata for dataset adapter declarations."""
+"""License metadata and gates for datasets and user-supplied terminology."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping
+
+from openmed.core.terminology_licenses import (
+    TERMINOLOGY_REDISTRIBUTION_PERMITTED,
+    TERMINOLOGY_REDISTRIBUTION_RESTRICTED,
+    TERMINOLOGY_REDISTRIBUTION_VALUES,
+    RestrictedTerminologyLocationError,
+    TerminologyLicense,
+    validate_terminology_source_path,
+)
 
 
 @dataclass(frozen=True)
@@ -143,4 +152,14 @@ def license_for(dataset: str) -> DatasetLicense:
         raise ValueError(f"unknown public dataset: {dataset}") from exc
 
 
-__all__ = ["DatasetLicense", "PUBLIC_DATASET_LICENSES", "license_for"]
+__all__ = [
+    "DatasetLicense",
+    "PUBLIC_DATASET_LICENSES",
+    "RestrictedTerminologyLocationError",
+    "TERMINOLOGY_REDISTRIBUTION_PERMITTED",
+    "TERMINOLOGY_REDISTRIBUTION_RESTRICTED",
+    "TERMINOLOGY_REDISTRIBUTION_VALUES",
+    "TerminologyLicense",
+    "license_for",
+    "validate_terminology_source_path",
+]
