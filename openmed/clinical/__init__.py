@@ -226,6 +226,7 @@ from .summary_card import (
     ClinicalSummaryCard,
     build_summary_card,
 )
+from .temporal_normalizer import NormalizedTimex, normalize_temporal
 from .timeline import (
     TIMELINE_ASSISTIVE_DISCLAIMER,
     NormalizedInterval,
@@ -377,6 +378,8 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "NormalizedTimex",
+    "normalize_temporal",
     "TemporalExpression",
     "detect_timexes",
     "NormalizedInterval",

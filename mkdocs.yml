@@ -40,6 +40,7 @@ nav:
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
+      - Temporal Normalization: clinical/temporal-normalization.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
