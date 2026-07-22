@@ -392,10 +392,10 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 **Symptom.** A PII call with an unrecognized `lang` raises:
 
 ```text
-ValueError: Unsupported language 'xx'. Supported: ['ar', 'de', 'en', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pt', 'ro', 'sw', 'te', 'th', 'tr', 'xh', 'zh', 'zu']
+ValueError: Unsupported language 'xx'. Supported: ['am', 'ar', 'de', 'en', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pt', 'ro', 'sw', 'te', 'th', 'tr', 'xh', 'zh', 'zu']
 ```
 
-**Cause.** PII extraction and de-identification support **21 supported PII language codes: ar, de, en, es,
+**Cause.** PII extraction and de-identification support **22 supported PII language codes: am, ar, de, en, es,
 fr, he, hi, id, it, ja, ko, nl, pt, ro, sw, te, th, tr, xh, zh, and zu**. Chinese currently uses the documented
 multilingual default-model placeholder. Passing anything outside that set (or a mistyped code) raises this error.
 

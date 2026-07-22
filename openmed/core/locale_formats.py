@@ -224,6 +224,7 @@ WIRED_LOCALES: Final = frozenset(
 )
 BACKLOG_LOCALES: Final = frozenset(
     {
+        "am",
         "bn",
         "cs",
         "da",
@@ -262,6 +263,7 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "tr": "dmy",
     # Backlog and national-ID-only locales.
     "af": "dmy",
+    "am": "dmy",
     "bg": "dmy",
     "bn": "dmy",
     "cs": "dmy",
@@ -326,6 +328,7 @@ LOCALE_NUMBER_SEP: Final[Mapping[str, NumberSeparators]] = {
     "tr": _COMMA_DECIMAL_DOT_GROUPS,
     # Backlog and national-ID-only locales.
     "af": _COMMA_DECIMAL_SPACE_GROUPS,
+    "am": _DOT_DECIMAL_COMMA_GROUPS,
     "bg": _COMMA_DECIMAL_SPACE_GROUPS,
     "bn": _DOT_DECIMAL_COMMA_GROUPS,
     "cs": _COMMA_DECIMAL_SPACE_GROUPS,

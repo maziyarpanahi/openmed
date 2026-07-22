@@ -174,8 +174,8 @@ hardware):
 ## Extract PII — `POST /pii/extract`
 
 Detect personally identifiable information. Unless `model_name` is set, OpenMed
-selects the recommended PII model for `lang`. The 21 supported PII language
-codes: `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
+selects the recommended PII model for `lang`. The 22 supported PII language
+codes: `am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
 `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`. Chinese currently uses the documented
 multilingual default-model placeholder. `confidence_threshold` defaults to `0.5`.
 

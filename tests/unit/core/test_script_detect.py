@@ -1,3 +1,6 @@
+from hypothesis import given
+from hypothesis import strategies as st
+
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
@@ -39,6 +42,7 @@ def test_detect_script_classifies_single_script_samples():
     samples = {
         "Patient John Smith": "Latin",
         "المريض أحمد علي": "Arabic",
+        "ታካሚ ሰላም ተስፋዬ": "Ethiopic",
         "患者 佐藤花子": "Han",
         "かな カタカナ": "Hiragana/Katakana",
         "환자 김민수": "Hangul",
@@ -82,6 +86,22 @@ def test_segment_by_script_mixed_latin_han_offsets_cover_text():
     _assert_offsets_cover_text(segments, text)
     assert [script for _, _, script in segments] == ["Latin", "Han", "Latin"]
     assert "".join(text[start:end] for start, end, _ in segments) == text
+
+
+def test_detect_script_covers_all_ethiopic_unicode_blocks():
+    samples = ("ሀ", "ᎀ", "ⶀ", "ꬁ", "𞟠")
+
+    assert all(detect_script(char) == "Ethiopic" for char in samples)
+
+
+def test_segment_by_script_mixed_amharic_latin_has_exact_offsets():
+    text = "ታካሚ Selam፡ ቀጠሮ"
+
+    assert list(segment_by_script(text)) == [
+        (0, 4, "Ethiopic"),
+        (4, 11, "Latin"),
+        (11, 14, "Ethiopic"),
+    ]
 
 
 def test_script_language_hints_cover_detectable_scripts():
@@ -181,6 +201,43 @@ def test_normalize_for_pii_detection_routes_indic_runs_and_preserves_marks():
     assert "ी" in normalized.text
     name_start = normalized.text.index("ऩील")
     assert normalized.remap_span(name_start, name_start + len("ऩील")) == (8, 12)
+
+
+def test_normalize_for_pii_detection_strips_standalone_ethiopic_mark():
+    normalized = normalize_for_pii_detection("\u135f")
+
+    assert normalized.text == ""
+    assert normalized.stripped_combining_marks == 1
+
+
+@given(
+    before=st.lists(st.sampled_from(tuple("ሀለሐመሠረሰቀበተነአከወዘየደገጠጸፈፐ")), min_size=1),
+    after=st.lists(st.sampled_from(tuple("ሀለሐመሠረሰቀበተነአከወዘየደገጠጸፈፐ")), max_size=8),
+    prefix=st.sampled_from(("", "ስም፡ ", "Patient ")),
+    suffix=st.sampled_from(("", "።", " visited")),
+)
+def test_ethiopic_combining_mark_remaps_without_offset_drift(
+    before: list[str],
+    after: list[str],
+    prefix: str,
+    suffix: str,
+):
+    marked_value = f"{''.join(before)}\u135f{''.join(after)}"
+    text = f"{prefix}{marked_value}{suffix}"
+    normalized = normalize_for_pii_detection(text)
+    value_start = len(prefix)
+    value_end = value_start + len(marked_value)
+    grapheme_start = value_start + len(before) - 1
+    grapheme_end = grapheme_start + 2
+
+    assert normalized.text == text
+    assert normalized.stripped_combining_marks == 0
+    assert normalized.remap_span(value_start, value_end) == (value_start, value_end)
+    assert normalized.remap_span(grapheme_start, grapheme_end) == (
+        grapheme_start,
+        grapheme_end,
+    )
+    assert text[grapheme_start:grapheme_end].endswith("\u135f")
 
 
 def test_confusable_skeleton_covers_cross_script_width_and_invisible_attacks():

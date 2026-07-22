@@ -54,6 +54,7 @@ _ID_VALIDATORS = {
 }
 
 _SCRIPT_RANGES = {
+    "am": ("\u1200", "\u137f"),
     "ar": ("\u0600", "\u06ff"),
     "he": ("\u0590", "\u05ff"),
     "hi": ("\u0900", "\u097f"),
@@ -111,7 +112,7 @@ def test_locale_phi_generation_is_deterministic_per_seed():
     assert first == second
 
 
-@pytest.mark.parametrize("language", ("ar", "he", "hi", "ja", "te", "th", "zh"))
+@pytest.mark.parametrize("language", ("am", "ar", "he", "hi", "ja", "te", "th", "zh"))
 def test_non_latin_locale_templates_render_target_script(language):
     example = LocalePhiGenerator(seed=29).generate(language)
     low, high = _SCRIPT_RANGES[language]

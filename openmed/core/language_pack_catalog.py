@@ -116,6 +116,12 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("en_IN", "aadhaar"),
     ),
     _pack(
+        "am",
+        "OpenMed/privacy-filter-multilingual",
+        "am_ET",
+        ("Ethiopic",),
+    ),
+    _pack(
         "pt",
         "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
         "pt_PT",
@@ -264,6 +270,7 @@ USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
 _SCRIPT_ORDER = (
     "Latin",
     "Arabic",
+    "Ethiopic",
     "Han",
     "Hiragana/Katakana",
     "Hangul",
@@ -309,6 +316,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "te",
+    "am",
     "pt",
     "ar",
     "he",

@@ -8,6 +8,9 @@ Notes:
 - Telugu (``te``) has no Faker locale; we fall back to ``en_IN`` so generated
   surrogates stay culturally adjacent. This is documented and surfaced to
   callers as a ``UserWarning`` the first time it's used.
+- Amharic (``am``) has no Faker locale; the conceptual ``am_ET`` locale uses
+  ``en_KE`` as its runtime backend while curated Ethiopic surrogate data stays
+  available through the language pack.
 - Portuguese defaults to ``pt_PT``; pass ``locale="pt_BR"`` explicitly to
   generate Brazilian-Portuguese surrogates (matters for CPF/CNPJ context).
 - Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
@@ -37,7 +40,7 @@ from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"af", "te", "ms", "sr", "ur", "xh"})
+_APPROXIMATE_LOCALES: Final = frozenset({"af", "am", "te", "ms", "sr", "ur", "xh"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -45,6 +48,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"af", "te", "ms", "sr", "ur", "xh"})
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "af_ZA": "zu_ZA",
+    "am_ET": "en_KE",
     "ar_MA": "ar_EG",
     "en_ZA": "zu_ZA",
     "en_GH": "tw_GH",

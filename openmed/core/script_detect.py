@@ -43,6 +43,7 @@ CONFUSABLE_DATA_LICENSE = "Unicode-3.0"
 SUPPORTED_SCRIPTS = (
     "Latin",
     "Arabic",
+    "Ethiopic",
     "Han",
     "Hiragana/Katakana",
     "Hangul",
@@ -224,6 +225,16 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
             (0x08A0, 0x08FF),
             (0xFB50, 0xFDFF),
             (0xFE70, 0xFEFF),
+        ),
+    ),
+    (
+        "Ethiopic",
+        (
+            (0x1200, 0x137F),
+            (0x1380, 0x139F),
+            (0x2D80, 0x2DDF),
+            (0xAB00, 0xAB2F),
+            (0x1E7E0, 0x1E7FF),
         ),
     ),
     (
@@ -441,10 +452,11 @@ def normalize_for_pii_detection(
 
     Indic script runs first receive script-specific NFC canonicalization. The
     defense then strips zero-width controls and standalone non-Indic combining
-    marks, folds common Latin-lookalike Greek/Cyrillic/full-width characters and
-    Indic decimal digits, and records a script-consistency summary without
-    storing source text. ``width_convention`` selects the CJK-safe width fold or
-    strict per-character NFKC normalization.
+    marks, while retaining Ethiopic marks attached to a preceding Ethiopic
+    grapheme. It folds common Latin-lookalike Greek/Cyrillic/full-width
+    characters and Indic decimal digits, and records a script-consistency
+    summary without storing source text. ``width_convention`` selects the
+    CJK-safe width fold or strict per-character NFKC normalization.
     """
 
     # Local imports keep the lightweight script helpers from importing the
@@ -519,9 +531,17 @@ def normalize_for_pii_detection(
         if char in ZERO_WIDTH_CHARS:
             removed_zero_width += 1
             continue
+        category = unicodedata.category(char)
+        attached_ethiopic_mark = (
+            category == "Mn"
+            and _script_for_char(char) == "Ethiopic"
+            and original_start > 0
+            and _script_for_char(text[original_start - 1]) == "Ethiopic"
+        )
         if (
-            unicodedata.category(char) == "Mn"
+            category == "Mn"
             and _script_for_char(char) not in INDIC_SCRIPTS
+            and not attached_ethiopic_mark
         ):
             stripped_combining_marks += 1
             continue
@@ -554,6 +574,11 @@ def _script_for_char(char: str) -> str | None:
     codepoint = ord(char)
     if codepoint == 0x3007:
         return "Han"
+    # Python 3.10's Unicode 13 database predates Ethiopic Extended-B. Route the
+    # explicit Unicode block independently of ``unicodedata.category`` so the
+    # same text is detected consistently across supported Python versions.
+    if 0x1E7E0 <= codepoint <= 0x1E7FF:
+        return "Ethiopic"
 
     category = unicodedata.category(char)
     if category[0] not in {"L", "M"}:

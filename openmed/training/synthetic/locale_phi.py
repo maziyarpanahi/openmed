@@ -44,6 +44,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "nl",
     "hi",
     "te",
+    "am",
     "pt",
     "ar",
     "he",
@@ -159,6 +160,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e ",
         ". \u0c2b\u0c3e\u0c32\u0c4b-\u0c05\u0c2a\u0c4d \u0c24\u0c47\u0c26\u0c40 ",
         ".",
+    ),
+    "am": (
+        "ክሊኒካዊ ማስታወሻ፡ ታካሚ ",
+        " የትውልድ ቀን ",
+        "። የታካሚ መለያ ",
+        "። ስልክ ",
+        "። አድራሻ ",
+        "። የቀጠሮ ቀን ",
+        "።",
     ),
     "pt": (
         "Nota clinica: paciente ",
