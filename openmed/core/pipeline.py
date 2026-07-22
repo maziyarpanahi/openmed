@@ -150,6 +150,7 @@ class PipelineContext:
     offset_map: OffsetMap
     route: LanguageRoute
     section_metadata: Mapping[str, Any] = field(default_factory=dict)
+    locale: str | None = None
 
 
 @dataclass(frozen=True)
@@ -380,6 +381,7 @@ class Pipeline:
             offset_map=normalized.offset_map,
             route=route,
             section_metadata=section_metadata,
+            locale=locale,
         )
 
         stage_results: list[PipelineStageResult] = [
@@ -921,7 +923,10 @@ class Pipeline:
             text,
             [],
             lang=context.route.lang,
-            patterns=_deterministic_patterns(context.route.lang),
+            patterns=_deterministic_patterns(
+                context.route.lang,
+                locale=context.locale,
+            ),
         )
         return (
             self._entities_to_spans(
@@ -1118,6 +1123,7 @@ class Pipeline:
                 text,
                 pii_result,
                 lang=context.route.lang,
+                locale=context.locale,
             )
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
@@ -1584,7 +1590,10 @@ def _language_run_metadata(run: Any) -> dict[str, object]:
     }
 
 
-def _deterministic_patterns(lang: str) -> list[PIIPattern]:
+def _deterministic_patterns(
+    lang: str,
+    locale: str | None = None,
+) -> list[PIIPattern]:
     from .anonymizer.providers import clinical_ids
 
     luhn_mrn = PIIPattern(
@@ -1597,11 +1606,21 @@ def _deterministic_patterns(lang: str) -> list[PIIPattern]:
         validator=clinical_ids.validate_luhn,
     )
     if lang == "en":
-        return [luhn_mrn, *PII_PATTERNS]
+        if locale is None:
+            return [luhn_mrn, *PII_PATTERNS]
+
+        from .pii_i18n import LOCALE_PII_PATTERNS
+
+        locale_key = locale.strip().replace("-", "_").casefold()
+        return [
+            luhn_mrn,
+            *PII_PATTERNS,
+            *LOCALE_PII_PATTERNS.get(locale_key, []),
+        ]
 
     from .pii_i18n import get_patterns_for_language
 
-    return [luhn_mrn, *get_patterns_for_language(lang)]
+    return [luhn_mrn, *get_patterns_for_language(lang, locale=locale)]
 
 
 def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
