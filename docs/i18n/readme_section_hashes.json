@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "e3d67900b69c53867b05b2d00e0f16cceca8fe1e42f4230d24131d134235c17c",
+          "source_sha256": "9db0bc59736b4b89ad492dbbb34c716828780e93b29accc6538987170e1038cc",
           "translation_heading": "__preamble__",
-          "translation_sha256": "37aa966cf39f837bb00d59d9025aa1faaa3ff2c04afe50ab4f1cf9220a95c790"
+          "translation_sha256": "f122bdbe75e4d9e28455ba11281d75fcbfd78265c653bd90f29e3f4822665f65"
         },
         {
           "source_heading": "See it in action",
@@ -24,9 +24,9 @@
         },
         {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "1bf5da457a392d5adb7b5542ca37c59bb6c706bafe8cf9a2b60bfa387cdfc02e",
+          "source_sha256": "85562a72d9945e05087503afe478d2cedf694bcc08b8f52d40bcfaaef767f0cb",
           "translation_heading": "为什么选择 OpenMed？",
-          "translation_sha256": "c001423bcd839d3d18a117a7535e78cd692fd728a8af4cf6be353d85dce8247a"
+          "translation_sha256": "c39cd965d66d5bbc9d9982420a97f887d97bd952897b706319503c6f63e87296"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
@@ -65,10 +65,10 @@
           "translation_sha256": "14930157351c1bbc966431ecf21fd47e0b2d9ddef645e5dfcfb0ec13a95a5302"
         },
         {
-          "source_heading": "Multilingual PII (17 model-backed languages)",
-          "source_sha256": "f725b692afe399ddd9068e42ab75d8c50fb87068e200a0dfc96d3c86a64661f0",
-          "translation_heading": "多语言 PII（17 种由模型支持的语言）",
-          "translation_sha256": "3e915cad4997e3049459a13b162c82b43a0c6bdc41cce78a739c043fe281e536"
+          "source_heading": "Multilingual PII (22 supported languages)",
+          "source_sha256": "b3d739d1b2ed3a6d5beb3aa498a7f040f230e8d998ea3b21549e1c46a17cf837",
+          "translation_heading": "多语言 PII（支持 22 种语言）",
+          "translation_sha256": "d50472f68f806acfbac7be74ec850a7be9826a5b5801d546a635d0e8e3e82dc3"
         },
         {
           "source_heading": "REST API",
@@ -78,9 +78,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "463a07127e5b2a74fa55b12a753518af5f14d993bf65b51eca696151bf412ee6",
+          "source_sha256": "7bc16bbf60566df5c3f11a556787bbc0e96221df4222ebe548c8ffb8a797635d",
           "translation_heading": "文档",
-          "translation_sha256": "fe4972343e6f5e57f50913164aa7efc174f6a3f25b066a31e9acd2a1a97641ec"
+          "translation_sha256": "0a4c5bfbb4a761383b945d37e722cbec370f12b9783a5a9354fa1f6bed0cd655"
         },
         {
           "source_heading": "Meet the mascot",
@@ -120,9 +120,9 @@
         },
         {
           "source_heading": "Star History",
-          "source_sha256": "b723f4c9159526cad969411e95f32917f839a7c4630c19353707f6d05bca31b1",
+          "source_sha256": "518d01d6502a15e81d017342c64131233d3ed9245c5b9b86b68b6d63257fa353",
           "translation_heading": "Star 历史",
-          "translation_sha256": "3a0f87d2b81a170de6e869b1010f38ecac97178f2d6261abfb1168719cf15168"
+          "translation_sha256": "6c50fde0142a7a0cfac6ad237cd998099f4f8112114b68bf100288417d314e2d"
         }
       ]
     }
