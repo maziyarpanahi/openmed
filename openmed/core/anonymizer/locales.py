@@ -38,6 +38,9 @@ from typing import Final, Mapping
 
 from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 
+ZH_CN_ADDRESS_LOCALE: Final = "zh_CN"
+"""Faker locale used by Chinese hierarchical address surrogates."""
+
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
 _APPROXIMATE_LOCALES: Final = frozenset({"af", "am", "te", "ms", "sr", "ur", "xh"})
@@ -213,6 +216,7 @@ __all__ = [
     "LANG_TO_LOCALE",
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
+    "ZH_CN_ADDRESS_LOCALE",
     "list_regional_locales",
     "locale_coherence_report",
     "resolve_faker_backend_locale",
