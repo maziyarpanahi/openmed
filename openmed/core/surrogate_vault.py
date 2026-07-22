@@ -19,7 +19,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable
+from typing import AbstractSet, Any, Callable
 
 from .labels import normalize_label
 from .schemas.span import hmac_text_hash
@@ -336,7 +336,7 @@ class InMemorySurrogateStore:
         with self._lock:
             return tuple(self._entries[key] for key in sorted(self._entries))
 
-    def used_surrogates(self, *, canonical_label: str, lang: str) -> set[str]:
+    def used_surrogates(self, *, canonical_label: str, lang: str) -> AbstractSet[str]:
         """Return surrogates already used for the label/language bucket."""
 
         with self._lock:
@@ -671,7 +671,15 @@ class SurrogateVault:
     ) -> str | None:
         """Return an existing surrogate for a source identifier."""
 
-        return self.store.get(self.key_for(source_text, label=label, lang=lang))
+        source = _source(source_text=source_text, label=label, lang=lang)
+        key = self._key_for_epoch(source, self._epoch_manager.current_key)
+        existing = self.store.get(key)
+        if existing is not None:
+            return existing
+        legacy_key = self._legacy_key_for_epoch(source, self._epoch_manager.current_key)
+        if legacy_key == key:
+            return None
+        return self.store.get(legacy_key)
 
     def get_or_create(
         self,
@@ -683,10 +691,23 @@ class SurrogateVault:
     ) -> str:
         """Return a stable surrogate, creating and storing it if needed."""
 
-        key = self.key_for(source_text, label=label, lang=lang)
+        source = _source(source_text=source_text, label=label, lang=lang)
+        key = self._key_for_epoch(source, self._epoch_manager.current_key)
         existing = self.store.get(key)
         if existing is not None:
             return existing
+        legacy_key = self._legacy_key_for_epoch(source, self._epoch_manager.current_key)
+        if legacy_key != key:
+            existing = self.store.get(legacy_key)
+            if existing is not None:
+                try:
+                    self.store.set(key, existing, key_id=self.current_key_id)
+                except ValueError:
+                    normalized_existing = self.store.get(key)
+                    if normalized_existing is None:
+                        raise
+                    return normalized_existing
+                return existing
 
         used = self.store.used_surrogates(
             canonical_label=key.canonical_label,
@@ -879,6 +900,18 @@ class SurrogateVault:
     def _key_for_epoch(self, source: SurrogateSource, epoch: _EpochKey) -> SurrogateKey:
         effective_lang = str(source.lang or "en")
         canonical_label = normalize_label(str(source.label), effective_lang)
+        source_text = _linkage_source_text(source.source_text, canonical_label)
+        return SurrogateKey(
+            canonical_label=canonical_label,
+            lang=effective_lang,
+            text_hash=hmac_text_hash(source_text, epoch.linkage_key),
+        )
+
+    def _legacy_key_for_epoch(
+        self, source: SurrogateSource, epoch: _EpochKey
+    ) -> SurrogateKey:
+        effective_lang = str(source.lang or "en")
+        canonical_label = normalize_label(str(source.label), effective_lang)
         return SurrogateKey(
             canonical_label=canonical_label,
             lang=effective_lang,
@@ -888,11 +921,12 @@ class SurrogateVault:
     def _source_proof(self, source: SurrogateSource) -> str:
         effective_lang = str(source.lang or "en")
         canonical_label = normalize_label(str(source.label), effective_lang)
+        source_text = _linkage_source_text(source.source_text, canonical_label)
         material = json.dumps(
             {
                 "canonical_label": canonical_label,
                 "lang": effective_lang,
-                "source_text": source.source_text,
+                "source_text": source_text,
             },
             ensure_ascii=True,
             separators=(",", ":"),
@@ -921,17 +955,20 @@ class SurrogateVault:
         from_key: _EpochKey,
         to_key: _EpochKey,
     ) -> tuple[SurrogateEntry, ...]:
-        source_by_key = {
-            self._key_for_epoch(source, from_key): source for source in sources
-        }
+        source_by_key: dict[SurrogateKey, SurrogateSource] = {}
+        for source in sources:
+            source_by_key[self._key_for_epoch(source, from_key)] = source
+            source_by_key.setdefault(
+                self._legacy_key_for_epoch(source, from_key), source
+            )
         remapped: dict[SurrogateKey, SurrogateEntry] = {}
         missing: list[str] = []
         for entry in entries:
-            source = source_by_key.get(entry.key)
-            if source is None:
+            matched_source = source_by_key.get(entry.key)
+            if matched_source is None:
                 missing.append(entry.key.text_hash)
                 continue
-            next_key = self._key_for_epoch(source, to_key)
+            next_key = self._key_for_epoch(matched_source, to_key)
             next_entry = SurrogateEntry(next_key, entry.surrogate, to_key.key_id)
             current = remapped.get(next_key)
             if current is not None and current.surrogate != next_entry.surrogate:
@@ -1085,6 +1122,23 @@ def _source(*, source_text: str, label: str, lang: str = "en") -> SurrogateSourc
     return SurrogateSource(
         source_text=str(source_text), label=str(label), lang=str(lang or "en")
     )
+
+
+def _linkage_source_text(source_text: str, canonical_label: str) -> str:
+    """Return cross-script linkage material without persisting source text."""
+
+    if canonical_label != "PERSON":
+        return source_text
+
+    # Import lazily so the lightweight vault module does not initialize the
+    # broader processing package during module import.
+    from ..processing.transliteration import INDIC_SCRIPTS, transliteration_key
+    from .script_detect import detect_script
+
+    script = detect_script(source_text)
+    if script not in {*INDIC_SCRIPTS, "Latin"}:
+        return source_text
+    return transliteration_key(source_text)
 
 
 def _sources(
