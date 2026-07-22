@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = Path("docs/i18n/readme_section_hashes.json")
-DEFAULT_TRANSLATIONS = (Path("README.zh-CN.md"),)
+DEFAULT_TRANSLATIONS = (Path("README.zh-CN.md"), Path("README.hi.md"))
 GLOSSARY = Path("docs/i18n/glossary.md")
 PREAMBLE = "__preamble__"
 
@@ -129,23 +129,46 @@ def _validate_translation_structure(
             f"{source_path.name}."
         )
 
+    source_targets = _relative_targets(
+        "".join(section.content for section in source_sections)
+    )
+    translation_targets = _relative_targets(
+        "".join(section.content for section in translation_sections)
+    )
+    source_targets.discard(translation_path.name)
+    translation_targets.discard(source_path.name)
+    if source_targets != translation_targets:
+        missing = sorted(source_targets - translation_targets)
+        extra = sorted(translation_targets - source_targets)
+        details = []
+        if missing:
+            details.append(f"missing targets: {', '.join(missing)}")
+        if extra:
+            details.append(f"unexpected targets: {', '.join(extra)}")
+        raise DriftError(
+            f"{translation_path.name} must preserve every link, badge, and image "
+            f"target from {source_path.name} ({'; '.join(details)})."
+        )
+
 
 def build_manifest(root: Path, manifest_path: Path) -> dict[str, object]:
     """Build a manifest from the current source and reviewed translations."""
     if not (root / GLOSSARY).is_file():
-        raise DriftError(f"Simplified Chinese glossary is missing: {GLOSSARY}")
+        raise DriftError(f"README translation glossary is missing: {GLOSSARY}")
 
     source_rel = Path("README.md")
     source_path = root / source_rel
     source_sections = _read_sections(source_path)
+    available_defaults = tuple(
+        path for path in DEFAULT_TRANSLATIONS if (root / path).is_file()
+    )
 
     if manifest_path.is_file():
         current = json.loads(manifest_path.read_text(encoding="utf-8"))
-        translation_names = tuple(
-            Path(name) for name in current.get("translations", {})
-        )
+        current_names = tuple(Path(name) for name in current.get("translations", {}))
+        translation_names = tuple(dict.fromkeys((*current_names, *available_defaults)))
     else:
-        translation_names = DEFAULT_TRANSLATIONS
+        translation_names = available_defaults
 
     translations: dict[str, object] = {}
     for translation_rel in translation_names:
@@ -319,7 +342,12 @@ def main(argv: list[str] | None = None) -> int:
                 + "\n",
                 encoding="utf-8",
             )
-            print(f"Updated {manifest_path.relative_to(root)}")
+            display_path = (
+                manifest_path.relative_to(root)
+                if manifest_path.is_relative_to(root)
+                else manifest_path
+            )
+            print(f"Updated {display_path}")
 
         check_repository(root, manifest_path)
     except DriftError as exc:

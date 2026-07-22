@@ -61,7 +61,7 @@ jobs:
       if: steps.readme_changes.outputs.should_run == 'true'
       run: |
         if ! python scripts/i18n/check_readme_drift.py; then
-          echo "::error title=README translation drift::README.zh-CN.md is stale. Review it using docs/i18n/glossary.md, then refresh the committed section manifest."
+          echo "::error title=README translation drift::One or more README translations are stale. Review them using docs/i18n/glossary.md, then refresh the committed section manifest."
           exit 1
         fi
 
