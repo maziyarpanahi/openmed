@@ -46,7 +46,7 @@ from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
 )
-from .decoding import remap_normalized_span
+from .decoding import remap_normalized_span, snap_span_to_grapheme_boundaries
 from .offline import network_blocked_if_offline
 from .script_detect import (
     DetectionNormalization,
@@ -743,6 +743,48 @@ def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
         entities=entities,
         metadata=metadata,
     )
+
+
+def _snap_entities_to_grapheme_boundaries(
+    text: str,
+    entities: list[EntityPrediction],
+) -> list[EntityPrediction]:
+    """Return entities whose source spans cannot bisect grapheme clusters."""
+
+    snapped_entities: list[EntityPrediction] = []
+    for entity in entities:
+        if entity.start is None or entity.end is None:
+            snapped_entities.append(entity)
+            continue
+
+        start, end = snap_span_to_grapheme_boundaries(
+            int(entity.start),
+            int(entity.end),
+            text,
+        )
+        if start == end:
+            snapped_entities.append(entity)
+            continue
+
+        if (start, end) == (entity.start, entity.end):
+            snapped_entities.append(entity)
+            continue
+
+        metadata = dict(entity.metadata or {})
+        metadata["grapheme_boundary_adjustment"] = {
+            "start_codepoints": int(entity.start) - start,
+            "end_codepoints": end - int(entity.end),
+        }
+        snapped_entities.append(
+            replace(
+                entity,
+                text=text[start:end],
+                start=start,
+                end=end,
+                metadata=metadata,
+            )
+        )
+    return snapped_entities
 
 
 def _extract_india_clinical_via_script_windows(
@@ -1871,7 +1913,11 @@ def _build_deidentification_result(
     from .labels import normalize_label
     from .quality_gates import resolve_overlapping_entities
 
-    resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
+    grapheme_safe_entities = _snap_entities_to_grapheme_boundaries(
+        text,
+        list(pii_result.entities),
+    )
+    resolved_entities = resolve_overlapping_entities(grapheme_safe_entities)
     pii_result = _replace_analysis_result(pii_result, entities=resolved_entities)
 
     active_thresholds = _active_calibration_thresholds(pii_result, lang=lang)

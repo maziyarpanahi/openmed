@@ -1,6 +1,9 @@
-from hypothesis import given
+import unicodedata
+
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from openmed.core.decoding import snap_span_to_grapheme_boundaries
 from openmed.core.language_pack_catalog import (
     DEFAULT_PII_MODELS as BUILTIN_DEFAULT_PII_MODELS,
 )
@@ -27,6 +30,27 @@ from openmed.core.script_detect import (
     normalize_for_pii_detection,
     segment_by_script,
 )
+
+
+@st.composite
+def _yoruba_cluster_spans(draw):
+    clusters = draw(
+        st.lists(
+            st.sampled_from(("ọ́", "ẹ̀", "ṣ", "á", "ì", "ń", "ǹ")),
+            min_size=1,
+            max_size=12,
+        )
+    )
+    use_nfd = draw(
+        st.lists(st.booleans(), min_size=len(clusters), max_size=len(clusters))
+    )
+    rendered = [
+        unicodedata.normalize("NFD" if decomposed else "NFC", cluster)
+        for cluster, decomposed in zip(clusters, use_nfd, strict=True)
+    ]
+    span_start = draw(st.integers(min_value=0, max_value=len(rendered) - 1))
+    span_end = draw(st.integers(min_value=span_start + 1, max_value=len(rendered)))
+    return rendered, span_start, span_end
 
 
 def _assert_offsets_cover_text(
@@ -169,9 +193,49 @@ def test_routing_only_languages_do_not_claim_bundled_models():
         "pt",
         "tr",
         "sw",
+        "yo",
         "zu",
         "xh",
     )
+
+
+@settings(deadline=None)
+@given(case=_yoruba_cluster_spans())
+def test_yoruba_normalization_remaps_whole_nfc_nfd_and_mixed_clusters(case):
+    clusters, selected_start, selected_end = case
+    prefix = unicodedata.normalize("NFD", "Àkọsílẹ̀: ")
+    suffix = unicodedata.normalize("NFC", " parí.")
+    before = "".join(clusters[:selected_start])
+    selected = "".join(clusters[selected_start:selected_end])
+    text = prefix + "".join(clusters) + suffix
+
+    normalized = normalize_for_pii_detection(text)
+    normalized_start = len(normalize_for_pii_detection(prefix + before).text)
+    normalized_end = len(normalize_for_pii_detection(prefix + before + selected).text)
+    original_start, original_end = normalized.remap_span(
+        normalized_start,
+        normalized_end,
+    )
+
+    assert text[original_start:original_end] == selected
+    assert not unicodedata.category(text[original_start]).startswith("M")
+    assert original_end == len(text) or not unicodedata.category(
+        text[original_end]
+    ).startswith("M")
+
+
+def test_snap_span_expands_both_sides_of_decomposed_yoruba_clusters():
+    text = unicodedata.normalize("NFD", "Bọ́láńlé Adébáyọ̀")
+    expected_start = text.index(unicodedata.normalize("NFD", "ọ́"))
+    expected_end = len(text)
+    inside_first_marks = expected_start + 1
+    before_final_marks = expected_end - 2
+
+    assert snap_span_to_grapheme_boundaries(
+        inside_first_marks,
+        before_final_marks,
+        text,
+    ) == (expected_start, expected_end)
 
 
 def test_han_script_routes_to_chinese_candidate_language():
