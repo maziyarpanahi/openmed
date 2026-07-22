@@ -21,6 +21,8 @@ Encounter).
   Bundle assembly unchanged, while literal ``"ResourceType/id"``
   references continue to be rewritten when their targets are present
   in the Bundle;
+* ABHA, UPI, and ration-card surfaces are redacted from FHIR ``Identifier``
+  and PatientID-style fields before resources are emitted;
 
 The assembler is purely mechanical: it never synthesises resources (a Patient
 removed by de-identification stays absent) and does not validate profiles.
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from .privacy import sanitize_india_health_identifiers
 from .references import deterministic_fullurl
 
 __all__ = ["to_bundle"]
@@ -105,7 +108,8 @@ def to_bundle(
 
     emit_request = bundle_type in _REQUEST_BUNDLE_TYPES
     for urn, resource in zip(urns, resources):
-        rewritten = _rewrite_references(resource, reference_map)
+        sanitized = sanitize_india_health_identifiers(resource)
+        rewritten = _rewrite_references(sanitized, reference_map)
         entry: dict[str, Any] = {"fullUrl": urn, "resource": rewritten}
         if emit_request:
             entry["request"] = {

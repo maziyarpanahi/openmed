@@ -896,6 +896,78 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
+def validate_abha_number(text: str) -> bool:
+    """Validate OpenMed's offline, checksum-backed 14-digit ABHA contract.
+
+    The check makes generated surrogates self-validating without implying live
+    ABDM registration or identity verification.
+    """
+
+    digits = re.sub(r"[\s-]", "", text)
+    if re.fullmatch(r"\d{14}", digits) is None or len(set(digits)) == 1:
+        return False
+    checksum = 0
+    for index, digit in enumerate(reversed(digits)):
+        checksum = _VERHOEFF_D[checksum][_VERHOEFF_P[index % 8][int(digit)]]
+    return checksum == 0
+
+
+def validate_abha_address(text: str) -> bool:
+    """Validate an ABHA Address using the local ``@abdm``/``@sbx`` shape."""
+
+    candidate = text.strip()
+    if candidate.count("@") != 1:
+        return False
+    handle, domain = candidate.rsplit("@", 1)
+    if domain.casefold() not in {"abdm", "sbx"}:
+        return False
+    if handle.isdigit():
+        return len(handle) == 14 and validate_abha_number(handle)
+    if not 4 <= len(handle) <= 32:
+        return False
+    return bool(
+        re.fullmatch(
+            r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*",
+            handle,
+        )
+    )
+
+
+def validate_upi_id(text: str) -> bool:
+    """Validate a UPI virtual payment address without contacting a PSP."""
+
+    candidate = text.strip()
+    if len(candidate) > 45 or candidate.count("@") != 1:
+        return False
+    account, provider = candidate.rsplit("@", 1)
+    if provider.casefold() in {"abdm", "sbx"}:
+        return False
+    return bool(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{1,63}", account)
+        and re.fullmatch(r"[A-Za-z][A-Za-z0-9]{1,31}", provider)
+    )
+
+
+def validate_indian_ration_card(text: str) -> bool:
+    """Validate a conservative cross-state Indian ration-card structure.
+
+    Ration-card formats vary by state. This validator accepts an optional
+    one-to-three-letter jurisdiction prefix plus 6-12 digits and an optional
+    short alphanumeric suffix. Recognition still requires a nearby ration-card
+    cue so this structural check is not treated as a national registry lookup.
+    """
+
+    candidate = re.sub(r"[\s/-]", "", text).upper()
+    if not 8 <= len(candidate) <= 19:
+        return False
+    if re.fullmatch(r"\d{8,12}", candidate):
+        return len(set(candidate)) > 1
+    match = re.fullmatch(r"[A-Z]{1,3}(\d{6,12})[A-Z0-9]{0,4}", candidate)
+    if match is None:
+        return False
+    return len(set(match.group(1))) > 1
+
+
 CHINESE_RESIDENT_ID_REGION_PREFIXES = frozenset(
     {
         "11",
@@ -2742,6 +2814,85 @@ def generate_mrz_td1(rng=None) -> str:
 # ---------------------------------------------------------------------------
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
+
+INDIA_HEALTH_ID_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)(?:\d{14}|\d{2}(?:[ -]\d{4}){3}|\d{4}(?:[ -]\d{4}){2}[ -]\d{2})(?!\d)",
+        "abha_number",
+        priority=14,
+        base_score=0.35,
+        context_words=[
+            "abha",
+            "abha number",
+            "abha id",
+            "health id",
+            "आभा",
+            "आभा नंबर",
+            "स्वास्थ्य आईडी",
+            "ఆభా",
+            "ఆభా నంబర్",
+        ],
+        context_boost=0.6,
+        validator=validate_abha_number,
+        context_required=True,
+    ),
+    PIIPattern(
+        r"(?<![A-Za-z0-9._])(?:[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*|\d{14})@(?:abdm|sbx)\b",
+        "abha_address",
+        priority=15,
+        base_score=0.95,
+        context_words=[
+            "abha address",
+            "phr address",
+            "आभा पता",
+            "ఆభా చిరునామా",
+        ],
+        context_boost=0.05,
+        validator=validate_abha_address,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Za-z0-9._+-])[A-Za-z0-9][A-Za-z0-9._-]{1,63}@[A-Za-z][A-Za-z0-9]{1,31}\b(?!\.[A-Za-z])",
+        "upi_id",
+        priority=13,
+        base_score=0.3,
+        context_words=[
+            "upi",
+            "upi id",
+            "vpa",
+            "virtual payment address",
+            "refund account",
+            "यूपीआई",
+            "यूपीआई आईडी",
+            "भुगतान पता",
+            "యూపీఐ",
+            "యూపీఐ ఐడి",
+        ],
+        context_boost=0.65,
+        validator=validate_upi_id,
+        context_required=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])(?:[A-Z]{1,3}[\s/-]?)?\d{8,12}(?:[\s/-][A-Z0-9]{1,4})?(?![A-Z0-9])",
+        "ration_card",
+        priority=12,
+        base_score=0.25,
+        context_words=[
+            "ration card",
+            "ration number",
+            "pds card",
+            "राशन कार्ड",
+            "राशन संख्या",
+            "రేషన్ కార్డు",
+            "రేషన్ నంబర్",
+        ],
+        context_boost=0.7,
+        validator=validate_indian_ration_card,
+        context_required=True,
+        flags=re.IGNORECASE,
+    ),
+]
 
 _EGYPT_NATIONAL_ID_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
@@ -7836,10 +7987,15 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
 
     from .pii_entity_merger import PII_PATTERNS
 
-    # English patterns serve as universal base. MRZ, USCC, and Aadhaar patterns
-    # are language-agnostic, so they join the universal base for every route.
+    # English patterns serve as universal base. MRZ, USCC, Aadhaar, and India
+    # health-ID patterns are language-agnostic, so they join every route. The
+    # ambiguous India-specific shapes require nearby clinical context.
     base = (
-        list(PII_PATTERNS) + MRZ_PII_PATTERNS + USCC_PII_PATTERNS + AADHAAR_PII_PATTERNS
+        list(PII_PATTERNS)
+        + MRZ_PII_PATTERNS
+        + USCC_PII_PATTERNS
+        + AADHAAR_PII_PATTERNS
+        + INDIA_HEALTH_ID_PII_PATTERNS
     )
 
     combined = base

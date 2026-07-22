@@ -476,6 +476,33 @@ def _generate_distinct_chinese_resident_id(faker, original):
     raise RuntimeError("could not generate a distinct Chinese Resident ID")
 
 
+def _india_health_id_surrogate(faker, original):
+    """Return a validator-compatible surrogate for an Indian health ID."""
+
+    if not original:
+        return None
+    from openmed.core.pii_i18n import (
+        validate_abha_address,
+        validate_abha_number,
+        validate_indian_ration_card,
+        validate_upi_id,
+    )
+
+    candidate = original.strip()
+    if validate_abha_address(candidate):
+        return faker.abha_address()
+    if validate_abha_number(candidate):
+        return faker.abha_number()
+    if validate_upi_id(candidate):
+        return faker.upi_id()
+    if re.fullmatch(
+        r"[A-Za-z]{1,3}[\s/-]\d{8,12}(?:[\s/-][A-Za-z0-9]{1,4})?",
+        candidate,
+    ) and validate_indian_ration_card(candidate):
+        return faker.indian_ration_card()
+    return None
+
+
 def _gen_id_num(faker, original, *, locale):
     method = _LOCALE_ID_METHODS.get(locale)
     if locale == "zh_CN" and method and hasattr(faker, method) and original:
@@ -502,6 +529,11 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
+    if locale in {"en_IN", "hi_IN", "te_IN"}:
+        india_health_id = _india_health_id_surrogate(faker, original)
+        if india_health_id is not None:
+            return india_health_id
+    method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
