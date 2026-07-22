@@ -35,6 +35,7 @@ from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     LANGUAGE_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
@@ -44,7 +45,20 @@ from openmed.core.pii_i18n import (
 # approximation. Kept here, independent of the code under test, so that wiring a
 # new pack to a wrong/approximate locale flips the assertions red until a human
 # consciously updates this set.
-DOCUMENTED_APPROXIMATE = {"af", "am", "te", "ms", "sr", "ur", "xh"}
+DOCUMENTED_APPROXIMATE = {
+    "af",
+    "am",
+    "as",
+    "kn",
+    "ml",
+    "mr",
+    "ms",
+    "pa",
+    "sr",
+    "te",
+    "ur",
+    "xh",
+}
 
 # Languages that register a national-ID validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
@@ -53,7 +67,9 @@ KNOWN_PROVIDERLESS_VALIDATORS = set()
 # Number of surrogates sampled per language for the round-trip check.
 SAMPLE_SIZE = 40
 
-REPORT_LANGUAGES = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+REPORT_LANGUAGES = (
+    SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+)
 
 
 def _languages_with_national_id_validator():

@@ -14,6 +14,8 @@ AggregationStrategy = Literal["simple", "first", "average", "max"]
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
 PIILanguage = Literal[
     "am",
+    "as",
+    "bn",
     "en",
     "fr",
     "de",

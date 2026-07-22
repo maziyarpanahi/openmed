@@ -48,11 +48,9 @@ var ErrResponseTooLarge = errors.New("openmed: response body exceeds configured 
 // placeholder mirrors the OpenAPI path exactly and is substituted with the
 // URL-escaped job identifier at call time.
 const (
-	LangAS                           PIILanguage = "as"
-	LangBN                           PIILanguage = "bn"
-	pathGetJob                                   = "/jobs/{job_id}"
-	pathSMARTBackendIngestionStatus              = "/fhir/smart-backend/ingestions/{job_id}"
-	pathSMARTBackendIngestionSummary             = "/fhir/smart-backend/ingestions/{job_id}/summary"
+	pathGetJob                       = "/jobs/{job_id}"
+	pathSMARTBackendIngestionStatus  = "/fhir/smart-backend/ingestions/{job_id}"
+	pathSMARTBackendIngestionSummary = "/fhir/smart-backend/ingestions/{job_id}/summary"
 )
 
 // AggregationStrategy selects how token-level predictions are grouped by the
@@ -73,6 +71,8 @@ type PIILanguage string
 // Languages supported by the PII endpoints.
 const (
 	LangAM PIILanguage = "am"
+	LangAS PIILanguage = "as"
+	LangBN PIILanguage = "bn"
 	LangEN PIILanguage = "en"
 	LangFR PIILanguage = "fr"
 	LangDE PIILanguage = "de"

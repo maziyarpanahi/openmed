@@ -44,6 +44,24 @@ from .language_pack_catalog import (
 # Constants
 # ---------------------------------------------------------------------------
 
+# Naamapadam languages supported by the optional Indic NER adapter. Existing
+# Hindi and Telugu defaults remain available; the shared CoNLL adapter is an
+# additional opt-in model family for all 11 languages.
+INDIC_NER_LANGUAGES = frozenset(
+    {"as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+)
+INDIC_NER_MODEL_ENV = "OPENMED_INDIC_NER_MODEL"
+OPTIONAL_PII_MODEL = f"env:{INDIC_NER_MODEL_ENV}"
+OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
+
+# The central catalog keeps user-supplied model routes separate from bundled
+# language packs. This compatibility map lets the 11 optional Indic routes
+# resolve explicitly configured weights without advertising them as built-in
+# language packs.
+DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
+for _language in INDIC_NER_LANGUAGES - {"hi", "te"}:
+    DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
+
 LANGUAGE_NAMES: Dict[str, str] = {
     "as": "Assamese",
     "bn": "Bengali",
@@ -7711,7 +7729,9 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     Raises:
         ValueError: If the language is not supported
     """
-    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    supported_pattern_languages = (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    )
     base_lang = _normalize_pattern_language(lang)
     if base_lang not in supported_pattern_languages:
         raise ValueError(

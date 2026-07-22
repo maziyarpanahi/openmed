@@ -181,6 +181,8 @@
             "default": "en",
             "enum": [
               "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -414,6 +416,8 @@
             "default": "en",
             "enum": [
               "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -549,6 +553,8 @@
             "default": "en",
             "enum": [
               "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -657,6 +663,8 @@
             "default": "en",
             "enum": [
               "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -785,6 +793,8 @@
             "default": "en",
             "enum": [
               "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -921,6 +931,8 @@
             "default": "en",
             "enum": [
               "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",

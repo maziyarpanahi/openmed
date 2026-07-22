@@ -34,14 +34,15 @@ _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 KeepAliveValue = Union[int, float, str]
 
-# Languages accepted by the PII endpoints. This MUST mirror
-# ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` so the REST/MCP layer does not
-# reject a language the core library actually supports (e.g. ar/ja/tr, which
-# shipped with published models but were missing from these schemas). The
-# parity is guarded by
+# Languages accepted by the PII endpoints. This MUST include both built-in
+# ``SUPPORTED_LANGUAGES`` and the explicitly configured optional Indic NER
+# routes so the REST/MCP layer does not reject a route accepted by the core.
+# The parity is guarded by
 # ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
 PIILanguage = Literal[
     "am",
+    "as",
+    "bn",
     "en",
     "fr",
     "de",

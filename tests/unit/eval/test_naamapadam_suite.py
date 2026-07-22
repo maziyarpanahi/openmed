@@ -26,7 +26,7 @@ EXPECTED_SCRIPTS = {
     "kn": "Kannada",
     "ml": "Malayalam",
     "mr": "Devanagari",
-    "or": "Oriya",
+    "or": "Odia",
     "pa": "Gurmukhi",
     "ta": "Tamil",
     "te": "Telugu",

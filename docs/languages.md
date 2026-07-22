@@ -1,9 +1,10 @@
 # Per-Language PII De-identification
 
-OpenMed's PII detection and de-identification are multilingual. The list of
-supported language codes is the single source of truth in
-[`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py),
-and each code wires up:
+OpenMed's PII detection and de-identification are multilingual. Built-in
+language packs live in
+[`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
+The optional Indic family adds nine user-configured routes and can also serve
+the built-in Hindi and Telugu codes. Every code documented here wires up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -55,13 +56,14 @@ routing is first requested, and do not download or bundle model weights.
     referenced by the router.
 
 !!! note "Kept in sync with the code"
-    The table below lists **every** code in `SUPPORTED_LANGUAGES` together with
-    its `DEFAULT_PII_MODELS` entry and its `LANG_TO_LOCALE` mapping.
+    The table below lists every built-in code in `SUPPORTED_LANGUAGES` plus the
+    optional `INDIC_NER_LANGUAGES`, together with its `DEFAULT_PII_MODELS`
+    entry and `LANG_TO_LOCALE` mapping.
     `tests/unit/test_docs_language_coherence.py` asserts this page matches the
     constants exactly, so a newly wired language fails the suite until it is
     documented here.
 
-## Supported languages
+## Built-in and optional languages
 
 | Code   | Language   | Default PII model                                          | Faker locale | Notes                                                        |
 | ------ | ---------- | ---------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
@@ -89,6 +91,7 @@ routing is first requested, and do not download or bundle model weights.
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | Pass `locale="pt_BR"` for CPF/CNPJ surrogates.               |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
+| `ta`   | Tamil      | `env:OPENMED_INDIC_NER_MODEL`                               | `ta_IN`      | Optional Indic NER weights.                                  |
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |

@@ -1486,7 +1486,7 @@ def _manifest_repo_ids(rows: Sequence[Mapping[str, Any]]) -> set[str]:
 
 
 def _manifest_pii_languages(rows: Sequence[Mapping[str, Any]]) -> set[str]:
-    languages: set[str] = set(OPTIONAL_PII_MODEL_LANGUAGES)
+    languages: set[str] = set()
     for row in rows:
         if not _is_pii_manifest_row(row):
             continue

@@ -11,6 +11,8 @@ export type AggregationStrategy = "simple" | "first" | "average" | "max";
 
 export type PIILanguage =
   | "am"
+  | "as"
+  | "bn"
   | "en"
   | "fr"
   | "de"

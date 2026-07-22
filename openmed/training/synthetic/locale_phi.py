@@ -16,6 +16,7 @@ from openmed.core.anonymizer.locales import (
 )
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
     validate_chinese_resident_id,
@@ -483,7 +484,7 @@ class LocalePhiGenerator:
                 f"unsupported locale PHI language {language!r}; "
                 f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}"
             )
-        if language not in SUPPORTED_LANGUAGES:
+        if language not in SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES:
             raise ValueError(f"language {language!r} is not wired in OpenMed")
 
         locale = resolve_locale(language)

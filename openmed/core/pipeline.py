@@ -829,7 +829,11 @@ class Pipeline:
 
     def stage2_language_script(self, text: str) -> LanguageRoute:
         from . import pii
-        from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+        from .pii_i18n import (
+            DEFAULT_PII_MODELS,
+            INDIC_NER_LANGUAGES,
+            SUPPORTED_LANGUAGES,
+        )
         from .script_detect import detect_script
 
         if self.lang == "auto":
@@ -857,10 +861,11 @@ class Pipeline:
 
         script = detect_script(text)
         lang = self.lang
-        if lang not in SUPPORTED_LANGUAGES:
+        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        if lang not in accepted_languages:
             raise ValueError(
                 f"Unsupported language '{lang}'. "
-                f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+                f"Supported: {sorted(accepted_languages)}"
             )
         model_name = pii._resolve_effective_pii_model(self.model_name, lang)
         return LanguageRoute(
