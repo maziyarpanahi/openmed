@@ -15,6 +15,7 @@ from .matcher import AbbreviationMap, LexicalMatcher, VocabularyTerms
 
 __all__ = [
     "InvalidVocabularyLoaderError",
+    "LinkerFactory",
     "RestrictedVocabularyLoaderError",
     "VocabularyLoader",
     "VocabularyLoaderRegistry",
