@@ -84,6 +84,14 @@ from .coref import (
     link_mentions,
     score_mention_pair,
 )
+from .coreference import (
+    COREFERENCE_FEATURES,
+    COREFERENCE_RESOLUTION_ADVISORY,
+    DEFAULT_COREFERENCE_THRESHOLD,
+    CoreferenceChain,
+    SpanChainKey,
+    resolve_coreference,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -336,6 +344,12 @@ __all__ = [
     "canonicalize_text",
     "link_mentions",
     "score_mention_pair",
+    "COREFERENCE_FEATURES",
+    "COREFERENCE_RESOLUTION_ADVISORY",
+    "DEFAULT_COREFERENCE_THRESHOLD",
+    "CoreferenceChain",
+    "SpanChainKey",
+    "resolve_coreference",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",
