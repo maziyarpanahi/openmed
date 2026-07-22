@@ -580,12 +580,12 @@ def _strip_accents(text: str) -> str:
 
 def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     """Validate language and resolve language-specific default PII model."""
+    from ..utils.gateway import validate_language
     from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
 
-    if lang not in SUPPORTED_LANGUAGES:
-        raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
-        )
+    # Guard the language through the shared input gateway so the library PII
+    # path enforces the same language allow-list as the REST and MCP surfaces.
+    lang = validate_language(lang, supported=SUPPORTED_LANGUAGES)
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         return DEFAULT_PII_MODELS[lang]

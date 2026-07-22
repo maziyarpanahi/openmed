@@ -1,5 +1,15 @@
 """Utility functions for OpenMed."""
 
+from .gateway import (
+    GatewayLimits,
+    InputValidationError,
+    NormalizedInput,
+    ensure_valid_encoding,
+    get_default_limits,
+    normalize_input,
+    normalize_text,
+    validate_language,
+)
 from .logging import get_logger, setup_logging
 from .profiling import (
     BatchMetrics,
@@ -25,6 +35,15 @@ __all__ = [
     "get_logger",
     "validate_input",
     "validate_model_name",
+    # Shared input gateway
+    "InputValidationError",
+    "GatewayLimits",
+    "NormalizedInput",
+    "ensure_valid_encoding",
+    "get_default_limits",
+    "normalize_text",
+    "validate_language",
+    "normalize_input",
     # Profiling utilities
     "Profiler",
     "ProfileReport",

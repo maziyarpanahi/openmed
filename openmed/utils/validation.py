@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from .gateway import ensure_valid_encoding
+
 
 def validate_input(
     text: Any,
@@ -12,6 +14,12 @@ def validate_input(
     allow_empty: bool = False,
 ) -> str:
     """Validate and clean input text.
+
+    This is the library entry point into the shared input gateway. Encoding
+    validation is delegated to :func:`openmed.utils.gateway.ensure_valid_encoding`
+    so the library rejects invalid UTF-8 (including unpaired surrogates)
+    identically to the REST and MCP surfaces; the length, empty, and
+    suspicious-content rules below round out the shared contract.
 
     Args:
         text: Input text to validate.
@@ -30,9 +38,10 @@ def validate_input(
             return ""
         raise ValueError("Input text cannot be None")
 
-    # Convert to string if not already
-    if not isinstance(text, str):
-        text = str(text)
+    # Convert to string if not already, rejecting undecodable bytes / lone
+    # surrogates through the shared gateway so all three surfaces agree on what
+    # counts as valid UTF-8.
+    text = ensure_valid_encoding(text)
 
     # Basic cleaning
     text = text.strip()

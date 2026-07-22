@@ -6,13 +6,13 @@ from collections.abc import Sequence
 from typing import Any, Literal, Optional, Union
 
 from openmed.core.policy import canonical_policy_name
+from openmed.utils.gateway import get_default_limits, normalize_text
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
 )
 
 from .keep_alive import parse_keep_alive
-from .limits import get_max_text_length
 
 try:
     from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -67,20 +67,11 @@ PIILanguage = Literal[
 
 
 def _normalize_text(value: Any) -> str:
-    if value is None:
-        raise ValueError("Text is required")
-    if not isinstance(value, str):
-        value = str(value)
-
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError("Text must not be blank")
-    max_text_length = get_max_text_length()
-    if len(normalized) > max_text_length:
-        raise ValueError(
-            f"Text exceeds the maximum length of {max_text_length} characters"
-        )
-    return normalized
+    # Route through the shared gateway so REST requests validate text identically
+    # to the library and MCP surfaces: same character cap (still driven by
+    # ``OPENMED_SERVICE_MAX_TEXT_LENGTH``), plus byte-size, UTF-8 encoding, and
+    # control-character guardrails. Errors never echo the (possibly PHI) text.
+    return normalize_text(value, limits=get_default_limits())
 
 
 def _normalize_model_name(value: str) -> str:
