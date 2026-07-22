@@ -71,6 +71,8 @@ type PIILanguage string
 // Languages supported by the PII endpoints.
 const (
 	LangAM PIILanguage = "am"
+	LangAS PIILanguage = "as"
+	LangBN PIILanguage = "bn"
 	LangEN PIILanguage = "en"
 	LangFR PIILanguage = "fr"
 	LangDE PIILanguage = "de"
@@ -78,6 +80,13 @@ const (
 	LangES PIILanguage = "es"
 	LangNL PIILanguage = "nl"
 	LangHI PIILanguage = "hi"
+	LangGU PIILanguage = "gu"
+	LangKN PIILanguage = "kn"
+	LangML PIILanguage = "ml"
+	LangMR PIILanguage = "mr"
+	LangOR PIILanguage = "or"
+	LangPA PIILanguage = "pa"
+	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"

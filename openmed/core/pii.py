@@ -583,15 +583,27 @@ def _strip_accents(text: str) -> str:
 
 def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     """Validate language and resolve language-specific default PII model."""
-    from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+    from .model_registry import get_default_pii_model
+    from .pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        INDIC_NER_MODEL_ENV,
+        SUPPORTED_LANGUAGES,
+    )
 
-    if lang not in SUPPORTED_LANGUAGES:
+    accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    if lang not in accepted_languages:
         raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. Supported: {sorted(accepted_languages)}"
         )
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
-        return DEFAULT_PII_MODELS[lang]
+        resolved = get_default_pii_model(lang)
+        if resolved is None:
+            raise ValueError(
+                f"Language '{lang}' uses optional Indic NER weights; pass an "
+                f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
+            )
+        return resolved
     return model_name
 
 

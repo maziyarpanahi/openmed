@@ -91,6 +91,9 @@ PII extraction and de-identification support **22 supported PII language codes**
 `am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
 Chinese routing currently uses the documented multilingual default-model
 placeholder; dedicated Chinese model weights are not bundled.
+Nine additional Indic codes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`,
+and `ta`) are opt-in routes through a user-configured
+`OPENMED_INDIC_NER_MODEL`; Hindi and Telugu can use the same adapter.
 Validator-backed national-ID coverage is broader for specific ID-only locales,
 including Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 The README keeps a short multilingual example set in

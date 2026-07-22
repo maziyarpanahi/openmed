@@ -16,6 +16,7 @@ from openmed.core.anonymizer.locales import (
 )
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
     validate_chinese_resident_id,
@@ -36,6 +37,8 @@ from openmed.core.pii_i18n import (
 )
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
+    "as",
+    "bn",
     "en",
     "fr",
     "de",
@@ -43,6 +46,13 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "es",
     "nl",
     "hi",
+    "gu",
+    "kn",
+    "ml",
+    "mr",
+    "or",
+    "pa",
+    "ta",
     "te",
     "am",
     "pt",
@@ -87,6 +97,24 @@ _FIELD_LABELS: Final[Mapping[str, str]] = {
 }
 
 _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
+    "as": (
+        "ক্লিনিকেল টোকা: ৰোগী ",
+        " জন্ম ",
+        ". ৰোগী ID ",
+        ". ফোন ",
+        ". ঠিকনা ",
+        ". পৰৱৰ্তী তাৰিখ ",
+        ".",
+    ),
+    "bn": (
+        "ক্লিনিক্যাল নোট: রোগী ",
+        " জন্ম ",
+        ". রোগী ID ",
+        ". ফোন ",
+        ". ঠিকানা ",
+        ". পরবর্তী তারিখ ",
+        ".",
+    ),
     "en": (
         "Clinical note: patient ",
         " was born on ",
@@ -149,6 +177,69 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u092b\u094b\u0928 ",
         ". \u092a\u0924\u093e ",
         ". \u0905\u0917\u0932\u0940 \u0924\u093e\u0930\u0940\u0916 ",
+        ".",
+    ),
+    "gu": (
+        "ક્લિનિકલ નોંધ: દર્દી ",
+        " જન્મ ",
+        ". દર્દી ID ",
+        ". ફોન ",
+        ". સરનામું ",
+        ". અનુવર્તી તારીખ ",
+        ".",
+    ),
+    "kn": (
+        "ಕ್ಲಿನಿಕಲ್ ಟಿಪ್ಪಣಿ: ರೋಗಿ ",
+        " ಜನನ ",
+        ". ರೋಗಿ ID ",
+        ". ಫೋನ್ ",
+        ". ವಿಳಾಸ ",
+        ". ಮುಂದಿನ ದಿನಾಂಕ ",
+        ".",
+    ),
+    "ml": (
+        "ക്ലിനിക്കൽ കുറിപ്പ്: രോഗി ",
+        " ജനനം ",
+        ". രോഗി ID ",
+        ". ഫോൺ ",
+        ". വിലാസം ",
+        ". തുടർ തീയതി ",
+        ".",
+    ),
+    "mr": (
+        "क्लिनिकल नोंद: रुग्ण ",
+        " जन्म ",
+        ". रुग्ण ID ",
+        ". फोन ",
+        ". पत्ता ",
+        ". पुढील तारीख ",
+        ".",
+    ),
+    "or": (
+        "କ୍ଲିନିକାଲ ଟିପ୍ପଣୀ: ରୋଗୀ ",
+        " ଜନ୍ମ ",
+        ". ରୋଗୀ ID ",
+        ". ଫୋନ ",
+        ". ଠିକଣା ",
+        ". ପରବର୍ତ୍ତୀ ତାରିଖ ",
+        ".",
+    ),
+    "pa": (
+        "ਕਲੀਨਿਕਲ ਨੋਟ: ਮਰੀਜ਼ ",
+        " ਜਨਮ ",
+        ". ਮਰੀਜ਼ ID ",
+        ". ਫੋਨ ",
+        ". ਪਤਾ ",
+        ". ਅਗਲੀ ਮਿਤੀ ",
+        ".",
+    ),
+    "ta": (
+        "மருத்துவ குறிப்பு: நோயாளி ",
+        " பிறந்த தேதி ",
+        ". நோயாளி ID ",
+        ". தொலைபேசி ",
+        ". முகவரி ",
+        ". அடுத்த தேதி ",
         ".",
     ),
     "te": (
@@ -393,7 +484,7 @@ class LocalePhiGenerator:
                 f"unsupported locale PHI language {language!r}; "
                 f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}"
             )
-        if language not in SUPPORTED_LANGUAGES:
+        if language not in SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES:
             raise ValueError(f"language {language!r} is not wired in OpenMed")
 
         locale = resolve_locale(language)

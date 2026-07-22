@@ -688,6 +688,7 @@ __all__ = [
     "generate_confusable_attack_corpus",
     "generate_reid_leaderboard",
     "golden_fixture_coverage_report",
+    "naamapadam_language_coverage",
     "hard_negative_difficulty_report",
     "hard_negative_over_redaction_report",
     "hash_fixture_set",

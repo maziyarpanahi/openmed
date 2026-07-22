@@ -419,6 +419,10 @@ as its source of truth and supports **22 supported PII language codes**:
 `am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
 Chinese routing currently uses the documented multilingual default-model
 placeholder; dedicated Chinese model weights are not bundled.
+The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
+`gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve Hindi and
+Telugu. It loads only an explicit path or repository from
+`OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
 Polish, Latvian, Slovak, Malay, Filipino, Danish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale

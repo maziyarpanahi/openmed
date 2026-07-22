@@ -33,6 +33,7 @@ from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semant
 from openmed.core.pii_i18n import (
     AADHAAR_PII_PATTERNS,
     DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_FAKE_DATA,
     LANGUAGE_MODEL_PREFIX,
     LANGUAGE_MONTH_NAMES,
@@ -147,7 +148,7 @@ class TestConstants:
         }
 
     def test_language_names_keys(self):
-        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
+        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
 
     def test_language_model_prefix(self):
         assert LANGUAGE_MODEL_PREFIX["am"] == "Amharic-"
@@ -174,7 +175,9 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
 
     def test_default_pii_models_all_languages(self):
-        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
+        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
+            INDIC_NER_LANGUAGES - {"hi", "te"}
+        )
 
     def test_default_pii_models_naming(self):
         assert DEFAULT_PII_MODELS["am"] == "OpenMed/privacy-filter-multilingual"

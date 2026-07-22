@@ -288,6 +288,33 @@ def golden_fixture_coverage_report(
     return fixture_coverage_report(path, fixtures=fixtures)
 
 
+def naamapadam_language_coverage() -> tuple[dict[str, object], ...]:
+    """Return one aggregate-only fixture coverage row per Indic language."""
+
+    from openmed.eval.suites.naamapadam import (
+        NAAMAPADAM_LANGUAGES,
+        load_naamapadam_fixtures,
+    )
+
+    fixtures = load_naamapadam_fixtures()
+    return tuple(
+        {
+            "fixture_count": sum(fixture.language == language for fixture in fixtures),
+            "labels": sorted(
+                {
+                    span.label
+                    for fixture in fixtures
+                    if fixture.language == language
+                    for span in fixture.gold_spans
+                }
+            ),
+            "language": language,
+            "suite": "naamapadam",
+        }
+        for language in NAAMAPADAM_LANGUAGES
+    )
+
+
 def _status_by_value(
     *,
     supported: Sequence[str],

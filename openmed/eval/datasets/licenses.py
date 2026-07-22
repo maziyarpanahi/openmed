@@ -32,6 +32,17 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         redistribution="committed synthetic fixtures only",
         notes="Synthetic-only fixtures; no real PHI and no DUA content.",
     ),
+    "naamapadam": DatasetLicense(
+        dataset="naamapadam",
+        license_id="CC0-1.0",
+        source_url="https://huggingface.co/datasets/ai4bharat/naamapadam",
+        redistribution="committed synthetic fixtures only",
+        notes=(
+            "Naamapadam packages its mined data under CC0-1.0. OpenMed "
+            "commits original synthetic fixtures only and redistributes no "
+            "Naamapadam corpus rows."
+        ),
+    ),
     "shield": DatasetLicense(
         dataset="shield",
         license_id="access-controlled-full; public-sample",

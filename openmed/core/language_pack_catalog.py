@@ -247,7 +247,17 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
 }
 
-SUPPLEMENTAL_LOCALES: Mapping[str, str] = {}
+SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
+    "as": "as_IN",
+    "bn": "bn_BD",
+    "gu": "gu_IN",
+    "kn": "kn_IN",
+    "ml": "ml_IN",
+    "mr": "mr_IN",
+    "or": "or_IN",
+    "pa": "pa_IN",
+    "ta": "ta_IN",
+}
 
 # Languages surfaced by script routing before a bundled default PII model or
 # complete language pack is available. Callers must supply their own model for
