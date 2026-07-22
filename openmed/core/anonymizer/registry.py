@@ -264,6 +264,8 @@ def _gen_age(faker, original, *, locale):
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
     "af_ZA": "south_african_id",
+    "ar_EG": "egyptian_national_id",
+    "ar_MA": "moroccan_cin",
     "en_ZA": "south_african_id",
     "en_NG": "nigeria_nin",
     "ha_NG": "nigeria_nin",
@@ -277,6 +279,7 @@ _LOCALE_ID_METHODS = {
     "pt_BR": "cpf",
     "pt_PT": "nif",
     "fr_FR": "ssn",
+    "fr_MA": "moroccan_cin",
     "it_IT": "ssn",
     "es_ES": "nie",
     "nl_NL": "ssn",
@@ -383,7 +386,12 @@ def _gen_id_num(faker, original, *, locale):
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
-        if method in {"nigeria_nin", "south_african_id"}:
+        if method in {
+            "egyptian_national_id",
+            "moroccan_cin",
+            "nigeria_nin",
+            "south_african_id",
+        }:
             return getattr(faker, method)(original)
         if locale in {"en_GH", "en_KE", "sw"}:
             if locale in {"en_KE", "sw"} and re.fullmatch(

@@ -54,6 +54,8 @@ EXPECTED_VALIDATOR_KEYS = (
     ("ke", "kenya_national_id"),
     ("ke", "maisha_namba"),
     ("za", "sa_id_number"),
+    ("eg", "egyptian_national_id"),
+    ("ma", "moroccan_cin"),
 )
 
 
@@ -91,6 +93,8 @@ ROUND_TRIP_CASES = (
     ("ke", "kenya_national_id", "en_KE"),
     ("ke", "maisha_namba", "en_KE"),
     ("za", "sa_id_number", "zu_ZA"),
+    ("eg", "egyptian_national_id", "ar_EG"),
+    ("ma", "moroccan_cin", "ar_MA"),
 )
 
 
@@ -156,6 +160,37 @@ class TestNationalIdRegistry:
         assert {spec.faker_method for spec in specs if spec is not None} == {
             "south_african_id"
         }
+
+    @pytest.mark.parametrize(
+        ("aliases", "id_type", "faker_method"),
+        (
+            (
+                ("eg", "ar", "ar_EG"),
+                "egyptian_national_id",
+                "egyptian_national_id",
+            ),
+            (("ma", "ar_MA", "fr_MA"), "moroccan_cin", "moroccan_cin"),
+        ),
+    )
+    def test_egypt_morocco_aliases_resolve_working_specs(
+        self,
+        aliases,
+        id_type,
+        faker_method,
+    ):
+        specs = [get_national_id(alias, id_type) for alias in aliases]
+        resolved_specs = [spec for spec in specs if spec is not None]
+        assert len(resolved_specs) == len(aliases)
+        assert {spec.validate for spec in resolved_specs} == {
+            resolved_specs[0].validate
+        }
+        assert {spec.faker_method for spec in resolved_specs} == {faker_method}
+
+        faker = Faker("ar_EG")
+        register_clinical_providers(faker)
+        faker.seed_instance(842)
+        surrogate = getattr(faker, faker_method)()
+        assert resolved_specs[0].validate(surrogate)
 
     @pytest.mark.parametrize("id_type", ("nin", "bvn"))
     def test_nigerian_aliases_resolve_working_faker_methods(self, id_type):

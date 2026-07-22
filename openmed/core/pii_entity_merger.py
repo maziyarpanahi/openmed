@@ -31,6 +31,7 @@ class PIIPattern:
     Inspired by Microsoft Presidio's PatternRecognizer approach:
     - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
     - context_words: Keywords that boost confidence when found nearby
+    - requires_context: Reject pattern-only matches without nearby context
     - validator: Optional checksum/validation function to confirm matches
     - reject_on_validation_failure: Drop regex matches whose validator fails,
       rather than retaining them with a reduced confidence score
@@ -56,6 +57,7 @@ class PIIPattern:
     context_words: List[str] = field(
         default_factory=list
     )  # Keywords that boost confidence
+    requires_context: bool = False
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
@@ -521,7 +523,13 @@ PII_PATTERNS = [
 
 
 def find_context_words(
-    text: str, start: int, end: int, context_words: List[str], context_window: int = 100
+    text: str,
+    start: int,
+    end: int,
+    context_words: List[str],
+    context_window: int = 100,
+    *,
+    require_boundaries: bool = False,
 ) -> bool:
     """Check if context words appear near the matched entity.
 
@@ -534,6 +542,9 @@ def find_context_words(
         end: Entity end position
         context_words: List of keywords to search for
         context_window: Number of characters to search before/after (default: 100)
+        require_boundaries: Require context phrases to begin and end outside
+            word characters, preventing short keywords from matching inside
+            unrelated words.
 
     Returns:
         True if any context word found within window
@@ -557,7 +568,7 @@ def find_context_words(
         word_lower = word.lower()
 
         # Direct match
-        if word_lower in context_text:
+        if not require_boundaries and word_lower in context_text:
             return True
 
         # Check word boundaries (avoid partial matches like "ssn" in "assign")
@@ -615,16 +626,32 @@ def find_semantic_units(
 
             matched_text = text[match.start() : match.end()]
 
+            has_context = bool(
+                pii_pattern.context_words
+                and find_context_words(
+                    text,
+                    match.start(),
+                    match.end(),
+                    pii_pattern.context_words,
+                )
+            )
+            if pii_pattern.requires_context:
+                has_required_context = find_context_words(
+                    text,
+                    match.start(),
+                    match.end(),
+                    pii_pattern.context_words,
+                    require_boundaries=True,
+                )
+                if not has_required_context:
+                    continue
+
             # Calculate score with context awareness
             score = pii_pattern.base_score
 
             # Check for context words (like Presidio)
-            if pii_pattern.context_words:
-                has_context = find_context_words(
-                    text, match.start(), match.end(), pii_pattern.context_words
-                )
-                if has_context:
-                    score = min(1.0, score + pii_pattern.context_boost)
+            if has_context:
+                score = min(1.0, score + pii_pattern.context_boost)
 
             # Validate if validator exists
             validated = True

@@ -256,6 +256,107 @@ def validate_bic(text: str) -> bool:
     return clinical_ids.validate_bic(text)
 
 
+_ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
+    "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+    "01234567890123456789",
+)
+
+
+def normalize_arabic_indic_digits(text: str) -> str:
+    """Fold Arabic-Indic decimal digits to ASCII without changing offsets.
+
+    Both the Arabic-Indic block (U+0660-U+0669) and the extended block commonly
+    used in Arabic-script text (U+06F0-U+06F9) are mapped one code point at a
+    time. ASCII text and all non-digit characters are left unchanged.
+
+    Args:
+        text: Text that may contain Arabic-Indic decimal digits.
+
+    Returns:
+        Length-preserving text with supported decimal digits rendered as ASCII.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+EGYPTIAN_GOVERNORATE_CODES = frozenset(
+    {
+        "01",
+        "02",
+        "03",
+        "04",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "88",
+    }
+)
+
+
+def validate_egyptian_national_id(text: str) -> bool:
+    """Validate the published structure of an Egyptian national ID.
+
+    The official final check-digit algorithm is not public, so this validator
+    deliberately checks only stable offline structure: 14 decimal digits, the
+    1900s/2000s century marker, a real embedded Gregorian birth date, and a
+    published governorate code.
+    """
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_arabic_indic_digits(text.strip())
+    if re.fullmatch(r"[23][0-9]{13}", normalized) is None:
+        return False
+
+    century = 1900 if normalized[0] == "2" else 2000
+    if not _is_valid_calendar_date(
+        century + int(normalized[1:3]),
+        int(normalized[3:5]),
+        int(normalized[5:7]),
+    ):
+        return False
+    return normalized[7:9] in EGYPTIAN_GOVERNORATE_CODES
+
+
+MOROCCAN_CIN_REGION_LETTERS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def validate_moroccan_cin(text: str) -> bool:
+    """Validate the offline structure of a Moroccan CIN identifier.
+
+    A CIN contains a one- or two-letter issuing-region prefix followed by five
+    to seven decimal digits. There is no public checksum, so detection also
+    requires nearby identity-card context.
+    """
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_arabic_indic_digits(text.strip()).upper()
+    match = re.fullmatch(r"([A-Z]{1,2})[0-9]{5,7}", normalized)
+    return match is not None and all(
+        letter in MOROCCAN_CIN_REGION_LETTERS for letter in match.group(1)
+    )
+
+
 def validate_za_id_number(text: str) -> bool:
     """Validate a South African 13-digit identity number.
 
@@ -2404,6 +2505,53 @@ def generate_mrz_td1(rng=None) -> str:
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
 
+_EGYPT_NATIONAL_ID_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)[23٢٣۲۳]\d{13}(?!\d)",
+        "national_id",
+        priority=15,
+        base_score=0.8,
+        context_words=[
+            "national id",
+            "national id number",
+            "egyptian id",
+            "الرقم القومي",
+            "رقم قومي",
+            "بطاقة الرقم القومي",
+            "رقم الهوية",
+        ],
+        context_boost=0.15,
+        validator=validate_egyptian_national_id,
+    ),
+]
+
+
+_MOROCCO_CIN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{1,2}\d{5,7}(?![A-Z0-9])",
+        "national_id",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "cin",
+            "cin number",
+            "carte nationale",
+            "carte d'identité nationale",
+            "carte d identite nationale",
+            "بطاقة التعريف الوطنية",
+            "بطاقة وطنية",
+            "بيطاقة التعريف الوطنية",
+            "bitaqa",
+            "bitaqa watania",
+        ],
+        context_boost=0.45,
+        validator=validate_moroccan_cin,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
     # Nigeria's NIN and BVN have no public checksums, so deterministic sweeps
     # require explicit identifier context. NIN precedes phone detection so an
@@ -3634,23 +3782,6 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
             "\u0627\u062a\u0635\u0627\u0644",
         ],
         context_boost=0.4,
-    ),
-    PIIPattern(
-        # Egyptian 14-digit national ID (starts with 2 or 3 for the
-        # century digit). Other Arabic locales have different ID formats
-        # (e.g. Saudi 10 digits starting 1/2, UAE 15 digits starting 784)
-        # and are not currently matched here.
-        r"\b[23]\d{13}\b",
-        "national_id",
-        priority=9,
-        base_score=0.35,
-        context_words=[
-            "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a",
-            "\u0628\u0637\u0627\u0642\u0629",
-            "\u0647\u0648\u064a\u0629",
-            "\u0631\u0642\u0645 \u0627\u0644\u0647\u0648\u064a\u0629",
-        ],
-        context_boost=0.5,
     ),
     PIIPattern(
         r"\b(?:\u0634\u0627\u0631\u0639|\u0637\u0631\u064a\u0642|\u062d\u064a|\u0645\u064a\u062f\u0627\u0646|\u062c\u0627\u062f\u0629)\s+[\u0600-\u06FF0-9\s]{3,60}\b",
@@ -6157,6 +6288,9 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "ar": _EGYPT_NATIONAL_ID_PII_PATTERNS + _MOROCCO_CIN_PII_PATTERNS,
+    "ar_eg": _EGYPT_NATIONAL_ID_PII_PATTERNS,
+    "ar_ma": _MOROCCO_CIN_PII_PATTERNS,
     "en_za": _NGUNI_PII_PATTERNS,
     "af": _NGUNI_PII_PATTERNS,
     "en_ng": _NIGERIAN_PII_PATTERNS,
@@ -6959,7 +7093,9 @@ def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     keys: list[str] = []
     if locale:
         keys.append(_normalize_pattern_locale(locale))
-    if "_" in lang or "-" in lang:
+    elif "_" in lang or "-" in lang:
+        keys.append(_normalize_pattern_locale(lang))
+    else:
         keys.append(_normalize_pattern_locale(lang))
 
     deduped: list[str] = []
@@ -7020,6 +7156,10 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
         ]
 
     for locale_key in _locale_pattern_keys(lang, locale):
-        combined = combined + LOCALE_PII_PATTERNS.get(locale_key, [])
+        combined = combined + [
+            pattern
+            for pattern in LOCALE_PII_PATTERNS.get(locale_key, [])
+            if not any(pattern is existing for existing in combined)
+        ]
 
     return combined
