@@ -276,6 +276,56 @@ TOKENIZER_SCRIPT_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 }
 
 
+INDIA_CLINICAL_MULTILINGUAL_FALLBACK = "OpenMed/privacy-filter-multilingual"
+
+
+@dataclass(frozen=True)
+class IndiaClinicalModelRoute:
+    """First-party model route for Indian-English mixed-script clinical NER.
+
+    Default routing is restricted to the model IDs already registered in
+    :data:`DEFAULT_PII_MODELS`: Latin windows use the English clinical model,
+    and Indic windows use the configured Hindi or Telugu model. The separately
+    hosted multilingual privacy filter is the documented fallback. Callers may
+    explicitly supply another model or local path; OpenMed never downloads an
+    unregistered third-party model merely because mixed script was detected.
+    """
+
+    language: str
+    latin_model: str
+    native_model: str
+    fallback_model: str
+    latin_prefix: str
+    native_prefix: str
+
+    def model_for_script(
+        self,
+        script: str,
+        *,
+        user_model: str | None = None,
+    ) -> str:
+        """Return a user-supplied model or the first-party script default."""
+
+        if user_model:
+            return user_model
+        if script in {"Devanagari", "Telugu"}:
+            return self.native_model
+        return self.latin_model
+
+
+INDIA_CLINICAL_MODEL_ROUTES: Dict[str, IndiaClinicalModelRoute] = {
+    lang: IndiaClinicalModelRoute(
+        language=lang,
+        latin_model=DEFAULT_PII_MODELS["en"],
+        native_model=DEFAULT_PII_MODELS[lang],
+        fallback_model=INDIA_CLINICAL_MULTILINGUAL_FALLBACK,
+        latin_prefix=LANGUAGE_MODEL_PREFIX["en"],
+        native_prefix=LANGUAGE_MODEL_PREFIX[lang],
+    )
+    for lang in ("hi", "te")
+}
+
+
 # ---------------------------------------------------------------------------
 # Financial Identifier Validators
 # ---------------------------------------------------------------------------
@@ -8124,3 +8174,30 @@ def get_patterns_for_code_mixed_tags(
     patterns = list(get_patterns_for_language(base_lang, locale=locale))
     patterns.extend(get_hinglish_patterns_for_token_tags(text, token_language_tags))
     return patterns
+
+
+def get_india_clinical_model_route(lang: str) -> IndiaClinicalModelRoute:
+    """Return the configured Indian-English clinical route for ``lang``.
+
+    Args:
+        lang: Hindi (``"hi"``) or Telugu (``"te"``).
+
+    Raises:
+        ValueError: If ``lang`` has no India clinical route.
+    """
+
+    normalized = _normalize_pattern_language(lang)
+    route = INDIA_CLINICAL_MODEL_ROUTES.get(normalized)
+    if route is None:
+        raise ValueError(
+            "India clinical NER is available only for lang='hi' or lang='te'"
+        )
+    return route
+
+
+def india_clinical_route_active(text: str, lang: str) -> bool:
+    """Return whether ``text`` activates mixed-script India clinical routing."""
+
+    from .script_detect import india_clinical_script_windows
+
+    return bool(india_clinical_script_windows(text, _normalize_pattern_language(lang)))
