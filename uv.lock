@@ -4960,6 +4960,7 @@ dask = [
     { name = "dask", extra = ["dataframe"] },
 ]
 dev = [
+    { name = "cryptography" },
     { name = "dask", extra = ["dataframe"] },
     { name = "duckdb" },
     { name = "fastapi" },
@@ -4981,8 +4982,10 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-dateutil" },
+    { name = "rich" },
     { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "typer" },
 ]
 docs = [
     { name = "griffe" },
@@ -5016,6 +5019,9 @@ hf = [
 ]
 indic = [
     { name = "indic-nlp-library" },
+]
+integrity = [
+    { name = "cryptography" },
 ]
 kafka = [
     { name = "confluent-kafka" },
@@ -5132,6 +5138,8 @@ requires-dist = [
     { name = "click", marker = "extra == 'spacy'", specifier = ">=8.0" },
     { name = "confluent-kafka", marker = "extra == 'kafka'", specifier = ">=2.3" },
     { name = "coremltools", marker = "extra == 'coreml'", specifier = ">=8.0" },
+    { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42,<50" },
+    { name = "cryptography", marker = "extra == 'integrity'", specifier = ">=42,<50" },
     { name = "dask", extras = ["dataframe"], marker = "extra == 'dask'", specifier = ">=2024.8" },
     { name = "dask", extras = ["dataframe"], marker = "extra == 'dev'", specifier = ">=2024.8" },
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.0,<2" },
@@ -5156,8 +5164,8 @@ requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'onnx-runtime'", specifier = ">=0.30" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
-    { name = "jieba", specifier = ">=0.42.1,<0.43" },
     { name = "indic-nlp-library", marker = "extra == 'indic'", specifier = ">=0.92" },
+    { name = "jieba", specifier = ">=0.42.1,<0.43" },
     { name = "jieba", marker = "extra == 'zh'", specifier = ">=0.42" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "langchain-core", marker = "extra == 'agents'", specifier = ">=0.2,<2" },
@@ -5226,6 +5234,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rapidfuzz", marker = "extra == 'grounding'", specifier = ">=3.9,<4" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
+    { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.22" },
     { name = "s3fs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
@@ -5244,9 +5253,10 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'openvino'", specifier = ">=4.50" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
+    { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "service", "spacy", "spark", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "service", "spacy", "spark", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "opentelemetry-api"

@@ -33,6 +33,10 @@ from openmed.core.config import (
     save_config_to_file,
     set_config,
 )
+from openmed.core.model_integrity import (
+    ModelIntegrityError,
+    verify_cached_models,
+)
 from openmed.ner import (
     NerRequest,
     build_index,
@@ -81,7 +85,8 @@ def _render_table(title: str, headers: List[str], rows: List[List[str]]) -> None
     Console().print(table)
 
 
-def main() -> None:
+def build_app():
+    """Build and return the Typer application."""
     _ensure_typer()
 
     app = typer.Typer(help="OpenMed Typer CLI (draft).")
@@ -180,6 +185,70 @@ def main() -> None:
         cfg = _load_config(config_path)
         max_len = get_model_max_length(model_key, config=cfg)
         _echo_json({"model_key": model_key, "max_length": max_len})
+
+    @models_app.command("verify")
+    def models_verify(
+        model_id: Optional[str] = typer.Argument(
+            None,
+            help="Registry model id or local model directory.",
+        ),
+        all_models: bool = typer.Option(
+            False,
+            "--all",
+            help="Verify every cached model with integrity metadata.",
+        ),
+        config_path: Optional[Path] = typer.Option(
+            None,
+            "--config-path",
+            help="Override config path.",
+        ),
+    ):
+        """Verify cached model artifacts without network access."""
+        if (model_id is None) == (not all_models):
+            raise typer.BadParameter("Provide MODEL_ID or --all, but not both.")
+        cfg = _load_config(config_path)
+        try:
+            results = verify_cached_models(
+                cache_dir=str(cfg.cache_dir),
+                model_id=None if all_models else model_id,
+            )
+        except ModelIntegrityError as exc:
+            _render_table(
+                "Model integrity",
+                ["model_id", "status", "expected", "actual", "files"],
+                [
+                    [
+                        exc.model_id,
+                        "FAIL",
+                        exc.expected_sha256,
+                        exc.actual_sha256,
+                        "-",
+                    ]
+                ],
+            )
+            rprint(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        except (OSError, ValueError) as exc:
+            rprint(f"[red]Model integrity verification failed: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+
+        rows = [
+            [
+                result.model_id,
+                "PASS",
+                result.expected_sha256,
+                result.actual_sha256,
+                str(result.files_checked),
+            ]
+            for result in results
+        ]
+        _render_table(
+            "Model integrity",
+            ["model_id", "status", "expected", "actual", "files"],
+            rows,
+        )
+        if not rows:
+            rprint("No verified model caches found.")
 
     app.add_typer(models_app, name="models")
 
@@ -295,7 +364,12 @@ def main() -> None:
 
     app.add_typer(zero_app, name="zero")
 
-    app()
+    return app
+
+
+def main() -> None:
+    """Run the Typer command-line application."""
+    build_app()()
 
 
 if __name__ == "__main__":  # pragma: no cover

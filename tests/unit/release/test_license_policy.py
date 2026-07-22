@@ -57,6 +57,17 @@ def test_zh_and_indic_dependencies_have_reviewed_permissive_licenses():
     )
 
 
+def test_cryptography_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("cryptography")
+    allowed, reason = policy.is_allowed_license("cryptography", license_text)
+
+    assert license_text == "Apache-2.0 OR BSD-3-Clause"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_current_package_data_has_no_restricted_vocab_dumps():
     assert policy.audit_restricted_vocab_data(ROOT) == []
 

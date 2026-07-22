@@ -77,6 +77,7 @@ if TYPE_CHECKING:
 
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
+from .model_integrity import prepare_model_reference
 from .model_registry import (
     ModelInfo as RegistryModelInfo,
 )
@@ -172,11 +173,21 @@ class ModelLoader:
                 "config": self._models[full_model_name].config,
             }
 
+        requested_local_loading = self._local_loading_kwargs(full_model_name, kwargs)
+        pretrained_reference = self._prepare_model_reference(
+            model_name,
+            full_model_name,
+            local_only=bool(requested_local_loading.get("local_files_only")),
+        )
+
         try:
             logger.info("Loading model: %s", full_model_name)
 
             auth_kwargs = self._hub_auth_kwargs()
-            local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
+            local_loading_kwargs = self._local_loading_kwargs(
+                pretrained_reference,
+                kwargs,
+            )
             load_kwargs = dict(kwargs)
             load_kwargs.pop("local_files_only", None)
             pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
@@ -194,7 +205,7 @@ class ModelLoader:
             # Load config first to verify it's a token classification model
             _ensure_hf_auto_config()
             config = AutoConfig.from_pretrained(
-                full_model_name,
+                pretrained_reference,
                 cache_dir=self.config.cache_dir,
                 **pretrained_kwargs,
             )
@@ -217,7 +228,7 @@ class ModelLoader:
             # Load tokenizer
             _ensure_hf_auto_tokenizer()
             tokenizer = get_tokenizer_with_loader(
-                full_model_name,
+                pretrained_reference,
                 AutoTokenizer.from_pretrained,
                 refresh_cache=force_reload,
                 cache_dir=self.config.cache_dir,
@@ -238,7 +249,7 @@ class ModelLoader:
             )
             _ensure_hf_auto_model()
             model = AutoModelForTokenClassification.from_pretrained(
-                full_model_name,
+                pretrained_reference,
                 cache_dir=self.config.cache_dir,
                 **model_kwargs,
             )
@@ -360,18 +371,28 @@ class ModelLoader:
             logger.info("Using cached pipeline for %s", full_model_name)
             return self._pipelines[cache_key]
 
+        requested_local_loading = self._local_loading_kwargs(full_model_name, kwargs)
+        pipeline_model_reference = self._prepare_model_reference(
+            model_name,
+            full_model_name,
+            local_only=bool(requested_local_loading.get("local_files_only")),
+        )
+
         model_kwargs: Dict[str, Any] = {}
         try:
             # Create pipeline directly with model name for better caching
             pipeline_device = kwargs.get("device", self._get_device_id())
             pipeline_kwargs = {
-                "model": full_model_name,
+                "model": pipeline_model_reference,
                 "aggregation_strategy": aggregation_strategy,
                 "device": pipeline_device,
                 "use_fast": use_fast_tokenizer,
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
-            local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
+            local_loading_kwargs = self._local_loading_kwargs(
+                pipeline_model_reference,
+                kwargs,
+            )
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
             # Transformers forwards loader options through ``model_kwargs``;
@@ -659,6 +680,25 @@ class ModelLoader:
         if getattr(self.config, "hf_token", None):
             return {"token": self.config.hf_token}
         return {}
+
+    def _prepare_model_reference(
+        self,
+        requested_model_name: str,
+        resolved_model_name: str,
+        *,
+        local_only: bool,
+    ) -> str:
+        """Resolve and verify cached artifacts before model construction."""
+        registry_info = get_model_info(requested_model_name) or get_model_info(
+            resolved_model_name
+        )
+        return prepare_model_reference(
+            resolved_model_name,
+            registry_info=registry_info,
+            cache_dir=str(self.config.cache_dir),
+            local_only=local_only,
+            token=getattr(self.config, "hf_token", None),
+        )
 
     def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
         """Return a filesystem path when ``model_name`` points to local files."""

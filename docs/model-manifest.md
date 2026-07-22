@@ -23,7 +23,7 @@ Every row must include:
 | `benchmark` | Legacy benchmark object or enriched suite list. |
 | `arxiv` | Related arXiv id, or `null`. |
 | `license` | Model license identifier, or `null` when not declared. |
-| `reproducibility_hash` | Stable `sha256:<64 lower hex>` provenance hash. |
+| `reproducibility_hash` | Stable `sha256:<64 lower hex>` repository/provenance hash. It binds the catalog row to a repository revision and file list; artifact bytes use the separate cache integrity manifest documented in [Supply Chain Controls](security/supply-chain.md#model-artifact-integrity). |
 | `released` | Release date as `YYYY-MM-DD`, or `null`. |
 
 ## Enrichment fields
