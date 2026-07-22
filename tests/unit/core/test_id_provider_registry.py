@@ -7,10 +7,14 @@ from faker import Faker
 
 from openmed.core.anonymizer.locales import FAKER_BACKEND_LOCALE
 from openmed.core.anonymizer.providers import registry_ids
-from openmed.core.anonymizer.providers.clinical_ids import register_clinical_providers
+from openmed.core.anonymizer.providers.clinical_ids import (
+    AfricanPhoneProvider,
+    register_clinical_providers,
+)
 from openmed.core.anonymizer.providers.registry_ids import (
     ID_PROVIDER_REGISTRY,
     NationalIdSpec,
+    clinical_faker_provider_classes,
     get_national_id,
     register_national_id,
 )
@@ -292,3 +296,50 @@ class TestNationalIdRegistry:
             "Add unit tests",
         ):
             assert expected in doc
+
+
+class TestAfricanPhoneProviderRegistry:
+    def test_provider_is_registered_once(self):
+        provider_classes = clinical_faker_provider_classes()
+
+        assert provider_classes.count(AfricanPhoneProvider) == 1
+
+    @pytest.mark.parametrize(
+        ("original", "preserved_digits"),
+        [
+            ("+251 91 234 5678", "25191"),
+            ("00250 78 123 4567", "0025078"),
+            ("0752 876 543", "0752"),
+        ],
+    )
+    def test_registered_provider_preserves_country_and_operator_prefix(
+        self,
+        original,
+        preserved_digits,
+    ):
+        faker = Faker("en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(858)
+
+        surrogate = faker.african_phone(original)
+
+        assert surrogate is not None
+        assert "".join(char for char in surrogate if char.isdigit()).startswith(
+            preserved_digits
+        )
+        assert surrogate != original
+        assert "".join(char for char in surrogate if not char.isdigit()) == "".join(
+            char for char in original if not char.isdigit()
+        )
+
+    def test_seeded_provider_is_deterministic(self):
+        first = Faker("en_US")
+        second = Faker("en_US")
+        register_clinical_providers(first)
+        register_clinical_providers(second)
+        first.seed_instance(858)
+        second.seed_instance(858)
+
+        assert first.african_phone("+233 24 123 4567") == second.african_phone(
+            "+233 24 123 4567"
+        )

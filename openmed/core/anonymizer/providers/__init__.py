@@ -9,6 +9,7 @@ and produce values that pass the existing checksum validators in
 from .clinical_ids import (
     AadhaarProvider,
     ABDMProvider,
+    AfricanPhoneProvider,
     BulgarianEgnProvider,
     ChineseIdentifierProvider,
     DanishCPRProvider,
@@ -35,6 +36,7 @@ from .clinical_ids import (
     generate_abha,
     generate_abha_address,
     generate_abha_number,
+    generate_african_phone,
     generate_bic,
     generate_bulgarian_egn,
     generate_chinese_bank_card,
@@ -79,8 +81,10 @@ from .clinical_ids import (
     validate_pan,
 )
 from .registry_ids import (
+    AUXILIARY_FAKER_PROVIDER_CLASSES,
     ID_PROVIDER_REGISTRY,
     NationalIdSpec,
+    clinical_faker_provider_classes,
     get_national_id,
     register_national_id,
 )
@@ -97,6 +101,8 @@ from .script_names import (
 __all__ = [
     "ABDMProvider",
     "AadhaarProvider",
+    "AfricanPhoneProvider",
+    "AUXILIARY_FAKER_PROVIDER_CLASSES",
     "BulgarianEgnProvider",
     "ChineseIdentifierProvider",
     "DanishCPRProvider",
@@ -126,10 +132,12 @@ __all__ = [
     "SpanishDNIProvider",
     "TELUGU_LANGUAGE_PACK",
     "VietnameseIdProvider",
+    "clinical_faker_provider_classes",
     "generate_abha",
     "generate_bic",
     "generate_abha_address",
     "generate_abha_number",
+    "generate_african_phone",
     "generate_bulgarian_egn",
     "generate_chinese_bank_card",
     "generate_chinese_mobile_number",

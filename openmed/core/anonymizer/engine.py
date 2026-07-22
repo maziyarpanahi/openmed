@@ -336,6 +336,10 @@ class Anonymizer:
             faker.seed_instance(self._derive_seed(canonical, original_value))
 
         if canonical == L.PHONE:
+            if hasattr(faker, "african_phone"):
+                african_surrogate = faker.african_phone(original_value)
+                if african_surrogate is not None:
+                    return african_surrogate
             return preserve_phone_format(original_value, rng=faker.random)
         if canonical in _FORMAT_PRESERVE_DATE_LABELS:
             day_first = effective_locale in _FORMAT_PRESERVE_DAY_FIRST_LOCALES
