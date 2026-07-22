@@ -1,6 +1,9 @@
 name: Release Gates
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       candidate:
@@ -22,6 +25,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -32,6 +37,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
+
+      - name: Check API migration guide completeness
+        if: startsWith(github.ref, 'refs/tags/v1.9.')
+        run: |
+          python scripts/release/api_surface_diff.py \
+            v1.8.0 "$GITHUB_SHA" \
+            --json "$RUNNER_TEMP/api-surface-diff.json" \
+            --check docs/migration/1.8-to-1.9.md
+          echo "API migration guide completeness gate passed." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check for candidate report
         id: check-candidate
