@@ -2357,6 +2357,85 @@ def radiology_finding_tuple_f1(
     )
 
 
+def _normalize_trend_entity(value: Any) -> str:
+    return " ".join(str(value or "").split()).casefold()
+
+
+def _index_trends_by_entity(
+    trends: Iterable[Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    return {_normalize_trend_entity(trend.get("entity")): trend for trend in trends}
+
+
+def trend_direction_accuracy(
+    predicted: Iterable[Iterable[Mapping[str, Any]]],
+    gold: Iterable[Iterable[Mapping[str, Any]]],
+) -> RateMetric:
+    """Fraction of gold trends whose predicted ``direction`` matches.
+
+    ``predicted`` and ``gold`` are parallel iterables of per-note trend lists
+    (one list per input note). Within a note, trends are aligned by normalized
+    entity name (case- and whitespace-insensitive). A gold trend with no matching
+    predicted trend counts as incorrect, so failing to group an entity is
+    penalized. Parser-agnostic: callers pass already-derived trend mappings.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        predicted_by_entity = _index_trends_by_entity(predicted_row)
+        for gold_trend in gold_row:
+            total += 1
+            match = predicted_by_entity.get(
+                _normalize_trend_entity(gold_trend.get("entity"))
+            )
+            if match is not None and match.get("direction") == gold_trend.get(
+                "direction"
+            ):
+                correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
+def trend_grouping_accuracy(
+    predicted: Iterable[Iterable[Mapping[str, Any]]],
+    gold: Iterable[Iterable[Mapping[str, Any]]],
+) -> RateMetric:
+    """Fraction of gold trends reproduced with the expected point partition.
+
+    Scores grouping and comparability: a predicted trend matches a gold trend
+    (aligned by normalized entity) only when its ``comparable_count`` and its
+    number of ``incomparable_points`` equal the gold ``comparable_count`` and
+    ``incomparable_count``. Parser-agnostic: callers pass already-derived trends.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        predicted_by_entity = _index_trends_by_entity(predicted_row)
+        for gold_trend in gold_row:
+            total += 1
+            match = predicted_by_entity.get(
+                _normalize_trend_entity(gold_trend.get("entity"))
+            )
+            if match is None:
+                continue
+            comparable_ok = int(match.get("comparable_count", -1)) == int(
+                gold_trend.get("comparable_count", -2)
+            )
+            incomparable_ok = len(match.get("incomparable_points", ())) == int(
+                gold_trend.get("incomparable_count", -2)
+            )
+            if comparable_ok and incomparable_ok:
+                correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
 def _bounded_unit_interval(value: Any, field_name: str) -> float:
     result = float(value)
     if not isfinite(result) or not 0.0 <= result <= 1.0:
@@ -3060,6 +3139,8 @@ __all__ = [
     "section_boundary_accuracy",
     "stated_category_accuracy",
     "radiology_finding_tuple_f1",
+    "trend_direction_accuracy",
+    "trend_grouping_accuracy",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
