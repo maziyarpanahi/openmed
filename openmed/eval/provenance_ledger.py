@@ -1,10 +1,11 @@
-"""Tamper-evident provenance ledger for evaluation results.
+"""Hash-chained provenance ledger for evaluation results.
 
 The ledger binds aggregate, PHI-safe evaluation results to the exact inputs
-that produced them.  Each record commits to the preceding record, allowing the
-verifier to detect mutation, insertion, deletion, and reordering.  Result
-metadata is intentionally restricted to numbers, booleans, nulls, and content
-digests so raw clinical text cannot be persisted accidentally.
+that produced them. Each record commits to the preceding record, allowing the
+verifier to detect partial mutation, insertion, deletion, and reordering. A
+trusted head hash additionally detects a complete chain rewrite. Result metadata
+is restricted to schema-defined keys and aggregate values so raw clinical text
+cannot be persisted accidentally.
 """
 
 from __future__ import annotations
@@ -30,27 +31,52 @@ LEDGER_SCHEMA_VERSION = "openmed.eval_provenance_ledger.v1"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,255}$")
 _METADATA_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
-_SENSITIVE_KEY_TOKENS = frozenset(
+ALLOWED_RESULT_METADATA_KEYS = frozenset(
     {
-        "address",
-        "content",
-        "document",
-        "email",
-        "identifier",
-        "mrn",
-        "name",
-        "note",
-        "patient",
-        "phone",
-        "prompt",
-        "raw",
-        "response",
-        "ssn",
-        "text",
+        "accuracy",
+        "auroc",
+        "average_precision",
+        "count",
+        "document_count",
+        "duration_ms",
+        "error_count",
+        "f1",
+        "failed_count",
+        "false_negative_count",
+        "false_positive_count",
+        "fixture_count",
+        "latency_ms",
+        "macro_f1",
+        "macro_precision",
+        "macro_recall",
+        "max",
+        "mean",
+        "median",
+        "metrics",
+        "micro_f1",
+        "micro_precision",
+        "micro_recall",
+        "min",
+        "p50_ms",
+        "p95_ms",
+        "p99_ms",
+        "passed",
+        "passed_count",
+        "precision",
+        "rate",
+        "recall",
+        "result_digest",
+        "score",
+        "specificity",
+        "standard_deviation",
+        "success_count",
+        "text_length",
+        "true_negative_count",
+        "true_positive_count",
+        "weighted_f1",
+        "weighted_precision",
+        "weighted_recall",
     }
-)
-_AGGREGATE_SUFFIXES = frozenset(
-    {"bytes", "count", "digest", "hash", "length", "ms", "rate", "ratio", "score"}
 )
 
 
@@ -529,15 +555,25 @@ def write_ledger(
 def verify_ledger(
     ledger: EvalProvenanceLedger | str | Path,
     *,
+    expected_head_hash: str | None = None,
     raise_on_error: bool = False,
 ) -> bool:
-    """Verify the chain and recompute every result and reproducibility hash."""
+    """Verify the chain, derived hashes, and an optional trusted head anchor."""
 
     try:
         resolved = load_ledger(ledger) if isinstance(ledger, (str, Path)) else ledger
         if not isinstance(resolved, EvalProvenanceLedger):
             raise LedgerVerificationError("expected a provenance ledger or path")
         resolved.validate()
+        if expected_head_hash is not None:
+            expected_head = _required_digest(
+                expected_head_hash,
+                "expected_head_hash",
+            )
+            if not hmac.compare_digest(resolved.head_hash, expected_head):
+                raise LedgerVerificationError(
+                    "ledger head_hash does not match the trusted expected head"
+                )
     except (OSError, json.JSONDecodeError, ProvenanceLedgerError) as exc:
         if raise_on_error:
             if isinstance(exc, LedgerVerificationError):
@@ -552,14 +588,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="python -m openmed.eval.provenance_ledger",
-        description="Verify hash-chained OpenMed evaluation provenance ledgers.",
+        description=(
+            "Verify OpenMed evaluation provenance ledgers, optionally against "
+            "a trusted head hash."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     verify_parser = subparsers.add_parser(
         "verify",
-        help="Re-check the chain and recompute all result hashes.",
+        help="Re-check the chain, derived hashes, and an optional trusted head.",
     )
     verify_parser.add_argument("ledger", type=Path, help="Ledger JSON file to verify.")
+    verify_parser.add_argument(
+        "--expected-head",
+        metavar="sha256:...",
+        help="Trusted ledger head hash used to detect a complete chain rewrite.",
+    )
     return parser
 
 
@@ -571,11 +615,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     try:
         ledger = load_ledger(args.ledger)
-        ledger.validate()
+        verify_ledger(
+            ledger,
+            expected_head_hash=args.expected_head,
+            raise_on_error=True,
+        )
     except ProvenanceLedgerError as exc:
         print(f"Ledger verification failed: {exc}", file=sys.stderr)
         return 1
-    print(f"Verified {ledger.record_count} eval provenance record(s): {args.ledger}")
+    anchor = " against the trusted head" if args.expected_head is not None else ""
+    print(
+        f"Verified {ledger.record_count} eval provenance record(s){anchor}: "
+        f"{args.ledger}"
+    )
     return 0
 
 
@@ -665,14 +717,9 @@ def _normalise_metadata_value(value: Any, *, path: str) -> Any:
 def _metadata_key(value: Any) -> str:
     if not isinstance(value, str) or not _METADATA_KEY_RE.fullmatch(value):
         raise UnsafeResultMetadataError(f"unsafe result metadata key: {value!r}")
-    tokens = {token.lower() for token in re.split(r"[_.-]+", value)}
-    sensitive = sorted(tokens & _SENSITIVE_KEY_TOKENS)
-    suffix = value.rsplit(".", 1)[-1]
-    suffix_tokens = [token.lower() for token in re.split(r"[_-]+", suffix)]
-    is_aggregate = bool(suffix_tokens and suffix_tokens[-1] in _AGGREGATE_SUFFIXES)
-    if sensitive and not is_aggregate:
+    if value not in ALLOWED_RESULT_METADATA_KEYS:
         raise UnsafeResultMetadataError(
-            f"result metadata key may contain raw identifying data: {value!r}"
+            f"result metadata key is not permitted by the v1 schema: {value!r}"
         )
     return value
 
@@ -719,6 +766,7 @@ def _require_exact_fields(
 
 
 __all__ = [
+    "ALLOWED_RESULT_METADATA_KEYS",
     "GENESIS_HASH",
     "LEDGER_SCHEMA_VERSION",
     "EvalProvenanceLedger",

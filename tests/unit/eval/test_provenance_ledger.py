@@ -76,6 +76,37 @@ def test_tampering_with_a_result_fails_verification(tmp_path: Path) -> None:
         verify_ledger(path, raise_on_error=True)
 
 
+def test_trusted_head_detects_a_fully_rebuilt_chain(tmp_path: Path) -> None:
+    path = tmp_path / "eval-provenance.json"
+    _append(path, f1=0.71)
+    trusted_head = load_ledger(path).head_hash
+
+    path.unlink()
+    _append(path, f1=0.94)
+
+    assert verify_ledger(path) is True
+    assert verify_ledger(path, expected_head_hash=trusted_head) is False
+    with pytest.raises(LedgerVerificationError, match="trusted expected head"):
+        verify_ledger(
+            path,
+            expected_head_hash=trusted_head,
+            raise_on_error=True,
+        )
+
+
+def test_trusted_head_must_be_a_canonical_digest(tmp_path: Path) -> None:
+    path = tmp_path / "eval-provenance.json"
+    _append(path)
+
+    assert verify_ledger(path, expected_head_hash="not-a-digest") is False
+    with pytest.raises(LedgerVerificationError, match="expected_head_hash"):
+        verify_ledger(
+            path,
+            expected_head_hash="not-a-digest",
+            raise_on_error=True,
+        )
+
+
 @pytest.mark.parametrize("mutation", ["delete", "reorder", "head"])
 def test_deletion_reordering_and_head_tampering_fail_verification(
     tmp_path: Path,
@@ -144,6 +175,37 @@ def test_raw_or_identifying_result_metadata_is_rejected(tmp_path: Path) -> None:
             config_digest=_digest("b"),
             env_fingerprint=_digest("c"),
             result_metadata={"patient_name": "Alice Smith"},
+        )
+
+    assert not path.exists()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "patient_mrn_score",
+        "mrn_12345678_score",
+        "john_smith_score",
+        "custom_metric",
+    ],
+)
+def test_result_metadata_rejects_keys_outside_the_v1_schema(
+    tmp_path: Path,
+    key: str,
+) -> None:
+    path = tmp_path / "eval-provenance.json"
+
+    with pytest.raises(UnsafeResultMetadataError, match="v1 schema"):
+        append_eval_result(
+            path,
+            model_digest=_digest("a"),
+            suite_id="synthetic-pii",
+            suite_version="2.1.0",
+            code_hash="abc1234",
+            seed=7,
+            config_digest=_digest("b"),
+            env_fingerprint=_digest("c"),
+            result_metadata={key: 0.99},
         )
 
     assert not path.exists()
@@ -220,9 +282,12 @@ def test_verify_command_reports_success_and_failure(
 ) -> None:
     path = tmp_path / "eval-provenance.json"
     _append(path)
+    trusted_head = load_ledger(path).head_hash
 
-    assert main(["verify", str(path)]) == 0
-    assert "Verified 1 eval provenance record" in capsys.readouterr().out
+    assert main(["verify", str(path), "--expected-head", trusted_head]) == 0
+    output = capsys.readouterr().out
+    assert "Verified 1 eval provenance record" in output
+    assert "against the trusted head" in output
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["records"][0]["result_hash"] = _digest("f")
