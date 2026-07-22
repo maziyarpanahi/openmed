@@ -179,6 +179,8 @@ def test_han_script_routes_to_chinese_candidate_language():
 
 def test_han_dominance_detection_supports_language_routing():
     assert is_han_dominant("患者王芳因心房颤动入院")
+    assert is_han_dominant("患者A")
+    assert not is_han_dominant("患者AB")
     assert not is_han_dominant("Patient John Smith")
 
 

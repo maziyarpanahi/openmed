@@ -45,22 +45,40 @@ def test_chinese_book_title_period_does_not_split_sentence():
     _assert_exact_round_trip(text, spans)
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_first"),
-    [
-        ("医生说：「情况稳定。」患者可以出院。", "医生说：「情况稳定。」"),
-        ("医嘱（立即复诊！）患者知情。", "医嘱（立即复诊！）"),
-        ("记录〔血压正常；〕继续观察。", "记录〔血压正常；〕"),
-    ],
-)
-def test_chinese_closing_punctuation_stays_with_preceding_sentence(
-    text: str,
-    expected_first: str,
-):
+def test_chinese_closing_quote_stays_with_preceding_sentence():
+    text = "医生说：「情况稳定。」患者可以出院。"
+
     spans = segment_chinese_text(text)
 
-    assert spans[0].text == expected_first
+    assert spans[0].text == "医生说：「情况稳定。」"
     assert len(spans) == 2
+    _assert_exact_round_trip(text, spans)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "医嘱（立即复诊！）患者知情。",
+        "记录〔血压正常；〕继续观察。",
+        "依据《临床指南。》调整用药。",
+    ],
+)
+def test_non_quote_bracket_punctuation_does_not_end_outer_sentence(text: str):
+    spans = segment_chinese_text(text)
+
+    assert [span.text for span in spans] == [text]
+    _assert_exact_round_trip(text, spans)
+
+
+def test_closing_quote_followed_by_comma_continues_the_outer_sentence():
+    text = "医生说：「情况稳定！」，建议明日出院。患者知情。"
+
+    spans = segment_chinese_text(text)
+
+    assert [span.text for span in spans] == [
+        "医生说：「情况稳定！」，建议明日出院。",
+        "患者知情。",
+    ]
     _assert_exact_round_trip(text, spans)
 
 
@@ -70,6 +88,15 @@ def test_chinese_fullwidth_decimal_does_not_split():
     spans = segment_chinese_text(text)
 
     assert [span.text for span in spans] == ["剂量为1．5毫克。", "复诊安排！"]
+    _assert_exact_round_trip(text, spans)
+
+
+def test_chinese_fullwidth_abbreviation_and_ascii_terminator():
+    text = "Dr．Wang记录剂量。情况稳定!"
+
+    spans = segment_chinese_text(text)
+
+    assert [span.text for span in spans] == ["Dr．Wang记录剂量。", "情况稳定!"]
     _assert_exact_round_trip(text, spans)
 
 
@@ -108,3 +135,15 @@ def test_non_chinese_language_keeps_pysbd_path():
         SentenceSpan("Patient is stable. ", 0, 19),
         SentenceSpan("Follow up tomorrow.", 19, len(text)),
     ]
+
+
+def test_explicit_segmenter_override_is_preserved_for_han_text():
+    text = "患者稳定。次日复诊！"
+    sentence_object = SimpleNamespace(sent=text, start=0, end=len(text))
+    explicit_segmenter = Mock()
+    explicit_segmenter.segment.return_value = [sentence_object]
+
+    spans = segment_text(text, language="zh", segmenter=explicit_segmenter)
+
+    explicit_segmenter.segment.assert_called_once_with(text)
+    assert spans == [SentenceSpan(text, 0, len(text))]

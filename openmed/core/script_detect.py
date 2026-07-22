@@ -343,7 +343,11 @@ def detect_script(text: str) -> str:
 def is_han_dominant(text: str) -> bool:
     """Return whether Han is the dominant supported script in ``text``."""
 
-    return detect_script(text) == "Han"
+    counts = _script_counts(text)
+    han_count = counts.get("Han", 0)
+    return han_count > 0 and all(
+        han_count > count for script, count in counts.items() if script != "Han"
+    )
 
 
 def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:

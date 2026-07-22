@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 _SEGMENTER_CACHE: Dict[Tuple[str, bool], Any] = {}
 
-_CHINESE_TERMINATORS = frozenset({"。", "！", "？", "；", "．", "｡"})
+_CHINESE_TERMINATORS = frozenset({"。", "！", "？", "；", "．", "｡", "!", "?", ";"})
 _CHINESE_OPEN_TO_CLOSE = {
     "「": "」",
     "『": "』",
@@ -21,7 +21,27 @@ _CHINESE_OPEN_TO_CLOSE = {
     "（": "）",
     "〔": "〕",
 }
+_CHINESE_QUOTE_OPENERS = frozenset({"「", "『"})
 _CHINESE_CLOSERS = frozenset(_CHINESE_OPEN_TO_CLOSE.values())
+_CHINESE_CONTINUATION_PUNCTUATION = frozenset({",", ":", "、", "，", "："})
+_COMMON_LATIN_ABBREVIATIONS = frozenset(
+    {
+        "dr",
+        "e.g",
+        "etc",
+        "fig",
+        "i.e",
+        "jr",
+        "mr",
+        "mrs",
+        "ms",
+        "no",
+        "prof",
+        "sr",
+        "st",
+        "vs",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -98,10 +118,30 @@ def _uses_chinese_segmenter(text: str, language: str) -> bool:
     )
 
 
-def _is_decimal_point(text: str, index: int) -> bool:
-    if text[index] != "．" or index == 0 or index + 1 >= len(text):
+def _is_non_boundary_fullwidth_period(text: str, index: int) -> bool:
+    if text[index] != "．" or index == 0:
         return False
-    return text[index - 1].isdigit() and text[index + 1].isdigit()
+
+    previous = text[index - 1]
+    following = text[index + 1] if index + 1 < len(text) else ""
+    if previous.isdigit() and following.isdigit():
+        return True
+    if (
+        previous.isascii()
+        and previous.isalpha()
+        and following.isascii()
+        and following.isalpha()
+    ):
+        return True
+
+    token_start = index - 1
+    while token_start >= 0:
+        char = text[token_start]
+        if not ((char.isascii() and char.isalpha()) or char in {".", "．"}):
+            break
+        token_start -= 1
+    token = text[token_start + 1 : index].replace("．", ".").casefold().strip(".")
+    return token in _COMMON_LATIN_ABBREVIATIONS
 
 
 def _continues_chinese_sentence(char: str) -> bool:
@@ -119,10 +159,13 @@ def _chinese_spans(text: str) -> List[SentenceSpan]:
         if deferred_boundary and stack and not _continues_chinese_sentence(char):
             deferred_boundary = False
 
-        if boundary_ready and not _continues_chinese_sentence(char):
-            spans.append(SentenceSpan(text[start:index], start, index))
-            start = index
-            boundary_ready = False
+        if boundary_ready:
+            if char in _CHINESE_CONTINUATION_PUNCTUATION:
+                boundary_ready = False
+            elif not _continues_chinese_sentence(char):
+                spans.append(SentenceSpan(text[start:index], start, index))
+                start = index
+                boundary_ready = False
 
         if char in _CHINESE_OPEN_TO_CLOSE:
             stack.append(char)
@@ -136,12 +179,15 @@ def _chinese_spans(text: str) -> List[SentenceSpan]:
                     deferred_boundary = False
             continue
 
-        if char not in _CHINESE_TERMINATORS or _is_decimal_point(text, index):
+        if char not in _CHINESE_TERMINATORS or _is_non_boundary_fullwidth_period(
+            text,
+            index,
+        ):
             continue
 
-        if stack:
+        if stack and stack[-1] in _CHINESE_QUOTE_OPENERS:
             deferred_boundary = True
-        else:
+        elif not stack:
             boundary_ready = True
 
     if start < len(text):
@@ -174,7 +220,7 @@ def segment_text(
     if not text:
         return []
 
-    if _uses_chinese_segmenter(text, language):
+    if segmenter is None and _uses_chinese_segmenter(text, language):
         return segment_chinese_text(text)
 
     seg = _get_segmenter(language=language, clean=clean, segmenter=segmenter)
