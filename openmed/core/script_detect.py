@@ -446,6 +446,10 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
             (0x00C0, 0x00FF),
             (0x0100, 0x017F),
             (0x0180, 0x024F),
+            # IPA Extensions contains lowercase Hausa hooked consonants
+            # U+0253 (ɓ) and U+0257 (ɗ); their uppercase forms live in
+            # Latin Extended-B above.
+            (0x0250, 0x02AF),
             (0x1E00, 0x1EFF),
             (0x2C60, 0x2C7F),
             (0xA720, 0xA7FF),
