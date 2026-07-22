@@ -1,6 +1,14 @@
 """Core functionality for OpenMed package."""
 
 from .audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .audit_chain import (
+    AuditChain,
+    AuditChainEntry,
+    AuditChainSpan,
+    ChainVerificationResult,
+    append_to_chain_file,
+    verify_chain,
+)
 from .config import (
     PROFILE_PRESETS,
     OpenMedConfig,
@@ -93,6 +101,12 @@ __all__ = [
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "AuditChain",
+    "AuditChainEntry",
+    "AuditChainSpan",
+    "ChainVerificationResult",
+    "append_to_chain_file",
+    "verify_chain",
     "redaction_preview",
     "render_redaction_preview",
     "BIDI_CONTROL_CHARS",
