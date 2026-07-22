@@ -39,6 +39,9 @@ authors = [
 [project.optional-dependencies]
 dev = [
   "pre-commit>=4.0",
+  "cryptography>=42,<50",
+  "rich>=13.0",
+  "typer>=0.12",
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
@@ -66,6 +69,10 @@ dev = [
 cli = [
   "rich>=13.0",
   "typer>=0.12",
+]
+
+integrity = [
+  "cryptography>=42,<50",
 ]
 
 mcp = [
@@ -282,6 +289,7 @@ include = [
   "openmed/core/schemas/json/*.json",
   "gates/baseline.json",
   "models.jsonl",
+  "models.jsonl.sigstore.json",
   "LICENSE",
   "NOTICE",
   "README.md",

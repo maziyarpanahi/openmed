@@ -30,6 +30,7 @@ from ..core.config import (
 )
 from ..core.manifest_diff import ManifestDiff, diff_manifests
 from ..core.model_card import render_model_card
+from ..core.model_integrity import ModelIntegrityError, verify_cached_models
 from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from ..core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
@@ -836,6 +837,23 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Registry key defined in openmed.core.model_registry.",
     )
     models_info.set_defaults(handler=_handle_models_info)
+
+    models_verify = models_sub.add_parser(
+        "verify",
+        help="Verify cached model artifacts without network access.",
+    )
+    models_verify.add_argument(
+        "model_id",
+        nargs="?",
+        help="Registry model id or local model directory.",
+    )
+    models_verify.add_argument(
+        "--all",
+        dest="all_models",
+        action="store_true",
+        help="Verify every cached model with integrity metadata.",
+    )
+    models_verify.set_defaults(handler=_handle_models_verify)
 
     models_search = models_sub.add_parser(
         "search",
@@ -2810,6 +2828,39 @@ def _handle_models_info(args: argparse.Namespace) -> int:
     if max_length is not None:
         payload["max_length"] = max_length
     return emit(args, payload, human=json.dumps(payload, indent=2))
+
+
+def _handle_models_verify(args: argparse.Namespace) -> int:
+    if (args.model_id is None) == (not args.all_models):
+        sys.stderr.write("Provide MODEL_ID or --all, but not both.\n")
+        return 2
+
+    config = _load_and_apply_config(args)
+    try:
+        results = verify_cached_models(
+            cache_dir=str(config.cache_dir),
+            model_id=None if args.all_models else args.model_id,
+        )
+    except ModelIntegrityError as exc:
+        sys.stdout.write("model_id  status  expected  actual  files\n")
+        sys.stdout.write(
+            f"{exc.model_id}  FAIL  {exc.expected_sha256}  {exc.actual_sha256}  -\n"
+        )
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Model integrity verification failed: {exc}\n")
+        return 1
+
+    sys.stdout.write("model_id  status  expected  actual  files\n")
+    for result in results:
+        sys.stdout.write(
+            f"{result.model_id}  PASS  {result.expected_sha256}  "
+            f"{result.actual_sha256}  {result.files_checked}\n"
+        )
+    if not results:
+        sys.stdout.write("No verified model caches found.\n")
+    return 0
 
 
 def _handle_models_freshness(args: argparse.Namespace) -> int:
