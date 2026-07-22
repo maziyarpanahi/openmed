@@ -291,6 +291,7 @@ from openmed.eval.metrics import (
     expected_calibration_error,
     normalize_critical_finding_category,
     paired_significance,
+    radiology_finding_tuple_f1,
     reliability_bins,
     weighted_coverage,
 )
@@ -720,6 +721,7 @@ __all__ = [
     "perturb_fixture",
     "probe_span_timing_side_channel",
     "profile_memory",
+    "radiology_finding_tuple_f1",
     "render_reid_leaderboard",
     "render_dataset_card_markdown",
     "render_eval_model_card_markdown",

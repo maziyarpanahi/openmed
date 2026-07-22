@@ -186,9 +186,11 @@ from .problem_list import (
 )
 from .radiology_finding import (
     RADIOLOGY_FINDING_ADVISORY,
+    RADIOLOGY_LATERALITY_LEXICON,
     Laterality,
     ProvenanceSpan,
     RadiologyFinding,
+    RadLexMappingSource,
     extract_radiology_findings,
 )
 from .radiology_report import (
@@ -434,9 +436,11 @@ __all__ = [
     "PROBLEM_CLINICAL_STATUS_VALUES",
     "PROBLEM_LIST_RECONCILIATION_ADVISORY",
     "RADIOLOGY_FINDING_ADVISORY",
+    "RADIOLOGY_LATERALITY_LEXICON",
     "RADIOLOGY_REPORT_ADVISORY",
     "Laterality",
     "ProvenanceSpan",
+    "RadLexMappingSource",
     "RadiologyFinding",
     "RadiologyReportTemplate",
     "extract_radiology_findings",
