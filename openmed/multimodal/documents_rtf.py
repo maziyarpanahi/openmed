@@ -171,6 +171,35 @@ def _scan_rtf(source: str) -> _ScanResult:
     pending_hex: list[int] = []
     pending_hex_start = -1
 
+    # A `\uN` escape that decoded to a UTF-16 high surrogate (0xD800-0xDBFF)
+    # is held here rather than emitted immediately: astral-plane characters
+    # (code points above U+FFFF) are represented in RTF as a *pair* of `\uN`
+    # escapes -- a high surrogate followed by a low surrogate -- each of
+    # which only carries half of the real code point on its own. Emitting
+    # each half independently via chr() would leak two lone (invalid)
+    # surrogate code points into the output text, which later crashes any
+    # UTF-8 encode of that text. `pending_surrogate` is resolved as soon as
+    # the next `\uN` escape (after this one's own `\ucN` fallback run) is
+    # seen: if it is the matching low surrogate, the two combine into a
+    # single real character; otherwise -- or if any other real content or
+    # end-of-document arrives first -- the held high surrogate is malformed
+    # and is dropped in favor of a replacement character.
+    pending_surrogate: int | None = None
+    pending_surrogate_start = -1
+    pending_surrogate_end = -1
+
+    def flush_pending_surrogate() -> None:
+        nonlocal pending_surrogate, pending_surrogate_start, pending_surrogate_end
+        if pending_surrogate is not None:
+            # Unpaired high surrogate: malformed/truncated input. Emit the
+            # Unicode replacement character rather than the raw, invalid
+            # lone surrogate -- the same "replace" treatment already used
+            # for undecodable `\'hh` byte sequences below.
+            emit("\ufffd", pending_surrogate_start, pending_surrogate_end)
+            pending_surrogate = None
+            pending_surrogate_start = -1
+            pending_surrogate_end = -1
+
     def flush_hex(end: int) -> None:
         nonlocal cursor, pending_hex, pending_hex_start
         if not pending_hex:
@@ -232,6 +261,11 @@ def _scan_rtf(source: str) -> _ScanResult:
                 else:
                     if not pending_hex:
                         pending_hex_start = i
+                        # A real (non-fallback) hex escape is new content
+                        # that isn't the low-surrogate `\uN` we might be
+                        # waiting on -- resolve any pending high surrogate
+                        # now, before this run's own text is emitted.
+                        flush_pending_surrogate()
                     pending_hex.append(int(hex_digits, 16))
                 i = end
                 just_opened = False
@@ -241,6 +275,7 @@ def _scan_rtf(source: str) -> _ScanResult:
         flush_hex(i)
 
         if ch == "{":
+            flush_pending_surrogate()
             groups.append(_Group(skip=groups[-1].skip, uc=groups[-1].uc))
             just_opened = True
             pending_skip = 0
@@ -248,12 +283,26 @@ def _scan_rtf(source: str) -> _ScanResult:
             continue
 
         if ch == "}":
+            flush_pending_surrogate()
             if len(groups) > 1:
                 groups.pop()
             just_opened = False
             pending_skip = 0
             i += 1
             continue
+
+        # A `\uN` escape (word == "u") is deferred to the control-word
+        # branch below, which needs to inspect its decoded value before
+        # deciding whether to flush -- it may be the low surrogate this
+        # pending high surrogate is waiting for. Raw/escaped CR-LF is also
+        # excluded: like `pending_skip`, it is pure source formatting with
+        # no effect on token flow (see the branches below), so it must not
+        # count as content breaking a pending surrogate pair either.
+        _next = source[i + 1] if i + 1 < length else ""
+        is_alpha_control = ch == "\\" and _next.isalpha()
+        is_noop_newline = ch in "\r\n" or (ch == "\\" and _next in "\r\n")
+        if pending_skip <= 0 and not is_alpha_control and not is_noop_newline:
+            flush_pending_surrogate()
 
         if ch in "\r\n":
             # Raw CR/LF between tokens is source formatting only; real
@@ -343,6 +392,15 @@ def _scan_rtf(source: str) -> _ScanResult:
                 j += 1
             control_end = j
 
+            # Any control word other than "u" itself is new real content
+            # once it's not being swallowed as someone else's \ucN fallback
+            # (pending_skip <= 0), so it can't be the low surrogate a
+            # pending high surrogate is waiting for -- resolve it now. The
+            # "u" branch below handles its own resolution, since it needs
+            # the decoded value to decide whether this *is* the pairing.
+            if word != "u" and pending_skip <= 0:
+                flush_pending_surrogate()
+
             if word in _SKIP_DESTINATIONS:
                 groups[-1].skip = True
 
@@ -367,8 +425,44 @@ def _scan_rtf(source: str) -> _ScanResult:
                         codepoint += 65536
                     codepoint &= 0xFFFF
                     if pending_skip <= 0:
-                        emit(chr(codepoint), i, control_end)
+                        if (
+                            0xDC00 <= codepoint <= 0xDFFF
+                            and pending_surrogate is not None
+                        ):
+                            # Matches the held high surrogate: combine the
+                            # UTF-16 surrogate pair into the single astral
+                            # code point it represents.
+                            combined = (
+                                0x10000
+                                + (pending_surrogate - 0xD800) * 0x400
+                                + (codepoint - 0xDC00)
+                            )
+                            emit(chr(combined), pending_surrogate_start, control_end)
+                            pending_surrogate = None
+                            pending_surrogate_start = -1
+                            pending_surrogate_end = -1
+                        else:
+                            # Not a low surrogate pairing with what we were
+                            # holding (if anything) -- resolve/drop that
+                            # first, then handle this token on its own.
+                            flush_pending_surrogate()
+                            if 0xD800 <= codepoint <= 0xDBFF:
+                                # High surrogate: hold it rather than emit,
+                                # pending the next \uN escape being its
+                                # matching low surrogate.
+                                pending_surrogate = codepoint
+                                pending_surrogate_start = i
+                                pending_surrogate_end = control_end
+                            elif 0xDC00 <= codepoint <= 0xDFFF:
+                                # Orphan low surrogate, no preceding high
+                                # surrogate: malformed on its own.
+                                emit("\ufffd", i, control_end)
+                            else:
+                                emit(chr(codepoint), i, control_end)
                     pending_skip = groups[-1].uc
+                elif pending_skip <= 0:
+                    # Bare "\u" with no parameter: not a pairing candidate.
+                    flush_pending_surrogate()
                 i = control_end
                 just_opened = False
                 continue
@@ -403,6 +497,10 @@ def _scan_rtf(source: str) -> _ScanResult:
         i += 2
         just_opened = False
 
+    # End of document with a high surrogate still awaiting its low-surrogate
+    # pair: truncated/malformed input, resolved the same way as any other
+    # unpaired high surrogate.
+    flush_pending_surrogate()
     flush_hex(length)
     return _ScanResult(text="".join(parts), spans=tuple(spans))
 

@@ -35,7 +35,14 @@ of the raw source text.
   never contribute to extracted text.
 - `\uN` Unicode escapes are decoded to the real character; the
   `\ucN`-controlled fallback run that follows (for older readers) is
-  consumed rather than duplicated into the output.
+  consumed rather than duplicated into the output. Astral-plane characters
+  (code points above U+FFFF, e.g. most emoji) are represented in RTF as a
+  UTF-16 surrogate *pair* -- two consecutive `\uN` escapes -- and are
+  recombined into the single real character they encode, rather than being
+  emitted as two invalid lone surrogate code points (which would later crash
+  a UTF-8 encode of the extracted text). A high or low surrogate escape with
+  no matching partner is malformed/truncated input; it is replaced with the
+  Unicode replacement character (`�`) rather than emitted raw.
 - `\'hh` hex escapes are decoded using the document's declared code page
   (`\ansicpg`, defaulting to Windows-1252) rather than treated as raw
   Unicode code points, so escapes like curly quotes and em dashes decode to

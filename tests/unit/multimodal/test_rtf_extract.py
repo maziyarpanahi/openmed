@@ -243,6 +243,59 @@ def test_redact_document_dispatches_rtf(tmp_path: Path):
     assert "Patient: John Q. Public" in doc.text
 
 
+def test_astral_unicode_surrogate_pair_combines_into_one_character(tmp_path: Path):
+    # Astral-plane characters (code points above U+FFFF, e.g. most emoji)
+    # are represented in RTF as a UTF-16 surrogate *pair* -- two consecutive
+    # \uN escapes, high surrogate then low surrogate -- not as a single \uN.
+    # Decoding each escape independently produces two lone (invalid)
+    # surrogate code points instead of the one real character; this is the
+    # reviewer's exact repro for U+1F600 (\U0001F600, grinning face emoji).
+    path = _write_synthetic_rtf(
+        tmp_path / "astral.rtf",
+        r"{\rtf1\ansi\ansicpg1252 Face: \u-10179?\u-8704? party}",
+    )
+
+    doc = extract_rtf(path)
+
+    assert doc.text == "Face: \U0001f600 party"
+    assert "\U0001f600" in doc.text
+    # A lone surrogate would raise UnicodeEncodeError here.
+    assert doc.text.encode("utf-8")
+
+
+def test_unpaired_high_surrogate_is_replaced_not_left_as_lone_surrogate(
+    tmp_path: Path,
+):
+    # A high surrogate escape with no matching low-surrogate escape after it
+    # is malformed/truncated input. It must not crash and must not leak an
+    # invalid lone surrogate into the output text.
+    path = _write_synthetic_rtf(
+        tmp_path / "unpaired_high.rtf",
+        r"{\rtf1\ansi\ansicpg1252 Broken: \u-10179? not a pair}",
+    )
+
+    doc = extract_rtf(path)
+
+    assert "Broken: \ufffd not a pair" == doc.text
+    assert doc.text.encode("utf-8")
+
+
+def test_orphan_low_surrogate_is_replaced_not_left_as_lone_surrogate(
+    tmp_path: Path,
+):
+    # A low surrogate escape with no preceding high surrogate is equally
+    # malformed and must be handled the same way.
+    path = _write_synthetic_rtf(
+        tmp_path / "orphan_low.rtf",
+        r"{\rtf1\ansi\ansicpg1252 Broken: \u-8704? not a pair}",
+    )
+
+    doc = extract_rtf(path)
+
+    assert "Broken: \ufffd not a pair" == doc.text
+    assert doc.text.encode("utf-8")
+
+
 def test_non_rtf_file_raises_unsupported_document_error(tmp_path: Path):
     path = tmp_path / "not_rtf.rtf"
     path.write_text("This is plain text, not RTF.", encoding="utf-8")
