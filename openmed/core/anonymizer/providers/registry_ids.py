@@ -258,7 +258,7 @@ def _register_aliases(
 
 def _register_builtin_specs() -> None:
     _register_aliases(
-        ("za", "zu", "zu_ZA", "xh", "xh_ZA"),
+        ("za", "en_ZA", "af", "af_ZA", "zu", "zu_ZA", "xh", "xh_ZA"),
         id_type="sa_id_number",
         validate=validate_za_id_number,
         faker_method="south_african_id",

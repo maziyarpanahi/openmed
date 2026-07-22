@@ -162,6 +162,10 @@ def _gen_phone(faker, original, *, locale):
         faker, "ng_mobile_number"
     ):
         return faker.ng_mobile_number(original)
+    if locale in {"af_ZA", "en_ZA", "zu_ZA", "xh_ZA"} and hasattr(
+        faker, "za_mobile_number"
+    ):
+        return faker.za_mobile_number(original)
     if any(ch.isdigit() for ch in original):
         return preserve_phone_format(original, rng=faker.random)
     return faker.phone_number()
@@ -225,6 +229,8 @@ _DAY_FIRST_LOCALES = frozenset(
         "th_TH",
         "cs_CZ",
         "sk_SK",
+        "af_ZA",
+        "en_ZA",
         "zu_ZA",
         "xh_ZA",
     }
@@ -257,6 +263,8 @@ def _gen_age(faker, original, *, locale):
 # When the locale-appropriate ID method exists, we call it; otherwise we
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
+    "af_ZA": "south_african_id",
+    "en_ZA": "south_african_id",
     "en_NG": "nigeria_nin",
     "ha_NG": "nigeria_nin",
     "ig_NG": "nigeria_nin",
@@ -375,7 +383,7 @@ def _gen_id_num(faker, original, *, locale):
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
-        if method == "nigeria_nin":
+        if method in {"nigeria_nin", "south_african_id"}:
             return getattr(faker, method)(original)
         if locale in {"en_GH", "en_KE", "sw"}:
             if locale in {"en_KE", "sw"} and re.fullmatch(

@@ -861,46 +861,173 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
-# South African identity number (YYMMDDSSSSCAZ with a Luhn check digit)
+# South African identity number and mobile phone
 # ---------------------------------------------------------------------------
 
 
-def generate_za_id_number(*, rng: random.Random | None = None) -> str:
-    """Generate a South African ID accepted by ``validate_za_id_number``.
+def _south_african_birth_year(digits: str) -> int:
+    """Resolve the most recent non-future century for an encoded ``YYMMDD``."""
+    today = date.today()
+    year = int(digits[:2])
+    month = int(digits[2:4])
+    day = int(digits[4:6])
+    modern_year = 2000 + year
+    try:
+        modern_date = date(modern_year, month, day)
+    except ValueError:
+        modern_date = None
+    if modern_date is not None and modern_date <= today:
+        return modern_year
+    return 1900 + year
 
-    The result contains a non-future birth date, a four-digit sequence, a
-    citizenship digit in ``{0, 1}``, a legacy classification digit, and a
-    Luhn check digit. The output is fully synthetic and uses only the supplied
-    deterministic random source.
+
+def _shares_digit_substring(source: str, candidate: str, *, length: int = 6) -> bool:
+    """Return whether two digit strings share a substring of ``length``."""
+    if len(source) < length:
+        return False
+    return any(
+        source[index : index + length] in candidate
+        for index in range(len(source) - length + 1)
+    )
+
+
+def generate_south_african_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid South African ID surrogate.
+
+    When a 13-digit source is supplied, the surrogate preserves its decoded
+    decade of birth, gender band, and citizenship digit. The generated value
+    always has a valid calendar date and Luhn check digit and never equals the
+    source.
 
     Args:
+        original: Optional source ID whose protected structural attributes are
+            preserved.
         rng: Optional deterministic random source.
 
     Returns:
-        A checksum-valid 13-digit South African identity number.
+        A checksum-valid 13-digit synthetic identity number.
     """
+    import calendar
+
     source = rng or random.Random()
-    first_birth_date = date(1940, 1, 1)
-    birth_date = date.fromordinal(
-        source.randint(first_birth_date.toordinal(), date.today().toordinal())
-    )
-    sequence = source.randint(0, 9999)
-    citizenship = source.randint(0, 1)
-    classification = source.randint(0, 9)
-    body = (
-        f"{birth_date.year % 100:02d}{birth_date.month:02d}{birth_date.day:02d}"
-        f"{sequence:04d}{citizenship}{classification}"
-    )
-    check_digit = _luhn_check_digit([int(digit) for digit in body])
-    return body + str(check_digit)
+    original_digits = _digits_only(original or "")
+    has_source_shape = len(original_digits) == 13
+    today = date.today()
+
+    if has_source_shape:
+        birth_year = _south_african_birth_year(original_digits)
+        decade_start = birth_year - birth_year % 10
+        gender_is_male = int(original_digits[6:10]) >= 5000
+        citizenship = (
+            int(original_digits[10])
+            if original_digits[10] in {"0", "1"}
+            else source.randint(0, 1)
+        )
+    else:
+        decade_start = source.randrange(1940, 2020, 10)
+        gender_is_male = bool(source.randint(0, 1))
+        citizenship = source.randint(0, 1)
+
+    latest_year = min(decade_start + 9, today.year)
+    if latest_year < decade_start:
+        decade_start = today.year - today.year % 10
+        latest_year = today.year
+
+    candidate = ""
+    for _ in range(100):
+        year = source.randint(decade_start, latest_year)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        birth_date = date(year, month, day)
+        if birth_date > today:
+            continue
+
+        gender_sequence = (
+            source.randint(5000, 9999) if gender_is_male else source.randint(0, 4999)
+        )
+        body = (
+            f"{year % 100:02d}{month:02d}{day:02d}"
+            f"{gender_sequence:04d}{citizenship}{source.randint(0, 9)}"
+        )
+        candidate = body + str(_luhn_check_digit([int(digit) for digit in body]))
+        if candidate != original_digits and not _shares_digit_substring(
+            original_digits,
+            candidate,
+        ):
+            return candidate
+
+    if not candidate:
+        year = decade_start
+        body = (
+            f"{year % 100:02d}0101{'5000' if gender_is_male else '0000'}{citizenship}0"
+        )
+        candidate = body + str(_luhn_check_digit([int(digit) for digit in body]))
+    body = candidate[:11] + str((int(candidate[11]) + 1) % 10)
+    return body + str(_luhn_check_digit([int(digit) for digit in body]))
+
+
+def generate_za_id_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid South African ID, preserving source structure."""
+    return generate_south_african_id(original, rng=rng)
+
+
+def generate_za_mobile_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a South African mobile surrogate preserving its prefix class."""
+    source = rng or random.Random()
+    original_text = (original or "").strip()
+    original_digits = _digits_only(original_text)
+
+    if len(original_digits) == 11 and original_digits.startswith("27"):
+        national = "0" + original_digits[2:]
+    elif len(original_digits) == 10 and original_digits.startswith("0"):
+        national = original_digits
+    else:
+        national = ""
+
+    if len(national) == 10 and national[:2] in {"06", "07", "08"}:
+        prefix = national[:3]
+    else:
+        prefix = f"0{source.choice('678')}{source.randint(0, 9)}"
+
+    domestic = ""
+    for _ in range(100):
+        domestic = prefix + "".join(str(source.randint(0, 9)) for _ in range(7))
+        if domestic != national and not _shares_digit_substring(national, domestic):
+            break
+    if domestic == national:
+        domestic = domestic[:-1] + str((int(domestic[-1]) + 1) % 10)
+
+    if original_text.startswith("+27"):
+        return f"+27 {domestic[1:3]} {domestic[3:6]} {domestic[6:]}"
+    if len(original_digits) == 11 and original_digits.startswith("27"):
+        return "27" + domestic[1:]
+    if any(separator in original_text for separator in (" ", "-", ".")):
+        return f"{domestic[:3]} {domestic[3:6]} {domestic[6:]}"
+    return domestic
 
 
 class SouthAfricanIdProvider(BaseProvider):
-    """Generate South African identity numbers with valid Luhn checksums."""
+    """Generate deterministic South African ID and mobile surrogates."""
 
-    def south_african_id(self) -> str:
-        """Return a synthetic 13-digit South African identity number."""
-        return generate_za_id_number(rng=self.generator.random)
+    def south_african_id(self, original: str | None = None) -> str:
+        """Return a Luhn-valid South African identity-number surrogate."""
+        return generate_south_african_id(original, rng=self.generator.random)
+
+    def za_mobile_number(self, original: str | None = None) -> str:
+        """Return a South African mobile surrogate with a stable prefix class."""
+        return generate_za_mobile_number(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2424,9 +2551,11 @@ __all__ = [
     "generate_rodne_cislo",
     "generate_romanian_cnp",
     "generate_portuguese_nif",
+    "generate_south_african_id",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_za_id_number",
+    "generate_za_mobile_number",
     "generate_thai_national_id",
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
