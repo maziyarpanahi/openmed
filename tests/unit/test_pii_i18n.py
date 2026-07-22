@@ -5638,13 +5638,31 @@ class TestAfricanMobilePlans:
             )
 
     def test_other_african_national_id_fixture_values_are_not_phones(self):
-        national_ids = {
-            "29801011234567",  # Egypt national ID golden fixture
-            "19850712123456789012",  # Tanzania NIDA fixture
-            "CF123456789ABC",  # Uganda NIN fixture
-            "1198571234567890",  # Rwanda national ID fixture
-            "234123412346",  # Ethiopia Fayda fixture
-        }
+        fixture_paths = (
+            "eg_ma_synthetic_notes.jsonl",
+            "ng_synthetic_notes.jsonl",
+            "gh_ke_synthetic_notes.jsonl",
+            "za_synthetic_notes.jsonl",
+            "east_africa_synthetic_notes.jsonl",
+        )
+        national_ids: set[str] = set()
+        for fixture_name in fixture_paths:
+            rows = [
+                json.loads(line)
+                for line in Path("tests/fixtures/pii", fixture_name)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            for row in rows:
+                national_ids.update(row.get("identifiers", ()))
+                national_ids.update(
+                    entity["text"]
+                    for entity in row.get("entities", ())
+                    if "PHONE" not in entity["label"].upper()
+                )
+
+        assert national_ids
         phone_patterns = tuple(AFRICAN_MOBILE_PII_PATTERNS.values())
 
         for identifier in national_ids:

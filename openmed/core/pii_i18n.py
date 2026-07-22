@@ -2943,6 +2943,7 @@ def generate_mrz_td1(rng=None) -> str:
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
 
+
 @dataclass(frozen=True)
 class AfricanMobilePlan:
     """Declarative national mobile-number plan.
