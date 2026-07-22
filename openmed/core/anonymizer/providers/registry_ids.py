@@ -39,6 +39,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_egyptian_national_id,
     validate_estonian_isikukood,
+    validate_ethiopia_fayda,
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
@@ -67,11 +68,14 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cpf,
     validate_portuguese_nif,
     validate_romanian_cnp,
+    validate_rwanda_id,
     validate_spanish_dni,
     validate_spanish_nie,
     validate_taiwan_compatriot_permit,
+    validate_tanzania_nida,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uganda_nin,
     validate_uk_nhs_number,
     validate_uk_nino,
     validate_upi_id,
@@ -91,6 +95,7 @@ from .clinical_ids import (
     ChineseIdentifierProvider,
     ChineseResidentIdProvider,
     DanishCPRProvider,
+    EastAfricanIdProvider,
     EgyptMoroccoIdProvider,
     EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
@@ -348,6 +353,34 @@ def _register_builtin_specs() -> None:
         validate=validate_kenya_maisha_namba,
         faker_method="kenya_maisha_namba",
         faker_provider=GhanaKenyaIdProvider,
+    )
+    _register_aliases(
+        ("tz", "sw", "sw_TZ", "en_TZ"),
+        id_type="nida_nin",
+        validate=validate_tanzania_nida,
+        faker_method="tanzania_nida",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("ug", "en_UG"),
+        id_type="nin",
+        validate=validate_uganda_nin,
+        faker_method="uganda_nin",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("rw", "rw_RW"),
+        id_type="rwanda_id",
+        validate=validate_rwanda_id,
+        faker_method="rwanda_id",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("et", "am", "am_ET", "en_ET"),
+        id_type="fayda_fan",
+        validate=validate_ethiopia_fayda,
+        faker_method="ethiopia_fayda",
+        faker_provider=EastAfricanIdProvider,
     )
     _register_aliases(
         ("fr", "fr_FR"),

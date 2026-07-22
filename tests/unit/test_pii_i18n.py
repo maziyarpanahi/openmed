@@ -21,10 +21,14 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_bulgarian_egn,
     generate_egyptian_national_id,
     generate_estonian_isikukood,
+    generate_ethiopia_fayda,
     generate_jmbg,
     generate_moroccan_cin,
     generate_philhealth_pin,
     generate_portuguese_nif,
+    generate_rwanda_id,
+    generate_tanzania_nida,
+    generate_uganda_nin,
     generate_vietnamese_cccd,
     generate_vietnamese_cmnd,
     register_clinical_providers,
@@ -56,6 +60,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_egyptian_national_id,
     validate_estonian_isikukood,
+    validate_ethiopia_fayda,
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
@@ -81,11 +86,14 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_portuguese_nif,
+    validate_rwanda_id,
     validate_south_african_id,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_tanzania_nida,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uganda_nin,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
 )
@@ -145,6 +153,7 @@ class TestConstants:
             "cs",
             "el",
             "vi",
+            "rw",
             "ur",
         }
 
@@ -213,6 +222,257 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+class TestEastAfricanNationalIds:
+    """Validator, detector, surrogate, and fixture coverage for OM-857."""
+
+    def test_tanzania_nida_validator_accepts_supported_renderings(self):
+        compact = "19850712123456789012"
+        hyphenated = "19850712-12345-67890-12"
+
+        assert validate_tanzania_nida(compact)
+        assert validate_tanzania_nida(hyphenated)
+        assert not validate_tanzania_nida("19850230123456789012")
+        assert not validate_tanzania_nida("18991231123456789012")
+        assert not validate_tanzania_nida("19850712-1234-567890-12")
+        assert not validate_tanzania_nida(None)
+
+    def test_uganda_nin_validator_checks_class_gender_and_length(self):
+        assert validate_uganda_nin("CM123456789ABC")
+        assert validate_uganda_nin("cf123456789abc")
+        assert validate_uganda_nin("RFABCDEFGHIJKL")
+        assert not validate_uganda_nin("XM123456789ABC")
+        assert not validate_uganda_nin("CX123456789ABC")
+        assert not validate_uganda_nin("CM123456789AB")
+        assert not validate_uganda_nin("CM123456789AB!")
+        assert not validate_uganda_nin(None)
+
+    def test_rwanda_id_validator_checks_birth_year_and_gender(self):
+        assert validate_rwanda_id("1198571234567890")
+        assert not validate_rwanda_id("1189971234567890")
+        assert not validate_rwanda_id("1198561234567890")
+        assert not validate_rwanda_id(f"1{date.today().year + 1:04d}71234567890")
+        assert not validate_rwanda_id("119857123456789")
+        assert not validate_rwanda_id(None)
+
+    def test_ethiopia_fayda_validator_checks_verhoeff_and_leading_digit(self):
+        assert validate_ethiopia_fayda("234123412346")
+        assert not validate_ethiopia_fayda("234123412347")
+        assert not validate_ethiopia_fayda("134123412346")
+        assert not validate_ethiopia_fayda("23412341234")
+        assert not validate_ethiopia_fayda("2341-2341-2346")
+        assert not validate_ethiopia_fayda("FAN234123412346")
+        assert not validate_ethiopia_fayda(None)
+
+    def test_cross_format_non_collision(self):
+        samples = {
+            validate_tanzania_nida: "19850712123456789012",
+            validate_uganda_nin: "CF123456789ABC",
+            validate_rwanda_id: "1198571234567890",
+            validate_ethiopia_fayda: "234123412346",
+        }
+        for expected_validator, value in samples.items():
+            assert expected_validator(value)
+            for other_validator in samples:
+                if other_validator is not expected_validator:
+                    assert not other_validator(value)
+
+    def test_generated_fayda_values_and_single_digit_mutations(self):
+        rng = random.Random(857)
+        for sample_index in range(1_000):
+            value = generate_ethiopia_fayda(rng=rng)
+            assert validate_ethiopia_fayda(value)
+
+            mutation_index = sample_index % len(value)
+            replacement = str((int(value[mutation_index]) + 1) % 10)
+            mutated = value[:mutation_index] + replacement + value[mutation_index + 1 :]
+            assert not validate_ethiopia_fayda(mutated)
+
+    def test_generated_structural_ids_all_pass_their_validators(self):
+        rng = random.Random(857)
+        generators_and_validators = (
+            (generate_tanzania_nida, validate_tanzania_nida),
+            (generate_uganda_nin, validate_uganda_nin),
+            (generate_rwanda_id, validate_rwanda_id),
+        )
+        for generator, validator in generators_and_validators:
+            assert all(validator(generator(rng=rng)) for _ in range(1_000))
+
+    def test_surrogates_preserve_embedded_fields(self):
+        nida_source = "19850712123456789012"
+        nida = generate_tanzania_nida(nida_source, rng=random.Random(1))
+        assert int(nida[:4]) // 10 == 198
+
+        for prefix in ("CM", "CF"):
+            nin = generate_uganda_nin(
+                f"{prefix}123456789ABC",
+                rng=random.Random(2),
+            )
+            assert nin.startswith(prefix)
+
+        rwanda_source = "1198571234567890"
+        rwanda = generate_rwanda_id(rwanda_source, rng=random.Random(3))
+        assert rwanda[0] == rwanda_source[0]
+        assert int(rwanda[1:5]) // 10 == int(rwanda_source[1:5]) // 10
+        assert rwanda[5] == rwanda_source[5]
+        assert validate_rwanda_id(rwanda)
+
+    def test_compact_and_hyphenated_nida_map_to_same_surrogate(self):
+        anonymizer = Anonymizer(lang="sw", consistent=True, seed=857)
+        compact = "19850712123456789012"
+        hyphenated = "19850712-12345-67890-12"
+
+        compact_surrogate = anonymizer.surrogate(compact, "national_id")
+        hyphenated_surrogate = anonymizer.surrogate(hyphenated, "national_id")
+
+        assert compact_surrogate == hyphenated_surrogate
+        assert validate_tanzania_nida(compact_surrogate)
+
+    @pytest.mark.parametrize(
+        ("lang", "source", "validator"),
+        (
+            ("en_TZ", "19850712123456789012", validate_tanzania_nida),
+            ("en_UG", "CF123456789ABC", validate_uganda_nin),
+            ("rw", "1198571234567890", validate_rwanda_id),
+            ("am", "234123412346", validate_ethiopia_fayda),
+            ("en_ET", "234123412346", validate_ethiopia_fayda),
+        ),
+    )
+    def test_anonymizer_dispatches_east_african_locale_surrogates(
+        self,
+        lang,
+        source,
+        validator,
+    ):
+        surrogate = Anonymizer(lang=lang, consistent=True, seed=857).surrogate(
+            source,
+            "national_id",
+        )
+        assert surrogate != source
+        assert validator(surrogate)
+
+    @pytest.mark.parametrize(
+        ("alias", "value"),
+        (
+            ("sw", "19850712123456789012"),
+            ("en_tz", "19850712-12345-67890-12"),
+            ("en_ug", "CF123456789ABC"),
+            ("rw", "1198571234567890"),
+            ("am", "234123412346"),
+            ("en_et", "234123412346"),
+        ),
+    )
+    def test_locale_alias_patterns_validate_expected_ids(self, alias, value):
+        patterns = LOCALE_PII_PATTERNS[alias]
+        assert any(
+            match
+            and pattern.validator is not None
+            and pattern.validator(match.group(0))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, value, pattern.flags))
+        )
+
+    @pytest.mark.parametrize(
+        ("lang", "locale", "contextual", "bare"),
+        (
+            (
+                "sw",
+                None,
+                "Namba ya NIDA: 19850712123456789012",
+                "19850712123456789012",
+            ),
+            (
+                "en",
+                "en_UG",
+                "NIRA NIN: CF123456789ABC",
+                "CF123456789ABC",
+            ),
+            (
+                "rw",
+                None,
+                "Indangamuntu: 1198571234567890",
+                "1198571234567890",
+            ),
+            (
+                "am",
+                None,
+                "Fayda FAN: 234123412346",
+                "234123412346",
+            ),
+        ),
+    )
+    def test_context_gated_formats_require_keyword_context(
+        self,
+        lang,
+        locale,
+        contextual,
+        bare,
+    ):
+        from openmed.core.safety_sweep import safety_sweep
+
+        assert any(
+            entity.label == "national_id"
+            for entity in safety_sweep(contextual, [], lang=lang, locale=locale)
+        )
+        assert not any(
+            entity.label == "national_id"
+            for entity in safety_sweep(bare, [], lang=lang, locale=locale)
+        )
+
+    def test_east_africa_fixture_round_trip_has_zero_identifier_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("tests/fixtures/pii/east_africa_synthetic_notes.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert {row["id_type"] for row in rows} == {
+            "fayda_fan",
+            "nida_nin",
+            "nin",
+            "rwanda_id",
+        }
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=857,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["identifiers"])
+            assert all(
+                identifier not in result.deidentified_text
+                for identifier in row["identifiers"]
+            )
 
 
 # ---------------------------------------------------------------------------

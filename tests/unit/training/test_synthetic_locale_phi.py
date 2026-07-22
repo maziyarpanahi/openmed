@@ -11,6 +11,7 @@ from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_chinese_resident_id,
     validate_dutch_bsn,
+    validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
@@ -33,6 +34,7 @@ from openmed.training.synthetic import (
 )
 
 _ID_VALIDATORS = {
+    "am": validate_ethiopia_fayda,
     "en": clinical_ids.validate_ssn,
     "fr": validate_french_nir,
     "de": validate_german_steuer_id,

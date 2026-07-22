@@ -44,7 +44,21 @@ ZH_CN_ADDRESS_LOCALE: Final = "zh_CN"
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
 _APPROXIMATE_LOCALES: Final = frozenset(
-    {"af", "am", "as", "kn", "ml", "mr", "ms", "pa", "sr", "te", "ur", "xh"}
+    {
+        "af",
+        "am",
+        "as",
+        "kn",
+        "ml",
+        "mr",
+        "ms",
+        "pa",
+        "rw",
+        "sr",
+        "te",
+        "ur",
+        "xh",
+    }
 )
 
 
@@ -56,6 +70,9 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
     "as_IN": "bn_BD",
+    "en_ET": "en_US",
+    "en_TZ": "en_US",
+    "en_UG": "en_US",
     "en_ZA": "zu_ZA",
     "en_GH": "tw_GH",
     "fr_MA": "fr_FR",
@@ -64,7 +81,9 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "mr_IN": "hi_IN",
     "ms_MY": "id_ID",
     "pa_IN": "en_IN",
+    "rw_RW": "en_US",
     "sr_RS": "hr_HR",
+    "sw_TZ": "sw",
     "ur_PK": "en_PK",
     "xh_ZA": "zu_ZA",
 }
@@ -149,6 +168,10 @@ def resolve_locale(
     # keeps the existing ar_EG default below unchanged.
     if lang.startswith("ar-"):
         return _resolve_arabic_region(lang)
+
+    normalized_lang = lang.replace("-", "_")
+    if normalized_lang in FAKER_BACKEND_LOCALE:
+        return normalized_lang
 
     locale = LANG_TO_LOCALE.get(lang)
     if locale is None:
