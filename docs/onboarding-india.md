@@ -7,6 +7,11 @@ with a policy that OpenMed ships today, de-identify synthetic Aadhaar- and
 ABHA-format identifiers, process a synthetic code-mixed Hinglish note, and
 select a compact Hindi checkpoint for a CPU-only machine.
 
+For a complete synthetic Hindi and code-mixed Hinglish walkthrough, run the
+[end-to-end example](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_hindi_hinglish_note.py)
+or follow the
+[Chinese and Hindi notebook tour](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/Chinese_Hindi_Deid_Tour.ipynb).
+
 !!! important "Synthetic walkthrough only"
     Every name and identifier on this page and in
     `examples/onboarding_india_dpdp.py` is fabricated test data. The values are
