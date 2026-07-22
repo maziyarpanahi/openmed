@@ -13,6 +13,7 @@ from .core.anonymizer import (
     LANG_TO_LOCALE,
     Anonymizer,
     AnonymizerConfig,
+    IndiaSurrogateProvider,
     register_clinical_provider,
     register_label_generator,
 )
@@ -759,6 +760,7 @@ __all__ = [
     # Anonymization engine
     "Anonymizer",
     "AnonymizerConfig",
+    "IndiaSurrogateProvider",
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",

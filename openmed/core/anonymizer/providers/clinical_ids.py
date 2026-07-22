@@ -21,6 +21,7 @@ deterministic:
     passes the official Verhoeff check — only ~1 in 20 by sampling)
   - ABDM identifiers: 14-digit ABHA numbers, ABHA addresses,
     PAN-shaped tax identifiers, and synthetic HPR/HFR registry identifiers
+  - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
   - Chinese Resident Identity Card (18 characters with MOD 11-2 checksum)
@@ -612,9 +613,7 @@ _ABHA_ADDRESS_RE = re.compile(
     r"^[a-z][a-z0-9]*(?:\.[a-z0-9]+)*@[a-z][a-z0-9-]{1,31}$",
     re.IGNORECASE,
 )
-_PAN_RE = re.compile(r"^[A-Z]{3}[ABCFGHLJPT][A-Z][0-9]{4}[A-Z]$")
 _ABDM_REGISTRY_ID_RE = re.compile(r"^(?:HPR|HFR)-[A-Z0-9][A-Z0-9-]{5,31}$")
-_PAN_HOLDER_TYPES = "ABCFGHLJPT"
 
 
 def validate_abha_number(text: str) -> bool:
@@ -639,12 +638,6 @@ def validate_abha_address(text: str) -> bool:
         return False
     handle, _domain = value.split("@", 1)
     return 4 <= len(handle) <= 32 and not handle.endswith(".")
-
-
-def validate_pan(text: str) -> bool:
-    """Validate the ten-character structural format of an Indian PAN."""
-
-    return bool(_PAN_RE.fullmatch(str(text or "").strip().upper()))
 
 
 def validate_abdm_registry_id(text: str) -> bool:
@@ -775,6 +768,221 @@ class IndiaHealthIdProvider(BaseProvider):
 
     def indian_ration_card(self) -> str:
         return generate_indian_ration_card(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# India locale bundle (PIN, phone, PAN, GSTIN, and ABHA)
+# ---------------------------------------------------------------------------
+
+_INDIA_UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_INDIA_ALPHANUMERIC = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_PAN_HOLDER_TYPES = "ABCFGHJLPT"
+_PAN_SYNTHETIC_PREFIX = "OMD"
+_PAN_CHECK_WEIGHTS = (3, 7, 1, 3, 7, 1, 3, 7, 1)
+_GSTIN_VALUE = {character: index for index, character in enumerate(_INDIA_ALPHANUMERIC)}
+
+
+def validate_indian_pin(text: str) -> bool:
+    """Validate the public six-digit Indian Postal Index Number shape."""
+
+    return (
+        isinstance(text, str) and re.fullmatch(r"[1-9]\d{5}", text.strip()) is not None
+    )
+
+
+def generate_indian_pin(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic six-digit Indian PIN-shaped value."""
+
+    source = rng or random.Random()
+    return str(source.randint(100_000, 999_999))
+
+
+def validate_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile number with an optional ``+91``/``0`` prefix."""
+
+    if not isinstance(text, str):
+        return False
+    digits = _digits_only(text)
+    if text.strip().startswith("+"):
+        return len(digits) == 12 and digits.startswith("91") and digits[2] in "6789"
+    if len(digits) == 11 and digits.startswith("0"):
+        return digits[1] in "6789"
+    return len(digits) == 10 and digits[0] in "6789"
+
+
+def generate_indian_phone(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic ``+91`` Indian mobile number."""
+
+    source = rng or random.Random()
+    national = source.choice("6789") + "".join(
+        str(source.randint(0, 9)) for _ in range(9)
+    )
+    return f"+91 {national[:5]} {national[5:]}"
+
+
+def pan_check_letter(body9: str) -> str:
+    """Return the check letter for OpenMed's synthetic PAN series.
+
+    India's allocated PAN check-letter algorithm is not public. Synthetic PANs
+    therefore use the project-specific ``OMD`` prefix and this deterministic
+    local checksum; non-synthetic PANs are validated by public structure only.
+    """
+
+    body = str(body9).strip().upper()
+    if re.fullmatch(r"[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}", body) is None:
+        raise ValueError("PAN body must match AAAAA9999 with a valid holder type")
+    total = sum(
+        _GSTIN_VALUE[character] * weight
+        for character, weight in zip(body, _PAN_CHECK_WEIGHTS)
+    )
+    return _INDIA_UPPERCASE[total % len(_INDIA_UPPERCASE)]
+
+
+def validate_pan(text: str) -> bool:
+    """Validate an Indian Permanent Account Number offline."""
+
+    if not isinstance(text, str):
+        return False
+    code = text.strip().upper()
+    if re.fullmatch(r"[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z]", code) is None:
+        return False
+    if code[5:9] == "0000":
+        return False
+    if code.startswith(_PAN_SYNTHETIC_PREFIX):
+        return code[-1] == pan_check_letter(code[:9])
+    return True
+
+
+def generate_pan(*, rng: random.Random | None = None) -> str:
+    """Generate a structurally valid PAN in OpenMed's synthetic series."""
+
+    source = rng or random.Random()
+    body = (
+        _PAN_SYNTHETIC_PREFIX
+        + source.choice(_PAN_HOLDER_TYPES)
+        + source.choice(_INDIA_UPPERCASE)
+        + f"{source.randint(1, 9999):04d}"
+    )
+    return body + pan_check_letter(body)
+
+
+def gstin_check_char(body14: str) -> str:
+    """Return the Luhn mod-36 check character for a GSTIN body."""
+
+    body = str(body14).strip().upper()
+    if len(body) != 14 or any(character not in _GSTIN_VALUE for character in body):
+        raise ValueError("GSTIN body must contain 14 uppercase alphanumeric characters")
+
+    factor = 2
+    total = 0
+    for character in reversed(body):
+        addend = factor * _GSTIN_VALUE[character]
+        total += (addend // 36) + (addend % 36)
+        factor = 1 if factor == 2 else 2
+    return _INDIA_ALPHANUMERIC[(36 - (total % 36)) % 36]
+
+
+def validate_gstin(text: str) -> bool:
+    """Validate an Indian GSTIN, including embedded PAN and checksum."""
+
+    if not isinstance(text, str):
+        return False
+    code = text.strip().upper()
+    if re.fullmatch(r"\d{2}[A-Z0-9]{10}[1-9A-Z]Z[0-9A-Z]", code) is None:
+        return False
+    if not 1 <= int(code[:2]) <= 38:
+        return False
+    if not validate_pan(code[2:12]):
+        return False
+    return code[-1] == gstin_check_char(code[:14])
+
+
+def generate_gstin(*, rng: random.Random | None = None) -> str:
+    """Generate a state-, PAN-, and mod-36-valid synthetic GSTIN."""
+
+    source = rng or random.Random()
+    state = f"{source.randint(1, 38):02d}"
+    pan = generate_pan(rng=source)
+    entity = source.choice(_INDIA_ALPHANUMERIC[1:])
+    body = f"{state}{pan}{entity}Z"
+    return body + gstin_check_char(body)
+
+
+def validate_abha(text: str) -> bool:
+    """Validate OpenMed's deterministic 14-digit synthetic ABHA contract."""
+
+    if not isinstance(text, str):
+        return False
+    digits = re.sub(r"[\s-]", "", text)
+    if re.fullmatch(r"\d{14}", digits) is None or len(set(digits)) == 1:
+        return False
+
+    checksum = 0
+    for index, digit in enumerate(reversed(digits)):
+        checksum = _VERHOEFF_D[checksum][_VERHOEFF_P[index % 8][int(digit)]]
+    return checksum == 0
+
+
+def generate_abha(*, rng: random.Random | None = None) -> str:
+    """Generate a 14-digit synthetic ABHA with a Verhoeff check digit."""
+
+    source = rng or random.Random()
+    digits = [source.randint(1, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(12))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
+class IndiaSurrogateProvider(BaseProvider):
+    """Faker bundle for locale-correct synthetic Indian surrogates."""
+
+    def indian_name(self) -> str:
+        """Return a name from the active Indian Faker locale."""
+
+        return self.generator.name()
+
+    def indian_first_name(self) -> str:
+        """Return a first name from the active Indian Faker locale."""
+
+        return self.generator.first_name()
+
+    def indian_last_name(self) -> str:
+        """Return a last name from the active Indian Faker locale."""
+
+        return self.generator.last_name()
+
+    def indian_pin(self) -> str:
+        """Return a synthetic six-digit Indian PIN."""
+
+        return generate_indian_pin(rng=self.generator.random)
+
+    def indian_address(self) -> str:
+        """Return a localized Indian street address carrying a PIN."""
+
+        return (
+            f"{self.generator.street_address()}, {self.generator.city()} "
+            f"{self.indian_pin()}"
+        )
+
+    def indian_phone_number(self) -> str:
+        """Return a synthetic Indian mobile number."""
+
+        return generate_indian_phone(rng=self.generator.random)
+
+    def pan(self) -> str:
+        """Return a synthetic checksum-bearing PAN."""
+
+        return generate_pan(rng=self.generator.random)
+
+    def gstin(self) -> str:
+        """Return a synthetic checksum-valid GSTIN."""
+
+        return generate_gstin(rng=self.generator.random)
+
+    def abha(self) -> str:
+        """Return a synthetic checksum-valid ABHA number."""
+
+        return generate_abha(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2831,16 +3039,33 @@ class UnifiedSocialCreditCodeProvider(BaseProvider):
         return generate_unified_social_credit_code(rng=self.generator.random)
 
 
+_extra_providers: list[type[BaseProvider]] = []
+
+
+def register_extra_clinical_provider(provider: type[BaseProvider]) -> None:
+    """Register a provider class for every subsequently built Faker instance."""
+
+    if provider not in _extra_providers:
+        _extra_providers.append(provider)
+
+
 def register_clinical_providers(faker) -> None:
-    """Add every custom provider in this module to ``faker``."""
+    """Add every built-in and caller-registered provider to ``faker``."""
     from .registry_ids import national_id_faker_provider_classes
 
-    for provider in national_id_faker_provider_classes():
-        faker.add_provider(provider)
-    faker.add_provider(MedicalRecordNumberProvider)
-    faker.add_provider(FinancialIdentifierProvider)
-    faker.add_provider(MrzProvider)
-    faker.add_provider(UnifiedSocialCreditCodeProvider)
+    providers = (
+        *national_id_faker_provider_classes(),
+        MedicalRecordNumberProvider,
+        FinancialIdentifierProvider,
+        MrzProvider,
+        UnifiedSocialCreditCodeProvider,
+        *_extra_providers,
+    )
+    seen: set[type[BaseProvider]] = set()
+    for provider in providers:
+        if provider not in seen:
+            faker.add_provider(provider)
+            seen.add(provider)
 
 
 __all__ = [
@@ -2861,6 +3086,7 @@ __all__ = [
     "GhanaKenyaIdProvider",
     "HungarianTAJProvider",
     "IndiaHealthIdProvider",
+    "IndiaSurrogateProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
@@ -2900,6 +3126,11 @@ __all__ = [
     "generate_hungarian_taj",
     "generate_abha_address",
     "generate_abha_number",
+    "generate_abha",
+    "generate_gstin",
+    "generate_indian_phone",
+    "generate_indian_pin",
+    "generate_pan",
     "generate_estonian_isikukood",
     "generate_ghana_card_pin",
     "generate_hong_kong_macau_permit",
@@ -2940,6 +3171,7 @@ __all__ = [
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "register_extra_clinical_provider",
     "validate_australian_medicare",
     "validate_australian_tfn",
     "validate_abdm_registry_id",
@@ -2949,6 +3181,10 @@ __all__ = [
     "validate_bic",
     "validate_canadian_sin",
     "validate_iban",
+    "validate_abha",
+    "validate_gstin",
+    "validate_indian_phone",
+    "validate_indian_pin",
     "validate_luhn",
     "validate_npi",
     "validate_ontario_health_card",

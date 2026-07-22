@@ -237,18 +237,23 @@ class TestLocaleCoherenceReport:
                 "locale",
                 "approximate",
                 "id_providers",
+                "id_types",
                 "id_locale",
             }
             assert row["locale"] == LANG_TO_LOCALE[lang]
             assert isinstance(row["approximate"], bool)
             assert row["approximate"] == (lang in DOCUMENTED_APPROXIMATE)
             assert isinstance(row["id_providers"], list)
+            assert isinstance(row["id_types"], list)
             if lang in NATIONAL_ID_PROVIDERS:
                 exp_locale, exp_method = NATIONAL_ID_PROVIDERS[lang]
-                assert row["id_providers"] == [exp_method]
+                if lang not in {"hi", "te"}:
+                    assert row["id_types"] == [exp_method]
+                    assert row["id_providers"] == [exp_method]
                 assert row["id_locale"] == exp_locale
             else:
                 assert row["id_providers"] == []
+                assert row["id_types"] == []
                 assert row["id_locale"] is None
 
     def test_report_is_json_serializable(self):
