@@ -5894,7 +5894,7 @@ class TestMpesaTransactionCodes:
                 lang=row["language"],
                 consistent=True,
                 seed=859,
-                locale=None,
+                locale=row.get("locale"),
                 use_safety_sweep=True,
             )
 

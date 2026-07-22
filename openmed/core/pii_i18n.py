@@ -582,6 +582,7 @@ def validate_mpesa_transaction_code(text: str) -> bool:
         and any(char.isdigit() for char in text)
     )
 
+
 # ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
