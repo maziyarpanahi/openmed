@@ -347,6 +347,28 @@ def validate_bic(text: str) -> bool:
     return clinical_ids.validate_bic(text)
 
 
+def validate_mobile_money_paybill(text: str) -> bool:
+    """Validate the offline-verifiable shape of a paybill number.
+
+    Paybill numbers are five to seven ASCII digits. Detection remains
+    keyword-gated because numbers of this length are common in clinical text.
+    """
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{5,7}", text) is not None
+
+
+def validate_mobile_money_till(text: str) -> bool:
+    """Validate the shape of a till or buy-goods number."""
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{5,7}", text) is not None
+
+
+def validate_momo_reference(text: str) -> bool:
+    """Validate a numeric MTN MoMo transaction reference."""
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{10,12}", text) is not None
+
+
 # ---------------------------------------------------------------------------
 # Chinese Contact, Financial, and Travel Identifiers
 # ---------------------------------------------------------------------------
@@ -3469,6 +3491,81 @@ _MPESA_TX_CODE_PII_PATTERNS: List[PIIPattern] = [
         context_words=["m-pesa", "mpesa", "confirmed", "muamala"],
         context_boost=0.5,
         validator=validate_mpesa_transaction_code,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+_MOBILE_MONEY_ACCOUNT_PATTERN = (
+    "(?:"
+    + "|".join(
+        rf"(?<={paybill}[ \t][0-9]{{{length}}}[ \t]{account}[ \t])"
+        for paybill in (
+            "Paybill",
+            "Paybill:",
+            "Paybill No",
+            "Paybill No.",
+            "Pay Bill",
+            "Pay Bill No",
+            "Pay Bill No.",
+        )
+        for length in (5, 6, 7)
+        for account in ("Account", "Account:", "Acc", "Acc:")
+    )
+    + ")"
+    + r"[^\W_][\w/'-]*(?:[ \t]+[^\W_][\w/'-]*){0,3}"
+    + r"(?=[ \t]*(?:[.;,|]|\r?$))"
+)
+
+_MOBILE_MONEY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        _MOBILE_MONEY_ACCOUNT_PATTERN,
+        "mobile_money_account",
+        priority=13,
+        base_score=0.3,
+        context_words=["paybill", "pay bill"],
+        context_boost=0.6,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE | re.MULTILINE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5,7}(?![0-9])",
+        "mobile_money_paybill",
+        priority=12,
+        base_score=0.25,
+        context_words=["paybill", "pay bill", "lipa"],
+        context_boost=0.65,
+        validator=validate_mobile_money_paybill,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5,7}(?![0-9])",
+        "mobile_money_till",
+        priority=12,
+        base_score=0.25,
+        context_words=["till", "till no", "buy goods", "buygoods", "lipa"],
+        context_boost=0.65,
+        validator=validate_mobile_money_till,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5,7}(?![0-9])",
+        "mobile_money_agent",
+        priority=12,
+        base_score=0.25,
+        context_words=["agent", "agent no", "agent number", "lipa"],
+        context_boost=0.65,
+        validator=validate_mobile_money_paybill,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{10,12}(?![0-9])",
+        "momo_reference",
+        priority=12,
+        base_score=0.25,
+        context_words=["momo", "momo ref", "momo reference", "mtn momo"],
+        context_boost=0.65,
+        validator=validate_momo_reference,
         safety_sweep_requires_context=True,
     ),
 ]
@@ -7478,6 +7575,14 @@ for _mpesa_alias in ("sw", "en_ke", "en_tz"):
         LOCALE_PII_PATTERNS[_mpesa_alias] = [
             *_existing_patterns,
             *_MPESA_TX_CODE_PII_PATTERNS,
+        ]
+
+for _mobile_money_alias in ("sw", "sw_tz", "en_ke", "en_tz", "en_gh", "en_ug"):
+    _existing_patterns = LOCALE_PII_PATTERNS.get(_mobile_money_alias, [])
+    if _MOBILE_MONEY_PII_PATTERNS[0] not in _existing_patterns:
+        LOCALE_PII_PATTERNS[_mobile_money_alias] = [
+            *_existing_patterns,
+            *_MOBILE_MONEY_PII_PATTERNS,
         ]
 
 
