@@ -15,6 +15,7 @@ from examples import (
     datasets_walkthrough,
     gradio_deid_app,
     onboarding_china_mirrors,
+    onboarding_india_dpdp,
 )
 
 
@@ -194,6 +195,12 @@ def test_onboarding_china_mirrors_example_is_syntactically_valid():
     ast.parse(source)
 
 
+def test_onboarding_india_dpdp_example_is_syntactically_valid():
+    source = Path("examples/onboarding_india_dpdp.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
 def test_onboarding_china_mirrors_configures_download_endpoint(monkeypatch):
     calls = []
 
@@ -267,3 +274,72 @@ def test_onboarding_china_mirrors_run_defaults_to_offline_cache(
     captured = capsys.readouterr().out
     assert "Offline cache-only mode" in captured
     assert "Resolved cached model" in captured
+
+
+def test_onboarding_india_dpdp_recognizers_cover_synthetic_direct_identifiers():
+    from openmed.core.custom_recognizer import ABDMRecognizer, CustomRecognizer
+
+    name_recognizer = CustomRecognizer.from_config(
+        onboarding_india_dpdp.SYNTHETIC_NAME_RECOGNIZER
+    )
+    abdm_recognizer = ABDMRecognizer()
+
+    assert {
+        (entity.text, entity.label)
+        for entity in name_recognizer.detect_entities(
+            onboarding_india_dpdp.SYNTHETIC_HINGLISH_NOTE
+        )
+    } == {
+        (onboarding_india_dpdp.SYNTHETIC_PERSON, "PERSON"),
+    }
+    assert {
+        (entity.text, entity.label)
+        for entity in abdm_recognizer.detect_entities(
+            onboarding_india_dpdp.SYNTHETIC_HINGLISH_NOTE
+        )
+    } == {
+        (onboarding_india_dpdp.SYNTHETIC_AADHAAR, "AADHAAR"),
+        (onboarding_india_dpdp.SYNTHETIC_ABHA, "ABHA_NUMBER"),
+    }
+
+
+def test_onboarding_india_dpdp_runs_policy_pipeline_without_network(monkeypatch):
+    from openmed.core import pii
+    from openmed.processing.outputs import PredictionResult
+
+    calls = []
+
+    def fake_extract_pii(text, model_name, *args, **kwargs):
+        calls.append(
+            {
+                "text": text,
+                "model_name": model_name,
+                "lang": kwargs["lang"],
+            }
+        )
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name=model_name,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(pii, "extract_pii", fake_extract_pii)
+
+    result = onboarding_india_dpdp.run()
+
+    assert calls == [
+        {
+            "text": onboarding_india_dpdp.SYNTHETIC_HINGLISH_NOTE,
+            "model_name": onboarding_india_dpdp.HINDI_MODEL_ID,
+            "lang": "hi",
+        }
+    ]
+    onboarding_india_dpdp.assert_synthetic_pii_is_deidentified(result.deidentified_text)
+    protected_values = {entity.text for entity in result.pii_entities}
+    assert {
+        onboarding_india_dpdp.SYNTHETIC_PERSON,
+        onboarding_india_dpdp.SYNTHETIC_AADHAAR,
+        onboarding_india_dpdp.SYNTHETIC_ABHA,
+    }.issubset(protected_values)
+    assert all(entity.action == "replace" for entity in result.pii_entities)
