@@ -61,6 +61,7 @@
     "pl": "pl_PL",
     "pt": "pt_PT",
     "ro": "ro_RO",
+    "rw": "rw_RW",
     "sk": "sk_SK",
     "sr": "sr_RS",
     "sw": "sw",
@@ -91,6 +92,7 @@
     "lv",
     "ms",
     "pl",
+    "rw",
     "sk",
     "sr",
     "tl",
@@ -102,6 +104,10 @@
     "af": [
       "af_ZA",
       "south_african_id"
+    ],
+    "am": [
+      "am_ET",
+      "ethiopia_fayda"
     ],
     "bg": [
       "bg_BG",
@@ -202,6 +208,10 @@
     "ro": [
       "ro_RO",
       "romanian_cnp"
+    ],
+    "rw": [
+      "rw_RW",
+      "rwanda_id"
     ],
     "sk": [
       "sk_SK",

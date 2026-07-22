@@ -21,6 +21,7 @@ from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_chinese_resident_id,
     validate_dutch_bsn,
+    validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
@@ -383,6 +384,7 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
+    "am": validate_ethiopia_fayda,
     "en": clinical_ids.validate_ssn,
     "fr": validate_french_nir,
     "de": validate_german_steuer_id,
@@ -405,6 +407,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
+    "am": "pii_i18n.validate_ethiopia_fayda",
     "en": "clinical_ids.validate_ssn",
     "fr": "pii_i18n.validate_french_nir",
     "de": "pii_i18n.validate_german_steuer_id",

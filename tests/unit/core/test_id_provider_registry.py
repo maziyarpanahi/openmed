@@ -21,6 +21,10 @@ def _always_valid(_text: str) -> bool:
 
 
 EXPECTED_VALIDATOR_KEYS = (
+    ("tz", "nida_nin"),
+    ("ug", "nin"),
+    ("rw", "rwanda_id"),
+    ("et", "fayda_fan"),
     ("fr", "nir"),
     ("de", "steuer_id"),
     ("it", "codice_fiscale"),
@@ -63,6 +67,10 @@ EXPECTED_VALIDATOR_KEYS = (
 
 
 ROUND_TRIP_CASES = (
+    ("tz", "nida_nin", "sw"),
+    ("ug", "nin", "en_UG"),
+    ("rw", "rwanda_id", "rw_RW"),
+    ("et", "fayda_fan", "am_ET"),
     ("fr", "nir", "fr_FR"),
     ("de", "steuer_id", "de_DE"),
     ("it", "codice_fiscale", "it_IT"),
@@ -105,6 +113,26 @@ ROUND_TRIP_CASES = (
 
 
 class TestNationalIdRegistry:
+    @pytest.mark.parametrize(
+        ("alias", "id_type"),
+        (
+            ("tz", "nida_nin"),
+            ("sw", "nida_nin"),
+            ("en_TZ", "nida_nin"),
+            ("ug", "nin"),
+            ("en_UG", "nin"),
+            ("rw", "rwanda_id"),
+            ("rw_RW", "rwanda_id"),
+            ("et", "fayda_fan"),
+            ("am", "fayda_fan"),
+            ("en_ET", "fayda_fan"),
+        ),
+    )
+    def test_east_african_aliases_resolve(self, alias, id_type):
+        spec = get_national_id(alias, id_type)
+        assert spec is not None
+        assert spec.faker_provider is not None
+
     def test_acceptance_lookups_return_validating_specs(self):
         for lang, id_type, locale in (
             ("it", "codice_fiscale", "it_IT"),
