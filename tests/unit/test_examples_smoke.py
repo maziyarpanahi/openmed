@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import os
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
+from jsonschema import validate
 
 from examples import (
     clinical_ner_families,
@@ -19,6 +23,8 @@ from examples import (
     onboarding_china_mirrors,
     onboarding_india_dpdp,
 )
+
+deid_demo = importlib.import_module("examples.spaces.deid_demo.app")
 
 
 def test_clinical_ner_families_example_is_syntactically_valid():
@@ -518,3 +524,185 @@ def test_hindi_hinglish_deid_example_fails_closed_on_synthetic_leak(
             note_name,
             note,
         )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_language"),
+    [
+        ("患者李晓雯今天复诊。", "zh"),
+        ("रोगी आज जाँच के लिए आए।", "hi"),
+        ("Patient Alex Example was seen today.", "en"),
+        ("Patient Ananya ka follow-up aaj hai.", "en"),
+        ("1234 / +1 555 0100", "en"),
+    ],
+)
+def test_deid_demo_detects_unicode_script(text, expected_language):
+    assert deid_demo.detect_script(text) == expected_language
+
+
+@pytest.mark.parametrize("override", ["zh", "hi", "en"])
+def test_deid_demo_manual_override_wins(override):
+    route = deid_demo.resolve_model_route("患者 हिन्दी Patient", override)
+
+    assert route.language == override
+    assert route.model_id == deid_demo.MODEL_IDS[override]
+
+
+@pytest.mark.parametrize(
+    ("sample_language", "openmed_language"),
+    [("zh", "zh"), ("hi", "hi"), ("en", "en")],
+)
+def test_deid_demo_routes_samples_without_network(
+    sample_language,
+    openmed_language,
+):
+    calls = []
+
+    def fake_deidentify(text, **kwargs):
+        calls.append((text, kwargs))
+        return SimpleNamespace(deidentified_text=f"[{sample_language.upper()} MASKED]")
+
+    sample = deid_demo.SAMPLES[sample_language]
+    result = deid_demo.run_deidentification(
+        sample.text,
+        deidentifier=fake_deidentify,
+    )
+
+    assert result.deidentified_text == f"[{sample_language.upper()} MASKED]"
+    assert result.route.language == sample_language
+    assert calls[0][0] == sample.text
+    assert calls[0][1] == {
+        "method": "mask",
+        "model_name": deid_demo.MODEL_IDS[sample_language],
+        "lang": openmed_language,
+        "policy": "strict_no_leak",
+        "use_safety_sweep": True,
+        "custom_recognizer": deid_demo._sample_recognizer(sample_language),
+        "keep_mapping": False,
+        "audit": False,
+        "cache_results": False,
+    }
+
+
+def test_deid_demo_models_are_registered():
+    from openmed.core.model_registry import get_model_info
+
+    assert all(
+        get_model_info(model_id) is not None
+        for model_id in deid_demo.MODEL_IDS.values()
+    )
+
+
+def test_deid_demo_samples_run_through_pipeline_without_network(monkeypatch):
+    from openmed.core import pii
+    from openmed.processing.outputs import PredictionResult
+
+    calls = []
+
+    def fake_extract_pii(text, model_name, *args, **kwargs):
+        calls.append((text, model_name, kwargs["lang"]))
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name=model_name,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(pii, "extract_pii", fake_extract_pii)
+
+    for language, sample in deid_demo.SAMPLES.items():
+        result = deid_demo.run_deidentification(sample.text, language)
+
+        assert all(
+            identifier not in result.deidentified_text
+            for identifier, _label in sample.identifiers
+        )
+
+    assert calls == [
+        (sample.text, deid_demo.MODEL_IDS[language], language)
+        for language, sample in deid_demo.SAMPLES.items()
+    ]
+
+
+def test_deid_demo_rejects_unknown_override():
+    with pytest.raises(ValueError, match="Unsupported language override"):
+        deid_demo.resolve_model_route("Synthetic note", "fr")
+
+
+def test_deid_demo_does_not_log_or_persist_input(caplog, monkeypatch, tmp_path):
+    raw_input = "Synthetic secret ZH-709-NEVER-LOG"
+    monkeypatch.chdir(tmp_path)
+
+    def fake_deidentify(text, **kwargs):
+        del text, kwargs
+        return SimpleNamespace(deidentified_text="Synthetic secret [ID_NUM]")
+
+    result = deid_demo.run_deidentification(
+        raw_input,
+        language_override="en",
+        deidentifier=fake_deidentify,
+    )
+
+    assert result.deidentified_text == "Synthetic secret [ID_NUM]"
+    assert raw_input not in caplog.text
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_deid_demo_disclaimer_contains_all_locales():
+    assert set(deid_demo.DISCLAIMERS) == {"zh", "hi", "en"}
+    assert all(
+        disclaimer in deid_demo.DISCLAIMER_MARKDOWN
+        for disclaimer in deid_demo.DISCLAIMERS.values()
+    )
+    assert "Never paste real patient data" in deid_demo.DISCLAIMERS["en"]
+    assert "真实患者数据" in deid_demo.DISCLAIMERS["zh"]
+    assert "वास्तविक रोगी डेटा" in deid_demo.DISCLAIMERS["hi"]
+
+
+def test_deid_demo_space_frontmatter_matches_schema():
+    readme = Path("examples/spaces/deid_demo/README.md").read_text(encoding="utf-8")
+    match = re.match(r"\A---\n(.*?)\n---\n", readme, flags=re.DOTALL)
+    assert match is not None
+    metadata = yaml.safe_load(match.group(1))
+    schema = {
+        "type": "object",
+        "required": ["title", "sdk", "sdk_version", "app_file", "models"],
+        "properties": {
+            "title": {"type": "string", "minLength": 1},
+            "sdk": {"const": "gradio"},
+            "sdk_version": {"type": "string", "pattern": r"^\d+\.\d+\.\d+$"},
+            "python_version": {"type": "string", "pattern": r"^3\.\d+(?:\.\d+)?$"},
+            "app_file": {"const": "app.py"},
+            "models": {
+                "type": "array",
+                "minItems": 3,
+                "items": {"type": "string", "pattern": r"^OpenMed/"},
+            },
+        },
+    }
+
+    validate(instance=metadata, schema=schema)
+    assert Path("examples/spaces/deid_demo", metadata["app_file"]).is_file()
+    assert metadata["sdk_version"] == "6.20.0"
+
+
+def test_deid_demo_requirements_are_pinned():
+    requirements = Path("examples/spaces/deid_demo/requirements.txt").read_text(
+        encoding="utf-8"
+    )
+    lines = [
+        line for line in requirements.splitlines() if line and not line.startswith("#")
+    ]
+
+    assert lines
+    assert all(
+        re.fullmatch(r"[A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_,.-]+\])?==[^\s]+", line)
+        for line in lines
+    )
+
+
+def test_deid_demo_readme_has_local_run_instructions():
+    readme = Path("examples/spaces/deid_demo/README.md").read_text(encoding="utf-8")
+
+    assert "python -m pip install -r requirements.txt" in readme
+    assert "python app.py" in readme
