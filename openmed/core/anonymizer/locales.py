@@ -45,8 +45,10 @@ _APPROXIMATE_LOCALES: Final = frozenset({"af", "te", "ms", "sr", "ur", "xh"})
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "af_ZA": "zu_ZA",
+    "ar_MA": "ar_EG",
     "en_ZA": "zu_ZA",
     "en_GH": "tw_GH",
+    "fr_MA": "fr_FR",
     "ms_MY": "id_ID",
     "sr_RS": "hr_HR",
     "ur_PK": "en_PK",

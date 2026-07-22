@@ -19,8 +19,10 @@ from openmed.core.anonymizer.providers import (
 )
 from openmed.core.anonymizer.providers.clinical_ids import (
     generate_bulgarian_egn,
+    generate_egyptian_national_id,
     generate_estonian_isikukood,
     generate_jmbg,
+    generate_moroccan_cin,
     generate_philhealth_pin,
     generate_portuguese_nif,
     generate_vietnamese_cccd,
@@ -42,6 +44,7 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
     get_patterns_for_language,
+    normalize_arabic_indic_digits,
     validate_bic,
     validate_bulgarian_egn,
     validate_croatian_oib,
@@ -49,6 +52,7 @@ from openmed.core.pii_i18n import (
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
+    validate_egyptian_national_id,
     validate_estonian_isikukood,
     validate_finnish_hetu,
     validate_french_nir,
@@ -66,6 +70,7 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_moroccan_cin,
     validate_nigeria_bvn,
     validate_nigeria_nin,
     validate_pakistani_cnic,
@@ -1474,7 +1479,7 @@ class TestLanguagePIIPatterns:
 
     def test_arabic_national_id_pattern(self):
         patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["ar"] if p.entity_type == "national_id"
+            p for p in get_patterns_for_language("ar") if p.entity_type == "national_id"
         ]
         text = "29801011234567"
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
@@ -2210,7 +2215,12 @@ class TestGetPatternsForLanguage:
             not any(pattern is universal for universal in universal_patterns)
             for pattern in LANGUAGE_PII_PATTERNS[lang]
         )
-        assert len(patterns) == base_count + language_count
+        locale_patterns = LOCALE_PII_PATTERNS.get(lang, [])
+        locale_count = sum(
+            not any(pattern is existing for existing in LANGUAGE_PII_PATTERNS[lang])
+            for pattern in locale_patterns
+        )
+        assert len(patterns) == base_count + language_count + locale_count
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
@@ -4754,6 +4764,334 @@ class TestGhanaKenyaIdentifiers:
 
         assert gold_count == 5
         assert leaked_count / gold_count == 0
+
+
+class TestEgyptMoroccoIdentifiers:
+    """Validator, pattern, provider, and fixture coverage for Egypt/Morocco."""
+
+    @staticmethod
+    def _faker(seed: int) -> Faker:
+        faker = Faker("ar_EG")
+        register_clinical_providers(faker)
+        faker.seed_instance(seed)
+        return faker
+
+    @staticmethod
+    def _fixture_rows():
+        return [
+            json.loads(line)
+            for line in Path("tests/fixtures/pii/eg_ma_synthetic_notes.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+
+    def test_arabic_indic_normalization_is_length_preserving(self):
+        original = "٠١٢٣٤٥٦٧٨٩ ۰۱۲۳۴۵۶۷۸۹ 0123456789"
+        normalized = normalize_arabic_indic_digits(original)
+
+        assert normalized == "0123456789 0123456789 0123456789"
+        assert len(normalized) == len(original)
+        assert normalize_arabic_indic_digits(normalized) == normalized
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "29801011234567",
+            "٣٠٠٠٢٢٩٨٨١٢٣٤٥",
+            "۳۰۰۰۲۲۹۸۸۱۲۳۴۵",
+        ),
+    )
+    def test_egyptian_validator_accepts_ascii_and_arabic_digits(self, value):
+        assert validate_egyptian_national_id(value)
+
+    @pytest.mark.parametrize(
+        "governorate",
+        ("00", "05", "10", "20", "30", "36", "50", "87", "89", "99"),
+    )
+    def test_egyptian_validator_rejects_unpublished_governorates(
+        self,
+        governorate,
+    ):
+        assert not validate_egyptian_national_id(f"2980101{governorate}34567")
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "19801011234567",
+            "29802301234567",
+            "29902291234567",
+            "2980101123456",
+            "298010112345678",
+            "29801011234X67",
+            None,
+        ),
+    )
+    def test_egyptian_validator_rejects_bad_century_date_or_shape(self, value):
+        assert not validate_egyptian_national_id(value)
+
+    def test_one_thousand_generated_egyptian_ids_validate(self):
+        faker = self._faker(842)
+        for _ in range(1_000):
+            assert validate_egyptian_national_id(faker.egyptian_national_id())
+
+    def test_egyptian_surrogate_preserves_fields_and_changes_serial(self):
+        source = "29801011234567"
+        surrogate = generate_egyptian_national_id(
+            source,
+            rng=random.Random(842),
+        )
+
+        assert validate_egyptian_national_id(surrogate)
+        assert surrogate != source
+        assert surrogate[0] == source[0]
+        assert surrogate[1:9] == source[1:9]
+        assert int(surrogate[12]) % 2 == int(source[12]) % 2
+        assert surrogate[9:13] != source[9:13]
+
+    @pytest.mark.parametrize(
+        "value",
+        ("A12345", "BK123456", "z1234567", "BK١٢٣٤٥٦", "A۱۲۳۴۵"),
+    )
+    def test_moroccan_cin_validator_accepts_region_prefix_and_digit_width(
+        self,
+        value,
+    ):
+        assert validate_moroccan_cin(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "123456",
+            "ABC123456",
+            "BK1234",
+            "BK12345678",
+            "B-123456",
+            "B12A456",
+            None,
+        ),
+    )
+    def test_moroccan_cin_validator_rejects_bad_shape(self, value):
+        assert not validate_moroccan_cin(value)
+
+    def test_moroccan_surrogate_preserves_exact_prefix_and_digit_width(self):
+        source = "BK123456"
+        surrogate = generate_moroccan_cin(source, rng=random.Random(842))
+
+        assert validate_moroccan_cin(surrogate)
+        assert surrogate != source
+        assert surrogate.startswith("BK")
+        assert len(surrogate) == len(source)
+
+    def test_moroccan_pattern_requires_identity_context_in_both_engines(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        patterns = LOCALE_PII_PATTERNS["ar_ma"]
+        for text in (
+            "Dose A12345 administered; specimen BK765432 queued.",
+            "Medicine BK765432 was logged as a specimen code.",
+            "الجرعة A١٢٣٤٥؛ العينة BK٧٦٥٤٣٢.",
+        ):
+            assert safety_sweep(text, [], patterns=patterns) == []
+            assert find_semantic_units(text, patterns) == []
+
+        for text, expected in (
+            ("CIN: BK123456", "BK123456"),
+            ("Carte nationale A7654321", "A7654321"),
+            ("بطاقة التعريف الوطنية BK١٢٣٤٥٦", "BK١٢٣٤٥٦"),
+            ("Bitaqa watania A۱۲۳۴۵", "A۱۲۳۴۵"),
+        ):
+            swept = safety_sweep(text, [], patterns=patterns)
+            assert [(entity.label, entity.text) for entity in swept] == [
+                ("national_id", expected)
+            ]
+            semantic = find_semantic_units(text, patterns)
+            assert [(item[2], text[item[0] : item[1]]) for item in semantic] == [
+                ("national_id", expected)
+            ]
+
+    def test_locale_aliases_select_country_specific_patterns(self):
+        assert LOCALE_PII_PATTERNS["ar_eg"] is not LOCALE_PII_PATTERNS["ar_ma"]
+        assert all(
+            pattern in get_patterns_for_language("ar", locale="ar_EG")
+            for pattern in LOCALE_PII_PATTERNS["ar_eg"]
+        )
+        assert all(
+            pattern in get_patterns_for_language("ar_MA")
+            for pattern in LOCALE_PII_PATTERNS["ar_ma"]
+        )
+        assert all(
+            pattern in get_patterns_for_language("ar")
+            for pattern in LOCALE_PII_PATTERNS["ar"]
+        )
+
+    def test_ascii_and_arabic_egyptian_ids_have_span_and_mask_parity(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        outputs = []
+        for identifier in ("29801011234567", "٢٩٨٠١٠١١٢٣٤٥٦٧"):
+            text = f"الرقم القومي: {identifier}"
+            empty = PredictionResult(
+                text=text,
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-16T00:00:00Z",
+                metadata={},
+            )
+            swept, added = _apply_safety_sweep_to_result(
+                text,
+                empty,
+                lang="ar",
+                locale="ar_EG",
+            )
+            assert added == 1
+            masked = _build_deidentification_result(
+                text,
+                swept,
+                effective_method="mask",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang="ar",
+                consistent=False,
+                seed=None,
+                locale="ar_EG",
+                use_safety_sweep=True,
+            )
+            outputs.append(
+                (
+                    [
+                        (entity.start, entity.end, entity.label)
+                        for entity in swept.entities
+                    ],
+                    masked.deidentified_text,
+                )
+            )
+
+        assert outputs[0] == outputs[1]
+
+    def test_arabic_extract_normalization_preserves_original_surface(self, monkeypatch):
+        import openmed
+        from openmed.processing.outputs import PredictionResult
+
+        original_id = "٢٩٨٠١٠١١٢٣٤٥٦٧"
+        original = f"الرقم القومي: {original_id}"
+
+        def fake_analyze_text(text, **_kwargs):
+            assert "29801011234567" in text
+            return PredictionResult(
+                text=text,
+                entities=[],
+                model_name="fixture-pii-model",
+                timestamp="2026-07-16T00:00:00Z",
+            )
+
+        monkeypatch.setattr(openmed, "analyze_text", fake_analyze_text)
+        result = openmed.extract_pii(
+            original,
+            model_name="fixture-pii-model",
+            lang="ar",
+            locale="ar_EG",
+        )
+
+        national_ids = [
+            entity for entity in result.entities if entity.label == "national_id"
+        ]
+        assert len(national_ids) == 1
+        assert national_ids[0].text == original_id
+        assert original[national_ids[0].start : national_ids[0].end] == original_id
+
+    def test_synthetic_fixture_offsets_pairs_and_hard_negatives(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        rows = self._fixture_rows()
+        assert len(rows) == 6
+        assert {row["metadata"]["digit_script"] for row in rows} == {
+            "ascii",
+            "arabic_indic",
+        }
+
+        paired_values = {}
+        for row in rows:
+            assert row["metadata"]["synthetic"] is True
+            assert row["metadata"]["generated_only"] is True
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"]
+                paired_values.setdefault(row["metadata"]["pair"], set()).add(
+                    normalize_arabic_indic_digits(entity["text"])
+                )
+
+            if not row["entities"]:
+                assert (
+                    safety_sweep(
+                        row["text"],
+                        [],
+                        patterns=LOCALE_PII_PATTERNS["ar_ma"],
+                    )
+                    == []
+                )
+
+        assert paired_values == {"eg-1": {"29801011234567"}, "ma-1": {"BK123456"}}
+
+    def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        gold_count = 0
+        leaked_count = 0
+        for row in self._fixture_rows():
+            if not row["entities"]:
+                continue
+            empty = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-16T00:00:00Z",
+                metadata={},
+            )
+            swept, added = _apply_safety_sweep_to_result(
+                row["text"],
+                empty,
+                lang="ar",
+                locale=row["language"],
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang="ar",
+                consistent=True,
+                seed=842,
+                locale=row["language"],
+                use_safety_sweep=True,
+            )
+
+            assert added == len(row["entities"])
+            for entity in row["entities"]:
+                gold_count += 1
+                leaked_count += int(
+                    normalize_arabic_indic_digits(entity["text"])
+                    in normalize_arabic_indic_digits(result.deidentified_text)
+                )
+
+            replacement = result.pii_entities[0].redacted_text
+            if row["language"] == "ar_EG":
+                assert validate_egyptian_national_id(replacement)
+            else:
+                assert validate_moroccan_cin(replacement)
+
+        assert gold_count == 4
+        assert leaked_count == 0
 
 
 def _south_african_id_with_luhn(body: str) -> str:
