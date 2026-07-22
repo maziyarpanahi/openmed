@@ -62,6 +62,18 @@ def _draw_distinct(faker, original: str, method: str) -> str:
     return candidate
 
 
+def _locale_fake_value(faker, locale: str, key: str, original: str):
+    """Draw a curated value for an OpenMed conceptual locale, if present."""
+
+    from ..pii_i18n import LOCALE_FAKE_DATA
+
+    values = LOCALE_FAKE_DATA.get(locale, {}).get(key, ())
+    if not values:
+        return None
+    alternatives = tuple(value for value in values if value != original)
+    return faker.random_element(alternatives or tuple(values))
+
+
 # ---------------------------------------------------------------------------
 # Names
 # ---------------------------------------------------------------------------
@@ -143,7 +155,7 @@ def _gen_zh_person(faker, original: str) -> str:
 def _gen_person(faker, original, *, locale):
     if _is_zh_cn(locale):
         return _gen_zh_person(faker, original)
-    return faker.name()
+    return _locale_fake_value(faker, locale, "NAME", original) or faker.name()
 
 
 def _gen_first_name(faker, original, *, locale):
@@ -154,7 +166,9 @@ def _gen_first_name(faker, original, *, locale):
             length=max(1, min(len(source) or 1, 2)),
             forbidden=set(source),
         )
-    return faker.first_name()
+    return (
+        _locale_fake_value(faker, locale, "FIRST_NAME", original) or faker.first_name()
+    )
 
 
 def _gen_last_name(faker, original, *, locale):
@@ -165,7 +179,7 @@ def _gen_last_name(faker, original, *, locale):
             compound=len(source) >= 2,
             forbidden=set(source),
         )
-    return faker.last_name()
+    return _locale_fake_value(faker, locale, "LAST_NAME", original) or faker.last_name()
 
 
 def _gen_middle_name(faker, original, *, locale):
@@ -215,6 +229,9 @@ def _gen_email(faker, original, *, locale):
 
 
 def _gen_phone(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "PHONE", original)
+    if curated is not None:
+        return curated
     if _is_zh_cn(locale):
         from openmed.core.pii_i18n import validate_chinese_mobile_number
 
@@ -333,7 +350,7 @@ def _gen_location(faker, original, *, locale):
     if _is_zh_address_locale(locale):
         return "".join(_pick_zh_division(faker, original))
     # Prefer city-level granularity since most "LOCATION" detections are cities
-    return faker.city()
+    return _locale_fake_value(faker, locale, "LOCATION", original) or faker.city()
 
 
 def _gen_street_address(faker, original, *, locale):
@@ -350,7 +367,10 @@ def _gen_street_address(faker, original, *, locale):
             return f"{street}{building}号，邮编{postcode}"
         province, city, district = _pick_zh_division(faker, original)
         return f"{province}{city}{district}{street}{building}号，邮编{postcode}"
-    return faker.street_address()
+    return (
+        _locale_fake_value(faker, locale, "STREET_ADDRESS", original)
+        or faker.street_address()
+    )
 
 
 def _gen_india_street_address(faker, original, *, locale):
