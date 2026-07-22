@@ -185,6 +185,10 @@ def _gen_url(faker, original, *, locale):
 
 
 _ZH_ADDRESS_RESOURCE = "data/zh_cn_administrative_divisions.json"
+_ZH_ADMINISTRATIVE_PREFIX_RE = re.compile(
+    r"^[\u3400-\u4dbf\u4e00-\u9fff]{1,12}?省"
+    r"[\u3400-\u4dbf\u4e00-\u9fff]{1,12}?市"
+)
 _ZH_SYNTHETIC_STREETS = (
     "安澜路",
     "和景街",
@@ -237,12 +241,22 @@ def _zh_random_digits(faker, *, width: int, original: str) -> str:
     source_numbers = set(re.findall(r"\d+", original))
     minimum = 10 ** (width - 1)
     maximum = (10**width) - 1
+
+    def is_safe(value: str) -> bool:
+        return all(source not in value for source in source_numbers)
+
     for _ in range(12):
         value = str(faker.random_int(min=minimum, max=maximum))
-        if value not in source_numbers:
+        if is_safe(value):
             return value
-    fallback = str((int(value) - minimum + 1) % (maximum - minimum + 1) + minimum)
-    return fallback
+
+    # Exhaustive fallback makes the privacy property deterministic even when
+    # several random candidates contain a short source number such as 17 or 88.
+    for candidate in range(minimum, maximum + 1):
+        value = str(candidate)
+        if is_safe(value):
+            return value
+    raise ValueError("Could not generate Chinese address digits without source reuse")
 
 
 def _gen_location(faker, original, *, locale):
@@ -254,11 +268,17 @@ def _gen_location(faker, original, *, locale):
 
 def _gen_street_address(faker, original, *, locale):
     if _is_zh_address_locale(locale):
-        province, city, district = _pick_zh_division(faker, original)
         streets = [street for street in _ZH_SYNTHETIC_STREETS if street not in original]
         street = faker.random_element(streets or _ZH_SYNTHETIC_STREETS)
         building = _zh_random_digits(faker, width=3, original=original).lstrip("0")
         postcode = _zh_random_digits(faker, width=6, original=original)
+        # The deterministic address assist deliberately emits only the
+        # district/street/building tail beside an existing LOCATION prefix.
+        # Avoid inserting a second, unrelated province/city hierarchy when
+        # that tail is replaced independently during de-identification.
+        if _ZH_ADMINISTRATIVE_PREFIX_RE.match(original) is None:
+            return f"{street}{building}号，邮编{postcode}"
+        province, city, district = _pick_zh_division(faker, original)
         return f"{province}{city}{district}{street}{building}号，邮编{postcode}"
     return faker.street_address()
 

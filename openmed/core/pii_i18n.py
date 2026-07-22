@@ -4299,23 +4299,36 @@ _CHINESE_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
-_ZH_ADDRESS_NAME = (
-    r"(?:(?![省市区县街道镇乡路巷弄大道号室楼栋单元])"
-    r"[\u3400-\u4dbf\u4e00-\u9fff])"
-)
-_ZH_ADDRESS_TAIL_PATTERN = (
-    rf"(?:(?<=省)|(?<=市)|(?<=[：:，,。；;\s])|^)"
-    rf"{_ZH_ADDRESS_NAME}{{1,12}}(?:区|县)\s*"
-    rf"{_ZH_ADDRESS_NAME}{{1,12}}(?:街道|镇|乡)\s*"
-    rf"{_ZH_ADDRESS_NAME}{{1,12}}(?:大道|路|街|巷|弄)\s*"
+_ZH_ADDRESS_NAME = r"[\u3400-\u4dbf\u4e00-\u9fff]"
+_ZH_ADDRESS_TAIL_CORE = (
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?(?:区|县)\s*"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?(?:街道|镇|乡)\s*"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?(?:大道|路|街|巷|弄)\s*"
     r"\d{1,5}号(?:\d{1,4}(?:室|房)|[一二三四五六七八九十]{1,3}单元)?"
+)
+_ZH_ADDRESS_TAIL_PATTERN = rf"(?<=市){_ZH_ADDRESS_TAIL_CORE}"
+_ZH_FULL_ADDRESS_PATTERN = (
+    rf"(?:(?<=[：:，,。；;\s])|^)"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?省"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?市"
+    rf"{_ZH_ADDRESS_TAIL_CORE}"
 )
 
 _CHINESE_ADDRESS_PII_PATTERNS: List[PIIPattern] = [
+    # When the model misses the entire address, cover the full hierarchy so
+    # province/city tokens cannot survive a tail-only replacement.
+    PIIPattern(
+        _ZH_FULL_ADDRESS_PATTERN,
+        "street_address",
+        priority=10,
+        base_score=0.9,
+        context_words=["地址", "住址", "现住址", "联系地址", "居住地"],
+        context_boost=0.1,
+    ),
     # Assist an under-segmented model span by adding only the strong
     # district/street/building tail. The leading boundary deliberately starts
-    # after a province/city suffix or punctuation so the safety sweep can add
-    # this span without overlapping or moving an existing province/city span.
+    # after a city suffix so the safety sweep can add this span without
+    # overlapping or moving an existing province/city span.
     PIIPattern(
         _ZH_ADDRESS_TAIL_PATTERN,
         "street_address",
@@ -7360,8 +7373,7 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
         lang: ISO 639-1 language code, optionally with a region suffix for
             pattern lookup. Model-backed languages are listed in
             :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
-            in :data:`NATIONAL_ID_ONLY_LANGUAGES`. A language may also expose a
-            narrow deterministic assist without claiming a complete model pack.
+            in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
         locale: Optional locale override (for example, ``"en_GB"``) whose
             locale-specific deterministic patterns should also be active.
 
@@ -7371,9 +7383,7 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     Raises:
         ValueError: If the language is not supported
     """
-    supported_pattern_languages = (
-        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | set(LANGUAGE_PII_PATTERNS)
-    )
+    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
     base_lang = _normalize_pattern_language(lang)
     if base_lang not in supported_pattern_languages:
         raise ValueError(
