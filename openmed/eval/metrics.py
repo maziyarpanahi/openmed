@@ -2348,8 +2348,7 @@ def radiology_finding_tuple_f1(
     for item in gold:
         gold_counts[_radiology_finding_tuple(item)] += 1
     true_positives = sum(
-        min(count, gold_counts.get(key, 0))
-        for key, count in predicted_counts.items()
+        min(count, gold_counts.get(key, 0)) for key, count in predicted_counts.items()
     )
     return _f1_from_counts(
         true_positives,
