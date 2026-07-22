@@ -3,7 +3,8 @@
   "fixture_count": 1,
   "generated_at": "2026-06-14T00:00:00Z",
   "metadata": {
-    "source": "committed benchmark report"
+    "source": "committed benchmark report",
+    "synthetic": true
   },
   "metrics": {
     "exact_span_f1": {

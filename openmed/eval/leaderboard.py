@@ -8,7 +8,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import quote
@@ -21,6 +21,7 @@ DEFAULT_REPORTS_DIR = Path("docs/benchmarks")
 DEFAULT_OUTPUT_DIR = Path("docs/eval/benchmark-leaderboard")
 
 _SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}")
+_REPORT_DISCRIMINATORS = frozenset({"suite", "model_name", "fixture_count", "metrics"})
 _LEAKAGE_METRICS = (
     "leakage.overall",
     "leakage_rate.overall",
@@ -341,8 +342,15 @@ def _load_archived_reports(reports_dir: str | Path) -> list[_ArchivedReport]:
             raise LeaderboardError(
                 f"Could not read archived report {path}: {exc}"
             ) from exc
+        is_named_report = path.name.endswith(".report.json")
         if not isinstance(payload, Mapping):
-            raise LeaderboardError(f"Archived report must be a JSON object: {path}")
+            if is_named_report:
+                raise LeaderboardError(f"Archived report must be a JSON object: {path}")
+            continue
+        if not is_named_report and not _REPORT_DISCRIMINATORS.intersection(payload):
+            continue
+        source = relative_path.as_posix()
+        _validate_report_payload(payload, source=source)
         try:
             report = BenchmarkReport.from_dict(payload)
         except (KeyError, TypeError, ValueError) as exc:
@@ -355,7 +363,32 @@ def _load_archived_reports(reports_dir: str | Path) -> list[_ArchivedReport]:
                 report=report,
             )
         )
+    if not archives:
+        raise LeaderboardError(f"No archived BenchmarkReport JSON found in {root}")
     return archives
+
+
+def _validate_report_payload(payload: Mapping[str, Any], *, source: str) -> None:
+    for field in ("suite", "model_name", "device"):
+        _required_text(payload.get(field), field=field, source=source)
+
+    fixture_count = payload.get("fixture_count")
+    if (
+        isinstance(fixture_count, bool)
+        or not isinstance(fixture_count, int)
+        or fixture_count <= 0
+    ):
+        raise LeaderboardError(
+            f"Report {source} requires a positive integer fixture_count"
+        )
+    if not isinstance(payload.get("metrics"), Mapping):
+        raise LeaderboardError(f"Report {source} requires a metrics object")
+    metadata = payload.get("metadata", {})
+    if not isinstance(metadata, Mapping):
+        raise LeaderboardError(f"Report {source} requires a metadata object")
+    generated_at = payload.get("generated_at")
+    if generated_at is not None and not isinstance(generated_at, str):
+        raise LeaderboardError(f"Report {source} has a non-string generated_at")
 
 
 def _row_from_archive(
@@ -367,15 +400,23 @@ def _row_from_archive(
     report = archive.report
     source = archive.relative_path.as_posix()
     metadata = report.metadata
+    if metadata.get("synthetic") is not True:
+        raise LeaderboardError(f"Report {source} is not explicitly marked as synthetic")
     family = metadata.get("model_family") or metadata.get("family")
     if family is None and manifest_row is not None:
         family = manifest_row.get("family")
-    if family is None or not str(family).strip():
-        raise LeaderboardError(f"Report {source} has no model family metadata")
+    family_text = _required_text(
+        family,
+        field="model family metadata",
+        source=source,
+    )
 
     row_release = metadata.get("release_tag") or metadata.get("release") or release_tag
-    if row_release is None or not str(row_release).strip():
-        raise LeaderboardError(f"Report {source} has no release tag")
+    release_text = _required_text(
+        row_release,
+        field="release tag",
+        source=source,
+    )
 
     run_date = metadata.get("run_date") or report.generated_at
     normalized_run_date = _normalize_run_date(run_date, source=source)
@@ -390,7 +431,7 @@ def _row_from_archive(
 
     return LeaderboardRow(
         suite=_required_text(report.suite, field="suite", source=source),
-        model_family=str(family).strip(),
+        model_family=family_text,
         model_name=_required_text(
             report.model_name,
             field="model_name",
@@ -400,7 +441,7 @@ def _row_from_archive(
         leakage=_metric(report.metrics, _LEAKAGE_METRICS, "leakage", source),
         recall=_metric(report.metrics, _RECALL_METRICS, "recall", source),
         f1=_metric(report.metrics, _F1_METRICS, "F1", source),
-        release_tag=str(row_release).strip(),
+        release_tag=release_text,
         run_date=normalized_run_date,
         reproducibility_hash=repro_hash,
         report_path=source,
@@ -443,9 +484,12 @@ def _nested_get(mapping: Mapping[str, Any], dotted_key: str) -> Any:
 def _normalize_run_date(value: Any, *, source: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise LeaderboardError(f"Report {source} has no run date")
-    candidate = value.strip()[:10]
+    candidate = value.strip()
     try:
-        return date.fromisoformat(candidate).isoformat()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", candidate):
+            return date.fromisoformat(candidate).isoformat()
+        normalized = f"{candidate[:-1]}+00:00" if candidate.endswith("Z") else candidate
+        return datetime.fromisoformat(normalized).date().isoformat()
     except ValueError as exc:
         raise LeaderboardError(
             f"Report {source} has invalid run date: {value!r}"
@@ -453,10 +497,9 @@ def _normalize_run_date(value: Any, *, source: str) -> str:
 
 
 def _required_text(value: Any, *, field: str, source: str) -> str:
-    text = str(value).strip()
-    if not text:
-        raise LeaderboardError(f"Report {source} has empty {field}")
-    return text
+    if not isinstance(value, str) or not value.strip():
+        raise LeaderboardError(f"Report {source} has no valid {field}")
+    return value.strip()
 
 
 def _row_sort_key(row: LeaderboardRow) -> tuple[Any, ...]:

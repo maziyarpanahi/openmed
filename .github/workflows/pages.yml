@@ -4,7 +4,6 @@ on:
   push:
     branches: ["master"]
     tags: ["v*"]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -45,8 +44,8 @@ jobs:
           python -m openmed.eval.leaderboard \
             --reports-dir docs/benchmarks \
             --output-dir docs/eval/benchmark-leaderboard \
-             --manifest models.jsonl \
-             --release-tag "$release_tag"
+            --manifest models.jsonl \
+            --release-tag "$release_tag"
       - name: Build MkDocs site and verify LLM feeds
         run: |
           mkdocs build --strict

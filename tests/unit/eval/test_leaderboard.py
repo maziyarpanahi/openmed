@@ -50,6 +50,7 @@ def _write_report(
             "family": family,
             "release_tag": release_tag,
             "reproducibility_hash": "sha256:" + repro_character * 64,
+            "synthetic": True,
         },
     ).write_json(path)
 
@@ -99,6 +100,19 @@ def test_renderer_sorts_leakage_first_then_recall(tmp_path: Path) -> None:
         (0.1, 0.8),
         (0.2, 0.99),
     ]
+
+
+def test_renderer_ignores_non_report_json_in_mixed_archive(tmp_path: Path) -> None:
+    reports = tmp_path / "reports"
+    _write_report(reports / "valid.report.json", model_name="valid")
+    (reports / "baseline.json").write_text(
+        '{"schema_version": 1, "throughput": 12.5}\n',
+        encoding="utf-8",
+    )
+
+    rows = load_leaderboard_rows(reports)
+
+    assert [row.model_name for row in rows] == ["valid"]
 
 
 def test_renderer_emits_grouped_html_json_and_downloads(tmp_path: Path) -> None:
@@ -185,6 +199,7 @@ def test_manifest_and_release_fallback_stamp_legacy_report(tmp_path: Path) -> No
             "exact_span_f1": {"f1": 0.9, "recall": 0.92},
             "leakage": {"overall": 0.01},
         },
+        metadata={"synthetic": True},
     ).write_json(report_path)
     manifest = [
         {
@@ -222,10 +237,45 @@ def test_renderer_fails_closed_when_ranking_evidence_is_missing(
             "family": "PII",
             "release_tag": "v2.0.0",
             "reproducibility_hash": "sha256:" + "a" * 64,
+            "synthetic": True,
         },
     ).write_json(reports / "incomplete.json")
 
     with pytest.raises(LeaderboardError, match="missing leakage"):
+        load_leaderboard_rows(reports)
+
+
+def test_renderer_rejects_report_without_explicit_synthetic_provenance(
+    tmp_path: Path,
+) -> None:
+    reports = tmp_path / "reports"
+    _write_report(reports / "unmarked.json", model_name="unmarked")
+    payload = json.loads((reports / "unmarked.json").read_text(encoding="utf-8"))
+    del payload["metadata"]["synthetic"]
+    (reports / "unmarked.json").write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(LeaderboardError, match="explicitly marked as synthetic"):
+        load_leaderboard_rows(reports)
+
+
+@pytest.mark.parametrize(
+    "run_date",
+    ["2026-07-17 trailing text", "2026-13-01", 20260717],
+)
+def test_renderer_rejects_invalid_run_dates(tmp_path: Path, run_date: object) -> None:
+    reports = tmp_path / "reports"
+    _write_report(reports / "invalid-date.json", model_name="invalid-date")
+    payload = json.loads((reports / "invalid-date.json").read_text(encoding="utf-8"))
+    payload["generated_at"] = run_date
+    (reports / "invalid-date.json").write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(LeaderboardError, match="generated_at|run date"):
         load_leaderboard_rows(reports)
 
 
@@ -258,8 +308,9 @@ def test_committed_public_leaderboard_does_not_drift(tmp_path: Path) -> None:
 
 
 def test_pages_workflow_renders_on_master_and_release_tags() -> None:
+    workflow_text = PAGES_WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.load(
-        PAGES_WORKFLOW.read_text(encoding="utf-8"),
+        workflow_text,
         Loader=yaml.BaseLoader,
     )
     push = workflow["on"]["push"]
@@ -272,6 +323,9 @@ def test_pages_workflow_renders_on_master_and_release_tags() -> None:
 
     assert push["branches"] == ["master"]
     assert push["tags"] == ["v*"]
+    assert workflow_text.count('tags: ["v*"]') == 1
     assert "python -m openmed.eval.leaderboard" in render_step["run"]
     assert "docs/eval/benchmark-leaderboard" in render_step["run"]
     assert 'release_tag="$GITHUB_REF_NAME"' in render_step["run"]
+    assert "test -s site/docs/llms.txt" in workflow_text
+    assert "test -s site/docs/llms-full.txt" in workflow_text

@@ -28,9 +28,12 @@ unverifiable row.
 
 ## Source and refresh flow
 
-Only committed synthetic `BenchmarkReport` JSON under `docs/benchmarks/` is
-published. Non-synthetic, private, DUA-restricted, or raw clinical data must
-never be added to this archive.
+Only committed `BenchmarkReport` JSON under `docs/benchmarks/` with
+`metadata.synthetic` set to `true` is published. Auxiliary JSON that has no
+BenchmarkReport fields is ignored, while malformed report candidates and
+reports without the explicit synthetic marker fail closed. Non-synthetic,
+private, DUA-restricted, or raw clinical data must never be added to this
+archive.
 
 To reproduce the release artifact locally:
 
