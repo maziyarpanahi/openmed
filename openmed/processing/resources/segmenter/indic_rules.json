@@ -1,0 +1,12 @@
+{
+  "format": "openmed-indic-break-rules",
+  "format_version": 1,
+  "license": "ICU-1.8.1",
+  "scripts": {
+    "Devanagari": {
+      "ranges": [[2304, 2431]],
+      "viramas": [2381],
+      "joiners": [8204, 8205]
+    }
+  }
+}

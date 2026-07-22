@@ -98,6 +98,7 @@ nav:
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
+      - On-device Segmenters: on-device-segmenters.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md

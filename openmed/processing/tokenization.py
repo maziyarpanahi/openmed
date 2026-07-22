@@ -1,10 +1,15 @@
 """Tokenization utilities for OpenMed."""
 
+import hashlib
+import importlib
+import json
 import logging
 import re
+import shutil
 import unicodedata
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from openmed.core.decoding.spans import (
     is_grapheme_boundary,
@@ -19,6 +24,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
+SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES = 64 * 1024
+SEGMENTER_RESOURCE_DIRECTORY = "segmenter"
+DEFAULT_SEGMENTER_ID = "openmed-cjk-indic-v1"
+SEGMENTER_IDS = (
+    "openmed-han-v1",
+    "openmed-indic-v1",
+    DEFAULT_SEGMENTER_ID,
+)
+_SEGMENTER_RESOURCE_ROOT = Path(__file__).with_name("resources") / "segmenter"
+_SEGMENTER_SPECS: dict[str, dict[str, Any]] = {
+    "openmed-han-v1": {
+        "scripts": ["Han"],
+        "license": "MIT",
+        "resources": [
+            ("han_words.txt", "han_dictionary", "MIT"),
+        ],
+    },
+    "openmed-indic-v1": {
+        "scripts": ["Devanagari"],
+        "license": "ICU-1.8.1",
+        "resources": [
+            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+        ],
+    },
+    DEFAULT_SEGMENTER_ID: {
+        "scripts": ["Han", "Devanagari"],
+        "license": "MIT AND ICU-1.8.1",
+        "resources": [
+            ("han_words.txt", "han_dictionary", "MIT"),
+            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+        ],
+    },
+}
 DEFAULT_MEDICAL_EXCEPTIONS = [
     "COVID-19",
     "SARS-CoV-2",
@@ -194,6 +232,419 @@ def _medical_tokens_in_segment(text: str, *, offset: int = 0) -> List[SpanToken]
             )
         )
     return tokens
+
+
+@dataclass(frozen=True)
+class SegmentSpan:
+    """One resource-segmenter span expressed in UTF-8 byte offsets."""
+
+    text: str
+    start: int
+    end: int
+
+
+def package_segmenter_resources(
+    bundle_dir: str | Path,
+    segmenter_id: str = DEFAULT_SEGMENTER_ID,
+) -> dict[str, Any]:
+    """Copy a compact segmenter resource set into an on-device bundle.
+
+    The returned descriptor is ready to store under the ``segmenter`` key in
+    MLX, ONNX, or CoreML manifests. The 64 KiB budget covers only the declared
+    data tables; no jieba or ICU runtime is copied into the artifact.
+    """
+
+    try:
+        spec = _SEGMENTER_SPECS[segmenter_id]
+    except KeyError as exc:
+        supported = ", ".join(SEGMENTER_IDS)
+        raise ValueError(
+            f"unsupported segmenter_id {segmenter_id!r}; expected one of {supported}"
+        ) from exc
+
+    bundle_path = Path(bundle_dir)
+    resource_dir = bundle_path / SEGMENTER_RESOURCE_DIRECTORY
+    resource_dir.mkdir(parents=True, exist_ok=True)
+    resource_files: list[dict[str, Any]] = []
+
+    for filename, role, license_id in spec["resources"]:
+        source = _SEGMENTER_RESOURCE_ROOT / filename
+        if not source.is_file():
+            raise FileNotFoundError(f"packaged segmenter resource is missing: {source}")
+        destination = resource_dir / filename
+        shutil.copy2(source, destination)
+        payload = destination.read_bytes()
+        resource_files.append(
+            {
+                "path": f"{SEGMENTER_RESOURCE_DIRECTORY}/{filename}",
+                "role": role,
+                "license": license_id,
+                "size_bytes": len(payload),
+                "sha256": f"sha256:{hashlib.sha256(payload).hexdigest()}",
+            }
+        )
+
+    total_size = sum(int(item["size_bytes"]) for item in resource_files)
+    descriptor = {
+        "id": segmenter_id,
+        "format_version": 1,
+        "scripts": list(spec["scripts"]),
+        "license": spec["license"],
+        "resource_files": resource_files,
+        "total_size_bytes": total_size,
+        "size_budget_bytes": SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES,
+    }
+    validate_segmenter_resources(bundle_path, descriptor)
+    return descriptor
+
+
+def validate_segmenter_resources(
+    bundle_dir: str | Path,
+    descriptor: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate one manifest segmenter descriptor and its bundle resources."""
+
+    bundle_path = Path(bundle_dir).resolve()
+    segmenter_id = str(descriptor.get("id") or "")
+    if segmenter_id not in SEGMENTER_IDS:
+        raise ValueError(f"unsupported segmenter resource id: {segmenter_id!r}")
+
+    scripts = descriptor.get("scripts")
+    if (
+        not isinstance(scripts, list)
+        or not scripts
+        or not all(isinstance(script, str) and script for script in scripts)
+    ):
+        raise ValueError("segmenter scripts must be a non-empty string list")
+    if not descriptor.get("license"):
+        raise ValueError("segmenter descriptor must record a license")
+    expected_spec = _SEGMENTER_SPECS[segmenter_id]
+    if scripts != expected_spec["scripts"]:
+        raise ValueError("segmenter scripts do not match the declared resource id")
+    if descriptor.get("license") != expected_spec["license"]:
+        raise ValueError("segmenter license does not match the declared resource id")
+
+    resources = descriptor.get("resource_files")
+    if not isinstance(resources, list) or not resources:
+        raise ValueError("segmenter descriptor must declare resource_files")
+    expected_resources = {
+        (filename, role): license_id
+        for filename, role, license_id in expected_spec["resources"]
+    }
+    declared_resources = {
+        (Path(str(item.get("path") or "")).name, str(item.get("role") or "")): str(
+            item.get("license") or ""
+        )
+        for item in resources
+        if isinstance(item, Mapping)
+    }
+    if declared_resources != expected_resources:
+        raise ValueError("segmenter resource roles or licenses do not match its id")
+
+    total_size = 0
+    validated_files: list[str] = []
+    for resource in resources:
+        if not isinstance(resource, Mapping):
+            raise ValueError("segmenter resource entries must be objects")
+        relative_path = str(resource.get("path") or "")
+        if not relative_path or Path(relative_path).is_absolute():
+            raise ValueError(f"invalid segmenter resource path: {relative_path!r}")
+        path = (bundle_path / relative_path).resolve()
+        if bundle_path not in path.parents:
+            raise ValueError(f"segmenter resource escapes bundle: {relative_path}")
+        if not path.is_file():
+            raise ValueError(f"segmenter resource is missing: {relative_path}")
+        if not resource.get("license"):
+            raise ValueError(f"segmenter resource has no license: {relative_path}")
+
+        payload = path.read_bytes()
+        actual_size = len(payload)
+        declared_size = resource.get("size_bytes")
+        if declared_size != actual_size:
+            raise ValueError(
+                f"segmenter resource size mismatch for {relative_path}: "
+                f"declared {declared_size}, actual {actual_size}"
+            )
+        declared_hash = str(resource.get("sha256") or "")
+        actual_hash = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+        if declared_hash != actual_hash:
+            raise ValueError(f"segmenter resource hash mismatch: {relative_path}")
+        total_size += actual_size
+        validated_files.append(relative_path)
+
+    budget = descriptor.get("size_budget_bytes")
+    if not isinstance(budget, int) or budget <= 0:
+        raise ValueError("segmenter size_budget_bytes must be a positive integer")
+    if budget != SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES:
+        raise ValueError("segmenter descriptor must use the 64 KiB on-device budget")
+    if total_size > budget:
+        raise ValueError(
+            f"segmenter resources use {total_size} bytes, above the {budget}-byte budget"
+        )
+    if descriptor.get("total_size_bytes") != total_size:
+        raise ValueError(
+            "segmenter total_size_bytes does not match the declared resource files"
+        )
+
+    return {
+        "id": segmenter_id,
+        "scripts": list(scripts),
+        "files": validated_files,
+        "total_size_bytes": total_size,
+        "size_budget_bytes": budget,
+    }
+
+
+class ResourceSegmenter:
+    """Segment Han and Devanagari text from manifest-declared resource tables."""
+
+    def __init__(
+        self,
+        bundle_dir: str | Path,
+        descriptor: Mapping[str, Any],
+    ) -> None:
+        self.bundle_dir = Path(bundle_dir)
+        self.descriptor = dict(descriptor)
+        validate_segmenter_resources(self.bundle_dir, self.descriptor)
+        self.scripts = frozenset(str(item) for item in descriptor["scripts"])
+        self._han_words: frozenset[str] = frozenset()
+        self._max_han_word_length = 1
+        self._devanagari_ranges: tuple[tuple[int, int], ...] = ()
+        self._viramas: frozenset[int] = frozenset()
+        self._joiners: frozenset[int] = frozenset()
+        self._load_resources()
+
+    @classmethod
+    def from_manifest(
+        cls,
+        bundle_dir: str | Path,
+        manifest: Mapping[str, Any],
+    ) -> "ResourceSegmenter | None":
+        """Create a segmenter from any OpenMed artifact manifest, if declared."""
+
+        descriptor = manifest.get("segmenter")
+        if descriptor is None:
+            return None
+        if not isinstance(descriptor, Mapping):
+            raise ValueError("manifest segmenter descriptor must be an object")
+        return cls(bundle_dir, descriptor)
+
+    def segment(
+        self,
+        text: str,
+        *,
+        use_accelerated: bool = False,
+    ) -> list[SegmentSpan]:
+        """Return non-whitespace spans with UTF-8 offsets.
+
+        The stdlib/resource-table implementation is always available. When
+        ``use_accelerated`` is true, a locally installed jieba runtime may be
+        used for Han runs; it is imported lazily and is never required.
+        """
+
+        if not text:
+            return []
+        han_tokenizer = self._load_optional_jieba() if use_accelerated else None
+        return self._segment_stdlib(text, han_tokenizer=han_tokenizer)
+
+    def _load_resources(self) -> None:
+        for resource in self.descriptor["resource_files"]:
+            path = self.bundle_dir / str(resource["path"])
+            role = resource.get("role")
+            if role == "han_dictionary":
+                words = {
+                    line.split()[0]
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")
+                }
+                self._han_words = frozenset(words)
+                self._max_han_word_length = max(map(len, words), default=1)
+            elif role == "indic_break_rules":
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                rules = payload.get("scripts", {}).get("Devanagari", {})
+                self._devanagari_ranges = tuple(
+                    (int(start), int(end)) for start, end in rules.get("ranges", [])
+                )
+                self._viramas = frozenset(
+                    int(item) for item in rules.get("viramas", [])
+                )
+                self._joiners = frozenset(
+                    int(item) for item in rules.get("joiners", [])
+                )
+
+    def _load_optional_jieba(self) -> Any | None:
+        if "Han" not in self.scripts:
+            return None
+        try:
+            module = importlib.import_module("jieba")
+            dictionary_path = next(
+                self.bundle_dir / str(item["path"])
+                for item in self.descriptor["resource_files"]
+                if item.get("role") == "han_dictionary"
+            )
+            return module.Tokenizer(dictionary=str(dictionary_path))
+        except (ImportError, AttributeError, OSError, StopIteration, TypeError):
+            return None
+
+    def _segment_stdlib(
+        self,
+        text: str,
+        *,
+        han_tokenizer: Any | None,
+    ) -> list[SegmentSpan]:
+        byte_offsets = [0]
+        for character in text:
+            byte_offsets.append(byte_offsets[-1] + len(character.encode("utf-8")))
+
+        spans: list[SegmentSpan] = []
+        cursor = 0
+        while cursor < len(text):
+            if text[cursor].isspace():
+                cursor += 1
+                continue
+            if "Han" in self.scripts and _is_han_character(text[cursor]):
+                end = cursor + 1
+                while end < len(text) and _is_han_character(text[end]):
+                    end += 1
+                han_spans = self._segment_han_run(
+                    text,
+                    cursor,
+                    end,
+                    byte_offsets,
+                    han_tokenizer=han_tokenizer,
+                )
+                spans.extend(han_spans)
+                cursor = end
+                continue
+            if "Devanagari" in self.scripts and self._is_devanagari(text[cursor]):
+                end = cursor + 1
+                while end < len(text) and (
+                    self._is_devanagari(text[end]) or ord(text[end]) in self._joiners
+                ):
+                    end += 1
+                spans.extend(
+                    self._segment_devanagari_run(text, cursor, end, byte_offsets)
+                )
+                cursor = end
+                continue
+
+            end = cursor + 1
+            while (
+                end < len(text)
+                and not text[end].isspace()
+                and not ("Han" in self.scripts and _is_han_character(text[end]))
+                and not (
+                    "Devanagari" in self.scripts
+                    and (
+                        self._is_devanagari(text[end])
+                        or ord(text[end]) in self._joiners
+                    )
+                )
+            ):
+                end += 1
+            spans.append(_segment_span(text, cursor, end, byte_offsets))
+            cursor = end
+        return spans
+
+    def _segment_han_run(
+        self,
+        text: str,
+        start: int,
+        end: int,
+        byte_offsets: list[int],
+        *,
+        han_tokenizer: Any | None,
+    ) -> list[SegmentSpan]:
+        fallback: list[SegmentSpan] = []
+        cursor = start
+        while cursor < end:
+            upper = min(end, cursor + self._max_han_word_length)
+            match_end = cursor + 1
+            for candidate_end in range(upper, cursor, -1):
+                if text[cursor:candidate_end] in self._han_words:
+                    match_end = candidate_end
+                    break
+            fallback.append(_segment_span(text, cursor, match_end, byte_offsets))
+            cursor = match_end
+
+        if han_tokenizer is not None:
+            try:
+                accelerated = [
+                    _segment_span(
+                        text,
+                        start + int(local_start),
+                        start + int(local_end),
+                        byte_offsets,
+                    )
+                    for _, local_start, local_end in han_tokenizer.tokenize(
+                        text[start:end]
+                    )
+                    if int(local_end) > int(local_start)
+                ]
+                if [(span.start, span.end) for span in accelerated] == [
+                    (span.start, span.end) for span in fallback
+                ]:
+                    return accelerated
+            except (AttributeError, TypeError, ValueError):
+                pass
+        return fallback
+
+    def _segment_devanagari_run(
+        self,
+        text: str,
+        start: int,
+        end: int,
+        byte_offsets: list[int],
+    ) -> list[SegmentSpan]:
+        boundaries = [start]
+        for cursor in range(start + 1, end):
+            codepoint = ord(text[cursor])
+            previous = ord(text[cursor - 1])
+            previous_previous = ord(text[cursor - 2]) if cursor - 2 >= start else None
+            joins_previous = (
+                unicodedata.category(text[cursor]).startswith("M")
+                or codepoint in self._joiners
+                or previous in self._viramas
+                or (
+                    previous in self._joiners
+                    and previous_previous is not None
+                    and previous_previous in self._viramas
+                )
+            )
+            if not joins_previous:
+                boundaries.append(cursor)
+        boundaries.append(end)
+        return [
+            _segment_span(text, left, right, byte_offsets)
+            for left, right in zip(boundaries, boundaries[1:])
+        ]
+
+    def _is_devanagari(self, character: str) -> bool:
+        codepoint = ord(character)
+        return any(start <= codepoint <= end for start, end in self._devanagari_ranges)
+
+
+def _segment_span(
+    text: str,
+    start: int,
+    end: int,
+    byte_offsets: list[int],
+) -> SegmentSpan:
+    return SegmentSpan(
+        text=text[start:end],
+        start=byte_offsets[start],
+        end=byte_offsets[end],
+    )
+
+
+def _is_han_character(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        0x3400 <= codepoint <= 0x4DBF
+        or 0x4E00 <= codepoint <= 0x9FFF
+        or 0xF900 <= codepoint <= 0xFAFF
+        or 0x20000 <= codepoint <= 0x323AF
+    )
 
 
 def medical_tokenize(
