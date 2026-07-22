@@ -55,6 +55,11 @@ from openmed.eval.suites.chinese_terminology import (
     ChineseTerminologyLeakageReport,
     evaluate_chinese_terminology_leakage,
 )
+from openmed.eval.suites.code_mixed_routing import (
+    CODE_MIXED_ROUTING,
+    evaluate_code_mixed_routing,
+    load_code_mixed_fixtures,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -104,6 +109,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     NAAMAPADAM,
     CHINESE_CLINICAL_NER,
     MULTIMODAL_DICOM,
+    CODE_MIXED_ROUTING,
 )
 
 
@@ -148,6 +154,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_chinese_clinical_ner_fixtures(kwargs.get("path"))
     if suite == MULTIMODAL_DICOM:
         return load_multimodal_dicom_fixtures(**kwargs)
+    if suite == CODE_MIXED_ROUTING:
+        return load_code_mixed_fixtures(kwargs.get("path"))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -177,6 +185,15 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return chinese_clinical_ner_metadata()
     if suite == MULTIMODAL_DICOM:
         return multimodal_dicom_metadata(**kwargs)
+    if suite == CODE_MIXED_ROUTING:
+        return {
+            "suite": CODE_MIXED_ROUTING,
+            "synthetic": True,
+            "gates": {
+                "phi_recall_min": 1.0,
+                "entity_leakage_max": 0,
+            },
+        }
     return {"suite": suite}
 
 
@@ -193,6 +210,7 @@ __all__ = [
     "NAAMAPADAM",
     "CHINESE_CLINICAL_NER",
     "MULTIMODAL_DICOM",
+    "CODE_MIXED_ROUTING",
     "RELATIONS",
     "RelationFixture",
     "RelationTrap",
@@ -241,4 +259,6 @@ __all__ = [
     "multimodal_dicom_metadata",
     "run_multimodal_dicom",
     "generate_synthetic_dicom_corpus",
+    "evaluate_code_mixed_routing",
+    "load_code_mixed_fixtures",
 ]

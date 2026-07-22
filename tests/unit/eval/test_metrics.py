@@ -49,6 +49,7 @@ def test_eval_modules_import_cleanly():
         "naamapadam",
         "chinese-clinical-ner",
         "multimodal_dicom",
+        "code_mixed_routing",
     )
 
 

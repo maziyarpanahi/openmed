@@ -12,7 +12,11 @@ from dataclasses import dataclass, field, replace
 from time import perf_counter
 from typing import Any, Callable, Iterator, Literal, Mapping, Optional, Sequence, cast
 
-from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
+from .custom_recognizer import (
+    CUSTOM_DENY_DETECTOR,
+    build_transliterated_name_recognizer,
+    coerce_custom_recognizer,
+)
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
@@ -149,6 +153,7 @@ class PipelineContext:
     normalized_text: str
     offset_map: OffsetMap
     route: LanguageRoute
+    token_language_tags: tuple[Any, ...] = ()
     section_metadata: Mapping[str, Any] = field(default_factory=dict)
     locale: str | None = None
 
@@ -265,6 +270,9 @@ class Pipeline:
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
         custom_recognizer: Any = None,
+        code_mixed: bool = False,
+        token_language_tags: Sequence[Any] | None = None,
+        transliterated_name_config: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
         from . import pii
@@ -318,6 +326,17 @@ class Pipeline:
         self.policy_actions = policy_actions
         self.section_detector = section_detector
         self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
+        self.code_mixed = bool(code_mixed)
+        if self.code_mixed and token_language_tags is None:
+            raise ValueError("code_mixed=True requires token_language_tags")
+        if not self.code_mixed and token_language_tags is not None:
+            raise ValueError("token_language_tags requires code_mixed=True")
+        self.token_language_tags = tuple(token_language_tags or ())
+        self.transliterated_name_recognizer = (
+            build_transliterated_name_recognizer(transliterated_name_config)
+            if self.code_mixed
+            else None
+        )
         self.hmac_secret = hmac_secret
         from .clinical_protect import protection_options_from_config
 
@@ -362,6 +381,7 @@ class Pipeline:
             normalized = self.stage1_normalize(original_text)
         with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
             route = self.stage2_language_script(normalized.normalized_text)
+        token_language_tags = self._normalize_code_mixed_tags(normalized)
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
@@ -380,6 +400,7 @@ class Pipeline:
             normalized_text=normalized.normalized_text,
             offset_map=normalized.offset_map,
             route=route,
+            token_language_tags=token_language_tags,
             section_metadata=section_metadata,
             locale=locale,
         )
@@ -398,6 +419,24 @@ class Pipeline:
                     "script": route.script,
                     "model_name": route.model_name,
                     **dict(route.metadata),
+                    **(
+                        {
+                            "code_mixed": {
+                                "enabled": True,
+                                "mode": "hinglish",
+                                "token_tags": [
+                                    {
+                                        "start": tag.start,
+                                        "end": tag.end,
+                                        "label": tag.label,
+                                    }
+                                    for tag in token_language_tags
+                                ],
+                            }
+                        }
+                        if self.code_mixed
+                        else {}
+                    ),
                 },
             ),
             PipelineStageResult(
@@ -535,7 +574,9 @@ class Pipeline:
 
             with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
                 pii_result = self.stage5_fast_pii_model(
-                    normalized.normalized_text, route
+                    normalized.normalized_text,
+                    route,
+                    token_language_tags=context.token_language_tags,
                 )
                 self._apply_calibration_thresholds(pii_result, route)
                 model_spans = self._entities_to_spans(
@@ -769,6 +810,30 @@ class Pipeline:
             cascade_duration_ms=cascade_duration_ms,
         )
 
+    def _normalize_code_mixed_tags(
+        self,
+        document: NormalizedDocument,
+    ) -> tuple[Any, ...]:
+        if not self.code_mixed:
+            return ()
+
+        from .pii_i18n import CodeMixedTokenTag, normalize_code_mixed_token_tags
+
+        source_tags = normalize_code_mixed_token_tags(
+            document.original_text,
+            self.token_language_tags,
+        )
+        normalized_tags = []
+        for tag in source_tags:
+            start, end = document.offset_map.original_span_to_normalized(
+                tag.start,
+                tag.end,
+            )
+            if start >= end:
+                raise ValueError("token language tag normalized to an empty span")
+            normalized_tags.append(CodeMixedTokenTag(start, end, tag.label))
+        return tuple(normalized_tags)
+
     def stage1_normalize(self, text: str) -> NormalizedDocument:
         repair_encoding, encoding_repair_metadata = _encoding_repairer()
         # Encoding repair is an optional (ftfy) capability. When it is
@@ -928,10 +993,7 @@ class Pipeline:
             text,
             [],
             lang=context.route.lang,
-            patterns=_deterministic_patterns(
-                context.route.lang,
-                locale=context.locale,
-            ),
+            patterns=self._deterministic_patterns(text, context),
         )
         return (
             self._entities_to_spans(
@@ -942,6 +1004,7 @@ class Pipeline:
                 stage=STAGE_NAMES[3],
             )
             + self._custom_deny_spans(text, context)
+            + self._transliterated_name_spans(text, context)
             + self._registered_detector_spans(
                 text,
                 context,
@@ -949,7 +1012,22 @@ class Pipeline:
             )
         )
 
-    def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
+    def stage5_fast_pii_model(
+        self,
+        text: str,
+        route: LanguageRoute,
+        *,
+        token_language_tags: Sequence[Any] = (),
+    ) -> Any:
+        code_mixed_kwargs = (
+            {
+                "code_mixed": True,
+                "token_language_tags": token_language_tags,
+                "transliterated_name_config": self.transliterated_name_recognizer,
+            }
+            if self.code_mixed
+            else {}
+        )
         if self.model_detector is not None:
             return self.model_detector(
                 text,
@@ -960,10 +1038,25 @@ class Pipeline:
                 lang=route.lang,
                 normalize_accents=self.normalize_accents,
                 loader=self.loader,
+                **code_mixed_kwargs,
             )
 
         from . import pii
 
+        if self.code_mixed:
+            return pii.extract_pii(
+                text,
+                self.model_name,
+                self.confidence_threshold,
+                self.config,
+                self.use_smart_merging,
+                lang=route.lang,
+                normalize_accents=self.normalize_accents,
+                loader=self.loader,
+                code_mixed=True,
+                token_language_tags=token_language_tags,
+                transliterated_name_config=self.transliterated_name_recognizer,
+            )
         return pii.extract_pii(
             text,
             route.model_name,
@@ -1129,6 +1222,11 @@ class Pipeline:
                 pii_result,
                 lang=context.route.lang,
                 locale=context.locale,
+                patterns=(
+                    self._deterministic_patterns(text, context)
+                    if self.code_mixed
+                    else None
+                ),
             )
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
@@ -1365,6 +1463,59 @@ class Pipeline:
             context,
             default_detector=CUSTOM_DENY_DETECTOR,
             stage=STAGE_NAMES[3],
+        )
+
+    def _deterministic_patterns(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> list[PIIPattern]:
+        if not self.code_mixed:
+            return _deterministic_patterns(
+                context.route.lang,
+                locale=context.locale,
+            )
+        from .pii_i18n import get_patterns_for_code_mixed_tags
+
+        return get_patterns_for_code_mixed_tags(
+            text,
+            context.token_language_tags,
+            base_lang=context.route.lang,
+            locale=context.locale,
+        )
+
+    def _transliterated_name_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> tuple[OpenMedSpan, ...]:
+        recognizer = self.transliterated_name_recognizer
+        if recognizer is None:
+            return ()
+        from .pii_i18n import code_mixed_route_active
+
+        if not code_mixed_route_active(text, context.token_language_tags):
+            return ()
+        spans = recognizer.detect_spans(
+            text,
+            doc_id=context.doc_id,
+            hmac_secret=self.hmac_secret,
+            lang=context.route.lang,
+        )
+        return tuple(
+            replace(
+                span,
+                detector="custom:hinglish-name",
+                metadata={
+                    **dict(span.metadata),
+                    "pipeline_stage": STAGE_NAMES[3],
+                    "code_mixed": {
+                        "mode": "hinglish",
+                        "source_script": "Latin",
+                    },
+                },
+            )
+            for span in spans
         )
 
     def _suppress_custom_allowed_spans(
