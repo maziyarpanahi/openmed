@@ -58,6 +58,13 @@ def test_ambiguous_and_unanchored_values_are_not_guessed() -> None:
     assert relative.granularity_flags == ("day", "unanchored")
 
 
+def test_two_digit_year_does_not_guess_a_century() -> None:
+    record = normalize_temporal("12/31/99", [(0, 8)], None)[0]
+
+    assert record.value is None
+    assert record.granularity_flags == ("day", "ambiguous")
+
+
 def test_last_next_calendar_arithmetic_and_month_end_clamping() -> None:
     text = "last month; next year; 1 month ago"
     expressions = ("last month", "next year", "1 month ago")
@@ -100,6 +107,49 @@ def test_absolute_time_duration_and_recurring_set_types() -> None:
     assert set_record.value == "R/PT8H"
     assert duration.timex_type == "DURATION"
     assert duration.value == "P2W"
+
+
+@pytest.mark.parametrize(
+    ("expression", "flags"),
+    [
+        ("q0h", ("hour", "ambiguous")),
+        ("q5h x1 day", ("hour", "bounded", "ambiguous")),
+    ],
+)
+def test_invalid_or_inexact_sets_do_not_emit_unbounded_values(
+    expression: str,
+    flags: tuple[str, ...],
+) -> None:
+    record = normalize_temporal(expression, [(0, len(expression))], None)[0]
+
+    assert record.timex_type == "SET"
+    assert record.value is None
+    assert record.granularity_flags == flags
+
+
+@pytest.mark.parametrize(
+    ("expression", "value", "flags"),
+    [
+        ("2026-06-15T08:45:00", "2026-06-15T08:45:00", ("second",)),
+        ("2026-06-15T08:45", "2026-06-15T08:45:00", ("minute",)),
+        (
+            "2026-06-15T08:45+02:00",
+            "2026-06-15T08:45:00+02:00",
+            ("minute",),
+        ),
+        ("2026-06-15t08:45", "2026-06-15T08:45:00", ("minute",)),
+        ("2026-02-30T08:45", None, ("minute", "ambiguous")),
+    ],
+)
+def test_iso_datetime_granularity_comes_from_source_precision(
+    expression: str,
+    value: str | None,
+    flags: tuple[str, ...],
+) -> None:
+    record = normalize_temporal(expression, [(0, len(expression))], None)[0]
+
+    assert record.value == value
+    assert record.granularity_flags == flags
 
 
 def test_normalization_is_offline_deterministic_and_emits_no_logs(caplog) -> None:

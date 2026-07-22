@@ -77,8 +77,9 @@ when needed:
   recorded anchor.
 
 Month-only expressions without `last`, `next`, or an explicit year remain
-ambiguous. Impossible dates and vague quantities are likewise flagged rather
-than coerced into precise timestamps.
+ambiguous. Numeric dates with two-digit years, impossible dates, zero-length
+recurrence periods, inexact bounded schedules, and vague quantities are
+likewise flagged rather than coerced into precise timestamps.
 
 ## Privacy and determinism
 

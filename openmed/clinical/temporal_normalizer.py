@@ -351,11 +351,11 @@ def _normalize_phrase(
         return _normalize_last_next(stripped, start, end, match, reference)
 
     if _ISO_DATETIME_RE.fullmatch(stripped):
+        granularity = _iso_datetime_granularity(stripped)
         try:
             parsed_datetime = datetime.fromisoformat(_replace_z(stripped))
         except ValueError:
-            return _ambiguous_date(stripped, start, end, "second")
-        granularity = "second" if parsed_datetime.second else "minute"
+            return _ambiguous_date(stripped, start, end, granularity)
         return _result(
             stripped,
             start,
@@ -644,9 +644,10 @@ def _normalize_numeric_date(
 ) -> NormalizedTimex:
     first = int(match.group("first"))
     second = int(match.group("second"))
-    year = int(match.group("year"))
-    if year < 100:
-        year += 2000
+    year_text = match.group("year")
+    if len(year_text) == 2:
+        return _ambiguous_date(phrase, start, end, "day")
+    year = int(year_text)
     if first <= 12 and second <= 12:
         return _ambiguous_date(phrase, start, end, "day")
     month, day = (first, second) if first <= 12 else (second, first)
@@ -710,9 +711,15 @@ def _normalize_interval_set(
     else:
         period = _parse_number(match.group("every_amount"))
         unit = _canonical_unit(match.group("every_unit"))
-    interval = _duration_value(period, unit)
-    value = f"R/{interval}"
     flags = [_unit_granularity(unit)]
+    if period <= 0:
+        flags.append("ambiguous")
+        if bounded:
+            flags.insert(1, "bounded")
+        return _result(phrase, start, end, "SET", None, None, *flags)
+
+    interval = _duration_value(period, unit)
+    value: str | None = f"R/{interval}"
     if bounded:
         duration = _parse_number(match.group("duration"))
         duration_unit = _canonical_unit(match.group("duration_unit"))
@@ -720,6 +727,7 @@ def _normalize_interval_set(
         flags.append("bounded")
         if repeat_count is None:
             flags.append("ambiguous")
+            value = None
         else:
             value = f"R{repeat_count}/{interval}"
     return _result(phrase, start, end, "SET", value, None, *flags)
@@ -899,6 +907,15 @@ def _shifted_iso_value(value: datetime, unit: str) -> str:
     if unit in {"second", "minute", "hour"}:
         return value.isoformat()
     return value.date().isoformat()
+
+
+def _iso_datetime_granularity(value: str) -> str:
+    match = re.search(
+        r"[T ]\d{1,2}:\d{2}(?P<seconds>:\d{2}(?:\.\d{1,6})?)?",
+        value,
+        re.IGNORECASE,
+    )
+    return "second" if match is not None and match.group("seconds") else "minute"
 
 
 def _ambiguous_date(
