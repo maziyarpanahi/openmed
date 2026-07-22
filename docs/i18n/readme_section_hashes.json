@@ -1,0 +1,131 @@
+{
+  "glossary": "docs/i18n/glossary.md",
+  "source": "README.md",
+  "translations": {
+    "README.zh-CN.md": {
+      "sections": [
+        {
+          "source_heading": "__preamble__",
+          "source_sha256": "9db0bc59736b4b89ad492dbbb34c716828780e93b29accc6538987170e1038cc",
+          "translation_heading": "__preamble__",
+          "translation_sha256": "f122bdbe75e4d9e28455ba11281d75fcbfd78265c653bd90f29e3f4822665f65"
+        },
+        {
+          "source_heading": "See it in action",
+          "source_sha256": "87e9ebf1db66c82f01adc9fb70e313a2db201a46d08a4a0d7e9b289f523115ea",
+          "translation_heading": "现场演示",
+          "translation_sha256": "1b7e2b3d7b303ace3a3171dab12ad54a3cacc8978fb5d42e7a2ce3b590535ad6"
+        },
+        {
+          "source_heading": "30-second example",
+          "source_sha256": "e18a0cf23b36ccc26c24ea967dc447c1fcdc0911ab1f3a017d0d8aa6f6cf1320",
+          "translation_heading": "30 秒上手示例",
+          "translation_sha256": "a08369e3824d8faa09eaf15195a7689c85781ad5b08287d50b4eaa3297911d66"
+        },
+        {
+          "source_heading": "Why OpenMed?",
+          "source_sha256": "85562a72d9945e05087503afe478d2cedf694bcc08b8f52d40bcfaaef767f0cb",
+          "translation_heading": "为什么选择 OpenMed？",
+          "translation_sha256": "c39cd965d66d5bbc9d9982420a97f887d97bd952897b706319503c6f63e87296"
+        },
+        {
+          "source_heading": "On-device on Apple: Swift, MLX & iOS",
+          "source_sha256": "b0d7cda36fb78c5edf06959b1edae8e31285571a519c3c9e28f7f1ea2e7e5f23",
+          "translation_heading": "在 Apple 设备上本地运行：Swift、MLX 与 iOS",
+          "translation_sha256": "b5024d7629d260151349e28625f4d64bf1cb907fffe1748176f16f471ab16744"
+        },
+        {
+          "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
+          "source_sha256": "1e9ab1b7892a75d76b77c16693953c8dcf98626b629d49851e86eebae53604c3",
+          "translation_heading": "在 Android 设备上本地运行：Kotlin 与 ONNX Runtime Mobile",
+          "translation_sha256": "a5cf88d37a56f46a26d842139f5cdb2ecf326dd3e274b320da5226dc2f8d2b53"
+        },
+        {
+          "source_heading": "How it works",
+          "source_sha256": "f2d8b6e4c8775df6a2f41cc448c0ad9c214f629355c22d2e2fb8d766d742e5ef",
+          "translation_heading": "工作原理",
+          "translation_sha256": "aef4d998035e76fb2a69ea9657600ff40cefb9e79fb4b4e96414122006e517ba"
+        },
+        {
+          "source_heading": "Quick start",
+          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "translation_heading": "快速开始",
+          "translation_sha256": "6acba51b6a1c22d304b741c4ba1b9338e56af1f741099e7ef8eb1f412c8f8048"
+        },
+        {
+          "source_heading": "Models",
+          "source_sha256": "1229d2b0c1450109a7a1b541aed17c970807730be5e26645b78ca98b6cb74fa5",
+          "translation_heading": "模型",
+          "translation_sha256": "bf0a8f557b393faceabd8e7f110e17e6556608dfa3cd724506c928dd90389b6f"
+        },
+        {
+          "source_heading": "Privacy: PII detection & de-identification",
+          "source_sha256": "77ab271445ecfc6f1ab82fdd04e89d86c055656d154c650e1fec40eebfad37fd",
+          "translation_heading": "隐私：PII 检测与去标识化",
+          "translation_sha256": "14930157351c1bbc966431ecf21fd47e0b2d9ddef645e5dfcfb0ec13a95a5302"
+        },
+        {
+          "source_heading": "Multilingual PII (22 supported languages)",
+          "source_sha256": "b3d739d1b2ed3a6d5beb3aa498a7f040f230e8d998ea3b21549e1c46a17cf837",
+          "translation_heading": "多语言 PII（支持 22 种语言）",
+          "translation_sha256": "d50472f68f806acfbac7be74ec850a7be9826a5b5801d546a635d0e8e3e82dc3"
+        },
+        {
+          "source_heading": "REST API",
+          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "translation_heading": "REST API",
+          "translation_sha256": "d03e9b055db8062d3185ac28786444fad04af083eaa7e8412ef1c6abcc448677"
+        },
+        {
+          "source_heading": "Documentation",
+          "source_sha256": "7bc16bbf60566df5c3f11a556787bbc0e96221df4222ebe548c8ffb8a797635d",
+          "translation_heading": "文档",
+          "translation_sha256": "0a4c5bfbb4a761383b945d37e722cbec370f12b9783a5a9354fa1f6bed0cd655"
+        },
+        {
+          "source_heading": "Meet the mascot",
+          "source_sha256": "901153cff90aa4f47b6bf3071854a5f43e5be20c0ee00b81bcd255b3d89ce480",
+          "translation_heading": "认识一下我们的吉祥物",
+          "translation_sha256": "edb41a22b7b02372629d8bf7712c564e7b764b2721625660fd70a486595ed6b7"
+        },
+        {
+          "source_heading": "Contributing",
+          "source_sha256": "90894e9cb31825ac87f839d0ca3d8b5549f098c375603d0c73d8a23be3003b94",
+          "translation_heading": "贡献",
+          "translation_sha256": "04ddfba51bcb3a0d87d9b09a4c7cc832c13ed5f6e93160637eb451f9675656b0"
+        },
+        {
+          "source_heading": "Security",
+          "source_sha256": "b16e02cc3498ca5578e60392f01f19f06583e0730d56bd000aa33ff68f70cb62",
+          "translation_heading": "安全",
+          "translation_sha256": "06dd52dfdf9b6183ab9fa888f2c2f85e84cbeb4c8b01a18d6bc5c009de56f92d"
+        },
+        {
+          "source_heading": "Credits",
+          "source_sha256": "2feda286eece483cc410b38dc387d6a62848b29c8c4a6e02f8398139dc815b26",
+          "translation_heading": "致谢",
+          "translation_sha256": "59f2d9de882f1a1085af673c13881a7e9e690d0258aaee57f176f73f2b7bc387"
+        },
+        {
+          "source_heading": "License",
+          "source_sha256": "0092b5d3cba4eb214653c7401524beaa6f0fdb1b20ee6e3b010e4ed05524d59e",
+          "translation_heading": "许可证",
+          "translation_sha256": "84a1a39f5bc6e573f931464a10144e6cffa0bacab790ccc1cd2896a534938786"
+        },
+        {
+          "source_heading": "Citation",
+          "source_sha256": "4b8468e240029ca8d98617788a38b5ff5dc8e2011185ff53704883d4638b3d45",
+          "translation_heading": "引用",
+          "translation_sha256": "8eeedcf8e5c3dd4f1b8945fd078d762ed6923b9f138a435cb43b5d41cc77a597"
+        },
+        {
+          "source_heading": "Star History",
+          "source_sha256": "518d01d6502a15e81d017342c64131233d3ed9245c5b9b86b68b6d63257fa353",
+          "translation_heading": "Star 历史",
+          "translation_sha256": "6c50fde0142a7a0cfac6ad237cd998099f4f8112114b68bf100288417d314e2d"
+        }
+      ]
+    }
+  },
+  "version": 1
+}
