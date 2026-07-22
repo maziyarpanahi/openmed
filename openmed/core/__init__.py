@@ -30,6 +30,7 @@ from .language_pack import (
     LANGUAGE_PACK_REGISTRY,
     LanguagePack,
     LanguagePackRegistry,
+    get_language_pack,
     register_language_pack,
 )
 from .language_pack_catalog import REGISTERED_SEGMENTERS, is_registered_segmenter
@@ -71,8 +72,10 @@ from .script_detect import (
     UNKNOWN_SCRIPT,
     ZERO_WIDTH_CHARS,
     DetectionNormalization,
+    ScriptDetectionWindow,
     candidate_languages_for_script,
     detect_script,
+    india_clinical_script_windows,
     normalize_for_pii_detection,
     segment_by_script,
 )
@@ -139,8 +142,10 @@ __all__ = [
     "UNKNOWN_SCRIPT",
     "ZERO_WIDTH_CHARS",
     "DetectionNormalization",
+    "ScriptDetectionWindow",
     "candidate_languages_for_script",
     "detect_script",
+    "india_clinical_script_windows",
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
@@ -152,6 +157,7 @@ __all__ = [
     "LanguagePack",
     "LanguagePackRegistry",
     "LANGUAGE_PACK_REGISTRY",
+    "get_language_pack",
     "register_language_pack",
     "REGISTERED_SEGMENTERS",
     "is_registered_segmenter",

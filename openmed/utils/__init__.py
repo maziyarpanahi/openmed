@@ -1,5 +1,6 @@
 """Utility functions for OpenMed."""
 
+from .deprecation import deprecated
 from .logging import get_logger, setup_logging
 from .profiling import (
     BatchMetrics,
@@ -21,6 +22,7 @@ from .profiling import (
 from .validation import validate_input, validate_model_name
 
 __all__ = [
+    "deprecated",
     "setup_logging",
     "get_logger",
     "validate_input",

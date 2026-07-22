@@ -132,7 +132,9 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
                 require_boundaries=True,
             ):
                 continue
-            if pattern.safety_sweep_requires_context and not _has_context(
+            if (
+                pattern.context_required or pattern.safety_sweep_requires_context
+            ) and not _has_context(
                 text,
                 start,
                 end,
@@ -214,6 +216,32 @@ def safety_sweep(
     return resolve_overlapping_entities(ordered)
 
 
+def safety_sweep_code_mixed(
+    text: str,
+    spans: Sequence[Any],
+    *,
+    token_language_tags: Sequence[Any],
+    base_lang: str = "en",
+    locale: str | None = None,
+) -> list[Any]:
+    """Sweep merged model/rule spans with explicitly gated Hinglish patterns."""
+    from .pii_i18n import get_patterns_for_code_mixed_tags
+
+    patterns = get_patterns_for_code_mixed_tags(
+        text,
+        token_language_tags,
+        base_lang=base_lang,
+        locale=locale,
+    )
+    return safety_sweep(
+        text,
+        spans,
+        lang=base_lang,
+        locale=locale,
+        patterns=patterns,
+    )
+
+
 def hashed_span_surface(
     text: str,
     start: int,
@@ -245,4 +273,5 @@ __all__ = [
     "SAFETY_SWEEP_SOURCE",
     "hashed_span_surface",
     "safety_sweep",
+    "safety_sweep_code_mixed",
 ]

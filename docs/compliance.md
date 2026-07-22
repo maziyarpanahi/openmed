@@ -43,3 +43,4 @@ Use these exact literals in docs, examples, and deployment configuration:
 | `hipaa_safe_harbor` | Redact all 18 HIPAA identifiers, no exceptions. | `remove`/`mask` | High-recall union; safety sweep mandatory; residual-risk ~0. |
 | `hipaa_expert_review_assist` | Flag + surrogate, leave clinical content; produce expert-review audit. | `replace` surrogates | Balanced, with reviewer escalation on low confidence. |
 | `gdpr_pseudonymization` | Reversible pseudonyms, mapping retained under key. | `replace` + `reversible_id` | Balanced; `keep_mapping=True`; HMAC reversible IDs. |
+| `india_health_id` | Fully redact ABHA, ABHA Address, context-confirmed UPI, and ration-card identifiers in clinical records. | `mask` | High-recall union; safety sweep mandatory; raw identifier logging forbidden. |

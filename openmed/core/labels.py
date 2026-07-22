@@ -167,6 +167,14 @@ ID_SUBTYPE_MRN: Final = "mrn"
 ID_SUBTYPE_NPI: Final = "npi"
 ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
 ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
+#: Ayushman Bharat Health Account number; still normalizes to ID_NUM.
+ID_SUBTYPE_ABHA_NUMBER: Final = "abha_number"
+#: ABDM personal health record address; still normalizes to ID_NUM.
+ID_SUBTYPE_ABHA_ADDRESS: Final = "abha_address"
+#: Unified Payments Interface virtual payment address; still normalizes to ID_NUM.
+ID_SUBTYPE_UPI_ID: Final = "upi_id"
+#: Indian public-distribution ration card identifier; still normalizes to ID_NUM.
+ID_SUBTYPE_RATION_CARD: Final = "ration_card"
 #: ICAO 9303 passport/ID machine-readable zone; still normalizes to ID_NUM.
 ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
 #: China Unified Social Credit Code (organization-linked); normalizes to ID_NUM.
@@ -183,6 +191,10 @@ ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
         ID_SUBTYPE_NPI,
         ID_SUBTYPE_NATIONAL_ID,
         ID_SUBTYPE_SSN_ADJACENT,
+        ID_SUBTYPE_ABHA_NUMBER,
+        ID_SUBTYPE_ABHA_ADDRESS,
+        ID_SUBTYPE_UPI_ID,
+        ID_SUBTYPE_RATION_CARD,
         ID_SUBTYPE_PASSPORT_MRZ,
         ID_SUBTYPE_SOCIAL_CREDIT_CODE,
         ID_SUBTYPE_CHINESE_PASSPORT,
@@ -967,6 +979,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # People
     "name": PERSON,
     "person": PERSON,
+    "per": PERSON,
     "patient": PERSON,
     "doctor": PERSON,
     "fullname": PERSON,
@@ -993,6 +1006,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "personalurl": URL,
     # Location
     "location": LOCATION,
+    "loc": LOCATION,
     "city": LOCATION,
     "state": LOCATION,
     "country": LOCATION,
@@ -1051,7 +1065,11 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "aadhaarnumber": ID_NUM,
     "abha": ID_NUM,
     "abhanumber": ID_NUM,
+    "abhaid": ID_NUM,
     "abhaaddress": ID_NUM,
+    "upiid": ID_NUM,
+    "vpa": ID_NUM,
+    "rationcard": ID_NUM,
     "pan": ID_NUM,
     "permanentaccountnumber": ID_NUM,
     "abdmhprid": ID_NUM,
@@ -1062,7 +1080,15 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "ghghanacard": ID_NUM,
     "kenationalid": ID_NUM,
     "kemaishanamba": ID_NUM,
+    "gstin": ID_NUM,
+    "gstnumber": ID_NUM,
     "teudatzehut": ID_NUM,
+    "mpesatxcode": ID_NUM,
+    "mobilemoneypaybill": ID_NUM,
+    "mobilemoneytill": ID_NUM,
+    "mobilemoneyagent": ID_NUM,
+    "momoreference": ID_NUM,
+    "facilityid": ID_NUM,
     "tz": ID_NUM,
     "npi": ID_NUM,
     "ssn": SSN,
@@ -1070,6 +1096,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "accountnumber": ACCOUNT_NUMBER,
     "accountname": ACCOUNT_NUMBER,
     "bankaccount": ACCOUNT_NUMBER,
+    "mobilemoneyaccount": ACCOUNT_NUMBER,
     "password": PASSWORD,
     "pin": PIN,
     "apikey": API_KEY,
@@ -1098,6 +1125,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "height": HEIGHT,
     # Work
     "organization": ORGANIZATION,
+    "org": ORGANIZATION,
     "company": ORGANIZATION,
     "employer": ORGANIZATION,
     "jobtitle": JOB_TITLE,
@@ -1127,12 +1155,16 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "condition": CONDITION,
     "disease": CONDITION,
     "diagnosis": CONDITION,
+    "ayushmorbidity": CONDITION,
+    "namastemorbidity": CONDITION,
     "finding": CONDITION,
     "problem": CONDITION,
     "disorder": CONDITION,
     "syndrome": CONDITION,
     "medication": MEDICATION,
     "drug": MEDICATION,
+    "indiandrug": MEDICATION,
+    "indiandrugbrand": MEDICATION,
     "chemical": MEDICATION,
     "substance": MEDICATION,
     "labtest": LAB_TEST,
@@ -1350,7 +1382,11 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "aadhaarnumber": ID_SUBTYPE_NATIONAL_ID,
     "abha": ID_SUBTYPE_NATIONAL_ID,
     "abhanumber": ID_SUBTYPE_NATIONAL_ID,
+    "abhaid": ID_SUBTYPE_NATIONAL_ID,
     "abhaaddress": ID_SUBTYPE_NATIONAL_ID,
+    "upiid": ID_SUBTYPE_UPI_ID,
+    "vpa": ID_SUBTYPE_UPI_ID,
+    "rationcard": ID_SUBTYPE_RATION_CARD,
     "pan": ID_SUBTYPE_NATIONAL_ID,
     "permanentaccountnumber": ID_SUBTYPE_NATIONAL_ID,
     "abdmhprid": ID_SUBTYPE_NATIONAL_ID,
@@ -1360,7 +1396,10 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "ghghanacard": ID_SUBTYPE_NATIONAL_ID,
     "kenationalid": ID_SUBTYPE_NATIONAL_ID,
     "kemaishanamba": ID_SUBTYPE_NATIONAL_ID,
+    "gstin": ID_SUBTYPE_NATIONAL_ID,
+    "gstnumber": ID_SUBTYPE_NATIONAL_ID,
     "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
+    "mpesatxcode": ID_SUBTYPE_NATIONAL_ID,
     "tz": ID_SUBTYPE_NATIONAL_ID,
 }
 
@@ -1491,6 +1530,10 @@ __all__ = [
     "ID_SUBTYPE_NPI",
     "ID_SUBTYPE_NATIONAL_ID",
     "ID_SUBTYPE_SSN_ADJACENT",
+    "ID_SUBTYPE_ABHA_NUMBER",
+    "ID_SUBTYPE_ABHA_ADDRESS",
+    "ID_SUBTYPE_UPI_ID",
+    "ID_SUBTYPE_RATION_CARD",
     "ID_SUBTYPE_PASSPORT_MRZ",
     "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
     "ID_SUBTYPE_CHINESE_PASSPORT",

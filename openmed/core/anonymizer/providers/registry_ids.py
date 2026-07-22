@@ -39,6 +39,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_egyptian_national_id,
     validate_estonian_isikukood,
+    validate_ethiopia_fayda,
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
@@ -46,17 +47,24 @@ from openmed.core.pii_i18n import (
     validate_greek_amka,
     validate_hong_kong_macau_permit,
     validate_hungarian_taj,
+    validate_indian_ration_card,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
     validate_kenya_maisha_namba,
+    validate_kenya_mfl_code,
     validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mobile_money_paybill,
+    validate_mobile_money_till,
+    validate_momo_reference,
     validate_moroccan_cin,
+    validate_mpesa_transaction_code,
     validate_nigeria_bvn,
+    validate_nigeria_hfr_code,
     validate_nigeria_nin,
     validate_pakistani_cnic,
     validate_philhealth_pin,
@@ -66,13 +74,17 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cpf,
     validate_portuguese_nif,
     validate_romanian_cnp,
+    validate_rwanda_id,
     validate_spanish_dni,
     validate_spanish_nie,
     validate_taiwan_compatriot_permit,
+    validate_tanzania_nida,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uganda_nin,
     validate_uk_nhs_number,
     validate_uk_nino,
+    validate_upi_id,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
     validate_za_id_number,
@@ -81,6 +93,7 @@ from openmed.core.pii_i18n import (
 from .clinical_ids import (
     AadhaarProvider,
     ABDMProvider,
+    AfricanPhoneProvider,
     AustralianMedicareProvider,
     AustralianTFNProvider,
     BCPHNProvider,
@@ -89,16 +102,22 @@ from .clinical_ids import (
     ChineseIdentifierProvider,
     ChineseResidentIdProvider,
     DanishCPRProvider,
+    EastAfricanIdProvider,
     EgyptMoroccoIdProvider,
     EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
     GhanaKenyaIdProvider,
+    HealthFacilityCodeProvider,
     HungarianTAJProvider,
+    IndiaHealthIdProvider,
+    IndiaSurrogateProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
+    MobileMoneyProvider,
+    MpesaProvider,
     NigeriaIdProvider,
     NPIProvider,
     OntarioHealthCardProvider,
@@ -117,12 +136,14 @@ from .clinical_ids import (
     UKNINOProvider,
     VietnameseIdProvider,
     validate_abdm_registry_id,
+    validate_abha,
     validate_abha_address,
     validate_abha_number,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
     validate_canadian_sin,
+    validate_gstin,
     validate_npi,
     validate_ontario_health_card,
     validate_pan,
@@ -132,6 +153,10 @@ NationalIdValidator = Callable[[str], bool]
 NationalIdFormatter = Callable[[str], str]
 NationalIdProvider = type[Any]
 RegistryKey = tuple[str, str]
+
+AUXILIARY_FAKER_PROVIDER_CLASSES: tuple[NationalIdProvider, ...] = (
+    AfricanPhoneProvider,
+)
 
 
 def _normalize_key_part(value: str, *, field_name: str) -> str:
@@ -241,6 +266,16 @@ def national_id_faker_provider_classes() -> tuple[NationalIdProvider, ...]:
     return tuple(providers)
 
 
+def clinical_faker_provider_classes() -> tuple[NationalIdProvider, ...]:
+    """Return all registry-owned custom Faker provider classes once each."""
+
+    providers = [
+        *national_id_faker_provider_classes(),
+        *AUXILIARY_FAKER_PROVIDER_CLASSES,
+    ]
+    return tuple(dict.fromkeys(providers))
+
+
 def _register_aliases(
     aliases: tuple[str, ...],
     *,
@@ -344,6 +379,34 @@ def _register_builtin_specs() -> None:
         faker_provider=GhanaKenyaIdProvider,
     )
     _register_aliases(
+        ("tz", "sw", "sw_TZ", "en_TZ"),
+        id_type="nida_nin",
+        validate=validate_tanzania_nida,
+        faker_method="tanzania_nida",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("ug", "en_UG"),
+        id_type="nin",
+        validate=validate_uganda_nin,
+        faker_method="uganda_nin",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("rw", "rw_RW"),
+        id_type="rwanda_id",
+        validate=validate_rwanda_id,
+        faker_method="rwanda_id",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
+        ("et", "am", "am_ET", "en_ET"),
+        id_type="fayda_fan",
+        validate=validate_ethiopia_fayda,
+        faker_method="ethiopia_fayda",
+        faker_provider=EastAfricanIdProvider,
+    )
+    _register_aliases(
         ("fr", "fr_FR"),
         id_type="nir",
         validate=validate_french_nir,
@@ -392,7 +455,6 @@ def _register_builtin_specs() -> None:
     for id_type, validate, faker_method in (
         ("abha_number", validate_abha_number, "abha_number"),
         ("abha_address", validate_abha_address, "abha_address"),
-        ("pan", validate_pan, "pan"),
         ("abdm_hpr_id", validate_abdm_registry_id, "abdm_hpr_id"),
         ("abdm_hfr_id", validate_abdm_registry_id, "abdm_hfr_id"),
     ):
@@ -403,6 +465,51 @@ def _register_builtin_specs() -> None:
             faker_method=faker_method,
             faker_provider=ABDMProvider,
         )
+    _register_aliases(
+        ("in", "hi", "te", "en_IN", "hi_IN"),
+        id_type="upi_id",
+        validate=validate_upi_id,
+        faker_method="upi_id",
+        faker_provider=IndiaHealthIdProvider,
+    )
+    _register_aliases(
+        ("in", "hi", "te", "en_IN", "hi_IN"),
+        id_type="ration_card",
+        validate=validate_indian_ration_card,
+        faker_method="indian_ration_card",
+        faker_provider=IndiaHealthIdProvider,
+    )
+    india_aliases = (
+        "in",
+        "india",
+        "en",
+        "hi",
+        "te",
+        "en_IN",
+        "hi_IN",
+        "te_IN",
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="pan",
+        validate=validate_pan,
+        faker_method="pan",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="gstin",
+        validate=validate_gstin,
+        faker_method="gstin",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="abha",
+        validate=validate_abha,
+        faker_method="abha",
+        faker_provider=IndiaSurrogateProvider,
+    )
     _register_aliases(
         ("zh", "zh_CN", "cn"),
         id_type="resident_id",
@@ -656,17 +763,79 @@ def _register_builtin_specs() -> None:
         faker_method="cnic",
         faker_provider=PakistaniCnicProvider,
     )
+    _register_aliases(
+        ("ke", "tz", "sw", "en_ke", "en_tz"),
+        id_type="mpesa_tx_code",
+        validate=validate_mpesa_transaction_code,
+        faker_method="mpesa_transaction_code",
+        faker_provider=MpesaProvider,
+    )
+    mobile_money_aliases = (
+        "ke",
+        "tz",
+        "gh",
+        "ug",
+        "sw",
+        "en_ke",
+        "en_tz",
+        "en_gh",
+        "en_ug",
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="mobile_money_paybill",
+        validate=validate_mobile_money_paybill,
+        faker_method="mobile_money_paybill",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="mobile_money_till",
+        validate=validate_mobile_money_till,
+        faker_method="mobile_money_till",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="mobile_money_agent",
+        validate=validate_mobile_money_paybill,
+        faker_method="mobile_money_agent",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        mobile_money_aliases,
+        id_type="momo_reference",
+        validate=validate_momo_reference,
+        faker_method="momo_reference",
+        faker_provider=MobileMoneyProvider,
+    )
+    _register_aliases(
+        ("ke", "sw", "en_KE"),
+        id_type="kmhfl_code",
+        validate=validate_kenya_mfl_code,
+        faker_method="kmhfl_code",
+        faker_provider=HealthFacilityCodeProvider,
+    )
+    _register_aliases(
+        ("ng", "en_NG"),
+        id_type="hfr_facility_code",
+        validate=validate_nigeria_hfr_code,
+        faker_method="hfr_facility_code",
+        faker_provider=HealthFacilityCodeProvider,
+    )
 
 
 _register_builtin_specs()
 
 
 __all__ = [
+    "AUXILIARY_FAKER_PROVIDER_CLASSES",
     "ID_PROVIDER_REGISTRY",
     "NationalIdFormatter",
     "NationalIdProvider",
     "NationalIdSpec",
     "NationalIdValidator",
+    "clinical_faker_provider_classes",
     "get_national_id",
     "iter_national_ids",
     "national_id_faker_provider_classes",

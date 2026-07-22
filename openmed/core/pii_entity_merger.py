@@ -35,6 +35,7 @@ class PIIPattern:
     - validator: Optional checksum/validation function to confirm matches
     - reject_on_validation_failure: Drop regex matches whose validator fails,
       rather than retaining them with a reduced confidence score
+    - context_required: Require nearby context for semantic-only recognition
     - safety_sweep_requires_context: Require nearby context before the
       deterministic safety sweep accepts this pattern
 
@@ -61,6 +62,7 @@ class PIIPattern:
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
+    context_required: bool = False
     safety_sweep_requires_context: bool = False
     reject_on_validation_failure: bool = False
 
@@ -652,6 +654,8 @@ def find_semantic_units(
             # Check for context words (like Presidio)
             if has_context:
                 score = min(1.0, score + pii_pattern.context_boost)
+            if pii_pattern.context_required and not has_context:
+                continue
 
             # Validate if validator exists
             validated = True
@@ -749,6 +753,7 @@ def merge_entities_with_semantic_units(
     prefer_model_labels: bool = False,
     allow_semantic_only_matches: bool = True,
     allow_label_expansion: bool = True,
+    india_clinical: bool = False,
 ) -> List[Dict[str, Any]]:
     """Merge entity predictions using semantic unit patterns.
 
@@ -763,6 +768,9 @@ def merge_entities_with_semantic_units(
         prefer_model_labels: If True, prefer model's label over pattern's label
         allow_semantic_only_matches: If False, regex-only matches are not added
         allow_label_expansion: If False, keep the model label taxonomy unchanged
+        india_clinical: Normalize Indian-English clinical abbreviations before
+            merging and bridge eligible PERSON/LOCATION spans across Latin and
+            Indic script boundaries.
 
     Returns:
         List of merged entity dicts
@@ -778,16 +786,27 @@ def merge_entities_with_semantic_units(
         {'entity_type': 'date_of_birth', 'score': 0.8, 'start': 5, 'end': 15,
          'word': '01/15/1970', 'merged_from': 2}
     """
+    if india_clinical:
+        from ..clinical.normalization import normalize_indian_clinical_entities
+
+        entities = normalize_indian_clinical_entities(entities)
+
     if not use_semantic_patterns:
         # Just return entities as-is if not using patterns
-        return sorted(entities, key=lambda x: x["start"])
+        ordered = sorted(entities, key=lambda x: x["start"])
+        return (
+            merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
+        )
 
     # Find semantic units
     semantic_units = find_semantic_units(text, patterns)
 
     if not semantic_units:
         # No semantic units found, return original entities
-        return sorted(entities, key=lambda x: x["start"])
+        ordered = sorted(entities, key=lambda x: x["start"])
+        return (
+            merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
+        )
 
     merged = []
     used_entities = set()
@@ -918,7 +937,10 @@ def merge_entities_with_semantic_units(
         if i not in used_entities:
             merged.append(entity)
 
-    return _coalesce_overlapping_merged_entities(merged, text)
+    coalesced = _coalesce_overlapping_merged_entities(merged, text)
+    if india_clinical:
+        return merge_india_code_mixed_spans(coalesced, text)
+    return coalesced
 
 
 def _coalesce_overlapping_merged_entities(
@@ -998,6 +1020,128 @@ def _coalesce_overlapping_merged_entities(
         )
 
     return result
+
+
+_INDIA_TRANSLITERATION_GAP_RE = re.compile(r"(?:\s*|\s*[-/|]\s*|\s*[\[(]\s*)")
+_INDIA_PERSON_LABELS = frozenset(
+    {"name", "person", "patient", "per", "patient_name", "full_name"}
+)
+_INDIA_LOCATION_LABELS = frozenset({"location", "loc", "place", "city"})
+
+
+def merge_india_code_mixed_spans(
+    entities: List[Dict[str, Any]],
+    text: str,
+) -> List[Dict[str, Any]]:
+    """Bridge PERSON/LOCATION fragments split only by an Indic script change.
+
+    The rule is intentionally narrow and must be opted into by the India
+    clinical route. It unions adjacent same-family spans only when one surface
+    is Latin and the other is Devanagari or Telugu. This captures mixed-script
+    names such as ``राहुल Sharma`` and parenthesized transliterations without
+    widening ordinary English entities.
+    """
+
+    if not entities:
+        return []
+
+    from ..clinical.normalization import normalize_indian_clinical_entities
+
+    ordered = sorted(
+        (dict(entity) for entity in entities),
+        key=lambda entity: (int(entity["start"]), int(entity["end"])),
+    )
+    merged: list[Dict[str, Any]] = []
+    current = ordered[0]
+    for candidate in ordered[1:]:
+        if not _should_bridge_india_spans(current, candidate, text):
+            merged.append(current)
+            current = candidate
+            continue
+        current = _bridge_india_spans(current, candidate, text)
+    merged.append(current)
+    return normalize_indian_clinical_entities(merged)
+
+
+def _should_bridge_india_spans(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    text: str,
+) -> bool:
+    left_family = _india_entity_family(str(left.get("entity_type", "")))
+    right_family = _india_entity_family(str(right.get("entity_type", "")))
+    if left_family is None or left_family != right_family:
+        return False
+
+    left_end = int(left["end"])
+    right_start = int(right["start"])
+    if right_start < left_end or right_start - left_end > 12:
+        return False
+    gap = text[left_end:right_start]
+    if _INDIA_TRANSLITERATION_GAP_RE.fullmatch(gap) is None:
+        return False
+
+    from .script_detect import detect_script
+
+    scripts = {
+        detect_script(text[int(left["start"]) : left_end]),
+        detect_script(text[right_start : int(right["end"])]),
+    }
+    return "Latin" in scripts and bool(scripts & {"Devanagari", "Telugu"})
+
+
+def _india_entity_family(label: str) -> str | None:
+    normalized = label.casefold().replace("b-", "").replace("i-", "")
+    if normalized in _INDIA_PERSON_LABELS:
+        return "person"
+    if normalized in _INDIA_LOCATION_LABELS:
+        return "location"
+    return None
+
+
+def _bridge_india_spans(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    text: str,
+) -> Dict[str, Any]:
+    start = int(left["start"])
+    end = int(right["end"])
+    gap = text[int(left["end"]) : int(right["start"])]
+    if "(" in gap and text[end : end + 1] == ")":
+        end += 1
+    elif "[" in gap and text[end : end + 1] == "]":
+        end += 1
+
+    source_labels = sorted(
+        {
+            str(label)
+            for entity in (left, right)
+            for label in entity.get(
+                "source_labels",
+                [entity.get("entity_type", "")],
+            )
+            if label
+        }
+    )
+    return {
+        "entity_type": max(
+            (left, right),
+            key=lambda entity: float(entity.get("score", 0.0)),
+        )["entity_type"],
+        "score": max(float(left.get("score", 0.0)), float(right.get("score", 0.0))),
+        "start": start,
+        "end": end,
+        "word": text[start:end],
+        "merged_from": max(int(left.get("merged_from", 1)), 1)
+        + max(int(right.get("merged_from", 1)), 1),
+        "source_labels": source_labels,
+        "mixed_label_union": len({normalize_label(label) for label in source_labels})
+        > 1,
+        "india_clinical_merge": {
+            "script_boundary_bridge": True,
+            "transliteration_pair": True,
+        },
+    }
 
 
 def normalize_label(label: str) -> str:

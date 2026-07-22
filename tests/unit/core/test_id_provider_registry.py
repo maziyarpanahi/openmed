@@ -7,10 +7,14 @@ from faker import Faker
 
 from openmed.core.anonymizer.locales import FAKER_BACKEND_LOCALE
 from openmed.core.anonymizer.providers import registry_ids
-from openmed.core.anonymizer.providers.clinical_ids import register_clinical_providers
+from openmed.core.anonymizer.providers.clinical_ids import (
+    AfricanPhoneProvider,
+    register_clinical_providers,
+)
 from openmed.core.anonymizer.providers.registry_ids import (
     ID_PROVIDER_REGISTRY,
     NationalIdSpec,
+    clinical_faker_provider_classes,
     get_national_id,
     register_national_id,
 )
@@ -21,6 +25,11 @@ def _always_valid(_text: str) -> bool:
 
 
 EXPECTED_VALIDATOR_KEYS = (
+    ("sw", "mpesa_tx_code"),
+    ("tz", "nida_nin"),
+    ("ug", "nin"),
+    ("rw", "rwanda_id"),
+    ("et", "fayda_fan"),
     ("fr", "nir"),
     ("de", "steuer_id"),
     ("it", "codice_fiscale"),
@@ -29,6 +38,9 @@ EXPECTED_VALIDATOR_KEYS = (
     ("nl", "bsn"),
     ("in", "aadhaar"),
     ("zh", "resident_id"),
+    ("in", "pan"),
+    ("in", "gstin"),
+    ("in", "abha"),
     ("id", "nik"),
     ("ms", "mykad"),
     ("tl", "philsys_psn"),
@@ -56,10 +68,18 @@ EXPECTED_VALIDATOR_KEYS = (
     ("za", "sa_id_number"),
     ("eg", "egyptian_national_id"),
     ("ma", "moroccan_cin"),
+    ("sw", "mobile_money_paybill"),
+    ("sw", "momo_reference"),
+    ("ke", "kmhfl_code"),
+    ("ng", "hfr_facility_code"),
 )
 
 
 ROUND_TRIP_CASES = (
+    ("tz", "nida_nin", "sw"),
+    ("ug", "nin", "en_UG"),
+    ("rw", "rwanda_id", "rw_RW"),
+    ("et", "fayda_fan", "am_ET"),
     ("fr", "nir", "fr_FR"),
     ("de", "steuer_id", "de_DE"),
     ("it", "codice_fiscale", "it_IT"),
@@ -68,6 +88,9 @@ ROUND_TRIP_CASES = (
     ("nl", "bsn", "nl_NL"),
     ("in", "aadhaar", "en_IN"),
     ("zh", "resident_id", "zh_CN"),
+    ("in", "pan", "en_IN"),
+    ("in", "gstin", "en_IN"),
+    ("in", "abha", "en_IN"),
     ("id", "nik", "id_ID"),
     ("ms", "mykad", "ms_MY"),
     ("tl", "philsys_psn", "fil_PH"),
@@ -99,6 +122,26 @@ ROUND_TRIP_CASES = (
 
 
 class TestNationalIdRegistry:
+    @pytest.mark.parametrize(
+        ("alias", "id_type"),
+        (
+            ("tz", "nida_nin"),
+            ("sw", "nida_nin"),
+            ("en_TZ", "nida_nin"),
+            ("ug", "nin"),
+            ("en_UG", "nin"),
+            ("rw", "rwanda_id"),
+            ("rw_RW", "rwanda_id"),
+            ("et", "fayda_fan"),
+            ("am", "fayda_fan"),
+            ("en_ET", "fayda_fan"),
+        ),
+    )
+    def test_east_african_aliases_resolve(self, alias, id_type):
+        spec = get_national_id(alias, id_type)
+        assert spec is not None
+        assert spec.faker_provider is not None
+
     def test_acceptance_lookups_return_validating_specs(self):
         for lang, id_type, locale in (
             ("it", "codice_fiscale", "it_IT"),
@@ -235,6 +278,77 @@ class TestNationalIdRegistry:
     def test_unknown_lookup_returns_none(self):
         assert get_national_id("zz", "unknown") is None
 
+    @pytest.mark.parametrize("alias", ("ke", "tz", "sw", "en_ke", "en_tz"))
+    def test_mpesa_transaction_code_aliases_generate_valid_surrogates(self, alias):
+        spec = get_national_id(alias, "mpesa_tx_code")
+        assert spec is not None
+
+        faker = Faker("en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(859)
+        surrogate = getattr(faker, spec.faker_method)("TB17CVOCY9")
+
+        assert surrogate.startswith("T")
+        assert surrogate != "TB17CVOCY9"
+        assert spec.validate(surrogate)
+
+    @pytest.mark.parametrize(
+        "alias",
+        ("ke", "tz", "gh", "ug", "sw", "en_ke", "en_tz", "en_gh", "en_ug"),
+    )
+    @pytest.mark.parametrize(
+        ("id_type", "original"),
+        (
+            ("mobile_money_paybill", "542542"),
+            ("mobile_money_till", "83290"),
+            ("mobile_money_agent", "5544331"),
+            ("momo_reference", "81234567890"),
+        ),
+    )
+    def test_mobile_money_aliases_generate_valid_surrogates(
+        self,
+        alias,
+        id_type,
+        original,
+    ):
+        spec = get_national_id(alias, id_type)
+        assert spec is not None
+
+        faker = Faker("en_KE")
+        register_clinical_providers(faker)
+        faker.seed_instance(860)
+        surrogate = getattr(faker, spec.faker_method)(original)
+
+        assert surrogate != original
+        assert len(surrogate) == len(original)
+        assert spec.validate(surrogate)
+
+    @pytest.mark.parametrize("alias", ("ke", "sw", "en_KE"))
+    def test_kenya_facility_registry_aliases_generate_valid_surrogates(self, alias):
+        spec = get_national_id(alias, "kmhfl_code")
+        assert spec is not None
+
+        faker = Faker("en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(861)
+        surrogate = getattr(faker, spec.faker_method)()
+
+        assert spec.faker_method == "kmhfl_code"
+        assert spec.validate(surrogate)
+
+    @pytest.mark.parametrize("alias", ("ng", "en_NG"))
+    def test_nigeria_facility_registry_aliases_generate_valid_surrogates(self, alias):
+        spec = get_national_id(alias, "hfr_facility_code")
+        assert spec is not None
+
+        faker = Faker("en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(861)
+        surrogate = getattr(faker, spec.faker_method)()
+
+        assert spec.faker_method == "hfr_facility_code"
+        assert spec.validate(surrogate)
+
     def test_duplicate_registration_rejects_key_with_clear_error(self):
         key = ("zz", "dummy")
         ID_PROVIDER_REGISTRY.pop(key, None)
@@ -258,3 +372,50 @@ class TestNationalIdRegistry:
             "Add unit tests",
         ):
             assert expected in doc
+
+
+class TestAfricanPhoneProviderRegistry:
+    def test_provider_is_registered_once(self):
+        provider_classes = clinical_faker_provider_classes()
+
+        assert provider_classes.count(AfricanPhoneProvider) == 1
+
+    @pytest.mark.parametrize(
+        ("original", "preserved_digits"),
+        [
+            ("+251 91 234 5678", "25191"),
+            ("00250 78 123 4567", "0025078"),
+            ("0752 876 543", "0752"),
+        ],
+    )
+    def test_registered_provider_preserves_country_and_operator_prefix(
+        self,
+        original,
+        preserved_digits,
+    ):
+        faker = Faker("en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(858)
+
+        surrogate = faker.african_phone(original)
+
+        assert surrogate is not None
+        assert "".join(char for char in surrogate if char.isdigit()).startswith(
+            preserved_digits
+        )
+        assert surrogate != original
+        assert "".join(char for char in surrogate if not char.isdigit()) == "".join(
+            char for char in original if not char.isdigit()
+        )
+
+    def test_seeded_provider_is_deterministic(self):
+        first = Faker("en_US")
+        second = Faker("en_US")
+        register_clinical_providers(first)
+        register_clinical_providers(second)
+        first.seed_instance(858)
+        second.seed_instance(858)
+
+        assert first.african_phone("+233 24 123 4567") == second.african_phone(
+            "+233 24 123 4567"
+        )

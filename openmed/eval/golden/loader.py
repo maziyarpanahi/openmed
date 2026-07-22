@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
-from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
 from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import (
@@ -27,6 +31,7 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     "multilingual",
     "checksum_ids",
     "financial_ids",
+    "india_health_ids",
     "date_arithmetic",
     "policy_profile_actions",
     HARD_NEGATIVE_CATEGORY,
@@ -40,6 +45,7 @@ _TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
 _SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
         "context_multilingual.jsonl",
+        "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
         "india_clinical.jsonl",
         "relation_assertion.jsonl",
@@ -97,7 +103,9 @@ class GoldenFixture:
             raise ValueError("golden fixture expected_output.text is required")
 
         language = str(data.get("language") or data.get("lang") or "en")
-        fixture_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        fixture_languages = (
+            SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        )
         if language not in fixture_languages:
             raise ValueError(f"unsupported golden fixture language: {language!r}")
 

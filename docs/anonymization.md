@@ -279,6 +279,38 @@ entries plus `schema_version` and `hmac_scheme`; it does not store raw source
 surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
 data anyway: it can connect records across documents even without plaintext.
 
+For person names, the vault derives that HMAC input from a deterministic ISO
+15919 pivot. Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu,
+Kannada, Malayalam, and ISO 15919 inputs can therefore share one in-memory join
+key and one surrogate without storing the romanized name. The same engine can
+normalize explicit ITRANS and Harvard-Kyoto input before conversion:
+
+```python
+from openmed.processing import from_latin, to_latin, transliteration_key
+
+result = to_latin("राम ராம rāma")
+assert result.text == "rāma rāma rāma"
+assert result.remap_span(0, 4) == (0, 3)
+assert transliteration_key("राम") == transliteration_key("ராம")
+assert transliteration_key("rAma", "ITRANS") == transliteration_key("rāma")
+assert from_latin("lakShmI", "Devanagari", scheme="itrans") == "लक्ष्मी"
+```
+
+The default `schwa_policy="preserve"` and `anusvara_policy="marker"` form the
+round-trip-safe subset. `schwa_policy="source"` applies northern word-final
+schwa deletion, while `anusvara_policy="homorganic"` expands a nasal according
+to the following consonant; both are intentionally lossy. The public
+`LOSSY_CASES` tuple also lists nukta and extended letters, Tamil distinctions
+that its orthography does not encode, Gurmukhi addak, and Malayalam chillu
+letters. The stdlib-only tables are a clean-room Unicode/ISO implementation
+interoperable with the conventions of Aksharamukha (AGPL-3.0) and the Indic NLP
+Library (MIT). No code, data, copyleft component, neural weights, or third-party
+mapping bundle from either project is included.
+
+Perso-Arabic Urdu is intentionally an unsupported stub. The built-in API fails
+closed with `ValueError`; deployments that need it must supply a separately
+licensed, out-of-process adapter.
+
 ### Format preservation
 
 Phone numbers, dates, and emails preserve the structure of the original:
@@ -387,6 +419,10 @@ as its source of truth and supports **22 supported PII language codes**:
 `am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
 Chinese routing currently uses the documented multilingual default-model
 placeholder; dedicated Chinese model weights are not bundled.
+The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
+`gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve Hindi and
+Telugu. It loads only an explicit path or repository from
+`OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
 Polish, Latvian, Slovak, Malay, Filipino, Danish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale
