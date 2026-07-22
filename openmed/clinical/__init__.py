@@ -4,6 +4,20 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
+from .abbreviation import (
+    ABBREVIATION_DISAMBIGUATION_ADVISORY,
+    DEFAULT_SENSE_INVENTORY_RESOURCE,
+    AbbreviationAnnotation,
+    AbbreviationDisambiguator,
+    AbbreviationSense,
+    SenseAlternative,
+    SenseDefinition,
+    SenseInventory,
+    disambiguate_abbreviation,
+    expand_abbreviations,
+    load_abbreviation_inventory,
+    load_sense_inventory,
+)
 from .assertion_graph import (
     ASSERTION_GRAPH_ADVISORY,
     ASSERTION_GRAPH_AXES,
@@ -243,6 +257,18 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "ABBREVIATION_DISAMBIGUATION_ADVISORY",
+    "DEFAULT_SENSE_INVENTORY_RESOURCE",
+    "AbbreviationAnnotation",
+    "AbbreviationDisambiguator",
+    "AbbreviationSense",
+    "SenseAlternative",
+    "SenseDefinition",
+    "SenseInventory",
+    "disambiguate_abbreviation",
+    "expand_abbreviations",
+    "load_abbreviation_inventory",
+    "load_sense_inventory",
     "AFFIRMED",
     "NEGATED",
     "NEGATION_VALUES",
