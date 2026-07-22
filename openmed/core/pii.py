@@ -1406,7 +1406,9 @@ def _apply_safety_sweep_to_result(
 
 
 _AUDIT_TEXT_KEYS = {
+    "canonical_transliteration_key",
     "text",
+    "transliteration_key",
     "word",
     "value",
     "surface",
@@ -2344,9 +2346,10 @@ def deidentify(
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
         surrogate_vault: Optional cross-document surrogate vault. When provided
-            with ``method="replace"``, OpenMed stores only HMAC source hashes
-            and reuses the same surrogate for the same label/language/source
-            identifier across calls.
+            with ``method="replace"``, OpenMed stores only HMAC source hashes.
+            Indian names in Devanagari, Tamil, or opted-in Romanization use one
+            HMAC of an in-memory phonetic fold and render the reused identity in
+            the input script; the fold itself is never persisted or audited.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path

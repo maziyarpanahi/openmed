@@ -190,7 +190,7 @@ def test_surrogate_vault_script_constraint_rejects_non_latin_candidates() -> Non
 def test_surrogate_vault_script_constraint_rejects_non_latin_legacy() -> None:
     vault = SurrogateVault.in_memory("script-constraint-legacy-secret")
     source = SurrogateSource("Rahul", "NAME", "en")
-    legacy_key = vault._legacy_key_for_epoch(
+    legacy_key = vault._normalized_legacy_key_for_epoch(
         source,
         vault._epoch_manager.current_key,
     )
