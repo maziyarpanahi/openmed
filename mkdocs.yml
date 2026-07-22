@@ -67,6 +67,7 @@ nav:
       - Per-Language De-identification: languages.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
