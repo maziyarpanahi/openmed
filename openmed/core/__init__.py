@@ -30,6 +30,7 @@ from .language_pack import (
     LANGUAGE_PACK_REGISTRY,
     LanguagePack,
     LanguagePackRegistry,
+    get_language_pack,
     register_language_pack,
 )
 from .language_pack_catalog import REGISTERED_SEGMENTERS, is_registered_segmenter
@@ -156,6 +157,7 @@ __all__ = [
     "LanguagePack",
     "LanguagePackRegistry",
     "LANGUAGE_PACK_REGISTRY",
+    "get_language_pack",
     "register_language_pack",
     "REGISTERED_SEGMENTERS",
     "is_registered_segmenter",

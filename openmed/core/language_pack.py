@@ -279,6 +279,12 @@ class LanguagePackRegistry:
         with self._lock:
             return self._packs[code]
 
+    def find(self, code: str) -> LanguagePack | None:
+        """Return the pack registered for ``code``, if any."""
+
+        with self._lock:
+            return self._packs.get(code)
+
     def iter_codes(self) -> Iterator[str]:
         """Iterate over a stable, alphabetically sorted snapshot of codes."""
 
@@ -315,9 +321,16 @@ def register_language_pack(
     return LANGUAGE_PACK_REGISTRY.register(pack, replace=replace)
 
 
+def get_language_pack(code: str) -> LanguagePack | None:
+    """Return a process-local language pack without raising for unknown codes."""
+
+    return LANGUAGE_PACK_REGISTRY.find(code)
+
+
 __all__ = [
     "LANGUAGE_PACK_REGISTRY",
     "LanguagePack",
     "LanguagePackRegistry",
+    "get_language_pack",
     "register_language_pack",
 ]

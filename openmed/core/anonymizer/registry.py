@@ -21,6 +21,11 @@ from importlib import resources
 from typing import Callable, Dict
 
 from .. import labels as L
+from ..language_pack import (
+    LanguagePack,
+    get_language_pack,
+    register_language_pack,
+)
 from .format_preserve import (
     preserve_date_format,
     preserve_email_pattern,
@@ -1001,14 +1006,96 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     "KE_MAISHA_NAMBA": _gen_ke_maisha_namba,
 }
 
+LANGUAGE_PACK_GENERATORS: Dict[tuple[str, str, str], Generator] = {}
+"""Script-specific generators keyed by ``(pack code, script, label)``."""
 
-def register_label_generator(canonical_label: str, generator: Generator) -> None:
+
+def register_label_generator(
+    canonical_label: str,
+    generator: Generator,
+    *,
+    language_pack: LanguagePack | None = None,
+    script: str | None = None,
+) -> None:
     """Register or override a generator for a canonical label.
 
     Use to extend coverage (new label types) or to swap in a domain-
-    specific generator (e.g. project-specific medical record format).
+    specific generator (e.g. project-specific medical record format). Pass a
+    ``language_pack`` and one of its ``script`` values to register a
+    script-specific generator without changing the global Faker fallback.
     """
-    LABEL_GENERATORS[canonical_label] = generator
+
+    if language_pack is None:
+        if script is not None:
+            raise ValueError("script requires a language_pack")
+        LABEL_GENERATORS[canonical_label] = generator
+        return
+
+    if script is None:
+        raise ValueError("language_pack generators require a script")
+    if script not in language_pack.scripts:
+        raise ValueError(
+            f"script {script!r} is not declared by language pack {language_pack.code!r}"
+        )
+    registered_pack = get_language_pack(language_pack.code)
+    if registered_pack is None:
+        register_language_pack(language_pack)
+    elif registered_pack != language_pack:
+        raise ValueError(f"language pack {language_pack.code!r} is already registered")
+    LANGUAGE_PACK_GENERATORS[(language_pack.code, script, canonical_label)] = generator
+
+
+def resolve_label_generator(
+    canonical_label: str,
+    *,
+    language_pack: LanguagePack | None,
+    script: str,
+    source_label: str | None = None,
+) -> tuple[Generator, bool]:
+    """Resolve a script-aware generator before the global Faker fallback.
+
+    Returns:
+        A ``(generator, is_script_specific)`` pair. The flag lets locale
+        resolution suppress approximation warnings only when Faker's locale
+        data is not being used for the selected provider.
+    """
+
+    if language_pack is not None and script in language_pack.scripts:
+        generator = LANGUAGE_PACK_GENERATORS.get(
+            (language_pack.code, script, canonical_label)
+        )
+        if generator is not None:
+            return generator, True
+    fallback_label = source_label or canonical_label
+    return (
+        LABEL_GENERATORS.get(
+            fallback_label,
+            LABEL_GENERATORS.get(canonical_label, LABEL_GENERATORS[L.OTHER]),
+        ),
+        False,
+    )
+
+
+def _register_builtin_script_name_generators() -> None:
+    from .providers.script_names import SCRIPT_NAME_PACKS
+
+    name_labels = (L.PERSON, L.FIRST_NAME, L.LAST_NAME, L.MIDDLE_NAME)
+    for language_pack, script, generator in SCRIPT_NAME_PACKS:
+        for canonical_label in name_labels:
+            selected_generator = generator
+            if language_pack.code == "zh" and canonical_label != L.MIDDLE_NAME:
+                # Preserve the established Chinese surname-aware generators;
+                # they already enforce Han-only, shape-correct, disjoint output.
+                selected_generator = LABEL_GENERATORS[canonical_label]
+            register_label_generator(
+                canonical_label,
+                selected_generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_builtin_script_name_generators()
 
 
 def register_india_label_generators() -> None:
@@ -1033,7 +1120,9 @@ register_india_label_generators()
 
 __all__ = [
     "Generator",
+    "LANGUAGE_PACK_GENERATORS",
     "LABEL_GENERATORS",
     "register_india_label_generators",
     "register_label_generator",
+    "resolve_label_generator",
 ]
