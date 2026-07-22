@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   impression, and recommendation text with provenance spans, captures only
   explicitly stated BI-RADS or Lung-RADS categories, and includes synthetic
   offline accuracy gates (#1838).
+- Added a deterministic radiology-finding extractor that binds laterality,
+  measured size, and anatomic location with per-field provenance, supports
+  caller-supplied offline RadLex JSON mappings, and includes a synthetic
+  finding-tuple-F1 gate (#1837).
 - Added a deterministic, offline ISO 15919 transliteration pivot for nine Indic
   scripts, ITRANS and Harvard-Kyoto parsing, offset-preserving romanization,
   and cross-script person-name linkage in surrogate vaults (#1483).
