@@ -161,6 +161,7 @@ class DynamicBatcher(Generic[T, R]):
         ),
         priority_weights: Optional[Mapping[str, int]] = None,
         metrics: Optional[Any] = None,
+        metrics_queue: Optional[str] = None,
     ) -> None:
         if max_batch_size <= 0:
             raise ValueError("max_batch_size must be positive")
@@ -179,6 +180,7 @@ class DynamicBatcher(Generic[T, R]):
         self._scheduler_cycle = _normalize_priority_weights(priority_weights)
         self._scheduler_index = 0
         self._metrics = metrics
+        self._metrics_queue = metrics_queue
         self._lock = asyncio.Lock()
         self._timer: Optional[asyncio.TimerHandle] = None
         for priority in PRIORITY_CLASSES:
@@ -396,7 +398,13 @@ class DynamicBatcher(Generic[T, R]):
     def _record_queue_depth(self, priority: str) -> None:
         record = getattr(self._metrics, "record_batch_queue_depth", None)
         if callable(record):
-            record(priority=priority, depth=len(self._queues[priority]))
+            kwargs = {
+                "priority": priority,
+                "depth": len(self._queues[priority]),
+            }
+            if self._metrics_queue is not None:
+                kwargs["queue"] = self._metrics_queue
+            record(**kwargs)
 
     def _record_queue_wait(self, priority: str, wait_seconds: float) -> None:
         record = getattr(self._metrics, "record_batch_queue_wait", None)

@@ -31,6 +31,7 @@ nav:
       - gRPC Service: serving/grpc.md
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
+      - Kubernetes Autoscaling: deploy/autoscaling.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
