@@ -95,6 +95,16 @@ def test_offset_map_and_iso_output_are_idempotent_for_mixed_script_text():
     assert len(first.offset_ends) == len(first.text)
 
 
+def test_decomposed_iso_input_is_nfc_with_source_offsets_preserved():
+    source = "ra\u0304ma"
+
+    result = to_latin(source)
+
+    assert result.text == "rāma"
+    assert unicodedata.is_normalized("NFC", result.text)
+    assert result.remap_span(1, 2) == (1, 3)
+
+
 def test_explicit_schwa_and_anusvara_policies_document_lossiness():
     assert to_latin("राम", schwa_policy="preserve").text == "rāma"
     assert to_latin("राम", schwa_policy="source").text == "rām"

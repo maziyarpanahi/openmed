@@ -81,10 +81,10 @@ def test_shared_vault_reuses_surrogates_across_deidentify_calls(monkeypatch):
 def test_shared_vault_reuses_one_surrogate_across_indic_scripts(monkeypatch):
     """ISO linkage keeps cross-script mentions consistent within a document."""
 
-    text = "राम met ராம"
+    text = "राम met ராம and rāma"
 
     def fake_extract(text: str, *args, **kwargs) -> PredictionResult:
-        return _prediction_result(text, ["राम", "ராம"])
+        return _prediction_result(text, ["राम", "ராம", "rāma"])
 
     monkeypatch.setattr("openmed.core.pii.extract_pii", fake_extract)
     vault = SurrogateVault.in_memory("unit-test-hmac-secret")
@@ -98,8 +98,8 @@ def test_shared_vault_reuses_one_surrogate_across_indic_scripts(monkeypatch):
         use_safety_sweep=False,
     )
 
-    assert len(result.pii_entities) == 2
-    assert result.pii_entities[0].surrogate == result.pii_entities[1].surrogate
+    assert len(result.pii_entities) == 3
+    assert len({entity.surrogate for entity in result.pii_entities}) == 1
     assert len(vault.entries()) == 1
     assert result.mapping is not None
     assert reidentify(result.deidentified_text, result.mapping) == text
@@ -115,6 +115,34 @@ def test_vault_reads_pre_transliteration_person_keys():
 
     assert legacy_key != vault.key_for(source.source_text, label=source.label)
     assert vault.get(source.source_text, label=source.label) == "Casey Example"
+
+
+def test_legacy_person_key_migrates_for_cross_script_reuse():
+    """A legacy surface seeds the normalized key used by other scripts."""
+
+    devanagari = SurrogateSource("राम", "NAME", "hi")
+    vault = SurrogateVault.in_memory("unit-test-hmac-secret")
+    legacy_key = vault._legacy_key_for_epoch(
+        devanagari,
+        vault._epoch_manager.current_key,
+    )
+    vault.store.set(legacy_key, "Casey Example", key_id=vault.current_key_id)
+
+    first = vault.get_or_create(
+        devanagari.source_text,
+        label=devanagari.label,
+        lang=devanagari.lang,
+        create_surrogate=lambda _attempt: "Unused Value",
+    )
+    second = vault.get_or_create(
+        "ராம",
+        label="NAME",
+        lang="hi",
+        create_surrogate=lambda _attempt: "Different Value",
+    )
+
+    assert first == second == "Casey Example"
+    assert vault.get("ராம", label="NAME", lang="hi") == "Casey Example"
 
 
 def test_json_vault_persists_only_hmac_hashes_and_encrypted_surrogates(

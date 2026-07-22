@@ -700,6 +700,13 @@ class SurrogateVault:
         if legacy_key != key:
             existing = self.store.get(legacy_key)
             if existing is not None:
+                try:
+                    self.store.set(key, existing, key_id=self.current_key_id)
+                except ValueError:
+                    normalized_existing = self.store.get(key)
+                    if normalized_existing is None:
+                        raise
+                    return normalized_existing
                 return existing
 
         used = self.store.used_surrogates(

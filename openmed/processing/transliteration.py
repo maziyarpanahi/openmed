@@ -779,11 +779,14 @@ def _romanized_pieces(text: str, source_start: int, *, scheme: str) -> list[_Pie
     normalized_scheme = _normalize_scheme(scheme)
     if normalized_scheme == "iso15919":
         pieces: list[_Piece] = []
-        for index, char in enumerate(text):
-            folded = char.casefold()
-            pieces.append(
-                _Piece(folded, source_start + index, source_start + index + 1)
-            )
+        index = 0
+        while index < len(text):
+            end = index + 1
+            while end < len(text) and unicodedata.combining(text[end]):
+                end += 1
+            folded = unicodedata.normalize("NFC", text[index:end].casefold())
+            pieces.append(_Piece(folded, source_start + index, source_start + end))
+            index = end
         return pieces
 
     mapping = _ITRANS_TO_ISO if normalized_scheme == "itrans" else _HK_TO_ISO
