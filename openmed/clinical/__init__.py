@@ -271,6 +271,13 @@ from .timeline import (
     evaluate_timeline_gold,
     resolve_timeline,
 )
+from .trend import (
+    TREND_ADVISORY,
+    MeasurementTrend,
+    SerialMeasurementPoint,
+    TrendDirection,
+    extract_measurement_trends,
+)
 from .units import (
     MEASUREMENT_NORMALIZATION_ADVISORY,
     ROUND_TRIP_ABS_TOLERANCE,
@@ -423,6 +430,11 @@ __all__ = [
     "TimelineEvaluationResult",
     "evaluate_timeline_gold",
     "resolve_timeline",
+    "TREND_ADVISORY",
+    "TrendDirection",
+    "SerialMeasurementPoint",
+    "MeasurementTrend",
+    "extract_measurement_trends",
     "ConversionStatus",
     "MeasurementNormalization",
     "MEASUREMENT_NORMALIZATION_ADVISORY",
