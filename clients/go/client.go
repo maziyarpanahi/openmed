@@ -70,6 +70,7 @@ type PIILanguage string
 
 // Languages supported by the PII endpoints.
 const (
+	LangAM PIILanguage = "am"
 	LangEN PIILanguage = "en"
 	LangFR PIILanguage = "fr"
 	LangDE PIILanguage = "de"

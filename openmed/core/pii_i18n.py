@@ -52,6 +52,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "nl": "Dutch",
     "hi": "Hindi",
     "te": "Telugu",
+    "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
     "he": "Hebrew",
@@ -76,6 +77,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "nl": "Dutch-",
     "hi": "Hindi-",
     "te": "Telugu-",
+    "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
     "he": "Hebrew-",
@@ -2165,6 +2167,22 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d",
         "\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d",
     ],
+    # Gregorian month names used by the existing date parser. Ethiopian-calendar
+    # conversion is intentionally outside this language pack's scope.
+    "am": [
+        "ጃንዋሪ",
+        "ፌብሩዋሪ",
+        "ማርች",
+        "ኤፕሪል",
+        "ሜይ",
+        "ጁን",
+        "ጁላይ",
+        "ኦገስት",
+        "ሴፕቴምበር",
+        "ኦክቶበር",
+        "ኖቬምበር",
+        "ዲሴምበር",
+    ],
     "ar": [
         "\u064a\u0646\u0627\u064a\u0631",
         "\u0641\u0628\u0631\u0627\u064a\u0631",
@@ -3732,6 +3750,171 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
+    ),
+]
+
+_ETHIOPIC_SCRIPT_RANGES = (
+    r"\u1200-\u135F\u1380-\u139F\u2D80-\u2DDF\uAB00-\uAB2F"
+    r"\U0001E7E0-\U0001E7FF"
+)
+_ETHIOPIC_NUMERAL_RANGE = r"\u1369-\u137C"
+
+_AMHARIC_NAME_CONTEXT = [
+    "ስም",
+    "የታካሚ ስም",
+    "ታካሚ",
+    "name",
+    "patient name",
+]
+_AMHARIC_DATE_CONTEXT = [
+    "ቀን",
+    "የትውልድ ቀን",
+    "ትውልድ",
+    "የቀጠሮ ቀን",
+    "date",
+    "date of birth",
+    "dob",
+]
+_AMHARIC_AGE_CONTEXT = ["ዕድሜ", "እድሜ", "ዓመት", "age", "years old"]
+_AMHARIC_ID_CONTEXT = [
+    "ፋይዳ",
+    "የፋይዳ መለያ ቁጥር",
+    "መለያ ቁጥር",
+    "መታወቂያ",
+    "fayda",
+    "fayda id",
+    "id number",
+]
+_AMHARIC_PHONE_CONTEXT = [
+    "ስልክ",
+    "ስልክ ቁጥር",
+    "ሞባይል",
+    "phone",
+    "mobile",
+    "contact",
+]
+_AMHARIC_ADDRESS_CONTEXT = [
+    "አድራሻ",
+    "መኖሪያ",
+    "ቦታ",
+    "address",
+    "location",
+]
+_AMHARIC_POSTCODE_CONTEXT = [
+    "የፖስታ ኮድ",
+    "ፖስታ ኮድ",
+    "postal code",
+    "postcode",
+    "zip code",
+]
+
+# Ethiopic has no letter case, so case-insensitive matching is a no-op for the
+# native-script patterns. ``re.IGNORECASE`` is used only by the Latin name
+# overlay that protects explicitly labelled names in code-mixed notes.
+_AMHARIC_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<=ስም[፡:] )[{_ETHIOPIC_SCRIPT_RANGES}]+"
+        rf"(?:\s+[{_ETHIOPIC_SCRIPT_RANGES}]+){{1,3}}(?=[\s፡።,.;]|$)",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_AMHARIC_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        r"(?<=Patient name: )[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){1,3}\b",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_AMHARIC_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        rf"(?<!\w)[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,12}}[./-]"
+        rf"[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,12}}[./-]"
+        rf"[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,16}}(?!\w)",
+        "date",
+        priority=11,
+        base_score=0.65,
+        context_words=_AMHARIC_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<=ዕድሜ[፡:] )[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,8}}"
+        r"(?=[\s፡።,.;]|$)",
+        "age",
+        priority=12,
+        base_score=0.65,
+        context_words=_AMHARIC_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Fayda recognition is format-only: exactly 12 decimal digits. No checksum
+    # or validity claim is made because none is publicly specified.
+    PIIPattern(
+        r"(?<!\w)[0-9]{12}(?!\w)",
+        "national_id",
+        priority=14,
+        base_score=0.5,
+        context_words=_AMHARIC_ID_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Traditional Ethiopic numerals are non-positional Unicode ``No`` values,
+    # not decimal digits. Preserve labelled tokens without treating them as
+    # 12-digit Fayda values.
+    PIIPattern(
+        rf"(?<=መለያ ቁጥር[፡:] )[{_ETHIOPIC_NUMERAL_RANGE}]{{2,24}}"
+        r"(?=[\s፡።,.;]|$)",
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_AMHARIC_ID_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:\+251[\s.-]?9\d{2}|09\d{2})"
+        r"[\s.-]?\d{3}[\s.-]?\d{3}(?!\d)",
+        "phone_number",
+        priority=12,
+        base_score=0.7,
+        context_words=_AMHARIC_PHONE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<=አድራሻ[፡:] )[{_ETHIOPIC_SCRIPT_RANGES}]+"
+        rf"(?:\s+[{_ETHIOPIC_SCRIPT_RANGES}]+){{1,6}}"
+        r"(?:\s+[0-9]{1,5})?(?=[፡።,.;]|$)",
+        "street_address",
+        priority=10,
+        base_score=0.65,
+        context_words=_AMHARIC_ADDRESS_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        r"(?<=የፖስታ ኮድ[፡:] )[0-9]{4}(?![0-9])",
+        "postcode",
+        priority=8,
+        base_score=0.35,
+        context_words=_AMHARIC_POSTCODE_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
     ),
 ]
 
@@ -6257,6 +6440,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     # while get_patterns_for_language deduplicates the universal rule.
     "hi": [*_HINDI_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
     "te": [*_TELUGU_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
+    "am": _AMHARIC_PII_PATTERNS,
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
@@ -6497,6 +6681,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
             "\u0c17\u0c41\u0c02\u0c1f\u0c42\u0c30\u0c41",
         ],
         "ZIPCODE": ["500001", "520001", "522001"],
+    },
+    "am": {
+        "NAME": [
+            "ሰላም ተስፋዬ",
+            "ዳዊት ከበደ",
+            "ሜሮን አለሙ",
+            "ሚካኤል ገብረ",
+        ],
+        "FIRST_NAME": ["ሰላም", "ዳዊት", "ሜሮን", "ሚካኤል"],
+        "LAST_NAME": ["ተስፋዬ", "ከበደ", "አለሙ", "ገብረ"],
+        "EMAIL": ["takami@example.et", "contact@example.org"],
+        "PHONE": ["+251 911 234 567", "0911 765 432"],
+        "ID_NUM": ["123456789012", "987654321098"],
+        "STREET_ADDRESS": ["አዲስ አበባ ቦሌ 12", "ባሕር ዳር ቀበሌ 5"],
+        "URL_PERSONAL": ["https://example.et"],
+        "USERNAME": ["takami123", "fayda456"],
+        "DATE": ["፲፬/፭/፲፱፻፹፰", "01/01/2000"],
+        "AGE": ["፳፱", "፴፭", "፵፯"],
+        "LOCATION": ["አዲስ አበባ", "ባሕር ዳር", "ሀዋሳ"],
+        "ZIPCODE": ["1000", "3000", "6000"],
     },
     "ar": {
         "NAME": [

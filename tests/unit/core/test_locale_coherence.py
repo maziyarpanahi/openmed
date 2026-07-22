@@ -44,7 +44,7 @@ from openmed.core.pii_i18n import (
 # approximation. Kept here, independent of the code under test, so that wiring a
 # new pack to a wrong/approximate locale flips the assertions red until a human
 # consciously updates this set.
-DOCUMENTED_APPROXIMATE = {"af", "te", "ms", "sr", "ur", "xh"}
+DOCUMENTED_APPROXIMATE = {"af", "am", "te", "ms", "sr", "ur", "xh"}
 
 # Languages that register a national-ID validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
@@ -189,6 +189,22 @@ class TestApproximateLocaleWarnings:
         assert len(user_warnings) == 1
         assert "xh_ZA" in str(user_warnings[0].message)
         assert "zu_ZA" in str(user_warnings[0].message)
+
+    def test_amharic_approximation_warns_once_and_uses_documented_backend(self):
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            first = resolve_locale("am")
+            second = resolve_locale("am")
+
+        assert first == second == "am_ET"
+        assert FAKER_BACKEND_LOCALE[first] == "en_KE"
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "am_ET" in str(user_warnings[0].message)
+        assert "en_KE" in str(user_warnings[0].message)
 
 
 class TestLocaleCoherenceReport:
