@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added dependency-free RTF (Rich Text Format) extraction with a stdlib-only
+  scanner that decodes `\'hh` hex escapes by document code page instead of
+  raw code point, consumes `\uN` Unicode-escape fallback runs instead of
+  duplicating them, honors `\*` ignorable destinations and `\binN` raw binary
+  payloads so embedded objects cannot desync group nesting, and emits
+  byte-exact character-offset source spans for redaction (#856).
 - Added build-generated `llms.txt` and `llms-full.txt` documentation feeds with
   curated quickstart, API, de-identification, agent, MCP, and REST coverage,
   plus strict local and Pages build checks (#1787).
