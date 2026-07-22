@@ -12,6 +12,7 @@ import openmed
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
@@ -292,10 +293,11 @@ def openmed_list_models(
         }
 
     if pii_language:
-        if pii_language not in SUPPORTED_LANGUAGES:
+        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        if pii_language not in accepted_languages:
             raise ValueError(
                 f"Unsupported language '{pii_language}'. "
-                f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+                f"Supported: {sorted(accepted_languages)}"
             )
         allowed = openmed.get_pii_models_by_language(pii_language)
         models = {key: model for key, model in models.items() if key in allowed}
@@ -312,7 +314,7 @@ def openmed_list_models(
 def openmed_list_pii_languages() -> Dict[str, Any]:
     """List supported PII languages and their default model IDs."""
     languages = []
-    for code in sorted(SUPPORTED_LANGUAGES):
+    for code in sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES):
         languages.append(
             {
                 "code": code,

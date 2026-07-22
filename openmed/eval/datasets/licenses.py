@@ -1,9 +1,18 @@
-"""License metadata for dataset adapter declarations."""
+"""License metadata and gates for datasets and user-supplied terminology."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping
+
+from openmed.core.terminology_licenses import (
+    TERMINOLOGY_REDISTRIBUTION_PERMITTED,
+    TERMINOLOGY_REDISTRIBUTION_RESTRICTED,
+    TERMINOLOGY_REDISTRIBUTION_VALUES,
+    RestrictedTerminologyLocationError,
+    TerminologyLicense,
+    validate_terminology_source_path,
+)
 
 
 @dataclass(frozen=True)
@@ -31,6 +40,17 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         source_url="openmed/eval/golden/fixtures",
         redistribution="committed synthetic fixtures only",
         notes="Synthetic-only fixtures; no real PHI and no DUA content.",
+    ),
+    "naamapadam": DatasetLicense(
+        dataset="naamapadam",
+        license_id="CC0-1.0",
+        source_url="https://huggingface.co/datasets/ai4bharat/naamapadam",
+        redistribution="reference-only",
+        notes=(
+            "AI4Bharat publishes the dataset packaging under CC0-1.0. OpenMed "
+            "loads user-supplied copies by reference, commits original synthetic "
+            "fixtures only, and redistributes no Naamapadam corpus rows."
+        ),
     ),
     "shield": DatasetLicense(
         dataset="shield",
@@ -60,6 +80,26 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "explicit license acceptance. The upstream repository and dataset-card "
             "prose declare non-commercial terms, while the current card metadata "
             "tags AFL-3.0; callers must verify the upstream terms for their use case."
+        ),
+    ),
+    "cblue": DatasetLicense(
+        dataset="cblue",
+        license_id="CBLUE-access-controlled",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        redistribution="user-supplied",
+        notes=(
+            "CBLUE access and usage terms apply. OpenMed never downloads, "
+            "caches, or redistributes the benchmark corpus."
+        ),
+    ),
+    "cmeee": DatasetLicense(
+        dataset="cmeee",
+        license_id="CBLUE-access-controlled",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        redistribution="user-supplied",
+        notes=(
+            "CMeEE is the CBLUE clinical NER task. Supply an authorized local "
+            "copy through OPENMED_CMEEE_PATH."
         ),
     ),
     "medmentions": DatasetLicense(
@@ -129,7 +169,17 @@ def license_for(dataset: str) -> DatasetLicense:
     try:
         return PUBLIC_DATASET_LICENSES[dataset]
     except KeyError as exc:
-        raise ValueError(f"unknown public dataset: {dataset}") from exc
+        raise ValueError(f"unknown dataset license: {dataset}") from exc
 
 
-__all__ = ["DatasetLicense", "PUBLIC_DATASET_LICENSES", "license_for"]
+__all__ = [
+    "DatasetLicense",
+    "PUBLIC_DATASET_LICENSES",
+    "RestrictedTerminologyLocationError",
+    "TERMINOLOGY_REDISTRIBUTION_PERMITTED",
+    "TERMINOLOGY_REDISTRIBUTION_RESTRICTED",
+    "TERMINOLOGY_REDISTRIBUTION_VALUES",
+    "TerminologyLicense",
+    "license_for",
+    "validate_terminology_source_path",
+]

@@ -14,6 +14,7 @@ evasion defense are retained.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -117,6 +118,221 @@ _CONFUSABLE_FOLD: dict[str, str] = {
     "\u3007": "O",
 }
 
+INDIAN_NAME_LANGUAGES = frozenset({"hi", "ta"})
+INDIAN_NAME_SCRIPTS = frozenset({"Devanagari", "Tamil"})
+
+_DEVANAGARI_CONSONANTS = {
+    "क": "k",
+    "ख": "kh",
+    "ग": "g",
+    "घ": "gh",
+    "ङ": "n",
+    "च": "ch",
+    "छ": "chh",
+    "ज": "j",
+    "झ": "jh",
+    "ञ": "n",
+    "ट": "t",
+    "ठ": "th",
+    "ड": "d",
+    "ढ": "dh",
+    "ण": "n",
+    "त": "t",
+    "थ": "th",
+    "द": "d",
+    "ध": "dh",
+    "न": "n",
+    "प": "p",
+    "फ": "ph",
+    "ब": "b",
+    "भ": "bh",
+    "म": "m",
+    "य": "y",
+    "र": "r",
+    "ल": "l",
+    "व": "v",
+    "श": "sh",
+    "ष": "sh",
+    "स": "s",
+    "ह": "h",
+    "क़": "k",
+    "ख़": "kh",
+    "ग़": "g",
+    "ज़": "j",
+    "ड़": "d",
+    "ढ़": "dh",
+    "फ़": "f",
+}
+_DEVANAGARI_VOWELS = {
+    "अ": "a",
+    "आ": "aa",
+    "इ": "i",
+    "ई": "ii",
+    "उ": "u",
+    "ऊ": "uu",
+    "ऋ": "r",
+    "ए": "e",
+    "ऐ": "ai",
+    "ओ": "o",
+    "औ": "au",
+}
+_DEVANAGARI_VOWEL_SIGNS = {
+    "ा": "aa",
+    "ि": "i",
+    "ी": "ii",
+    "ु": "u",
+    "ू": "uu",
+    "ृ": "r",
+    "े": "e",
+    "ै": "ai",
+    "ो": "o",
+    "ौ": "au",
+}
+
+_TAMIL_CONSONANTS = {
+    "க": "k",
+    "ங": "n",
+    "ச": "s",
+    "ஞ": "n",
+    "ட": "t",
+    "ண": "n",
+    "த": "t",
+    "ந": "n",
+    "ப": "p",
+    "ம": "m",
+    "ய": "y",
+    "ர": "r",
+    "ல": "l",
+    "வ": "v",
+    "ழ": "l",
+    "ள": "l",
+    "ற": "r",
+    "ன": "n",
+    "ஜ": "j",
+    "ஷ": "sh",
+    "ஸ": "s",
+    "ஹ": "h",
+}
+_TAMIL_VOWELS = {
+    "அ": "a",
+    "ஆ": "aa",
+    "இ": "i",
+    "ஈ": "ii",
+    "உ": "u",
+    "ஊ": "uu",
+    "எ": "e",
+    "ஏ": "e",
+    "ஐ": "ai",
+    "ஒ": "o",
+    "ஓ": "o",
+    "ஔ": "au",
+}
+_TAMIL_VOWEL_SIGNS = {
+    "ா": "aa",
+    "ி": "i",
+    "ீ": "ii",
+    "ு": "u",
+    "ூ": "uu",
+    "ெ": "e",
+    "ே": "e",
+    "ை": "ai",
+    "ொ": "o",
+    "ோ": "o",
+    "ௌ": "au",
+}
+
+_DEVANAGARI_RENDER_CONSONANTS = {
+    "kh": "ख",
+    "gh": "घ",
+    "ch": "च",
+    "jh": "झ",
+    "th": "थ",
+    "dh": "ध",
+    "ph": "फ",
+    "bh": "भ",
+    "sh": "श",
+    "k": "क",
+    "g": "ग",
+    "c": "च",
+    "j": "ज",
+    "t": "त",
+    "d": "द",
+    "n": "न",
+    "p": "प",
+    "b": "ब",
+    "m": "म",
+    "y": "य",
+    "r": "र",
+    "l": "ल",
+    "v": "व",
+    "w": "व",
+    "s": "स",
+    "h": "ह",
+    "f": "फ",
+    "q": "क",
+    "x": "क्स",
+    "z": "ज",
+}
+_DEVANAGARI_RENDER_VOWELS = {
+    "a": ("अ", ""),
+    "i": ("इ", "ि"),
+    "u": ("उ", "ु"),
+    "e": ("ए", "े"),
+    "o": ("ओ", "ो"),
+    "ai": ("ऐ", "ै"),
+    "au": ("औ", "ौ"),
+}
+
+_TAMIL_RENDER_CONSONANTS = {
+    "kh": "க",
+    "gh": "க",
+    "ch": "ச",
+    "jh": "ஜ",
+    "th": "த",
+    "dh": "த",
+    "ph": "ப",
+    "bh": "ப",
+    "sh": "ஷ",
+    "k": "க",
+    "g": "க",
+    "c": "ச",
+    "j": "ஜ",
+    "t": "த",
+    "d": "த",
+    "n": "ந",
+    "p": "ப",
+    "b": "ப",
+    "m": "ம",
+    "y": "ய",
+    "r": "ர",
+    "l": "ல",
+    "v": "வ",
+    "w": "வ",
+    "s": "ஸ",
+    "h": "ஹ",
+    "f": "ஃப",
+    "q": "க",
+    "x": "க்ஸ",
+    "z": "ஜ",
+}
+_TAMIL_RENDER_VOWELS = {
+    "a": ("அ", ""),
+    "i": ("இ", "ி"),
+    "u": ("உ", "ு"),
+    "e": ("எ", "ெ"),
+    "o": ("ஒ", "ொ"),
+    "ai": ("ஐ", "ை"),
+    "au": ("ஔ", "ௌ"),
+}
+
+_PHONETIC_VOWEL_FOLDS = (
+    ("ee", "i"),
+    ("ii", "i"),
+    ("oo", "u"),
+    ("uu", "u"),
+    ("aa", "a"),
+)
+
 
 @dataclass(frozen=True)
 class MixedScriptSpan:
@@ -198,6 +414,27 @@ class DetectionNormalization:
             "scripts": list(self.scripts),
             "stripped_combining_marks": self.stripped_combining_marks,
         }
+
+
+@dataclass(frozen=True)
+class ScriptDetectionWindow:
+    """One offset-preserving inference window around a Unicode script run.
+
+    ``start`` and ``end`` delimit the context-bearing text sent to a detector,
+    while ``core_start`` and ``core_end`` retain the exact run that caused the
+    route to be selected. The source text is deliberately not stored.
+    """
+
+    start: int
+    end: int
+    core_start: int
+    core_end: int
+    script: str
+
+    def extract(self, text: str) -> str:
+        """Return this window's exact slice from ``text``."""
+
+        return text[self.start : self.end]
 
 
 _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
@@ -314,6 +551,193 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
     ),
     ("Thai", ((0x0E00, 0x0E7F),)),
 )
+
+
+def indian_name_script(text: str, lang: str = "hi") -> str | None:
+    """Return the rendering script for an Indian name surface, if in scope.
+
+    Native Devanagari and Tamil surfaces are unambiguous. Latin surfaces opt in
+    through a Hindi or Tamil language hint so unrelated Latin names retain their
+    existing exact vault key behavior.
+    """
+
+    script = detect_script(text)
+    if script in INDIAN_NAME_SCRIPTS:
+        return script
+    base_lang = str(lang or "").strip().replace("-", "_").split("_", 1)[0]
+    if script == "Latin" and base_lang.casefold() in INDIAN_NAME_LANGUAGES:
+        return script
+    return None
+
+
+def canonical_indian_name(text: str) -> str:
+    """Fold a Devanagari, Tamil, or Romanized name to one phonetic key.
+
+    This is a deterministic transliteration fold, not fuzzy entity resolution.
+    It handles common long-vowel Roman variants and Indic consonant spellings
+    while retaining the rest of each name, so similar but distinct names do not
+    merge merely because they share a prefix.
+    """
+
+    script = detect_script(text)
+    if script == "Devanagari":
+        transliterated = _indic_to_latin(
+            text,
+            consonants=_DEVANAGARI_CONSONANTS,
+            vowels=_DEVANAGARI_VOWELS,
+            vowel_signs=_DEVANAGARI_VOWEL_SIGNS,
+            virama="्",
+            nasal_marks=frozenset({"ं", "ँ"}),
+            ignored_marks=frozenset({"़"}),
+        )
+    elif script == "Tamil":
+        transliterated = _indic_to_latin(
+            text,
+            consonants=_TAMIL_CONSONANTS,
+            vowels=_TAMIL_VOWELS,
+            vowel_signs=_TAMIL_VOWEL_SIGNS,
+            virama="்",
+            nasal_marks=frozenset(),
+            ignored_marks=frozenset(),
+        )
+    else:
+        words = []
+        for word in text.split():
+            if word.endswith("a") and any(not char.isascii() for char in word):
+                word = word[:-1]
+            words.append(word)
+        transliterated = " ".join(words)
+    return _fold_indian_romanization(transliterated)
+
+
+def render_indian_name(canonical_name: str, script: str) -> str:
+    """Render one canonical Indian surrogate identity in ``script``."""
+
+    if script == "Devanagari":
+        return _latin_to_indic(
+            canonical_name,
+            consonants=_DEVANAGARI_RENDER_CONSONANTS,
+            vowels=_DEVANAGARI_RENDER_VOWELS,
+            virama="्",
+        )
+    if script == "Tamil":
+        return _latin_to_indic(
+            canonical_name,
+            consonants=_TAMIL_RENDER_CONSONANTS,
+            vowels=_TAMIL_RENDER_VOWELS,
+            virama="்",
+        )
+    return " ".join(part.capitalize() for part in canonical_name.split())
+
+
+def _indic_to_latin(
+    text: str,
+    *,
+    consonants: dict[str, str],
+    vowels: dict[str, str],
+    vowel_signs: dict[str, str],
+    virama: str,
+    nasal_marks: frozenset[str],
+    ignored_marks: frozenset[str],
+) -> str:
+    output: list[str] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        consonant = consonants.get(char)
+        if consonant is not None:
+            following = text[index + 1] if index + 1 < len(text) else ""
+            if following == virama:
+                output.append(consonant)
+                index += 2
+                continue
+            vowel_sign = vowel_signs.get(following)
+            if vowel_sign is not None:
+                output.append(consonant + vowel_sign)
+                index += 2
+                continue
+            output.append(consonant + "a")
+        elif char in vowels:
+            output.append(vowels[char])
+        elif char in nasal_marks:
+            output.append("n")
+        elif char in ignored_marks or char == virama:
+            pass
+        elif char.isascii() or char.isspace():
+            output.append(char)
+        index += 1
+
+    words = "".join(output).split()
+    return " ".join(word[:-1] if word.endswith("a") else word for word in words)
+
+
+def _fold_indian_romanization(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text).casefold()
+    ascii_letters = "".join(
+        char
+        for char in decomposed
+        if not unicodedata.combining(char) and (char.isascii() or char.isspace())
+    )
+    folded = re.sub(r"[^a-z]+", " ", ascii_letters).strip()
+    folded = folded.replace("sh", "s")
+    for source, replacement in _PHONETIC_VOWEL_FOLDS:
+        folded = folded.replace(source, replacement)
+    return " ".join(folded.split())
+
+
+def _latin_to_indic(
+    text: str,
+    *,
+    consonants: dict[str, str],
+    vowels: dict[str, tuple[str, str]],
+    virama: str,
+) -> str:
+    consonant_tokens = sorted(consonants, key=len, reverse=True)
+    vowel_tokens = sorted(vowels, key=len, reverse=True)
+    output: list[str] = []
+    index = 0
+    previous_was_consonant = False
+
+    while index < len(text):
+        char = text[index]
+        if not char.isalpha():
+            if previous_was_consonant:
+                output.append(virama)
+            output.append(char)
+            previous_was_consonant = False
+            index += 1
+            continue
+
+        consonant = next(
+            (token for token in consonant_tokens if text.startswith(token, index)),
+            None,
+        )
+        if consonant is not None:
+            if previous_was_consonant:
+                output.append(virama)
+            output.append(consonants[consonant])
+            previous_was_consonant = True
+            index += len(consonant)
+            continue
+
+        vowel = next(
+            (token for token in vowel_tokens if text.startswith(token, index)),
+            None,
+        )
+        if vowel is not None:
+            independent, sign = vowels[vowel]
+            output.append(sign if previous_was_consonant else independent)
+            previous_was_consonant = False
+            index += len(vowel)
+            continue
+
+        output.append(char)
+        previous_was_consonant = False
+        index += 1
+
+    if previous_was_consonant:
+        output.append(virama)
+    return "".join(output)
 
 
 def detect_script(text: str) -> str:
@@ -451,6 +875,74 @@ def detect_mixed_script(text: str) -> bool:
     """Return whether an identifier-like span mixes Unicode scripts."""
 
     return bool(mixed_script_spans(text))
+
+
+def india_clinical_script_windows(
+    text: str,
+    lang: str,
+    *,
+    context_chars: int = 64,
+) -> tuple[ScriptDetectionWindow, ...]:
+    """Return context-bearing Latin/Indic windows for Indian clinical NER.
+
+    The route activates only when Latin and an Indic script occur in the same
+    note. Hindi accepts Devanagari, while Telugu accepts Telugu or Devanagari
+    because Indian-English clinical notes can embed Hindi phrases even when
+    ``lang="te"`` is the closest configured language. Context is expanded on
+    both sides of each run and snapped to token boundaries so PERSON and
+    LOCATION spans are not truncated merely because the script changes.
+
+    Args:
+        text: Source note whose offsets the returned windows reference.
+        lang: OpenMed language code. Only ``"hi"`` and ``"te"`` activate the
+            India clinical route.
+        context_chars: Maximum context expansion on either side before token
+            boundary adjustment.
+
+    Returns:
+        Deduplicated inference windows in source order, or an empty tuple when
+        the text is not an eligible mixed-script Indian clinical note.
+    """
+
+    if lang not in {"hi", "te"} or not text:
+        return ()
+    if context_chars < 0:
+        raise ValueError("context_chars must be non-negative")
+
+    target_scripts = {"Devanagari"}
+    if lang == "te":
+        target_scripts.add("Telugu")
+
+    runs = list(segment_by_script(text))
+    scripts = {script for _start, _end, script in runs}
+    if "Latin" not in scripts or not (scripts & target_scripts):
+        return ()
+
+    windows: list[ScriptDetectionWindow] = []
+    seen: set[tuple[int, int, str]] = set()
+    for core_start, core_end, script in runs:
+        if script != "Latin" and script not in target_scripts:
+            continue
+        start, end = _expand_detection_window(
+            text,
+            core_start,
+            core_end,
+            context_chars=context_chars,
+        )
+        key = (start, end, script)
+        if key in seen:
+            continue
+        seen.add(key)
+        windows.append(
+            ScriptDetectionWindow(
+                start=start,
+                end=end,
+                core_start=core_start,
+                core_end=core_end,
+                script=script,
+            )
+        )
+    return tuple(windows)
 
 
 def normalize_for_pii_detection(
@@ -600,6 +1092,25 @@ def _script_for_char(char: str) -> str | None:
     return None
 
 
+def _expand_detection_window(
+    text: str,
+    core_start: int,
+    core_end: int,
+    *,
+    context_chars: int,
+) -> tuple[int, int]:
+    """Expand one script run without cutting through adjacent tokens."""
+
+    start = max(0, core_start - context_chars)
+    end = min(len(text), core_end + context_chars)
+
+    while start > 0 and not text[start - 1].isspace():
+        start -= 1
+    while end < len(text) and not text[end].isspace():
+        end += 1
+    return start, end
+
+
 def _script_counts(text: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     for char in text:
@@ -635,17 +1146,24 @@ __all__ = [
     "CONFUSABLE_DATA_VERSION",
     "DetectionNormalization",
     "INDIC_SCRIPTS",
+    "INDIAN_NAME_LANGUAGES",
+    "INDIAN_NAME_SCRIPTS",
     "MixedScriptSpan",
+    "ScriptDetectionWindow",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
     "ZERO_WIDTH_CHARS",
+    "canonical_indian_name",
     "candidate_languages_for_script",
     "confusable_skeleton",
     "detect_mixed_script",
     "detect_script",
+    "india_clinical_script_windows",
+    "indian_name_script",
     "is_han_dominant",
     "mixed_script_spans",
     "normalize_for_pii_detection",
+    "render_indian_name",
     "segment_by_script",
 ]

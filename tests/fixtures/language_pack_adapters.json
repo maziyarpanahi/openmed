@@ -27,7 +27,9 @@
     "af": "af_ZA",
     "am": "am_ET",
     "ar": "ar_EG",
+    "as": "as_IN",
     "bg": "bg_BG",
+    "bn": "bn_BD",
     "cs": "cs_CZ",
     "da": "da_DK",
     "de": "de_DE",
@@ -37,6 +39,7 @@
     "et": "et_EE",
     "fi": "fi_FI",
     "fr": "fr_FR",
+    "gu": "gu_IN",
     "ha": "ha_NG",
     "he": "he_IL",
     "hi": "hi_IN",
@@ -46,16 +49,23 @@
     "ig": "ig_NG",
     "it": "it_IT",
     "ja": "ja_JP",
+    "kn": "kn_IN",
     "ko": "ko_KR",
     "lv": "lv_LV",
+    "ml": "ml_IN",
+    "mr": "mr_IN",
     "ms": "ms_MY",
     "nl": "nl_NL",
+    "or": "or_IN",
+    "pa": "pa_IN",
     "pl": "pl_PL",
     "pt": "pt_PT",
     "ro": "ro_RO",
+    "rw": "rw_RW",
     "sk": "sk_SK",
     "sr": "sr_RS",
     "sw": "sw",
+    "ta": "ta_IN",
     "te": "en_IN",
     "th": "th_TH",
     "tl": "fil_PH",
@@ -82,6 +92,7 @@
     "lv",
     "ms",
     "pl",
+    "rw",
     "sk",
     "sr",
     "tl",
@@ -93,6 +104,10 @@
     "af": [
       "af_ZA",
       "south_african_id"
+    ],
+    "am": [
+      "am_ET",
+      "ethiopia_fayda"
     ],
     "bg": [
       "bg_BG",
@@ -193,6 +208,10 @@
     "ro": [
       "ro_RO",
       "romanian_cnp"
+    ],
+    "rw": [
+      "rw_RW",
+      "rwanda_id"
     ],
     "sk": [
       "sk_SK",

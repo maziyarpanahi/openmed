@@ -29,6 +29,42 @@ jobs:
       run: |
         python scripts/release/check_github_actions_refs.py
 
+  readme-i18n-drift:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Detect README changes
+      id: readme_changes
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" HEAD -- 'README*'; then
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "No README files changed; translation drift check is not needed."
+        else
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Check README translation drift
+      if: steps.readme_changes.outputs.should_run == 'true'
+      run: |
+        if ! python scripts/i18n/check_readme_drift.py; then
+          echo "::error title=README translation drift::One or more README translations are stale. Review them using docs/i18n/glossary.md, then refresh the committed section manifest."
+          exit 1
+        fi
+
   lockfile-drift:
     runs-on: ubuntu-latest
     steps:

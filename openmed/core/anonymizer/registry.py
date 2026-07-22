@@ -21,6 +21,11 @@ from importlib import resources
 from typing import Callable, Dict
 
 from .. import labels as L
+from ..language_pack import (
+    LanguagePack,
+    get_language_pack,
+    register_language_pack,
+)
 from .format_preserve import (
     preserve_date_format,
     preserve_email_pattern,
@@ -31,6 +36,30 @@ from .locales import ZH_CN_ADDRESS_LOCALE
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
+
+_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+
+
+def _contains_original_fragment(original: str, candidate: str) -> bool:
+    """Return whether a meaningful original token survives in ``candidate``."""
+
+    fragments = re.findall(
+        r"[A-Za-z]{3,}|\d{4,}|[\u0900-\u097f]{3,}",
+        original,
+    )
+    folded_candidate = candidate.casefold()
+    return any(fragment.casefold() in folded_candidate for fragment in fragments)
+
+
+def _draw_distinct(faker, original: str, method: str) -> str:
+    """Draw from ``method`` without retaining meaningful original fragments."""
+
+    candidate = ""
+    for _ in range(20):
+        candidate = str(getattr(faker, method)())
+        if not _contains_original_fragment(original, candidate):
+            return candidate
+    return candidate
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +172,30 @@ def _gen_middle_name(faker, original, *, locale):
     return faker.first_name()
 
 
+def _gen_india_person(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_name"):
+        return _draw_distinct(faker, original, "indian_name")
+    return _gen_person(faker, original, locale=locale)
+
+
+def _gen_india_first_name(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
+        return _draw_distinct(faker, original, "indian_first_name")
+    return _gen_first_name(faker, original, locale=locale)
+
+
+def _gen_india_last_name(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_last_name"):
+        return _draw_distinct(faker, original, "indian_last_name")
+    return _gen_last_name(faker, original, locale=locale)
+
+
+def _gen_india_middle_name(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
+        return _draw_distinct(faker, original, "indian_first_name")
+    return _gen_middle_name(faker, original, locale=locale)
+
+
 def _gen_prefix(faker, original, *, locale):
     return faker.prefix()
 
@@ -178,8 +231,18 @@ def _gen_phone(faker, original, *, locale):
     ):
         return faker.za_mobile_number(original)
     if any(ch.isdigit() for ch in original):
+        if hasattr(faker, "african_phone"):
+            african_surrogate = faker.african_phone(original)
+            if african_surrogate is not None:
+                return african_surrogate
         return preserve_phone_format(original, rng=faker.random)
     return faker.phone_number()
+
+
+def _gen_india_phone(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_phone_number"):
+        return _draw_distinct(faker, original, "indian_phone_number")
+    return _gen_phone(faker, original, locale=locale)
 
 
 def _gen_url(faker, original, *, locale):
@@ -290,6 +353,12 @@ def _gen_street_address(faker, original, *, locale):
     return faker.street_address()
 
 
+def _gen_india_street_address(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_address"):
+        return _draw_distinct(faker, original, "indian_address")
+    return _gen_street_address(faker, original, locale=locale)
+
+
 def _gen_building_number(faker, original, *, locale):
     if _is_zh_address_locale(locale):
         number = _zh_random_digits(faker, width=3, original=original).lstrip("0")
@@ -303,6 +372,12 @@ def _gen_zipcode(faker, original, *, locale):
     if any(ch.isdigit() or ch.isalpha() for ch in original):
         return preserve_id_pattern(original, rng=faker.random)
     return faker.postcode()
+
+
+def _gen_india_zipcode(faker, original, *, locale):
+    if locale in _INDIA_LOCALES and hasattr(faker, "indian_pin"):
+        return _draw_distinct(faker, original, "indian_pin")
+    return _gen_zipcode(faker, original, locale=locale)
 
 
 def _gen_gps(faker, original, *, locale):
@@ -370,6 +445,7 @@ def _gen_age(faker, original, *, locale):
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
     "af_ZA": "south_african_id",
+    "am_ET": "ethiopia_fayda",
     "ar_EG": "egyptian_national_id",
     "ar_MA": "moroccan_cin",
     "en_ZA": "south_african_id",
@@ -395,6 +471,9 @@ _LOCALE_ID_METHODS = {
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "nino",
+    "en_ET": "ethiopia_fayda",
+    "en_TZ": "tanzania_nida",
+    "en_UG": "uganda_nin",
     "tr_TR": "ssn",
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
@@ -416,6 +495,8 @@ _LOCALE_ID_METHODS = {
     "et_EE": "isikukood",
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
+    "rw_RW": "rwanda_id",
+    "sw_TZ": "tanzania_nida",
     "ur_PK": "cnic",
 }
 
@@ -427,6 +508,8 @@ _INDIA_ID_METHODS = {
     "ABDM_HPR_ID": "abdm_hpr_id",
     "ABDM_HFR_ID": "abdm_hfr_id",
 }
+
+_FIELD_PRESERVING_ID_METHODS = frozenset({"rwanda_id", "tanzania_nida", "uganda_nin"})
 
 
 _MRZ_CHARSET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
@@ -464,6 +547,93 @@ def _uscc_surrogate(faker, original):
     return generate_unified_social_credit_code(rng=faker.random)
 
 
+def _mpesa_surrogate(faker, original):
+    """Return an M-Pesa surrogate when ``original`` is a valid code."""
+
+    if not original:
+        return None
+    from openmed.core.pii_i18n import validate_mpesa_transaction_code
+
+    if not validate_mpesa_transaction_code(original):
+        return None
+    if not hasattr(faker, "mpesa_transaction_code"):
+        return None
+    return faker.mpesa_transaction_code(original)
+
+
+def _gen_mobile_money_identifier(
+    faker,
+    original: str,
+    *,
+    method: str,
+    validator: Callable[[str], bool],
+) -> str:
+    """Generate a provider-specific billing identifier when shape-valid."""
+
+    if validator(original) and hasattr(faker, method):
+        return str(getattr(faker, method)(original))
+    return preserve_id_pattern(original, rng=faker.random)
+
+
+def _gen_mobile_money_paybill(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_mobile_money_paybill
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="mobile_money_paybill",
+        validator=validate_mobile_money_paybill,
+    )
+
+
+def _gen_mobile_money_till(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_mobile_money_till
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="mobile_money_till",
+        validator=validate_mobile_money_till,
+    )
+
+
+def _gen_mobile_money_agent(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_mobile_money_paybill
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="mobile_money_agent",
+        validator=validate_mobile_money_paybill,
+    )
+
+
+def _gen_momo_reference(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_momo_reference
+
+    return _gen_mobile_money_identifier(
+        faker,
+        original,
+        method="momo_reference",
+        validator=validate_momo_reference,
+    )
+
+
+def _gen_facility_id(faker, original, *, locale):
+    """Generate a validator-compatible Kenya or Nigeria facility surrogate."""
+
+    from openmed.core.pii_i18n import (
+        validate_kenya_mfl_code,
+        validate_nigeria_hfr_code,
+    )
+
+    if validate_kenya_mfl_code(original) and hasattr(faker, "kmhfl_code"):
+        return faker.kmhfl_code(original)
+    if validate_nigeria_hfr_code(original) and hasattr(faker, "hfr_facility_code"):
+        return faker.hfr_facility_code(original)
+    return preserve_id_pattern(original, rng=faker.random)
+
+
 def _generate_distinct_chinese_resident_id(faker, original):
     """Return a valid Chinese Resident ID that differs from ``original``."""
     from openmed.core.pii_i18n import validate_chinese_resident_id
@@ -474,6 +644,33 @@ def _generate_distinct_chinese_resident_id(faker, original):
         if candidate != original and validate_chinese_resident_id(candidate):
             return candidate
     raise RuntimeError("could not generate a distinct Chinese Resident ID")
+
+
+def _india_health_id_surrogate(faker, original):
+    """Return a validator-compatible surrogate for an Indian health ID."""
+
+    if not original:
+        return None
+    from openmed.core.pii_i18n import (
+        validate_abha_address,
+        validate_abha_number,
+        validate_indian_ration_card,
+        validate_upi_id,
+    )
+
+    candidate = original.strip()
+    if validate_abha_address(candidate):
+        return faker.abha_address()
+    if validate_abha_number(candidate):
+        return faker.abha_number()
+    if validate_upi_id(candidate):
+        return faker.upi_id()
+    if re.fullmatch(
+        r"[A-Za-z]{1,3}[\s/-]\d{8,12}(?:[\s/-][A-Za-z0-9]{1,4})?",
+        candidate,
+    ) and validate_indian_ration_card(candidate):
+        return faker.indian_ration_card()
+    return None
 
 
 def _gen_id_num(faker, original, *, locale):
@@ -489,6 +686,9 @@ def _gen_id_num(faker, original, *, locale):
     uscc = _uscc_surrogate(faker, original)
     if uscc is not None:
         return uscc
+    mpesa = _mpesa_surrogate(faker, original)
+    if mpesa is not None:
+        return mpesa
     if _is_zh_cn(locale):
         from openmed.core.pii_i18n import (
             validate_chinese_passport,
@@ -502,10 +702,20 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
+    if locale in {"en_IN", "hi_IN", "te_IN"}:
+        india_health_id = _india_health_id_surrogate(faker, original)
+        if india_health_id is not None:
+            return india_health_id
+    if locale == "sw":
+        from openmed.core.pii_i18n import validate_tanzania_nida
+
+        if validate_tanzania_nida(original):
+            return faker.tanzania_nida(original)
+    method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         if locale == "zh_CN":
             return _generate_distinct_chinese_resident_id(faker, original)
-        if method in {
+        if method in _FIELD_PRESERVING_ID_METHODS | {
             "egyptian_national_id",
             "moroccan_cin",
             "nigeria_nin",
@@ -580,6 +790,39 @@ def _gen_ke_national_id(faker, original, *, locale):
 
 def _gen_ke_maisha_namba(faker, original, *, locale):
     return faker.kenya_maisha_namba(original)
+
+
+def _indian_id_surrogate(faker, original):
+    """Return a validator-compatible Indian ID surrogate when recognized."""
+
+    if not original:
+        return None
+
+    from openmed.core.anonymizer.providers.clinical_ids import (
+        validate_abha,
+        validate_gstin,
+        validate_pan,
+    )
+    from openmed.core.pii_i18n import validate_aadhaar
+
+    validators_and_methods = (
+        (validate_gstin, "gstin"),
+        (validate_pan, "pan"),
+        (validate_abha, "abha"),
+        (validate_aadhaar, "aadhaar"),
+    )
+    for validator, method in validators_and_methods:
+        if validator(original) and hasattr(faker, method):
+            return _draw_distinct(faker, original, method)
+    return None
+
+
+def _gen_india_id_num(faker, original, *, locale):
+    if locale in _INDIA_LOCALES:
+        surrogate = _indian_id_surrogate(faker, original)
+        if surrogate is not None:
+            return surrogate
+    return _gen_id_num(faker, original, locale=locale)
 
 
 def _gen_ssn(faker, original, *, locale):
@@ -868,20 +1111,130 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     "GH_GHANA_CARD": _gen_ghana_card,
     "KE_NATIONAL_ID": _gen_ke_national_id,
     "KE_MAISHA_NAMBA": _gen_ke_maisha_namba,
+    "MOBILE_MONEY_PAYBILL": _gen_mobile_money_paybill,
+    "MOBILE_MONEY_TILL": _gen_mobile_money_till,
+    "MOBILE_MONEY_AGENT": _gen_mobile_money_agent,
+    "MOMO_REFERENCE": _gen_momo_reference,
+    "FACILITY_ID": _gen_facility_id,
 }
 
+LANGUAGE_PACK_GENERATORS: Dict[tuple[str, str, str], Generator] = {}
+"""Script-specific generators keyed by ``(pack code, script, label)``."""
 
-def register_label_generator(canonical_label: str, generator: Generator) -> None:
+
+def register_label_generator(
+    canonical_label: str,
+    generator: Generator,
+    *,
+    language_pack: LanguagePack | None = None,
+    script: str | None = None,
+) -> None:
     """Register or override a generator for a canonical label.
 
     Use to extend coverage (new label types) or to swap in a domain-
-    specific generator (e.g. project-specific medical record format).
+    specific generator (e.g. project-specific medical record format). Pass a
+    ``language_pack`` and one of its ``script`` values to register a
+    script-specific generator without changing the global Faker fallback.
     """
-    LABEL_GENERATORS[canonical_label] = generator
+
+    if language_pack is None:
+        if script is not None:
+            raise ValueError("script requires a language_pack")
+        LABEL_GENERATORS[canonical_label] = generator
+        return
+
+    if script is None:
+        raise ValueError("language_pack generators require a script")
+    if script not in language_pack.scripts:
+        raise ValueError(
+            f"script {script!r} is not declared by language pack {language_pack.code!r}"
+        )
+    registered_pack = get_language_pack(language_pack.code)
+    if registered_pack is None:
+        register_language_pack(language_pack)
+    elif registered_pack != language_pack:
+        raise ValueError(f"language pack {language_pack.code!r} is already registered")
+    LANGUAGE_PACK_GENERATORS[(language_pack.code, script, canonical_label)] = generator
+
+
+def resolve_label_generator(
+    canonical_label: str,
+    *,
+    language_pack: LanguagePack | None,
+    script: str,
+    source_label: str | None = None,
+) -> tuple[Generator, bool]:
+    """Resolve a script-aware generator before the global Faker fallback.
+
+    Returns:
+        A ``(generator, is_script_specific)`` pair. The flag lets locale
+        resolution suppress approximation warnings only when Faker's locale
+        data is not being used for the selected provider.
+    """
+
+    if language_pack is not None and script in language_pack.scripts:
+        generator = LANGUAGE_PACK_GENERATORS.get(
+            (language_pack.code, script, canonical_label)
+        )
+        if generator is not None:
+            return generator, True
+    fallback_label = source_label or canonical_label
+    return (
+        LABEL_GENERATORS.get(
+            fallback_label,
+            LABEL_GENERATORS.get(canonical_label, LABEL_GENERATORS[L.OTHER]),
+        ),
+        False,
+    )
+
+
+def _register_builtin_script_name_generators() -> None:
+    from .providers.script_names import SCRIPT_NAME_PACKS
+
+    name_labels = (L.PERSON, L.FIRST_NAME, L.LAST_NAME, L.MIDDLE_NAME)
+    for language_pack, script, generator in SCRIPT_NAME_PACKS:
+        for canonical_label in name_labels:
+            selected_generator = generator
+            if language_pack.code == "zh" and canonical_label != L.MIDDLE_NAME:
+                # Preserve the established Chinese surname-aware generators;
+                # they already enforce Han-only, shape-correct, disjoint output.
+                selected_generator = LABEL_GENERATORS[canonical_label]
+            register_label_generator(
+                canonical_label,
+                selected_generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_builtin_script_name_generators()
+
+
+def register_india_label_generators() -> None:
+    """Install locale-gated India surrogate generators in the label registry."""
+
+    india_generators = {
+        L.PERSON: _gen_india_person,
+        L.FIRST_NAME: _gen_india_first_name,
+        L.LAST_NAME: _gen_india_last_name,
+        L.MIDDLE_NAME: _gen_india_middle_name,
+        L.PHONE: _gen_india_phone,
+        L.STREET_ADDRESS: _gen_india_street_address,
+        L.ZIPCODE: _gen_india_zipcode,
+        L.ID_NUM: _gen_india_id_num,
+    }
+    for canonical_label, generator in india_generators.items():
+        register_label_generator(canonical_label, generator)
+
+
+register_india_label_generators()
 
 
 __all__ = [
     "Generator",
+    "LANGUAGE_PACK_GENERATORS",
     "LABEL_GENERATORS",
+    "register_india_label_generators",
     "register_label_generator",
+    "resolve_label_generator",
 ]

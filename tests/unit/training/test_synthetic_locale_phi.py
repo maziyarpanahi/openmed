@@ -6,10 +6,12 @@ from openmed.core.anonymizer.locales import NATIONAL_ID_PROVIDERS
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import CANONICAL_LABELS, ID_NUM
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
     validate_chinese_resident_id,
     validate_dutch_bsn,
+    validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
@@ -32,6 +34,7 @@ from openmed.training.synthetic import (
 )
 
 _ID_VALIDATORS = {
+    "am": validate_ethiopia_fayda,
     "en": clinical_ids.validate_ssn,
     "fr": validate_french_nir,
     "de": validate_german_steuer_id,
@@ -67,7 +70,9 @@ _SCRIPT_RANGES = {
 
 
 def test_supported_languages_match_wired_language_set():
-    assert set(SUPPORTED_LOCALE_PHI_LANGUAGES) == SUPPORTED_LANGUAGES
+    assert set(SUPPORTED_LOCALE_PHI_LANGUAGES) == (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    )
 
 
 @pytest.mark.parametrize("language", SUPPORTED_LOCALE_PHI_LANGUAGES)

@@ -5,9 +5,9 @@ resolves OpenMed's ISO 639-1 codes (used everywhere else in the library) to
 the most appropriate Faker locale.
 
 Notes:
-- Telugu (``te``) has no Faker locale; we fall back to ``en_IN`` so generated
-  surrogates stay culturally adjacent. This is documented and surfaced to
-  callers as a ``UserWarning`` the first time it's used.
+- Telugu (``te``) has no Faker locale; non-script-specific values fall back to
+  ``en_IN`` and surface a one-time ``UserWarning``. Native Telugu name
+  surrogates bypass that approximate path and therefore do not warn.
 - Amharic (``am``) has no Faker locale; the conceptual ``am_ET`` locale uses
   ``en_KE`` as its runtime backend while curated Ethiopic surrogate data stays
   available through the language pack.
@@ -43,7 +43,23 @@ ZH_CN_ADDRESS_LOCALE: Final = "zh_CN"
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"af", "am", "te", "ms", "sr", "ur", "xh"})
+_APPROXIMATE_LOCALES: Final = frozenset(
+    {
+        "af",
+        "am",
+        "as",
+        "kn",
+        "ml",
+        "mr",
+        "ms",
+        "pa",
+        "rw",
+        "sr",
+        "te",
+        "ur",
+        "xh",
+    }
+)
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -53,11 +69,21 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "af_ZA": "zu_ZA",
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
+    "as_IN": "bn_BD",
+    "en_ET": "en_US",
+    "en_TZ": "en_US",
+    "en_UG": "en_US",
     "en_ZA": "zu_ZA",
     "en_GH": "tw_GH",
     "fr_MA": "fr_FR",
+    "kn_IN": "en_IN",
+    "ml_IN": "en_IN",
+    "mr_IN": "hi_IN",
     "ms_MY": "id_ID",
+    "pa_IN": "en_IN",
+    "rw_RW": "en_US",
     "sr_RS": "hr_HR",
+    "sw_TZ": "sw",
     "ur_PK": "en_PK",
     "xh_ZA": "zu_ZA",
 }
@@ -113,13 +139,21 @@ def _resolve_arabic_region(tag: str) -> str:
     return LANG_TO_LOCALE["ar"]
 
 
-def resolve_locale(lang: str, locale_override: str | None = None) -> str:
+def resolve_locale(
+    lang: str,
+    locale_override: str | None = None,
+    *,
+    warn_approximation: bool = True,
+) -> str:
     """Resolve a Faker locale for ``lang``.
 
     Args:
         lang: ISO 639-1 language code (``en``, ``fr``, ``de``, ...).
         locale_override: Caller-supplied Faker locale (e.g. ``pt_BR``) or
             documented region tag (e.g. ``ar-SA``); takes precedence.
+        warn_approximation: Emit the documented one-time warning when the
+            resolved Faker locale approximates ``lang``. Script-specific
+            providers set this false because they do not use Faker's name data.
 
     Returns:
         A Faker locale string.
@@ -135,11 +169,15 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
     if lang.startswith("ar-"):
         return _resolve_arabic_region(lang)
 
+    normalized_lang = lang.replace("-", "_")
+    if normalized_lang in FAKER_BACKEND_LOCALE:
+        return normalized_lang
+
     locale = LANG_TO_LOCALE.get(lang)
     if locale is None:
         return LANG_TO_LOCALE["en"]
 
-    if lang in _APPROXIMATE_LOCALES and lang not in _warned:
+    if warn_approximation and lang in _APPROXIMATE_LOCALES and lang not in _warned:
         backend = FAKER_BACKEND_LOCALE.get(locale)
         backend_note = f" backed by {backend!r}" if backend else ""
         warnings.warn(
@@ -186,25 +224,36 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``id_providers``: national-ID Faker method names whose surrogates
         round-trip the language's registered checksum validator (empty when the
         language has no checksummed national-ID surrogate provider).
+      - ``id_types``: stable registry ID types covered by ``id_providers``.
       - ``id_locale``: the Faker locale those providers are drawn from, or
         ``None``. Usually equals ``locale``; differs when the registered
         validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
     """
     from ..pii_i18n import (  # lazy: avoid import cycle
+        INDIC_NER_LANGUAGES,
         NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
     )
 
     rows: list[dict[str, object]] = []
-    for lang in sorted(SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES):
+    reported_languages = (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    )
+    for lang in sorted(reported_languages):
         provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
         id_locale, id_method = provider if provider else (None, None)
+        id_types = [id_method] if id_method is not None else []
+        id_methods = [id_method] if id_method is not None else []
+        if lang in {"hi", "te"}:
+            id_types = ["aadhaar", "pan", "gstin", "abha"]
+            id_methods = ["aadhaar", "pan", "gstin", "abha"]
         rows.append(
             {
                 "language": lang,
                 "locale": LANG_TO_LOCALE.get(lang, LANG_TO_LOCALE["en"]),
                 "approximate": lang in _APPROXIMATE_LOCALES,
-                "id_providers": [id_method] if id_method else [],
+                "id_providers": id_methods,
+                "id_types": id_types,
                 "id_locale": id_locale,
             }
         )

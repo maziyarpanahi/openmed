@@ -14,11 +14,14 @@ from openmed.core.model_registry import (
 from openmed.core.pii_i18n import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
+    OPTIONAL_PII_MODEL,
     SUPPORTED_LANGUAGES,
 )
 
 MULTILINGUAL_DEFAULT_LANGUAGES = {"he", "id", "th", "ro"}
+OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - {"hi", "te"}
 
 
 class TestRegistryCompleteness:
@@ -53,6 +56,8 @@ class TestRegistryCompleteness:
     def test_default_models_are_registered(self):
         registry_model_ids = {info.model_id for info in OPENMED_MODELS.values()}
         for lang, model_id in DEFAULT_PII_MODELS.items():
+            if model_id == OPTIONAL_PII_MODEL:
+                continue
             assert model_id in registry_model_ids, (
                 f"Default model for {lang} ({model_id}) not found in registry"
             )
@@ -74,6 +79,9 @@ class TestModelNaming:
             pytest.skip("language intentionally uses a documented model placeholder")
         if lang in MULTILINGUAL_DEFAULT_LANGUAGES:
             pytest.skip("language intentionally defaults to multilingual family")
+        if lang in OPTIONAL_ONLY_LANGUAGES:
+            assert get_pii_models_by_language(lang) == {}
+            return
         language_name = LANGUAGE_NAMES[lang]
         models = get_pii_models_by_language(lang)
         assert models
@@ -116,7 +124,21 @@ class TestHelperFunctions:
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
     def test_get_default_pii_model(self, lang):
         model_id = get_default_pii_model(lang)
+        if lang in OPTIONAL_ONLY_LANGUAGES:
+            assert model_id is None
+            return
         assert model_id == DEFAULT_PII_MODELS[lang]
+
+    @pytest.mark.parametrize("lang", sorted(INDIC_NER_LANGUAGES))
+    def test_configured_indic_model_is_registered(self, monkeypatch, lang):
+        monkeypatch.setenv("OPENMED_INDIC_NER_MODEL", "/models/indic-ner")
+
+        models = get_pii_models_by_language(lang)
+
+        optional = models[f"pii_{lang}_indic_ner"]
+        assert optional.model_id == "/models/indic-ner"
+        assert optional.languages == [lang]
+        assert optional.entity_types == ["PERSON", "LOCATION", "ORGANIZATION"]
 
     def test_get_default_pii_model_unsupported(self):
         result = get_default_pii_model("xx")

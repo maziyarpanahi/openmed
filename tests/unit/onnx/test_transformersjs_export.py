@@ -73,6 +73,8 @@ def test_export_transformersjs_bundle_writes_layout_and_manifest(
         "path": "transformersjs",
         "precision": "int8",
     }
+    assert "segmenter" not in manifest
+    assert not (result.output_dir / "segmenter").exists()
 
 
 def test_validate_transformersjs_contract_rejects_static_sequence_axis(
@@ -86,6 +88,32 @@ def test_validate_transformersjs_contract_rejects_static_sequence_axis(
 
     with pytest.raises(ValueError, match="axis sequence must be dynamic"):
         module.validate_transformersjs_contract(model_path)
+
+
+def test_export_packages_and_validates_optional_segmenter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    source_dir = _write_source_export(tmp_path / "onnx-export")
+    _install_fake_onnx_stack(monkeypatch)
+
+    result = module.export_transformersjs_bundle(
+        source_dir,
+        segmenter_id="openmed-cjk-indic-v1",
+    )
+
+    bundle_manifest = json.loads(
+        (result.output_dir / "openmed-onnx.json").read_text(encoding="utf-8")
+    )
+    assert bundle_manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+    assert module.validate_transformersjs_bundle(result.output_dir)
+    source_manifest = json.loads(
+        (source_dir / "openmed-onnx.json").read_text(encoding="utf-8")
+    )
+    assert source_manifest["segmenter"]["resource_files"][0]["path"].startswith(
+        "transformersjs/segmenter/"
+    )
 
 
 def test_validate_transformersjs_contract_rejects_old_opset(

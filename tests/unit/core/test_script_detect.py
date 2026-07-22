@@ -1,9 +1,13 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
+from openmed.core.language_pack_catalog import (
+    DEFAULT_PII_MODELS as BUILTIN_DEFAULT_PII_MODELS,
+)
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
+    OPTIONAL_PII_MODEL,
     SUPPORTED_LANGUAGES,
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
@@ -152,7 +156,9 @@ def test_routing_only_languages_do_not_claim_bundled_models():
     }
 
     assert USER_SUPPLIED_MODEL_LANGUAGES == expected_languages
-    assert USER_SUPPLIED_MODEL_LANGUAGES.isdisjoint(DEFAULT_PII_MODELS)
+    assert USER_SUPPLIED_MODEL_LANGUAGES.isdisjoint(BUILTIN_DEFAULT_PII_MODELS)
+    for language in expected_languages - {"ne", "ur"}:
+        assert DEFAULT_PII_MODELS[language] == OPTIONAL_PII_MODEL
     assert candidate_languages_for_script("Latin") == (
         "en",
         "fr",

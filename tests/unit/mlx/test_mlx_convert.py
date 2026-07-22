@@ -428,9 +428,43 @@ class TestSaveNumpyModel:
             "tokenizer_config.json",
             "special_tokens_map.json",
         ]
+        assert "segmenter" not in manifest
         assert (output / "tokenizer.json").exists()
         assert (output / "tokenizer_config.json").exists()
         assert (output / "special_tokens_map.json").exists()
+
+    def test_packages_and_validates_optional_segmenter_resources(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        import numpy as np
+
+        from openmed.mlx.artifact import validate_mlx_bundle
+        from openmed.mlx.convert import save_numpy_model
+
+        class FakeTokenizer:
+            def save_pretrained(self, output_dir):
+                Path(output_dir, "tokenizer.json").write_text("{}")
+
+        fake_transformers = types.ModuleType("transformers")
+        fake_transformers.AutoTokenizer = types.SimpleNamespace(
+            from_pretrained=lambda *args, **kwargs: FakeTokenizer()
+        )
+        monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+        output = save_numpy_model(
+            {"classifier.weight": np.zeros((1, 1), dtype=np.float32)},
+            {"num_labels": 1, "model_type": "bert"},
+            tmp_path / "model",
+            source_model_id="OpenMed/test-model",
+            segmenter_id="openmed-cjk-indic-v1",
+        )
+
+        manifest = validate_mlx_bundle(output)
+        assert manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+        assert (output / "segmenter" / "han_words.txt").is_file()
+        assert (output / "segmenter" / "indic_rules.json").is_file()
 
     @pytest.mark.skipif(
         not _SAFETENSORS_NUMPY_AVAILABLE,

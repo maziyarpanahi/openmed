@@ -69,6 +69,15 @@ from .text import (
 )
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
+from .transliteration import (
+    LOSSY_CASES,
+    TransliterationResult,
+    from_latin,
+    romanized_to_iso15919,
+    to_latin,
+    transliterate,
+    transliteration_key,
+)
 from .zh_segmentation import (
     ChineseSegmentationConfig,
     ChineseSegmenter,
@@ -158,4 +167,11 @@ __all__ = [
     "SentenceSpan",
     "segment_chinese_text",
     "segment_text",
+    "LOSSY_CASES",
+    "TransliterationResult",
+    "from_latin",
+    "romanized_to_iso15919",
+    "to_latin",
+    "transliterate",
+    "transliteration_key",
 ]

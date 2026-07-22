@@ -29,13 +29,16 @@ helpers in :mod:`format_preserve`; clinical-ID providers in
 from __future__ import annotations
 
 import hashlib
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Optional
 
 from .. import labels as L
 from ..labels import normalize_label
+from ..language_pack import get_language_pack
 from ..name_order import CJK_LANGUAGES, normalize_person_span
+from ..script_detect import detect_script
 from .format_preserve import (
     mask_aadhaar,
     preserve_date_format,
@@ -45,7 +48,7 @@ from .format_preserve import (
 )
 from .locales import resolve_faker_backend_locale, resolve_locale
 from .providers import register_clinical_providers
-from .registry import LABEL_GENERATORS
+from .registry import resolve_label_generator
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -151,6 +154,22 @@ class Anonymizer:
         digest = hashlib.blake2b(material, digest_size=8).digest()
         return int.from_bytes(digest, "big", signed=False)
 
+    @staticmethod
+    def _seed_value_for_identifier(
+        canonical_label: str,
+        original_value: str,
+        locale: str,
+    ) -> str:
+        """Canonicalize alternate renderings of the same Tanzania NIDA."""
+        if canonical_label != L.ID_NUM or locale not in {"en_TZ", "sw", "sw_TZ"}:
+            return original_value
+
+        from ..pii_i18n import validate_tanzania_nida
+
+        if validate_tanzania_nida(original_value):
+            return re.sub(r"[^0-9]", "", original_value)
+        return original_value
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -180,11 +199,6 @@ class Anonymizer:
         """
         effective_lang = lang or self.config.lang
         canonical = normalize_label(label, effective_lang)
-        effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
-        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(original):
-            # Aadhaar stays checksum-valid even when an English/code-mixed
-            # note routes through the generic en_US locale.
-            effective_locale = "en_IN"
 
         # CJK PERSON spans: peel a trailing honorific (さん/様/씨/님/先生/…) so
         # the name is swapped while the honorific is re-attached verbatim.
@@ -205,15 +219,33 @@ class Anonymizer:
                 seed_value = core_name
                 generator_input = core_name
 
+        script = detect_script(generator_input)
+        language_pack = get_language_pack(effective_lang)
+        source_key = str(label).strip().upper().replace("-", "_").replace(" ", "_")
+        generator, is_script_specific = resolve_label_generator(
+            canonical,
+            language_pack=language_pack,
+            script=script,
+            source_label=source_key,
+        )
+        effective_locale = resolve_locale(
+            effective_lang,
+            locale or self.config.locale,
+            warn_approximation=not is_script_specific,
+        )
+        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(original):
+            # Aadhaar stays checksum-valid even when an English/code-mixed
+            # note routes through the generic en_US locale.
+            effective_locale = "en_IN"
+        seed_value = self._seed_value_for_identifier(
+            canonical,
+            seed_value,
+            effective_locale,
+        )
         faker = self._get_faker(effective_locale)
         if self.config.consistent:
             faker.seed_instance(self._derive_seed(canonical, seed_value))
 
-        source_key = str(label).strip().upper().replace("-", "_").replace(" ", "_")
-        generator = LABEL_GENERATORS.get(
-            source_key,
-            LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"]),
-        )
         try:
             generated = generator(faker, generator_input, locale=effective_locale)
             return f"{generated}{honorific_suffix}"
@@ -304,6 +336,10 @@ class Anonymizer:
             faker.seed_instance(self._derive_seed(canonical, original_value))
 
         if canonical == L.PHONE:
+            if hasattr(faker, "african_phone"):
+                african_surrogate = faker.african_phone(original_value)
+                if african_surrogate is not None:
+                    return african_surrogate
             return preserve_phone_format(original_value, rng=faker.random)
         if canonical in _FORMAT_PRESERVE_DATE_LABELS:
             day_first = effective_locale in _FORMAT_PRESERVE_DAY_FIRST_LOCALES

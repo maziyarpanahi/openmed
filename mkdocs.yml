@@ -18,6 +18,10 @@ nav:
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - Persona Quickstarts: quickstarts.md
+      - China Onboarding: onboarding-china.md
+      - 中国用户上手指南: onboarding-china.zh.md
+      - India Onboarding: onboarding-india.md
+      - भारत के उपयोगकर्ताओं के लिए गाइड: onboarding-india.hi.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
@@ -69,6 +73,7 @@ nav:
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - Per-Language De-identification: languages.md
+      - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
@@ -97,6 +102,7 @@ nav:
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
+      - On-device Segmenters: on-device-segmenters.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
@@ -118,6 +124,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
       - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
       - OpenMed 1.9.0 Release Notes: release/v1.9.0.md

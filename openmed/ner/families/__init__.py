@@ -10,6 +10,14 @@ from .gliner2 import (
     is_gliner2_available,
     load_gliner2_handle,
 )
+from .indic import (
+    IndicNerAdapter,
+    IndicNerPrediction,
+    IndicNerWeightsUnavailable,
+    configured_indic_ner_model,
+    is_indic_ner_configured,
+    load_indic_ner_adapter,
+)
 
 __all__ = [
     "ModelFamily",
@@ -19,4 +27,10 @@ __all__ = [
     "is_gliner2_available",
     "load_gliner2_handle",
     "clear_gliner2_cache",
+    "IndicNerAdapter",
+    "IndicNerPrediction",
+    "IndicNerWeightsUnavailable",
+    "configured_indic_ner_model",
+    "is_indic_ner_configured",
+    "load_indic_ner_adapter",
 ]

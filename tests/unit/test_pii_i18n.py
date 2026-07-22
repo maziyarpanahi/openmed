@@ -18,13 +18,23 @@ from openmed.core.anonymizer.providers import (
     generate_hungarian_taj,
 )
 from openmed.core.anonymizer.providers.clinical_ids import (
+    KENYA_MFL_SYNTHETIC_MAX,
+    KENYA_MFL_SYNTHETIC_MIN,
+    NIGERIA_HFR_SYNTHETIC_SERIAL_MAX,
+    NIGERIA_HFR_SYNTHETIC_SERIAL_MIN,
+    generate_african_phone,
     generate_bulgarian_egn,
     generate_egyptian_national_id,
     generate_estonian_isikukood,
+    generate_ethiopia_fayda,
     generate_jmbg,
     generate_moroccan_cin,
+    generate_mpesa_transaction_code,
     generate_philhealth_pin,
     generate_portuguese_nif,
+    generate_rwanda_id,
+    generate_tanzania_nida,
+    generate_uganda_nin,
     generate_vietnamese_cccd,
     generate_vietnamese_cmnd,
     register_clinical_providers,
@@ -32,7 +42,11 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     AADHAAR_PII_PATTERNS,
+    AFRICAN_MOBILE_PII_PATTERNS,
+    AFRICAN_MOBILE_PLANS,
     DEFAULT_PII_MODELS,
+    INDIA_HEALTH_ID_PII_PATTERNS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_FAKE_DATA,
     LANGUAGE_MODEL_PREFIX,
     LANGUAGE_MONTH_NAMES,
@@ -43,6 +57,8 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
+    AfricanMobilePlan,
+    build_african_mobile_pattern,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
     validate_bic,
@@ -54,6 +70,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_egyptian_national_id,
     validate_estonian_isikukood,
+    validate_ethiopia_fayda,
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
@@ -66,12 +83,18 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_jmbg,
     validate_kenya_maisha_namba,
+    validate_kenya_mfl_code,
     validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_mobile_money_paybill,
+    validate_mobile_money_till,
+    validate_momo_reference,
     validate_moroccan_cin,
+    validate_mpesa_transaction_code,
     validate_nigeria_bvn,
+    validate_nigeria_hfr_code,
     validate_nigeria_nin,
     validate_pakistani_cnic,
     validate_philhealth_pin,
@@ -79,11 +102,14 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_portuguese_nif,
+    validate_rwanda_id,
     validate_south_african_id,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_tanzania_nida,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uganda_nin,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
 )
@@ -143,11 +169,12 @@ class TestConstants:
             "cs",
             "el",
             "vi",
+            "rw",
             "ur",
         }
 
     def test_language_names_keys(self):
-        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
+        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
 
     def test_language_model_prefix(self):
         assert LANGUAGE_MODEL_PREFIX["am"] == "Amharic-"
@@ -174,7 +201,9 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
 
     def test_default_pii_models_all_languages(self):
-        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
+        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
+            INDIC_NER_LANGUAGES - {"hi", "te"}
+        )
 
     def test_default_pii_models_naming(self):
         assert DEFAULT_PII_MODELS["am"] == "OpenMed/privacy-filter-multilingual"
@@ -209,6 +238,257 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+class TestEastAfricanNationalIds:
+    """Validator, detector, surrogate, and fixture coverage for OM-857."""
+
+    def test_tanzania_nida_validator_accepts_supported_renderings(self):
+        compact = "19850712123456789012"
+        hyphenated = "19850712-12345-67890-12"
+
+        assert validate_tanzania_nida(compact)
+        assert validate_tanzania_nida(hyphenated)
+        assert not validate_tanzania_nida("19850230123456789012")
+        assert not validate_tanzania_nida("18991231123456789012")
+        assert not validate_tanzania_nida("19850712-1234-567890-12")
+        assert not validate_tanzania_nida(None)
+
+    def test_uganda_nin_validator_checks_class_gender_and_length(self):
+        assert validate_uganda_nin("CM123456789ABC")
+        assert validate_uganda_nin("cf123456789abc")
+        assert validate_uganda_nin("RFABCDEFGHIJKL")
+        assert not validate_uganda_nin("XM123456789ABC")
+        assert not validate_uganda_nin("CX123456789ABC")
+        assert not validate_uganda_nin("CM123456789AB")
+        assert not validate_uganda_nin("CM123456789AB!")
+        assert not validate_uganda_nin(None)
+
+    def test_rwanda_id_validator_checks_birth_year_and_gender(self):
+        assert validate_rwanda_id("1198571234567890")
+        assert not validate_rwanda_id("1189971234567890")
+        assert not validate_rwanda_id("1198561234567890")
+        assert not validate_rwanda_id(f"1{date.today().year + 1:04d}71234567890")
+        assert not validate_rwanda_id("119857123456789")
+        assert not validate_rwanda_id(None)
+
+    def test_ethiopia_fayda_validator_checks_verhoeff_and_leading_digit(self):
+        assert validate_ethiopia_fayda("234123412346")
+        assert not validate_ethiopia_fayda("234123412347")
+        assert not validate_ethiopia_fayda("134123412346")
+        assert not validate_ethiopia_fayda("23412341234")
+        assert not validate_ethiopia_fayda("2341-2341-2346")
+        assert not validate_ethiopia_fayda("FAN234123412346")
+        assert not validate_ethiopia_fayda(None)
+
+    def test_cross_format_non_collision(self):
+        samples = {
+            validate_tanzania_nida: "19850712123456789012",
+            validate_uganda_nin: "CF123456789ABC",
+            validate_rwanda_id: "1198571234567890",
+            validate_ethiopia_fayda: "234123412346",
+        }
+        for expected_validator, value in samples.items():
+            assert expected_validator(value)
+            for other_validator in samples:
+                if other_validator is not expected_validator:
+                    assert not other_validator(value)
+
+    def test_generated_fayda_values_and_single_digit_mutations(self):
+        rng = random.Random(857)
+        for sample_index in range(1_000):
+            value = generate_ethiopia_fayda(rng=rng)
+            assert validate_ethiopia_fayda(value)
+
+            mutation_index = sample_index % len(value)
+            replacement = str((int(value[mutation_index]) + 1) % 10)
+            mutated = value[:mutation_index] + replacement + value[mutation_index + 1 :]
+            assert not validate_ethiopia_fayda(mutated)
+
+    def test_generated_structural_ids_all_pass_their_validators(self):
+        rng = random.Random(857)
+        generators_and_validators = (
+            (generate_tanzania_nida, validate_tanzania_nida),
+            (generate_uganda_nin, validate_uganda_nin),
+            (generate_rwanda_id, validate_rwanda_id),
+        )
+        for generator, validator in generators_and_validators:
+            assert all(validator(generator(rng=rng)) for _ in range(1_000))
+
+    def test_surrogates_preserve_embedded_fields(self):
+        nida_source = "19850712123456789012"
+        nida = generate_tanzania_nida(nida_source, rng=random.Random(1))
+        assert int(nida[:4]) // 10 == 198
+
+        for prefix in ("CM", "CF"):
+            nin = generate_uganda_nin(
+                f"{prefix}123456789ABC",
+                rng=random.Random(2),
+            )
+            assert nin.startswith(prefix)
+
+        rwanda_source = "1198571234567890"
+        rwanda = generate_rwanda_id(rwanda_source, rng=random.Random(3))
+        assert rwanda[0] == rwanda_source[0]
+        assert int(rwanda[1:5]) // 10 == int(rwanda_source[1:5]) // 10
+        assert rwanda[5] == rwanda_source[5]
+        assert validate_rwanda_id(rwanda)
+
+    def test_compact_and_hyphenated_nida_map_to_same_surrogate(self):
+        anonymizer = Anonymizer(lang="sw", consistent=True, seed=857)
+        compact = "19850712123456789012"
+        hyphenated = "19850712-12345-67890-12"
+
+        compact_surrogate = anonymizer.surrogate(compact, "national_id")
+        hyphenated_surrogate = anonymizer.surrogate(hyphenated, "national_id")
+
+        assert compact_surrogate == hyphenated_surrogate
+        assert validate_tanzania_nida(compact_surrogate)
+
+    @pytest.mark.parametrize(
+        ("lang", "source", "validator"),
+        (
+            ("en_TZ", "19850712123456789012", validate_tanzania_nida),
+            ("en_UG", "CF123456789ABC", validate_uganda_nin),
+            ("rw", "1198571234567890", validate_rwanda_id),
+            ("am", "234123412346", validate_ethiopia_fayda),
+            ("en_ET", "234123412346", validate_ethiopia_fayda),
+        ),
+    )
+    def test_anonymizer_dispatches_east_african_locale_surrogates(
+        self,
+        lang,
+        source,
+        validator,
+    ):
+        surrogate = Anonymizer(lang=lang, consistent=True, seed=857).surrogate(
+            source,
+            "national_id",
+        )
+        assert surrogate != source
+        assert validator(surrogate)
+
+    @pytest.mark.parametrize(
+        ("alias", "value"),
+        (
+            ("sw", "19850712123456789012"),
+            ("en_tz", "19850712-12345-67890-12"),
+            ("en_ug", "CF123456789ABC"),
+            ("rw", "1198571234567890"),
+            ("am", "234123412346"),
+            ("en_et", "234123412346"),
+        ),
+    )
+    def test_locale_alias_patterns_validate_expected_ids(self, alias, value):
+        patterns = LOCALE_PII_PATTERNS[alias]
+        assert any(
+            match
+            and pattern.validator is not None
+            and pattern.validator(match.group(0))
+            for pattern in patterns
+            if (match := re.search(pattern.pattern, value, pattern.flags))
+        )
+
+    @pytest.mark.parametrize(
+        ("lang", "locale", "contextual", "bare"),
+        (
+            (
+                "sw",
+                None,
+                "Namba ya NIDA: 19850712123456789012",
+                "19850712123456789012",
+            ),
+            (
+                "en",
+                "en_UG",
+                "NIRA NIN: CF123456789ABC",
+                "CF123456789ABC",
+            ),
+            (
+                "rw",
+                None,
+                "Indangamuntu: 1198571234567890",
+                "1198571234567890",
+            ),
+            (
+                "am",
+                None,
+                "Fayda FAN: 234123412346",
+                "234123412346",
+            ),
+        ),
+    )
+    def test_context_gated_formats_require_keyword_context(
+        self,
+        lang,
+        locale,
+        contextual,
+        bare,
+    ):
+        from openmed.core.safety_sweep import safety_sweep
+
+        assert any(
+            entity.label == "national_id"
+            for entity in safety_sweep(contextual, [], lang=lang, locale=locale)
+        )
+        assert not any(
+            entity.label == "national_id"
+            for entity in safety_sweep(bare, [], lang=lang, locale=locale)
+        )
+
+    def test_east_africa_fixture_round_trip_has_zero_identifier_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("tests/fixtures/pii/east_africa_synthetic_notes.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert {row["id_type"] for row in rows} == {
+            "fayda_fan",
+            "nida_nin",
+            "nin",
+            "rwanda_id",
+        }
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=857,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["identifiers"])
+            assert all(
+                identifier not in result.deidentified_text
+                for identifier in row["identifiers"]
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -2199,6 +2479,7 @@ class TestGetPatternsForLanguage:
             + len(MRZ_PII_PATTERNS)
             + len(USCC_PII_PATTERNS)
             + len(AADHAAR_PII_PATTERNS)
+            + len(INDIA_HEALTH_ID_PII_PATTERNS)
         )
 
     @pytest.mark.parametrize(
@@ -2212,8 +2493,14 @@ class TestGetPatternsForLanguage:
             + len(MRZ_PII_PATTERNS)
             + len(USCC_PII_PATTERNS)
             + len(AADHAAR_PII_PATTERNS)
+            + len(INDIA_HEALTH_ID_PII_PATTERNS)
         )
-        universal_patterns = MRZ_PII_PATTERNS + USCC_PII_PATTERNS + AADHAAR_PII_PATTERNS
+        universal_patterns = (
+            MRZ_PII_PATTERNS
+            + USCC_PII_PATTERNS
+            + AADHAAR_PII_PATTERNS
+            + INDIA_HEALTH_ID_PII_PATTERNS
+        )
         language_count = sum(
             not any(pattern is universal for universal in universal_patterns)
             for pattern in LANGUAGE_PII_PATTERNS[lang]
@@ -5277,6 +5564,881 @@ class TestSouthAfricanIdentifiers:
                     source_digits[index : index + 6] not in replacement_digits
                     for index in range(len(source_digits) - 5)
                 )
+
+
+class TestAfricanMobilePlans:
+    """Data-driven African phone detection and anonymization regressions."""
+
+    VALID_NUMBERS = {
+        "EG": ("+20 10 1234 5678", "0020 11 2468 1357", "012 8765 4321"),
+        "GH": ("+233 24 123 4567", "00233 50 246 8135", "055 765 4321"),
+        "ET": ("+251 91 234 5678", "00251 72 246 8135", "092 876 5432"),
+        "TZ": ("+255 71 234 5678", "00255 68 246 8135", "065 876 5432"),
+        "UG": ("+256 772 123 456", "00256 782 246 813", "0752 876 543"),
+        "RW": ("+250 78 123 4567", "00250 79 246 8135", "073 876 5432"),
+    }
+
+    INVALID_PREFIX_NUMBERS = {
+        "EG": "+20 13 1234 5678",
+        "GH": "+233 30 123 4567",
+        "ET": "+251 11 234 5678",
+        "TZ": "+255 22 234 5678",
+        "UG": "+256 200 123 456",
+        "RW": "+250 25 123 4567",
+    }
+
+    @staticmethod
+    def _fullmatch(country: str, value: str) -> bool:
+        pattern = AFRICAN_MOBILE_PII_PATTERNS[country]
+        return re.fullmatch(pattern.pattern, value, pattern.flags) is not None
+
+    def test_plan_table_encodes_all_six_country_contracts(self):
+        assert set(AFRICAN_MOBILE_PLANS) == {"EG", "GH", "ET", "TZ", "UG", "RW"}
+        assert AFRICAN_MOBILE_PLANS["EG"].mobile_prefixes == (
+            "10",
+            "11",
+            "12",
+            "15",
+        )
+        assert AFRICAN_MOBILE_PLANS["UG"].mobile_prefixes == ("7xx",)
+        assert AFRICAN_MOBILE_PLANS["RW"].mobile_prefixes == (
+            "72",
+            "73",
+            "78",
+            "79",
+        )
+
+    @pytest.mark.parametrize("country", VALID_NUMBERS)
+    def test_all_three_renderings_are_detected(self, country):
+        for value in self.VALID_NUMBERS[country]:
+            assert self._fullmatch(country, value), value
+
+    @pytest.mark.parametrize("country", VALID_NUMBERS)
+    def test_invalid_prefixes_and_lengths_are_rejected(self, country):
+        valid = self.VALID_NUMBERS[country][0]
+        compact = valid.replace(" ", "")
+
+        assert not self._fullmatch(country, self.INVALID_PREFIX_NUMBERS[country])
+        assert not self._fullmatch(country, compact[:-1])
+        assert not self._fullmatch(country, compact + "0")
+
+    def test_builder_compiles_a_dummy_plan_without_code_changes(self):
+        dummy = AfricanMobilePlan(
+            country_code="999",
+            nsn_length=6,
+            mobile_prefixes=("4x",),
+            locale_aliases=("zz",),
+        )
+        pattern = build_african_mobile_pattern(dummy)
+
+        for value in ("+999 42 3456", "00999-47-6543", "049 8765"):
+            assert re.fullmatch(pattern, value), value
+        assert re.fullmatch(pattern, "+999 32 3456") is None
+        assert re.fullmatch(pattern, "+999 42 345") is None
+
+    def test_plan_entries_populate_every_locale_alias(self):
+        for country, plan in AFRICAN_MOBILE_PLANS.items():
+            expected = AFRICAN_MOBILE_PII_PATTERNS[country]
+            for alias in plan.locale_aliases:
+                assert expected in LOCALE_PII_PATTERNS[alias]
+
+        for lang in ("am", "sw", "rw"):
+            patterns = get_patterns_for_language(lang)
+            assert any(
+                pattern in patterns for pattern in AFRICAN_MOBILE_PII_PATTERNS.values()
+            )
+
+    def test_other_african_national_id_fixture_values_are_not_phones(self):
+        fixture_paths = (
+            "eg_ma_synthetic_notes.jsonl",
+            "ng_synthetic_notes.jsonl",
+            "gh_ke_synthetic_notes.jsonl",
+            "za_synthetic_notes.jsonl",
+            "east_africa_synthetic_notes.jsonl",
+        )
+        national_ids: set[str] = set()
+        for fixture_name in fixture_paths:
+            rows = [
+                json.loads(line)
+                for line in Path("tests/fixtures/pii", fixture_name)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            for row in rows:
+                national_ids.update(row.get("identifiers", ()))
+                national_ids.update(
+                    entity["text"]
+                    for entity in row.get("entities", ())
+                    if "PHONE" not in entity["label"].upper()
+                )
+
+        assert national_ids
+        phone_patterns = tuple(AFRICAN_MOBILE_PII_PATTERNS.values())
+
+        for identifier in national_ids:
+            assert not any(
+                re.search(pattern.pattern, identifier, pattern.flags)
+                for pattern in phone_patterns
+            ), identifier
+
+    def test_fixture_has_every_country_rendering_and_exact_spans(self):
+        fixture_path = Path("tests/fixtures/pii/africa_phones_synthetic.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert {row["country"] for row in rows} == set(AFRICAN_MOBILE_PLANS)
+        assert all(row["synthetic"] is True for row in rows)
+        for row in rows:
+            assert "Appointment reminder" in row["text"]
+            assert "Billing contact" in row["text"]
+            assert len(row["phones"]) == 3
+            assert any(phone.startswith("+") for phone in row["phones"])
+            assert any(phone.startswith("00") for phone in row["phones"])
+            assert any(
+                phone.startswith("0") and not phone.startswith("00")
+                for phone in row["phones"]
+            )
+            for phone in row["phones"]:
+                assert phone in row["text"]
+                assert self._fullmatch(row["country"], phone)
+
+    def test_fixture_round_trip_has_zero_phone_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("tests/fixtures/pii/africa_phones_synthetic.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row["locale"],
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=858,
+                locale=row["locale"],
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["phones"])
+            assert all(phone not in result.deidentified_text for phone in row["phones"])
+
+    @pytest.mark.parametrize(
+        ("original", "preserved_prefix"),
+        [
+            ("+251 91 234 5678", "+251 91"),
+            ("00233 24 123 4567", "00233 24"),
+            ("0752 876 543", "0752"),
+        ],
+    )
+    def test_generator_preserves_operator_prefix_and_changes_input(
+        self,
+        original,
+        preserved_prefix,
+    ):
+        surrogate = generate_african_phone(original, rng=random.Random(858))
+
+        assert surrogate is not None
+        assert surrogate.startswith(preserved_prefix)
+        assert surrogate != original
+
+
+_MPESA_FIXTURE_PATH = Path("tests/fixtures/pii/mpesa_synthetic_receipts.jsonl")
+
+
+def _mpesa_fixture_rows():
+    return [
+        json.loads(line)
+        for line in _MPESA_FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _mpesa_fixture_entities(row):
+    from openmed.core.safety_sweep import safety_sweep
+
+    return [
+        entity
+        for entity in safety_sweep(
+            row["text"],
+            [],
+            lang=row["language"],
+            locale=row.get("locale"),
+        )
+        if entity.label == "mpesa_tx_code"
+    ]
+
+
+class TestMpesaTransactionCodes:
+    """M-Pesa receipt codes stay precise and redact without leakage."""
+
+    @pytest.mark.parametrize(
+        "code",
+        ("TB17CVOCY9", "UC34HJKLM8", "VD56NPQRS7", "AB12CDEFG3"),
+    )
+    def test_validator_accepts_valid_codes(self, code):
+        assert validate_mpesa_transaction_code(code)
+
+    @pytest.mark.parametrize(
+        "code",
+        (
+            "TB1ACVOCY9",
+            "tb17cvocy9",
+            "TB17CVOCY",
+            "TB17CVOCY90",
+            "1234567890",
+            "ABCDEFGHIJ",
+            " TB17CVOCY9",
+            "TB17CVOCY9 ",
+            None,
+        ),
+    )
+    def test_validator_rejects_invalid_structure(self, code):
+        assert not validate_mpesa_transaction_code(code)
+
+    def test_one_thousand_seeded_surrogates_are_valid_and_reproducible(self):
+        first_rng = random.Random(859)
+        second_rng = random.Random(859)
+        generated = [
+            generate_mpesa_transaction_code(rng=first_rng) for _ in range(1000)
+        ]
+
+        assert generated == [
+            generate_mpesa_transaction_code(rng=second_rng) for _ in range(1000)
+        ]
+        assert all(validate_mpesa_transaction_code(code) for code in generated)
+
+    def test_surrogate_preserves_leading_date_encoding_character(self):
+        originals = ("TB17CVOCY9", "UC34HJKLM8", "7D89TUVWX6")
+        rng = random.Random(859)
+
+        for original in originals:
+            surrogate = generate_mpesa_transaction_code(original, rng=rng)
+            assert surrogate[0] == original[0]
+            assert surrogate != original
+            assert validate_mpesa_transaction_code(surrogate)
+
+    def test_fixture_keyword_gating_and_hard_negatives(self):
+        rows = _mpesa_fixture_rows()
+
+        for row in rows:
+            observed = {entity.text for entity in _mpesa_fixture_entities(row)}
+            assert observed == set(row["expected_codes"]), row["id"]
+
+        ungated = next(row for row in rows if row["id"] == "mpesa-ungated-ids")
+        gated = next(row for row in rows if row["id"] == "mpesa-gated-ids")
+        assert ungated["candidate_codes"] == gated["candidate_codes"]
+        assert not ungated["expected_codes"]
+        assert gated["expected_codes"] == gated["candidate_codes"]
+
+    def test_swahili_and_english_receipts_detect_identically(self):
+        rows = _mpesa_fixture_rows()
+        english = next(row for row in rows if row["id"] == "mpesa-en-shared")
+        swahili = next(row for row in rows if row["id"] == "mpesa-sw-shared")
+
+        english_codes = {entity.text for entity in _mpesa_fixture_entities(english)}
+        swahili_codes = {entity.text for entity in _mpesa_fixture_entities(swahili)}
+
+        assert english_codes == swahili_codes == {"TB17CVOCY9"}
+
+    def test_anonymizer_round_trip_has_zero_code_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        leakage = 0
+        for row in _mpesa_fixture_rows():
+            if not row["expected_codes"]:
+                continue
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=859,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["expected_codes"])
+            leakage += sum(
+                original in result.deidentified_text
+                for original in row["expected_codes"]
+            )
+            for entity in result.pii_entities:
+                if entity.entity_type != "mpesa_tx_code":
+                    continue
+                assert entity.surrogate is not None
+                assert entity.surrogate[0] == entity.original_text[0]
+                assert validate_mpesa_transaction_code(entity.surrogate)
+
+        assert leakage == 0
+
+    def test_repeated_code_has_referential_integrity_with_fixed_seed(self):
+        row = next(
+            row for row in _mpesa_fixture_rows() if row["id"] == "mpesa-repeated-code"
+        )
+        entities = _mpesa_fixture_entities(row)
+        anonymizer = Anonymizer(lang="en", consistent=True, seed=859)
+        surrogates = [
+            anonymizer.surrogate(entity.text, entity.label) for entity in entities
+        ]
+
+        assert len(surrogates) == 2
+        assert len(set(surrogates)) == 1
+        assert surrogates[0][0] == row["expected_codes"][0][0]
+        assert validate_mpesa_transaction_code(surrogates[0])
+
+
+_MOBILE_MONEY_FIXTURE_PATH = Path(
+    "tests/fixtures/pii/mobile_money_synthetic_billing.jsonl"
+)
+_MOBILE_MONEY_LABELS = {
+    "mobile_money_account",
+    "mobile_money_agent",
+    "mobile_money_paybill",
+    "mobile_money_till",
+    "momo_reference",
+}
+
+
+def _mobile_money_fixture_rows():
+    return [
+        json.loads(line)
+        for line in _MOBILE_MONEY_FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _mobile_money_fixture_entities(row):
+    from openmed.core.safety_sweep import safety_sweep
+
+    return [
+        entity
+        for entity in safety_sweep(
+            row["text"],
+            [],
+            lang=row["language"],
+            locale=row.get("locale"),
+        )
+        if entity.label in _MOBILE_MONEY_LABELS
+    ]
+
+
+class TestMobileMoneyBillingIdentifiers:
+    """Mobile-money billing identifiers are precise and safely replaceable."""
+
+    @pytest.mark.parametrize("value", ("12345", "542542", "7654321"))
+    def test_paybill_validator_accepts_five_to_seven_ascii_digits(self, value):
+        assert validate_mobile_money_paybill(value)
+
+    @pytest.mark.parametrize("value", ("83290", "832909", "1832909"))
+    def test_till_validator_accepts_five_to_seven_ascii_digits(self, value):
+        assert validate_mobile_money_till(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("8123456789", "81234567890", "812345678901"),
+    )
+    def test_momo_validator_accepts_ten_to_twelve_ascii_digits(self, value):
+        assert validate_momo_reference(value)
+
+    @pytest.mark.parametrize(
+        ("validator", "value"),
+        (
+            (validate_mobile_money_paybill, "1234"),
+            (validate_mobile_money_paybill, "12345678"),
+            (validate_mobile_money_paybill, "１２３４５"),
+            (validate_mobile_money_till, "123-45"),
+            (validate_mobile_money_till, None),
+            (validate_momo_reference, "123456789"),
+            (validate_momo_reference, "1234567890123"),
+            (validate_momo_reference, "12345ABCDE"),
+        ),
+    )
+    def test_validators_reject_wrong_length_or_non_ascii_digits(
+        self,
+        validator,
+        value,
+    ):
+        assert not validator(value)
+
+    @pytest.mark.parametrize(
+        ("method", "validator", "originals"),
+        (
+            (
+                "mobile_money_paybill",
+                validate_mobile_money_paybill,
+                ("12345", "542542", "7654321"),
+            ),
+            (
+                "mobile_money_till",
+                validate_mobile_money_till,
+                ("83290", "832909", "1832909"),
+            ),
+            (
+                "mobile_money_agent",
+                validate_mobile_money_paybill,
+                ("55443", "554433", "5544331"),
+            ),
+            (
+                "momo_reference",
+                validate_momo_reference,
+                ("8123456789", "81234567890", "812345678901"),
+            ),
+        ),
+    )
+    def test_seeded_provider_surrogates_validate_preserve_length_and_differ(
+        self,
+        method,
+        validator,
+        originals,
+    ):
+        for seed, original in enumerate(originals, start=860):
+            first = Faker("en_KE")
+            second = Faker("en_KE")
+            register_clinical_providers(first)
+            register_clinical_providers(second)
+            first.seed_instance(seed)
+            second.seed_instance(seed)
+
+            first_surrogate = getattr(first, method)(original)
+            second_surrogate = getattr(second, method)(original)
+
+            assert first_surrogate == second_surrogate
+            assert first_surrogate != original
+            assert len(first_surrogate) == len(original)
+            assert validator(first_surrogate)
+
+    @pytest.mark.parametrize(
+        ("label", "original", "validator"),
+        (
+            ("mobile_money_paybill", "542542", validate_mobile_money_paybill),
+            ("mobile_money_till", "83290", validate_mobile_money_till),
+            ("mobile_money_agent", "5544331", validate_mobile_money_paybill),
+            ("momo_reference", "812345678901", validate_momo_reference),
+        ),
+    )
+    def test_source_labels_route_to_shape_preserving_generators(
+        self,
+        label,
+        original,
+        validator,
+    ):
+        first = Anonymizer(lang="sw", consistent=True, seed=860)
+        second = Anonymizer(lang="sw", consistent=True, seed=860)
+
+        first_surrogate = first.surrogate(original, label)
+        second_surrogate = second.surrogate(original, label)
+
+        assert first_surrogate == second_surrogate
+        assert first_surrogate != original
+        assert len(first_surrogate) == len(original)
+        assert validator(first_surrogate)
+
+    def test_fixture_detects_expected_values_and_keyword_gates_negatives(self):
+        rows = _mobile_money_fixture_rows()
+        assert {row["country"] for row in rows} == {
+            "Ghana",
+            "Kenya",
+            "Tanzania",
+            "Uganda",
+        }
+
+        for row in rows:
+            observed = {
+                (entity.label, entity.text)
+                for entity in _mobile_money_fixture_entities(row)
+            }
+            expected = {(entity["label"], entity["text"]) for entity in row["expected"]}
+            assert observed == expected, row["id"]
+
+        negative = next(
+            row for row in rows if row["id"] == "mobile-money-hard-negatives"
+        )
+        assert negative["candidate_numbers"]
+        assert not _mobile_money_fixture_entities(negative)
+
+    def test_account_suffix_requires_paybill_and_captures_only_reference(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        for positive, reference in (
+            (
+                "Paybill 542542 Account AMINA OTIENO; invoice paid.",
+                "AMINA OTIENO",
+            ),
+            ("Paybill: 542542 Acc: PATIENT-2041. Invoice paid.", "PATIENT-2041"),
+        ):
+            entities = safety_sweep(positive, [], lang="sw")
+            account_entities = [
+                entity for entity in entities if entity.label == "mobile_money_account"
+            ]
+
+            assert [
+                (entity.text, entity.start, entity.end) for entity in account_entities
+            ] == [
+                (
+                    reference,
+                    positive.index(reference),
+                    positive.index(reference) + len(reference),
+                )
+            ]
+
+        negative = "Invoice Account AMINA OTIENO; balance paid in cash."
+        assert not any(
+            entity.label == "mobile_money_account"
+            for entity in safety_sweep(negative, [], lang="sw")
+        )
+
+    @pytest.mark.parametrize(
+        "alias",
+        ("sw", "sw_TZ", "en_KE", "en_TZ", "en_GH", "en_UG"),
+    )
+    def test_locale_aliases_expose_mobile_money_patterns(self, alias):
+        patterns = get_patterns_for_language(alias)
+        labels = {pattern.entity_type for pattern in patterns}
+
+        assert _MOBILE_MONEY_LABELS <= labels
+
+    def test_anonymizer_round_trip_has_zero_fixture_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        leakage = 0
+        for row in _mobile_money_fixture_rows():
+            if not row["expected"]:
+                continue
+
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, _added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=860,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            for expected in row["expected"]:
+                leakage += expected["text"] in result.deidentified_text
+
+            for entity in result.pii_entities:
+                if entity.entity_type not in {
+                    "mobile_money_agent",
+                    "mobile_money_paybill",
+                    "mobile_money_till",
+                    "momo_reference",
+                }:
+                    continue
+                assert entity.surrogate is not None
+                assert entity.surrogate != entity.original_text
+                assert len(entity.surrogate) == len(entity.original_text)
+                validator = (
+                    validate_momo_reference
+                    if entity.entity_type == "momo_reference"
+                    else validate_mobile_money_paybill
+                )
+                assert validator(entity.surrogate)
+
+        assert leakage == 0
+
+
+_HEALTH_FACILITY_FIXTURE_PATH = Path(
+    "tests/fixtures/pii/health_facility_synthetic_referrals.jsonl"
+)
+
+
+def _health_facility_fixture_rows():
+    return [
+        json.loads(line)
+        for line in _HEALTH_FACILITY_FIXTURE_PATH.read_text(
+            encoding="utf-8"
+        ).splitlines()
+        if line.strip()
+    ]
+
+
+def _health_facility_entities(row):
+    from openmed.core.safety_sweep import safety_sweep
+
+    return [
+        entity
+        for entity in safety_sweep(
+            row["text"],
+            [],
+            lang=row["language"],
+            locale=row.get("locale"),
+        )
+        if entity.label == "FACILITY_ID"
+    ]
+
+
+class TestAfricanHealthFacilityCodes:
+    """Kenya KMHFL and Nigeria HFR identifiers remain precise and synthetic."""
+
+    @pytest.mark.parametrize("value", ("12345", "48321", "99999"))
+    def test_kenya_validator_accepts_five_ascii_digits(self, value):
+        assert validate_kenya_mfl_code(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("1234", "123456", "１２３４５", "123-45", " 12345", None),
+    )
+    def test_kenya_validator_rejects_invalid_shapes(self, value):
+        assert not validate_kenya_mfl_code(value)
+
+    @pytest.mark.parametrize("value", ("0101110001", "1301220008", "3744239999"))
+    def test_nigeria_validator_accepts_structural_ranges(self, value):
+        assert validate_nigeria_hfr_code(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "0001110001",
+            "3801110001",
+            "0100110001",
+            "0145110001",
+            "0101010001",
+            "0101310001",
+            "0101100001",
+            "0101140001",
+            "0101110000",
+            "010111001",
+            "01011100011",
+            "０１０１１１０００１",
+            None,
+        ),
+    )
+    def test_nigeria_validator_rejects_invalid_fields(self, value):
+        assert not validate_nigeria_hfr_code(value)
+
+    def test_facility_source_label_normalizes_as_identifier(self):
+        from openmed.core.labels import ID_NUM, normalize_label
+
+        assert normalize_label("FACILITY_ID") == ID_NUM
+
+    @pytest.mark.parametrize("alias", ("sw", "sw_TZ", "en_KE", "en_NG"))
+    def test_locale_aliases_expose_facility_id_patterns(self, alias):
+        patterns = get_patterns_for_language(alias)
+
+        assert any(pattern.entity_type == "FACILITY_ID" for pattern in patterns)
+
+    def test_fixture_detects_context_gated_facility_codes(self):
+        rows = _health_facility_fixture_rows()
+        assert {row["country"] for row in rows} == {"Kenya", "Nigeria", "Mixed"}
+
+        for row in rows:
+            observed = {entity.text for entity in _health_facility_entities(row)}
+            assert observed == set(row["facility_codes"]), row["id"]
+
+    @pytest.mark.parametrize(
+        ("text", "lang", "locale"),
+        (
+            ("Platelet count 12345 and batch 234567 were recorded.", "en", "en_KE"),
+            ("Dozi 12345 na hesabu 234567 zilirekodiwa.", "sw", None),
+            ("Archive 3744238123 and count 12345 were recorded.", "en", "en_NG"),
+        ),
+    )
+    def test_bare_clinical_numbers_do_not_match(self, text, lang, locale):
+        from openmed.core.safety_sweep import safety_sweep
+
+        entities = safety_sweep(text, [], lang=lang, locale=locale)
+        assert not [entity for entity in entities if entity.label == "FACILITY_ID"]
+
+    def test_seeded_provider_uses_reserved_bands_disjoint_from_fixtures(self):
+        fixture_codes = {
+            code
+            for row in _health_facility_fixture_rows()
+            for code in row["facility_codes"]
+        }
+        generated_mfl: set[str] = set()
+        generated_hfr: set[str] = set()
+
+        for seed in range(861, 961):
+            first = Faker("en_US")
+            second = Faker("en_US")
+            register_clinical_providers(first)
+            register_clinical_providers(second)
+            first.seed_instance(seed)
+            second.seed_instance(seed)
+
+            mfl = first.kmhfl_code()
+            hfr = first.hfr_facility_code()
+            assert (mfl, hfr) == (
+                second.kmhfl_code(),
+                second.hfr_facility_code(),
+            )
+            assert validate_kenya_mfl_code(mfl)
+            assert KENYA_MFL_SYNTHETIC_MIN <= int(mfl) <= KENYA_MFL_SYNTHETIC_MAX
+            assert validate_nigeria_hfr_code(hfr)
+            assert (
+                NIGERIA_HFR_SYNTHETIC_SERIAL_MIN
+                <= int(hfr[-4:])
+                <= NIGERIA_HFR_SYNTHETIC_SERIAL_MAX
+            )
+            generated_mfl.add(mfl)
+            generated_hfr.add(hfr)
+
+        assert generated_mfl.isdisjoint(fixture_codes)
+        assert generated_hfr.isdisjoint(fixture_codes)
+
+    @pytest.mark.parametrize(
+        ("original", "validator"),
+        (
+            ("48321", validate_kenya_mfl_code),
+            ("3744238123", validate_nigeria_hfr_code),
+        ),
+    )
+    def test_anonymizer_routes_facility_source_label(self, original, validator):
+        first = Anonymizer(lang="en", consistent=True, seed=861)
+        second = Anonymizer(lang="en", consistent=True, seed=861)
+
+        first_surrogate = first.surrogate(original, "FACILITY_ID")
+        second_surrogate = second.surrogate(original, "FACILITY_ID")
+
+        assert first_surrogate == second_surrogate
+        assert first_surrogate != original
+        assert validator(first_surrogate)
+
+    def test_patient_and_repeated_facility_ids_are_replaced_in_one_pass(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        leakage = 0
+        for row in _health_facility_fixture_rows():
+            if not row["facility_codes"]:
+                continue
+
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, _added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=861,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            for source in row["facility_codes"] + row["patient_identifiers"]:
+                leakage += source in result.deidentified_text
+
+            facility_entities = [
+                entity
+                for entity in result.pii_entities
+                if entity.entity_type == "FACILITY_ID"
+            ]
+            patient_entities = [
+                entity
+                for entity in result.pii_entities
+                if entity.entity_type == "medical_record_number"
+            ]
+            assert len(facility_entities) == 2
+            assert len(patient_entities) == 1
+            assert len({entity.surrogate for entity in facility_entities}) == 1
+
+            validator = (
+                validate_kenya_mfl_code
+                if row["country"] == "Kenya"
+                else validate_nigeria_hfr_code
+            )
+            assert all(
+                entity.surrogate is not None and validator(entity.surrogate)
+                for entity in facility_entities
+            )
+            assert all(
+                entity.surrogate is not None
+                and entity.surrogate != entity.original_text
+                for entity in patient_entities
+            )
+
+        assert leakage == 0
 
 
 if __name__ == "__main__":

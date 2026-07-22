@@ -509,6 +509,10 @@ Extraction and de-identification support **22 supported PII language codes**:
 `am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
 Chinese routing currently uses the documented multilingual default-model
 placeholder while dedicated Chinese model weights remain separate.
+An optional, user-configured Indic NER family accepts nine additional routes
+(`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve
+Hindi and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
+automatically selects those weights.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 

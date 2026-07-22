@@ -179,7 +179,7 @@ def test_go_request_requiredness_and_zero_defaults_match_openapi() -> None:
 
 
 def test_go_pii_languages_match_core_and_openapi() -> None:
-    from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+    from openmed.core.pii_i18n import INDIC_NER_LANGUAGES, SUPPORTED_LANGUAGES
 
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
     go_languages = set(
@@ -199,8 +199,10 @@ def test_go_pii_languages_match_core_and_openapi() -> None:
         if isinstance(properties.get("lang"), dict) and "enum" in properties["lang"]
     }
 
-    assert go_languages == SUPPORTED_LANGUAGES
-    assert openapi_language_sets == {frozenset(SUPPORTED_LANGUAGES)}
+    assert go_languages == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    assert openapi_language_sets == {
+        frozenset(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)
+    }
 
 
 def test_go_openapi_enum_constants_match() -> None:
