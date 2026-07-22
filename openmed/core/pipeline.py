@@ -1222,7 +1222,11 @@ class Pipeline:
                 pii_result,
                 lang=context.route.lang,
                 locale=context.locale,
-                patterns=self._deterministic_patterns(text, context),
+                patterns=(
+                    self._deterministic_patterns(text, context)
+                    if self.code_mixed
+                    else None
+                ),
             )
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
@@ -1466,21 +1470,19 @@ class Pipeline:
         text: str,
         context: PipelineContext,
     ) -> list[PIIPattern]:
-        patterns = _deterministic_patterns(
-            context.route.lang,
+        if not self.code_mixed:
+            return _deterministic_patterns(
+                context.route.lang,
+                locale=context.locale,
+            )
+        from .pii_i18n import get_patterns_for_code_mixed_tags
+
+        return get_patterns_for_code_mixed_tags(
+            text,
+            context.token_language_tags,
+            base_lang=context.route.lang,
             locale=context.locale,
         )
-        if not self.code_mixed:
-            return patterns
-        from .pii_i18n import get_hinglish_patterns_for_token_tags
-
-        patterns.extend(
-            get_hinglish_patterns_for_token_tags(
-                text,
-                context.token_language_tags,
-            )
-        )
-        return patterns
 
     def _transliterated_name_spans(
         self,

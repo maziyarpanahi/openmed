@@ -12,7 +12,7 @@ from openmed.core.pii_i18n import (
     normalize_code_mixed_token_tags,
 )
 from openmed.core.pipeline import Pipeline
-from openmed.core.surrogate_vault import SurrogateVault
+from openmed.core.surrogate_vault import SurrogateSource, SurrogateVault
 from openmed.eval.suites.code_mixed_routing import load_code_mixed_fixtures
 from openmed.processing.outputs import PredictionResult
 
@@ -185,3 +185,22 @@ def test_surrogate_vault_script_constraint_rejects_non_latin_candidates() -> Non
 
     assert surrogate == "Aarav"
     assert vault.get("Rahul", label="PERSON", lang="en") == "Aarav"
+
+
+def test_surrogate_vault_script_constraint_rejects_non_latin_legacy() -> None:
+    vault = SurrogateVault.in_memory("script-constraint-legacy-secret")
+    source = SurrogateSource("Rahul", "NAME", "en")
+    legacy_key = vault._legacy_key_for_epoch(
+        source,
+        vault._epoch_manager.current_key,
+    )
+    vault.store.set(legacy_key, "राहुल", key_id=vault.current_key_id)
+
+    with pytest.raises(ValueError, match="legacy surrogate"):
+        vault.get_or_create(
+            source.source_text,
+            label=source.label,
+            lang=source.lang,
+            create_surrogate=lambda _attempt: "Aarav",
+            required_script="Latin",
+        )

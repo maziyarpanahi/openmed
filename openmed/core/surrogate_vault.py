@@ -717,12 +717,23 @@ class SurrogateVault:
         if legacy_key != key:
             existing = self.store.get(legacy_key)
             if existing is not None:
+                if not _matches_required_script(existing, required_script):
+                    raise ValueError(
+                        "existing legacy surrogate does not satisfy required_script"
+                    )
                 try:
                     self.store.set(key, existing, key_id=self.current_key_id)
                 except ValueError:
                     normalized_existing = self.store.get(key)
                     if normalized_existing is None:
                         raise
+                    if not _matches_required_script(
+                        normalized_existing,
+                        required_script,
+                    ):
+                        raise ValueError(
+                            "existing surrogate does not satisfy required_script"
+                        )
                     return normalized_existing
                 return existing
 
