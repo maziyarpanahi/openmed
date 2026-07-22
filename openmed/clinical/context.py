@@ -75,6 +75,11 @@ CERTAINTY_VALUES = (CERTAIN, UNCERTAIN)
 ContextCueCategory = Literal["historical", "hypothetical", "uncertainty", "negation"]
 ContextCueDirection = Literal["forward", "backward"]
 
+INDIA_CLINICAL_NER_DISCLAIMER = (
+    "India clinical NER output assists review and does not make clinical or "
+    "disclosure decisions."
+)
+
 _ENGLISH_CONTEXT_LEXICON = get_clinical_cue_lexicon("en")
 
 # Ported ConText temporal lexicon. Cues are matched case-insensitively and on
@@ -1287,6 +1292,7 @@ __all__ = [
     "ClinicalAssertion",
     "ContextCueCategory",
     "ContextCueDirection",
+    "INDIA_CLINICAL_NER_DISCLAIMER",
     "ModifierHit",
     "clinical_context_lexicon_stats",
     "scan_context_cues",
