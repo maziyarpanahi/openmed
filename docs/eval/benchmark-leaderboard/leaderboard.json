@@ -1,0 +1,50 @@
+{
+  "row_count": 1,
+  "rows": [
+    {
+      "device": "mlx-fp",
+      "f1": 1.0,
+      "leakage": 0.0,
+      "model_family": "PII",
+      "model_name": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
+      "recall": 1.0,
+      "release_tag": "v1.9.1",
+      "report_path": "golden.report.json",
+      "report_url": "reports/golden.report.json",
+      "reproducibility_hash": "sha256:4818bdef580eb406f5cc665cc0892aefab1fd90c8743822d843dd48f135bde34",
+      "run_date": "2026-06-14",
+      "suite": "golden"
+    }
+  ],
+  "schema_version": 1,
+  "sort": [
+    "leakage:asc",
+    "recall:desc"
+  ],
+  "suites": [
+    {
+      "families": [
+        {
+          "name": "PII",
+          "rows": [
+            {
+              "device": "mlx-fp",
+              "f1": 1.0,
+              "leakage": 0.0,
+              "model_family": "PII",
+              "model_name": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
+              "recall": 1.0,
+              "release_tag": "v1.9.1",
+              "report_path": "golden.report.json",
+              "report_url": "reports/golden.report.json",
+              "reproducibility_hash": "sha256:4818bdef580eb406f5cc665cc0892aefab1fd90c8743822d843dd48f135bde34",
+              "run_date": "2026-06-14",
+              "suite": "golden"
+            }
+          ]
+        }
+      ],
+      "name": "golden"
+    }
+  ]
+}

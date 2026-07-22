@@ -3,6 +3,7 @@ name: Deploy Docs to GitHub Pages
 on:
   push:
     branches: ["master"]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -31,6 +32,20 @@ jobs:
           python-version: "3.11"
       - name: Install documentation tooling
         run: pip install ".[docs]"
+      - name: Render public benchmark leaderboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="$GITHUB_REF_NAME"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            version="$(python -c 'from openmed.__about__ import __version__; print(__version__)')"
+            release_tag="v${version}"
+          fi
+          python -m openmed.eval.leaderboard \
+            --reports-dir docs/benchmarks \
+            --output-dir docs/eval/benchmark-leaderboard \
+            --manifest models.jsonl \
+            --release-tag "$release_tag"
       - name: Build MkDocs site and verify LLM feeds
         run: |
           mkdocs build --strict
