@@ -10,6 +10,7 @@ from openmed.core.locale_formats import (
     BACKLOG_LOCALES,
     LOCALE_DATE_ORDER,
     LOCALE_NUMBER_SEP,
+    LOCALE_PII_FORMATS,
     WIRED_LOCALES,
     format_hint,
     normalize_number,
@@ -20,6 +21,9 @@ from openmed.core.pii_i18n import (
     LOCALE_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    get_patterns_for_language,
+    validate_egyptian_national_id,
+    validate_moroccan_cin,
 )
 from openmed.core.safety_sweep import safety_sweep
 
@@ -110,6 +114,61 @@ def test_format_hint_returns_date_order_and_separators(lang: str) -> None:
     assert hint.date_order in {"dmy", "mdy", "ymd"}
     assert hint.decimal_separator
     assert hint.number.decimal_separators
+
+
+@pytest.mark.parametrize("locale", ["ar_eg", "ar_ma"])
+def test_north_africa_locale_format_examples_match_declared_data(locale: str) -> None:
+    for spec in LOCALE_PII_FORMATS[locale]:
+        for example in spec.examples:
+            assert re.search(spec.pattern, example, spec.flags), (spec.name, example)
+
+
+@pytest.mark.parametrize(
+    ("locale", "format_name", "contextual_text", "value", "invalid", "validator"),
+    [
+        (
+            "ar_EG",
+            "egyptian_national_id",
+            "الرقم القومي: 29801011234567",
+            "29801011234567",
+            "29913311234567",
+            validate_egyptian_national_id,
+        ),
+        (
+            "ar_MA",
+            "moroccan_cin",
+            "رقم البطاقة الوطنية: AB123456",
+            "AB123456",
+            "123456",
+            validate_moroccan_cin,
+        ),
+    ],
+)
+def test_north_africa_national_ids_round_trip_through_locale_sweep(
+    locale,
+    format_name,
+    contextual_text,
+    value,
+    invalid,
+    validator,
+) -> None:
+    locale_key = locale.casefold()
+    declared = next(
+        spec for spec in LOCALE_PII_FORMATS[locale_key] if spec.name == format_name
+    )
+    runtime = next(
+        pattern
+        for pattern in LOCALE_PII_PATTERNS[locale_key]
+        if pattern.pattern == declared.pattern
+    )
+
+    assert validator(value) is True
+    assert validator(invalid) is False
+    assert runtime.validator is validator
+    assert runtime in get_patterns_for_language("ar", locale=locale)
+
+    swept = safety_sweep(contextual_text, [], lang="ar", locale=locale)
+    assert [(entity.text, entity.label) for entity in swept] == [(value, "national_id")]
 
 
 @pytest.mark.parametrize(

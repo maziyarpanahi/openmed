@@ -30,6 +30,7 @@ from openmed.core.policy import (
     CURRENT_POLICY_SCHEMA_VERSION,
     PolicyName,
     canonical_policy_name,
+    compile_policy,
     lint_policy,
     list_policies,
     load_policy,
@@ -257,6 +258,132 @@ def test_australia_privacy_act_profile_alias_and_lint_load():
     assert profile.keep_mapping is False
     assert profile.reversible_id is False
     assert lint_policy("australia_privacy_act") == ()
+
+
+_NORTH_AFRICA_SENSITIVE_CLASS_LABELS = {
+    "eg_pdpl": {
+        "identity": "ID_NUM",
+        "person_name": "PERSON",
+        "health": "CONDITION",
+        "genetic": "GENE_SYMBOL",
+        "biometric_or_other_sensitive": "OTHER",
+        "financial": "ACCOUNT_NUMBER",
+    },
+    "ma_law_09_08": {
+        "identity": "ID_NUM",
+        "person_name": "PERSON",
+        "health": "CONDITION",
+        "genetic": "GENE_SYMBOL",
+        "physical_or_psychological_identity": "OTHER",
+        "financial_identity": "ACCOUNT_NUMBER",
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("policy_name", "sensitive_classes"),
+    _NORTH_AFRICA_SENSITIVE_CLASS_LABELS.items(),
+)
+def test_north_africa_profiles_mask_statutory_sensitive_classes(
+    policy_name,
+    sensitive_classes,
+):
+    profile = load_policy(policy_name)
+
+    assert profile.default_action == "mask"
+    assert profile.safety_sweep_mandatory is True
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+    assert set(sensitive_classes.values()) <= set(CANONICAL_LABELS)
+    assert all(
+        profile.action_for(label) != "keep" for label in sensitive_classes.values()
+    )
+    assert lint_policy(policy_name) == ()
+
+    compiled = compile_policy(policy_name)
+    assert compiled.proof.verified is True
+    assert compiled.proof.coverage_percent == 100.0
+
+
+@pytest.mark.parametrize(
+    ("policy_name", "locale", "text", "identifiers"),
+    [
+        (
+            "eg_pdpl",
+            "ar_EG",
+            "اسم المريض: أحمد علي\n"
+            "اسم المريض: Ahmed Hassan\n"
+            "العنوان: ١٢ شارع النيل، القاهرة\n"
+            "الرقم القومي: 29801011234567\n"
+            "الهاتف: +20 10 1234 5678\n"
+            "التاريخ الميلادي: 15/03/2026 م\n"
+            "التاريخ الهجري: 15/09/1447 هـ",
+            (
+                "أحمد علي",
+                "Ahmed Hassan",
+                "١٢ شارع النيل، القاهرة",
+                "29801011234567",
+                "+20 10 1234 5678",
+                "15/03/2026",
+                "15/09/1447",
+            ),
+        ),
+        (
+            "ma_law_09_08",
+            "ar_MA",
+            "اسم المريض: فاطمة الزهراء\n"
+            "اسم المريض: Fatima Zahra\n"
+            "العنوان: ١٥ زنقة الأطلس، الدار البيضاء\n"
+            "رقم البطاقة الوطنية: AB123456\n"
+            "الهاتف: +212 6 12 34 56 78\n"
+            "التاريخ الميلادي: 15/03/2026 م\n"
+            "التاريخ الهجري: 15/09/1447 هـ",
+            (
+                "فاطمة الزهراء",
+                "Fatima Zahra",
+                "١٥ زنقة الأطلس، الدار البيضاء",
+                "AB123456",
+                "+212 6 12 34 56 78",
+                "15/03/2026",
+                "15/09/1447",
+            ),
+        ),
+    ],
+)
+def test_north_africa_profiles_leave_zero_synthetic_identifier_leakage(
+    monkeypatch,
+    policy_name,
+    locale,
+    text,
+    identifiers,
+):
+    _patch_extract_many(monkeypatch, [])
+
+    result = deidentify(
+        text,
+        lang="ar",
+        locale=locale,
+        policy=policy_name,
+        use_safety_sweep=False,
+    )
+
+    assert all(identifier not in result.deidentified_text for identifier in identifiers)
+    assert result.mapping is None
+    assert result.metadata["policy"]["name"] == policy_name
+    assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
+    assert result.pii_entities
+    assert all(entity.action == "mask" for entity in result.pii_entities)
+    swept_names = {
+        entity.text
+        for entity in result.pii_entities
+        if entity.canonical_label == "PERSON"
+        and (entity.metadata or {}).get("source") == "safety_sweep"
+    }
+    assert all(
+        any(name in swept_name for swept_name in swept_names)
+        for name in identifiers[:2]
+    )
 
 
 def test_china_pipl_profile_covers_sensitive_personal_information():

@@ -86,6 +86,7 @@ nav:
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
+      - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md

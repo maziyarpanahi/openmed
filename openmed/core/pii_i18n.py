@@ -42,6 +42,7 @@ from .language_pack_catalog import (
     SUPPORTED_LANGUAGES,
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
+from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -3027,6 +3028,54 @@ def generate_mrz_td1(rng=None) -> str:
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
 
+_LOCALE_FORMAT_VALIDATORS = {
+    "egyptian_national_id": validate_egyptian_national_id,
+    "moroccan_cin": validate_moroccan_cin,
+}
+
+
+def _pii_pattern_from_locale_format(spec: LocalePIIFormat) -> PIIPattern:
+    """Compile one declarative locale format into a detector pattern."""
+
+    validator = None
+    if spec.validator is not None:
+        try:
+            validator = _LOCALE_FORMAT_VALIDATORS[spec.validator]
+        except KeyError as exc:  # pragma: no cover - import-time data invariant
+            raise RuntimeError(
+                f"unknown locale PII validator {spec.validator!r}"
+            ) from exc
+    return PIIPattern(
+        spec.pattern,
+        spec.entity_type,
+        priority=spec.priority,
+        flags=spec.flags,
+        base_score=spec.base_score,
+        context_words=list(spec.context_words),
+        context_boost=spec.context_boost,
+        requires_context=spec.requires_context,
+        validator=validator,
+        safety_sweep_requires_context=spec.safety_sweep_requires_context,
+    )
+
+
+_LOCALE_DATA_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    locale: [_pii_pattern_from_locale_format(spec) for spec in formats]
+    for locale, formats in LOCALE_PII_FORMATS.items()
+}
+
+
+def _locale_patterns_named(locale: str, *names: str) -> List[PIIPattern]:
+    wanted = set(names)
+    return [
+        pattern
+        for spec, pattern in zip(
+            LOCALE_PII_FORMATS[locale],
+            _LOCALE_DATA_PII_PATTERNS[locale],
+        )
+        if spec.name in wanted
+    ]
+
 
 @dataclass(frozen=True)
 class AfricanMobilePlan:
@@ -3256,52 +3305,10 @@ INDIA_HEALTH_ID_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
-_EGYPT_NATIONAL_ID_PII_PATTERNS: List[PIIPattern] = [
-    PIIPattern(
-        r"(?<!\d)[23٢٣۲۳]\d{13}(?!\d)",
-        "national_id",
-        priority=15,
-        base_score=0.8,
-        context_words=[
-            "national id",
-            "national id number",
-            "egyptian id",
-            "الرقم القومي",
-            "رقم قومي",
-            "بطاقة الرقم القومي",
-            "رقم الهوية",
-        ],
-        context_boost=0.15,
-        validator=validate_egyptian_national_id,
-    ),
-]
-
-
-_MOROCCO_CIN_PII_PATTERNS: List[PIIPattern] = [
-    PIIPattern(
-        r"(?<![A-Z0-9])[A-Z]{1,2}\d{5,7}(?![A-Z0-9])",
-        "national_id",
-        priority=14,
-        base_score=0.5,
-        context_words=[
-            "cin",
-            "cin number",
-            "carte nationale",
-            "carte d'identité nationale",
-            "carte d identite nationale",
-            "بطاقة التعريف الوطنية",
-            "بطاقة وطنية",
-            "بيطاقة التعريف الوطنية",
-            "bitaqa",
-            "bitaqa watania",
-        ],
-        context_boost=0.45,
-        validator=validate_moroccan_cin,
-        requires_context=True,
-        safety_sweep_requires_context=True,
-        flags=re.IGNORECASE,
-    ),
-]
+_EGYPT_NATIONAL_ID_PII_PATTERNS = _locale_patterns_named(
+    "ar_eg", "egyptian_national_id"
+)
+_MOROCCO_CIN_PII_PATTERNS = _locale_patterns_named("ar_ma", "moroccan_cin")
 
 NIGERIA_NIN_PATTERN = r"(?<!\d)\d{11}(?!\d)"
 _NIGERIA_INTERNATIONAL_PHONE_BODY = (
@@ -8038,8 +8045,8 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "am": _ETHIOPIA_FAYDA_PII_PATTERNS,
     "zh_cn": _CHINESE_IDENTIFIER_PII_PATTERNS,
     "ar": _EGYPT_NATIONAL_ID_PII_PATTERNS + _MOROCCO_CIN_PII_PATTERNS,
-    "ar_eg": _EGYPT_NATIONAL_ID_PII_PATTERNS,
-    "ar_ma": _MOROCCO_CIN_PII_PATTERNS,
+    "ar_eg": _LOCALE_DATA_PII_PATTERNS["ar_eg"],
+    "ar_ma": _LOCALE_DATA_PII_PATTERNS["ar_ma"],
     "en_za": _NGUNI_PII_PATTERNS,
     "af": _NGUNI_PII_PATTERNS,
     "en_ng": _NIGERIAN_PII_PATTERNS,
