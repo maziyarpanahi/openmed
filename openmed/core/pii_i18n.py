@@ -369,6 +369,43 @@ def validate_momo_reference(text: str) -> bool:
     return isinstance(text, str) and re.fullmatch(r"[0-9]{10,12}", text) is not None
 
 
+def validate_kenya_mfl_code(text: str) -> bool:
+    """Validate a Kenya Master Health Facility List code's shape.
+
+    Kenya's MFL implementation guide defines the facility code as a five-digit
+    sequential number. Detection separately requires explicit facility context
+    because this shape is common in clinical notes and claims.
+    """
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{5}", text) is not None
+
+
+def validate_nigeria_hfr_code(text: str) -> bool:
+    """Validate a Nigeria Health Facility Registry identifier.
+
+    The ten-digit ``AABBCDEEEE`` structure contains a state code (01-37),
+    LGA code (01-44), ownership (1 public or 2 private), level of care
+    (1 primary, 2 secondary, or 3 tertiary), and a non-zero four-digit
+    LGA-level serial number.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{10}", text) is None:
+        return False
+
+    state = int(text[:2])
+    lga = int(text[2:4])
+    ownership = int(text[4])
+    level_of_care = int(text[5])
+    serial = int(text[6:])
+    return (
+        1 <= state <= 37
+        and 1 <= lga <= 44
+        and ownership in {1, 2}
+        and level_of_care in {1, 2, 3}
+        and 1 <= serial <= 9999
+    )
+
+
 # ---------------------------------------------------------------------------
 # Chinese Contact, Financial, and Travel Identifiers
 # ---------------------------------------------------------------------------
@@ -3568,6 +3605,80 @@ _MOBILE_MONEY_PII_PATTERNS: List[PIIPattern] = [
         validator=validate_momo_reference,
         safety_sweep_requires_context=True,
     ),
+]
+
+
+def _context_prefixed_numeric_pattern(
+    context_words: tuple[str, ...],
+    digit_pattern: str,
+) -> str:
+    """Build a fixed-lookbehind expression for an adjacent contextual code."""
+
+    prefixes = (
+        rf"(?<={re.escape(context)}{re.escape(separator)})"
+        for context in context_words
+        for separator in (" ", ": ", " #")
+    )
+    return "(?:" + "|".join(prefixes) + ")" + digit_pattern
+
+
+_KENYA_HEALTH_FACILITY_CONTEXT = (
+    "mfl",
+    "mfl code",
+    "kmhfl",
+    "kmhfl code",
+    "kmhfr",
+    "kmhfr code",
+    "facility code",
+    "facility id",
+    "health facility code",
+    "msimbo wa kituo",
+    "nambari ya kituo",
+)
+
+_NIGERIA_HEALTH_FACILITY_CONTEXT = (
+    "hfr",
+    "hfr code",
+    "nhfr",
+    "nhfr code",
+    "facility code",
+    "facility id",
+    "health facility code",
+    "health facility registry code",
+)
+
+
+_KENYA_HEALTH_FACILITY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        _context_prefixed_numeric_pattern(
+            _KENYA_HEALTH_FACILITY_CONTEXT,
+            r"[0-9]{5}(?![0-9])",
+        ),
+        "FACILITY_ID",
+        priority=12,
+        base_score=0.25,
+        context_words=list(_KENYA_HEALTH_FACILITY_CONTEXT),
+        context_boost=0.65,
+        validator=validate_kenya_mfl_code,
+        safety_sweep_requires_context=True,
+    )
+]
+
+
+_NIGERIA_HEALTH_FACILITY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        _context_prefixed_numeric_pattern(
+            _NIGERIA_HEALTH_FACILITY_CONTEXT,
+            r"[0-9]{10}(?![0-9])",
+        ),
+        "FACILITY_ID",
+        priority=12,
+        base_score=0.25,
+        context_words=list(_NIGERIA_HEALTH_FACILITY_CONTEXT),
+        context_boost=0.65,
+        validator=validate_nigeria_hfr_code,
+        safety_sweep_requires_context=True,
+    )
 ]
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
@@ -7584,6 +7695,17 @@ for _mobile_money_alias in ("sw", "sw_tz", "en_ke", "en_tz", "en_gh", "en_ug"):
             *_existing_patterns,
             *_MOBILE_MONEY_PII_PATTERNS,
         ]
+
+for _facility_alias in ("sw", "sw_tz", "en_ke"):
+    _existing_patterns = LOCALE_PII_PATTERNS.get(_facility_alias, [])
+    if _KENYA_HEALTH_FACILITY_PII_PATTERNS[0] not in _existing_patterns:
+        LOCALE_PII_PATTERNS[_facility_alias] = [
+            *_existing_patterns,
+            *_KENYA_HEALTH_FACILITY_PII_PATTERNS,
+        ]
+
+if _NIGERIA_HEALTH_FACILITY_PII_PATTERNS[0] not in _NIGERIAN_PII_PATTERNS:
+    _NIGERIAN_PII_PATTERNS.extend(_NIGERIA_HEALTH_FACILITY_PII_PATTERNS)
 
 
 # ---------------------------------------------------------------------------

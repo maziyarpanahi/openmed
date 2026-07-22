@@ -18,6 +18,10 @@ from openmed.core.anonymizer.providers import (
     generate_hungarian_taj,
 )
 from openmed.core.anonymizer.providers.clinical_ids import (
+    KENYA_MFL_SYNTHETIC_MAX,
+    KENYA_MFL_SYNTHETIC_MIN,
+    NIGERIA_HFR_SYNTHETIC_SERIAL_MAX,
+    NIGERIA_HFR_SYNTHETIC_SERIAL_MIN,
     generate_african_phone,
     generate_bulgarian_egn,
     generate_egyptian_national_id,
@@ -79,6 +83,7 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_jmbg,
     validate_kenya_maisha_namba,
+    validate_kenya_mfl_code,
     validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
@@ -89,6 +94,7 @@ from openmed.core.pii_i18n import (
     validate_moroccan_cin,
     validate_mpesa_transaction_code,
     validate_nigeria_bvn,
+    validate_nigeria_hfr_code,
     validate_nigeria_nin,
     validate_pakistani_cnic,
     validate_philhealth_pin,
@@ -6200,6 +6206,237 @@ class TestMobileMoneyBillingIdentifiers:
                     else validate_mobile_money_paybill
                 )
                 assert validator(entity.surrogate)
+
+        assert leakage == 0
+
+
+_HEALTH_FACILITY_FIXTURE_PATH = Path(
+    "tests/fixtures/pii/health_facility_synthetic_referrals.jsonl"
+)
+
+
+def _health_facility_fixture_rows():
+    return [
+        json.loads(line)
+        for line in _HEALTH_FACILITY_FIXTURE_PATH.read_text(
+            encoding="utf-8"
+        ).splitlines()
+        if line.strip()
+    ]
+
+
+def _health_facility_entities(row):
+    from openmed.core.safety_sweep import safety_sweep
+
+    return [
+        entity
+        for entity in safety_sweep(
+            row["text"],
+            [],
+            lang=row["language"],
+            locale=row.get("locale"),
+        )
+        if entity.label == "FACILITY_ID"
+    ]
+
+
+class TestAfricanHealthFacilityCodes:
+    """Kenya KMHFL and Nigeria HFR identifiers remain precise and synthetic."""
+
+    @pytest.mark.parametrize("value", ("12345", "48321", "99999"))
+    def test_kenya_validator_accepts_five_ascii_digits(self, value):
+        assert validate_kenya_mfl_code(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        ("1234", "123456", "１２３４５", "123-45", " 12345", None),
+    )
+    def test_kenya_validator_rejects_invalid_shapes(self, value):
+        assert not validate_kenya_mfl_code(value)
+
+    @pytest.mark.parametrize("value", ("0101110001", "1301220008", "3744239999"))
+    def test_nigeria_validator_accepts_structural_ranges(self, value):
+        assert validate_nigeria_hfr_code(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "0001110001",
+            "3801110001",
+            "0100110001",
+            "0145110001",
+            "0101010001",
+            "0101310001",
+            "0101100001",
+            "0101140001",
+            "0101110000",
+            "010111001",
+            "01011100011",
+            "０１０１１１０００１",
+            None,
+        ),
+    )
+    def test_nigeria_validator_rejects_invalid_fields(self, value):
+        assert not validate_nigeria_hfr_code(value)
+
+    def test_facility_source_label_normalizes_as_identifier(self):
+        from openmed.core.labels import ID_NUM, normalize_label
+
+        assert normalize_label("FACILITY_ID") == ID_NUM
+
+    @pytest.mark.parametrize("alias", ("sw", "sw_TZ", "en_KE", "en_NG"))
+    def test_locale_aliases_expose_facility_id_patterns(self, alias):
+        patterns = get_patterns_for_language(alias)
+
+        assert any(pattern.entity_type == "FACILITY_ID" for pattern in patterns)
+
+    def test_fixture_detects_context_gated_facility_codes(self):
+        rows = _health_facility_fixture_rows()
+        assert {row["country"] for row in rows} == {"Kenya", "Nigeria", "Mixed"}
+
+        for row in rows:
+            observed = {entity.text for entity in _health_facility_entities(row)}
+            assert observed == set(row["facility_codes"]), row["id"]
+
+    @pytest.mark.parametrize(
+        ("text", "lang", "locale"),
+        (
+            ("Platelet count 12345 and batch 234567 were recorded.", "en", "en_KE"),
+            ("Dozi 12345 na hesabu 234567 zilirekodiwa.", "sw", None),
+            ("Archive 3744238123 and count 12345 were recorded.", "en", "en_NG"),
+        ),
+    )
+    def test_bare_clinical_numbers_do_not_match(self, text, lang, locale):
+        from openmed.core.safety_sweep import safety_sweep
+
+        entities = safety_sweep(text, [], lang=lang, locale=locale)
+        assert not [entity for entity in entities if entity.label == "FACILITY_ID"]
+
+    def test_seeded_provider_uses_reserved_bands_disjoint_from_fixtures(self):
+        fixture_codes = {
+            code
+            for row in _health_facility_fixture_rows()
+            for code in row["facility_codes"]
+        }
+        generated_mfl: set[str] = set()
+        generated_hfr: set[str] = set()
+
+        for seed in range(861, 961):
+            first = Faker("en_US")
+            second = Faker("en_US")
+            register_clinical_providers(first)
+            register_clinical_providers(second)
+            first.seed_instance(seed)
+            second.seed_instance(seed)
+
+            mfl = first.kmhfl_code()
+            hfr = first.hfr_facility_code()
+            assert (mfl, hfr) == (
+                second.kmhfl_code(),
+                second.hfr_facility_code(),
+            )
+            assert validate_kenya_mfl_code(mfl)
+            assert KENYA_MFL_SYNTHETIC_MIN <= int(mfl) <= KENYA_MFL_SYNTHETIC_MAX
+            assert validate_nigeria_hfr_code(hfr)
+            assert (
+                NIGERIA_HFR_SYNTHETIC_SERIAL_MIN
+                <= int(hfr[-4:])
+                <= NIGERIA_HFR_SYNTHETIC_SERIAL_MAX
+            )
+            generated_mfl.add(mfl)
+            generated_hfr.add(hfr)
+
+        assert generated_mfl.isdisjoint(fixture_codes)
+        assert generated_hfr.isdisjoint(fixture_codes)
+
+    @pytest.mark.parametrize(
+        ("original", "validator"),
+        (
+            ("48321", validate_kenya_mfl_code),
+            ("3744238123", validate_nigeria_hfr_code),
+        ),
+    )
+    def test_anonymizer_routes_facility_source_label(self, original, validator):
+        first = Anonymizer(lang="en", consistent=True, seed=861)
+        second = Anonymizer(lang="en", consistent=True, seed=861)
+
+        first_surrogate = first.surrogate(original, "FACILITY_ID")
+        second_surrogate = second.surrogate(original, "FACILITY_ID")
+
+        assert first_surrogate == second_surrogate
+        assert first_surrogate != original
+        assert validator(first_surrogate)
+
+    def test_patient_and_repeated_facility_ids_are_replaced_in_one_pass(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        leakage = 0
+        for row in _health_facility_fixture_rows():
+            if not row["facility_codes"]:
+                continue
+
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, _added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=861,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            for source in row["facility_codes"] + row["patient_identifiers"]:
+                leakage += source in result.deidentified_text
+
+            facility_entities = [
+                entity
+                for entity in result.pii_entities
+                if entity.entity_type == "FACILITY_ID"
+            ]
+            patient_entities = [
+                entity
+                for entity in result.pii_entities
+                if entity.entity_type == "medical_record_number"
+            ]
+            assert len(facility_entities) == 2
+            assert len(patient_entities) == 1
+            assert len({entity.surrogate for entity in facility_entities}) == 1
+
+            validator = (
+                validate_kenya_mfl_code
+                if row["country"] == "Kenya"
+                else validate_nigeria_hfr_code
+            )
+            assert all(
+                entity.surrogate is not None and validator(entity.surrogate)
+                for entity in facility_entities
+            )
+            assert all(
+                entity.surrogate is not None
+                and entity.surrogate != entity.original_text
+                for entity in patient_entities
+            )
 
         assert leakage == 0
 

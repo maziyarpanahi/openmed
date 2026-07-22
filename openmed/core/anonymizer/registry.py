@@ -619,6 +619,21 @@ def _gen_momo_reference(faker, original, *, locale):
     )
 
 
+def _gen_facility_id(faker, original, *, locale):
+    """Generate a validator-compatible Kenya or Nigeria facility surrogate."""
+
+    from openmed.core.pii_i18n import (
+        validate_kenya_mfl_code,
+        validate_nigeria_hfr_code,
+    )
+
+    if validate_kenya_mfl_code(original) and hasattr(faker, "kmhfl_code"):
+        return faker.kmhfl_code(original)
+    if validate_nigeria_hfr_code(original) and hasattr(faker, "hfr_facility_code"):
+        return faker.hfr_facility_code(original)
+    return preserve_id_pattern(original, rng=faker.random)
+
+
 def _generate_distinct_chinese_resident_id(faker, original):
     """Return a valid Chinese Resident ID that differs from ``original``."""
     from openmed.core.pii_i18n import validate_chinese_resident_id
@@ -1100,6 +1115,7 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     "MOBILE_MONEY_TILL": _gen_mobile_money_till,
     "MOBILE_MONEY_AGENT": _gen_mobile_money_agent,
     "MOMO_REFERENCE": _gen_momo_reference,
+    "FACILITY_ID": _gen_facility_id,
 }
 
 LANGUAGE_PACK_GENERATORS: Dict[tuple[str, str, str], Generator] = {}
