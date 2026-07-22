@@ -229,6 +229,16 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+Country-aware African French and Portuguese surrogates are available through
+conceptual locale overrides. `fr_SN`, `fr_CI`, and `fr_CM` use curated names,
+cities, addresses, and country-code phone formats while keeping the French PII
+model; `pt_MZ` and `pt_AO` do the same with the Portuguese model. Unsupported
+Faker methods delegate to `fr_FR` or `pt_PT`, so these overrides do not alter
+the default `fr` and `pt` output. Arabic also accepts `ar-DZ` and `ar-MA`; if
+the installed Faker release lacks the requested regional backend, OpenMed
+falls back to `ar_EG` and emits the same one-time warning used by the other
+Arabic regional overrides.
+
 For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
 default PII model, Faker locale, and a before/after example — see
 [Per-Language De-identification](languages.md).

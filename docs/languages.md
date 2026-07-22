@@ -74,7 +74,7 @@ routing is first requested, and do not download or bundle model weights.
 | `de`   | German     | `OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1`    | `de_DE`      | Steuer-ID surrogates via `GermanSteuerIdProvider`.           |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
 | `es`   | Spanish    | `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1`   | `es_ES`      | DNI/NIE checksum-aware surrogates.                           |
-| `fr`   | French     | `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1`    | `fr_FR`      | NIR / INSEE surrogates via `fr_FR.ssn`.                      |
+| `fr`   | French     | `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1`    | `fr_FR`      | NIR / INSEE; `fr_SN`, `fr_CI`, and `fr_CM` locale overlays.  |
 | `gu`   | Gujarati   | `env:OPENMED_INDIC_NER_MODEL`                               | `gu_IN`      | Optional Indic NER weights.                                  |
 | `he`   | Hebrew     | `OpenMed/privacy-filter-multilingual`                      | `he_IL`      | Served by the multilingual privacy filter.                   |
 | `hi`   | Hindi      | `OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1`    | `hi_IN`      | Aadhaar (Verhoeff) surrogates.                               |
@@ -88,7 +88,7 @@ routing is first requested, and do not download or bundle model weights.
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `or`   | Odia       | `env:OPENMED_INDIC_NER_MODEL`                               | `or_IN`      | Optional Indic NER weights.                                  |
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
-| `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | Pass `locale="pt_BR"` for CPF/CNPJ surrogates.               |
+| `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `ta`   | Tamil      | `env:OPENMED_INDIC_NER_MODEL`                               | `ta_IN`      | Optional Indic NER weights.                                  |
