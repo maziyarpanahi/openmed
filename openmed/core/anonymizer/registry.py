@@ -1082,9 +1082,14 @@ def _register_builtin_script_name_generators() -> None:
     name_labels = (L.PERSON, L.FIRST_NAME, L.LAST_NAME, L.MIDDLE_NAME)
     for language_pack, script, generator in SCRIPT_NAME_PACKS:
         for canonical_label in name_labels:
+            selected_generator = generator
+            if language_pack.code == "zh" and canonical_label != L.MIDDLE_NAME:
+                # Preserve the established Chinese surname-aware generators;
+                # they already enforce Han-only, shape-correct, disjoint output.
+                selected_generator = LABEL_GENERATORS[canonical_label]
             register_label_generator(
                 canonical_label,
-                generator,
+                selected_generator,
                 language_pack=language_pack,
                 script=script,
             )
