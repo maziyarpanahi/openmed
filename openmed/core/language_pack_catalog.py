@@ -306,7 +306,21 @@ _SCRIPT_ORDER = (
 # current bundled model-backed language packs. These codes are routing hints;
 # entries in ``USER_SUPPLIED_MODEL_LANGUAGES`` do not gain default models.
 _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
-    "Latin": ("en", "fr", "de", "it", "es", "nl", "pt", "tr", "sw", "yo", "zu", "xh"),
+    "Latin": (
+        "en",
+        "fr",
+        "de",
+        "it",
+        "es",
+        "nl",
+        "pt",
+        "tr",
+        "sw",
+        "ig",
+        "yo",
+        "zu",
+        "xh",
+    ),
     "Arabic": ("ar", "ha", "ur"),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an Igbo (`ig`) PII pack for Nigerian clinical text with NFC, NFD, and
+  unmarked context support, native `ig_NG` surrogates, shared Nigerian NIN and
+  phone patterns, and grapheme-safe replacement of dot-below names (#1441).
 - Added a Yoruba (`yo`) PII pack with NFC, NFD, and unmarked context support,
   native `yo_NG` surrogates, and grapheme-safe normalized span remapping and
   replacement boundaries for stacked dot-below and tone marks (#1440).

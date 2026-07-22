@@ -154,6 +154,12 @@ tone-marked, decomposed, or unmarked context cues, and replacement spans expand
 to whole base-plus-diacritic clusters so dot-below and tone marks cannot be
 orphaned.
 
+Igbo (`ig`) is available through that deterministic pattern-pack path with a
+native `ig_NG` surrogate locale. It recognizes Nigeria NINs, `+234` phones,
+dates, and ages in Igbo and English-Igbo clinical text, including decomposed or
+unmarked context cues. Replacement spans expand to whole base-plus-diacritic
+clusters so dot-below vowels cannot be split or left behind.
+
 ## Worked examples
 
 Each example de-identifies synthetic, non-PHI text with `method="mask"`. The

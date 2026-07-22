@@ -3522,6 +3522,112 @@ _YORUBA_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Igbo PII patterns
+# ---------------------------------------------------------------------------
+
+
+_IGBO_DATE_CONTEXT = _diacritic_context_variants(
+    "ụbọchị ọmụmụ",
+    "ụbọchị a mụrụ",
+)
+_IGBO_PHONE_CONTEXT = _diacritic_context_variants(
+    "nọmba ekwentị",
+    "nọmba",
+)
+_IGBO_NIN_CONTEXT = _diacritic_context_variants(
+    "nin",
+    "nọmba nin",
+    "nọmba njirimara",
+)
+_IGBO_AGE_CONTEXT = _diacritic_context_variants(
+    "afọ ndụ",
+    "afọ",
+)
+_IGBO_ADDRESS_CONTEXT = _diacritic_context_variants(
+    "adreesị okporo ama",
+    "adreesị",
+    "ebe obibi",
+)
+_IGBO_POSTCODE_CONTEXT = _diacritic_context_variants(
+    "koodu nzipu ozi",
+    "koodu postal",
+    "postcode",
+)
+_IGBO_AGE_CONTEXT_PATTERN = "|".join(
+    re.escape(value) for value in sorted(_IGBO_AGE_CONTEXT, key=len, reverse=True)
+)
+_IGBO_STREET_DESIGNATOR_PATTERN = "|".join(
+    re.escape(value)
+    for value in sorted(
+        _diacritic_context_variants("okporo ama", "okporo ụzọ"),
+        key=len,
+        reverse=True,
+    )
+)
+
+_IGBO_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.55,
+        context_words=_IGBO_DATE_CONTEXT,
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:" + _IGBO_AGE_CONTEXT_PATTERN + r")\s*[:=-]?\s*\d{1,3}(?!\d)",
+        "age",
+        priority=8,
+        base_score=0.55,
+        context_words=_IGBO_AGE_CONTEXT,
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_PHONE_PATTERN,
+        "phone_number",
+        priority=10,
+        base_score=0.6,
+        context_words=_IGBO_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_NIN_PATTERN,
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=_IGBO_NIN_CONTEXT,
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)\d{1,5}[A-Za-z]?(?:[/.-]\d{1,5}[A-Za-z]?)?\s+(?:"
+        + _IGBO_STREET_DESIGNATOR_PATTERN
+        + r")\s+[^\n,;]{2,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=_IGBO_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=_IGBO_POSTCODE_CONTEXT,
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
     # GH_GHANA_CARD: documented country prefix + ten digits. With no published
     # offline checksum, require explicit Ghana Card or NIA context.
@@ -7761,7 +7867,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "af": _NGUNI_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
     "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
-    "ig": _NIGERIAN_PII_PATTERNS,
+    "ig": [*_NIGERIAN_PII_PATTERNS, *_IGBO_PII_PATTERNS],
     "yo": [*_NIGERIAN_PII_PATTERNS, *_YORUBA_PII_PATTERNS],
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -8659,6 +8765,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["42", "58", "73"],
         "LOCATION": ["Kano", "Kaduna", "Sokoto", "Niamey"],
         "ZIPCODE": ["700001", "800001", "840001"],
+    },
+    "ig": {
+        "NAME": [
+            "Chukwuemeka Ọnwụka",
+            "Ngọzi Okafọ",
+            "Ọbịanụju Ụzọma",
+            "Chịọma Nwankwọ",
+        ],
+        "FIRST_NAME": ["Chukwuemeka", "Ngọzi", "Ọbịanụju", "Chịọma"],
+        "LAST_NAME": ["Ọnwụka", "Okafọ", "Ụzọma", "Nwankwọ"],
+        "EMAIL": ["onyeoria@example.ng", "uloogwu@example.org"],
+        "PHONE": ["+234 803 123 4567", "+234-907-654-3210"],
+        "ID_NUM": ["12345678901", "10987654321"],
+        "STREET_ADDRESS": ["12 Okporo Ụzọ Ogui", "45 Okporo Ụzọ Awka"],
+        "URL_PERSONAL": ["https://example.ng"],
+        "USERNAME": ["onyeoria123", "onyeoji456"],
+        "DATE": ["14/03/1984", "01/01/2000"],
+        "AGE": ["42", "58", "73"],
+        "LOCATION": ["Enugu", "Onitsha", "Owerri", "Aba"],
+        "ZIPCODE": ["400001", "430001", "460001", "450001"],
     },
     "yo": {
         "NAME": [
