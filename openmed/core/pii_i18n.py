@@ -3111,7 +3111,7 @@ _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
         r"0(?:70|80|81|90|91)[0-9])[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
         "NG_PHONE",
         priority=12,
-        base_score=0.7,
+        base_score=0.35,
         context_words=[
             "phone",
             "mobile",
@@ -7189,8 +7189,10 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
             "fayda identification number",
             "national id",
         ],
-        context_boost=0.25,
+        context_boost=0.6,
         validator=validate_ethiopia_fayda,
+        safety_sweep_requires_context=True,
+        flags=0,
     ),
 ]
 

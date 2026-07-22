@@ -394,9 +394,15 @@ class TestEastAfricanNationalIds:
                 "Indangamuntu: 1198571234567890",
                 "1198571234567890",
             ),
+            (
+                "am",
+                None,
+                "Fayda FAN: 234123412346",
+                "234123412346",
+            ),
         ),
     )
-    def test_non_checksummed_formats_require_keyword_context(
+    def test_context_gated_formats_require_keyword_context(
         self,
         lang,
         locale,
