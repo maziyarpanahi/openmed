@@ -41,6 +41,7 @@ nav:
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
+      - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md

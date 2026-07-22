@@ -51,6 +51,10 @@ from openmed.eval.suites.chinese_clinical_ner import (
     run_chinese_clinical_ner_suite,
     run_synthetic_chinese_clinical_ner_smoke,
 )
+from openmed.eval.suites.chinese_terminology import (
+    ChineseTerminologyLeakageReport,
+    evaluate_chinese_terminology_leakage,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -183,12 +187,14 @@ __all__ = [
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
     "ComparatorUnavailable",
+    "ChineseTerminologyLeakageReport",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
     "run_comparator_matrix",
+    "evaluate_chinese_terminology_leakage",
     "load_i2b2_deid",
     "i2b2_suite_metadata",
     "biomedical_ner_suite_metadata",
