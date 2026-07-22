@@ -243,6 +243,7 @@ class Pipeline:
         lang: str = "en",
         normalize_accents: Optional[bool] = None,
         use_safety_sweep: bool = True,
+        preserve_whitespace: bool = False,
         loader: Any = None,
         privacy_filter_pipeline: Any = None,
         model_detector: ModelDetector | None = None,
@@ -292,6 +293,7 @@ class Pipeline:
         self.lang = lang
         self.normalize_accents = normalize_accents
         self.use_safety_sweep = use_safety_sweep
+        self.preserve_whitespace = bool(preserve_whitespace)
         self.loader = loader
         self.privacy_filter_pipeline = privacy_filter_pipeline
         self.model_detector = model_detector
@@ -354,7 +356,7 @@ class Pipeline:
             stage_name: 0.0 for stage_name in STAGE_NAMES
         }
         cascade_duration_ms: float | None = None
-        original_text = text.strip()
+        original_text = text if self.preserve_whitespace else text.strip()
         with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
             normalized = self.stage1_normalize(original_text)
         with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
@@ -960,6 +962,7 @@ class Pipeline:
             self.use_smart_merging,
             lang=route.lang,
             normalize_accents=self.normalize_accents,
+            preserve_whitespace=self.preserve_whitespace,
             loader=self.loader,
             batch_size=getattr(self.config, "batch_size", None),
             num_workers=getattr(self.config, "num_workers", None),

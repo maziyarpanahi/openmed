@@ -61,6 +61,7 @@ nav:
       - GPTQ Export: export-gptq.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - Per-Language De-identification: languages.md
       - Smart Entity Merging: pii-smart-merging.md

@@ -606,15 +606,16 @@ def _prepare_pii_text(
     lang: str,
     normalize_accents: Optional[bool],
     config: Optional[OpenMedConfig] = None,
+    preserve_whitespace: bool = False,
 ) -> _PreparedPIIText:
-    """Return original stripped text, inference text, and normalization flag."""
+    """Return source text, inference text, and normalization metadata."""
     do_normalize = (
         normalize_accents
         if normalize_accents is not None
         else (lang in _ACCENT_NORMALIZE_LANGS)
     )
 
-    original_text = text.strip()
+    original_text = text if preserve_whitespace else text.strip()
     width_convention = config.cjk_width_convention if config is not None else "cjk"
     detection_normalization = normalize_for_pii_detection(
         original_text,
@@ -798,6 +799,7 @@ def _extract_pii_batch(
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
     *,
+    preserve_whitespace: bool = False,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
@@ -811,6 +813,7 @@ def _extract_pii_batch(
             lang=lang,
             normalize_accents=normalize_accents,
             config=config,
+            preserve_whitespace=preserve_whitespace,
         )
         for text in texts
     ]
@@ -918,6 +921,7 @@ def extract_pii(
     max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
+    preserve_whitespace: bool = False,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     batch_size: Optional[int] = None,
@@ -951,6 +955,8 @@ def extract_pii(
             names.  Entity spans in the result reference the *original*
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
+        preserve_whitespace: Preserve leading and trailing source whitespace
+            so returned entity offsets refer to the exact input string.
         loader: Optional shared model loader to reuse warmed pipelines.
         batch_size: Optional backend inference batch size.
         num_workers: Optional backend inference worker count.
@@ -1015,6 +1021,7 @@ def extract_pii(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        preserve_whitespace=preserve_whitespace,
         locale=locale,
         loader=loader,
         custom_recognizer=custom_recognizer,
@@ -1826,6 +1833,7 @@ def _deidentify_batch(
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
+    preserve_whitespace: bool = False,
     custom_recognizer: Any = None,
     abdm: Optional[bool] = None,
     policy: Optional[str] = None,
@@ -1847,16 +1855,17 @@ def _deidentify_batch(
         date_shift_max_days=date_shift_max_days,
         date_shift_secret=date_shift_secret,
     )
-    stripped_texts = [text.strip() for text in texts]
+    source_texts = [text if preserve_whitespace else text.strip() for text in texts]
     recognizer = coerce_custom_recognizer(custom_recognizer)
     pii_results = _extract_pii_batch(
-        stripped_texts,
+        source_texts,
         model_name=model_name,
         confidence_threshold=confidence_threshold,
         config=config,
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        preserve_whitespace=preserve_whitespace,
         locale=locale,
         custom_recognizer=recognizer,
         abdm=abdm_mode_enabled(
@@ -1872,14 +1881,14 @@ def _deidentify_batch(
 
     if use_safety_sweep:
         swept_results = []
-        for stripped_text, pii_result in zip(stripped_texts, pii_results):
+        for source_text, pii_result in zip(source_texts, pii_results):
             pii_result, _ = _apply_safety_sweep_to_result(
-                stripped_text,
+                source_text,
                 pii_result,
                 lang=lang,
                 locale=locale,
             )
-            _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
+            _suppress_custom_allowed_entities(source_text, pii_result, recognizer)
             swept_results.append(pii_result)
         pii_results = swept_results
 
@@ -1906,7 +1915,7 @@ def _deidentify_batch(
             surrogate_vault=surrogate_vault,
             policy=policy or "hipaa_safe_harbor",
         )
-        for text, pii_result in zip(stripped_texts, pii_results)
+        for text, pii_result in zip(source_texts, pii_results)
     ]
 
 
