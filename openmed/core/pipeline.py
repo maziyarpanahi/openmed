@@ -1605,8 +1605,18 @@ def _deterministic_patterns(
         context_boost=0.05,
         validator=clinical_ids.validate_luhn,
     )
-    if lang == "en" and locale is None:
-        return [luhn_mrn, *PII_PATTERNS]
+    if lang == "en":
+        if locale is None:
+            return [luhn_mrn, *PII_PATTERNS]
+
+        from .pii_i18n import LOCALE_PII_PATTERNS
+
+        locale_key = locale.strip().replace("-", "_").casefold()
+        return [
+            luhn_mrn,
+            *PII_PATTERNS,
+            *LOCALE_PII_PATTERNS.get(locale_key, []),
+        ]
 
     from .pii_i18n import get_patterns_for_language
 

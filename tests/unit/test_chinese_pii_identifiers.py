@@ -33,6 +33,7 @@ from openmed.core.labels import (
 )
 from openmed.core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
+    LOCALE_PII_PATTERNS,
     get_patterns_for_language,
     validate_chinese_bank_card,
     validate_chinese_mobile_number,
@@ -113,13 +114,14 @@ class TestChineseValidators:
 class TestChineseRecognition:
     def test_language_and_locale_paths_expose_the_chinese_patterns(self) -> None:
         zh_patterns = LANGUAGE_PII_PATTERNS["zh"]
+        zh_cn_patterns = LOCALE_PII_PATTERNS["zh_cn"]
 
         assert all(
             pattern in get_patterns_for_language("zh") for pattern in zh_patterns
         )
         assert all(
             pattern in get_patterns_for_language("en", locale="zh_CN")
-            for pattern in zh_patterns
+            for pattern in zh_cn_patterns
         )
 
     def test_detection_has_exact_offsets_and_distinct_id_subtypes(self) -> None:
