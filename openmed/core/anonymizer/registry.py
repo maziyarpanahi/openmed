@@ -1041,9 +1041,7 @@ def register_label_generator(
     if registered_pack is None:
         register_language_pack(language_pack)
     elif registered_pack != language_pack:
-        raise ValueError(
-            f"language pack {language_pack.code!r} is already registered"
-        )
+        raise ValueError(f"language pack {language_pack.code!r} is already registered")
     LANGUAGE_PACK_GENERATORS[(language_pack.code, script, canonical_label)] = generator
 
 
