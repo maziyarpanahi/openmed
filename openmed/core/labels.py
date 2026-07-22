@@ -1083,6 +1083,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "gstin": ID_NUM,
     "gstnumber": ID_NUM,
     "teudatzehut": ID_NUM,
+    "mpesatxcode": ID_NUM,
     "tz": ID_NUM,
     "npi": ID_NUM,
     "ssn": SSN,
@@ -1392,6 +1393,7 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "gstin": ID_SUBTYPE_NATIONAL_ID,
     "gstnumber": ID_SUBTYPE_NATIONAL_ID,
     "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
+    "mpesatxcode": ID_SUBTYPE_NATIONAL_ID,
     "tz": ID_SUBTYPE_NATIONAL_ID,
 }
 

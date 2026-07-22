@@ -25,6 +25,7 @@ def _always_valid(_text: str) -> bool:
 
 
 EXPECTED_VALIDATOR_KEYS = (
+    ("sw", "mpesa_tx_code"),
     ("tz", "nida_nin"),
     ("ug", "nin"),
     ("rw", "rwanda_id"),
@@ -272,6 +273,20 @@ class TestNationalIdRegistry:
 
     def test_unknown_lookup_returns_none(self):
         assert get_national_id("zz", "unknown") is None
+
+    @pytest.mark.parametrize("alias", ("ke", "tz", "sw", "en_ke", "en_tz"))
+    def test_mpesa_transaction_code_aliases_generate_valid_surrogates(self, alias):
+        spec = get_national_id(alias, "mpesa_tx_code")
+        assert spec is not None
+
+        faker = Faker("en_US")
+        register_clinical_providers(faker)
+        faker.seed_instance(859)
+        surrogate = getattr(faker, spec.faker_method)("TB17CVOCY9")
+
+        assert surrogate.startswith("T")
+        assert surrogate != "TB17CVOCY9"
+        assert spec.validate(surrogate)
 
     def test_duplicate_registration_rejects_key_with_clear_error(self):
         key = ("zz", "dummy")

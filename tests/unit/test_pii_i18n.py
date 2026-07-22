@@ -25,6 +25,7 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_ethiopia_fayda,
     generate_jmbg,
     generate_moroccan_cin,
+    generate_mpesa_transaction_code,
     generate_philhealth_pin,
     generate_portuguese_nif,
     generate_rwanda_id,
@@ -83,6 +84,7 @@ from openmed.core.pii_i18n import (
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
     validate_moroccan_cin,
+    validate_mpesa_transaction_code,
     validate_nigeria_bvn,
     validate_nigeria_nin,
     validate_pakistani_cnic,
@@ -5758,6 +5760,172 @@ class TestAfricanMobilePlans:
         assert surrogate is not None
         assert surrogate.startswith(preserved_prefix)
         assert surrogate != original
+
+
+_MPESA_FIXTURE_PATH = Path("tests/fixtures/pii/mpesa_synthetic_receipts.jsonl")
+
+
+def _mpesa_fixture_rows():
+    return [
+        json.loads(line)
+        for line in _MPESA_FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _mpesa_fixture_entities(row):
+    from openmed.core.safety_sweep import safety_sweep
+
+    return [
+        entity
+        for entity in safety_sweep(
+            row["text"],
+            [],
+            lang=row["language"],
+            locale=row.get("locale"),
+        )
+        if entity.label == "mpesa_tx_code"
+    ]
+
+
+class TestMpesaTransactionCodes:
+    """M-Pesa receipt codes stay precise and redact without leakage."""
+
+    @pytest.mark.parametrize(
+        "code",
+        ("TB17CVOCY9", "UC34HJKLM8", "VD56NPQRS7", "AB12CDEFG3"),
+    )
+    def test_validator_accepts_valid_codes(self, code):
+        assert validate_mpesa_transaction_code(code)
+
+    @pytest.mark.parametrize(
+        "code",
+        (
+            "TB1ACVOCY9",
+            "tb17cvocy9",
+            "TB17CVOCY",
+            "TB17CVOCY90",
+            "1234567890",
+            "ABCDEFGHIJ",
+            " TB17CVOCY9",
+            "TB17CVOCY9 ",
+            None,
+        ),
+    )
+    def test_validator_rejects_invalid_structure(self, code):
+        assert not validate_mpesa_transaction_code(code)
+
+    def test_one_thousand_seeded_surrogates_are_valid_and_reproducible(self):
+        first_rng = random.Random(859)
+        second_rng = random.Random(859)
+        generated = [
+            generate_mpesa_transaction_code(rng=first_rng) for _ in range(1000)
+        ]
+
+        assert generated == [
+            generate_mpesa_transaction_code(rng=second_rng) for _ in range(1000)
+        ]
+        assert all(validate_mpesa_transaction_code(code) for code in generated)
+
+    def test_surrogate_preserves_leading_date_encoding_character(self):
+        originals = ("TB17CVOCY9", "UC34HJKLM8", "7D89TUVWX6")
+        rng = random.Random(859)
+
+        for original in originals:
+            surrogate = generate_mpesa_transaction_code(original, rng=rng)
+            assert surrogate[0] == original[0]
+            assert surrogate != original
+            assert validate_mpesa_transaction_code(surrogate)
+
+    def test_fixture_keyword_gating_and_hard_negatives(self):
+        rows = _mpesa_fixture_rows()
+
+        for row in rows:
+            observed = {entity.text for entity in _mpesa_fixture_entities(row)}
+            assert observed == set(row["expected_codes"]), row["id"]
+
+        ungated = next(row for row in rows if row["id"] == "mpesa-ungated-ids")
+        gated = next(row for row in rows if row["id"] == "mpesa-gated-ids")
+        assert ungated["candidate_codes"] == gated["candidate_codes"]
+        assert not ungated["expected_codes"]
+        assert gated["expected_codes"] == gated["candidate_codes"]
+
+    def test_swahili_and_english_receipts_detect_identically(self):
+        rows = _mpesa_fixture_rows()
+        english = next(row for row in rows if row["id"] == "mpesa-en-shared")
+        swahili = next(row for row in rows if row["id"] == "mpesa-sw-shared")
+
+        english_codes = {entity.text for entity in _mpesa_fixture_entities(english)}
+        swahili_codes = {entity.text for entity in _mpesa_fixture_entities(swahili)}
+
+        assert english_codes == swahili_codes == {"TB17CVOCY9"}
+
+    def test_anonymizer_round_trip_has_zero_code_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        leakage = 0
+        for row in _mpesa_fixture_rows():
+            if not row["expected_codes"]:
+                continue
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-18T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang=row["language"],
+                locale=row.get("locale"),
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang=row["language"],
+                consistent=True,
+                seed=859,
+                locale=row.get("locale"),
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["expected_codes"])
+            leakage += sum(
+                original in result.deidentified_text
+                for original in row["expected_codes"]
+            )
+            for entity in result.pii_entities:
+                if entity.entity_type != "mpesa_tx_code":
+                    continue
+                assert entity.surrogate is not None
+                assert entity.surrogate[0] == entity.original_text[0]
+                assert validate_mpesa_transaction_code(entity.surrogate)
+
+        assert leakage == 0
+
+    def test_repeated_code_has_referential_integrity_with_fixed_seed(self):
+        row = next(
+            row for row in _mpesa_fixture_rows() if row["id"] == "mpesa-repeated-code"
+        )
+        entities = _mpesa_fixture_entities(row)
+        anonymizer = Anonymizer(lang="en", consistent=True, seed=859)
+        surrogates = [
+            anonymizer.surrogate(entity.text, entity.label) for entity in entities
+        ]
+
+        assert len(surrogates) == 2
+        assert len(set(surrogates)) == 1
+        assert surrogates[0][0] == row["expected_codes"][0][0]
+        assert validate_mpesa_transaction_code(surrogates[0])
 
 
 if __name__ == "__main__":
