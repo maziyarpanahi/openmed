@@ -147,18 +147,49 @@ def test_attestation_serialization_contains_no_raw_phi() -> None:
 
 
 def test_attestation_rejects_untrusted_action_text() -> None:
-    with pytest.raises(ValueError, match="unsupported audit span action"):
+    untrusted = "raw synthetic patient value"
+    with pytest.raises(ValueError, match="unsupported action") as error:
         generate_safe_harbor_attestation(
             {
                 "policy": "hipaa_safe_harbor",
                 "spans": [
                     {
                         "canonical_label": "EMAIL",
-                        "action": "raw synthetic patient value",
+                        "action": untrusted,
                     }
                 ],
             }
         )
+    assert untrusted not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("span", "message"),
+    [
+        (
+            {"canonical_label": "synthetic patient value", "action": "mask"},
+            "unsupported label",
+        ),
+        (
+            {
+                "canonical_label": "EMAIL",
+                "action": "mask",
+                "safe_harbor_class": "synthetic patient value",
+            },
+            "unknown Safe Harbor category",
+        ),
+    ],
+)
+def test_attestation_errors_do_not_echo_untrusted_fields(
+    span: dict[str, str],
+    message: str,
+) -> None:
+    untrusted = "synthetic patient value"
+    with pytest.raises(ValueError, match=message) as error:
+        generate_safe_harbor_attestation(
+            {"policy": "hipaa_safe_harbor", "spans": [span]}
+        )
+    assert untrusted not in str(error.value)
 
 
 def test_attestation_rejects_tampered_audit_report() -> None:
@@ -167,6 +198,19 @@ def test_attestation_rejects_tampered_audit_report() -> None:
 
     with pytest.raises(ValueError, match="reproducibility hash does not match"):
         generate_safe_harbor_attestation(audit_report)
+
+
+def test_attestation_rejects_forged_mapping_repro_hash() -> None:
+    forged_hash = hash_text("unrelated audit payload")
+
+    with pytest.raises(ValueError, match="reproducibility hash does not match"):
+        generate_safe_harbor_attestation(
+            {
+                "policy": "hipaa_safe_harbor",
+                "spans": [],
+                "repro_hash": forged_hash,
+            }
+        )
 
 
 def test_keep_action_adds_residual_risk_to_a_covered_category() -> None:
@@ -208,6 +252,42 @@ def test_cli_emits_attestation_offline(
     assert SYNTHETIC_NAME not in json.dumps(payload)
 
 
+def test_cli_stdout_uses_json_envelope_when_requested(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    audit_path = tmp_path / "audit.json"
+    audit_path.write_text(_audit_report().to_json() + "\n", encoding="utf-8")
+
+    result = main_module.main(["compliance", "safe-harbor", str(audit_path), "--json"])
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "compliance safe-harbor"
+    assert payload["data"]["report_type"] == "hipaa_safe_harbor_attestation"
+
+
+def test_cli_failure_does_not_echo_untrusted_audit_fields(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    untrusted = "synthetic patient value"
+    audit = _audit_report().to_dict()
+    audit["spans"][0]["action"] = untrusted
+    audit_path = tmp_path / "audit.json"
+    audit_path.write_text(json.dumps(audit), encoding="utf-8")
+
+    result = main_module.main(["compliance", "safe-harbor", str(audit_path), "--json"])
+
+    assert result == 1
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "attestation_failed"
+    assert untrusted not in output
+
+
 def test_cli_rejects_invalid_audit_input(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -218,4 +298,4 @@ def test_cli_rejects_invalid_audit_input(
     result = main_module.main(["compliance", "safe-harbor", str(audit_path)])
 
     assert result == 1
-    assert "Failed to generate Safe Harbor attestation" in capsys.readouterr().err
+    assert "Failed to generate Safe Harbor attestation." in capsys.readouterr().err

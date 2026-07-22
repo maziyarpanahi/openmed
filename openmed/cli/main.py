@@ -1801,16 +1801,33 @@ def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
     try:
         report = _load_audit_report(args.report)
         attestation = generate_safe_harbor_attestation(report)
-        rendered = f"{attestation.to_json()}\n"
-        if args.output is None:
-            sys.stdout.write(rendered)
-        else:
-            args.output.write_text(rendered, encoding="utf-8")
-            sys.stdout.write(f"Safe Harbor attestation written to: {args.output}\n")
     except (OSError, TypeError, ValueError) as exc:
-        sys.stderr.write(f"Failed to generate Safe Harbor attestation: {exc}\n")
-        return 1
-    return 0
+        raise CliError(
+            "Failed to generate Safe Harbor attestation.",
+            code="attestation_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = attestation.to_dict()
+    if args.output is None:
+        return emit(args, payload, human=attestation.to_json())
+
+    try:
+        args.output.write_text(f"{attestation.to_json()}\n", encoding="utf-8")
+    except OSError as exc:
+        raise CliError(
+            "Failed to write Safe Harbor attestation.",
+            code="write_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    return emit(
+        args,
+        {
+            "output": str(args.output),
+            "attestation_hash": attestation.attestation_hash,
+        },
+        human=f"Safe Harbor attestation written to: {args.output}",
+    )
 
 
 def _load_audit_report(path: Path):

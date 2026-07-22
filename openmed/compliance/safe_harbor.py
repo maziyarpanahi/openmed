@@ -16,8 +16,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final
 
-from openmed.core.audit import stable_hash
+from openmed.core.audit import stable_hash, verify_repro_hash
 from openmed.core.labels import (
+    CANONICAL_LABELS,
     HIPAA_SAFE_HARBOR_CLASSES,
     LABEL_TO_HIPAA,
     normalize_label,
@@ -229,9 +230,6 @@ def generate_safe_harbor_attestation(
     """
 
     payload = _report_payload(audit_report)
-    integrity_check = getattr(audit_report, "repro_hash_matches", None)
-    if callable(integrity_check) and not integrity_check():
-        raise ValueError("audit report reproducibility hash does not match")
     spans = _report_value(audit_report, "spans")
     if isinstance(spans, (str, bytes)) or not isinstance(spans, Iterable):
         raise TypeError("audit report spans must be an iterable of span records")
@@ -258,7 +256,7 @@ def generate_safe_harbor_attestation(
         if not action:
             action = profile.action_for(canonical_label)
         if action not in ACTION_VALUES:
-            raise ValueError(f"unsupported audit span action: {action!r}")
+            raise ValueError("audit span contains an unsupported action")
         detection_counts[category] += 1
         action_counts[category][action] += 1
 
@@ -337,13 +335,17 @@ def _span_value(span: Any, name: str, default: Any = None) -> Any:
 
 
 def _canonical_span_label(span: Any) -> str:
-    value = _span_value(span, "canonical_label") or _span_value(span, "label")
+    canonical_value = _span_value(span, "canonical_label")
+    if canonical_value:
+        canonical_label = str(canonical_value)
+        if canonical_label not in CANONICAL_LABELS:
+            raise ValueError("audit span contains an unsupported label")
+        return canonical_label
+
+    value = _span_value(span, "label")
     if not value:
         raise ValueError("audit span must include canonical_label or label")
-    try:
-        return normalize_label(str(value))
-    except (KeyError, ValueError) as exc:
-        raise ValueError(f"unsupported audit span label: {value!r}") from exc
+    return normalize_label(str(value))
 
 
 def _explicit_span_category(span: Any) -> str | None:
@@ -359,7 +361,7 @@ def _explicit_span_category(span: Any) -> str | None:
                 continue
             category = str(container[key])
             if category not in HIPAA_SAFE_HARBOR_CLASSES:
-                raise ValueError(f"unknown HIPAA Safe Harbor category: {category!r}")
+                raise ValueError("audit span contains an unknown Safe Harbor category")
             return category
 
     tags = _span_value(span, "regulatory_tags", ())
@@ -373,9 +375,22 @@ def _explicit_span_category(span: Any) -> str | None:
 
 def _source_report_hash(report: Any, payload: Mapping[str, Any]) -> str:
     candidate = str(_report_value(report, "repro_hash", "") or "")
-    if _SHA256_RE.fullmatch(candidate):
-        return candidate
-    return stable_hash(payload)
+    if not candidate:
+        return stable_hash(payload)
+    if not _SHA256_RE.fullmatch(candidate):
+        raise ValueError("audit report reproducibility hash is invalid")
+
+    integrity_check = getattr(report, "repro_hash_matches", None)
+    if callable(integrity_check):
+        integrity_ok = bool(integrity_check())
+    else:
+        try:
+            integrity_ok = verify_repro_hash(payload)
+        except (TypeError, ValueError):
+            integrity_ok = False
+    if not integrity_ok:
+        raise ValueError("audit report reproducibility hash does not match")
+    return candidate
 
 
 __all__ = [

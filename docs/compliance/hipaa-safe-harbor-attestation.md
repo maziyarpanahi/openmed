@@ -30,6 +30,8 @@ openmed compliance safe-harbor run-audit.json \
 ```
 
 Omit `--output` to print the JSON artifact to standard output.
+Add `--json` to wrap stdout in OpenMed's uniform machine-readable command
+envelope; the attestation is returned in its `data` field.
 The command rejects an audit report whose reproducibility hash no longer
 matches its contents.
 
