@@ -307,6 +307,8 @@ RISK_LEVELS: Final[tuple[str, ...]] = (RISK_LOW, RISK_MEDIUM, RISK_HIGH)
 RXNORM: Final = "RxNorm"
 LOINC: Final = "LOINC"
 ICD_10_CM: Final = "ICD-10-CM"
+CHINESE_ICD_10: Final = "ICD-10-CN"
+CHINESE_DRUG: Final = "CN-DRUG"
 HPO: Final = "HPO"
 SNOMED: Final = "SNOMED"
 CLINICAL_SYSTEM_HINTS: Final[tuple[str, ...]] = (
@@ -555,8 +557,16 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ANTIBIOTIC: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
     SUSCEPTIBILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     # Clinical concepts
-    CONDITION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED)),
-    MEDICATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    CONDITION: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (ICD_10_CM, CHINESE_ICD_10, SNOMED),
+    ),
+    MEDICATION: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (RXNORM, CHINESE_DRUG, SNOMED),
+    ),
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),

@@ -18,6 +18,21 @@ from .cache import (
     NormalizationCacheStats,
     make_normalization_cache_key,
 )
+from .chinese import (
+    CHINESE_DRUG_SYSTEM,
+    CHINESE_ICD_10_SYSTEM,
+    CHINESE_TERMINOLOGY_DISCLAIMER,
+    CHINESE_TERMINOLOGY_VOCABULARY_NOTE,
+    ChineseTerminologyDictionary,
+    ChineseTerminologyEntry,
+    ChineseTerminologyError,
+    ChineseTerminologyGrounder,
+    ChineseTerminologyLicenseError,
+    ChineseTerminologyMatch,
+    ChineseTerminologyPathError,
+    load_chinese_terminology_dictionary,
+    normalize_chinese_clinical_surface,
+)
 from .ranker import (
     SYNTHETIC_GOLD_SET,
     CandidateProvenance,
@@ -31,7 +46,18 @@ from .ranker import (
 
 __all__ = [
     "BackendIdentity",
+    "CHINESE_DRUG_SYSTEM",
+    "CHINESE_ICD_10_SYSTEM",
+    "CHINESE_TERMINOLOGY_DISCLAIMER",
+    "CHINESE_TERMINOLOGY_VOCABULARY_NOTE",
     "CandidateProvenance",
+    "ChineseTerminologyDictionary",
+    "ChineseTerminologyEntry",
+    "ChineseTerminologyError",
+    "ChineseTerminologyGrounder",
+    "ChineseTerminologyLicenseError",
+    "ChineseTerminologyMatch",
+    "ChineseTerminologyPathError",
     "CodeSystemMetadata",
     "ConceptNormalizationCache",
     "ConceptNormalizer",
@@ -47,7 +73,9 @@ __all__ = [
     "TerminologyConcept",
     "evaluate_normalization_gold",
     "generate_query_variants",
+    "load_chinese_terminology_dictionary",
     "make_normalization_cache_key",
+    "normalize_chinese_clinical_surface",
     "normalize_surface",
     "validate_backend_identity",
 ]
