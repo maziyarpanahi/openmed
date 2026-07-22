@@ -77,6 +77,7 @@ nav:
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
       - De-identified DHIS2 Export: dhis2-export.md
+      - OpenMRS Adapter: openmrs-adapter.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
