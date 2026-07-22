@@ -3,6 +3,7 @@
 import pytest
 
 from openmed.core.anonymizer import (
+    LABEL_GENERATORS,
     LANG_TO_LOCALE,
     Anonymizer,
     AnonymizerConfig,
@@ -266,6 +267,7 @@ class TestCustomGenerator:
     def test_register_label_generator_overrides_default(self):
         """Users can override per-label generators."""
         marker = "CUSTOM-MRN-GENERATOR"
+        previous = LABEL_GENERATORS["ID_NUM"]
 
         def my_gen(faker, original, *, locale):
             return marker
@@ -276,10 +278,7 @@ class TestCustomGenerator:
             a = Anonymizer(lang="en")
             assert a.surrogate("12345", "id_num") == marker
         finally:
-            # Restore default
-            from openmed.core.anonymizer.registry import _gen_id_num
-
-            register_label_generator("ID_NUM", _gen_id_num)
+            register_label_generator("ID_NUM", previous)
 
 
 class TestAnonymizerConfig:

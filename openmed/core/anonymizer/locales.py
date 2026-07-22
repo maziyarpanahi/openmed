@@ -193,6 +193,7 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``id_providers``: national-ID Faker method names whose surrogates
         round-trip the language's registered checksum validator (empty when the
         language has no checksummed national-ID surrogate provider).
+      - ``id_types``: stable registry ID types covered by ``id_providers``.
       - ``id_locale``: the Faker locale those providers are drawn from, or
         ``None``. Usually equals ``locale``; differs when the registered
         validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
@@ -210,12 +211,18 @@ def locale_coherence_report() -> list[dict[str, object]]:
     for lang in sorted(reported_languages):
         provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
         id_locale, id_method = provider if provider else (None, None)
+        id_types = [id_method] if id_method is not None else []
+        id_methods = [id_method] if id_method is not None else []
+        if lang in {"hi", "te"}:
+            id_types = ["aadhaar", "pan", "gstin", "abha"]
+            id_methods = ["aadhaar", "pan", "gstin", "abha"]
         rows.append(
             {
                 "language": lang,
                 "locale": LANG_TO_LOCALE.get(lang, LANG_TO_LOCALE["en"]),
                 "approximate": lang in _APPROXIMATE_LOCALES,
-                "id_providers": [id_method] if id_method else [],
+                "id_providers": id_methods,
+                "id_types": id_types,
                 "id_locale": id_locale,
             }
         )

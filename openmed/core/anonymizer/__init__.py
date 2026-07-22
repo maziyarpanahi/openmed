@@ -27,6 +27,7 @@ from typing import Any
 
 from .engine import Anonymizer, AnonymizerConfig
 from .locales import LANG_TO_LOCALE, resolve_locale
+from .providers.clinical_ids import IndiaSurrogateProvider
 from .registry import LABEL_GENERATORS, Generator, register_label_generator
 
 
@@ -39,26 +40,16 @@ def register_clinical_provider(provider: Any) -> None:
     ``AnonymizerConfig.custom_providers`` instead when you need
     per-instance scoping.
     """
-    from .providers import clinical_ids
+    from .providers.clinical_ids import register_extra_clinical_provider
 
-    if not hasattr(clinical_ids, "_extra_providers"):
-        clinical_ids._extra_providers = []  # type: ignore[attr-defined]
-    clinical_ids._extra_providers.append(provider)  # type: ignore[attr-defined]
-
-    original = clinical_ids.register_clinical_providers
-
-    def _augmented(faker):
-        original(faker)
-        for extra in getattr(clinical_ids, "_extra_providers", ()):
-            faker.add_provider(extra)
-
-    clinical_ids.register_clinical_providers = _augmented  # type: ignore[assignment]
+    register_extra_clinical_provider(provider)
 
 
 __all__ = [
     "Anonymizer",
     "AnonymizerConfig",
     "Generator",
+    "IndiaSurrogateProvider",
     "LABEL_GENERATORS",
     "LANG_TO_LOCALE",
     "register_clinical_provider",
