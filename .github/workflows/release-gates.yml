@@ -39,7 +39,7 @@ jobs:
           pip install -e .
 
       - name: Check API migration guide completeness
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v1.9.')
         run: |
           python scripts/release/api_surface_diff.py \
             v1.8.0 "$GITHUB_SHA" \

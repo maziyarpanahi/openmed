@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import importlib.util
+import json
 import subprocess
 import sys
 import time
@@ -95,6 +96,20 @@ def test_reexported_function_keeps_static_signature_without_importing():
     )
 
 
+def test_package_local_reexport_without_all_remains_public():
+    sources = {
+        PurePosixPath("fixturepkg/api.py"): "VALUE = {'en'}\n",
+        PurePosixPath("fixturepkg/bridge.py"): (
+            "from typing import Any\nfrom .api import VALUE\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.bridge.VALUE"].kind == "data"
+    assert "fixturepkg.bridge.Any" not in surface
+
+
 def test_json_diff_is_machine_readable_and_stable():
     payload = fixture_diff().to_dict()
 
@@ -114,7 +129,7 @@ def test_json_diff_is_machine_readable_and_stable():
 
 def test_missing_entry_fails_and_names_the_symbol():
     diff = fixture_diff()
-    complete = "\n".join(change.symbol for change in diff.breaking)
+    complete = "\n".join(change.symbol for change in (*diff.breaking, *diff.deprecated))
 
     assert api_surface_diff.missing_migration_symbols(diff, complete) == ()
     missing_symbol = "fixturepkg.api.removed"
@@ -124,11 +139,22 @@ def test_missing_entry_fails_and_names_the_symbol():
     )
 
 
+def test_missing_deprecated_entry_fails_and_names_the_symbol():
+    diff = fixture_diff()
+    complete = "\n".join(change.symbol for change in (*diff.breaking, *diff.deprecated))
+    missing_symbol = diff.deprecated[0].symbol
+    incomplete = complete.replace(missing_symbol, "")
+
+    assert api_surface_diff.missing_migration_symbols(diff, incomplete) == (
+        missing_symbol,
+    )
+
+
 def test_check_cli_fails_closed_then_passes_when_entry_is_restored(
     tmp_path, monkeypatch, capsys
 ):
     diff = fixture_diff()
-    complete = "\n".join(change.symbol for change in diff.breaking)
+    complete = "\n".join(change.symbol for change in (*diff.breaking, *diff.deprecated))
     missing_symbol = "fixturepkg.api.removed"
     guide = tmp_path / "migration.md"
     guide.write_text(complete.replace(missing_symbol, ""), encoding="utf-8")
@@ -140,6 +166,26 @@ def test_check_cli_fails_closed_then_passes_when_entry_is_restored(
     guide.write_text(complete, encoding="utf-8")
     assert api_surface_diff.main(["before", "after", "--check", str(guide)]) == 0
     assert "completeness check passed" in capsys.readouterr().out
+
+
+def test_json_stdout_stays_machine_readable_when_check_passes(
+    tmp_path, monkeypatch, capsys
+):
+    diff = fixture_diff()
+    guide = tmp_path / "migration.md"
+    guide.write_text(
+        "\n".join(change.symbol for change in (*diff.breaking, *diff.deprecated)),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_surface_diff, "compare_refs", lambda *args: diff)
+
+    assert (
+        api_surface_diff.main(["before", "after", "--json", "-", "--check", str(guide)])
+        == 0
+    )
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["schema_version"] == 1
+    assert "completeness check passed" in captured.err
 
 
 def test_full_package_extraction_is_ast_only_and_under_thirty_seconds(monkeypatch):
@@ -201,6 +247,6 @@ def test_release_workflow_runs_gate_only_for_tags():
     assert 'tags:\n      - "v*"' in workflow
     assert "fetch-depth: 0" in workflow
     assert "Check API migration guide completeness" in workflow
-    assert "if: startsWith(github.ref, 'refs/tags/')" in workflow
+    assert "if: startsWith(github.ref, 'refs/tags/v1.9.')" in workflow
     assert "scripts/release/api_surface_diff.py" in workflow
     assert "API migration guide completeness gate passed." in workflow

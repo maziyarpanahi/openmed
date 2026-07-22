@@ -628,7 +628,16 @@ def _module_symbols(
         else tuple(
             name
             for name, symbol in local.items()
-            if "." not in name and symbol.kind != "import" and not name.startswith("_")
+            if "." not in name
+            and not name.startswith("_")
+            and (
+                symbol.kind != "import"
+                or symbol.source_target == package
+                or (
+                    symbol.source_target is not None
+                    and symbol.source_target.startswith(f"{package}.")
+                )
+            )
         )
     )
     for name in names:
@@ -914,10 +923,10 @@ def missing_migration_symbols(
     diff: ApiSurfaceDiff,
     document: str,
 ) -> tuple[str, ...]:
-    """Return breaking symbols not named exactly in a migration document."""
+    """Return required change symbols absent from a migration document."""
 
     missing: list[str] = []
-    for change in diff.breaking:
+    for change in (*diff.breaking, *diff.deprecated):
         symbol_pattern = re.compile(
             rf"(?<![A-Za-z0-9_.]){re.escape(change.symbol)}(?![A-Za-z0-9_.])"
         )
@@ -930,7 +939,7 @@ def check_migration_document(
     diff: ApiSurfaceDiff,
     document_path: Path,
 ) -> tuple[str, ...]:
-    """Return breaking symbols missing from ``document_path``."""
+    """Return required change symbols missing from ``document_path``."""
 
     try:
         document = document_path.read_text(encoding="utf-8")
@@ -1032,13 +1041,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             missing = check_migration_document(diff, document_path)
             if missing:
                 print(
-                    "Migration guide is missing breaking API symbols:",
+                    "Migration guide is missing breaking or deprecated API symbols:",
                     file=sys.stderr,
                 )
                 for symbol in missing:
                     print(f"  - {symbol}", file=sys.stderr)
                 return 1
-            print(f"Migration guide completeness check passed: {document_path}")
+            status_stream = sys.stderr if args.json_destination == "-" else sys.stdout
+            print(
+                f"Migration guide completeness check passed: {document_path}",
+                file=status_stream,
+            )
     except ApiSurfaceError as exc:
         print(f"api-surface-diff: {exc}", file=sys.stderr)
         return 2

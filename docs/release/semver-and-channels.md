@@ -65,8 +65,9 @@ def legacy_api() -> None:
 ```
 
 Every breaking or deprecated change must also have a before/after entry in the
-relevant migration guide. Tag builds compare the candidate against the release
-baseline and fail when the guide omits a detected breaking symbol.
+relevant migration guide. Version-scoped tag builds compare the candidate
+against the release baseline and fail when the guide omits either kind of
+required change.
 
 ## Release Gates
 
