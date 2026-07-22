@@ -774,7 +774,9 @@ class SurrogateVault:
                         source,
                     )
                     assert normalized_rendered is not None
-                    if not _matches_required_script(normalized_rendered, required_script):
+                    if not _matches_required_script(
+                        normalized_rendered, required_script
+                    ):
                         raise ValueError(
                             "existing surrogate does not satisfy required_script"
                         )

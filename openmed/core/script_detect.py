@@ -601,7 +601,12 @@ def canonical_indian_name(text: str) -> str:
             ignored_marks=frozenset(),
         )
     else:
-        transliterated = text
+        words = []
+        for word in text.split():
+            if word.endswith("a") and any(not char.isascii() for char in word):
+                word = word[:-1]
+            words.append(word)
+        transliterated = " ".join(words)
     return _fold_indian_romanization(transliterated)
 
 

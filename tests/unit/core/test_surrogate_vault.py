@@ -10,6 +10,7 @@ import pytest
 from openmed.core import surrogate_vault as vault_module
 from openmed.core.pii import deidentify, reidentify
 from openmed.core.schemas.span import hmac_text_hash
+from openmed.core.script_detect import detect_script
 from openmed.core.surrogate_vault import (
     ENCRYPTION_SCHEME,
     HMAC_SCHEME,
@@ -78,8 +79,8 @@ def test_shared_vault_reuses_surrogates_across_deidentify_calls(monkeypatch):
     assert "Bruno Quill" not in third.deidentified_text
 
 
-def test_shared_vault_reuses_one_surrogate_across_indic_scripts(monkeypatch):
-    """ISO linkage keeps cross-script mentions consistent within a document."""
+def test_shared_vault_reuses_one_identity_across_indic_scripts(monkeypatch):
+    """Cross-script mentions share one identity with script-aware rendering."""
 
     text = "राम met ராம and rāma"
 
@@ -99,18 +100,23 @@ def test_shared_vault_reuses_one_surrogate_across_indic_scripts(monkeypatch):
     )
 
     assert len(result.pii_entities) == 3
-    assert len({entity.surrogate for entity in result.pii_entities}) == 1
+    assert {
+        detect_script(entity.surrogate or "") for entity in result.pii_entities
+    } == {"Devanagari", "Tamil", "Latin"}
     assert len(vault.entries()) == 1
     assert result.mapping is not None
     assert reidentify(result.deidentified_text, result.mapping) == text
 
 
-def test_vault_reads_pre_transliteration_person_keys():
-    """Existing raw-surface entries remain readable after key normalization."""
+def test_vault_reads_pre_india_person_keys():
+    """Existing normalized PERSON entries remain readable after India scoping."""
 
     source = SurrogateSource("Alice Zephyr", "NAME")
     vault = SurrogateVault.in_memory("unit-test-hmac-secret")
-    legacy_key = vault._legacy_key_for_epoch(source, vault._epoch_manager.current_key)
+    legacy_key = vault._normalized_legacy_key_for_epoch(
+        source,
+        vault._epoch_manager.current_key,
+    )
     vault.store.set(legacy_key, "Casey Example", key_id=vault.current_key_id)
 
     assert legacy_key != vault.key_for(source.source_text, label=source.label)
@@ -141,8 +147,17 @@ def test_legacy_person_key_migrates_for_cross_script_reuse():
         create_surrogate=lambda _attempt: "Different Value",
     )
 
-    assert first == second == "Casey Example"
-    assert vault.get("ராம", label="NAME", lang="hi") == "Casey Example"
+    assert detect_script(first) == "Devanagari"
+    assert detect_script(second) == "Tamil"
+    assert vault.key_for("राम", label="NAME", lang="hi") == vault.key_for(
+        "ராம",
+        label="NAME",
+        lang="hi",
+    )
+    assert vault.get("ராம", label="NAME", lang="hi") == second
+    assert vault.store.get(vault.key_for("राम", label="NAME", lang="hi")) == (
+        "casey example"
+    )
 
 
 def test_json_vault_persists_only_hmac_hashes_and_encrypted_surrogates(
