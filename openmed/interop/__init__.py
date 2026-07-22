@@ -131,6 +131,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="OMOP CDM loader for grounded clinical note spans",
     ),
+    "openmrs": AdapterSpec(
+        name="openmrs",
+        module="openmed.interop.openmrs",
+        extra="openmrs",
+        description="Local-first OpenMRS REST and FHIR2 de-identification adapter",
+    ),
 }
 
 _GATEWAY_EXPORTS: Final[dict[str, str]] = {

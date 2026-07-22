@@ -1,0 +1,41 @@
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "https://facility.test/openmrs/ws/fhir2/R4/Observation/observation-1",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-1",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34109-9",
+              "display": "Note"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-1"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-1"
+        },
+        "valueString": "Amina Wanjiku can be reached at +254 712 345 678.",
+        "note": [
+          {
+            "text": "National identifier 12345678 was checked on the facility box."
+          }
+        ]
+      }
+    }
+  ],
+  "link": [
+    {
+      "relation": "next",
+      "url": "https://facility.test/openmrs/ws/fhir2/R4/Observation?_count=2&page=2"
+    }
+  ]
+}
