@@ -105,6 +105,25 @@ class DraftModelInfo:
         return self.license.lower() in PERMISSIVE_DRAFT_MODEL_LICENSES
 
 
+@dataclass(frozen=True)
+class PiiFamilyTransferRoute:
+    """Registry-facing PII language route with family adapter metadata."""
+
+    language: str
+    family_id: str
+    family_display_name: str
+    target_model_id: Optional[str]
+    backbone_model_id: str
+    donor_language: Optional[str] = None
+    donor_model_id: Optional[str] = None
+    adapter_id: Optional[str] = None
+    adapter_license: Optional[str] = None
+    adapter_provenance: Optional[str] = None
+    clinical_disclaimer: Optional[str] = None
+    offline_runnable: bool = True
+    mode: str = "native"
+
+
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
 
 PERMISSIVE_DRAFT_MODEL_LICENSES = frozenset(
@@ -1046,3 +1065,44 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     from .pii_i18n import DEFAULT_PII_MODELS
 
     return DEFAULT_PII_MODELS.get(lang)
+
+
+def resolve_pii_family_transfer_route(
+    lang: str,
+) -> Optional[PiiFamilyTransferRoute]:
+    """Return backbone plus donor-adapter metadata for a PII language route."""
+
+    from openmed.training.adapters.config import DEFAULT_BACKBONE_MODEL_ID
+    from openmed.training.adapters.family_transfer import resolve_family_transfer
+
+    resolution = resolve_family_transfer(lang)
+    if resolution is None:
+        return None
+
+    target_model_id = get_default_pii_model(resolution.language)
+    edge = resolution.primary_edge
+    if edge is None:
+        return PiiFamilyTransferRoute(
+            language=resolution.language,
+            family_id=resolution.family.family_id,
+            family_display_name=resolution.family.display_name,
+            target_model_id=target_model_id,
+            backbone_model_id=DEFAULT_BACKBONE_MODEL_ID,
+        )
+
+    adapter = edge.adapter
+    return PiiFamilyTransferRoute(
+        language=resolution.language,
+        family_id=resolution.family.family_id,
+        family_display_name=resolution.family.display_name,
+        target_model_id=target_model_id,
+        backbone_model_id=adapter.backbone_model_id,
+        donor_language=edge.donor_language,
+        donor_model_id=get_default_pii_model(edge.donor_language),
+        adapter_id=adapter.adapter_id,
+        adapter_license=adapter.license,
+        adapter_provenance=adapter.provenance,
+        clinical_disclaimer=adapter.disclaimer,
+        offline_runnable=adapter.offline_runnable,
+        mode=edge.mode,
+    )
