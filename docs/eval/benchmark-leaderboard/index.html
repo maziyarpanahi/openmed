@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenMed Public Benchmark Leaderboard</title>
+  <style>
+    :root{color-scheme:light dark;font-family:system-ui,sans-serif}
+    body{margin:0 auto;max-width:96rem;padding:2rem;line-height:1.5}
+    header{display:flex;gap:1rem;align-items:start;justify-content:space-between;flex-wrap:wrap}
+    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.5rem 0}
+    .tab{border:1px solid #64748b;border-radius:.4rem;padding:.55rem .9rem;background:transparent;cursor:pointer}
+    .tab[aria-selected="true"]{background:#2563eb;color:#fff;border-color:#2563eb}
+    .table-wrap{overflow-x:auto;margin-bottom:2rem}
+    table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+    th,td{border-bottom:1px solid #94a3b8;padding:.6rem;text-align:left;vertical-align:top}
+    th.numeric,td.numeric{text-align:right}
+    code{overflow-wrap:anywhere}
+    .metric-note{color:#64748b}
+  </style>
+</head>
+<body>
+<header><div><h1>OpenMed Public Benchmark Leaderboard</h1><p class="metric-note">Ranked leakage ascending, then recall descending. Every row links to its archived synthetic report.</p></div><a href="leaderboard.json" download>Download leaderboard.json</a></header>
+<div class="tabs" role="tablist" aria-label="Benchmark suites"><button class="tab" role="tab" id="suite-0-tab" aria-controls="suite-0" aria-selected="true" data-target="suite-0">golden</button></div>
+<section class="suite-panel" id="suite-0" role="tabpanel" aria-labelledby="suite-0-tab"><h2>PII</h2><div class="table-wrap"><table><thead><tr><th class="numeric">Rank</th><th>Model</th><th>Device</th><th class="numeric">Leakage</th><th class="numeric">Recall</th><th class="numeric">F1</th><th>Release</th><th>Run date</th><th>Reproducibility hash</th><th>Report</th></tr></thead><tbody><tr><td class="numeric">1</td><td>OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx</td><td>mlx-fp</td><td class="numeric">0.0000%</td><td class="numeric">100.0000%</td><td class="numeric">100.0000%</td><td><code>v1.9.1</code></td><td><time datetime="2026-06-14">2026-06-14</time></td><td><code>sha256:4818bdef580eb406f5cc665cc0892aefab1fd90c8743822d843dd48f135bde34</code></td><td><a href="reports/golden.report.json" download>Download JSON</a></td></tr></tbody></table></div></section>
+<script>
+  const tabs = document.querySelectorAll('[role="tab"]');
+  tabs.forEach((tab) => tab.addEventListener('click', () => {
+    tabs.forEach((item) => item.setAttribute('aria-selected', String(item === tab)));
+    document.querySelectorAll('[role="tabpanel"]').forEach((panel) => {
+      panel.hidden = panel.id !== tab.dataset.target;
+    });
+  }));
+</script>
+</body>
+</html>

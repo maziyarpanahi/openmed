@@ -57,6 +57,7 @@ nav:
       - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Public Benchmark Leaderboard: eval/leaderboard.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
