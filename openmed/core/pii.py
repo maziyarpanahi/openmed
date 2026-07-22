@@ -195,7 +195,9 @@ class DeidentificationResult:
         pii_entities: List of detected and redacted PII entities
         method: De-identification method used
         timestamp: When de-identification was performed
-        mapping: Optional mapping for re-identification (redacted -> original)
+        mapping: Optional mapping for re-identification. Colliding replacement
+            surfaces use private occurrence keys so separate source spellings
+            remain reversible without changing the de-identified text.
     """
 
     original_text: str
@@ -332,6 +334,7 @@ class DeidentificationResult:
 # For these, input is automatically stripped of accents before model
 # inference and entity positions are mapped back to the original text.
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
+_OCCURRENCE_MAPPING_PREFIX = "__openmed_occurrence_v1__:"
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset(
@@ -1631,7 +1634,8 @@ def _build_deidentification_result(
         )
 
     deidentified = text
-    mapping = {} if keep_mapping else None
+    mapping: dict[str, str] | None = None
+    mapping_occurrences: dict[str, list[tuple[int, str]]] = {}
     source_surrogates: dict[tuple[str, str], str] = {}
     entity_occurrence_indexes: dict[int, int] = {}
     if keep_mapping:
@@ -1721,8 +1725,13 @@ def _build_deidentification_result(
             deidentified[: entity.start] + redacted + deidentified[entity.end :]
         )
 
-        if keep_mapping and mapping is not None:
-            mapping[redacted] = entity.original_text or entity.text
+        if keep_mapping:
+            mapping_occurrences.setdefault(redacted, []).append(
+                (entity.start, entity.original_text or entity.text)
+            )
+
+    if keep_mapping:
+        mapping = _build_reidentification_mapping(mapping_occurrences)
 
     audit_report = None
     if audit:
@@ -2861,7 +2870,8 @@ def reidentify(
 
     Args:
         deidentified_text: De-identified text
-        mapping: Mapping from redacted to original text
+        mapping: Mapping from redacted to original text, optionally including
+            occurrence-aware entries emitted for colliding replacement values.
 
     Returns:
         Re-identified text with original PII restored
@@ -2879,8 +2889,57 @@ def reidentify(
         Requires proper authorization and audit logging in production.
     """
     result = deidentified_text
-
+    regular_mapping: dict[str, str] = {}
+    occurrence_mapping: dict[str, list[tuple[int, str]]] = {}
     for redacted, original in mapping.items():
+        parsed = _parse_occurrence_mapping_key(redacted)
+        if parsed is None:
+            regular_mapping[redacted] = original
+            continue
+        ordinal, surface = parsed
+        occurrence_mapping.setdefault(surface, []).append((ordinal, original))
+
+    for redacted in sorted(occurrence_mapping, key=len, reverse=True):
+        originals = [original for _, original in sorted(occurrence_mapping[redacted])]
+        occurrence_index = 0
+
+        def restore_occurrence(match: re.Match[str]) -> str:
+            nonlocal occurrence_index
+            if occurrence_index >= len(originals):
+                return match.group(0)
+            original = originals[occurrence_index]
+            occurrence_index += 1
+            return original
+
+        result = re.sub(re.escape(redacted), restore_occurrence, result)
+
+    for redacted, original in regular_mapping.items():
         result = result.replace(redacted, original)
 
     return result
+
+
+def _build_reidentification_mapping(
+    occurrences: Mapping[str, list[tuple[int, str]]],
+) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for redacted, values in occurrences.items():
+        ordered = sorted(values)
+        originals = [original for _, original in ordered]
+        if len(set(originals)) == 1:
+            mapping[redacted] = originals[0]
+            continue
+        for ordinal, original in enumerate(originals, start=1):
+            key = f"{_OCCURRENCE_MAPPING_PREFIX}{ordinal:08d}:{redacted}"
+            mapping[key] = original
+    return mapping
+
+
+def _parse_occurrence_mapping_key(key: str) -> tuple[int, str] | None:
+    if not key.startswith(_OCCURRENCE_MAPPING_PREFIX):
+        return None
+    payload = key[len(_OCCURRENCE_MAPPING_PREFIX) :]
+    ordinal_text, separator, redacted = payload.partition(":")
+    if not separator or not ordinal_text.isdigit() or not redacted:
+        return None
+    return int(ordinal_text), redacted
