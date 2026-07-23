@@ -222,6 +222,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
+            high_watermark=runtime.batching.high_watermark,
+            low_watermark=runtime.batching.low_watermark,
+            max_queue_wait_ms=runtime.batching.max_queue_wait_ms,
+            queue_name="analyze",
             metrics=runtime.metrics,
         )
         app.state.pii_extract_batcher = DynamicBatcher(
@@ -229,6 +233,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
             max_queue_size_per_priority=runtime.batching.max_queue_size,
+            high_watermark=runtime.batching.high_watermark,
+            low_watermark=runtime.batching.low_watermark,
+            max_queue_wait_ms=runtime.batching.max_queue_wait_ms,
+            queue_name="pii_extract",
             metrics=runtime.metrics,
         )
     app.state.throttle = ServiceThrottle(

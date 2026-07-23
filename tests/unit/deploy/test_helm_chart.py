@@ -110,3 +110,7 @@ def test_synthetic_values_exercise_image_resources_and_secret_env():
         == "disease_detection_superclinical"
     )
     assert configmap["data"]["OPENMED_SERVICE_METRICS_ENABLED"] == "true"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE"] == "32"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_HIGH_WATERMARK"] == "24"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_LOW_WATERMARK"] == "8"
+    assert configmap["data"]["OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"] == "250"

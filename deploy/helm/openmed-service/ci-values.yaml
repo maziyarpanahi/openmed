@@ -17,6 +17,10 @@ config:
     enabled: true
     maxSize: 4
     maxWaitMs: 20
+    maxQueueSize: 32
+    highWatermark: 24
+    lowWatermark: 8
+    maxQueueWaitMs: 250
   coalescing:
     enabled: true
   metrics:
