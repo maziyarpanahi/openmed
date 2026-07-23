@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "9db0bc59736b4b89ad492dbbb34c716828780e93b29accc6538987170e1038cc",
+          "source_sha256": "9c3fb81988c144c00707b0b7f75c4e0d5ce657fdc73ad22268faa3276a1c53c7",
           "translation_heading": "__preamble__",
-          "translation_sha256": "3ef4374cf36198753e91b630ff405cc7e919b36bd908b1a747773d127a815161"
+          "translation_sha256": "2455d97dbc64b1a5ddc64e66272fa5299aaad46f60aab3e56baf0a7ca040472b"
         },
         {
           "source_heading": "See it in action",
@@ -78,9 +78,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "7bc16bbf60566df5c3f11a556787bbc0e96221df4222ebe548c8ffb8a797635d",
+          "source_sha256": "78abe2e34db570d388268b8ebc273cab9b391cf58080e01e38cdab6207fb66bd",
           "translation_heading": "दस्तावेज़ीकरण",
-          "translation_sha256": "d27493309f37b1502c7be499f826165645276b78702465c1eae4f3dfa980cf81"
+          "translation_sha256": "464e3b15c769578e61587377532b0181235ceea91ba7009ad0c202fa9b83944b"
         },
         {
           "source_heading": "Meet the mascot",
@@ -126,13 +126,137 @@
         }
       ]
     },
+    "README.sw.md": {
+      "sections": [
+        {
+          "source_heading": "__preamble__",
+          "source_sha256": "9c3fb81988c144c00707b0b7f75c4e0d5ce657fdc73ad22268faa3276a1c53c7",
+          "translation_heading": "__preamble__",
+          "translation_sha256": "3eec5488b813513ce5d11a004f4902287f24e6464a8702de4474db7c97b9b869"
+        },
+        {
+          "source_heading": "See it in action",
+          "source_sha256": "87e9ebf1db66c82f01adc9fb70e313a2db201a46d08a4a0d7e9b289f523115ea",
+          "translation_heading": "Ione ikifanya kazi",
+          "translation_sha256": "db685cdc6b52da186b2ac77e54133d3b8542eff0e6db278da4aca62d91af0b58"
+        },
+        {
+          "source_heading": "30-second example",
+          "source_sha256": "e18a0cf23b36ccc26c24ea967dc447c1fcdc0911ab1f3a017d0d8aa6f6cf1320",
+          "translation_heading": "Mfano wa sekunde 30",
+          "translation_sha256": "22966c690f9cd5b3cb59a2729d15ee176dcc99c082f9b7d4129b21d08e8ce19e"
+        },
+        {
+          "source_heading": "Why OpenMed?",
+          "source_sha256": "85562a72d9945e05087503afe478d2cedf694bcc08b8f52d40bcfaaef767f0cb",
+          "translation_heading": "Kwa nini OpenMed?",
+          "translation_sha256": "895e7ffbd19f60050b793513e4cd7cba37fcadecd0dfdcbcc79b0cc47691c691"
+        },
+        {
+          "source_heading": "On-device on Apple: Swift, MLX & iOS",
+          "source_sha256": "b0d7cda36fb78c5edf06959b1edae8e31285571a519c3c9e28f7f1ea2e7e5f23",
+          "translation_heading": "Kwenye kifaa cha Apple: Swift, MLX na iOS",
+          "translation_sha256": "c3698b31770009f75c84289f4aa490191f11cedabf7e89234e9bc6b9fb89934c"
+        },
+        {
+          "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
+          "source_sha256": "1e9ab1b7892a75d76b77c16693953c8dcf98626b629d49851e86eebae53604c3",
+          "translation_heading": "Kwenye kifaa cha Android — Kotlin na ONNX Runtime Mobile",
+          "translation_sha256": "fb644de3b4a83513cbe8484ce39d23f643658e01d0dc4f9ffa75e4577c5b33ef"
+        },
+        {
+          "source_heading": "How it works",
+          "source_sha256": "f2d8b6e4c8775df6a2f41cc448c0ad9c214f629355c22d2e2fb8d766d742e5ef",
+          "translation_heading": "Jinsi inavyofanya kazi",
+          "translation_sha256": "620c0e87cd7f3b36f413dbce932dbb5def89cf632593452c40431c81223531b9"
+        },
+        {
+          "source_heading": "Quick start",
+          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "translation_heading": "Anza haraka",
+          "translation_sha256": "b949670f043de40e9e4893a62e11c0842c028002a7b59ef938d3d6cb049b86ea"
+        },
+        {
+          "source_heading": "Models",
+          "source_sha256": "1229d2b0c1450109a7a1b541aed17c970807730be5e26645b78ca98b6cb74fa5",
+          "translation_heading": "Modeli",
+          "translation_sha256": "3bde636e3adfdcbf5667266e98a9ba00c365084a8ec3229c695b2982a965b3cc"
+        },
+        {
+          "source_heading": "Privacy: PII detection & de-identification",
+          "source_sha256": "77ab271445ecfc6f1ab82fdd04e89d86c055656d154c650e1fec40eebfad37fd",
+          "translation_heading": "Faragha: utambuzi wa PII na uondoaji utambulisho",
+          "translation_sha256": "4b094ecf156d3d6876220596014d02cb45a6633ffd3af9ed90a641c966c0cdcc"
+        },
+        {
+          "source_heading": "Multilingual PII (22 supported languages)",
+          "source_sha256": "b3d739d1b2ed3a6d5beb3aa498a7f040f230e8d998ea3b21549e1c46a17cf837",
+          "translation_heading": "PII ya lugha nyingi (lugha 22 zinazoungwa mkono)",
+          "translation_sha256": "7534497a9661df524e76b429a252c32183f19fa01e098cf72ab9a8755add1675"
+        },
+        {
+          "source_heading": "REST API",
+          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "translation_heading": "REST API",
+          "translation_sha256": "8b9db8b2bc6373c2722a12316fa61e970fd33934cf148d86ea33a8c40b916c31"
+        },
+        {
+          "source_heading": "Documentation",
+          "source_sha256": "78abe2e34db570d388268b8ebc273cab9b391cf58080e01e38cdab6207fb66bd",
+          "translation_heading": "Nyaraka",
+          "translation_sha256": "ad539c726c387d8999d28ff23c17be04c916c9324c71838be2b05f1a5345df04"
+        },
+        {
+          "source_heading": "Meet the mascot",
+          "source_sha256": "901153cff90aa4f47b6bf3071854a5f43e5be20c0ee00b81bcd255b3d89ce480",
+          "translation_heading": "Kutana na kinyago",
+          "translation_sha256": "a58baaf43f3ad8897d22fc211779ef61cb55fdeaf16731edd936478398f05ae6"
+        },
+        {
+          "source_heading": "Contributing",
+          "source_sha256": "90894e9cb31825ac87f839d0ca3d8b5549f098c375603d0c73d8a23be3003b94",
+          "translation_heading": "Kuchangia",
+          "translation_sha256": "29eef74a2a9f1c43c99b9a61946afa85a14cd59e2fcb5fe403f98b075acb91b0"
+        },
+        {
+          "source_heading": "Security",
+          "source_sha256": "b16e02cc3498ca5578e60392f01f19f06583e0730d56bd000aa33ff68f70cb62",
+          "translation_heading": "Usalama",
+          "translation_sha256": "b15146639aa41c69d976007eb36936c6ba49a64314b5c9e3d81a91b890aaa420"
+        },
+        {
+          "source_heading": "Credits",
+          "source_sha256": "2feda286eece483cc410b38dc387d6a62848b29c8c4a6e02f8398139dc815b26",
+          "translation_heading": "Shukrani",
+          "translation_sha256": "c01ea1b65cd42a9ee3ebe61ec64825b1606fca2df1c1d29e74d99b7ba6c49a28"
+        },
+        {
+          "source_heading": "License",
+          "source_sha256": "0092b5d3cba4eb214653c7401524beaa6f0fdb1b20ee6e3b010e4ed05524d59e",
+          "translation_heading": "Leseni",
+          "translation_sha256": "db533825bee23031c588a726d68aa493e7e150f22ec728dfb7c748f0afa46b8c"
+        },
+        {
+          "source_heading": "Citation",
+          "source_sha256": "4b8468e240029ca8d98617788a38b5ff5dc8e2011185ff53704883d4638b3d45",
+          "translation_heading": "Nukuu",
+          "translation_sha256": "7ba7ba664df1e0d26a9052f34f765295e736e4b702252b7c3016141156947a79"
+        },
+        {
+          "source_heading": "Star History",
+          "source_sha256": "518d01d6502a15e81d017342c64131233d3ed9245c5b9b86b68b6d63257fa353",
+          "translation_heading": "Historia ya nyota",
+          "translation_sha256": "6c6a64fbb5847c7cd7e0445d807eec823ab8318b3e038ea04c15f9a8a3038f2f"
+        }
+      ]
+    },
     "README.zh-CN.md": {
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "9db0bc59736b4b89ad492dbbb34c716828780e93b29accc6538987170e1038cc",
+          "source_sha256": "9c3fb81988c144c00707b0b7f75c4e0d5ce657fdc73ad22268faa3276a1c53c7",
           "translation_heading": "__preamble__",
-          "translation_sha256": "f122bdbe75e4d9e28455ba11281d75fcbfd78265c653bd90f29e3f4822665f65"
+          "translation_sha256": "10cb94a77b5ef80e0f1c9e33c699c07e00c1eb04883a84a511a46f641430fc83"
         },
         {
           "source_heading": "See it in action",
@@ -202,9 +326,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "7bc16bbf60566df5c3f11a556787bbc0e96221df4222ebe548c8ffb8a797635d",
+          "source_sha256": "78abe2e34db570d388268b8ebc273cab9b391cf58080e01e38cdab6207fb66bd",
           "translation_heading": "文档",
-          "translation_sha256": "0a4c5bfbb4a761383b945d37e722cbec370f12b9783a5a9354fa1f6bed0cd655"
+          "translation_sha256": "58f4d0664610ed3e21db47e516dbc8f9a441c85ee5c2c0c1a2112aae04ed47c8"
         },
         {
           "source_heading": "Meet the mascot",

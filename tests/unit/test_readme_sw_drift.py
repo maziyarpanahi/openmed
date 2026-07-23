@@ -97,21 +97,27 @@ def test_committed_swahili_readme_is_in_shared_manifest() -> None:
     assert "README.sw.md" in manifest["translations"]
     check_repository(ROOT, MANIFEST)
 
-    source_sections = split_h2_sections((ROOT / "README.md").read_text())
-    translation_sections = split_h2_sections((ROOT / "README.sw.md").read_text())
+    source_sections = split_h2_sections(
+        (ROOT / "README.md").read_text(encoding="utf-8")
+    )
+    translation_sections = split_h2_sections(
+        (ROOT / "README.sw.md").read_text(encoding="utf-8")
+    )
     assert len(source_sections) == len(translation_sections)
 
 
 def test_swahili_readme_preserves_all_link_and_image_targets() -> None:
-    source_targets = _relative_targets((ROOT / "README.md").read_text())
-    translation_targets = _relative_targets((ROOT / "README.sw.md").read_text())
+    source_targets = _relative_targets((ROOT / "README.md").read_text(encoding="utf-8"))
+    translation_targets = _relative_targets(
+        (ROOT / "README.sw.md").read_text(encoding="utf-8")
+    )
     source_targets.remove("README.sw.md")
     translation_targets.remove("README.md")
     assert source_targets == translation_targets
 
 
 def test_ci_uses_shared_drift_check_for_all_readmes() -> None:
-    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "readme-i18n-drift:" in workflow
     assert "'README*'" in workflow
     assert "python scripts/i18n/check_readme_drift.py" in workflow

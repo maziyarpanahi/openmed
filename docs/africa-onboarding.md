@@ -19,6 +19,19 @@ an English anatomy token-classification model with 33 million parameters. Its
 required model and tokenizer artifacts are about 67 MB in total, making it a
 better first download than the 109M or 434M registry entries.
 
+Confirm the local registry estimate before downloading. The command is offline
+by default; `OPENMED_OFFLINE=1` also makes that intent explicit:
+
+```bash
+OPENMED_OFFLINE=1 openmed models size \
+  OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M
+```
+
+The table should report about 67.9 MB to download and 256 MB estimated peak
+RAM. Use `openmed models size --budget-mb 100` to compare every registry model
+that fits a 100 MB download budget. Add `--remote` only when you intentionally
+want current Hub metadata and have a reliable connection.
+
 This model recognizes anatomy in English text. The Swahili README is a product
 and developer translation; it does not imply that this English checkpoint is a
 Swahili clinical NER model.

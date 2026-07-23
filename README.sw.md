@@ -34,7 +34,7 @@ mtandao wako.</p>
 </p>
 
 <p>
-  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 17 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 21 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -109,7 +109,7 @@ ufunguo wa API wala ombi la mtandao.
 | Data ya mgonjwa hutoka mtandao wako  |          **Kamwe**             | Hutumwa kwa mtoa huduma  |
 | Gharama                              | Bure na chanzo huria            | Malipo kwa kila ombi     |
 | Modeli maalumu za matibabu           |            2,000+              | Chache                    |
-| Lugha za PII zinazotumia modeli      |              17                | Hutofautiana              |
+| Lugha za PII zinazotumia modeli      |              21                | Hutofautiana              |
 | Nje ya mtandao/air-gapped            |               ✅               |            ❌            |
 | Uharakishaji wa Apple Silicon (MLX)  |               ✅               | Haitumiki                 |
 | Programu asilia za iOS/macOS         | ✅ kupitia OpenMedKit           |            ❌            |
@@ -421,17 +421,26 @@ Hugging Face na matumizi yake hapa hayaiti API ya OpenAI.
 | **Nemotron-PII fine-tune** | [`OpenMed/privacy-filter-nemotron`](https://huggingface.co/OpenMed/privacy-filter-nemotron) | [`…-nemotron-mlx`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx) | [`…-nemotron-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx-8bit) |
 | **OpenMed Multilingual** | [`OpenMed/privacy-filter-multilingual`](https://huggingface.co/OpenMed/privacy-filter-multilingual) | [`…-multilingual-mlx`](https://huggingface.co/OpenMed/privacy-filter-multilingual-mlx) | [`…-multilingual-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-multilingual-mlx-8bit) |
 
+Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.md#privacy-filter-family).
+
 </details>
 
 ---
 
-## PII ya lugha nyingi (lugha 17 zinazotumia modeli)
+## PII ya lugha nyingi (lugha 22 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 17 ya lugha za PII**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
-`pt`, `ro`, `te`, `th` na `tr`, pamoja na checkpoint 600+ za PII. Hii ndiyo
-orodha ya lugha zinazoungwa mkono na modeli. OpenMed pia ina uthibitishaji wa
-vitambulisho vya kitaifa kwa maeneo mengine ambayo hayana modeli kamili ya PII.
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 22 ya lugha za PII**:
+`am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
+`pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh` na `zu`, pamoja na checkpoint
+600+ za PII. Uelekezaji wa Kichina kwa sasa hutumia kishikilia nafasi cha
+modeli chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka, huku uzito
+maalumu wa modeli ya Kichina ukiwa tofauti. Familia ya hiari ya Indic NER
+iliyosanidiwa na mtumiaji hukubali njia tisa za ziada (`as`, `bn`, `gu`, `kn`,
+`ml`, `mr`, `or`, `pa` na `ta`) na inaweza pia kuhudumia Kihindi na Kitelugu.
+Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
+kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
+maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,
+Slovakia, Malaysia, Ufilipino na Denmark.
 
 Tazama [mwongozo wa kila lugha](docs/languages.md) kwa modeli chaguo-msingi,
 locale ya Faker na mfano wa kabla/baada.
@@ -481,14 +490,21 @@ Tazama [mwongozo kamili wa huduma ya REST](docs/rest-service.md).
 
 Miongozo kamili ipo **[openmed.life/docs](https://openmed.life/docs/)**.
 
+Mawakala wa AI wanaweza kupakia faharasa iliyochaguliwa ya
+[llms.txt](https://openmed.life/docs/llms.txt) au mlisho wa ndani wa
+[llms-full.txt](https://openmed.life/docs/llms-full.txt). Zote hutengenezwa upya
+kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
+
 | | | |
 |---|---|---|
 | [Kuanza](https://openmed.life/docs/) | [Analyze Text](https://openmed.life/docs/analyze-text) | [Sajili ya Modeli](https://openmed.life/docs/model-registry) |
 | [Maswali](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Wasifu wa Usanidi](https://openmed.life/docs/profiles) | [Huduma ya REST](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) | [Mifano](docs/examples.md) | [Kuchangia](docs/contributing.md) |
-| [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | |
+| [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Maelezo ya Toleo la OpenMed 1.9.0](docs/release/v1.9.0.md) | [Mifano](docs/examples.md) |
+| [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
+| [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Detector](docs/plugin-sdk.md) |
+| [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |
 
 ---
 
@@ -567,9 +583,7 @@ OpenMed katika makala, mabango na nyaraka zinazotokana nayo.
 
 Ikiwa OpenMed inakufaa, nyota huwasaidia wengine kuipata.
 
-<a href="https://star-history.com/#maziyarpanahi/openmed&Date">
-  <img src="https://api.star-history.com/svg?repos=maziyarpanahi/openmed&type=Date" alt="Chati ya Historia ya Nyota" width="640" />
-</a>
+[![Chati ya Historia ya Nyota](https://api.star-history.com/chart?repos=maziyarpanahi/openmed&type=date&legend=top-left&sealed_token=_HghchEkPCrucwFdVMULC2ufUwKUsFcTwheGjTM2VUvsTVevJ8xvrV-b5WyNkXCLDaOMTzk3vvsnzTR1rtTL7oxu90MGSTw8Eljuy0wrwEk_qEa1s83OV3hyz0-1mckZLCffMDc5Pot9Yx_MiZaQjsz4NxNnV7Pb_k-1KBWkf6gM9C9AZl3sgqRC-y2w)](https://www.star-history.com/?repos=maziyarpanahi%2Fopenmed&type=date&legend=top-left)
 
 ---
 

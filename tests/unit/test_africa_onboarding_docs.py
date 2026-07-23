@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,8 @@ def test_africa_guide_covers_required_onboarding_paths() -> None:
 
     for required in (
         "OpenMed-NER-AnatomyDetect-ElectraMed-33M",
+        "openmed models size",
+        "--budget-mb 100",
         "snapshot_download",
         "OPENMED_OFFLINE=1",
         "POPIA",
@@ -50,3 +53,12 @@ def test_africa_guide_is_in_nav_and_linked_from_quick_start() -> None:
 
     assert "African Developer Onboarding: africa-onboarding.md" in nav
     assert "[African developer onboarding guide](africa-onboarding.md)" in quick_start
+
+
+def test_africa_guide_python_examples_compile() -> None:
+    guide = (ROOT / "docs" / "africa-onboarding.md").read_text(encoding="utf-8")
+    snippets = re.findall(r"```python\n(.*?)```", guide, flags=re.DOTALL)
+
+    assert snippets
+    for index, snippet in enumerate(snippets, start=1):
+        compile(snippet, f"africa-onboarding-python-{index}", "exec")

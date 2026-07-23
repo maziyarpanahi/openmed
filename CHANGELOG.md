@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Swahili README and an African developer onboarding guide covering
+  bandwidth-aware model sizing and offline setup, POPIA/NDPA policy pointers,
+  OpenMRS FHIR and DHIS2 Tracker recipes, community links, and shared
+  translation-drift enforcement (#1455).
 - Added an offline-first `openmed models size` command with committed download,
   disk, and peak-RAM estimates, cache-aware remaining bytes, per-task bandwidth
   recommendations, JSON output, and explicitly opt-in remote refinement (#1453).
