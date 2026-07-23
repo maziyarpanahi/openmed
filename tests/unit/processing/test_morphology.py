@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
@@ -168,3 +169,36 @@ def test_both_confidence_and_allowlist_gates_are_required() -> None:
 def test_out_of_scope_languages_fail_closed(language: str) -> None:
     with pytest.raises(ValueError, match="unsupported morphology language"):
         stem_token("example", language, confidence=1.0, allowed_stems={"exam"})
+
+
+def test_rule_registries_are_runtime_immutable() -> None:
+    assert isinstance(INDIC_SUFFIX_TABLES, MappingProxyType)
+    with pytest.raises(TypeError):
+        INDIC_SUFFIX_TABLES["hi"] = ()  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [
+        ({"confidence": True}, "confidence"),
+        ({"minimum_confidence": False}, "minimum_confidence"),
+        ({"minimum_stem_graphemes": True}, "minimum_stem_graphemes"),
+        ({"minimum_stem_graphemes": 1.5}, "minimum_stem_graphemes"),
+    ],
+)
+def test_ambiguous_threshold_types_are_rejected(kwargs, match) -> None:
+    arguments = {
+        "confidence": 1.0,
+        "minimum_confidence": 0.9,
+        "minimum_stem_graphemes": 2,
+    }
+    arguments.update(kwargs)
+
+    with pytest.raises(ValueError, match=match):
+        stem_token("रामको", "hi", allowed_stems={"राम"}, **arguments)
+
+
+@pytest.mark.parametrize("allowlist", ["राम", {"राम", 3}])
+def test_allowlist_requires_an_iterable_of_strings(allowlist) -> None:
+    with pytest.raises(TypeError, match="allowed_stems"):
+        stem_token("रामको", "hi", confidence=1.0, allowed_stems=allowlist)

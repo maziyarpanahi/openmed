@@ -12,6 +12,8 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from numbers import Real
+from types import MappingProxyType
 from typing import Final
 
 SUPPORTED_INDIC_MORPHOLOGY_LANGUAGES: Final[tuple[str, ...]] = (
@@ -55,86 +57,92 @@ def _tamil_glide_rule(surface: str, separated: str) -> _SuffixRule:
 
 # Longest forms precede their suffixes so matching is deterministic.  These
 # tables are deliberately small: expanding them requires precision fixtures.
-_SUFFIX_RULES: Final[Mapping[str, tuple[_SuffixRule, ...]]] = {
-    "hi": tuple(
-        _suffix_rule(surface)
-        for surface in ("में", "पर", "को", "से", "ने", "का", "की", "के")
-    ),
-    "mr": (
-        *(
+_SUFFIX_RULES: Final[Mapping[str, tuple[_SuffixRule, ...]]] = MappingProxyType(
+    {
+        "hi": tuple(
+            _suffix_rule(surface)
+            for surface in ("में", "पर", "को", "से", "ने", "का", "की", "के")
+        ),
+        "mr": (
+            *(
+                _suffix_rule(surface)
+                for surface in (
+                    "पासून",
+                    "मध्ये",
+                    "बरोबर",
+                    "साठी",
+                    "कडे",
+                    "वरून",
+                    "ला",
+                    "ने",
+                    "चा",
+                    "ची",
+                    "चे",
+                    "वर",
+                )
+            ),
+        ),
+        "ta": (
+            _tamil_glide_rule("விடமிருந்து", "இடமிருந்து"),
+            _tamil_glide_rule("விடம்", "இடம்"),
+            _tamil_glide_rule("வுடன்", "உடன்"),
+            _tamil_glide_rule("வுக்கு", "உக்கு"),
+            _tamil_glide_rule("வால்", "ஆல்"),
+            _tamil_glide_rule("வில்", "இல்"),
+            _tamil_glide_rule("வின்", "இன்"),
+            _tamil_glide_rule("வை", "ஐ"),
+        ),
+        "te": tuple(
+            _suffix_rule(surface)
+            for surface in ("నుంచి", "యొక్క", "దగ్గర", "తో", "లో", "కు", "కి", "ని", "ను")
+        ),
+        "ml": tuple(
             _suffix_rule(surface)
             for surface in (
-                "पासून",
-                "मध्ये",
-                "बरोबर",
-                "साठी",
-                "कडे",
-                "वरून",
-                "ला",
-                "ने",
-                "चा",
-                "ची",
-                "चे",
-                "वर",
+                "യിൽനിന്ന്",
+                "യോടൊപ്പം",
+                "യുടെ",
+                "യിൽ",
+                "യോട്",
+                "യ്ക്ക്",
+                "യെ",
+                "ൽ",
             )
         ),
-    ),
-    "ta": (
-        _tamil_glide_rule("விடமிருந்து", "இடமிருந்து"),
-        _tamil_glide_rule("விடம்", "இடம்"),
-        _tamil_glide_rule("வுடன்", "உடன்"),
-        _tamil_glide_rule("வுக்கு", "உக்கு"),
-        _tamil_glide_rule("வால்", "ஆல்"),
-        _tamil_glide_rule("வில்", "இல்"),
-        _tamil_glide_rule("வின்", "இன்"),
-        _tamil_glide_rule("வை", "ஐ"),
-    ),
-    "te": tuple(
-        _suffix_rule(surface)
-        for surface in ("నుంచి", "యొక్క", "దగ్గర", "తో", "లో", "కు", "కి", "ని", "ను")
-    ),
-    "ml": tuple(
-        _suffix_rule(surface)
-        for surface in (
-            "യിൽനിന്ന്",
-            "യോടൊപ്പം",
-            "യുടെ",
-            "യിൽ",
-            "യോട്",
-            "യ്ക്ക്",
-            "യെ",
-            "ൽ",
-        )
-    ),
-    "kn": tuple(
-        _suffix_rule(surface) for surface in ("ಜೊತೆಗೆ", "ದಿಂದ", "ದಲ್ಲಿ", "ಕ್ಕೆ", "ನ್ನು", "ಗೆ")
-    ),
-}
-INDIC_SUFFIX_TABLES: Final[Mapping[str, tuple[str, ...]]] = {
-    language: tuple(rule.surface for rule in rules)
-    for language, rules in _SUFFIX_RULES.items()
-}
+        "kn": tuple(
+            _suffix_rule(surface) for surface in ("ಜೊತೆಗೆ", "ದಿಂದ", "ದಲ್ಲಿ", "ಕ್ಕೆ", "ನ್ನು", "ಗೆ")
+        ),
+    }
+)
+INDIC_SUFFIX_TABLES: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        language: tuple(rule.surface for rule in rules)
+        for language, rules in _SUFFIX_RULES.items()
+    }
+)
 
-_LANGUAGE_ALIASES: Final[Mapping[str, str]] = {
-    "hi": "hi",
-    "hin": "hi",
-    "hindi": "hi",
-    "mr": "mr",
-    "mar": "mr",
-    "marathi": "mr",
-    "ta": "ta",
-    "tam": "ta",
-    "tamil": "ta",
-    "te": "te",
-    "tel": "te",
-    "telugu": "te",
-    "ml": "ml",
-    "mal": "ml",
-    "malayalam": "ml",
-    "kn": "kn",
-    "kan": "kn",
-    "kannada": "kn",
-}
+_LANGUAGE_ALIASES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "hi": "hi",
+        "hin": "hi",
+        "hindi": "hi",
+        "mr": "mr",
+        "mar": "mr",
+        "marathi": "mr",
+        "ta": "ta",
+        "tam": "ta",
+        "tamil": "ta",
+        "te": "te",
+        "tel": "te",
+        "telugu": "te",
+        "ml": "ml",
+        "mal": "ml",
+        "malayalam": "ml",
+        "kn": "kn",
+        "kan": "kn",
+        "kannada": "kn",
+    }
+)
 
 _VIRAMAS: Final[frozenset[str]] = frozenset(
     {
@@ -290,6 +298,7 @@ def stem_token(
     Returns:
         A :class:`StemResult` with explicit source offsets.
     """
+    _validate_token(token)
     normalized_language = _normalize_language(language)
     _validate_thresholds(confidence, minimum_confidence, minimum_stem_graphemes)
     unchanged = _unchanged_stem(token, normalized_language, confidence)
@@ -351,6 +360,7 @@ def split_sandhi(
     Returns:
         A :class:`SandhiSplitResult` with part spans and an output offset map.
     """
+    _validate_token(token)
     normalized_language = _normalize_language(language)
     _validate_thresholds(confidence, minimum_confidence, minimum_stem_graphemes)
     allowed = _normalized_allowlist(allowed_stems)
@@ -424,6 +434,8 @@ def split_sandhi(
 
 
 def _normalize_language(language: str) -> str:
+    if not isinstance(language, str):
+        raise TypeError("language must be text")
     normalized = _LANGUAGE_ALIASES.get(language.strip().casefold())
     if normalized is None:
         supported = ", ".join(SUPPORTED_INDIC_MORPHOLOGY_LANGUAGES)
@@ -438,18 +450,41 @@ def _validate_thresholds(
     minimum_confidence: float,
     minimum_stem_graphemes: int,
 ) -> None:
-    if not 0.0 <= confidence <= 1.0:
+    if (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, Real)
+        or not 0.0 <= confidence <= 1.0
+    ):
         raise ValueError("confidence must be between 0 and 1")
-    if not 0.0 <= minimum_confidence <= 1.0:
+    if (
+        isinstance(minimum_confidence, bool)
+        or not isinstance(minimum_confidence, Real)
+        or not 0.0 <= minimum_confidence <= 1.0
+    ):
         raise ValueError("minimum_confidence must be between 0 and 1")
-    if minimum_stem_graphemes < 1:
+    if (
+        isinstance(minimum_stem_graphemes, bool)
+        or not isinstance(minimum_stem_graphemes, int)
+        or minimum_stem_graphemes < 1
+    ):
         raise ValueError("minimum_stem_graphemes must be at least 1")
 
 
 def _normalized_allowlist(allowed_stems: Iterable[str]) -> frozenset[str]:
-    return frozenset(
-        unicodedata.normalize("NFC", stem).casefold() for stem in allowed_stems if stem
-    )
+    if isinstance(allowed_stems, str):
+        raise TypeError("allowed_stems must be an iterable of strings")
+    normalized: set[str] = set()
+    for stem in allowed_stems:
+        if not isinstance(stem, str):
+            raise TypeError("allowed_stems must contain only strings")
+        if stem:
+            normalized.add(unicodedata.normalize("NFC", stem).casefold())
+    return frozenset(normalized)
+
+
+def _validate_token(token: str) -> None:
+    if not isinstance(token, str):
+        raise TypeError("token must be text")
 
 
 def _allowed(stem: str, allowed_stems: frozenset[str]) -> bool:
