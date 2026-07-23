@@ -443,6 +443,98 @@ class TestImmunizationDomain:
 
 
 # ---------------------------------------------------------------------------
+# Nursing observation domain (issue #910)
+# --------
+class TestNursingObservation:
+    """Nursing-care observation domain and offline fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "IntakeOutput",
+        "LineDrainTube",
+        "RiskScore",
+        "MobilityStatus",
+        "CareIntervention",
+        "PainScore",
+        "SkinAssessment",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "IntakeOutput": "INTAKE_OUTPUT",
+        "LineDrainTube": "LINE_DRAIN_TUBE",
+        "RiskScore": "NURSING_RISK_SCORE",
+        "MobilityStatus": "OTHER",
+        "CareIntervention": "CARE_INTERVENTION",
+        "PainScore": "OTHER",
+        "SkinAssessment": "BODY_SITE",
+    }
+    EXPECTED_ENTITIES = [
+        ("IntakeOutput", 8, 26, "output 450mL clear"),
+        ("LineDrainTube", 37, 51, "Foley catheter"),
+        ("RiskScore", 67, 82, "Braden score 14"),
+        ("RiskScore", 84, 98, "fall risk high"),
+        ("MobilityStatus", 100, 121, "Ambulates with walker"),
+        ("PainScore", 123, 132, "pain 3/10"),
+        ("CareIntervention", 134, 150, "Repositioned q2h"),
+        ("SkinAssessment", 152, 171, "skin dry and intact"),
+    ]
+
+    def test_nursing_in_available_domains(self):
+        assert "nursing_observation" in available_domains()
+
+    def test_get_default_labels_returns_nursing_set(self):
+        assert get_default_labels("nursing_observation") == self.EXPECTED_LABELS
+
+    def test_nursing_labels_have_no_duplicates(self):
+        labels = get_default_labels("nursing_observation")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_nursing_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+
+    def test_nursing_fixture_reports_offline_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "nursing_observation.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not recommend care interventions" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        # Your fixture covers 100% of all EXPECTED_LABELS in a single row
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+    def test_nursing_domain_does_not_add_model_routing(self):
+        """Nursing observations are zero-shot extracted and do not route to legacy models."""
+        assert "NursingObservation" not in _CATEGORY_ENTITY_TYPES
+
+
+# ---------------------------------------------------------------------------
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
 

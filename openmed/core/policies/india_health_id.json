@@ -118,6 +118,10 @@
     "OXYGEN_SUPPORT": "keep",
     "RESPIRATORY_FINDING": "keep",
     "DYSPNEA_GRADE": "keep",
+    "INTAKE_OUTPUT": "keep",
+    "LINE_DRAIN_TUBE": "keep",
+    "NURSING_RISK_SCORE": "keep", 
+    "CARE_INTERVENTION": "keep",
     "OTHER": "keep"
   },
   "metadata": {

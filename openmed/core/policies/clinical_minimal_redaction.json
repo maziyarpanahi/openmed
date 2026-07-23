@@ -116,6 +116,10 @@
     "GROWTH_PARAMETER": "keep",
     "GROWTH_PERCENTILE": "keep",
     "DEVELOPMENTAL_MILESTONE": "keep",
+    "INTAKE_OUTPUT": "keep",
+    "LINE_DRAIN_TUBE": "keep",
+    "NURSING_RISK_SCORE": "keep", 
+    "CARE_INTERVENTION": "keep",
     "OTHER": "keep"
   }
 }

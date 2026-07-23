@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-
+- Added an offline nursing-care observation zero-shot domain with display
+  label mappings (IntakeOutput, LineDrainTube, RiskScore, CareIntervention),
+  canonical policy label metadata, synthetic per-label fixture coverage for risk-score and line/drain/tube spans, and domain-coverage evaluation integration (#910).
 - Added opt-in token-level language identification for Hinglish clinical text,
   with exact offset-only decisions, deterministic local fallback routing,
   optional caller-supplied model hooks, and synthetic token-accuracy and
