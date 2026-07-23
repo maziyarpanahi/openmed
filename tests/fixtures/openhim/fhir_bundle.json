@@ -1,0 +1,71 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:patient-1",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-1",
+        "identifier": [
+          {
+            "system": "https://facility.example/mrn",
+            "value": "MRN-871-1448"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "text": "Amina Example",
+            "family": "Example",
+            "given": [
+              "Amina"
+            ]
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+256-700-871-1448",
+            "use": "mobile"
+          }
+        ],
+        "gender": "female"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-1",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-1",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body Weight"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-1",
+          "display": "Amina Example"
+        },
+        "note": [
+          {
+            "text": "Amina Example called from +256-700-871-1448."
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+name: OpenHIM mediator container
+
+on:
+  pull_request:
+    paths:
+      - "openmed/service/**"
+      - "examples/openhim-mediator/**"
+      - "tests/integration/test_openhim_mediator_container.py"
+      - ".github/workflows/openhim-mediator.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENMED_OPENHIM_CORE_URL: http://openhim-fixture:8081
+      OPENMED_OPENHIM_USERNAME: openhim@example.org
+      OPENMED_OPENHIM_PASSWORD: synthetic-password
+      OPENMED_OPENHIM_ALLOW_INSECURE_HTTP: "true"
+    defaults:
+      run:
+        working-directory: examples/openhim-mediator
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start recorded core fixture
+        run: docker compose --profile fixture up -d openhim-fixture
+
+      - name: Wait for fixture
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8081/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile fixture logs openhim-fixture
+          exit 1
+
+      - name: Build and start mediator
+        run: docker compose up -d --build openmed-mediator
+
+      - name: Verify registration and heartbeat
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/openhim/heartbeat > mediator.json; then
+              break
+            fi
+            sleep 2
+          done
+          test "$(jq -r .registered mediator.json)" = "true"
+          test "$(jq -r .last_heartbeat_at mediator.json)" != "null"
+          curl --fail --silent http://127.0.0.1:8081/health > fixture.json
+          test "$(jq -r .registration_count fixture.json)" = "1"
+          test "$(jq -r .heartbeat_count fixture.json)" -ge 1
+
+      - name: Show logs
+        if: always()
+        run: docker compose --profile fixture logs
+
+      - name: Stop example
+        if: always()
+        run: docker compose --profile fixture down --volumes --remove-orphans
