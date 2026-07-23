@@ -52,6 +52,7 @@ def test_eval_modules_import_cleanly():
         "multimodal_dicom",
         "code_mixed_routing",
         "india_health_id_leakage",
+        "indian_multi_id",
     )
 
 

@@ -270,6 +270,7 @@ class Pipeline:
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
         custom_recognizer: Any = None,
+        indian_multi_id: bool | None = None,
         code_mixed: bool = False,
         token_language_tags: Sequence[Any] | None = None,
         lid_model: Any = None,
@@ -327,6 +328,7 @@ class Pipeline:
         self.policy_actions = policy_actions
         self.section_detector = section_detector
         self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
+        self.indian_multi_id = indian_multi_id
         self.code_mixed = bool(code_mixed)
         if not self.code_mixed and token_language_tags is not None:
             raise ValueError("token_language_tags requires code_mixed=True")
@@ -702,6 +704,8 @@ class Pipeline:
                 ]
                 pii_result.metadata = metadata
         else:
+            from .detector_plugins import INDIAN_MULTI_ID_ENTITY_TYPES
+
             pii._suppress_custom_allowed_entities(
                 normalized.normalized_text,
                 pii_result,
@@ -714,7 +718,12 @@ class Pipeline:
                     span
                     for span in policy_spans
                     if span.action != ACTION_KEEP
-                    and str(span.detector or "").startswith(("plugin:", "custom:"))
+                    and (
+                        str(span.detector or "").startswith(
+                            ("builtin:", "plugin:", "custom:")
+                        )
+                        or span.entity_type in INDIAN_MULTI_ID_ENTITY_TYPES
+                    )
                 ],
             )
 
@@ -1013,21 +1022,48 @@ class Pipeline:
             lang=context.route.lang,
             patterns=self._deterministic_patterns(text, context),
         )
+        custom_spans = self._custom_deny_spans(text, context)
+        registered_spans = self._registered_detector_spans(
+            text,
+            context,
+            pipeline_stage=STAGE_NAMES[3],
+        )
+        registered_spans = tuple(
+            span
+            for span in registered_spans
+            if not (
+                span.detector == "builtin:indian_multi_id"
+                and any(
+                    span.start < custom.end and span.end > custom.start
+                    for custom in custom_spans
+                )
+            )
+        )
+        rule_spans = self._entities_to_spans(
+            entities,
+            text,
+            context,
+            default_detector="rules:regex",
+            stage=STAGE_NAMES[3],
+        )
+        from .detector_plugins import INDIAN_MULTI_ID_ENTITY_TYPES
+
+        rule_spans = tuple(
+            span
+            for span in rule_spans
+            if not (
+                span.entity_type in INDIAN_MULTI_ID_ENTITY_TYPES
+                and any(
+                    span.start < custom.end and span.end > custom.start
+                    for custom in custom_spans
+                )
+            )
+        )
         return (
-            self._entities_to_spans(
-                entities,
-                text,
-                context,
-                default_detector="rules:regex",
-                stage=STAGE_NAMES[3],
-            )
-            + self._custom_deny_spans(text, context)
+            rule_spans
+            + custom_spans
             + self._transliterated_name_spans(text, context)
-            + self._registered_detector_spans(
-                text,
-                context,
-                pipeline_stage=STAGE_NAMES[3],
-            )
+            + registered_spans
         )
 
     def stage5_fast_pii_model(
@@ -1074,6 +1110,10 @@ class Pipeline:
                 locale=locale,
                 normalize_accents=self.normalize_accents,
                 loader=self.loader,
+                abdm=self._indian_multi_id_enabled_for(
+                    lang=route.lang,
+                    locale=locale,
+                ),
                 code_mixed=True,
                 token_language_tags=token_language_tags,
                 transliterated_name_config=self.transliterated_name_recognizer,
@@ -1089,6 +1129,10 @@ class Pipeline:
             normalize_accents=self.normalize_accents,
             preserve_whitespace=self.preserve_whitespace,
             loader=self.loader,
+            abdm=self._indian_multi_id_enabled_for(
+                lang=route.lang,
+                locale=locale,
+            ),
             batch_size=getattr(self.config, "batch_size", None),
             num_workers=getattr(self.config, "num_workers", None),
         )
@@ -1423,11 +1467,20 @@ class Pipeline:
         *,
         pipeline_stage: str,
     ) -> tuple[OpenMedSpan, ...]:
-        from .detector_plugins import detector_provenance, iter_detectors
+        from .detector_plugins import (
+            INDIAN_MULTI_ID_DETECTOR,
+            detector_provenance,
+            iter_detectors,
+        )
 
         plugin_stage = _PIPELINE_TO_PLUGIN_STAGE[pipeline_stage]
         spans: list[OpenMedSpan] = []
         for spec in iter_detectors(plugin_stage, context.route.lang):
+            if (
+                spec.name == INDIAN_MULTI_ID_DETECTOR
+                and not self._indian_multi_id_enabled(context)
+            ):
+                continue
             try:
                 detected = _call_detector_plugin(spec, text, context)
             except Exception as exc:
@@ -1514,6 +1567,7 @@ class Pipeline:
             return _deterministic_patterns(
                 context.route.lang,
                 locale=context.locale,
+                include_indian_multi_id=self._indian_multi_id_enabled(context),
             )
         from .pii_i18n import get_patterns_for_code_mixed_tags
 
@@ -1522,6 +1576,34 @@ class Pipeline:
             context.token_language_tags,
             base_lang=context.route.lang,
             locale=context.locale,
+            include_indian_multi_id=self._indian_multi_id_enabled(context),
+        )
+
+    def _indian_multi_id_enabled(self, context: PipelineContext) -> bool:
+        """Resolve explicit or India-route activation for the built-in pack."""
+
+        return self._indian_multi_id_enabled_for(
+            lang=context.route.lang,
+            locale=context.locale,
+        )
+
+    def _indian_multi_id_enabled_for(
+        self,
+        *,
+        lang: str,
+        locale: str | None,
+    ) -> bool:
+        """Resolve the multi-ID pack without retaining request text."""
+
+        if self.indian_multi_id is not None:
+            return self.indian_multi_id
+        from .custom_recognizer import abdm_mode_enabled
+
+        return abdm_mode_enabled(
+            None,
+            policy=self.policy,
+            lang=lang,
+            locale=locale,
         )
 
     def _transliterated_name_spans(
@@ -1848,6 +1930,8 @@ def _language_run_metadata(run: Any) -> dict[str, object]:
 def _deterministic_patterns(
     lang: str,
     locale: str | None = None,
+    *,
+    include_indian_multi_id: bool = True,
 ) -> list[PIIPattern]:
     from .anonymizer.providers import clinical_ids
 
@@ -1867,15 +1951,34 @@ def _deterministic_patterns(
         from .pii_i18n import LOCALE_PII_PATTERNS
 
         locale_key = locale.strip().replace("-", "_").casefold()
+        locale_patterns = LOCALE_PII_PATTERNS.get(locale_key, [])
+        if not include_indian_multi_id:
+            from .pii_i18n import INDIAN_MULTI_ID_PII_PATTERNS
+
+            indian_pattern_ids = {
+                id(pattern) for pattern in INDIAN_MULTI_ID_PII_PATTERNS
+            }
+            locale_patterns = [
+                pattern
+                for pattern in locale_patterns
+                if id(pattern) not in indian_pattern_ids
+            ]
         return [
             luhn_mrn,
             *PII_PATTERNS,
-            *LOCALE_PII_PATTERNS.get(locale_key, []),
+            *locale_patterns,
         ]
 
     from .pii_i18n import get_patterns_for_language
 
-    return [luhn_mrn, *get_patterns_for_language(lang, locale=locale)]
+    return [
+        luhn_mrn,
+        *get_patterns_for_language(
+            lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        ),
+    ]
 
 
 def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
@@ -1901,7 +2004,7 @@ def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
     if detector and str(detector).startswith(
-        ("rules:", "model:", "plugin:", "custom:")
+        ("rules:", "model:", "builtin:", "plugin:", "custom:")
     ):
         return str(detector)
 
@@ -2337,20 +2440,37 @@ def _append_span_predictions(
     if not spans:
         return pii_result
 
+    existing_entities = list(getattr(pii_result, "entities", ()) or ())
+    existing_keys: set[tuple[int, int, str]] = set()
+    for entity in existing_entities:
+        bounds = _entity_bounds(entity, text)
+        if bounds is None:
+            continue
+        label = str(getattr(entity, "label", "") or "")
+        existing_keys.add((*bounds, normalize_label(label)))
+
+    new_spans = [
+        span
+        for span in spans
+        if (span.start, span.end, span.canonical_label) not in existing_keys
+    ]
+    if not new_spans:
+        return pii_result
+
     span_result = _prediction_result_from_spans(
         text,
-        spans,
+        new_spans,
         model_name=str(getattr(pii_result, "model_name", "plugins") or "plugins"),
     )
     combined = copy.copy(pii_result)
     combined.entities = [
-        *list(getattr(pii_result, "entities", ()) or ()),
+        *existing_entities,
         *span_result.entities,
     ]
     if hasattr(combined, "num_entities"):
         combined.num_entities = len(combined.entities)
     metadata = dict(getattr(pii_result, "metadata", None) or {})
-    metadata["plugin_detector_spans"] = len(spans)
+    metadata["plugin_detector_spans"] = len(new_spans)
     combined.metadata = metadata
     return combined
 

@@ -180,6 +180,20 @@ ID_SUBTYPE_RATION_CARD: Final = "ration_card"
 ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
 #: China Unified Social Credit Code (organization-linked); normalizes to ID_NUM.
 ID_SUBTYPE_SOCIAL_CREDIT_CODE: Final = "social_credit_code"
+#: Indian Permanent Account Number; normalizes to ID_NUM.
+ID_SUBTYPE_PAN: Final = "pan"
+#: Indian GST registration number; normalizes to ID_NUM.
+ID_SUBTYPE_GSTIN: Final = "gstin"
+#: Indian Financial System Code; normalizes to ID_NUM.
+ID_SUBTYPE_IFSC: Final = "ifsc"
+#: Indian Electoral Photo Identity Card number; normalizes to ID_NUM.
+ID_SUBTYPE_VOTER_ID_EPIC: Final = "voter_id_epic"
+#: Indian driving-licence number; normalizes to ID_NUM.
+ID_SUBTYPE_INDIAN_DRIVING_LICENCE: Final = "indian_driving_licence"
+#: Indian passport number outside an MRZ block; normalizes to ID_NUM.
+ID_SUBTYPE_INDIAN_PASSPORT: Final = "indian_passport"
+#: Ayushman Bharat Health Account identifier; normalizes to ID_NUM.
+ID_SUBTYPE_ABHA: Final = "abha"
 #: Mainland China passport number; normalizes to ID_NUM.
 ID_SUBTYPE_CHINESE_PASSPORT: Final = "chinese_passport"
 #: Mainland Travel Permit for Hong Kong/Macau residents; normalizes to ID_NUM.
@@ -198,6 +212,13 @@ ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
         ID_SUBTYPE_RATION_CARD,
         ID_SUBTYPE_PASSPORT_MRZ,
         ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+        ID_SUBTYPE_PAN,
+        ID_SUBTYPE_GSTIN,
+        ID_SUBTYPE_IFSC,
+        ID_SUBTYPE_VOTER_ID_EPIC,
+        ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+        ID_SUBTYPE_INDIAN_PASSPORT,
+        ID_SUBTYPE_ABHA,
         ID_SUBTYPE_CHINESE_PASSPORT,
         ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
         ID_SUBTYPE_TAIWAN_PERMIT,
@@ -1089,6 +1110,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "kemaishanamba": ID_NUM,
     "gstin": ID_NUM,
     "gstnumber": ID_NUM,
+    "ifsc": ID_NUM,
+    "ifsccode": ID_NUM,
+    "voteridepic": ID_NUM,
+    "voterid": ID_NUM,
+    "epic": ID_NUM,
+    "indiandrivinglicence": ID_NUM,
+    "drivinglicence": ID_NUM,
+    "indiandrivinglicense": ID_NUM,
+    "drivinglicense": ID_NUM,
+    "indianpassport": ID_NUM,
+    "passport": ID_NUM,
     "teudatzehut": ID_NUM,
     "mpesatxcode": ID_NUM,
     "mobilemoneypaybill": ID_NUM,
@@ -1154,6 +1186,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vin": VIN,
     "vrm": VEHICLE_REGISTRATION,
     "licenseplate": VEHICLE_REGISTRATION,
+    "indianvehicleregistration": VEHICLE_REGISTRATION,
+    "rtoregistration": VEHICLE_REGISTRATION,
     "imei": IMEI,
     # Microbiology
     "microorganism": MICROORGANISM,
@@ -1411,6 +1445,17 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "kemaishanamba": ID_SUBTYPE_NATIONAL_ID,
     "gstin": ID_SUBTYPE_NATIONAL_ID,
     "gstnumber": ID_SUBTYPE_NATIONAL_ID,
+    "ifsc": ID_SUBTYPE_IFSC,
+    "ifsccode": ID_SUBTYPE_IFSC,
+    "voteridepic": ID_SUBTYPE_VOTER_ID_EPIC,
+    "voterid": ID_SUBTYPE_VOTER_ID_EPIC,
+    "epic": ID_SUBTYPE_VOTER_ID_EPIC,
+    "indiandrivinglicence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "drivinglicence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indiandrivinglicense": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "drivinglicense": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indianpassport": ID_SUBTYPE_INDIAN_PASSPORT,
+    "passport": ID_SUBTYPE_INDIAN_PASSPORT,
     "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
     "mpesatxcode": ID_SUBTYPE_NATIONAL_ID,
     "tz": ID_SUBTYPE_NATIONAL_ID,
@@ -1549,6 +1594,13 @@ __all__ = [
     "ID_SUBTYPE_RATION_CARD",
     "ID_SUBTYPE_PASSPORT_MRZ",
     "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
+    "ID_SUBTYPE_PAN",
+    "ID_SUBTYPE_GSTIN",
+    "ID_SUBTYPE_IFSC",
+    "ID_SUBTYPE_VOTER_ID_EPIC",
+    "ID_SUBTYPE_INDIAN_DRIVING_LICENCE",
+    "ID_SUBTYPE_INDIAN_PASSPORT",
+    "ID_SUBTYPE_ABHA",
     "ID_SUBTYPE_CHINESE_PASSPORT",
     "ID_SUBTYPE_HONG_KONG_MACAU_PERMIT",
     "ID_SUBTYPE_TAIWAN_PERMIT",

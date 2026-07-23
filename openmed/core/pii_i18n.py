@@ -26,12 +26,17 @@ from importlib import resources
 from typing import Any, Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    gstin_check_char,
+    pan_check_letter,
+    validate_abha,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
     validate_canadian_sin,
+    validate_gstin,
     validate_luhn,
     validate_ontario_health_card,
+    validate_pan,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
@@ -1035,6 +1040,64 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_ifsc(text: str) -> bool:
+    """Validate the public 11-character Indian IFSC structure.
+
+    IFSC contains a four-letter bank code, the reserved fifth character ``0``,
+    and a six-character alphanumeric branch code. This offline validator does
+    not bundle or query bank-branch registry data.
+    """
+
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", text.strip().upper()) is not None
+
+
+def validate_indian_passport(text: str) -> bool:
+    """Validate the common Indian passport shape: one letter and seven digits."""
+
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"[A-Z][1-9]\d{6}", text.strip().upper()) is not None
+
+
+def validate_voter_id_epic(text: str) -> bool:
+    """Validate the current EPIC/FUSN shape: three letters and seven digits."""
+
+    if not isinstance(text, str):
+        return False
+    code = re.sub(r"[\s/-]", "", text).upper()
+    return re.fullmatch(r"[A-Z]{3}\d{7}", code) is not None and code[3:] != "0000000"
+
+
+def validate_indian_driving_licence(text: str) -> bool:
+    """Validate a normalized 15-character Indian driving-licence identifier."""
+
+    if not isinstance(text, str):
+        return False
+    code = re.sub(r"[\s/-]", "", text).upper()
+    match = re.fullmatch(r"[A-Z]{2}(\d{2})((?:19|20)\d{2})(\d{7})", code)
+    if match is None:
+        return False
+    rto_code, _year, serial = match.groups()
+    return rto_code != "00" and serial != "0000000"
+
+
+def validate_vehicle_registration(text: str) -> bool:
+    """Validate standard RTO or Bharat-series vehicle-registration structure."""
+
+    if not isinstance(text, str):
+        return False
+    code = re.sub(r"[\s-]", "", text).upper()
+    standard = re.fullmatch(r"[A-Z]{2}(\d{1,2})[A-Z]{1,3}(\d{1,4})", code)
+    if standard is not None:
+        return int(standard.group(1)) > 0 and int(standard.group(2)) > 0
+    bharat = re.fullmatch(r"(\d{2})BH(\d{4})[A-Z]{2}", code)
+    return (
+        bharat is not None and int(bharat.group(1)) >= 21 and int(bharat.group(2)) > 0
+    )
 
 
 def validate_abha_number(text: str) -> bool:
@@ -3307,6 +3370,182 @@ INDIA_HEALTH_ID_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.7,
         validator=validate_indian_ration_card,
         context_required=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+INDIAN_MULTI_ID_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z](?![A-Z0-9])",
+        "pan",
+        priority=16,
+        base_score=0.7,
+        context_words=[
+            "pan",
+            "pan number",
+            "pan card",
+            "permanent account number",
+            "पैन",
+            "पैन नंबर",
+            "पैन कार्ड",
+            "పాన్",
+            "పాన్ నంబర్",
+        ],
+        context_boost=0.3,
+        validator=validate_pan,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        (
+            r"(?<![A-Z0-9])\d{2}[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}"
+            r"[A-Z][1-9A-Z]Z[0-9A-Z](?![A-Z0-9])"
+        ),
+        "gstin",
+        priority=18,
+        base_score=0.8,
+        context_words=[
+            "gstin",
+            "gst number",
+            "gst no",
+            "जीएसटीआईएन",
+            "जीएसटी नंबर",
+            "జీఎస్టీఐఎన్",
+            "జీఎస్టీ నంబర్",
+        ],
+        context_boost=0.2,
+        validator=validate_gstin,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{4}0[A-Z0-9]{6}(?![A-Z0-9])",
+        "ifsc",
+        priority=15,
+        base_score=0.55,
+        context_words=[
+            "ifsc",
+            "ifsc code",
+            "bank code",
+            "branch code",
+            "आईएफएससी",
+            "बैंक कोड",
+            "ఐఎఫ్ఎస్‌సి",
+            "బ్యాంక్ కోడ్",
+        ],
+        context_boost=0.4,
+        validator=validate_ifsc,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}[\s/-]?\d{7}(?![A-Z0-9])",
+        "voter_id_epic",
+        priority=14,
+        base_score=0.45,
+        context_words=[
+            "epic",
+            "voter id",
+            "voter card",
+            "matdata pehchan",
+            "मतदाता पहचान",
+            "वोटर आईडी",
+            "ఓటర్ ఐడి",
+            "ఎపిక్",
+        ],
+        context_boost=0.45,
+        validator=validate_voter_id_epic,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        (
+            r"(?<![A-Z0-9])[A-Z]{2}[\s/-]?\d{2}[\s/-]?"
+            r"(?:19|20)\d{2}[\s/-]?\d{7}(?![A-Z0-9])"
+        ),
+        "indian_driving_licence",
+        priority=17,
+        base_score=0.5,
+        context_words=[
+            "driving licence",
+            "driving license",
+            "dl number",
+            "licence number",
+            "license number",
+            "driving licence no",
+            "ड्राइविंग लाइसेंस",
+            "लाइसेंस नंबर",
+            "డ్రైవింగ్ లైసెన్స్",
+            "లైసెన్స్ నంబర్",
+        ],
+        context_boost=0.45,
+        validator=validate_indian_driving_licence,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z][1-9]\d{6}(?![A-Z0-9])",
+        "indian_passport",
+        priority=13,
+        base_score=0.4,
+        context_words=[
+            "passport",
+            "passport number",
+            "passport no",
+            "पासपोर्ट",
+            "पासपोर्ट नंबर",
+            "పాస్‌పోర్ట్",
+            "పాస్‌పోర్ట్ నంబర్",
+        ],
+        context_boost=0.5,
+        validator=validate_indian_passport,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        (
+            r"(?<![A-Z0-9])(?:[A-Z]{2}[\s-]?\d{1,2}[\s-]?[A-Z]{1,3}"
+            r"[\s-]?\d{1,4}|\d{2}[\s-]?BH[\s-]?\d{4}[\s-]?[A-Z]{2})"
+            r"(?![A-Z0-9])"
+        ),
+        "indian_vehicle_registration",
+        priority=14,
+        base_score=0.45,
+        context_words=[
+            "vehicle registration",
+            "registration number",
+            "vehicle number",
+            "rto",
+            "gaadi number",
+            "गाड़ी नंबर",
+            "वाहन पंजीकरण",
+            "आरटीओ",
+            "వాహన నమోదు",
+            "వాహనం నంబర్",
+        ],
+        context_boost=0.45,
+        validator=validate_vehicle_registration,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{2}(?!\d)",
+        "abha",
+        priority=13,
+        base_score=0.35,
+        context_words=[
+            "abha",
+            "abha number",
+            "health id",
+            "health identifier",
+            "आभा",
+            "आभा नंबर",
+            "स्वास्थ्य आईडी",
+            "ఆభా",
+            "ఆభా నంబర్",
+            "హెల్త్ ఐడి",
+        ],
+        context_boost=0.55,
+        validator=validate_abha,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -7972,8 +8211,16 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "nl": _DUTCH_PII_PATTERNS,
     # Keep Aadhaar discoverable through the historical per-language mapping
     # while get_patterns_for_language deduplicates the universal rule.
-    "hi": [*_HINDI_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
-    "te": [*_TELUGU_PII_PATTERNS, *AADHAAR_PII_PATTERNS],
+    "hi": [
+        *_HINDI_PII_PATTERNS,
+        *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "te": [
+        *_TELUGU_PII_PATTERNS,
+        *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
@@ -8147,6 +8394,7 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_et": _ETHIOPIA_FAYDA_PII_PATTERNS,
     "en_tz": _TANZANIA_NIDA_PII_PATTERNS,
     "en_ug": _UGANDA_NIN_PII_PATTERNS,
+    "en_in": INDIAN_MULTI_ID_PII_PATTERNS,
     "rw": _RWANDA_ID_PII_PATTERNS,
     "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
     "sw_tz": _TANZANIA_NIDA_PII_PATTERNS,
@@ -9245,7 +9493,12 @@ def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     return deduped
 
 
-def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIPattern]:
+def get_patterns_for_language(
+    lang: str,
+    locale: str | None = None,
+    *,
+    include_indian_multi_id: bool = True,
+) -> List[PIIPattern]:
     """Return combined PII patterns for the given language.
 
     English patterns (email, URL, IP, etc.) are universal and always
@@ -9310,6 +9563,12 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
             pattern
             for pattern in LOCALE_PII_PATTERNS.get(locale_key, [])
             if not any(pattern is existing for existing in combined)
+        ]
+
+    if not include_indian_multi_id:
+        indian_pattern_ids = {id(pattern) for pattern in INDIAN_MULTI_ID_PII_PATTERNS}
+        combined = [
+            pattern for pattern in combined if id(pattern) not in indian_pattern_ids
         ]
 
     return combined
@@ -9417,9 +9676,16 @@ def get_patterns_for_code_mixed_tags(
     *,
     base_lang: str = "en",
     locale: str | None = None,
+    include_indian_multi_id: bool = True,
 ) -> List[PIIPattern]:
     """Combine the base language pack with explicitly gated Hinglish patterns."""
-    patterns = list(get_patterns_for_language(base_lang, locale=locale))
+    patterns = list(
+        get_patterns_for_language(
+            base_lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        )
+    )
     patterns.extend(get_hinglish_patterns_for_token_tags(text, token_language_tags))
     return patterns
 
