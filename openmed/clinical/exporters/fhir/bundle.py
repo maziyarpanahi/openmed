@@ -30,6 +30,8 @@ removed by de-identification stays absent) and does not validate profiles.
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Callable
 from typing import Any, Mapping, Sequence
 
 from .privacy import sanitize_india_health_identifiers
@@ -47,6 +49,7 @@ def to_bundle(
     *,
     doc_id: str = "openmed-document",
     bundle_type: str = "transaction",
+    profile_check: Callable[[Mapping[str, Any]], Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble ``resources`` into a single R4 Bundle.
 
@@ -65,6 +68,11 @@ def to_bundle(
         The Bundle ``type`` (defaults to ``"transaction"``). For
         ``transaction``/``batch`` bundles each entry also gets a ``request``
         block.
+    profile_check:
+        Optional callback invoked once with a deep copy of the completed
+        Bundle. This provides an opt-in conformance or policy gate without
+        allowing the callback to mutate the exported Bundle. The callback's
+        return value is ignored and exceptions propagate to the caller.
 
     Returns
     -------
@@ -118,7 +126,12 @@ def to_bundle(
             }
         entries.append(entry)
 
-    return {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
+    bundle = {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
+    if profile_check is not None:
+        if not callable(profile_check):
+            raise TypeError("profile_check must be callable")
+        profile_check(copy.deepcopy(bundle))
+    return bundle
 
 
 def _rewrite_references(node: Any, reference_map: Mapping[str, str]) -> Any:
