@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a scrubadub adapter with `to_canonical()`/`from_canonical()` span
+  conversion and canonical label mapping for scrubadub's core `Filth` types
+  (including the `en_US`/`en_GB` locale detectors), splitting `credential`
+  matches into separate `USERNAME`/`PASSWORD` entities using scrubadub's
+  named regex groups, flattening scrubadub overlap wrappers without label loss,
+  and losslessly recombining credential matches on the return trip. Scoreless
+  scrubadub spans default to fallback priority during OpenMed arbitration.
+  scrubadub stays an optional `scrubadub` extra, and the adapter is
+  registered lazily as `scrubadub` in `openmed.interop` (#281).
 - Added a full Russian (`ru`) PII language pack, including Cyrillic date,
   phone, postal-index, and street-address patterns, SNILS (insurance account
   number) and OMS (health-insurance policy number) validators with
