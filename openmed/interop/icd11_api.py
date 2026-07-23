@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -30,6 +31,19 @@ SNAPSHOT_SCHEMA_VERSION = 1
 DEFAULT_CACHE_ENV = "OPENMED_ICD11_CACHE_DIR"
 CLIENT_ID_ENV = "WHO_ICD_CLIENT_ID"
 CLIENT_SECRET_ENV = "WHO_ICD_CLIENT_SECRET"
+MAX_API_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_SNAPSHOT_BYTES = 128 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
+MAX_SNAPSHOT_ENTITIES = 100_000
+
+_MAX_ENTITY_TEXT_CHARS = 4_096
+_MAX_ENTITY_URI_CHARS = 2_048
+_MAX_CODE_CHARS = 128
+_MAX_ENTITY_SYNONYMS = 512
+_MAX_QUERY_CHARS = 1_024
+_MAX_TOKEN_CHARS = 16_384
+_MAX_CHILDREN_PER_ENTITY = 100_000
+_MAX_TOKEN_LIFETIME_SECONDS = 24 * 60 * 60
 
 _RELEASE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}$")
 _CHAPTER_RE = re.compile(r"^(?:0[1-9]|1[0-9]|2[0-6]|V|X)$")
@@ -43,6 +57,10 @@ __all__ = [
     "ICD11Entity",
     "ICD11Snapshot",
     "ICD11_MMS_SYSTEM",
+    "MAX_API_RESPONSE_BYTES",
+    "MAX_MANIFEST_BYTES",
+    "MAX_SNAPSHOT_BYTES",
+    "MAX_SNAPSHOT_ENTITIES",
     "SNAPSHOT_SCHEMA_VERSION",
     "SnapshotBuildResult",
     "SnapshotIntegrityError",
@@ -61,6 +79,30 @@ class ICD11APIError(RuntimeError):
 
 class SnapshotIntegrityError(ValueError):
     """Raised when an ICD-11 snapshot or its manifest fails validation."""
+
+
+class _RejectRedirectHandler(urlrequest.HTTPRedirectHandler):
+    """Prevent credential-bearing requests from following redirects."""
+
+    def redirect_request(
+        self,
+        req: urlrequest.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
+def _open_without_redirects(
+    request: urlrequest.Request,
+    *,
+    timeout: float,
+) -> Any:
+    opener = urlrequest.build_opener(_RejectRedirectHandler())
+    return opener.open(request, timeout=timeout)
 
 
 @dataclass(frozen=True)
@@ -103,10 +145,25 @@ class ICD11Snapshot:
         entities: Sequence[ICD11Entity],
         snapshot_sha256: str = "",
     ) -> None:
+        entity_items = tuple(entities)
+        if len(entity_items) > MAX_SNAPSHOT_ENTITIES:
+            raise SnapshotIntegrityError(
+                f"snapshot exceeds {MAX_SNAPSHOT_ENTITIES} entities"
+            )
+        if not all(isinstance(entity, ICD11Entity) for entity in entity_items):
+            raise SnapshotIntegrityError(
+                "snapshot entities must be ICD11Entity instances"
+            )
         self.release = _normalize_release(release)
         self.chapters = _normalize_chapters(chapters)
         self.language = _normalize_language(language)
-        self.entities = tuple(sorted(entities, key=lambda item: (item.code, item.uri)))
+        self.entities = tuple(
+            sorted(entity_items, key=lambda item: (item.code, item.uri))
+        )
+        if snapshot_sha256 and re.fullmatch(r"[0-9a-f]{64}", snapshot_sha256) is None:
+            raise SnapshotIntegrityError(
+                "snapshot sha256 must be a lowercase 64-character digest"
+            )
         self.snapshot_sha256 = snapshot_sha256
         self._term_index = self._build_term_index()
 
@@ -116,6 +173,24 @@ class ICD11Snapshot:
             if not entity.uri or not entity.code or not entity.title:
                 raise SnapshotIntegrityError(
                     "snapshot entities require non-empty uri, code, and title"
+                )
+            if len(entity.uri) > _MAX_ENTITY_URI_CHARS:
+                raise SnapshotIntegrityError(
+                    "snapshot entity URI exceeds the safety limit"
+                )
+            if len(entity.code) > _MAX_CODE_CHARS:
+                raise SnapshotIntegrityError(
+                    "snapshot entity code exceeds the safety limit"
+                )
+            if len(entity.title) > _MAX_ENTITY_TEXT_CHARS:
+                raise SnapshotIntegrityError(
+                    "snapshot entity title exceeds the safety limit"
+                )
+            if len(entity.synonyms) > _MAX_ENTITY_SYNONYMS or any(
+                len(synonym) > _MAX_ENTITY_TEXT_CHARS for synonym in entity.synonyms
+            ):
+                raise SnapshotIntegrityError(
+                    "snapshot entity terms exceed the safety limit"
                 )
             for rank, term in ((0, entity.title),):
                 _add_ranked_term(ranked, term, rank, entity)
@@ -134,6 +209,10 @@ class ICD11Snapshot:
             title or synonym exists.
         """
 
+        if not isinstance(mention, str):
+            raise TypeError("mention must be a string")
+        if len(mention) > _MAX_ENTITY_TEXT_CHARS:
+            return None
         normalized = _normalize_term(mention)
         if not normalized:
             return None
@@ -197,15 +276,29 @@ class ICD11APIClient:
             or not client_secret
         ):
             raise ValueError("WHO ICD-API client id and client secret are required")
-        if timeout <= 0:
-            raise ValueError("timeout must be greater than zero")
+        if isinstance(timeout, bool):
+            raise TypeError("timeout must be a finite number")
+        try:
+            timeout_value = float(timeout)
+        except (TypeError, ValueError) as exc:
+            raise TypeError("timeout must be a finite number") from exc
+        if not math.isfinite(timeout_value) or timeout_value <= 0:
+            raise ValueError("timeout must be a finite number greater than zero")
 
         self.client_id = str(client_id).strip()
         self._client_secret = str(client_secret)
         self.language = _normalize_language(language)
-        self.api_base_url = api_base_url.rstrip("/")
-        self.token_endpoint = token_endpoint
-        self.timeout = float(timeout)
+        self.api_base_url = _validated_service_url(
+            api_base_url,
+            label="api_base_url",
+            require_root_path=True,
+        )
+        self.token_endpoint = _validated_service_url(
+            token_endpoint,
+            label="token_endpoint",
+            require_root_path=False,
+        )
+        self.timeout = timeout_value
         self._opener = opener
         self._access_token: str | None = None
         self._token_expires_at = 0.0
@@ -233,14 +326,17 @@ class ICD11APIClient:
         )
         payload = self._request_json(request)
         token = payload.get("access_token")
-        if not isinstance(token, str) or not token:
+        if not isinstance(token, str) or not token or len(token) > _MAX_TOKEN_CHARS:
             raise ICD11APIError("WHO ICD-API token response omitted access_token")
         self._access_token = token
         expires_in = payload.get("expires_in", 3600)
         try:
-            lifetime = max(1.0, float(expires_in))
+            lifetime = float(expires_in)
         except (TypeError, ValueError):
             lifetime = 3600.0
+        if not math.isfinite(lifetime) or lifetime <= 0:
+            lifetime = 3600.0
+        lifetime = min(lifetime, _MAX_TOKEN_LIFETIME_SECONDS)
         self._token_expires_at = time.monotonic() + max(1.0, lifetime - 60.0)
         return token
 
@@ -260,8 +356,10 @@ class ICD11APIClient:
     ) -> dict[str, Any]:
         """Search a pinned MMS release, optionally within chapter codes."""
 
-        if not str(query).strip():
+        if not isinstance(query, str) or not query.strip():
             raise ValueError("query must not be empty")
+        if len(query) > _MAX_QUERY_CHARS:
+            raise ValueError(f"query must not exceed {_MAX_QUERY_CHARS} characters")
         release_id = _normalize_release(release)
         parameters: dict[str, str] = {
             "flatResults": "true",
@@ -309,10 +407,10 @@ class ICD11APIClient:
         return self._request_json(request)
 
     def _request_json(self, request: urlrequest.Request) -> dict[str, Any]:
-        opener = self._opener or urlrequest.urlopen
+        opener = self._opener or _open_without_redirects
         try:
             with opener(request, timeout=self.timeout) as response:
-                raw = response.read()
+                raw = response.read(MAX_API_RESPONSE_BYTES + 1)
         except urlerror.HTTPError as exc:
             raise ICD11APIError(
                 f"WHO ICD-API request failed with HTTP {exc.code}"
@@ -320,9 +418,14 @@ class ICD11APIClient:
         except (urlerror.URLError, TimeoutError, OSError) as exc:
             raise ICD11APIError("WHO ICD-API request failed") from exc
 
+        if len(raw) > MAX_API_RESPONSE_BYTES:
+            raise ICD11APIError(
+                f"WHO ICD-API response exceeds {MAX_API_RESPONSE_BYTES} bytes"
+            )
+
         try:
             payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
             raise ICD11APIError("WHO ICD-API returned invalid JSON") from exc
         if not isinstance(payload, dict):
             raise ICD11APIError("WHO ICD-API returned a non-object JSON response")
@@ -406,14 +509,25 @@ def build_snapshot(
         raise ValueError("snapshot language must match the ICD11APIClient language")
 
     release_payload = client.release_index(release_id)
-    top_level_uris = _string_sequence(release_payload.get("child"))
+    top_level_uris = _validated_entity_links(
+        release_payload.get("child"),
+        release=release_id,
+        api_base_url=client.api_base_url,
+        label="release response",
+    )
     if not top_level_uris:
         raise ICD11APIError("WHO ICD-API release response omitted chapter URIs")
 
     payload_cache: dict[str, dict[str, Any]] = {}
     chapter_roots: dict[str, str] = {}
-    for uri in sorted(top_level_uris):
+    for uri in top_level_uris:
         payload = client.get_entity(uri, release=release_id)
+        _validate_response_entity_uri(
+            payload,
+            requested_url=uri,
+            release=release_id,
+            api_base_url=client.api_base_url,
+        )
         payload_cache[uri] = payload
         chapter_code = str(payload.get("code") or "").strip().upper()
         if chapter_code in chapter_ids:
@@ -428,22 +542,46 @@ def build_snapshot(
 
     entities: dict[str, ICD11Entity] = {}
     pending = [chapter_roots[chapter] for chapter in reversed(chapter_ids)]
+    queued = set(pending)
     visited: set[str] = set()
     while pending:
         uri = pending.pop()
+        queued.discard(uri)
         if uri in visited:
             continue
+        if len(visited) >= MAX_SNAPSHOT_ENTITIES:
+            raise ICD11APIError(
+                f"snapshot traversal exceeds {MAX_SNAPSHOT_ENTITIES} entities"
+            )
         visited.add(uri)
         payload = payload_cache.pop(uri, None)
         if payload is None:
             payload = client.get_entity(uri, release=release_id)
+        _validate_response_entity_uri(
+            payload,
+            requested_url=uri,
+            release=release_id,
+            api_base_url=client.api_base_url,
+        )
 
         entity = _entity_from_api_payload(payload)
         if entity is not None:
-            entities[entity.uri] = entity
+            entities[uri] = entity
 
-        children = sorted(_string_sequence(payload.get("child")), reverse=True)
-        pending.extend(child for child in children if child not in visited)
+        children = _validated_entity_links(
+            payload.get("child"),
+            release=release_id,
+            api_base_url=client.api_base_url,
+            label="entity response",
+        )
+        for child in reversed(children):
+            if child not in visited and child not in queued:
+                pending.append(child)
+                queued.add(child)
+        if len(visited) + len(queued) > MAX_SNAPSHOT_ENTITIES:
+            raise ICD11APIError(
+                f"snapshot traversal exceeds {MAX_SNAPSHOT_ENTITIES} entities"
+            )
 
     if not entities:
         raise ICD11APIError("requested ICD-11 chapters contained no coded entities")
@@ -461,12 +599,15 @@ def load_snapshot(
     path: str | Path,
     *,
     manifest_path: str | Path | None = None,
+    expected_sha256: str | None = None,
 ) -> ICD11Snapshot:
     """Load and integrity-check a local snapshot without network access.
 
     Args:
         path: Snapshot JSON path.
         manifest_path: Optional sidecar manifest override.
+        expected_sha256: Optional trusted digest pin. When supplied, the
+            snapshot must match it in addition to its sidecar manifest.
 
     Returns:
         A verified, locally indexed snapshot.
@@ -483,8 +624,18 @@ def load_snapshot(
         else snapshot_file.with_suffix(".manifest.json")
     )
     try:
-        snapshot_bytes = snapshot_file.read_bytes()
-        manifest_bytes = manifest_file.read_bytes()
+        snapshot_bytes = _read_limited_file(
+            snapshot_file,
+            max_bytes=MAX_SNAPSHOT_BYTES,
+            label="snapshot",
+        )
+        manifest_bytes = _read_limited_file(
+            manifest_file,
+            max_bytes=MAX_MANIFEST_BYTES,
+            label="manifest",
+        )
+    except SnapshotIntegrityError:
+        raise
     except OSError as exc:
         raise SnapshotIntegrityError(
             "snapshot and manifest must both be readable"
@@ -493,7 +644,7 @@ def load_snapshot(
     try:
         payload = json.loads(snapshot_bytes)
         manifest = json.loads(manifest_bytes)
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise SnapshotIntegrityError(
             "snapshot or manifest contains invalid JSON"
         ) from exc
@@ -503,6 +654,14 @@ def load_snapshot(
     actual_sha256 = hashlib.sha256(snapshot_bytes).hexdigest()
     if manifest.get("snapshot_sha256") != actual_sha256:
         raise SnapshotIntegrityError("snapshot sha256 does not match its manifest")
+    if expected_sha256 is not None:
+        if (
+            not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise ValueError("expected_sha256 must be a lowercase 64-character digest")
+        if actual_sha256 != expected_sha256:
+            raise SnapshotIntegrityError("snapshot sha256 does not match trusted pin")
     if manifest.get("snapshot_file") != snapshot_file.name:
         raise SnapshotIntegrityError("manifest snapshot filename does not match")
     if (
@@ -516,22 +675,50 @@ def load_snapshot(
     for key in ("release", "language", "chapters"):
         if payload.get(key) != manifest.get(key):
             raise SnapshotIntegrityError(f"snapshot and manifest disagree on {key}")
+    if not isinstance(payload.get("release"), str) or not isinstance(
+        payload.get("language"), str
+    ):
+        raise SnapshotIntegrityError("snapshot release and language must be strings")
+    raw_chapters = payload.get("chapters")
+    if not isinstance(raw_chapters, list) or not all(
+        isinstance(chapter, str) for chapter in raw_chapters
+    ):
+        raise SnapshotIntegrityError("snapshot chapters must be strings")
     raw_entities = payload.get("entities")
     if not isinstance(raw_entities, list):
         raise SnapshotIntegrityError("snapshot entities must be a JSON array")
-    if manifest.get("entity_count") != len(raw_entities):
+    entity_count = manifest.get("entity_count")
+    if (
+        isinstance(entity_count, bool)
+        or not isinstance(entity_count, int)
+        or entity_count != len(raw_entities)
+    ):
         raise SnapshotIntegrityError(
             "snapshot entity count does not match its manifest"
         )
+    if len(raw_entities) > MAX_SNAPSHOT_ENTITIES:
+        raise SnapshotIntegrityError(
+            f"snapshot exceeds {MAX_SNAPSHOT_ENTITIES} entities"
+        )
 
-    entities = tuple(_entity_from_snapshot(item) for item in raw_entities)
-    return ICD11Snapshot(
-        release=str(payload.get("release") or ""),
-        chapters=_string_sequence(payload.get("chapters")),
-        language=str(payload.get("language") or ""),
-        entities=entities,
-        snapshot_sha256=actual_sha256,
-    )
+    try:
+        release_id = _normalize_release(payload["release"])
+        chapter_ids = _normalize_chapters(raw_chapters)
+        language_id = _normalize_language(payload["language"])
+        entities = tuple(
+            _entity_from_snapshot(item, release=release_id) for item in raw_entities
+        )
+        return ICD11Snapshot(
+            release=release_id,
+            chapters=chapter_ids,
+            language=language_id,
+            entities=entities,
+            snapshot_sha256=actual_sha256,
+        )
+    except SnapshotIntegrityError:
+        raise
+    except (TypeError, ValueError) as exc:
+        raise SnapshotIntegrityError("snapshot metadata is invalid") from exc
 
 
 def ground_mention(mention: str, snapshot: ICD11Snapshot) -> ICD11Entity | None:
@@ -622,6 +809,8 @@ def _write_snapshot(
         cache_dir=cache_dir,
     )
     snapshot_bytes = _canonical_json_bytes(snapshot.to_payload())
+    if len(snapshot_bytes) > MAX_SNAPSHOT_BYTES:
+        raise ICD11APIError(f"generated snapshot exceeds {MAX_SNAPSHOT_BYTES} bytes")
     snapshot_sha256 = hashlib.sha256(snapshot_bytes).hexdigest()
     manifest = {
         "chapters": list(snapshot.chapters),
@@ -669,6 +858,14 @@ def _atomic_write(path: Path, content: bytes) -> None:
                 pass
 
 
+def _read_limited_file(path: Path, *, max_bytes: int, label: str) -> bytes:
+    with path.open("rb") as handle:
+        content = handle.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise SnapshotIntegrityError(f"{label} exceeds {max_bytes} bytes")
+    return content
+
+
 def _canonical_json_bytes(payload: Mapping[str, Any]) -> bytes:
     return (
         json.dumps(
@@ -690,9 +887,17 @@ def _entity_from_api_payload(payload: Mapping[str, Any]) -> ICD11Entity | None:
     title = _language_specific_text(payload.get("title"))
     if not uri or not code or not title:
         return None
+    if len(uri) > _MAX_ENTITY_URI_CHARS:
+        raise ICD11APIError("WHO ICD-API entity URI exceeds the safety limit")
+    if len(code) > _MAX_CODE_CHARS:
+        raise ICD11APIError("WHO ICD-API entity code exceeds the safety limit")
+    if len(title) > _MAX_ENTITY_TEXT_CHARS:
+        raise ICD11APIError("WHO ICD-API entity title exceeds the safety limit")
 
     synonyms: set[str] = set()
     fully_specified_name = _language_specific_text(payload.get("fullySpecifiedName"))
+    if len(fully_specified_name) > _MAX_ENTITY_TEXT_CHARS:
+        raise ICD11APIError("WHO ICD-API entity term exceeds the safety limit")
     if fully_specified_name and _normalize_term(
         fully_specified_name
     ) != _normalize_term(title):
@@ -705,8 +910,14 @@ def _entity_from_api_payload(payload: Mapping[str, Any]) -> ICD11Entity | None:
             if not isinstance(term, Mapping) or term.get("deprecated") is True:
                 continue
             label = _language_specific_text(term.get("label"))
+            if len(label) > _MAX_ENTITY_TEXT_CHARS:
+                raise ICD11APIError("WHO ICD-API entity term exceeds the safety limit")
             if label and _normalize_term(label) != _normalize_term(title):
                 synonyms.add(label)
+                if len(synonyms) > _MAX_ENTITY_SYNONYMS:
+                    raise ICD11APIError(
+                        "WHO ICD-API entity exceeds the synonym safety limit"
+                    )
 
     return ICD11Entity(
         uri=uri,
@@ -718,18 +929,46 @@ def _entity_from_api_payload(payload: Mapping[str, Any]) -> ICD11Entity | None:
     )
 
 
-def _entity_from_snapshot(payload: Any) -> ICD11Entity:
+def _entity_from_snapshot(payload: Any, *, release: str) -> ICD11Entity:
     if not isinstance(payload, Mapping):
         raise SnapshotIntegrityError("snapshot entity must be a JSON object")
+    raw_uri = payload.get("uri")
+    raw_code = payload.get("code")
+    raw_title = payload.get("title")
+    if not all(isinstance(value, str) for value in (raw_uri, raw_code, raw_title)):
+        raise SnapshotIntegrityError("snapshot entity fields must be strings")
+    uri = raw_uri.strip()
+    code = raw_code.strip()
+    title = raw_title.strip()
+    if not uri or not code or not title:
+        raise SnapshotIntegrityError(
+            "snapshot entities require non-empty uri, code, and title"
+        )
+    if len(uri) > _MAX_ENTITY_URI_CHARS:
+        raise SnapshotIntegrityError("snapshot entity URI exceeds the safety limit")
+    if len(code) > _MAX_CODE_CHARS:
+        raise SnapshotIntegrityError("snapshot entity code exceeds the safety limit")
+    if len(title) > _MAX_ENTITY_TEXT_CHARS:
+        raise SnapshotIntegrityError("snapshot entity title exceeds the safety limit")
+    try:
+        _validated_entity_url(uri, release, ICD11_API_BASE_URL)
+    except ValueError as exc:
+        raise SnapshotIntegrityError(
+            "snapshot entity URI is outside the pinned WHO MMS release"
+        ) from exc
     synonyms = payload.get("synonyms", [])
     if not isinstance(synonyms, list) or not all(
         isinstance(value, str) for value in synonyms
     ):
         raise SnapshotIntegrityError("snapshot entity synonyms must be strings")
+    if len(synonyms) > _MAX_ENTITY_SYNONYMS:
+        raise SnapshotIntegrityError("snapshot entity exceeds the synonym safety limit")
+    if any(len(value) > _MAX_ENTITY_TEXT_CHARS for value in synonyms):
+        raise SnapshotIntegrityError("snapshot entity term exceeds the safety limit")
     return ICD11Entity(
-        uri=str(payload.get("uri") or "").strip(),
-        code=str(payload.get("code") or "").strip(),
-        title=str(payload.get("title") or "").strip(),
+        uri=uri,
+        code=code,
+        title=title,
         synonyms=tuple(synonyms),
     )
 
@@ -744,6 +983,89 @@ def _language_specific_text(value: Any) -> str:
     return ""
 
 
+def _validated_service_url(
+    value: str,
+    *,
+    label: str,
+    require_root_path: bool,
+) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{label} must be a URL string")
+    parsed = urlparse.urlparse(value.strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"{label} has an invalid port") from exc
+    loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and loopback):
+        raise ValueError(f"{label} must use HTTPS or loopback HTTP")
+    if (
+        not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(f"{label} must be an absolute URL without credentials")
+    if require_root_path and parsed.path not in {"", "/"}:
+        raise ValueError(f"{label} must not include a path")
+    if not require_root_path and not parsed.path.startswith("/"):
+        raise ValueError(f"{label} must include an absolute path")
+
+    hostname = parsed.hostname
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    netloc = hostname
+    if port is not None:
+        netloc = f"{netloc}:{port}"
+    path = "" if require_root_path else parsed.path
+    return urlparse.urlunparse((parsed.scheme, netloc, path, "", "", ""))
+
+
+def _validated_entity_links(
+    value: Any,
+    *,
+    release: str,
+    api_base_url: str,
+    label: str,
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)) or not all(
+        isinstance(item, str) and item for item in value
+    ):
+        raise ICD11APIError(f"WHO ICD-API {label} contains invalid entity links")
+    if len(value) > _MAX_CHILDREN_PER_ENTITY:
+        raise ICD11APIError(f"WHO ICD-API {label} exceeds the child-link safety limit")
+    try:
+        links = {_validated_entity_url(item, release, api_base_url) for item in value}
+    except ValueError as exc:
+        raise ICD11APIError(
+            f"WHO ICD-API {label} contains an out-of-scope entity link"
+        ) from exc
+    return tuple(sorted(links))
+
+
+def _validate_response_entity_uri(
+    payload: Mapping[str, Any],
+    *,
+    requested_url: str,
+    release: str,
+    api_base_url: str,
+) -> None:
+    entity_uri = payload.get("@id")
+    if not isinstance(entity_uri, str) or not entity_uri:
+        raise ICD11APIError("WHO ICD-API entity response omitted @id")
+    try:
+        normalized = _validated_entity_url(entity_uri, release, api_base_url)
+    except ValueError as exc:
+        raise ICD11APIError(
+            "WHO ICD-API entity response contains an out-of-scope @id"
+        ) from exc
+    if normalized != requested_url:
+        raise ICD11APIError("WHO ICD-API entity response @id does not match request")
+
+
 def _validated_entity_url(
     entity_uri: str,
     release: str,
@@ -755,7 +1077,7 @@ def _validated_entity_url(
     if (
         parsed.scheme not in {"http", "https"}
         or parsed.hostname != expected_base.hostname
-        or not parsed.path.startswith(expected_prefix)
+        or re.fullmatch(rf"{re.escape(expected_prefix)}[0-9]+", parsed.path) is None
         or parsed.query
         or parsed.fragment
     ):
