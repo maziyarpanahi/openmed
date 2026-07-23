@@ -102,6 +102,10 @@ pydeid = [
   "pyDeid>=0.0.1",
 ]
 
+scrubadub = [
+  "scrubadub>=2.0,<3",
+]
+
 pandas = [
   "pandas>=2.0",
 ]

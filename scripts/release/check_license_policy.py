@@ -128,6 +128,7 @@ REVIEWED_LICENSES = {
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
+    "scrubadub": "Apache-2.0",
     "spacy": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
