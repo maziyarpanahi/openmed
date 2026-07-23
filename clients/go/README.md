@@ -156,6 +156,29 @@ job, err := client.CreateJob(ctx, openmed.DeidentifyJobRequest{
 status, err := client.GetJob(ctx, job.ID)
 ```
 
+Long de-identification requests can also be consumed incrementally:
+
+```go
+stream, err := client.DeidentifyStream(ctx, openmed.PIIDeidentifyStreamRequest{
+	Text:      longClinicalNote,
+	Method:    openmed.MethodMask,
+	ChunkSize: 2048,
+})
+if err != nil {
+	log.Fatal(err)
+}
+defer stream.Close()
+for stream.Next() {
+	event := stream.Event()
+	if event.Type == "chunk" {
+		consumeRedactedText(event.RedactedText)
+	}
+}
+if err := stream.Err(); err != nil {
+	log.Fatal(err)
+}
+```
+
 ## Error handling
 
 Every non-2xx response is returned as a typed `*APIError`. It preserves the HTTP
@@ -209,6 +232,7 @@ non-nil redirect policy when that forwarding behavior is deliberate.
 | `ExtractPII` | `POST /pii/extract` |
 | `ExtractPIIStream` | `POST /pii/extract/stream` |
 | `Deidentify` | `POST /pii/deidentify` |
+| `DeidentifyStream` | `POST /pii/deidentify/stream` |
 | `PrivacyGateway` | `POST /privacy-gateway/complete` |
 | `Health` | `GET /health` |
 | `Livez` | `GET /livez` |

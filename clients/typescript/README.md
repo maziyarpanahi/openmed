@@ -50,6 +50,23 @@ const deidentified = await client.deidentify({
   keep_mapping: true,
 });
 
+const ndjson = await client.deidentifyStream({
+  text: "Paciente: Maria Garcia, DNI: 12345678Z",
+  method: "mask",
+  lang: "es",
+  chunk_size: 1024,
+});
+for (const line of ndjson.split("\n")) {
+  if (!line) continue;
+  const event = JSON.parse(line) as {
+    type: string;
+    redacted_text?: string;
+  };
+  if (event.type === "chunk") {
+    consumeRedactedText(event.redacted_text ?? "");
+  }
+}
+
 const job = await client.createJob({
   documents: [
     { id: "note-1", text: "Paciente: Maria Garcia, DNI: 12345678Z" },
@@ -119,6 +136,9 @@ try {
   }
 }
 ```
+
+Streaming methods return the NDJSON response as text without JSON-decoding the
+whole body. Split it into lines as above; each non-empty line is one event.
 
 The underlying service envelope has this shape:
 

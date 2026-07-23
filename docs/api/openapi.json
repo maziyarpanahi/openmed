@@ -529,6 +529,157 @@
         "title": "PIIDeidentifyRequest",
         "type": "object"
       },
+      "PIIDeidentifyStreamRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for ``/pii/deidentify/stream``.",
+        "properties": {
+          "chunk_size": {
+            "default": 1024,
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Chunk Size",
+            "type": "integer"
+          },
+          "confidence_threshold": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "date_shift_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Shift Days"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "keep_mapping": {
+            "default": false,
+            "title": "Keep Mapping",
+            "type": "boolean"
+          },
+          "keep_year": {
+            "default": false,
+            "title": "Keep Year",
+            "type": "boolean"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th",
+              "ko",
+              "ro"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "method": {
+            "default": "mask",
+            "enum": [
+              "mask",
+              "remove",
+              "replace",
+              "hash",
+              "shift_dates"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy"
+          },
+          "shift_dates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Dates"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "use_safety_sweep": {
+            "default": true,
+            "title": "Use Safety Sweep",
+            "type": "boolean"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PIIDeidentifyStreamRequest",
+        "type": "object"
+      },
       "PIIExtractRequest": {
         "additionalProperties": false,
         "description": "Request schema for /pii/extract.",
@@ -1519,6 +1670,42 @@
           }
         },
         "summary": "Pii Deidentify"
+      }
+    },
+    "/pii/deidentify/stream": {
+      "post": {
+        "operationId": "pii_deidentify_stream_pii_deidentify_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PIIDeidentifyStreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pii Deidentify Stream"
       }
     },
     "/pii/extract": {
