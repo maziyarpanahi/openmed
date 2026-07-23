@@ -346,6 +346,12 @@ INDIA_CLINICAL_MODEL_ROUTES: Dict[str, IndiaClinicalModelRoute] = {
     for lang in ("hi", "te")
 }
 
+# Backbone-only Indic encoders are an opt-in supplement, not replacements for
+# the complete Hindi and Telugu token-classification checkpoints above. Other
+# family-supported language codes can be enabled explicitly through
+# ``configure_indic_encoder(..., languages=...)`` in ``model_registry``.
+INDIC_ENCODER_PII_LANGUAGES: frozenset[str] = frozenset({"hi", "te"})
+
 
 # ---------------------------------------------------------------------------
 # Financial Identifier Validators

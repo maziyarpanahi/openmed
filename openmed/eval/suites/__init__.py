@@ -97,6 +97,12 @@ from openmed.eval.suites.indian_ids import (
     load_indian_id_fixtures,
     run_indian_id_evaluation,
 )
+from openmed.eval.suites.indic_encoder import (
+    INDIC_ENCODER_RECALL_DELTA,
+    IndicRecallDeltaReport,
+    SyntheticIndicFixture,
+    run_indic_encoder_recall_delta,
+)
 from openmed.eval.suites.indic_name_consistency import (
     INDIC_NAME_CONSISTENCY,
     evaluate_indic_name_consistency,
@@ -355,6 +361,7 @@ __all__ = [
     "INDIA_HEALTH_ID_LEAKAGE",
     "INDIAN_MULTI_ID",
     "INDIC_NAME_CONSISTENCY",
+    "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
     "RelationFixture",
     "RelationTrap",
@@ -363,12 +370,15 @@ __all__ = [
     "ComparatorMatrixRow",
     "ComparatorUnavailable",
     "ChineseTerminologyLeakageReport",
+    "IndicRecallDeltaReport",
+    "SyntheticIndicFixture",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
     "run_comparator_matrix",
+    "run_indic_encoder_recall_delta",
     "evaluate_chinese_terminology_leakage",
     "run_script_ner_benchmark",
     "load_i2b2_deid",
