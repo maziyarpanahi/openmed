@@ -1,6 +1,6 @@
 {
   "action": {
-    "fingerprint": "sha256:5f2c1c34c9472026264a8e96f39c7777119f43666145aab790a647df1ad85c0f",
+    "fingerprint": "sha256:77743f37088ea6fbbad3f9ebf8121243a27c4bd7a71507f9208f189715aa7796",
     "properties": [
       "action",
       "metadata",
@@ -98,7 +98,7 @@
     "schema_version": 1
   },
   "entity": {
-    "fingerprint": "sha256:95d4b7026fd2dac95cf0a6d279eb31b46e51ee5d8d6edbf5733287313f0e441d",
+    "fingerprint": "sha256:b47ea001d3e341205a30e6c5e8818c9182b78ca27d8083c5048a828b9d8d0581",
     "properties": [
       "canonical_label",
       "entity_type",
@@ -162,7 +162,7 @@
     "schema_version": 1
   },
   "span": {
-    "fingerprint": "sha256:273fb72f3c82b119ba35600d20e17ece75db1ff806fd1bbd26e766cafcca48b2",
+    "fingerprint": "sha256:c996e49b36c73a3f694cf307b8447535234331ff34624a1019f4f62ce0b056f2",
     "properties": [
       "action",
       "canonical_label",

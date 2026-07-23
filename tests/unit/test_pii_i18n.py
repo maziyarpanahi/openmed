@@ -5907,7 +5907,10 @@ class TestMpesaTransactionCodes:
                 use_safety_sweep=True,
             )
 
-            assert added_count == len(row["expected_codes"])
+            # Africa context sweeps may also protect a named facility in the
+            # same synthetic receipt; every planted transaction code must
+            # still be detected and removed.
+            assert added_count >= len(row["expected_codes"])
             leakage += sum(
                 original in result.deidentified_text
                 for original in row["expected_codes"]

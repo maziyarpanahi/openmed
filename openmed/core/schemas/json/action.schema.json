@@ -11,7 +11,12 @@
       "type": "object"
     },
     "policy_label": {
-      "enum": ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "CLINICAL_CONCEPT"],
+      "enum": [
+        "DIRECT_IDENTIFIER",
+        "QUASI_IDENTIFIER",
+        "SENSITIVE_ATTRIBUTE",
+        "CLINICAL_CONCEPT"
+      ],
       "type": "string"
     },
     "replacement": {
