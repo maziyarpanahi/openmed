@@ -92,6 +92,11 @@ class AnonymizerConfig:
     indic_name_similarity_threshold: float = DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD
     indic_name_normalizer: IndicNameNormalizer | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.transliteration_aware_name_matching, bool):
+            raise TypeError("transliteration_aware_name_matching must be a boolean")
+        IndicNameNormalizer(similarity_threshold=self.indic_name_similarity_threshold)
+
 
 # ---------------------------------------------------------------------------
 # Anonymizer
@@ -398,7 +403,7 @@ class Anonymizer:
             source_label=canonical_label,
         )
         try:
-            return generator(faker, original, locale="en_IN")
+            return generator(faker, "", locale="en_IN")
         except Exception as exc:  # noqa: BLE001 - retain safe anonymizer fallback
             warnings.warn(
                 "Anonymizer fallback for transliteration-aware PERSON at "

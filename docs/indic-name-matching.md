@@ -29,7 +29,9 @@ name key. Latin mentions receive the Latin surface; Indic-script mentions
 receive a deterministic surrogate rendered in the source script. The
 persisted key contains an HMAC-SHA256 digest, the canonical `PERSON` label,
 and the `indic` language bucket. Raw names and raw canonical keys are never
-written to the vault.
+written to the vault. The matching backend, version, and threshold are stored
+as non-sensitive metadata and authenticated with the vault key so an edited
+file cannot silently change identity-linking behavior.
 
 ## Stdlib fallback and collision threshold
 
@@ -48,6 +50,10 @@ are:
 export OPENMED_TRANSLITERATION_AWARE_NAME_MATCHING=1
 export OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD=0.80
 ```
+
+Surfaces longer than 512 characters bypass phonetic folding and receive a
+distinct bounded digest key. This fail-closed path prevents pathological input
+from causing expensive fuzzy work or collapsing oversized spans together.
 
 ## Optional local transliteration weights
 

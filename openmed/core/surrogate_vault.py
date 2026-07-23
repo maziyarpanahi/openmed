@@ -19,6 +19,8 @@ import tempfile
 import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from math import isfinite
+from numbers import Real
 from pathlib import Path
 from threading import RLock
 from typing import AbstractSet, Any, Callable
@@ -27,6 +29,7 @@ from .indic_name_match import (
     DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
     INDIC_NAME_KEY_VERSION,
     IndicNameNormalizer,
+    detect_name_script,
     is_indic_name_candidate,
 )
 from .labels import PERSON, normalize_label
@@ -47,6 +50,18 @@ _KEY_ID_BYTES = 8
 _NONCE_BYTES = 16
 _INDIAN_NAME_KEY_LANG = "india"
 _INDIAN_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
+_SCRIPT_NAME_PREFIXES = {
+    "bengali": "BENGALI",
+    "devanagari": "DEVANAGARI",
+    "gurmukhi": "GURMUKHI",
+    "gujarati": "GUJARATI",
+    "kannada": "KANNADA",
+    "latin": "LATIN",
+    "malayalam": "MALAYALAM",
+    "odia": "ORIYA",
+    "tamil": "TAMIL",
+    "telugu": "TELUGU",
+}
 
 
 @dataclass(frozen=True, order=True)
@@ -276,6 +291,67 @@ class _EpochManager:
         }
 
 
+def _validated_name_matching_metadata(
+    metadata: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if not metadata:
+        return {}
+    allowed = {
+        "backend",
+        "enabled",
+        "normalizer_version",
+        "similarity_threshold",
+    }
+    unknown = set(metadata) - allowed
+    if unknown:
+        raise ValueError(
+            "surrogate vault name_matching may not contain fields: "
+            + ", ".join(sorted(map(str, unknown)))
+        )
+    if set(metadata) != allowed:
+        raise ValueError("surrogate vault name_matching metadata is incomplete")
+    backend = metadata["backend"]
+    enabled = metadata["enabled"]
+    version = metadata["normalizer_version"]
+    threshold = metadata["similarity_threshold"]
+    if backend not in {"stdlib", "user-supplied"}:
+        raise ValueError("surrogate vault name_matching backend is unsupported")
+    if not isinstance(enabled, bool):
+        raise ValueError("surrogate vault name_matching enabled must be boolean")
+    if version != INDIC_NAME_KEY_VERSION:
+        raise ValueError("surrogate vault name_matching version is unsupported")
+    if isinstance(threshold, bool) or not isinstance(threshold, Real):
+        raise ValueError(
+            "surrogate vault name_matching similarity_threshold must be numeric"
+        )
+    numeric_threshold = float(threshold)
+    if not isfinite(numeric_threshold) or not 0.5 <= numeric_threshold <= 1.0:
+        raise ValueError(
+            "surrogate vault name_matching similarity_threshold is out of range"
+        )
+    return {
+        "backend": backend,
+        "enabled": enabled,
+        "normalizer_version": version,
+        "similarity_threshold": numeric_threshold,
+    }
+
+
+def _name_matching_tag(metadata: Mapping[str, Any], epoch: _EpochKey) -> str:
+    material = json.dumps(
+        dict(metadata),
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    digest = hmac.new(
+        epoch.encryption_key,
+        b"openmed-surrogate-vault:name-matching:1:" + material,
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{HMAC_SCHEME}:{digest}"
+
+
 class InMemorySurrogateStore:
     """In-memory store for surrogate vault entries."""
 
@@ -289,7 +365,9 @@ class InMemorySurrogateStore:
         self._entries: dict[SurrogateKey, SurrogateEntry] = {}
         self._lock = RLock()
         self._epoch_manager = epoch_manager
-        self._name_matching_metadata = dict(name_matching_metadata or {})
+        self._name_matching_metadata = _validated_name_matching_metadata(
+            name_matching_metadata
+        )
         for entry in entries:
             self.set(entry.key, entry.surrogate, key_id=entry.key_id)
 
@@ -323,7 +401,7 @@ class InMemorySurrogateStore:
         """Replace non-sensitive name-matching configuration metadata."""
 
         with self._lock:
-            self._name_matching_metadata = dict(metadata)
+            self._name_matching_metadata = _validated_name_matching_metadata(metadata)
 
     def get(self, key: SurrogateKey) -> str | None:
         """Return the surrogate for ``key``, if present."""
@@ -403,6 +481,10 @@ class InMemorySurrogateStore:
         }
         if self._name_matching_metadata:
             payload["name_matching"] = dict(self._name_matching_metadata)
+            payload["name_matching_tag"] = _name_matching_tag(
+                self._name_matching_metadata,
+                current_key,
+            )
         entries_payload: list[dict[str, str]] = []
         for entry in self.entries():
             key_id = entry.key_id or current_key.key_id
@@ -465,10 +547,22 @@ class InMemorySurrogateStore:
         metadata = payload.get("name_matching") or {}
         if not isinstance(metadata, Mapping):
             raise ValueError("surrogate vault name_matching must be an object")
+        validated_metadata = _validated_name_matching_metadata(metadata)
+        persisted_tag = payload.get("name_matching_tag")
+        if validated_metadata:
+            if not isinstance(persisted_tag, str):
+                raise ValueError("surrogate vault name_matching_tag is required")
+            expected_tag = _name_matching_tag(validated_metadata, current_key)
+            if not hmac.compare_digest(persisted_tag, expected_tag):
+                raise ValueError("surrogate vault name_matching metadata is invalid")
+        elif persisted_tag is not None:
+            raise ValueError(
+                "surrogate vault name_matching_tag requires name_matching metadata"
+            )
         return cls(
             entries,
             epoch_manager=manager,
-            name_matching_metadata=metadata,
+            name_matching_metadata=validated_metadata,
         )
 
     @classmethod
@@ -501,10 +595,13 @@ class InMemorySurrogateStore:
         metadata = payload.get("name_matching") or {}
         if not isinstance(metadata, Mapping):
             raise ValueError("surrogate vault name_matching must be an object")
+        if metadata or payload.get("name_matching_tag") is not None:
+            raise ValueError(
+                "legacy surrogate vaults may not contain name_matching metadata"
+            )
         return cls(
             entries,
             epoch_manager=manager,
-            name_matching_metadata=metadata,
         )
 
 
@@ -636,6 +733,18 @@ def _matches_required_script(candidate: str, required_script: str | None) -> boo
     )
 
 
+def _matches_render_script(candidate: str, render_script: str | None) -> bool:
+    if render_script is None:
+        return True
+    prefix = _SCRIPT_NAME_PREFIXES.get(render_script.casefold())
+    if prefix is None:
+        return False
+    letters = [char for char in candidate if char.isalpha()]
+    return bool(letters) and all(
+        unicodedata.name(char, "").startswith(f"{prefix} ") for char in letters
+    )
+
+
 def _contains_indian_name(candidate: str, canonical_source: str) -> bool:
     if candidate == canonical_source:
         return True
@@ -677,8 +786,10 @@ class SurrogateVault:
 
         persisted = self.store.name_matching_metadata
         if transliteration_aware_name_matching is None and config is not None:
-            transliteration_aware_name_matching = bool(
-                getattr(config, "transliteration_aware_name_matching", False)
+            transliteration_aware_name_matching = getattr(
+                config,
+                "transliteration_aware_name_matching",
+                False,
             )
         if indic_name_similarity_threshold is None and config is not None:
             indic_name_similarity_threshold = float(
@@ -689,7 +800,7 @@ class SurrogateVault:
                 )
             )
         if transliteration_aware_name_matching is None:
-            transliteration_aware_name_matching = bool(persisted.get("enabled", False))
+            transliteration_aware_name_matching = persisted.get("enabled", False)
         if indic_name_similarity_threshold is None:
             indic_name_similarity_threshold = float(
                 persisted.get(
@@ -697,6 +808,9 @@ class SurrogateVault:
                     DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
                 )
             )
+
+        if not isinstance(transliteration_aware_name_matching, bool):
+            raise TypeError("transliteration_aware_name_matching must be a boolean")
 
         persisted_backend = str(persisted.get("backend", ""))
         if (
@@ -708,18 +822,14 @@ class SurrogateVault:
                 "this vault requires the user-supplied Indic transliterator "
                 "used when it was created"
             )
-        if (
-            not persisted
-            and self.entries()
-            and bool(transliteration_aware_name_matching)
-        ):
+        if not persisted and self.entries() and transliteration_aware_name_matching:
             raise ValueError(
                 "transliteration-aware matching cannot be enabled on a legacy "
                 "vault that already contains entries"
             )
         self._set_name_matching(
-            enabled=bool(transliteration_aware_name_matching),
-            similarity_threshold=float(indic_name_similarity_threshold),
+            enabled=transliteration_aware_name_matching,
+            similarity_threshold=indic_name_similarity_threshold,
             transliterator=transliterator,
             allow_existing=persisted == {},
         )
@@ -956,26 +1066,30 @@ class SurrogateVault:
             candidate = create_surrogate(attempt)
             if not candidate:
                 continue
+            rendered_candidate: str
             if identity.key_lang == _INDIAN_NAME_KEY_LANG:
                 candidate = canonical_indian_name(candidate)
                 if not candidate:
                     continue
                 leaks_source = _contains_indian_name(candidate, identity.key_text)
+                render_script = identity.render_script
+                assert render_script is not None
                 rendered_candidate = render_indian_name(
                     candidate,
-                    identity.render_script,
+                    render_script,
                 )
             elif identity.key_lang == "indic":
                 leaks_source = self._indic_candidate_leaks_source(
                     candidate,
                     source_text,
                 )
-                rendered_candidate = self._render_for_source(
+                rendered_value = self._render_for_source(
                     candidate,
                     source,
                     renderer=render_surrogate,
                 )
-                assert rendered_candidate is not None
+                assert rendered_value is not None
+                rendered_candidate = rendered_value
                 leaks_source = leaks_source or _contains_source_surface(
                     rendered_candidate,
                     source_text,
@@ -1246,8 +1360,8 @@ class SurrogateVault:
             and canonical_label == PERSON
             and is_indic_name_candidate(source.source_text, lang=effective_lang)
         ):
-            script = indian_name_script(source.source_text, effective_lang)
-            if script is not None:
+            script = detect_name_script(source.source_text)
+            if script in _SCRIPT_NAME_PREFIXES:
                 return _SourceIdentity(
                     canonical_label=canonical_label,
                     key_lang="indic",
@@ -1269,20 +1383,35 @@ class SurrogateVault:
             return None
         identity = self._source_identity(source)
         if identity.key_lang == "indic":
-            rendered = (
-                renderer(stored_surrogate)
-                if renderer is not None
-                else self.indic_name_normalizer.render_surrogate(
-                    stored_surrogate,
-                    source_surface=source.source_text,
-                )
+            if renderer is not None:
+                rendered = renderer(stored_surrogate)
+                if (
+                    rendered
+                    and _matches_render_script(rendered, identity.render_script)
+                    and not _contains_source_surface(rendered, source.source_text)
+                ):
+                    return rendered
+            rendered = self.indic_name_normalizer.render_surrogate(
+                stored_surrogate,
+                source_surface=source.source_text,
             )
-            if not rendered or _contains_source_surface(rendered, source.source_text):
-                return stored_surrogate
-            return rendered
+            if (
+                rendered
+                and _matches_render_script(rendered, identity.render_script)
+                and not _contains_source_surface(rendered, source.source_text)
+            ):
+                return rendered
+            placeholder = self.indic_name_normalizer.render_surrogate(
+                "Person",
+                source_surface=source.source_text,
+            )
+            if not _matches_render_script(placeholder, identity.render_script):
+                raise ValueError("unable to render Indic surrogate in source script")
+            return placeholder
         script = identity.render_script
         if script is None:
             return stored_surrogate
+        assert script is not None
         return render_indian_name(stored_surrogate, script)
 
     def _indic_candidate_leaks_source(
@@ -1303,13 +1432,15 @@ class SurrogateVault:
         transliterator: Any,
         allow_existing: bool,
     ) -> None:
+        if not isinstance(enabled, bool):
+            raise TypeError("enabled must be a boolean")
         normalizer = IndicNameNormalizer(
             similarity_threshold=similarity_threshold,
             transliterator=transliterator,
         )
         metadata = {
             "backend": "user-supplied" if transliterator is not None else "stdlib",
-            "enabled": bool(enabled),
+            "enabled": enabled,
             "normalizer_version": INDIC_NAME_KEY_VERSION,
             "similarity_threshold": normalizer.similarity_threshold,
         }
@@ -1319,7 +1450,7 @@ class SurrogateVault:
             raise ValueError(
                 "name matching configuration cannot change after vault entries exist"
             )
-        self._transliteration_aware_name_matching = bool(enabled)
+        self._transliteration_aware_name_matching = enabled
         self._indic_name_normalizer = normalizer
         self.store.set_name_matching_metadata(metadata)
 

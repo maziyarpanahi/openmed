@@ -9,15 +9,19 @@ uses only :mod:`unicodedata` and supports the major Brahmic scripts.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from math import isfinite
+from numbers import Real
 from typing import Any
 
 DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD = 0.80
 INDIC_NAME_KEY_VERSION = "indic-name-v1"
+MAX_INDIC_NAME_SURFACE_CHARS = 512
 
 INDIC_LANGUAGE_CODES = frozenset(
     {
@@ -208,17 +212,29 @@ class IndicNameNormalizer:
 
     def __post_init__(self) -> None:
         _validate_threshold(self.similarity_threshold)
+        object.__setattr__(
+            self, "similarity_threshold", float(self.similarity_threshold)
+        )
 
     def canonical_key(self, surface: str) -> str:
         """Return a versioned in-memory canonical match key for ``surface``."""
 
-        latin = self.to_latin(surface)
+        source = str(surface or "").strip()
+        if not source:
+            raise ValueError("name surface must be non-empty")
+        if len(source) > MAX_INDIC_NAME_SURFACE_CHARS:
+            folded_bytes = (
+                unicodedata.normalize("NFKC", source).casefold().encode("utf-8")
+            )
+            digest = hashlib.sha256(folded_bytes).hexdigest()
+            return f"{INDIC_NAME_KEY_VERSION}:overflow:{digest}"
+        latin = self.to_latin(source)
         tokens = _latin_tokens(latin)
-        folded = [
+        folded_tokens = [
             _collision_safe_fold(token, threshold=self.similarity_threshold)
             for token in tokens
         ]
-        return f"{INDIC_NAME_KEY_VERSION}:{' '.join(folded)}"
+        return f"{INDIC_NAME_KEY_VERSION}:{' '.join(folded_tokens)}"
 
     def to_latin(self, surface: str) -> str:
         """Return deterministic Latin text using a local model or stdlib."""
@@ -229,7 +245,7 @@ class IndicNameNormalizer:
         script = detect_name_script(source)
         if script in _SCRIPT_PREFIXES and self.transliterator is not None:
             translated = _model_to_latin(self.transliterator, source, script)
-            if translated:
+            if translated and len(translated) <= MAX_INDIC_NAME_SURFACE_CHARS:
                 return translated
         return _stdlib_to_latin(source)
 
@@ -246,9 +262,12 @@ class IndicNameNormalizer:
             return identity
         if self.transliterator is not None:
             translated = _model_from_latin(self.transliterator, identity, script)
-            if translated and detect_name_script(translated) == script:
+            if _is_script_pure(translated, script):
                 return translated
-        return _stdlib_from_latin(identity, script)
+        rendered = _stdlib_from_latin(identity, script)
+        if _is_script_pure(rendered, script):
+            return rendered
+        return _stdlib_from_latin("Person", script)
 
 
 def canonical_indic_name_key(
@@ -520,6 +539,16 @@ def _model_from_latin(model: Transliterator, text: str, script: str) -> str:
     return ""
 
 
+def _is_script_pure(value: str, script: str) -> bool:
+    prefix = _SCRIPT_PREFIXES[script]
+    letters = [
+        char for char in str(value or "") if unicodedata.category(char).startswith("L")
+    ]
+    return bool(letters) and all(
+        unicodedata.name(char, "").startswith(f"{prefix} ") for char in letters
+    )
+
+
 def _try_model_calls(calls: Sequence[Callable[[], Any]]) -> str:
     for call in calls:
         try:
@@ -553,7 +582,10 @@ def _coerce_model_result(value: Any) -> str:
 
 
 def _validate_threshold(value: float) -> None:
-    if not 0.5 <= float(value) <= 1.0:
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise TypeError("similarity_threshold must be a real number")
+    numeric = float(value)
+    if not isfinite(numeric) or not 0.5 <= numeric <= 1.0:
         raise ValueError("similarity_threshold must be between 0.5 and 1.0")
 
 
@@ -561,6 +593,7 @@ __all__ = [
     "DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD",
     "INDIC_LANGUAGE_CODES",
     "INDIC_NAME_KEY_VERSION",
+    "MAX_INDIC_NAME_SURFACE_CHARS",
     "IndicNameNormalizer",
     "canonical_indic_name_key",
     "detect_name_script",

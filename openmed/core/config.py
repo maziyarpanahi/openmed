@@ -172,6 +172,10 @@ class OpenMedConfig:
                     setattr(self, key, value)
             self.profile = env_profile
 
+        if not isinstance(self.transliteration_aware_name_matching, bool):
+            raise TypeError("transliteration_aware_name_matching must be a boolean")
+        if isinstance(self.indic_name_similarity_threshold, bool):
+            raise TypeError("indic_name_similarity_threshold must be a real number")
         self.indic_name_similarity_threshold = float(
             self.indic_name_similarity_threshold
         )
@@ -286,8 +290,8 @@ class OpenMedConfig:
 
         env_indic_matching = os.getenv("OPENMED_TRANSLITERATION_AWARE_NAME_MATCHING")
         if env_indic_matching is not None:
-            self.transliteration_aware_name_matching = (
-                env_indic_matching.lower() not in {"0", "false", "no"}
+            self.transliteration_aware_name_matching = env_flag_enabled(
+                env_indic_matching
             )
 
         env_indic_threshold = os.getenv("OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD")

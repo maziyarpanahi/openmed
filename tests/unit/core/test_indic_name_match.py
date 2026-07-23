@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 
 import pytest
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.config import OpenMedConfig
 from openmed.core.indic_name_match import (
+    MAX_INDIC_NAME_SURFACE_CHARS,
     IndicNameNormalizer,
     canonical_indic_name_key,
     detect_name_script,
@@ -46,6 +48,22 @@ def test_similarity_threshold_is_validated_and_tunable():
     assert not indic_names_match("Sanjay", "Sanjai", similarity_threshold=0.90)
     with pytest.raises(ValueError, match="between 0.5 and 1.0"):
         IndicNameNormalizer(similarity_threshold=0.49)
+    with pytest.raises(TypeError, match="real number"):
+        IndicNameNormalizer(similarity_threshold=True)
+    with pytest.raises(ValueError, match="between 0.5 and 1.0"):
+        IndicNameNormalizer(similarity_threshold=float("nan"))
+
+
+def test_oversized_surfaces_use_distinct_bounded_fallback_keys():
+    normalizer = IndicNameNormalizer()
+    prefix = "S" * MAX_INDIC_NAME_SURFACE_CHARS
+
+    first = normalizer.canonical_key(f"{prefix}a")
+    second = normalizer.canonical_key(f"{prefix}b")
+
+    assert first.startswith("indic-name-v1:overflow:")
+    assert second.startswith("indic-name-v1:overflow:")
+    assert first != second
 
 
 def test_user_supplied_transliterator_is_used_without_bundled_weights():
@@ -79,6 +97,77 @@ def test_stdlib_rendering_preserves_source_script_class():
         )
         == "Ketan Sharma"
     )
+
+
+def test_stdlib_rendering_never_leaves_latin_letters_in_indic_output():
+    rendered = IndicNameNormalizer().render_surrogate(
+        "Victor Xavier C. Fox",
+        source_surface="संजय",
+    )
+
+    letters = [char for char in rendered if char.isalpha()]
+    assert letters
+    assert all(unicodedata.name(char, "").startswith("DEVANAGARI ") for char in letters)
+
+
+@pytest.mark.parametrize(
+    ("surface", "lang", "script", "unicode_prefix"),
+    [
+        ("रवि", "hi", "devanagari", "DEVANAGARI "),
+        ("রবি", "bn", "bengali", "BENGALI "),
+        ("ਰਵੀ", "pa", "gurmukhi", "GURMUKHI "),
+        ("રવિ", "gu", "gujarati", "GUJARATI "),
+        ("ରବି", "or", "odia", "ORIYA "),
+        ("ரவி", "ta", "tamil", "TAMIL "),
+        ("రవి", "te", "telugu", "TELUGU "),
+        ("ರವಿ", "kn", "kannada", "KANNADA "),
+        ("രവി", "ml", "malayalam", "MALAYALAM "),
+    ],
+)
+def test_vault_renders_supported_brahmic_scripts_without_mixed_letters(
+    surface,
+    lang,
+    script,
+    unicode_prefix,
+):
+    vault = SurrogateVault.in_memory(
+        "synthetic-test-secret",
+        transliteration_aware_name_matching=True,
+    )
+
+    rendered = vault.get_or_create(
+        surface,
+        label="PERSON",
+        lang=lang,
+        create_surrogate=lambda attempt: "Victor Xavier C. Fox",
+    )
+
+    assert vault.key_for(surface, label="PERSON", lang=lang).lang == "indic"
+    assert detect_name_script(rendered) == script
+    letters = [char for char in rendered if char.isalpha()]
+    assert letters
+    assert all(
+        unicodedata.name(char, "").startswith(unicode_prefix) for char in letters
+    )
+
+
+def test_vault_rejects_mixed_script_renderer_output():
+    vault = SurrogateVault.in_memory(
+        "synthetic-test-secret",
+        transliteration_aware_name_matching=True,
+    )
+
+    rendered = vault.get_or_create(
+        "संजय",
+        label="PERSON",
+        lang="hi",
+        create_surrogate=lambda attempt: "Victor Cross",
+        render_surrogate=lambda identity: "विक्टरMixed",
+    )
+
+    letters = [char for char in rendered if char.isalpha()]
+    assert letters
+    assert all(unicodedata.name(char, "").startswith("DEVANAGARI ") for char in letters)
 
 
 def test_anonymizer_reuses_identity_while_rendering_each_script():
@@ -119,6 +208,14 @@ def test_config_round_trip_and_environment(monkeypatch):
     environment_config = OpenMedConfig()
     assert environment_config.transliteration_aware_name_matching is True
     assert environment_config.indic_name_similarity_threshold == 0.90
+
+    monkeypatch.setenv("OPENMED_TRANSLITERATION_AWARE_NAME_MATCHING", " false ")
+    assert OpenMedConfig().transliteration_aware_name_matching is False
+
+    with pytest.raises(TypeError, match="must be a boolean"):
+        OpenMedConfig(transliteration_aware_name_matching="false")
+    with pytest.raises(TypeError, match="real number"):
+        OpenMedConfig(indic_name_similarity_threshold=True)
 
 
 def test_vault_links_variants_and_renders_one_identity_per_script(tmp_path):
@@ -168,6 +265,7 @@ def test_vault_links_variants_and_renders_one_identity_per_script(tmp_path):
         "normalizer_version": "indic-name-v1",
         "similarity_threshold": 0.8,
     }
+    assert payload["name_matching_tag"].startswith("hmac-sha256:")
 
     reloaded = SurrogateVault.from_file(
         path,
@@ -175,6 +273,35 @@ def test_vault_links_variants_and_renders_one_identity_per_script(tmp_path):
     )
     assert reloaded.transliteration_aware_name_matching is True
     assert reloaded.get("Sanjai", label="PERSON", lang="hi") == "Ketan Sharma"
+
+
+def test_file_vault_rejects_tampered_name_matching_metadata(tmp_path):
+    path = tmp_path / "tampered-indic-vault.json"
+    vault = SurrogateVault.from_file(
+        path,
+        hmac_secret="synthetic-test-secret",
+        transliteration_aware_name_matching=True,
+    )
+    vault.get_or_create(
+        "Sanjay",
+        label="PERSON",
+        lang="hi",
+        create_surrogate=lambda attempt: "Ketan Sharma",
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["name_matching"]["similarity_threshold"] = 0.9
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata is invalid"):
+        SurrogateVault.from_file(path, hmac_secret="synthetic-test-secret")
+
+
+def test_vault_rejects_ambiguous_matching_flag():
+    with pytest.raises(TypeError, match="must be a boolean"):
+        SurrogateVault.in_memory(
+            "synthetic-test-secret",
+            transliteration_aware_name_matching="false",
+        )
 
 
 def test_disabled_vault_keeps_existing_exact_cross_script_behavior():
