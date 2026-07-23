@@ -35,6 +35,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "indic": AdapterSpec(
+        name="indic",
+        module="openmed.interop.indic",
+        extra="indic",
+        description="Indic segmentation and transliteration helpers",
+    ),
     "duckdb": AdapterSpec(
         name="duckdb",
         module="openmed.interop.duckdb_udf",
@@ -83,6 +89,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="polars",
         description="Polars DataFrame de-identification helpers",
     ),
+    "prefect": AdapterSpec(
+        name="prefect",
+        module="openmed.interop.prefect_tasks",
+        extra="prefect",
+        description="Prefect task and flow for batch de-identification",
+    ),
     "pydeid": AdapterSpec(
         name="pydeid",
         module="openmed.interop.pydeid",
@@ -101,6 +113,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="spacy",
         description="spaCy pipeline component for OpenMed PII spans",
     ),
+    "zh": AdapterSpec(
+        name="zh",
+        module="openmed.interop.zh",
+        extra="zh",
+        description="Chinese segmentation, script conversion, and pinyin helpers",
+    ),
     "cdm_etl": AdapterSpec(
         name="cdm_etl",
         module="openmed.interop.cdm_etl",
@@ -112,6 +130,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.omop",
         extra="",
         description="OMOP CDM loader for grounded clinical note spans",
+    ),
+    "openmrs": AdapterSpec(
+        name="openmrs",
+        module="openmed.interop.openmrs",
+        extra="openmrs",
+        description="Local-first OpenMRS REST and FHIR2 de-identification adapter",
     ),
 }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import struct
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -21,6 +22,7 @@ from openmed.processing.tokenization import (
     DictionaryExpansionLimitError,
     DictionaryIngestionError,
     DictionaryLimits,
+    DictionaryRecordLimitError,
     UserDictionaryEntry,
     load_user_dictionary,
     validate_user_dictionary_entry,
@@ -92,6 +94,46 @@ def test_single_member_stored_zip_loads_and_multiple_members_fail_closed(
         load_user_dictionary(invalid_path)
 
 
+def test_zip_entry_count_is_rejected_before_central_directory_parsing(
+    tmp_path: Path,
+) -> None:
+    archive_path = tmp_path / "directory-metadata.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("metadata/", b"")
+        archive.writestr("terms.txt", b"patient\n")
+
+    with patch.object(
+        zipfile,
+        "ZipFile",
+        side_effect=AssertionError("central directory must not be materialized"),
+    ):
+        with pytest.raises(DictionaryArchiveError):
+            load_user_dictionary(archive_path)
+
+
+def test_forged_single_entry_count_cannot_hide_extra_metadata(
+    tmp_path: Path,
+) -> None:
+    archive_path = tmp_path / "forged-count.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("metadata/", b"")
+        archive.writestr("terms.txt", b"patient\n")
+
+    payload = bytearray(archive_path.read_bytes())
+    end_record = payload.rfind(b"PK\x05\x06")
+    assert end_record >= 0
+    struct.pack_into("<HH", payload, end_record + 8, 1, 1)
+    archive_path.write_bytes(payload)
+
+    with patch.object(
+        zipfile,
+        "ZipFile",
+        side_effect=AssertionError("central directory must not be materialized"),
+    ):
+        with pytest.raises(DictionaryArchiveError):
+            load_user_dictionary(archive_path)
+
+
 @pytest.mark.timeout(10)
 def test_ten_million_entries_stop_at_the_default_cap(tmp_path: Path) -> None:
     path = tmp_path / "ten-million.txt"
@@ -104,6 +146,48 @@ def test_ten_million_entries_stop_at_the_default_cap(tmp_path: Path) -> None:
         load_user_dictionary(path)
 
     assert exc_info.value.observed_count == 100_001
+
+
+def test_blank_and_comment_records_consume_the_record_budget(tmp_path: Path) -> None:
+    path = tmp_path / "empty-records.txt"
+    path.write_text("\n# comment\n\n", encoding="utf-8")
+    limits = DictionaryLimits(max_records=2)
+
+    with pytest.raises(DictionaryRecordLimitError) as exc_info:
+        load_user_dictionary(path, limits=limits)
+
+    assert exc_info.value.observed_count == 3
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("max_compressed_bytes", 16 * 1024 * 1024 + 1),
+        ("max_decompressed_bytes", 64 * 1024 * 1024 + 1),
+        ("max_entries", 100_001),
+        ("max_records", 200_001),
+        ("max_entry_bytes", 4 * 1024 + 1),
+        ("max_term_characters", 257),
+        ("max_expansion_ratio", 100.01),
+        ("max_expansion_ratio", float("nan")),
+    ],
+)
+def test_dictionary_limits_are_lower_only(name: str, value: int | float) -> None:
+    with pytest.raises(ValueError):
+        DictionaryLimits(**{name: value})
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("max_entries", True),
+        ("max_entry_bytes", 1.5),
+        ("max_expansion_ratio", "10"),
+    ],
+)
+def test_dictionary_limit_types_fail_closed(name: str, value: object) -> None:
+    with pytest.raises(TypeError):
+        DictionaryLimits(**{name: value})
 
 
 @pytest.mark.parametrize(

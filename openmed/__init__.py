@@ -13,8 +13,16 @@ from .core.anonymizer import (
     LANG_TO_LOCALE,
     Anonymizer,
     AnonymizerConfig,
+    IndiaSurrogateProvider,
     register_clinical_provider,
     register_label_generator,
+)
+from .core.attestation import (
+    AttestationReport,
+    AttestationTemplateError,
+    generate_attestation,
+    list_attestation_profiles,
+    load_attestation_template,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 from .core.custom_recognizer import CustomRecognizer
@@ -51,12 +59,15 @@ from .core.pii_entity_merger import (
     calculate_dominant_label,
     find_semantic_units,
     merge_entities_with_semantic_units,
+    merge_india_code_mixed_spans,
 )
 from .core.pii_i18n import (
     DEFAULT_PII_MODELS,
     LANGUAGE_PII_PATTERNS,
     SUPPORTED_LANGUAGES,
+    get_india_clinical_model_route,
     get_patterns_for_language,
+    india_clinical_route_active,
 )
 from .core.redaction_preview import redaction_preview, render_redaction_preview
 from .core.result_cache import (
@@ -99,6 +110,8 @@ from .processing import (
     BatchResult,
     DatasetRedactionResult,
     DatasetRedactionSummary,
+    IndicNormalization,
+    IndicNormalizer,
     OutputFormatter,
     TextProcessor,
     TokenizationHelper,
@@ -119,13 +132,16 @@ from .processing.advanced_ner import (
 )
 from .processing.outputs import PredictionResult
 from .utils import (
+    PeakRSSMeasurement,
     Profiler,
     ProfileReport,
     Timer,
     disable_profiling,
     enable_profiling,
     get_logger,
+    get_peak_rss_bytes,
     get_profile_report,
+    measure_peak_rss,
     profile,
     setup_logging,
     timed,
@@ -649,6 +665,8 @@ __all__ = [
     "OnnxModel",
     "load_onnx_model",
     "TextProcessor",
+    "IndicNormalization",
+    "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
     "TokenizationHelper",
@@ -705,10 +723,13 @@ __all__ = [
     # Profiling utilities
     "Profiler",
     "ProfileReport",
+    "PeakRSSMeasurement",
     "Timer",
     "enable_profiling",
     "disable_profiling",
     "get_profile_report",
+    "get_peak_rss_bytes",
+    "measure_peak_rss",
     "profile",
     "timed",
     # PII detection and de-identification
@@ -717,6 +738,11 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "AttestationReport",
+    "AttestationTemplateError",
+    "generate_attestation",
+    "list_attestation_profiles",
+    "load_attestation_template",
     "CustomRecognizer",
     "StreamingBufferError",
     "StreamingDeidentificationEvent",
@@ -728,6 +754,7 @@ __all__ = [
     "render_redaction_preview",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
+    "merge_india_code_mixed_spans",
     "find_semantic_units",
     "calculate_dominant_label",
     "PII_PATTERNS",
@@ -736,13 +763,16 @@ __all__ = [
     "SUPPORTED_LANGUAGES",
     "DEFAULT_PII_MODELS",
     "LANGUAGE_PII_PATTERNS",
+    "get_india_clinical_model_route",
     "get_patterns_for_language",
+    "india_clinical_route_active",
     # Canonical label taxonomy
     "CANONICAL_LABELS",
     "normalize_label",
     # Anonymization engine
     "Anonymizer",
     "AnonymizerConfig",
+    "IndiaSurrogateProvider",
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",

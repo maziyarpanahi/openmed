@@ -6,20 +6,25 @@ from openmed.core.anonymizer.locales import NATIONAL_ID_PROVIDERS
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import CANONICAL_LABELS, ID_NUM
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_chinese_resident_id,
     validate_dutch_bsn,
+    validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_za_id_number,
 )
 from openmed.training.synthetic import (
     LOCALE_PHI_LABELS,
@@ -29,6 +34,7 @@ from openmed.training.synthetic import (
 )
 
 _ID_VALIDATORS = {
+    "am": validate_ethiopia_fayda,
     "en": clinical_ids.validate_ssn,
     "fr": validate_french_nir,
     "de": validate_german_steuer_id,
@@ -44,9 +50,14 @@ _ID_VALIDATORS = {
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
+    "sw": validate_kenya_maisha_namba,
+    "zu": validate_za_id_number,
+    "xh": validate_za_id_number,
+    "zh": validate_chinese_resident_id,
 }
 
 _SCRIPT_RANGES = {
+    "am": ("\u1200", "\u137f"),
     "ar": ("\u0600", "\u06ff"),
     "he": ("\u0590", "\u05ff"),
     "hi": ("\u0900", "\u097f"),
@@ -54,11 +65,14 @@ _SCRIPT_RANGES = {
     "ko": ("\uac00", "\ud7a3"),
     "te": ("\u0c00", "\u0c7f"),
     "th": ("\u0e00", "\u0e7f"),
+    "zh": ("\u4e00", "\u9fff"),
 }
 
 
 def test_supported_languages_match_wired_language_set():
-    assert set(SUPPORTED_LOCALE_PHI_LANGUAGES) == SUPPORTED_LANGUAGES
+    assert set(SUPPORTED_LOCALE_PHI_LANGUAGES) == (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    )
 
 
 @pytest.mark.parametrize("language", SUPPORTED_LOCALE_PHI_LANGUAGES)
@@ -103,7 +117,7 @@ def test_locale_phi_generation_is_deterministic_per_seed():
     assert first == second
 
 
-@pytest.mark.parametrize("language", ("ar", "he", "hi", "ja", "te", "th"))
+@pytest.mark.parametrize("language", ("am", "ar", "he", "hi", "ja", "te", "th", "zh"))
 def test_non_latin_locale_templates_render_target_script(language):
     example = LocalePhiGenerator(seed=29).generate(language)
     low, high = _SCRIPT_RANGES[language]
@@ -113,4 +127,4 @@ def test_non_latin_locale_templates_render_target_script(language):
 
 def test_locale_phi_generator_rejects_unsupported_language():
     with pytest.raises(ValueError, match="unsupported locale PHI language"):
-        LocalePhiGenerator(seed=1).generate("zh")
+        LocalePhiGenerator(seed=1).generate("xx")

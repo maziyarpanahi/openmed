@@ -21,6 +21,8 @@ Encounter).
   Bundle assembly unchanged, while literal ``"ResourceType/id"``
   references continue to be rewritten when their targets are present
   in the Bundle;
+* ABHA, UPI, and ration-card surfaces are redacted from FHIR ``Identifier``
+  and PatientID-style fields before resources are emitted;
 
 The assembler is purely mechanical: it never synthesises resources (a Patient
 removed by de-identification stays absent) and does not validate profiles.
@@ -28,8 +30,11 @@ removed by de-identification stays absent) and does not validate profiles.
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Callable
 from typing import Any, Mapping, Sequence
 
+from .privacy import sanitize_india_health_identifiers
 from .references import deterministic_fullurl
 
 __all__ = ["to_bundle"]
@@ -44,6 +49,7 @@ def to_bundle(
     *,
     doc_id: str = "openmed-document",
     bundle_type: str = "transaction",
+    profile_check: Callable[[Mapping[str, Any]], Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble ``resources`` into a single R4 Bundle.
 
@@ -62,6 +68,11 @@ def to_bundle(
         The Bundle ``type`` (defaults to ``"transaction"``). For
         ``transaction``/``batch`` bundles each entry also gets a ``request``
         block.
+    profile_check:
+        Optional callback invoked once with a deep copy of the completed
+        Bundle. This provides an opt-in conformance or policy gate without
+        allowing the callback to mutate the exported Bundle. The callback's
+        return value is ignored and exceptions propagate to the caller.
 
     Returns
     -------
@@ -105,7 +116,8 @@ def to_bundle(
 
     emit_request = bundle_type in _REQUEST_BUNDLE_TYPES
     for urn, resource in zip(urns, resources):
-        rewritten = _rewrite_references(resource, reference_map)
+        sanitized = sanitize_india_health_identifiers(resource)
+        rewritten = _rewrite_references(sanitized, reference_map)
         entry: dict[str, Any] = {"fullUrl": urn, "resource": rewritten}
         if emit_request:
             entry["request"] = {
@@ -114,7 +126,12 @@ def to_bundle(
             }
         entries.append(entry)
 
-    return {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
+    bundle = {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
+    if profile_check is not None:
+        if not callable(profile_check):
+            raise TypeError("profile_check must be callable")
+        profile_check(copy.deepcopy(bundle))
+    return bundle
 
 
 def _rewrite_references(node: Any, reference_map: Mapping[str, str]) -> Any:

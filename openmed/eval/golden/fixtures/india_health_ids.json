@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "fixtures": [
+    {
+      "id": "golden-india-health-ids-code-mixed",
+      "language": "hi",
+      "text": "Synthetic discharge note / कृत्रिम रिकॉर्ड: आभा नंबर 7604 8764 7593 81; ABHA Address patient.482901@abdm; यूपीआई आईडी refund.593104@okaxis; राशन कार्ड DL-4829013756. Ordinary email records@example.org. Invalid ABHA 7604 8764 7593 82.",
+      "gold_spans": [
+        {
+          "start": 53,
+          "end": 70,
+          "text": "7604 8764 7593 81",
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "abha_number",
+            "checksum_status": "valid",
+            "source": "synthetic_india_health_id"
+          }
+        },
+        {
+          "start": 85,
+          "end": 104,
+          "text": "patient.482901@abdm",
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "abha_address",
+            "source": "synthetic_india_health_id"
+          }
+        },
+        {
+          "start": 118,
+          "end": 138,
+          "text": "refund.593104@okaxis",
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "upi_id",
+            "source": "synthetic_india_health_id"
+          }
+        },
+        {
+          "start": 151,
+          "end": 164,
+          "text": "DL-4829013756",
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "ration_card",
+            "source": "synthetic_india_health_id"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "india_health_ids",
+        "suite": "india_health_id_leakage",
+        "synthetic": true,
+        "notice": "Synthetic-only identifiers; no real PHI or live ABDM data.",
+        "hard_negatives": [
+          {
+            "start": 181,
+            "end": 200,
+            "text": "records@example.org",
+            "reason": "ordinary_email_not_abha_or_upi"
+          },
+          {
+            "start": 215,
+            "end": 232,
+            "text": "7604 8764 7593 82",
+            "reason": "invalid_abha_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "india_health_id",
+          "text": "Synthetic discharge note / कृत्रिम रिकॉर्ड: आभा नंबर [ID_NUM]; ABHA Address [ID_NUM]; यूपीआई आईडी [ID_NUM]; राशन कार्ड [ID_NUM]. Ordinary email records@example.org. Invalid ABHA 7604 8764 7593 82."
+        }
+      }
+    }
+  ]
+}

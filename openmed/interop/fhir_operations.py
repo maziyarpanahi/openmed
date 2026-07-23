@@ -39,7 +39,9 @@ from ..clinical.exporters.fhir import OperationOutcomeIssue, to_operation_outcom
 
 __all__ = [
     "de_identify_resource",
+    "de_identify_resource_with_manifest",
     "de_identify_bundle",
+    "de_identify_bundle_with_manifest",
     "de_identify",
 ]
 
@@ -157,6 +159,38 @@ def de_identify_resource(
     return transformed
 
 
+def de_identify_resource_with_manifest(
+    resource: Any,
+    *,
+    policy: str = _DEFAULT_POLICY,
+    method: str = _DEFAULT_METHOD,
+    deidentifier: Optional[Deidentifier] = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return a de-identified FHIR resource and its ``OperationOutcome``.
+
+    The outcome contains one informational issue per transformed FHIRPath-like
+    element path. It is useful to adapters that need to hand a PHI-free change
+    manifest to downstream systems without running the privacy pipeline twice.
+
+    Args:
+        resource: A FHIR resource mapping carrying ``resourceType``.
+        policy: Privacy policy profile passed to the pipeline.
+        method: De-identification method.
+        deidentifier: Optional privacy pipeline override, mainly for tests.
+
+    Returns:
+        A ``(resource, outcome)`` pair. Both values are newly allocated.
+    """
+
+    transformed, changes = _de_identify_resource(
+        resource,
+        policy=policy,
+        method=method,
+        deidentifier=deidentifier,
+    )
+    return transformed, _outcome_from_changes(changes)
+
+
 def de_identify_bundle(
     bundle: Any,
     *,
@@ -191,6 +225,37 @@ def de_identify_bundle(
         deidentifier=deidentifier,
     )
     return transformed
+
+
+def de_identify_bundle_with_manifest(
+    bundle: Any,
+    *,
+    policy: str = _DEFAULT_POLICY,
+    method: str = _DEFAULT_METHOD,
+    deidentifier: Optional[Deidentifier] = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return a de-identified FHIR Bundle and its ``OperationOutcome``.
+
+    Bundle entry structure, request blocks, ``fullUrl`` values, and references
+    are preserved exactly; the manifest reports only transformed text paths.
+
+    Args:
+        bundle: A FHIR ``Bundle`` resource mapping.
+        policy: Privacy policy profile passed to the pipeline.
+        method: De-identification method.
+        deidentifier: Optional privacy pipeline override, mainly for tests.
+
+    Returns:
+        A ``(bundle, outcome)`` pair. Both values are newly allocated.
+    """
+
+    transformed, changes = _de_identify_bundle(
+        bundle,
+        policy=policy,
+        method=method,
+        deidentifier=deidentifier,
+    )
+    return transformed, _outcome_from_changes(changes)
 
 
 def de_identify(

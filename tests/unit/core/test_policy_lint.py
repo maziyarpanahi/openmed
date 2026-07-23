@@ -12,6 +12,7 @@ from openmed.core.policy_lint import (
     POLICY_SCHEMA_INVALID,
     POLICY_STRICT_POSTURE_REQUIRES_SWEEP,
     POLICY_UNKNOWN_ACTION_LABEL,
+    POLICY_UNKNOWN_ACTION_VALUE,
     POLICY_UNKNOWN_THRESHOLD_PROFILE,
     POLICY_UNREACHABLE_POLICY_LABEL_ACTION,
     lint_policy,
@@ -52,6 +53,27 @@ def test_lint_policy_flags_unknown_action_label_and_threshold_profile() -> None:
     assert "$.threshold_profile" in _finding_paths(
         report, POLICY_UNKNOWN_THRESHOLD_PROFILE
     )
+
+
+def test_lint_policy_flags_unknown_action_values_at_stable_paths() -> None:
+    payload = _profile_payload()
+    actions = payload["actions"]
+    policy_label_actions = payload["policy_label_actions"]
+    assert isinstance(actions, dict)
+    assert isinstance(policy_label_actions, dict)
+    payload["default_action"] = "remove"
+    actions["ID_NUM"] = "drop"
+    policy_label_actions[DIRECT_IDENTIFIER] = "scrub"
+
+    report = lint_policy(payload)
+
+    assert report["valid"] is False
+    assert POLICY_UNKNOWN_ACTION_VALUE in _codes(report, "errors")
+    assert _finding_paths(report, POLICY_UNKNOWN_ACTION_VALUE) == {
+        "$.actions.ID_NUM",
+        "$.default_action",
+        "$.policy_label_actions.DIRECT_IDENTIFIER",
+    }
 
 
 def test_lint_policy_detects_duplicate_action_labels(tmp_path: Path) -> None:

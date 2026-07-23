@@ -18,64 +18,68 @@ Health identifiers for HIPAA cross-map consumers:
 from __future__ import annotations
 
 import re
+import unicodedata
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
-from typing import Dict, List, Optional, Set
+from importlib import resources
+from typing import Any, Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    gstin_check_char,
+    pan_check_letter,
+    validate_abha,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
     validate_canadian_sin,
+    validate_gstin,
+    validate_luhn,
     validate_ontario_health_card,
+    validate_pan,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
+from .lang_id_codemix import (
+    TokenLanguageRun,
+    TokenLIDHook,
+    identify_token_languages,
+    token_language_runs,
+)
+from .language_pack_catalog import (
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+    DEFAULT_PII_MODELS,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
+)
+from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-SUPPORTED_LANGUAGES: Set[str] = {
-    "en",
-    "fr",
-    "de",
-    "it",
-    "es",
-    "nl",
-    "hi",
-    "te",
-    "pt",
-    "ar",
-    "he",
-    "ja",
-    "tr",
-    "id",
-    "th",
-    "ko",
-    "ro",
-}
+# Naamapadam languages supported by the optional Indic NER adapter. Existing
+# Hindi and Telugu defaults remain available; the shared CoNLL adapter is an
+# additional opt-in model family for all 11 languages.
+INDIC_NER_LANGUAGES = frozenset(
+    {"as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+)
+INDIC_NER_MODEL_ENV = "OPENMED_INDIC_NER_MODEL"
+OPTIONAL_PII_MODEL = f"env:{INDIC_NER_MODEL_ENV}"
+OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 
-# Languages with validator-backed national-ID coverage but no bundled default
-# PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
-    "pl",
-    "lv",
-    "sk",
-    "ms",
-    "tl",
-    "da",
-    "hu",
-    "et",
-    "sr",
-    "hr",
-    "bg",
-    "fi",
-    "cs",
-    "el",
-    "vi",
-}
+# The central catalog keeps user-supplied model routes separate from bundled
+# language packs. This compatibility map lets the 11 optional Indic routes
+# resolve explicitly configured weights without advertising them as built-in
+# language packs.
+DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
+for _language in INDIC_NER_LANGUAGES - {"hi", "te"}:
+    DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
 
 LANGUAGE_NAMES: Dict[str, str] = {
+    "as": "Assamese",
+    "bn": "Bengali",
     "en": "English",
     "fr": "French",
     "de": "German",
@@ -83,7 +87,15 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "es": "Spanish",
     "nl": "Dutch",
     "hi": "Hindi",
+    "gu": "Gujarati",
+    "kn": "Kannada",
+    "ml": "Malayalam",
+    "mr": "Marathi",
+    "or": "Odia",
+    "pa": "Punjabi",
+    "ta": "Tamil",
     "te": "Telugu",
+    "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
     "he": "Hebrew",
@@ -93,9 +105,15 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "th": "Thai",
     "ko": "Korean",
     "ro": "Romanian",
+    "zh": "Chinese",
+    "sw": "Swahili",
+    "zu": "isiZulu",
+    "xh": "isiXhosa",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
+    "as": "Assamese-",
+    "bn": "Bengali-",
     "en": "",
     "fr": "French-",
     "de": "German-",
@@ -103,7 +121,15 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "es": "Spanish-",
     "nl": "Dutch-",
     "hi": "Hindi-",
+    "gu": "Gujarati-",
+    "kn": "Kannada-",
+    "ml": "Malayalam-",
+    "mr": "Marathi-",
+    "or": "Odia-",
+    "pa": "Punjabi-",
+    "ta": "Tamil-",
     "te": "Telugu-",
+    "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
     "he": "Hebrew-",
@@ -113,26 +139,203 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "th": "Thai-",
     "ko": "Korean-",
     "ro": "Romanian-",
+    "zh": "Chinese-",
+    "sw": "Swahili-",
+    "zu": "isiZulu-",
+    "xh": "isiXhosa-",
 }
 
-DEFAULT_PII_MODELS: Dict[str, str] = {
-    "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
-    "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
-    "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
-    "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
-    "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
-    "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
-    "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
-    "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
-    "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
-    "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
-    "he": "OpenMed/privacy-filter-multilingual",
-    "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
-    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
-    "id": "OpenMed/privacy-filter-multilingual",
-    "th": "OpenMed/privacy-filter-multilingual",
-    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
-    "ro": "OpenMed/privacy-filter-multilingual",
+# ---------------------------------------------------------------------------
+# Chinese personal-name assist data
+# ---------------------------------------------------------------------------
+
+_CHINESE_SURNAME_RESOURCE = "data/chinese_surnames.txt"
+_HAN_CHARACTER_CLASS = "\u3400-\u4dbf\u4e00-\u9fff"
+
+
+def _load_chinese_surnames() -> frozenset[str]:
+    """Load the packaged public-domain/CC0 Chinese surname gazetteer."""
+
+    resource = resources.files("openmed.clinical").joinpath(_CHINESE_SURNAME_RESOURCE)
+    with resource.open("r", encoding="utf-8") as handle:
+        surnames = {
+            line.strip()
+            for line in handle
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+    if not surnames or any(
+        re.fullmatch(rf"[{_HAN_CHARACTER_CLASS}]{{1,2}}", surname) is None
+        for surname in surnames
+    ):
+        raise RuntimeError("invalid packaged Chinese surname gazetteer")
+    return frozenset(surnames)
+
+
+CHINESE_SURNAMES = _load_chinese_surnames()
+"""Permissively licensed Chinese surname vocabulary with no patient data."""
+
+CHINESE_COMPOUND_SURNAMES = frozenset(
+    surname for surname in CHINESE_SURNAMES if len(surname) == 2
+)
+"""Common two-character Chinese surnames, such as ``欧阳`` and ``司马``."""
+
+CHINESE_SINGLE_SURNAMES = CHINESE_SURNAMES - CHINESE_COMPOUND_SURNAMES
+"""Single-character Chinese surnames used by the name-recognition assist."""
+
+# Synthetic, non-patient probes used to audit tokenizer representation before a
+# PII model is advertised for a writing system.  The shape intentionally mirrors
+# LANGUAGE_FAKE_DATA below while keeping the audit focused on names, addresses,
+# and identifiers that would create direct leakage if tokenized as unknowns.
+TOKENIZER_SCRIPT_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "han_simplified": {
+        "NAME": ["张伟", "李娜", "王芳"],
+        "STREET_ADDRESS": [
+            "北京市朝阳区建国路88号",
+            "上海市浦东新区世纪大道100号",
+            "广州市天河区体育西路12号",
+        ],
+        "ID_NUM": ["身份证110105199001012345", "病历号京医20260018"],
+    },
+    "han_traditional": {
+        "NAME": ["王小明", "陳美玲", "林志豪"],
+        "STREET_ADDRESS": [
+            "臺北市中正區忠孝東路一段10號",
+            "高雄市苓雅區中正一路25號",
+            "香港九龍彌敦道88號",
+        ],
+        "ID_NUM": ["身分證A123456789", "病歷號臺醫20260027"],
+    },
+    "devanagari": {
+        "NAME": ["अनिता शर्मा", "राजेश कुमार", "प्रिया वर्मा"],
+        "STREET_ADDRESS": [
+            "१२ जनपथ मार्ग नई दिल्ली",
+            "४५ एम जी रोड पुणे",
+            "८८ अस्पताल मार्ग लखनऊ",
+        ],
+        "ID_NUM": ["रोगी क्रमांक १२३४५६", "पहचान ९८७६५४३२१०"],
+    },
+    "bengali": {
+        "NAME": ["অনন্যা সেন", "রাহুল দাস", "মেঘা রায়"],
+        "STREET_ADDRESS": [
+            "১২ কলেজ স্ট্রিট কলকাতা",
+            "৪৫ হাসপাতাল রোড ঢাকা",
+            "৮৮ রবীন্দ্র সরণি শিলিগুড়ি",
+        ],
+        "ID_NUM": ["রোগী নম্বর ১২৩৪৫৬", "পরিচয় ৯৮৭৬৫৪৩২১০"],
+    },
+    "tamil": {
+        "NAME": ["அனிதா குமார்", "ரவி சங்கர்", "மீனா தேவி"],
+        "STREET_ADDRESS": [
+            "௧௨ அண்ணா சாலை சென்னை",
+            "௪௫ மருத்துவமனை வீதி மதுரை",
+            "௮௮ காந்தி சாலை கோயம்புத்தூர்",
+        ],
+        "ID_NUM": ["நோயாளர் எண் ௧௨௩௪௫௬", "அடையாளம் ௯௮௭௬௫௪௩௨௧௦"],
+    },
+    "telugu": {
+        "NAME": ["సీతా రెడ్డి", "రామ్ కుమార్", "ప్రియా దేవి"],
+        "STREET_ADDRESS": [
+            "౧౨ బంజారా హిల్స్ హైదరాబాద్",
+            "౪౫ ఆసుపత్రి వీధి విజయవాడ",
+            "౮౮ గాంధీ రోడ్ గుంటూరు",
+        ],
+        "ID_NUM": ["రోగి సంఖ్య ౧౨౩౪౫౬", "గుర్తింపు ౯౮౭౬౫౪౩౨౧౦"],
+    },
+    "kannada": {
+        "NAME": ["ಅನಿತಾ ರಾವ್", "ರವಿ ಕುಮಾರ್", "ಮೀನಾ ದೇವಿ"],
+        "STREET_ADDRESS": [
+            "೧೨ ಎಂ ಜಿ ರಸ್ತೆ ಬೆಂಗಳೂರು",
+            "೪೫ ಆಸ್ಪತ್ರೆ ರಸ್ತೆ ಮೈಸೂರು",
+            "೮೮ ಗಾಂಧಿ ನಗರ ಹುಬ್ಬಳ್ಳಿ",
+        ],
+        "ID_NUM": ["ರೋಗಿ ಸಂಖ್ಯೆ ೧೨೩೪೫೬", "ಗುರುತು ೯೮೭೬೫೪೩೨೧೦"],
+    },
+    "malayalam": {
+        "NAME": ["അനിത നായർ", "രവി കുമാർ", "മീന ദേവി"],
+        "STREET_ADDRESS": [
+            "൧൨ എം ജി റോഡ് കൊച്ചി",
+            "൪൫ ആശുപത്രി റോഡ് കോഴിക്കോട്",
+            "൮൮ ഗാന്ധി നഗർ തിരുവനന്തപുരം",
+        ],
+        "ID_NUM": ["രോഗി നമ്പർ ൧൨൩൪൫൬", "തിരിച്ചറിയൽ ൯൮൭൬൫൪൩൨൧൦"],
+    },
+    "gujarati": {
+        "NAME": ["અનિતા પટેલ", "રવિ શાહ", "મીના દેસાઈ"],
+        "STREET_ADDRESS": [
+            "૧૨ આશ્રમ રોડ અમદાવાદ",
+            "૪૫ હોસ્પિટલ માર્ગ વડોદરા",
+            "૮૮ ગાંધી નગર સુરત",
+        ],
+        "ID_NUM": ["દર્દી નંબર ૧૨૩૪૫૬", "ઓળખ ૯૮૭૬૫૪૩૨૧૦"],
+    },
+    "gurmukhi": {
+        "NAME": ["ਅਨੀਤਾ ਕੌਰ", "ਰਵੀ ਸਿੰਘ", "ਮੀਨਾ ਗਿੱਲ"],
+        "STREET_ADDRESS": [
+            "੧੨ ਮਾਲ ਰੋਡ ਅੰਮ੍ਰਿਤਸਰ",
+            "੪੫ ਹਸਪਤਾਲ ਮਾਰਗ ਲੁਧਿਆਣਾ",
+            "੮੮ ਗਾਂਧੀ ਨਗਰ ਪਟਿਆਲਾ",
+        ],
+        "ID_NUM": ["ਮਰੀਜ਼ ਨੰਬਰ ੧੨੩੪੫੬", "ਪਛਾਣ ੯੮੭੬੫੪੩੨੧੦"],
+    },
+    "odia": {
+        "NAME": ["ଅନିତା ଦାସ", "ରବି କୁମାର", "ମୀନା ପଟ୍ଟନାୟକ"],
+        "STREET_ADDRESS": [
+            "୧୨ ଜନପଥ ଭୁବନେଶ୍ୱର",
+            "୪୫ ଡାକ୍ତରଖାନା ରୋଡ କଟକ",
+            "୮୮ ଗାନ୍ଧୀ ନଗର ପୁରୀ",
+        ],
+        "ID_NUM": ["ରୋଗୀ ନମ୍ବର ୧୨୩୪୫୬", "ପରିଚୟ ୯୮୭୬୫୪୩୨୧୦"],
+    },
+}
+
+
+INDIA_CLINICAL_MULTILINGUAL_FALLBACK = "OpenMed/privacy-filter-multilingual"
+
+
+@dataclass(frozen=True)
+class IndiaClinicalModelRoute:
+    """First-party model route for Indian-English mixed-script clinical NER.
+
+    Default routing is restricted to the model IDs already registered in
+    :data:`DEFAULT_PII_MODELS`: Latin windows use the English clinical model,
+    and Indic windows use the configured Hindi or Telugu model. The separately
+    hosted multilingual privacy filter is the documented fallback. Callers may
+    explicitly supply another model or local path; OpenMed never downloads an
+    unregistered third-party model merely because mixed script was detected.
+    """
+
+    language: str
+    latin_model: str
+    native_model: str
+    fallback_model: str
+    latin_prefix: str
+    native_prefix: str
+
+    def model_for_script(
+        self,
+        script: str,
+        *,
+        user_model: str | None = None,
+    ) -> str:
+        """Return a user-supplied model or the first-party script default."""
+
+        if user_model:
+            return user_model
+        if script in {"Devanagari", "Telugu"}:
+            return self.native_model
+        return self.latin_model
+
+
+INDIA_CLINICAL_MODEL_ROUTES: Dict[str, IndiaClinicalModelRoute] = {
+    lang: IndiaClinicalModelRoute(
+        language=lang,
+        latin_model=DEFAULT_PII_MODELS["en"],
+        native_model=DEFAULT_PII_MODELS[lang],
+        fallback_model=INDIA_CLINICAL_MULTILINGUAL_FALLBACK,
+        latin_prefix=LANGUAGE_MODEL_PREFIX["en"],
+        native_prefix=LANGUAGE_MODEL_PREFIX[lang],
+    )
+    for lang in ("hi", "te")
 }
 
 
@@ -157,9 +360,408 @@ def validate_bic(text: str) -> bool:
     return clinical_ids.validate_bic(text)
 
 
+def validate_mobile_money_paybill(text: str) -> bool:
+    """Validate the offline-verifiable shape of a paybill number.
+
+    Paybill numbers are five to seven ASCII digits. Detection remains
+    keyword-gated because numbers of this length are common in clinical text.
+    """
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{5,7}", text) is not None
+
+
+def validate_mobile_money_till(text: str) -> bool:
+    """Validate the shape of a till or buy-goods number."""
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{5,7}", text) is not None
+
+
+def validate_momo_reference(text: str) -> bool:
+    """Validate a numeric MTN MoMo transaction reference."""
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{10,12}", text) is not None
+
+
+def validate_kenya_mfl_code(text: str) -> bool:
+    """Validate a Kenya Master Health Facility List code's shape.
+
+    Kenya's MFL implementation guide defines the facility code as a five-digit
+    sequential number. Detection separately requires explicit facility context
+    because this shape is common in clinical notes and claims.
+    """
+
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{5}", text) is not None
+
+
+def validate_nigeria_hfr_code(text: str) -> bool:
+    """Validate a Nigeria Health Facility Registry identifier.
+
+    The ten-digit ``AABBCDEEEE`` structure contains a state code (01-37),
+    LGA code (01-44), ownership (1 public or 2 private), level of care
+    (1 primary, 2 secondary, or 3 tertiary), and a non-zero four-digit
+    LGA-level serial number.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{10}", text) is None:
+        return False
+
+    state = int(text[:2])
+    lga = int(text[2:4])
+    ownership = int(text[4])
+    level_of_care = int(text[5])
+    serial = int(text[6:])
+    return (
+        1 <= state <= 37
+        and 1 <= lga <= 44
+        and ownership in {1, 2}
+        and level_of_care in {1, 2, 3}
+        and 1 <= serial <= 9999
+    )
+
+
+# ---------------------------------------------------------------------------
+# Chinese Contact, Financial, and Travel Identifiers
+# ---------------------------------------------------------------------------
+
+
+def validate_chinese_mobile_number(text: str) -> bool:
+    """Validate a mainland China mobile number with an optional ``+86`` prefix."""
+
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"(?:\+86[ -]?)?1[3-9][0-9]{9}", text.strip()) is not None
+
+
+def validate_chinese_bank_card(text: str) -> bool:
+    """Validate a 16-19 digit Chinese bank-card candidate using Luhn."""
+
+    if not isinstance(text, str):
+        return False
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9](?:[ -]?[0-9]){15,18}", candidate) is None:
+        return False
+    digits = re.sub(r"[ -]", "", candidate)
+    return 16 <= len(digits) <= 19 and validate_luhn(digits)
+
+
+def validate_chinese_passport(text: str) -> bool:
+    """Validate the offline structure of a PRC passport number."""
+
+    return bool(
+        isinstance(text, str) and re.fullmatch(r"[EGDSP][0-9]{8}", text.strip().upper())
+    )
+
+
+def validate_hong_kong_macau_permit(text: str) -> bool:
+    """Validate a Hong Kong/Macau resident Home Return Permit number."""
+
+    return bool(
+        isinstance(text, str) and re.fullmatch(r"[HM][0-9]{8}", text.strip().upper())
+    )
+
+
+def validate_taiwan_compatriot_permit(text: str) -> bool:
+    """Validate the eight-digit Taiwan Compatriot Permit structure."""
+
+    return bool(isinstance(text, str) and re.fullmatch(r"[0-9]{8}", text.strip()))
+
+
+# Descriptive aliases matching the official travel-permit names.
+validate_chinese_mobile = validate_chinese_mobile_number
+validate_hk_macau_permit = validate_hong_kong_macau_permit
+validate_mainland_travel_permit_hong_kong_macau = validate_hong_kong_macau_permit
+validate_mainland_travel_permit_taiwan = validate_taiwan_compatriot_permit
+validate_taiwan_permit = validate_taiwan_compatriot_permit
+
+
+_ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
+    "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+    "01234567890123456789",
+)
+
+
+def normalize_arabic_indic_digits(text: str) -> str:
+    """Fold Arabic-Indic decimal digits to ASCII without changing offsets.
+
+    Both the Arabic-Indic block (U+0660-U+0669) and the extended block commonly
+    used in Arabic-script text (U+06F0-U+06F9) are mapped one code point at a
+    time. ASCII text and all non-digit characters are left unchanged.
+
+    Args:
+        text: Text that may contain Arabic-Indic decimal digits.
+
+    Returns:
+        Length-preserving text with supported decimal digits rendered as ASCII.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+EGYPTIAN_GOVERNORATE_CODES = frozenset(
+    {
+        "01",
+        "02",
+        "03",
+        "04",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "88",
+    }
+)
+
+
+def validate_egyptian_national_id(text: str) -> bool:
+    """Validate the published structure of an Egyptian national ID.
+
+    The official final check-digit algorithm is not public, so this validator
+    deliberately checks only stable offline structure: 14 decimal digits, the
+    1900s/2000s century marker, a real embedded Gregorian birth date, and a
+    published governorate code.
+    """
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_arabic_indic_digits(text.strip())
+    if re.fullmatch(r"[23][0-9]{13}", normalized) is None:
+        return False
+
+    century = 1900 if normalized[0] == "2" else 2000
+    if not _is_valid_calendar_date(
+        century + int(normalized[1:3]),
+        int(normalized[3:5]),
+        int(normalized[5:7]),
+    ):
+        return False
+    return normalized[7:9] in EGYPTIAN_GOVERNORATE_CODES
+
+
+MOROCCAN_CIN_REGION_LETTERS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def validate_moroccan_cin(text: str) -> bool:
+    """Validate the offline structure of a Moroccan CIN identifier.
+
+    A CIN contains a one- or two-letter issuing-region prefix followed by five
+    to seven decimal digits. There is no public checksum, so detection also
+    requires nearby identity-card context.
+    """
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_arabic_indic_digits(text.strip()).upper()
+    match = re.fullmatch(r"([A-Z]{1,2})[0-9]{5,7}", normalized)
+    return match is not None and all(
+        letter in MOROCCAN_CIN_REGION_LETTERS for letter in match.group(1)
+    )
+
+
+def validate_za_id_number(text: str) -> bool:
+    """Validate a South African 13-digit identity number.
+
+    South African identity numbers use ``YYMMDDSSSSCAZ``: an embedded birth
+    date, a four-digit sequence, a citizenship digit (``0`` or ``1``), a
+    legacy classification digit, and a final Luhn check digit. The two-digit
+    year has no century marker, so the date is accepted when it exists in
+    either the 1900s or 2000s.
+
+    Args:
+        text: Candidate containing exactly 13 ASCII digits.
+
+    Returns:
+        ``True`` when the shape, date, citizenship digit, and checksum are
+        valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{13}", digits) is None:
+        return False
+
+    year = int(digits[:2])
+    month = int(digits[2:4])
+    day = int(digits[4:6])
+    if not any(
+        _is_valid_calendar_date(century + year, month, day) for century in (1900, 2000)
+    ):
+        return False
+    if digits[10] not in {"0", "1"}:
+        return False
+
+    total = 0
+    for index, value in enumerate(digits):
+        digit = int(value)
+        if index % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return total % 10 == 0
+
+
+def _is_valid_calendar_date(year: int, month: int, day: int) -> bool:
+    """Return whether ``year``/``month``/``day`` form a Gregorian date."""
+    try:
+        date(year, month, day)
+    except ValueError:
+        return False
+    return True
+
+
+validate_south_african_id = validate_za_id_number
+
+
+def validate_mpesa_transaction_code(text: str) -> bool:
+    """Validate a Kenya or Tanzania M-Pesa transaction code.
+
+    M-Pesa confirmation codes contain exactly ten uppercase ASCII letters or
+    digits, include at least one of each, and use a digit in the fourth
+    position. Detection remains context-gated because the shape alone also
+    occurs in laboratory and billing systems.
+
+    Args:
+        text: Candidate M-Pesa confirmation code.
+
+    Returns:
+        True when the candidate satisfies the offline-verifiable structure.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[A-Z0-9]{10}", text) is None:
+        return False
+    return (
+        text[3].isdigit()
+        and any(char.isalpha() for char in text)
+        and any(char.isdigit() for char in text)
+    )
+
+
 # ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
+
+
+def _is_nigeria_sequential_run(digits: str) -> bool:
+    """Return whether an 11-digit value contains a full ascending/descending run."""
+
+    return "0123456789" in digits or "9876543210" in digits
+
+
+def validate_nigeria_nin(text: str) -> bool:
+    """Validate the offline structural rules for a Nigerian NIN.
+
+    Nigerian National Identification Numbers contain exactly 11 ASCII digits
+    and have no public checksum. OpenMed therefore rejects only unmistakable
+    placeholder values: repeated single digits and complete ascending or
+    descending digit runs. Detection remains context-gated to avoid treating
+    arbitrary 11-digit values as identifiers.
+
+    Args:
+        text: Candidate containing exactly 11 ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has a non-trivial NIN structure.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{11}", digits) is None:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return not _is_nigeria_sequential_run(digits)
+
+
+def validate_nigeria_bvn(text: str) -> bool:
+    """Validate the offline structural rules for a Nigerian BVN.
+
+    Bank Verification Numbers contain exactly 11 ASCII digits. No public
+    checksum or leading-digit allocation rule is documented, so OpenMed uses
+    the same conservative non-triviality checks as NIN validation and keeps
+    detection context-gated.
+
+    Args:
+        text: Candidate containing exactly 11 ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has a non-trivial BVN structure.
+    """
+    return validate_nigeria_nin(text)
+
+
+def validate_ghana_card_pin(text: str) -> bool:
+    """Validate the documented offline structure of a Ghana Card PIN.
+
+    NIA documents the ``GHA-#########-#`` form and three-letter nationality
+    prefixes for resident cards, but does not publish an offline checksum
+    algorithm. Detection therefore remains context-gated; authoritative card
+    verification requires the NIA Identity Verification System Platform.
+
+    Args:
+        text: Candidate Ghana Card PIN.
+
+    Returns:
+        ``True`` when the candidate has the documented ASCII shape.
+    """
+    return bool(
+        isinstance(text, str)
+        and re.fullmatch(
+            r"[A-Z]{3}-[0-9]{9}-[0-9]",
+            text.strip().upper(),
+        )
+    )
+
+
+def validate_kenya_national_id(text: str) -> bool:
+    """Validate the offline structure of a legacy Kenyan national ID.
+
+    Kenya's second-generation identity numbers contain seven or eight digits
+    and have no public checksum. Recognition therefore requires identity
+    context at the pattern layer.
+
+    Args:
+        text: Candidate containing exactly seven or eight ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has the expected structure.
+    """
+    return (
+        isinstance(text, str) and re.fullmatch(r"[0-9]{7,8}", text.strip()) is not None
+    )
+
+
+def validate_kenya_maisha_namba(text: str) -> bool:
+    """Validate the documented nine-digit structure of a Kenya Maisha Namba.
+
+    The identifier has no public checksum, so recognition also requires nearby
+    Maisha, Huduma, or UPI context at the pattern layer.
+
+    Args:
+        text: Candidate containing exactly nine ASCII digits.
+
+    Returns:
+        ``True`` when the candidate has the expected structure.
+    """
+    return isinstance(text, str) and re.fullmatch(r"[0-9]{9}", text.strip()) is not None
 
 
 def validate_french_nir(text: str) -> bool:
@@ -416,19 +1018,22 @@ def validate_aadhaar(text: str) -> bool:
     Verhoeff check digit.
 
     Args:
-        text: Aadhaar string (may contain spaces or separators)
+        text: Aadhaar string, either as 12 digits or in the UIDAI 4-4-4
+            display form.
 
     Returns:
         True if the Aadhaar passes the Verhoeff checksum
     """
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 12:
+    candidate = text.strip()
+    if (
+        re.fullmatch(
+            r"[2-9][0-9]{11}|[2-9][0-9]{3} [0-9]{4} [0-9]{4}",
+            candidate,
+        )
+        is None
+    ):
         return False
-
-    # First digit cannot be 0 or 1
-    if digits[0] in ("0", "1"):
-        return False
+    digits = candidate.replace(" ", "")
 
     # Verhoeff checksum
     c = 0
@@ -437,47 +1042,369 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
-_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+def validate_ifsc(text: str) -> bool:
+    """Validate the public 11-character Indian IFSC structure.
+
+    IFSC contains a four-letter bank code, the reserved fifth character ``0``,
+    and a six-character alphanumeric branch code. This offline validator does
+    not bundle or query bank-branch registry data.
+    """
+
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", text.strip().upper()) is not None
+
+
+def validate_indian_passport(text: str) -> bool:
+    """Validate the common Indian passport shape: one letter and seven digits."""
+
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"[A-Z][1-9]\d{6}", text.strip().upper()) is not None
+
+
+def validate_voter_id_epic(text: str) -> bool:
+    """Validate the current EPIC/FUSN shape: three letters and seven digits."""
+
+    if not isinstance(text, str):
+        return False
+    code = re.sub(r"[\s/-]", "", text).upper()
+    return re.fullmatch(r"[A-Z]{3}\d{7}", code) is not None and code[3:] != "0000000"
+
+
+def validate_indian_driving_licence(text: str) -> bool:
+    """Validate a normalized 15-character Indian driving-licence identifier."""
+
+    if not isinstance(text, str):
+        return False
+    code = re.sub(r"[\s/-]", "", text).upper()
+    match = re.fullmatch(r"[A-Z]{2}(\d{2})((?:19|20)\d{2})(\d{7})", code)
+    if match is None:
+        return False
+    rto_code, _year, serial = match.groups()
+    return rto_code != "00" and serial != "0000000"
+
+
+def validate_vehicle_registration(text: str) -> bool:
+    """Validate standard RTO or Bharat-series vehicle-registration structure."""
+
+    if not isinstance(text, str):
+        return False
+    code = re.sub(r"[\s-]", "", text).upper()
+    standard = re.fullmatch(r"[A-Z]{2}(\d{1,2})[A-Z]{1,3}(\d{1,4})", code)
+    if standard is not None:
+        return int(standard.group(1)) > 0 and int(standard.group(2)) > 0
+    bharat = re.fullmatch(r"(\d{2})BH(\d{4})[A-Z]{2}", code)
+    return (
+        bharat is not None and int(bharat.group(1)) >= 21 and int(bharat.group(2)) > 0
+    )
+
+
+def validate_abha_number(text: str) -> bool:
+    """Validate OpenMed's offline, checksum-backed 14-digit ABHA contract.
+
+    The check makes generated surrogates self-validating without implying live
+    ABDM registration or identity verification.
+    """
+
+    digits = re.sub(r"[\s-]", "", text)
+    if re.fullmatch(r"\d{14}", digits) is None or len(set(digits)) == 1:
+        return False
+    checksum = 0
+    for index, digit in enumerate(reversed(digits)):
+        checksum = _VERHOEFF_D[checksum][_VERHOEFF_P[index % 8][int(digit)]]
+    return checksum == 0
+
+
+def validate_abha_address(text: str) -> bool:
+    """Validate an ABHA Address using the local ``@abdm``/``@sbx`` shape."""
+
+    candidate = text.strip()
+    if candidate.count("@") != 1:
+        return False
+    handle, domain = candidate.rsplit("@", 1)
+    if domain.casefold() not in {"abdm", "sbx"}:
+        return False
+    if handle.isdigit():
+        return len(handle) == 14 and validate_abha_number(handle)
+    if not 4 <= len(handle) <= 32:
+        return False
+    return bool(
+        re.fullmatch(
+            r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*",
+            handle,
+        )
+    )
+
+
+def validate_upi_id(text: str) -> bool:
+    """Validate a UPI virtual payment address without contacting a PSP."""
+
+    candidate = text.strip()
+    if len(candidate) > 45 or candidate.count("@") != 1:
+        return False
+    account, provider = candidate.rsplit("@", 1)
+    if provider.casefold() in {"abdm", "sbx"}:
+        return False
+    return bool(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{1,63}", account)
+        and re.fullmatch(r"[A-Za-z][A-Za-z0-9]{1,31}", provider)
+    )
+
+
+def validate_indian_ration_card(text: str) -> bool:
+    """Validate a conservative cross-state Indian ration-card structure.
+
+    Ration-card formats vary by state. This validator accepts an optional
+    one-to-three-letter jurisdiction prefix plus 6-12 digits and an optional
+    short alphanumeric suffix. Recognition still requires a nearby ration-card
+    cue so this structural check is not treated as a national registry lookup.
+    """
+
+    candidate = re.sub(r"[\s/-]", "", text).upper()
+    if not 8 <= len(candidate) <= 19:
+        return False
+    if re.fullmatch(r"\d{8,12}", candidate):
+        return len(set(candidate)) > 1
+    match = re.fullmatch(r"[A-Z]{1,3}(\d{6,12})[A-Z0-9]{0,4}", candidate)
+    if match is None:
+        return False
+    return len(set(match.group(1))) > 1
+
+
+CHINESE_RESIDENT_ID_REGION_PREFIXES = frozenset(
+    {
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "21",
+        "22",
+        "23",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+    }
+)
+"""Mainland province-level prefixes from the GB/T 2260 code hierarchy.
+
+The full county-level table changes over time. OpenMed deliberately bundles
+only this small, stable first-level set and validates the remaining four
+digits structurally, avoiding a stale or restrictively licensed data asset.
+"""
+
+_CHINESE_RESIDENT_ID_WEIGHTS = (
+    7,
+    9,
+    10,
+    5,
+    8,
+    4,
+    2,
+    1,
+    6,
+    3,
+    7,
+    9,
+    10,
+    5,
+    8,
+    4,
+    2,
+)
+
+
+def validate_tanzania_nida(text: str) -> bool:
+    """Validate a Tanzania NIDA number's offline-verifiable fields.
+
+    NIDA numbers contain 20 digits and begin with an eight-digit Gregorian
+    birth date. Both the compact form and the commonly printed
+    ``YYYYMMDD-XXXXX-XXXXX-XX`` form are accepted.
+
+    Args:
+        text: Candidate NIDA number.
+
+    Returns:
+        True when the candidate has a supported shape and plausible birth date.
+    """
+    if not isinstance(text, str):
+        return False
+    stripped = text.strip()
+    if re.fullmatch(r"\d{20}|\d{8}-\d{5}-\d{5}-\d{2}", stripped) is None:
+        return False
+
+    digits = stripped.replace("-", "")
+    try:
+        birth_date = date(
+            int(digits[0:4]),
+            int(digits[4:6]),
+            int(digits[6:8]),
+        )
+    except ValueError:
+        return False
+    return date(1900, 1, 1) <= birth_date <= date.today()
+
+
+def validate_uganda_nin(text: str) -> bool:
+    """Validate the stable structure of a Uganda NIRA NIN.
+
+    The 14-character identifier starts with a class character (``C``, ``P``,
+    or ``R``) followed by the encoded gender character (``M`` or ``F``).
+    Remaining characters are alphanumeric and have no public checksum.
+    """
+    if not isinstance(text, str):
+        return False
+    return re.fullmatch(r"[CPR][MF][A-Z0-9]{12}", text.strip().upper()) is not None
+
+
+def validate_rwanda_id(text: str) -> bool:
+    """Validate offline-verifiable fields in a Rwanda national ID.
+
+    Rwanda IDs contain 16 digits. OpenMed checks the embedded four-digit birth
+    year and the public gender digit (``7`` for female or ``8`` for male).
+    Registry-backed status and security-code verification is intentionally not
+    attempted offline.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"\d{16}", digits) is None:
+        return False
+
+    birth_year = int(digits[1:5])
+    return 1900 <= birth_year <= date.today().year and digits[5] in {"7", "8"}
+
+
+def validate_ethiopia_fayda(text: str) -> bool:
+    """Validate Ethiopia's 12-digit Fayda identification number (FAN).
+
+    Fayda follows the MOSIP UIN contract: the first digit cannot be ``0`` or
+    ``1`` and the final digit is a Verhoeff check digit. This is the same
+    offline checksum and leading-digit rule used by Aadhaar.
+    """
+    if not isinstance(text, str):
+        return False
+    stripped = text.strip()
+    if re.fullmatch(r"\d{12}", stripped) is None:
+        return False
+    return validate_aadhaar(stripped)
+
+
 _CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
 
+_PAKISTANI_CNIC_EASTERN_DIGITS = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹",
+    "0123456789",
+)
+_PAKISTANI_CNIC_RE = re.compile(r"(?:[0-9]{5}-[0-9]{7}-[0-9]|[0-9]{13})")
 
-def validate_chinese_resident_identity_card(text: str) -> bool:
-    """Validate a mainland China 18-digit resident identity card number.
+
+def validate_pakistani_cnic(text: str) -> bool:
+    """Validate the public dashed or undashed Pakistani CNIC format.
+
+    Persian/Eastern Arabic-Indic digits are normalized to ASCII before the
+    structural check. CNIC has no public checksum, so this intentionally does
+    not claim that a matching value was issued by NADRA.
+    """
+    if not isinstance(text, str):
+        return False
+    normalized = text.translate(_PAKISTANI_CNIC_EASTERN_DIGITS)
+    return _PAKISTANI_CNIC_RE.fullmatch(normalized) is not None
+
+
+def chinese_resident_id_check_character(body: str) -> str:
+    """Return the ISO 7064 MOD 11-2 check character for a 17-digit body.
+
+    Args:
+        body: The first 17 digits of a Chinese Resident Identity Card number.
+
+    Returns:
+        The decimal check digit or uppercase ``"X"``.
+
+    Raises:
+        ValueError: If ``body`` is not exactly 17 ASCII digits.
+    """
+    if re.fullmatch(r"[0-9]{17}", body) is None:
+        raise ValueError("Chinese Resident ID body must contain 17 ASCII digits")
+
+    total = sum(
+        int(digit) * weight for digit, weight in zip(body, _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+
+
+def validate_chinese_resident_id(text: str) -> bool:
+    """Validate a mainland China 18-digit Resident Identity Card number.
 
     The second-generation resident identity card stores a six-digit address
     code, an eight-digit Gregorian birth date, a three-digit sequence, and a
-    MOD 11-2 checksum digit. OpenMed validates only these offline structural
-    and checksum properties; it does not bundle or query a region registry.
+    MOD 11-2 checksum character. Region validation deliberately uses the
+    stable province-level GB/T 2260 prefixes plus structural county digits,
+    rather than bundling a mutable full administrative-code dataset.
+
+    Args:
+        text: Candidate identifier. The final check character is
+            case-insensitive, but separators are not accepted.
+
+    Returns:
+        ``True`` only when format, region, birth date, sequence, and checksum
+        are all valid.
     """
-    cleaned = re.sub(r"[\s-]", "", text).upper()
-    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+    if not isinstance(text, str):
         return False
 
-    if cleaned[:6] == "000000":
+    cleaned = text.upper()
+    if re.fullmatch(r"[0-9]{17}[0-9X]", cleaned) is None:
+        return False
+
+    region_code = cleaned[:6]
+    prefecture_code = int(region_code[2:4])
+    if (
+        region_code[:2] not in CHINESE_RESIDENT_ID_REGION_PREFIXES
+        or (prefecture_code > 70 and prefecture_code != 90)
+        or prefecture_code == 0
+        or region_code[4:] == "00"
+    ):
         return False
 
     try:
-        year = int(cleaned[6:10])
-        month = int(cleaned[10:12])
-        day = int(cleaned[12:14])
+        birth_date = date.fromisoformat(
+            f"{cleaned[6:10]}-{cleaned[10:12]}-{cleaned[12:14]}"
+        )
     except ValueError:
         return False
 
-    import calendar
-
-    if month < 1 or month > 12 or day < 1:
-        return False
-    try:
-        if day > calendar.monthrange(year, month)[1]:
-            return False
-    except (ValueError, calendar.IllegalMonthError):
+    if birth_date > date.today() or cleaned[14:17] == "000":
         return False
 
-    total = sum(
-        int(digit) * weight
-        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
-    )
-    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+    return cleaned[-1] == chinese_resident_id_check_character(cleaned[:17])
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Compatibility alias for :func:`validate_chinese_resident_id`."""
+
+    return validate_chinese_resident_id(text)
 
 
 def validate_portuguese_cpf(text: str) -> bool:
@@ -1562,6 +2489,34 @@ def validate_romanian_cnp(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
+    "as": [
+        "জানুৱাৰী",
+        "ফেব্ৰুৱাৰী",
+        "মাৰ্চ",
+        "এপ্ৰিল",
+        "মে",
+        "জুন",
+        "জুলাই",
+        "আগষ্ট",
+        "ছেপ্টেম্বৰ",
+        "অক্টোবৰ",
+        "নৱেম্বৰ",
+        "ডিচেম্বৰ",
+    ],
+    "bn": [
+        "জানুয়ারি",
+        "ফেব্রুয়ারি",
+        "মার্চ",
+        "এপ্রিল",
+        "মে",
+        "জুন",
+        "জুলাই",
+        "আগস্ট",
+        "সেপ্টেম্বর",
+        "অক্টোবর",
+        "নভেম্বর",
+        "ডিসেম্বর",
+    ],
     "en": [
         "January",
         "February",
@@ -1674,6 +2629,104 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0928\u0935\u0902\u092c\u0930",
         "\u0926\u093f\u0938\u0902\u092c\u0930",
     ],
+    "gu": [
+        "જાન્યુઆરી",
+        "ફેબ્રુઆરી",
+        "માર્ચ",
+        "એપ્રિલ",
+        "મે",
+        "જૂન",
+        "જુલાઈ",
+        "ઑગસ્ટ",
+        "સપ્ટેમ્બર",
+        "ઑક્ટોબર",
+        "નવેમ્બર",
+        "ડિસેમ્બર",
+    ],
+    "kn": [
+        "ಜನವರಿ",
+        "ಫೆಬ್ರವರಿ",
+        "ಮಾರ್ಚ್",
+        "ಏಪ್ರಿಲ್",
+        "ಮೇ",
+        "ಜೂನ್",
+        "ಜುಲೈ",
+        "ಆಗಸ್ಟ್",
+        "ಸೆಪ್ಟೆಂಬರ್",
+        "ಅಕ್ಟೋಬರ್",
+        "ನವೆಂಬರ್",
+        "ಡಿಸೆಂಬರ್",
+    ],
+    "ml": [
+        "ജനുവരി",
+        "ഫെബ്രുവരി",
+        "മാർച്ച്",
+        "ഏപ്രിൽ",
+        "മേയ്",
+        "ജൂൺ",
+        "ജൂലൈ",
+        "ഓഗസ്റ്റ്",
+        "സെപ്റ്റംബർ",
+        "ഒക്ടോബർ",
+        "നവംബർ",
+        "ഡിസംബർ",
+    ],
+    "mr": [
+        "जानेवारी",
+        "फेब्रुवारी",
+        "मार्च",
+        "एप्रिल",
+        "मे",
+        "जून",
+        "जुलै",
+        "ऑगस्ट",
+        "सप्टेंबर",
+        "ऑक्टोबर",
+        "नोव्हेंबर",
+        "डिसेंबर",
+    ],
+    "or": [
+        "ଜାନୁଆରୀ",
+        "ଫେବୃଆରୀ",
+        "ମାର୍ଚ୍ଚ",
+        "ଏପ୍ରିଲ",
+        "ମେ",
+        "ଜୁନ",
+        "ଜୁଲାଇ",
+        "ଅଗଷ୍ଟ",
+        "ସେପ୍ଟେମ୍ବର",
+        "ଅକ୍ଟୋବର",
+        "ନଭେମ୍ବର",
+        "ଡିସେମ୍ବର",
+    ],
+    "pa": [
+        "ਜਨਵਰੀ",
+        "ਫ਼ਰਵਰੀ",
+        "ਮਾਰਚ",
+        "ਅਪ੍ਰੈਲ",
+        "ਮਈ",
+        "ਜੂਨ",
+        "ਜੁਲਾਈ",
+        "ਅਗਸਤ",
+        "ਸਤੰਬਰ",
+        "ਅਕਤੂਬਰ",
+        "ਨਵੰਬਰ",
+        "ਦਸੰਬਰ",
+    ],
+    "ta": [
+        "ஜனவரி",
+        "பிப்ரவரி",
+        "மார்ச்",
+        "ஏப்ரல்",
+        "மே",
+        "ஜூன்",
+        "ஜூலை",
+        "ஆகஸ்ட்",
+        "செப்டம்பர்",
+        "அக்டோபர்",
+        "நவம்பர்",
+        "டிசம்பர்",
+    ],
     "te": [
         "\u0c1c\u0c28\u0c35\u0c30\u0c3f",
         "\u0c2b\u0c3f\u0c2c\u0c4d\u0c30\u0c35\u0c30\u0c3f",
@@ -1687,6 +2740,22 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0c05\u0c15\u0c4d\u0c1f\u0c4b\u0c2c\u0c30\u0c4d",
         "\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d",
         "\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d",
+    ],
+    # Gregorian month names used by the existing date parser. Ethiopian-calendar
+    # conversion is intentionally outside this language pack's scope.
+    "am": [
+        "ጃንዋሪ",
+        "ፌብሩዋሪ",
+        "ማርች",
+        "ኤፕሪል",
+        "ሜይ",
+        "ጁን",
+        "ጁላይ",
+        "ኦገስት",
+        "ሴፕቴምበር",
+        "ኦክቶበር",
+        "ኖቬምበር",
+        "ዲሴምበር",
     ],
     "ar": [
         "\u064a\u0646\u0627\u064a\u0631",
@@ -1772,6 +2841,48 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "November",
         "Disember",
     ],
+    "sw": [
+        "Januari",
+        "Februari",
+        "Machi",
+        "Aprili",
+        "Mei",
+        "Juni",
+        "Julai",
+        "Agosti",
+        "Septemba",
+        "Oktoba",
+        "Novemba",
+        "Desemba",
+    ],
+    "zu": [
+        "Januwari",
+        "Februwari",
+        "Mashi",
+        "Ephreli",
+        "Meyi",
+        "Juni",
+        "Julayi",
+        "Agasti",
+        "Septhemba",
+        "Okthoba",
+        "Novemba",
+        "Disemba",
+    ],
+    "xh": [
+        "Janyuwari",
+        "Februwari",
+        "Matshi",
+        "Epreli",
+        "Meyi",
+        "Juni",
+        "Julayi",
+        "Agasti",
+        "Septemba",
+        "Okthobha",
+        "Novemba",
+        "Disemba",
+    ],
     "th": [
         "มกราคม",
         "กุมภาพันธ์",
@@ -1813,6 +2924,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "octombrie",
         "noiembrie",
         "decembrie",
+    ],
+    "zh": [
+        "一月",
+        "二月",
+        "三月",
+        "四月",
+        "五月",
+        "六月",
+        "七月",
+        "八月",
+        "九月",
+        "十月",
+        "十一月",
+        "十二月",
     ],
 }
 
@@ -1972,6 +3097,854 @@ def generate_mrz_td1(rng=None) -> str:
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
 
+_LOCALE_FORMAT_VALIDATORS = {
+    "egyptian_national_id": validate_egyptian_national_id,
+    "moroccan_cin": validate_moroccan_cin,
+}
+
+
+def _pii_pattern_from_locale_format(spec: LocalePIIFormat) -> PIIPattern:
+    """Compile one declarative locale format into a detector pattern."""
+
+    validator = None
+    if spec.validator is not None:
+        try:
+            validator = _LOCALE_FORMAT_VALIDATORS[spec.validator]
+        except KeyError as exc:  # pragma: no cover - import-time data invariant
+            raise RuntimeError(
+                f"unknown locale PII validator {spec.validator!r}"
+            ) from exc
+    return PIIPattern(
+        spec.pattern,
+        spec.entity_type,
+        priority=spec.priority,
+        flags=spec.flags,
+        base_score=spec.base_score,
+        context_words=list(spec.context_words),
+        context_boost=spec.context_boost,
+        requires_context=spec.requires_context,
+        validator=validator,
+        safety_sweep_requires_context=spec.safety_sweep_requires_context,
+    )
+
+
+_LOCALE_DATA_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    locale: [_pii_pattern_from_locale_format(spec) for spec in formats]
+    for locale, formats in LOCALE_PII_FORMATS.items()
+}
+
+
+def _locale_patterns_named(locale: str, *names: str) -> List[PIIPattern]:
+    wanted = set(names)
+    return [
+        pattern
+        for spec, pattern in zip(
+            LOCALE_PII_FORMATS[locale],
+            _LOCALE_DATA_PII_PATTERNS[locale],
+        )
+        if spec.name in wanted
+    ]
+
+
+@dataclass(frozen=True)
+class AfricanMobilePlan:
+    """Declarative national mobile-number plan.
+
+    ``x`` characters in ``mobile_prefixes`` represent operator-prefix digits
+    that must be present and are preserved when a surrogate is generated.
+
+    Attributes:
+        country_code: ITU-T E.164 country calling code without ``+``.
+        nsn_length: Exact national significant number length, excluding the
+            national trunk prefix.
+        mobile_prefixes: Allowed mobile prefixes, using ``x`` for any digit.
+        locale_aliases: Normalized language or locale keys that activate the
+            plan's detector.
+    """
+
+    country_code: str
+    nsn_length: int
+    mobile_prefixes: tuple[str, ...]
+    locale_aliases: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.country_code.isdigit() or self.country_code.startswith("0"):
+            raise ValueError("country_code must contain digits and cannot start with 0")
+        if self.nsn_length <= 0:
+            raise ValueError("nsn_length must be positive")
+        if not self.mobile_prefixes:
+            raise ValueError("mobile_prefixes must not be empty")
+        for prefix in self.mobile_prefixes:
+            if not prefix or re.fullmatch(r"[0-9x]+", prefix) is None:
+                raise ValueError("mobile prefixes must contain only digits or 'x'")
+            if prefix.startswith("0") or len(prefix) >= self.nsn_length:
+                raise ValueError(
+                    "mobile prefixes cannot start with 0 or fill the entire NSN"
+                )
+        if not self.locale_aliases:
+            raise ValueError("locale_aliases must not be empty")
+
+
+AFRICAN_MOBILE_PLANS: Dict[str, AfricanMobilePlan] = {
+    "EG": AfricanMobilePlan(
+        country_code="20",
+        nsn_length=10,
+        mobile_prefixes=("10", "11", "12", "15"),
+        locale_aliases=("ar_eg",),
+    ),
+    "GH": AfricanMobilePlan(
+        country_code="233",
+        nsn_length=9,
+        mobile_prefixes=("2x", "5x"),
+        locale_aliases=("en_gh",),
+    ),
+    "ET": AfricanMobilePlan(
+        country_code="251",
+        nsn_length=9,
+        mobile_prefixes=("7x", "9x"),
+        locale_aliases=("am", "am_et", "en_et"),
+    ),
+    "TZ": AfricanMobilePlan(
+        country_code="255",
+        nsn_length=9,
+        mobile_prefixes=("6x", "7x"),
+        locale_aliases=("sw", "sw_tz", "en_tz"),
+    ),
+    "UG": AfricanMobilePlan(
+        country_code="256",
+        nsn_length=9,
+        mobile_prefixes=("7xx",),
+        locale_aliases=("en_ug",),
+    ),
+    "RW": AfricanMobilePlan(
+        country_code="250",
+        nsn_length=9,
+        mobile_prefixes=("72", "73", "78", "79"),
+        locale_aliases=("rw", "rw_rw", "en_rw"),
+    ),
+}
+
+
+_AFRICAN_PHONE_SEPARATOR = r"[\s.-]?"
+
+
+def _african_mobile_prefix_expression(prefix: str) -> str:
+    digits = [r"[0-9]" if char == "x" else re.escape(char) for char in prefix]
+    return _AFRICAN_PHONE_SEPARATOR.join(digits)
+
+
+def build_african_mobile_pattern(plan: AfricanMobilePlan) -> str:
+    """Build one strict E.164, ``00``, and national mobile regex.
+
+    The generated expression accepts optional spaces, dots, or hyphens while
+    enforcing the plan's exact NSN length and mobile-prefix classes.
+
+    Args:
+        plan: Declarative mobile plan to compile.
+
+    Returns:
+        A regular-expression string for all three supported renderings.
+    """
+
+    nsn_alternatives: list[str] = []
+    for prefix in plan.mobile_prefixes:
+        subscriber_length = plan.nsn_length - len(prefix)
+        prefix_expression = _african_mobile_prefix_expression(prefix)
+        subscriber_expression = (
+            rf"(?:{_AFRICAN_PHONE_SEPARATOR}[0-9]){{{subscriber_length}}}"
+        )
+        nsn_alternatives.append(prefix_expression + subscriber_expression)
+
+    nsn_expression = "(?:" + "|".join(nsn_alternatives) + ")"
+    international_prefix = (
+        rf"(?:\+|00){_AFRICAN_PHONE_SEPARATOR}"
+        rf"{re.escape(plan.country_code)}{_AFRICAN_PHONE_SEPARATOR}"
+    )
+    national_prefix = rf"0{_AFRICAN_PHONE_SEPARATOR}"
+    return (
+        rf"(?<![A-Za-z0-9])(?:{international_prefix}|{national_prefix})"
+        rf"{nsn_expression}(?![A-Za-z0-9])"
+    )
+
+
+def _build_african_mobile_pii_pattern(plan: AfricanMobilePlan) -> PIIPattern:
+    return PIIPattern(
+        build_african_mobile_pattern(plan),
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=[
+            "phone",
+            "mobile",
+            "telephone",
+            "contact",
+            "call",
+            "appointment",
+            "billing",
+            "mobile money",
+            "wallet",
+            "هاتف",
+            "جوال",
+            "اتصال",
+        ],
+        context_boost=0.3,
+    )
+
+
+AFRICAN_MOBILE_PII_PATTERNS: Dict[str, PIIPattern] = {
+    country: _build_african_mobile_pii_pattern(plan)
+    for country, plan in AFRICAN_MOBILE_PLANS.items()
+}
+INDIA_HEALTH_ID_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)(?:\d{14}|\d{2}(?:[ -]\d{4}){3}|\d{4}(?:[ -]\d{4}){2}[ -]\d{2})(?!\d)",
+        "abha_number",
+        priority=14,
+        base_score=0.35,
+        context_words=[
+            "abha",
+            "abha number",
+            "abha id",
+            "health id",
+            "आभा",
+            "आभा नंबर",
+            "स्वास्थ्य आईडी",
+            "ఆభా",
+            "ఆభా నంబర్",
+        ],
+        context_boost=0.6,
+        validator=validate_abha_number,
+        context_required=True,
+    ),
+    PIIPattern(
+        r"(?<![A-Za-z0-9._])(?:[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*|\d{14})@(?:abdm|sbx)\b",
+        "abha_address",
+        priority=15,
+        base_score=0.95,
+        context_words=[
+            "abha address",
+            "phr address",
+            "आभा पता",
+            "ఆభా చిరునామా",
+        ],
+        context_boost=0.05,
+        validator=validate_abha_address,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Za-z0-9._+-])[A-Za-z0-9][A-Za-z0-9._-]{1,63}@[A-Za-z][A-Za-z0-9]{1,31}\b(?!\.[A-Za-z])",
+        "upi_id",
+        priority=13,
+        base_score=0.3,
+        context_words=[
+            "upi",
+            "upi id",
+            "vpa",
+            "virtual payment address",
+            "refund account",
+            "यूपीआई",
+            "यूपीआई आईडी",
+            "भुगतान पता",
+            "యూపీఐ",
+            "యూపీఐ ఐడి",
+        ],
+        context_boost=0.65,
+        validator=validate_upi_id,
+        context_required=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])(?:[A-Z]{1,3}[\s/-]?)?\d{8,12}(?:[\s/-][A-Z0-9]{1,4})?(?![A-Z0-9])",
+        "ration_card",
+        priority=12,
+        base_score=0.25,
+        context_words=[
+            "ration card",
+            "ration number",
+            "pds card",
+            "राशन कार्ड",
+            "राशन संख्या",
+            "రేషన్ కార్డు",
+            "రేషన్ నంబర్",
+        ],
+        context_boost=0.7,
+        validator=validate_indian_ration_card,
+        context_required=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+INDIAN_MULTI_ID_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z](?![A-Z0-9])",
+        "pan",
+        priority=16,
+        base_score=0.7,
+        context_words=[
+            "pan",
+            "pan number",
+            "pan card",
+            "permanent account number",
+            "पैन",
+            "पैन नंबर",
+            "पैन कार्ड",
+            "పాన్",
+            "పాన్ నంబర్",
+        ],
+        context_boost=0.3,
+        validator=validate_pan,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        (
+            r"(?<![A-Z0-9])\d{2}[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}"
+            r"[A-Z][1-9A-Z]Z[0-9A-Z](?![A-Z0-9])"
+        ),
+        "gstin",
+        priority=18,
+        base_score=0.8,
+        context_words=[
+            "gstin",
+            "gst number",
+            "gst no",
+            "जीएसटीआईएन",
+            "जीएसटी नंबर",
+            "జీఎస్టీఐఎన్",
+            "జీఎస్టీ నంబర్",
+        ],
+        context_boost=0.2,
+        validator=validate_gstin,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{4}0[A-Z0-9]{6}(?![A-Z0-9])",
+        "ifsc",
+        priority=15,
+        base_score=0.55,
+        context_words=[
+            "ifsc",
+            "ifsc code",
+            "bank code",
+            "branch code",
+            "आईएफएससी",
+            "बैंक कोड",
+            "ఐఎఫ్ఎస్‌సి",
+            "బ్యాంక్ కోడ్",
+        ],
+        context_boost=0.4,
+        validator=validate_ifsc,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}[\s/-]?\d{7}(?![A-Z0-9])",
+        "voter_id_epic",
+        priority=14,
+        base_score=0.45,
+        context_words=[
+            "epic",
+            "voter id",
+            "voter card",
+            "matdata pehchan",
+            "मतदाता पहचान",
+            "वोटर आईडी",
+            "ఓటర్ ఐడి",
+            "ఎపిక్",
+        ],
+        context_boost=0.45,
+        validator=validate_voter_id_epic,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        (
+            r"(?<![A-Z0-9])[A-Z]{2}[\s/-]?\d{2}[\s/-]?"
+            r"(?:19|20)\d{2}[\s/-]?\d{7}(?![A-Z0-9])"
+        ),
+        "indian_driving_licence",
+        priority=17,
+        base_score=0.5,
+        context_words=[
+            "driving licence",
+            "driving license",
+            "dl number",
+            "licence number",
+            "license number",
+            "driving licence no",
+            "ड्राइविंग लाइसेंस",
+            "लाइसेंस नंबर",
+            "డ్రైవింగ్ లైసెన్స్",
+            "లైసెన్స్ నంబర్",
+        ],
+        context_boost=0.45,
+        validator=validate_indian_driving_licence,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z][1-9]\d{6}(?![A-Z0-9])",
+        "indian_passport",
+        priority=13,
+        base_score=0.4,
+        context_words=[
+            "passport",
+            "passport number",
+            "passport no",
+            "पासपोर्ट",
+            "पासपोर्ट नंबर",
+            "పాస్‌పోర్ట్",
+            "పాస్‌పోర్ట్ నంబర్",
+        ],
+        context_boost=0.5,
+        validator=validate_indian_passport,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        (
+            r"(?<![A-Z0-9])(?:[A-Z]{2}[\s-]?\d{1,2}[\s-]?[A-Z]{1,3}"
+            r"[\s-]?\d{1,4}|\d{2}[\s-]?BH[\s-]?\d{4}[\s-]?[A-Z]{2})"
+            r"(?![A-Z0-9])"
+        ),
+        "indian_vehicle_registration",
+        priority=14,
+        base_score=0.45,
+        context_words=[
+            "vehicle registration",
+            "registration number",
+            "vehicle number",
+            "rto",
+            "gaadi number",
+            "गाड़ी नंबर",
+            "वाहन पंजीकरण",
+            "आरटीओ",
+            "వాహన నమోదు",
+            "వాహనం నంబర్",
+        ],
+        context_boost=0.45,
+        validator=validate_vehicle_registration,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{2}(?!\d)",
+        "abha",
+        priority=13,
+        base_score=0.35,
+        context_words=[
+            "abha",
+            "abha number",
+            "health id",
+            "health identifier",
+            "आभा",
+            "आभा नंबर",
+            "स्वास्थ्य आईडी",
+            "ఆభా",
+            "ఆభా నంబర్",
+            "హెల్త్ ఐడి",
+        ],
+        context_boost=0.55,
+        validator=validate_abha,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+_EGYPT_NATIONAL_ID_PII_PATTERNS = _locale_patterns_named(
+    "ar_eg", "egyptian_national_id"
+)
+_MOROCCO_CIN_PII_PATTERNS = _locale_patterns_named("ar_ma", "moroccan_cin")
+
+NIGERIA_NIN_PATTERN = r"(?<!\d)\d{11}(?!\d)"
+_NIGERIA_INTERNATIONAL_PHONE_BODY = (
+    r"(?:234|٢٣٤|۲۳۴)[\s.-]?[789٧٨٩۷۸۹]\d{2}[\s.-]?\d{3}[\s.-]?\d{4}"
+)
+NIGERIA_PHONE_PATTERN = rf"(?<!\w)\+{_NIGERIA_INTERNATIONAL_PHONE_BODY}(?!\d)"
+
+
+_NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Nigeria's NIN and BVN have no public checksums, so deterministic sweeps
+    # require explicit identifier context. NIN precedes phone detection so an
+    # explicitly labeled mobile-shaped identifier is consumed as an ID first.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "NG_NIN",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "nin",
+            "nimc",
+            "national identification",
+            "national identification number",
+            "national identity number",
+        ],
+        context_boost=0.45,
+        validator=validate_nigeria_nin,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "NG_BVN",
+        priority=13,
+        base_score=0.5,
+        context_words=[
+            "bvn",
+            "nibss",
+            "bank verification",
+            "bank verification number",
+        ],
+        context_boost=0.45,
+        validator=validate_nigeria_bvn,
+        safety_sweep_requires_context=True,
+    ),
+    # Nigerian mobile numbers use 070x/080x/081x/090x/091x domestically and
+    # drop the leading zero after the +234 country code.
+    PIIPattern(
+        r"(?<![0-9])(?:\+234[\s.-]?(?:70|80|81|90|91)[0-9]|"
+        r"0(?:70|80|81|90|91)[0-9])[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+        "NG_PHONE",
+        priority=12,
+        base_score=0.7,
+        context_words=[
+            "phone",
+            "mobile",
+            "telephone",
+            "contact",
+            "waya",
+            "ekwentị",
+            "foonu",
+        ],
+        context_boost=0.25,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Hausa PII patterns (Boko Latin and Ajami Arabic scripts)
+# ---------------------------------------------------------------------------
+
+# Ajami coverage is deliberately numeric and pattern-level: dates, Nigerian
+# NINs, and Nigerian/Nigerien phone numbers are recognized in Western,
+# Arabic-Indic, and Eastern Arabic-Indic digits. No Ajami lexical matching or
+# transliteration is claimed; those require a separately reviewed lexicon.
+_HAUSA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=["ranar haihuwa", "haihuwa", "ranar", "kwanan wata"],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<!\w)(?:shekaru|shekara)\s+\d{1,3}(?!\d)|"
+        r"(?<!\d)\d{1,3}\s+(?:shekaru|shekara)\b)",
+        "age",
+        priority=8,
+        base_score=0.6,
+        context_words=["shekaru", "shekara", "shekarunsa", "shekarunta"],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        rf"(?<!\w)\+(?:{_NIGERIA_INTERNATIONAL_PHONE_BODY}|"
+        r"(?:227|٢٢٧|۲۲۷)[\s.-]?\d{2}"
+        r"(?:[\s.-]?\d{2}){3})(?!\d)",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=["lambar waya", "waya", "kira", "lamba"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Nigeria's NIN is an eleven-digit identifier with no public checksum.
+    # ``\d`` is intentional so exact-offset Ajami spans using native digits
+    # are covered without normalizing or rewriting the source text.
+    PIIPattern(
+        NIGERIA_NIN_PATTERN,
+        "national_id",
+        priority=9,
+        base_score=0.5,
+        context_words=["nin", "lambar nin", "lambar shaida", "lambar ƙasa", "lamba"],
+        context_boost=0.4,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Yoruba PII patterns
+# ---------------------------------------------------------------------------
+
+
+def _diacritic_context_variants(*values: str) -> List[str]:
+    """Return NFC, NFD, and mark-stripped variants without duplicates."""
+
+    variants: List[str] = []
+    for value in values:
+        nfc = unicodedata.normalize("NFC", value)
+        nfd = unicodedata.normalize("NFD", nfc)
+        unmarked = "".join(
+            char for char in nfd if not unicodedata.category(char).startswith("M")
+        )
+        for variant in (nfc, nfd, unmarked):
+            if variant not in variants:
+                variants.append(variant)
+    return variants
+
+
+_YORUBA_DATE_CONTEXT = _diacritic_context_variants("ọjọ́ ìbí", "ọjọ́ tí a bí", "ọjọ́")
+_YORUBA_PHONE_CONTEXT = _diacritic_context_variants(
+    "nọ́ńbà tẹlifóònù",
+    "nọ́mbà tẹlifóònù",
+    "tẹlifóònù",
+    "fóònù alágbèéká",
+)
+_YORUBA_NIN_CONTEXT = _diacritic_context_variants(
+    "nin",
+    "nọ́mbà nin",
+    "nọ́mbà ìdánimọ̀",
+    "ìdánimọ̀ orílẹ̀-èdè",
+)
+_YORUBA_ADDRESS_CONTEXT = _diacritic_context_variants("àdírẹ́sì", "òpópónà", "ọ̀nà")
+_YORUBA_POSTCODE_CONTEXT = _diacritic_context_variants(
+    "kóòdù ìfìwéránṣẹ́",
+    "kóòdù ìfìwéránṣẹ",
+)
+_YORUBA_STREET_DESIGNATOR_PATTERN = "|".join(
+    re.escape(value)
+    for value in sorted(
+        _diacritic_context_variants("òpópónà", "ọ̀nà"),
+        key=len,
+        reverse=True,
+    )
+)
+
+_YORUBA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.55,
+        context_words=_YORUBA_DATE_CONTEXT,
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_PHONE_PATTERN,
+        "phone_number",
+        priority=13,
+        base_score=0.6,
+        context_words=_YORUBA_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_NIN_PATTERN,
+        "national_id",
+        priority=15,
+        base_score=0.45,
+        context_words=_YORUBA_NIN_CONTEXT,
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)\d{1,5}[A-Za-z]?(?:[/.-]\d{1,5}[A-Za-z]?)?\s+(?:"
+        + _YORUBA_STREET_DESIGNATOR_PATTERN
+        + r")\s+[^\n,;]{2,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=_YORUBA_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=_YORUBA_POSTCODE_CONTEXT,
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Igbo PII patterns
+# ---------------------------------------------------------------------------
+
+
+_IGBO_DATE_CONTEXT = _diacritic_context_variants(
+    "ụbọchị ọmụmụ",
+    "ụbọchị a mụrụ",
+)
+_IGBO_PHONE_CONTEXT = _diacritic_context_variants(
+    "nọmba ekwentị",
+    "nọmba",
+)
+_IGBO_NIN_CONTEXT = _diacritic_context_variants(
+    "nin",
+    "nọmba nin",
+    "nọmba njirimara",
+)
+_IGBO_AGE_CONTEXT = _diacritic_context_variants(
+    "afọ ndụ",
+    "afọ",
+)
+_IGBO_ADDRESS_CONTEXT = _diacritic_context_variants(
+    "adreesị okporo ama",
+    "adreesị",
+    "ebe obibi",
+)
+_IGBO_POSTCODE_CONTEXT = _diacritic_context_variants(
+    "koodu nzipu ozi",
+    "koodu postal",
+    "postcode",
+)
+_IGBO_AGE_CONTEXT_PATTERN = "|".join(
+    re.escape(value) for value in sorted(_IGBO_AGE_CONTEXT, key=len, reverse=True)
+)
+_IGBO_STREET_DESIGNATOR_PATTERN = "|".join(
+    re.escape(value)
+    for value in sorted(
+        _diacritic_context_variants("okporo ama", "okporo ụzọ"),
+        key=len,
+        reverse=True,
+    )
+)
+
+_IGBO_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.55,
+        context_words=_IGBO_DATE_CONTEXT,
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:" + _IGBO_AGE_CONTEXT_PATTERN + r")\s*[:=-]?\s*\d{1,3}(?!\d)",
+        "age",
+        priority=8,
+        base_score=0.55,
+        context_words=_IGBO_AGE_CONTEXT,
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_PHONE_PATTERN,
+        "phone_number",
+        priority=10,
+        base_score=0.6,
+        context_words=_IGBO_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        NIGERIA_NIN_PATTERN,
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=_IGBO_NIN_CONTEXT,
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)\d{1,5}[A-Za-z]?(?:[/.-]\d{1,5}[A-Za-z]?)?\s+(?:"
+        + _IGBO_STREET_DESIGNATOR_PATTERN
+        + r")\s+[^\n,;]{2,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=_IGBO_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=_IGBO_POSTCODE_CONTEXT,
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+_GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
+    # GH_GHANA_CARD: documented country prefix + ten digits. With no published
+    # offline checksum, require explicit Ghana Card or NIA context.
+    PIIPattern(
+        r"(?<![A-Z0-9])[A-Z]{3}-[0-9]{9}-[0-9](?![A-Z0-9])",
+        "GH_GHANA_CARD",
+        priority=15,
+        base_score=0.5,
+        context_words=[
+            "ghana card",
+            "ghana card pin",
+            "national identification authority",
+            "nia pin",
+        ],
+        context_boost=0.45,
+        validator=validate_ghana_card_pin,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+_KENYA_ID_PII_PATTERNS: List[PIIPattern] = [
+    # KE_MAISHA_NAMBA: structural UPI with mandatory nearby identifier context.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{9}(?![0-9])",
+        "KE_MAISHA_NAMBA",
+        priority=15,
+        base_score=0.5,
+        context_words=[
+            "maisha namba",
+            "maisha number",
+            "maisha card",
+            "huduma namba",
+            "huduma number",
+            "unique personal identifier",
+            "upi number",
+            "nambari ya maisha",
+        ],
+        context_boost=0.45,
+        validator=validate_kenya_maisha_namba,
+        safety_sweep_requires_context=True,
+    ),
+    # KE_NATIONAL_ID: legacy seven/eight-digit number. Without an identity
+    # keyword this shape is too common in labs, MRNs, and other clinical data.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{7,8}(?![0-9])",
+        "KE_NATIONAL_ID",
+        priority=14,
+        base_score=0.5,
+        context_words=[
+            "id no",
+            "id number",
+            "national id",
+            "national identification number",
+            "identity card number",
+            "kitambulisho",
+            "nambari ya kitambulisho",
+            "nambari ya id",
+        ],
+        context_boost=0.45,
+        validator=validate_kenya_national_id,
+        safety_sweep_requires_context=True,
+    ),
+]
+
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
     PIIPattern(
@@ -2065,6 +4038,169 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_MPESA_TX_CODE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b[A-Z0-9]{3}[0-9][A-Z0-9]{6}\b",
+        "mpesa_tx_code",
+        priority=12,
+        flags=0,
+        base_score=0.45,
+        context_words=["m-pesa", "mpesa", "confirmed", "muamala"],
+        context_boost=0.5,
+        validator=validate_mpesa_transaction_code,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+_MOBILE_MONEY_ACCOUNT_PATTERN = (
+    "(?:"
+    + "|".join(
+        rf"(?<={paybill}[ \t][0-9]{{{length}}}[ \t]{account}[ \t])"
+        for paybill in (
+            "Paybill",
+            "Paybill:",
+            "Paybill No",
+            "Paybill No.",
+            "Pay Bill",
+            "Pay Bill No",
+            "Pay Bill No.",
+        )
+        for length in (5, 6, 7)
+        for account in ("Account", "Account:", "Acc", "Acc:")
+    )
+    + ")"
+    + r"[^\W_][\w/'-]*(?:[ \t]+[^\W_][\w/'-]*){0,3}"
+    + r"(?=[ \t]*(?:[.;,|]|\r?$))"
+)
+
+_MOBILE_MONEY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        _MOBILE_MONEY_ACCOUNT_PATTERN,
+        "mobile_money_account",
+        priority=13,
+        base_score=0.3,
+        context_words=["paybill", "pay bill"],
+        context_boost=0.6,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE | re.MULTILINE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5,7}(?![0-9])",
+        "mobile_money_paybill",
+        priority=12,
+        base_score=0.25,
+        context_words=["paybill", "pay bill", "lipa"],
+        context_boost=0.65,
+        validator=validate_mobile_money_paybill,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5,7}(?![0-9])",
+        "mobile_money_till",
+        priority=12,
+        base_score=0.25,
+        context_words=["till", "till no", "buy goods", "buygoods", "lipa"],
+        context_boost=0.65,
+        validator=validate_mobile_money_till,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5,7}(?![0-9])",
+        "mobile_money_agent",
+        priority=12,
+        base_score=0.25,
+        context_words=["agent", "agent no", "agent number", "lipa"],
+        context_boost=0.65,
+        validator=validate_mobile_money_paybill,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{10,12}(?![0-9])",
+        "momo_reference",
+        priority=12,
+        base_score=0.25,
+        context_words=["momo", "momo ref", "momo reference", "mtn momo"],
+        context_boost=0.65,
+        validator=validate_momo_reference,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
+def _context_prefixed_numeric_pattern(
+    context_words: tuple[str, ...],
+    digit_pattern: str,
+) -> str:
+    """Build a fixed-lookbehind expression for an adjacent contextual code."""
+
+    prefixes = (
+        rf"(?<={re.escape(context)}{re.escape(separator)})"
+        for context in context_words
+        for separator in (" ", ": ", " #")
+    )
+    return "(?:" + "|".join(prefixes) + ")" + digit_pattern
+
+
+_KENYA_HEALTH_FACILITY_CONTEXT = (
+    "mfl",
+    "mfl code",
+    "kmhfl",
+    "kmhfl code",
+    "kmhfr",
+    "kmhfr code",
+    "facility code",
+    "facility id",
+    "health facility code",
+    "msimbo wa kituo",
+    "nambari ya kituo",
+)
+
+_NIGERIA_HEALTH_FACILITY_CONTEXT = (
+    "hfr",
+    "hfr code",
+    "nhfr",
+    "nhfr code",
+    "facility code",
+    "facility id",
+    "health facility code",
+    "health facility registry code",
+)
+
+
+_KENYA_HEALTH_FACILITY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        _context_prefixed_numeric_pattern(
+            _KENYA_HEALTH_FACILITY_CONTEXT,
+            r"[0-9]{5}(?![0-9])",
+        ),
+        "FACILITY_ID",
+        priority=12,
+        base_score=0.25,
+        context_words=list(_KENYA_HEALTH_FACILITY_CONTEXT),
+        context_boost=0.65,
+        validator=validate_kenya_mfl_code,
+        safety_sweep_requires_context=True,
+    )
+]
+
+
+_NIGERIA_HEALTH_FACILITY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        _context_prefixed_numeric_pattern(
+            _NIGERIA_HEALTH_FACILITY_CONTEXT,
+            r"[0-9]{10}(?![0-9])",
+        ),
+        "FACILITY_ID",
+        priority=12,
+        base_score=0.25,
+        context_words=list(_NIGERIA_HEALTH_FACILITY_CONTEXT),
+        context_boost=0.65,
+        validator=validate_nigeria_hfr_code,
+        safety_sweep_requires_context=True,
+    )
+]
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
@@ -2212,6 +4348,36 @@ MRZ_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.7,
         context_words=["passport", "identity card", "mrz"],
         validator=validate_mrz_td1,
+    ),
+]
+
+# Aadhaar is language-agnostic in Indian clinical notes: English labels and
+# Romanized code-mixed text are common alongside Devanagari or Telugu cues.
+# The strict validator gate prevents phone-like or random 12-digit values from
+# being promoted to a national identifier by this deterministic recognizer.
+AADHAAR_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9])[2-9][0-9]{3}(?P<aadhaar_sep> ?)[0-9]{4}"
+        r"(?P=aadhaar_sep)[0-9]{4}(?![0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.55,
+        context_words=[
+            "आधार",
+            "यूआईडीएआई",
+            "पहचान",
+            "aadhaar",
+            "aadhar",
+            "uid",
+            "uidai",
+            "unique identification",
+            "ఆధార్",
+            "గుర్తింపు",
+        ],
+        context_boost=0.4,
+        validator=validate_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -2933,21 +5099,98 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
         safety_sweep_requires_context=True,
     ),
-    # Aadhaar (12 digits, possibly spaced as 4-4-4)
+]
+
+
+# Roman-script Hindi cues are intentionally separate from the Devanagari Hindi
+# pack. They are activated only by the explicit code-mixed route with at least
+# one caller-supplied Hindi token tag, so ordinary English routing cannot pick
+# them up accidentally.
+HINGLISH_PII_PATTERNS_VERSION = "hinglish-pii-v1"
+_HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
-        "national_id",
+        r"(?:(?<=patient ka naam )|(?<=patient kaa naam )|(?<=naam )|"
+        r"(?<=naam: )|(?<=naam ka ))"
+        r"[A-Za-z][A-Za-z'\N{RIGHT SINGLE QUOTATION MARK}-]{1,39}"
+        r"(?:\s+(?!(?:aur|umar|mobile|janm|janam|pata|hai|ko|ki|ka|ke|"
+        r"saal|varsh|mein|likha)\b)"
+        r"[A-Za-z][A-Za-z'\N{RIGHT SINGLE QUOTATION MARK}-]{1,39})?",
+        "name",
+        priority=10,
+        base_score=0.9,
+        context_words=["naam", "naam ka", "patient ka naam"],
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=umar )|(?<=umar: ))(?:1[01]\d|120|[1-9]?\d)"
+        r"(?=\s*(?:saal|varsh)\b)",
+        "age",
+        priority=10,
+        base_score=0.9,
+        context_words=["umar", "saal", "varsh"],
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=mobile )|(?<=mobile: )|(?<=mobail )|(?<=phone )|"
+        r"(?<=sampark ))(?:\+91[\s-]?)?[6-9]\d{4}[\s.-]?\d{5}\b",
+        "phone_number",
         priority=9,
-        base_score=0.4,
-        context_words=[
-            "\u0906\u0927\u093e\u0930",
-            "aadhaar",
-            "\u092f\u0942\u0906\u0908\u0921\u0940\u090f\u0906\u0908",
-            "uid",
-            "\u092a\u0939\u091a\u093e\u0928",
-        ],
-        context_boost=0.45,
-        validator=validate_aadhaar,
+        base_score=0.85,
+        context_words=["mobile", "mobail", "phone", "sampark"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=janm )|(?<=janm: )|(?<=janam )|(?<=janam: )|"
+        r"(?<=janm tareekh )|(?<=janam tareekh ))"
+        r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.85,
+        context_words=["janm", "janam", "janm tareekh", "janam tareekh"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=janm )|(?<=janam )|(?<=janm tareekh )|"
+        r"(?<=janam tareekh ))\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|"
+        r"Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|"
+        r"Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.85,
+        context_words=["janm", "janam", "janm tareekh", "janam tareekh"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=pata )|(?<=pata: ))\d{1,5}\s+"
+        r"[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,4}"
+        r"(?=(?:[,.;]|\s+(?:hai|par)\b|$))",
+        "street_address",
+        priority=8,
+        base_score=0.85,
+        context_words=["pata", "address"],
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=pata pin )|(?<=pata pin: )|(?<=pin ))\d{6}\b",
+        "postcode",
+        priority=8,
+        base_score=0.8,
+        context_words=["pata", "pin", "pin code"],
+        context_boost=0.2,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
     ),
 ]
 
@@ -3017,20 +5260,170 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
         safety_sweep_requires_context=True,
     ),
-    # Aadhaar (12 digits, possibly spaced as 4-4-4)
+]
+
+_ETHIOPIC_SCRIPT_RANGES = (
+    r"\u1200-\u135F\u1380-\u139F\u2D80-\u2DDF\uAB00-\uAB2F"
+    r"\U0001E7E0-\U0001E7FF"
+)
+_ETHIOPIC_NUMERAL_RANGE = r"\u1369-\u137C"
+
+_AMHARIC_NAME_CONTEXT = [
+    "ስም",
+    "የታካሚ ስም",
+    "ታካሚ",
+    "name",
+    "patient name",
+]
+_AMHARIC_DATE_CONTEXT = [
+    "ቀን",
+    "የትውልድ ቀን",
+    "ትውልድ",
+    "የቀጠሮ ቀን",
+    "date",
+    "date of birth",
+    "dob",
+]
+_AMHARIC_AGE_CONTEXT = ["ዕድሜ", "እድሜ", "ዓመት", "age", "years old"]
+_AMHARIC_ID_CONTEXT = [
+    "ፋይዳ",
+    "የፋይዳ መለያ ቁጥር",
+    "መለያ ቁጥር",
+    "መታወቂያ",
+    "fayda",
+    "fayda id",
+    "id number",
+]
+_AMHARIC_PHONE_CONTEXT = [
+    "ስልክ",
+    "ስልክ ቁጥር",
+    "ሞባይል",
+    "phone",
+    "mobile",
+    "contact",
+]
+_AMHARIC_ADDRESS_CONTEXT = [
+    "አድራሻ",
+    "መኖሪያ",
+    "ቦታ",
+    "address",
+    "location",
+]
+_AMHARIC_POSTCODE_CONTEXT = [
+    "የፖስታ ኮድ",
+    "ፖስታ ኮድ",
+    "postal code",
+    "postcode",
+    "zip code",
+]
+
+# Ethiopic has no letter case, so case-insensitive matching is a no-op for the
+# native-script patterns. ``re.IGNORECASE`` is used only by the Latin name
+# overlay that protects explicitly labelled names in code-mixed notes.
+_AMHARIC_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
+        rf"(?<=ስም[፡:] )[{_ETHIOPIC_SCRIPT_RANGES}]+"
+        rf"(?:\s+[{_ETHIOPIC_SCRIPT_RANGES}]+){{1,3}}(?=[\s፡።,.;]|$)",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_AMHARIC_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        r"(?<=Patient name: )[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){1,3}\b",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_AMHARIC_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        rf"(?<!\w)[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,12}}[./-]"
+        rf"[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,12}}[./-]"
+        rf"[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,16}}(?!\w)",
+        "date",
+        priority=11,
+        base_score=0.65,
+        context_words=_AMHARIC_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<=ዕድሜ[፡:] )[0-9{_ETHIOPIC_NUMERAL_RANGE}]{{1,8}}"
+        r"(?=[\s፡።,.;]|$)",
+        "age",
+        priority=12,
+        base_score=0.65,
+        context_words=_AMHARIC_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Fayda recognition is format-only: exactly 12 decimal digits. No checksum
+    # or validity claim is made because none is publicly specified.
+    PIIPattern(
+        r"(?<!\w)[0-9]{12}(?!\w)",
         "national_id",
-        priority=9,
-        base_score=0.4,
-        context_words=[
-            "\u0c06\u0c27\u0c3e\u0c30\u0c4d",
-            "aadhaar",
-            "uid",
-            "\u0c17\u0c41\u0c30\u0c4d\u0c24\u0c3f\u0c02\u0c2a\u0c41",
-        ],
+        priority=14,
+        base_score=0.5,
+        context_words=_AMHARIC_ID_CONTEXT,
         context_boost=0.45,
-        validator=validate_aadhaar,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Traditional Ethiopic numerals are non-positional Unicode ``No`` values,
+    # not decimal digits. Preserve labelled tokens without treating them as
+    # 12-digit Fayda values.
+    PIIPattern(
+        rf"(?<=መለያ ቁጥር[፡:] )[{_ETHIOPIC_NUMERAL_RANGE}]{{2,24}}"
+        r"(?=[\s፡።,.;]|$)",
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_AMHARIC_ID_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:\+251[\s.-]?9\d{2}|09\d{2})"
+        r"[\s.-]?\d{3}[\s.-]?\d{3}(?!\d)",
+        "phone_number",
+        priority=12,
+        base_score=0.7,
+        context_words=_AMHARIC_PHONE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<=አድራሻ[፡:] )[{_ETHIOPIC_SCRIPT_RANGES}]+"
+        rf"(?:\s+[{_ETHIOPIC_SCRIPT_RANGES}]+){{1,6}}"
+        r"(?:\s+[0-9]{1,5})?(?=[፡።,.;]|$)",
+        "street_address",
+        priority=10,
+        base_score=0.65,
+        context_words=_AMHARIC_ADDRESS_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        r"(?<=የፖስታ ኮድ[፡:] )[0-9]{4}(?![0-9])",
+        "postcode",
+        priority=8,
+        base_score=0.35,
+        context_words=_AMHARIC_POSTCODE_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        safety_sweep_requires_context=True,
+        flags=0,
     ),
 ]
 
@@ -3064,11 +5457,12 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.25,
         flags=re.IGNORECASE,
     ),
+    AFRICAN_MOBILE_PII_PATTERNS["EG"],
     PIIPattern(
-        # Require either an international prefix (+CC) or a leading 0 so the
-        # pattern doesn't fire on every 5–13-digit number string (e.g. the
-        # 14-digit national-ID format in the same clinical note).
-        r"(?<!\w)(?:\+(?:20|966|971|962|961|212|216|213|964|965|974|968|973)[\s.-]?|0)\d{1,3}(?:[\s.-]?\d{2,4}){2,3}\b",
+        # Other Arabic-region international numbers retain the existing broad
+        # coverage. Egypt uses the stricter table-driven mobile plan above so
+        # landlines and national-ID digit runs cannot enter the phone path.
+        r"(?<!\w)\+(?:966|971|962|961|212|216|213|964|965|974|968|973)[\s.-]?\d{1,3}(?:[\s.-]?\d{2,4}){2,3}\b",
         "phone_number",
         priority=8,
         base_score=0.45,
@@ -3081,23 +5475,6 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
             "\u0627\u062a\u0635\u0627\u0644",
         ],
         context_boost=0.4,
-    ),
-    PIIPattern(
-        # Egyptian 14-digit national ID (starts with 2 or 3 for the
-        # century digit). Other Arabic locales have different ID formats
-        # (e.g. Saudi 10 digits starting 1/2, UAE 15 digits starting 784)
-        # and are not currently matched here.
-        r"\b[23]\d{13}\b",
-        "national_id",
-        priority=9,
-        base_score=0.35,
-        context_words=[
-            "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a",
-            "\u0628\u0637\u0627\u0642\u0629",
-            "\u0647\u0648\u064a\u0629",
-            "\u0631\u0642\u0645 \u0627\u0644\u0647\u0648\u064a\u0629",
-        ],
-        context_boost=0.5,
     ),
     PIIPattern(
         r"\b(?:\u0634\u0627\u0631\u0639|\u0637\u0631\u064a\u0642|\u062d\u064a|\u0645\u064a\u062f\u0627\u0646|\u062c\u0627\u062f\u0629)\s+[\u0600-\u06FF0-9\s]{3,60}\b",
@@ -3122,6 +5499,79 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
             "\u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0628\u0631\u064a\u062f\u064a",
             "\u0631\u0645\u0632 \u0628\u0631\u064a\u062f\u064a",
             "\u0639\u0646\u0648\u0627\u0646",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_URDU_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u062a\u0627\u0631\u06cc\u062e",
+            "\u067e\u06cc\u062f\u0627\u0626\u0634",
+            "\u062a\u0627\u0631\u06cc\u062e \u067e\u06cc\u062f\u0627\u0626\u0634",
+            "\u062f\u0627\u062e\u0644\u06c1",
+            "\u0688\u0633\u0686\u0627\u0631\u062c",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+92[\s.-]?|0)\d{2,3}(?:[\s.-]?\d{3,4}){1,2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.45,
+        context_words=[
+            "\u0641\u0648\u0646",
+            "\u0645\u0648\u0628\u0627\u0626\u0644",
+            "\u0631\u0627\u0628\u0637\u06c1",
+        ],
+        context_boost=0.4,
+    ),
+    PIIPattern(
+        # Pakistani CNIC: 13 digits, formatted XXXXX-XXXXXXX-X or undashed.
+        # No public checksum exists (NADRA does not publish one); this is a
+        # format-only match. Also accepts Eastern Arabic-Indic digits since
+        # Urdu-script notes may be hand-typed with them, though issued CNIC
+        # cards themselves use Western digits.
+        r"\b[0-9\u06F0-\u06F9]{5}-[0-9\u06F0-\u06F9]{7}-[0-9\u06F0-\u06F9]\b"
+        r"|\b[0-9\u06F0-\u06F9]{13}\b",
+        "national_id",
+        priority=9,
+        base_score=0.4,
+        context_words=[
+            "\u0634\u0646\u0627\u062e\u062a\u06cc \u06a9\u0627\u0631\u0688",
+            "\u0642\u0648\u0645\u06cc \u0634\u0646\u0627\u062e\u062a\u06cc \u06a9\u0627\u0631\u0688",
+            "\u06a9\u0627\u0631\u0688 \u0646\u0645\u0628\u0631",
+        ],
+        context_boost=0.5,
+        validator=validate_pakistani_cnic,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"\b(?:\u0645\u062d\u0644\u06c1|\u06af\u0644\u06cc|\u0633\u0691\u06a9|\u0628\u0644\u0627\u06a9)\s+[\u0600-\u06D3\u06D5-\u06FF0-9\s]{3,40}(?=[۔،\n]|$)",
+        "street_address",
+        priority=7,
+        base_score=0.6,
+        context_words=[
+            "\u067e\u062a\u06c1",
+            "\u0631\u06c1\u0627\u0626\u0634",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "\u067e\u0648\u0633\u0679\u0644 \u06a9\u0648\u0688",
+            "\u0632\u067e \u06a9\u0648\u0688",
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
@@ -3299,6 +5749,168 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_CHINESE_SURNAME_ALTERNATION = "|".join(
+    re.escape(surname)
+    for surname in sorted(CHINESE_SURNAMES, key=lambda value: (-len(value), value))
+)
+
+# Chinese names are contiguous, so ordinary ``\b`` boundaries cannot separate a
+# family name from surrounding Han text. The left side accepts either a true Han
+# boundary or a strong clinical/name-field cue; the right side accepts normal
+# punctuation/whitespace plus common clinical continuations. The latter makes
+# ``患者王伟今日复诊`` resolve to ``王伟`` rather than ``王伟今``.
+_CHINESE_NAME_LEFT_BOUNDARY = (
+    rf"(?:(?<![{_HAN_CHARACTER_CLASS}])|(?<=患者)|(?<=病人)|(?<=病患)|"
+    r"(?<=姓名为)|(?<=姓名是)|(?<=姓名：)|(?<=姓名:))"
+)
+_CHINESE_NAME_RIGHT_BOUNDARY = (
+    rf"(?=$|[^{_HAN_CHARACTER_CLASS}]|今日|因|于|来|现|复诊|就诊|主诉|"
+    r"报告|表示|诉|接受|返回)"
+)
+
+_CHINESE_IDENTIFIER_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9])(?:\+86[ -]?)?1[3-9][0-9]{9}(?![0-9])",
+        "phone_number",
+        priority=14,
+        base_score=0.75,
+        context_words=["手机", "手机号", "电话", "联系电话"],
+        context_boost=0.2,
+        validator=validate_chinese_mobile_number,
+    ),
+    PIIPattern(
+        r"(?<![0-9])(?:[0-9][ -]?){15,18}[0-9](?![0-9])",
+        "credit_card",
+        priority=15,
+        base_score=0.55,
+        context_words=["银行卡", "银行卡号", "卡号", "银联卡"],
+        context_boost=0.4,
+        validator=validate_chinese_bank_card,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?<![0-9A-Z])[EGDSP][0-9]{8}(?![0-9A-Z])",
+        "chinese_passport",
+        priority=14,
+        base_score=0.6,
+        context_words=["护照", "护照号", "护照号码", "旅行证件"],
+        context_boost=0.35,
+        validator=validate_chinese_passport,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9A-Z])[HM][0-9]{8}(?![0-9A-Z])",
+        "home_return_permit",
+        priority=14,
+        base_score=0.6,
+        context_words=["回乡证", "港澳居民来往内地通行证", "港澳居民通行证"],
+        context_boost=0.35,
+        validator=validate_hong_kong_macau_permit,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9A-Z])[0-9]{8}(?![0-9])",
+        "taiwan_compatriot_permit",
+        priority=13,
+        base_score=0.55,
+        context_words=["台胞证", "台湾居民来往大陆通行证", "台湾居民通行证"],
+        context_boost=0.4,
+        validator=validate_taiwan_compatriot_permit,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_CHINESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<![0-9])[0-9]{17}[0-9Xx](?![0-9A-Za-z])",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "居民身份证",
+            "公民身份号码",
+            "身份证号码",
+            "身份证号",
+            "身份证",
+            "身份号码",
+            "证件号码",
+        ],
+        context_boost=0.5,
+        validator=validate_chinese_resident_id,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        _CHINESE_NAME_LEFT_BOUNDARY
+        + rf"(?:{_CHINESE_SURNAME_ALTERNATION})"
+        + rf"[{_HAN_CHARACTER_CLASS}]{{1,2}}"
+        + _CHINESE_NAME_RIGHT_BOUNDARY,
+        "person",
+        priority=12,
+        flags=0,
+        base_score=0.75,
+        context_words=[
+            "患者",
+            "病人",
+            "病患",
+            "姓名",
+            "就诊者",
+            "联系人",
+            "家属",
+        ],
+        context_boost=0.2,
+    ),
+]
+
+_ZH_ADDRESS_NAME = r"[\u3400-\u4dbf\u4e00-\u9fff]"
+_ZH_ADDRESS_TAIL_CORE = (
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?(?:区|县)\s*"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?(?:街道|镇|乡)\s*"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?(?:大道|路|街|巷|弄)\s*"
+    r"\d{1,5}号(?:\d{1,4}(?:室|房)|[一二三四五六七八九十]{1,3}单元)?"
+)
+_ZH_ADDRESS_TAIL_PATTERN = rf"(?<=市){_ZH_ADDRESS_TAIL_CORE}"
+_ZH_FULL_ADDRESS_PATTERN = (
+    rf"(?:(?<=[：:，,。；;\s])|^)"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?省"
+    rf"{_ZH_ADDRESS_NAME}{{1,12}}?市"
+    rf"{_ZH_ADDRESS_TAIL_CORE}"
+)
+
+_CHINESE_ADDRESS_PII_PATTERNS: List[PIIPattern] = [
+    # When the model misses the entire address, cover the full hierarchy so
+    # province/city tokens cannot survive a tail-only replacement.
+    PIIPattern(
+        _ZH_FULL_ADDRESS_PATTERN,
+        "street_address",
+        priority=10,
+        base_score=0.9,
+        context_words=["地址", "住址", "现住址", "联系地址", "居住地"],
+        context_boost=0.1,
+    ),
+    # Assist an under-segmented model span by adding only the strong
+    # district/street/building tail. The leading boundary deliberately starts
+    # after a city suffix so the safety sweep can add this span without
+    # overlapping or moving an existing province/city span.
+    PIIPattern(
+        _ZH_ADDRESS_TAIL_PATTERN,
+        "street_address",
+        priority=9,
+        base_score=0.9,
+        context_words=["地址", "住址", "现住址", "联系地址", "居住地"],
+        context_boost=0.1,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["邮编", "邮政编码", "邮政", "地址", "住址"],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+    ),
+]
 _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
@@ -4447,6 +7059,335 @@ _TAGALOG_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_SWAHILI_MONTH_PATTERN = (
+    r"Januari|Februari|Machi|Aprili|Mei|Juni|Julai|Agosti|Septemba|"
+    r"Oktoba|Novemba|Desemba"
+)
+
+_SWAHILI_DATE_CONTEXT = [
+    "tarehe",
+    "tarehe ya kuzaliwa",
+    "alizaliwa",
+    "kuzaliwa",
+    "date",
+    "date of birth",
+    "dob",
+    "born",
+    "admitted",
+    "discharged",
+]
+
+_SWAHILI_AGE_CONTEXT = [
+    "umri",
+    "umri wa miaka",
+    "miaka",
+    "age",
+    "aged",
+    "years old",
+]
+
+_SWAHILI_ID_CONTEXT = [
+    "nambari ya kitambulisho",
+    "namba ya kitambulisho",
+    "kitambulisho",
+    "nambari ya nida",
+    "namba ya nida",
+    "nida",
+    "national id",
+    "national identification number",
+    "identity number",
+    "id number",
+    "id no",
+]
+
+_SWAHILI_NHIF_CONTEXT = [
+    "nambari ya nhif",
+    "namba ya nhif",
+    "nhif nambari",
+    "nhif namba",
+    "nhif",
+    "nhif number",
+    "nhif member number",
+    "member number",
+    "health insurance number",
+]
+
+_SWAHILI_PHONE_CONTEXT = [
+    "simu",
+    "nambari ya simu",
+    "namba ya simu",
+    "piga simu",
+    "wasiliana",
+    "phone",
+    "phone number",
+    "mobile",
+    "call",
+    "contact",
+]
+
+_SWAHILI_NAME_CONTEXT = [
+    "jina",
+    "jina la mgonjwa",
+    "mgonjwa",
+    "name",
+    "patient name",
+    "patient",
+]
+
+_SWAHILI_PII_PATTERNS: List[PIIPattern] = [
+    # Explicitly labelled names are safe to sweep without guessing which
+    # capitalised words in a Latin-script, code-mixed note denote a person.
+    PIIPattern(
+        r"(?:(?<=Jina: )|(?<=Name: )|(?<=Jina la mgonjwa: )|"
+        r"(?<=Patient name: ))[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){1,3}\b",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_SWAHILI_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_SWAHILI_DATE_CONTEXT,
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_SWAHILI_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=_SWAHILI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Match only ages immediately attached to a bilingual age cue. A generic
+    # one-to-three-digit pattern would over-redact labs elsewhere in the note.
+    PIIPattern(
+        r"(?:(?<=Umri: )|(?<=Age: )|(?<=Umri wa miaka )|(?<=Aged ))"
+        r"(?:1[01]\d|[1-9]?\d)\b",
+        "age",
+        priority=11,
+        base_score=0.65,
+        context_words=_SWAHILI_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    # This offline pack has no checksum validation for NHIF member numbers.
+    # Restrict recognition to explicitly labelled six-to-ten-digit values to
+    # avoid treating clinical measurements as IDs.
+    PIIPattern(
+        r"(?<!\d)\d{6,10}(?!\d)",
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_SWAHILI_NHIF_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+    ),
+    # Tanzanian NIDA NIN: format-only recognition of the 20-digit value,
+    # including its commonly grouped 8-5-5-2 rendering. No checksum is claimed.
+    PIIPattern(
+        r"(?<!\d)\d{8}(?P<nida_sep>[ -]?)\d{5}(?P=nida_sep)"
+        r"\d{5}(?P=nida_sep)\d{2}(?!\d)",
+        "national_id",
+        priority=15,
+        base_score=0.5,
+        context_words=_SWAHILI_ID_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"(?:(?<=Anwani: )|(?<=Address: ))[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){0,4}\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=["anwani", "address", "barabara", "mtaa"],
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=7,
+        base_score=0.25,
+        context_words=["msimbo wa posta", "postal code", "postcode", "posta"],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    # East African mobile numbers in international form for Kenya, Tanzania,
+    # and Uganda. Each has a nine-digit national significant number.
+    PIIPattern(
+        r"(?<!\d)\+(?:254[\s.-]?(?:1|7)\d{2}|"
+        r"255[\s.-]?[67]\d{2}|256[\s.-]?7\d{2})"
+        r"[\s.-]?\d{3}[\s.-]?\d{3}(?!\d)",
+        "phone_number",
+        priority=12,
+        base_score=0.7,
+        context_words=_SWAHILI_PHONE_CONTEXT,
+        context_boost=0.25,
+    ),
+]
+
+_SWAHILI_AND_KENYA_PII_PATTERNS = [
+    *_SWAHILI_PII_PATTERNS,
+    *_KENYA_ID_PII_PATTERNS,
+]
+
+_NGUNI_NAME_CONTEXT = [
+    "igama",
+    "igama lesiguli",
+    "igama lesigulane",
+    "name",
+    "patient name",
+]
+
+_NGUNI_DATE_CONTEXT = [
+    "usuku lokuzalwa",
+    "umhla wokuzalwa",
+    "wazalwa",
+    "date of birth",
+    "dob",
+    "born",
+]
+
+_NGUNI_AGE_CONTEXT = ["iminyaka", "ubudala", "age", "aged", "years old"]
+
+_NGUNI_ID_CONTEXT = [
+    "identiteitsnommer",
+    "inombolo kamazisi",
+    "umazisi",
+    "inombolo yesazisi",
+    "isazisi",
+    "south african id",
+    "sa id",
+    "identity number",
+    "id number",
+]
+
+_NGUNI_MEDICAL_AID_CONTEXT = [
+    "inombolo yosizo lwezempilo",
+    "usizo lwezempilo",
+    "inombolo yoncedo lwezonyango",
+    "uncedo lwezonyango",
+    "medical aid",
+    "medical aid number",
+    "medical aid member number",
+    "membership number",
+]
+
+_NGUNI_PHONE_CONTEXT = [
+    "selfoon",
+    "ucingo",
+    "umakhalekhukhwini",
+    "ifowuni",
+    "inombolo yefowuni",
+    "phone",
+    "mobile",
+    "call",
+    "contact",
+]
+
+_NGUNI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?:(?<=Igama: )|(?<=Igama lesiguli: )|(?<=Igama lesigulane: )|"
+        r"(?<=Name: )|(?<=Patient name: ))[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){1,3}\b",
+        "name",
+        priority=12,
+        base_score=0.65,
+        context_words=_NGUNI_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b(?:0?[1-9]|[12][0-9]|3[01])[./-]"
+        r"(?:0?[1-9]|1[0-2])[./-](?:19|20)[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_NGUNI_DATE_CONTEXT,
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?:(?<=Iminyaka )|(?<=Ubudala: )|(?<=Age: )|(?<=Aged ))"
+        r"(?:1[01][0-9]|120|[1-9]?[0-9])\b",
+        "age",
+        priority=11,
+        base_score=0.65,
+        context_words=_NGUNI_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{13}(?![0-9])",
+        "national_id",
+        priority=15,
+        base_score=0.75,
+        context_words=_NGUNI_ID_CONTEXT,
+        context_boost=0.2,
+        validator=validate_za_id_number,
+    ),
+    PIIPattern(
+        r"(?<![A-Z0-9])(?:[A-Z]{2,5}[- ]?)?[0-9]{6,12}(?![A-Z0-9])",
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_NGUNI_MEDICAL_AID_CONTEXT,
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?<=Ikheli: )|(?<=Idilesi: )|(?<=Address: ))"
+        r"[0-9]{1,5}\s+[A-Z][A-Za-z'’-]{1,30}"
+        r"(?:\s+[A-Z][A-Za-z'’-]{1,30}){0,4}\b",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=["ikheli", "idilesi", "address"],
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{4}(?![0-9])",
+        "postcode",
+        priority=7,
+        base_score=0.25,
+        context_words=[
+            "ikhodi yeposi",
+            "ikhowudi yeposi",
+            "postal code",
+            "postcode",
+        ],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])(?:\+?27[\s.-]?[678][0-9]|0[678][0-9])"
+        r"[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+        "phone_number",
+        priority=12,
+        base_score=0.7,
+        context_words=_NGUNI_PHONE_CONTEXT,
+        context_boost=0.25,
+    ),
+]
+
+
 _DANISH_MONTH_PATTERN = (
     r"januar|februar|marts|april|maj|juni|juli|august|september|"
     r"oktober|november|december"
@@ -5097,18 +8038,198 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# Keep this character set aligned with processing.zh_normalize without making
+# the core pattern registry depend on the processing package at import time.
+_CHINESE_NUMERAL_CHARS = "〇零一二三四五六七八九十百千万亿壹贰叁肆伍陆柒捌玖拾佰仟萬億"
+_CHINESE_NUMERAL_RUN = rf"[{_CHINESE_NUMERAL_CHARS}]+"
+
+
+def _validate_chinese_numeral_surface(value: str) -> bool:
+    """Return whether ``value`` is a structurally valid Chinese numeral."""
+
+    # Keep the registry import-cycle-free while sharing the public parser at
+    # match time instead of maintaining a second unit-order implementation.
+    from openmed.processing.zh_normalize import parse_chinese_numeral
+
+    try:
+        parse_chinese_numeral(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _validate_chinese_date_surface(value: str) -> bool:
+    """Return whether ``value`` is one complete, valid Chinese calendar date."""
+
+    from openmed.processing.zh_normalize import normalize_chinese_dates
+
+    try:
+        matches = normalize_chinese_dates(value)
+    except TypeError:
+        return False
+    return len(matches) == 1 and matches[0].span == (0, len(value))
+
+
+_CHINESE_NUMERAL_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![{_CHINESE_NUMERAL_CHARS}]){_CHINESE_NUMERAL_RUN}\s*年\s*"
+        rf"{_CHINESE_NUMERAL_RUN}\s*月\s*{_CHINESE_NUMERAL_RUN}\s*日"
+        rf"(?![{_CHINESE_NUMERAL_CHARS}])",
+        "date",
+        priority=10,
+        base_score=0.65,
+        context_words=["出生", "生于", "出生日期", "出生年月日", "生日"],
+        context_boost=0.3,
+        validator=_validate_chinese_date_surface,
+        reject_on_validation_failure=True,
+    ),
+    PIIPattern(
+        r"(?:(?<=病历号：)|(?<=病历号:)|(?<=病历号)|"
+        r"(?<=病历号码：)|(?<=病历号码:)|(?<=病历号码)|"
+        r"(?<=住院号：)|(?<=住院号:)|(?<=住院号)|"
+        r"(?<=住院号码：)|(?<=住院号码:)|(?<=住院号码)|"
+        r"(?<=患者编号：)|(?<=患者编号:)|(?<=患者编号))"
+        rf"[{_CHINESE_NUMERAL_CHARS}]{{3,24}}"
+        rf"(?![{_CHINESE_NUMERAL_CHARS}])",
+        "medical_record_number",
+        priority=9,
+        base_score=0.3,
+        context_words=["病历号", "病历号码", "住院号", "住院号码", "患者编号"],
+        context_boost=0.6,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        rf"(?<![{_CHINESE_NUMERAL_CHARS}]){_CHINESE_NUMERAL_RUN}"
+        r"(?=\s*(?:毫升|毫克|微克|克|千克|公斤|单位|片|粒|支|袋|次))",
+        "quantity",
+        priority=7,
+        base_score=0.25,
+        context_words=[
+            "剂量",
+            "用量",
+            "容量",
+            "毫升",
+            "毫克",
+            "微克",
+            "千克",
+            "公斤",
+        ],
+        context_boost=0.45,
+        validator=_validate_chinese_numeral_surface,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_TANZANIA_NIDA_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\d{20}|\d{8}-\d{5}-\d{5}-\d{2})(?![A-Za-z0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "nida",
+            "nida number",
+            "namba ya nida",
+            "namba ya utambulisho",
+            "national identification number",
+        ],
+        context_boost=0.6,
+        validator=validate_tanzania_nida,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_UGANDA_NIN_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<![A-Za-z0-9])[CPR][MF][A-Za-z0-9]{12}(?![A-Za-z0-9])",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "nin",
+            "nira",
+            "nira nin",
+            "national id number",
+            "national identification number",
+        ],
+        context_boost=0.6,
+        validator=validate_uganda_nin,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_RWANDA_ID_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<!\d)\d{16}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "indangamuntu",
+            "nimero y'indangamuntu",
+            "national id",
+            "national identification",
+        ],
+        context_boost=0.6,
+        validator=validate_rwanda_id,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_ETHIOPIA_FAYDA_PII_PATTERNS = [
+    PIIPattern(
+        r"(?<!\d)\d{12}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.35,
+        context_words=[
+            "fayda",
+            "fan",
+            "fayda number",
+            "fayda identification number",
+            "national id",
+        ],
+        context_boost=0.6,
+        validator=validate_ethiopia_fayda,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "af": _NGUNI_PII_PATTERNS,
+    "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
+    "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
+    "ig": [*_NIGERIAN_PII_PATTERNS, *_IGBO_PII_PATTERNS],
+    "yo": [*_NIGERIAN_PII_PATTERNS, *_YORUBA_PII_PATTERNS],
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
     "es": _SPANISH_PII_PATTERNS,
     "pt": _PORTUGUESE_PII_PATTERNS,
     "nl": _DUTCH_PII_PATTERNS,
-    "hi": _HINDI_PII_PATTERNS,
-    "te": _TELUGU_PII_PATTERNS,
+    # Keep Aadhaar discoverable through the historical per-language mapping
+    # while get_patterns_for_language deduplicates the universal rule.
+    "hi": [
+        *_HINDI_PII_PATTERNS,
+        *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "te": [
+        *_TELUGU_PII_PATTERNS,
+        *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "ar": _ARABIC_PII_PATTERNS,
     "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
+    "zh": [
+        *_CHINESE_PII_PATTERNS,
+        *_CHINESE_ADDRESS_PII_PATTERNS,
+        *_CHINESE_IDENTIFIER_PII_PATTERNS,
+        *_CHINESE_NUMERAL_PII_PATTERNS,
+    ],
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
@@ -5118,6 +8239,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
+    "rw": _RWANDA_ID_PII_PATTERNS,
+    "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
+    "zu": _NGUNI_PII_PATTERNS,
+    "xh": _NGUNI_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
     "fi": _FINNISH_PII_PATTERNS,
@@ -5129,19 +8254,305 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "el": _GREEK_PII_PATTERNS,
     "cs": _CZECH_PII_PATTERNS,
     "vi": _VIETNAMESE_PII_PATTERNS,
+    "ur": _URDU_PII_PATTERNS,
 }
 
+
+AFRICAN_FR_PT_PHONE_PREFIXES: Dict[str, str] = {
+    "fr_sn": "+221",
+    "fr_ci": "+225",
+    "fr_cm": "+237",
+    "pt_mz": "+258",
+    "pt_ao": "+244",
+}
+
+_AFRICAN_FR_PT_PHONE_CONTEXT = [
+    "téléphone",
+    "telephone",
+    "tél",
+    "tel",
+    "portable",
+    "contact",
+    "telefone",
+    "telemóvel",
+    "telemovel",
+    "contacto",
+]
+
+_AFRICAN_FR_PT_PHONE_PII_PATTERNS: Dict[str, PIIPattern] = {
+    # International and 00-prefix renderings are intentionally required. The
+    # existing fr/pt language patterns retain responsibility for national-only
+    # numbers, while these country overlays make the calling code unambiguous.
+    "fr_sn": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)221[\s.-]?[378](?:[\s.-]?[0-9]){8}"
+        r"(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "fr_ci": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)225[\s.-]?(?:0[157]|2[157])"
+        r"(?:[\s.-]?[0-9]){8}(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "fr_cm": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)237[\s.-]?[26](?:[\s.-]?[0-9]){8}"
+        r"(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "pt_mz": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)258[\s.-]?(?:2[1-9]|8[234567])"
+        r"(?:[\s.-]?[0-9]){7}(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    "pt_ao": PIIPattern(
+        r"(?<![A-Za-z0-9])(?:\+|00)244[\s.-]?[29](?:[\s.-]?[0-9]){8}"
+        r"(?![A-Za-z0-9])",
+        "phone_number",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRICAN_FR_PT_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+}
+
+_SENEGAL_CNI_PII_PATTERN = PIIPattern(
+    # ECOWAS CNI NIN: sex digit + 3-digit civil centre + 4-digit birth year +
+    # 5-digit register sequence. No public checksum is claimed.
+    r"(?<![0-9])[12][0-9]{3}(?:19|20)[0-9]{2}[0-9]{5}(?![0-9])",
+    "national_id",
+    priority=12,
+    base_score=0.35,
+    context_words=[
+        "cni",
+        "carte nationale d'identité",
+        "carte nationale d’identite",
+        "numéro d'identification national",
+        "numéro d’identification national",
+        "nin",
+    ],
+    context_boost=0.6,
+    safety_sweep_requires_context=True,
+    flags=re.IGNORECASE,
+)
+
+_ANGOLA_BI_PII_PATTERN = PIIPattern(
+    # Current BI/NIF examples use nine digits, a two-letter issuing series,
+    # and three trailing digits. No public checksum is claimed.
+    r"(?<![A-Za-z0-9])0[0-9]{8}[A-Z]{2}[0-9]{3}(?![A-Za-z0-9])",
+    "national_id",
+    priority=12,
+    base_score=0.35,
+    context_words=[
+        "bilhete de identidade",
+        "número do bilhete",
+        "numero do bilhete",
+        "número de identificação civil",
+        "numero de identificacao civil",
+        "nº do bi",
+        "n.º do bi",
+        "bi:",
+    ],
+    context_boost=0.6,
+    safety_sweep_requires_context=True,
+    flags=re.IGNORECASE,
+)
+
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "am": _ETHIOPIA_FAYDA_PII_PATTERNS,
+    "zh_cn": _CHINESE_IDENTIFIER_PII_PATTERNS,
+    "ar": _EGYPT_NATIONAL_ID_PII_PATTERNS + _MOROCCO_CIN_PII_PATTERNS,
+    "ar_eg": _LOCALE_DATA_PII_PATTERNS["ar_eg"],
+    "ar_ma": _LOCALE_DATA_PII_PATTERNS["ar_ma"],
+    "en_za": _NGUNI_PII_PATTERNS,
+    "af": _NGUNI_PII_PATTERNS,
+    "en_ng": _NIGERIAN_PII_PATTERNS,
+    "ha": _NIGERIAN_PII_PATTERNS,
+    "ig": _NIGERIAN_PII_PATTERNS,
+    "yo": _NIGERIAN_PII_PATTERNS,
+    "en_gh": _GHANA_CARD_PII_PATTERNS,
+    "en_ke": _KENYA_ID_PII_PATTERNS,
+    "en_et": _ETHIOPIA_FAYDA_PII_PATTERNS,
+    "en_tz": _TANZANIA_NIDA_PII_PATTERNS,
+    "en_ug": _UGANDA_NIN_PII_PATTERNS,
+    "en_in": INDIAN_MULTI_ID_PII_PATTERNS,
+    "rw": _RWANDA_ID_PII_PATTERNS,
+    "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
+    "sw_tz": _TANZANIA_NIDA_PII_PATTERNS,
+    "zu": _NGUNI_PII_PATTERNS,
+    "xh": _NGUNI_PII_PATTERNS,
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_sn": [
+        _AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_sn"],
+        _SENEGAL_CNI_PII_PATTERN,
+    ],
+    "fr_ci": [_AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_ci"]],
+    "fr_cm": [_AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_cm"]],
+    "pt_mz": [_AFRICAN_FR_PT_PHONE_PII_PATTERNS["pt_mz"]],
+    "pt_ao": [
+        _AFRICAN_FR_PT_PHONE_PII_PATTERNS["pt_ao"],
+        _ANGOLA_BI_PII_PATTERN,
+    ],
 }
+
+for _country, _plan in AFRICAN_MOBILE_PLANS.items():
+    _phone_pattern = AFRICAN_MOBILE_PII_PATTERNS[_country]
+    for _alias in _plan.locale_aliases:
+        _existing_patterns = LOCALE_PII_PATTERNS.get(_alias, [])
+        if _phone_pattern not in _existing_patterns:
+            LOCALE_PII_PATTERNS[_alias] = [*_existing_patterns, _phone_pattern]
+
+for _mpesa_alias in ("sw", "en_ke", "en_tz"):
+    _existing_patterns = LOCALE_PII_PATTERNS.get(_mpesa_alias, [])
+    if _MPESA_TX_CODE_PII_PATTERNS[0] not in _existing_patterns:
+        LOCALE_PII_PATTERNS[_mpesa_alias] = [
+            *_existing_patterns,
+            *_MPESA_TX_CODE_PII_PATTERNS,
+        ]
+
+for _mobile_money_alias in ("sw", "sw_tz", "en_ke", "en_tz", "en_gh", "en_ug"):
+    _existing_patterns = LOCALE_PII_PATTERNS.get(_mobile_money_alias, [])
+    if _MOBILE_MONEY_PII_PATTERNS[0] not in _existing_patterns:
+        LOCALE_PII_PATTERNS[_mobile_money_alias] = [
+            *_existing_patterns,
+            *_MOBILE_MONEY_PII_PATTERNS,
+        ]
+
+for _facility_alias in ("sw", "sw_tz", "en_ke"):
+    _existing_patterns = LOCALE_PII_PATTERNS.get(_facility_alias, [])
+    if _KENYA_HEALTH_FACILITY_PII_PATTERNS[0] not in _existing_patterns:
+        LOCALE_PII_PATTERNS[_facility_alias] = [
+            *_existing_patterns,
+            *_KENYA_HEALTH_FACILITY_PII_PATTERNS,
+        ]
+
+if _NIGERIA_HEALTH_FACILITY_PII_PATTERNS[0] not in _NIGERIAN_PII_PATTERNS:
+    _NIGERIAN_PII_PATTERNS.extend(_NIGERIA_HEALTH_FACILITY_PII_PATTERNS)
 
 
 # ---------------------------------------------------------------------------
 # Language-specific fake data
 # ---------------------------------------------------------------------------
+
+# Curated supplements for conceptual locales that Faker does not ship. These
+# values cover only the culturally sensitive methods; every other generator is
+# delegated to the installed backend in ``FAKER_BACKEND_LOCALE``. Keeping this
+# separate from ``LANGUAGE_FAKE_DATA`` ensures the default ``fr`` and ``pt``
+# code paths remain unchanged unless the caller explicitly passes ``locale=``.
+LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "fr_SN": {
+        "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],
+        "FIRST_NAME": ["Awa", "Mamadou", "Fatou", "Ibrahima"],
+        "LAST_NAME": ["Ndiaye", "Diop", "Sarr", "Fall"],
+        "PHONE": [
+            "+221 77 642 18 35",
+            "+221 76 315 42 87",
+            "+221 70 824 53 16",
+        ],
+        "STREET_ADDRESS": [
+            "12 avenue Cheikh Anta Diop, Dakar",
+            "48 rue Carnot, Saint-Louis",
+            "7 avenue Léopold Sédar Senghor, Thiès",
+        ],
+        "LOCATION": ["Dakar", "Thiès", "Saint-Louis", "Kaolack"],
+    },
+    "fr_CI": {
+        "NAME": ["Aïcha Koné", "Kouadio Yao", "Aminata Traoré", "Koffi N'Guessan"],
+        "FIRST_NAME": ["Aïcha", "Kouadio", "Aminata", "Koffi"],
+        "LAST_NAME": ["Koné", "Yao", "Traoré", "N'Guessan"],
+        "PHONE": [
+            "+225 07 48 26 15 39",
+            "+225 05 31 74 82 60",
+            "+225 01 62 93 47 18",
+        ],
+        "STREET_ADDRESS": [
+            "17 boulevard Latrille, Abidjan",
+            "8 rue des Jardins, Bouaké",
+            "23 avenue Houphouët-Boigny, Yamoussoukro",
+        ],
+        "LOCATION": ["Abidjan", "Bouaké", "Yamoussoukro", "San-Pédro"],
+    },
+    "fr_CM": {
+        "NAME": ["Mireille Ngono", "Alain Njoya", "Chantal Mbarga", "Samuel Tchinda"],
+        "FIRST_NAME": ["Mireille", "Alain", "Chantal", "Samuel"],
+        "LAST_NAME": ["Ngono", "Njoya", "Mbarga", "Tchinda"],
+        "PHONE": [
+            "+237 6 71 24 83 59",
+            "+237 6 96 35 72 18",
+            "+237 6 52 81 46 30",
+        ],
+        "STREET_ADDRESS": [
+            "25 avenue Kennedy, Yaoundé",
+            "10 rue Joss, Douala",
+            "6 avenue des Banques, Bafoussam",
+        ],
+        "LOCATION": ["Yaoundé", "Douala", "Bafoussam", "Garoua"],
+    },
+    "pt_MZ": {
+        "NAME": [
+            "Amélia Mucavele",
+            "Ernesto Mondlane",
+            "Celina Nhantumbo",
+            "Luís Mabote",
+        ],
+        "FIRST_NAME": ["Amélia", "Ernesto", "Celina", "Luís"],
+        "LAST_NAME": ["Mucavele", "Mondlane", "Nhantumbo", "Mabote"],
+        "PHONE": [
+            "+258 84 362 7185",
+            "+258 82 715 4369",
+            "+258 87 246 5913",
+        ],
+        "STREET_ADDRESS": [
+            "24 Avenida Julius Nyerere, Maputo",
+            "16 Avenida Eduardo Mondlane, Beira",
+            "9 Rua dos Continuadores, Nampula",
+        ],
+        "LOCATION": ["Maputo", "Beira", "Nampula", "Quelimane"],
+    },
+    "pt_AO": {
+        "NAME": [
+            "Ana Domingos",
+            "Manuel Mateus",
+            "Teresa Chissola",
+            "Paulo Cassoma",
+        ],
+        "FIRST_NAME": ["Ana", "Manuel", "Teresa", "Paulo"],
+        "LAST_NAME": ["Domingos", "Mateus", "Chissola", "Cassoma"],
+        "PHONE": [
+            "+244 923 461 785",
+            "+244 934 725 816",
+            "+244 951 284 639",
+        ],
+        "STREET_ADDRESS": [
+            "31 Rua Rainha Ginga, Luanda",
+            "14 Avenida da Independência, Benguela",
+            "8 Rua do Comércio, Huambo",
+        ],
+        "LOCATION": ["Luanda", "Benguela", "Huambo", "Lubango"],
+    },
+}
 
 LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
     "en": {
@@ -5328,6 +8739,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         ],
         "ZIPCODE": ["500001", "520001", "522001"],
     },
+    "am": {
+        "NAME": [
+            "ሰላም ተስፋዬ",
+            "ዳዊት ከበደ",
+            "ሜሮን አለሙ",
+            "ሚካኤል ገብረ",
+        ],
+        "FIRST_NAME": ["ሰላም", "ዳዊት", "ሜሮን", "ሚካኤል"],
+        "LAST_NAME": ["ተስፋዬ", "ከበደ", "አለሙ", "ገብረ"],
+        "EMAIL": ["takami@example.et", "contact@example.org"],
+        "PHONE": ["+251 911 234 567", "0911 765 432"],
+        "ID_NUM": ["123456789012", "987654321098"],
+        "STREET_ADDRESS": ["አዲስ አበባ ቦሌ 12", "ባሕር ዳር ቀበሌ 5"],
+        "URL_PERSONAL": ["https://example.et"],
+        "USERNAME": ["takami123", "fayda456"],
+        "DATE": ["፲፬/፭/፲፱፻፹፰", "01/01/2000"],
+        "AGE": ["፳፱", "፴፭", "፵፯"],
+        "LOCATION": ["አዲስ አበባ", "ባሕር ዳር", "ሀዋሳ"],
+        "ZIPCODE": ["1000", "3000", "6000"],
+    },
     "ar": {
         "NAME": [
             "\u0644\u064a\u0644\u0649 \u062d\u0633\u0646",
@@ -5364,6 +8795,45 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
             "\u062f\u0628\u064a",
         ],
         "ZIPCODE": ["11511", "12345", "54321"],
+    },
+    "ur": {
+        "NAME": [
+            "\u0627\u062d\u0645\u062f \u0639\u0644\u06cc",
+            "\u0641\u0627\u0637\u0645\u06c1 \u062e\u0627\u0646",
+            "\u0626\u0644\u0627\u0644 \u062d\u0633\u06cc\u0646",
+            "\u0633\u0627\u0631\u0627 \u0627\u062d\u0645\u062f",
+        ],
+        "FIRST_NAME": [
+            "\u0627\u062d\u0645\u062f",
+            "\u0641\u0627\u0637\u0645\u06c1",
+            "\u0626\u0644\u0627\u0644",
+            "\u0633\u0627\u0631\u0627",
+        ],
+        "LAST_NAME": [
+            "\u0639\u0644\u06cc",
+            "\u062e\u0627\u0646",
+            "\u062d\u0633\u06cc\u0646",
+            "\u0627\u062d\u0645\u062f",
+        ],
+        "EMAIL": ["patient@example.pk", "contact@example.org"],
+        "PHONE": ["+92 300 1234567", "021 34567890"],
+        "ID_NUM": ["12345-6789012-3", "42101-1234567-9"],
+        "STREET_ADDRESS": [
+            "\u06af\u0644\u06cc \u0646\u0645\u0628\u0631 5 \u0645\u062d\u0644\u06c1 \u0627\u0633\u0644\u0627\u0645 \u0622\u0626\u0627\u062f 12"
+        ],
+        "URL_PERSONAL": ["https://example.pk"],
+        "USERNAME": ["patient123", "user456"],
+        "DATE": [
+            "\u06f1\u06f6.\u06f1\u06f1.\u06f1\u06f9\u06f7\u06f5",
+            "16.11.1975",
+        ],
+        "AGE": ["\u06f4\u06f5", "62", "38"],
+        "LOCATION": [
+            "\u06a9\u0631\u0627\u0686\u06cc",
+            "\u0644\u0627\u06c1\u0648\u0631",
+            "\u0627\u0633\u0644\u0627\u0645 \u0622\u0626\u0627\u062f",
+        ],
+        "ZIPCODE": ["74200", "54000", "44000"],
     },
     "he": {
         "NAME": [
@@ -5508,6 +8978,74 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Manila", "Quezon City", "Cebu City"],
         "ZIPCODE": ["1000", "1100", "6000"],
+    },
+    "sw": {
+        "NAME": [
+            "Amina Hassan",
+            "Daniel Otieno",
+            "Wanjiku Njeri",
+            "Baraka Mushi",
+        ],
+        "FIRST_NAME": ["Amina", "Daniel", "Wanjiku", "Baraka"],
+        "LAST_NAME": ["Hassan", "Otieno", "Njeri", "Mushi"],
+        "EMAIL": ["mgonjwa@example.ke", "mawasiliano@example.tz"],
+        "PHONE": [
+            "+254 712 345 678",
+            "+255 754 321 098",
+            "+256 772 456 789",
+        ],
+        "ID_NUM": [
+            "12345678",
+            "987654321",
+            "19791103-12345-67890-12",
+        ],
+        "STREET_ADDRESS": ["Kenyatta Avenue 12", "Barabara ya Nyerere 45"],
+        "URL_PERSONAL": ["https://example.ke"],
+        "USERNAME": ["mgonjwa123", "mtumiaji456"],
+        "DATE": ["14/05/1988", "3 Novemba 1979"],
+        "AGE": ["29", "38", "47"],
+        "LOCATION": ["Nairobi", "Dar es Salaam", "Kampala", "Mombasa"],
+        "ZIPCODE": ["00100", "11101", "10101"],
+    },
+    "zu": {
+        "NAME": [
+            "Nomcebo Dlamini",
+            "Xolani Khumalo",
+            "Qhawe Ndlovu",
+            "Cebisile Zulu",
+        ],
+        "FIRST_NAME": ["Nomcebo", "Xolani", "Qhawe", "Cebisile"],
+        "LAST_NAME": ["Dlamini", "Khumalo", "Ndlovu", "Zulu"],
+        "EMAIL": ["isiguli@example.co.za", "xhumana@example.org"],
+        "PHONE": ["+27 82 123 4567", "071 987 6543"],
+        "ID_NUM": ["8001015009087", "9003030123082"],
+        "STREET_ADDRESS": ["12 Umgeni Road", "45 Vilakazi Street"],
+        "URL_PERSONAL": ["https://example.co.za"],
+        "USERNAME": ["isiguli123", "nomcebo88"],
+        "DATE": ["14/05/1988", "03/11/1979"],
+        "AGE": ["38", "47", "29"],
+        "LOCATION": ["Durban", "Umlazi", "East London", "Gqeberha"],
+        "ZIPCODE": ["4001", "4066", "5201", "6001"],
+    },
+    "xh": {
+        "NAME": [
+            "Xolani Qwabe",
+            "Qhawe Mbeki",
+            "Nomcebo Gcaleka",
+            "Zukiswa Nqatha",
+        ],
+        "FIRST_NAME": ["Xolani", "Qhawe", "Nomcebo", "Zukiswa"],
+        "LAST_NAME": ["Qwabe", "Mbeki", "Gcaleka", "Nqatha"],
+        "EMAIL": ["isigulane@example.co.za", "qhagamshelana@example.org"],
+        "PHONE": ["+27 71 234 5678", "083 765 4321"],
+        "ID_NUM": ["7903116001080", "0102034000186"],
+        "STREET_ADDRESS": ["18 Oxford Street", "27 Govan Mbeki Avenue"],
+        "URL_PERSONAL": ["https://example.co.za"],
+        "USERNAME": ["isigulane123", "qhawe79"],
+        "DATE": ["03/11/1979", "21/06/1991"],
+        "AGE": ["47", "35", "29"],
+        "LOCATION": ["East London", "Gqeberha", "Durban", "Umlazi"],
+        "ZIPCODE": ["5201", "6001", "4001", "4066"],
     },
     "da": {
         "NAME": ["Anna Nielsen", "Peter Jensen", "Mette Hansen", "Lars Andersen"],
@@ -5781,7 +9319,151 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["Αθήνα", "Θεσσαλονίκη", "Πάτρα"],
         "ZIPCODE": ["104 31", "546 21", "262 21"],
     },
+    "ha": {
+        "NAME": [
+            "Amina Ɗanladi",
+            "Musa Ɗanjuma",
+            "Bilkisu Ɗanƙande",
+            "Ƙasimu Balarabe",
+        ],
+        "FIRST_NAME": ["Amina", "Musa", "Bilkisu", "Ƙasimu"],
+        "LAST_NAME": ["Ɗanladi", "Ɗanjuma", "Ɗanƙande", "Balarabe"],
+        "EMAIL": ["majiyyaci@example.ng", "tuntuɓa@example.org"],
+        "PHONE": ["+234 803 123 4567", "+234 907 654 3210", "+227 90 12 34 56"],
+        "ID_NUM": ["12345678901", "10987654321"],
+        "STREET_ADDRESS": ["12 Titin Bompai", "45 Titin Ahmadu Bello"],
+        "URL_PERSONAL": ["https://example.ng"],
+        "USERNAME": ["majiyyaci123", "mai_amfani456"],
+        "DATE": ["14/03/1984", "01/01/2000"],
+        "AGE": ["42", "58", "73"],
+        "LOCATION": ["Kano", "Kaduna", "Sokoto", "Niamey"],
+        "ZIPCODE": ["700001", "800001", "840001"],
+    },
+    "ig": {
+        "NAME": [
+            "Chukwuemeka Ọnwụka",
+            "Ngọzi Okafọ",
+            "Ọbịanụju Ụzọma",
+            "Chịọma Nwankwọ",
+        ],
+        "FIRST_NAME": ["Chukwuemeka", "Ngọzi", "Ọbịanụju", "Chịọma"],
+        "LAST_NAME": ["Ọnwụka", "Okafọ", "Ụzọma", "Nwankwọ"],
+        "EMAIL": ["onyeoria@example.ng", "uloogwu@example.org"],
+        "PHONE": ["+234 803 123 4567", "+234-907-654-3210"],
+        "ID_NUM": ["12345678901", "10987654321"],
+        "STREET_ADDRESS": ["12 Okporo Ụzọ Ogui", "45 Okporo Ụzọ Awka"],
+        "URL_PERSONAL": ["https://example.ng"],
+        "USERNAME": ["onyeoria123", "onyeoji456"],
+        "DATE": ["14/03/1984", "01/01/2000"],
+        "AGE": ["42", "58", "73"],
+        "LOCATION": ["Enugu", "Onitsha", "Owerri", "Aba"],
+        "ZIPCODE": ["400001", "430001", "460001", "450001"],
+    },
+    "yo": {
+        "NAME": [
+            "Adéọlá Ọládìpọ̀",
+            "Bọ́láńlé Adébáyọ̀",
+            "Olúwafẹ́mi Ọlátúndé",
+            "Mọ́rẹ́nikẹ́ Adéṣínà",
+        ],
+        "FIRST_NAME": ["Adéọlá", "Bọ́láńlé", "Olúwafẹ́mi", "Mọ́rẹ́nikẹ́"],
+        "LAST_NAME": ["Ọládìpọ̀", "Adébáyọ̀", "Ọlátúndé", "Adéṣínà"],
+        "EMAIL": ["alaisan@example.ng", "iwosan@example.org"],
+        "PHONE": ["+234 803 123 4567", "+234-907-654-3210"],
+        "ID_NUM": ["12345678901", "10987654321"],
+        "STREET_ADDRESS": ["12 Òpópónà Ọbáfẹ́mi", "45 Ọ̀nà Adéyẹmí"],
+        "URL_PERSONAL": ["https://example.ng"],
+        "USERNAME": ["alaisan123", "olumulo456"],
+        "DATE": ["14/03/1984", "01/01/2000"],
+        "AGE": ["42", "58", "73"],
+        "LOCATION": ["Èkó", "Ìbàdàn", "Ilé-Ifẹ̀", "Abẹ́òkúta"],
+        "ZIPCODE": ["100001", "200001", "220001"],
+    },
+    "zh": {
+        "NAME": ["王芳", "李雷", "张伟", "刘洋"],
+        "FIRST_NAME": ["芳", "雷", "伟", "洋"],
+        "LAST_NAME": ["王", "李", "张", "刘"],
+        "EMAIL": ["patient@example.cn", "contact@example.org"],
+        "PHONE": ["13800138000", "13900139000"],
+        "ID_NUM": ["CN123456", "MRN-987654"],
+        "STREET_ADDRESS": ["北京市朝阳区健康路12号", "上海市和平路45号"],
+        "URL_PERSONAL": ["https://example.cn"],
+        "USERNAME": ["patient123", "user456"],
+        "DATE": ["2000年1月1日", "1985年3月15日"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["北京", "上海", "广州"],
+        "ZIPCODE": ["100000", "200000", "510000"],
+    },
 }
+
+
+LANGUAGE_FAKE_DATA.update(
+    {
+        "as": {
+            "NAME": ["অৰুণ দাস"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["গুৱাহাটী"],
+        },
+        "bn": {
+            "NAME": ["অরুণ দাস"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["কলকাতা"],
+        },
+        "gu": {
+            "NAME": ["આરવ પટેલ"],
+            "EMAIL": ["dardi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["અમદાવાદ"],
+        },
+        "kn": {
+            "NAME": ["ಅರುಣ್ ಕುಮಾರ್"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["ಬೆಂಗಳೂರು"],
+        },
+        "ml": {
+            "NAME": ["അരുൺ കുമാർ"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["കൊച്ചി"],
+        },
+        "mr": {
+            "NAME": ["आरव पाटील"],
+            "EMAIL": ["rugna@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["पुणे"],
+        },
+        "or": {
+            "NAME": ["ଅରୁଣ ଦାସ"],
+            "EMAIL": ["rogi@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["ଭୁବନେଶ୍ୱର"],
+        },
+        "pa": {
+            "NAME": ["ਅਰੁਣ ਸਿੰਘ"],
+            "EMAIL": ["mareez@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["ਅੰਮ੍ਰਿਤਸਰ"],
+        },
+        "ta": {
+            "NAME": ["அருண் குமார்"],
+            "EMAIL": ["noyali@example.in"],
+            "PHONE": ["+91 9876543210"],
+            "DATE": ["01/01/2000"],
+            "LOCATION": ["சென்னை"],
+        },
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -5798,11 +9480,9 @@ def _normalize_pattern_locale(locale: str) -> str:
 
 
 def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
-    keys: list[str] = []
+    keys: list[str] = [_normalize_pattern_locale(lang)]
     if locale:
-        keys.append(_normalize_pattern_locale(locale))
-    if "_" in lang or "-" in lang:
-        keys.append(_normalize_pattern_locale(lang))
+        keys.insert(0, _normalize_pattern_locale(locale))
 
     deduped: list[str] = []
     seen: set[str] = set()
@@ -5813,7 +9493,12 @@ def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     return deduped
 
 
-def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIPattern]:
+def get_patterns_for_language(
+    lang: str,
+    locale: str | None = None,
+    *,
+    include_indian_multi_id: bool = True,
+) -> List[PIIPattern]:
     """Return combined PII patterns for the given language.
 
     English patterns (email, URL, IP, etc.) are universal and always
@@ -5826,7 +9511,8 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
         lang: ISO 639-1 language code, optionally with a region suffix for
             pattern lookup. Model-backed languages are listed in
             :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
-            in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
+            in :data:`NATIONAL_ID_ONLY_LANGUAGES`. Deterministic-only language
+            packs may also be exposed directly in :data:`LANGUAGE_PII_PATTERNS`.
         locale: Optional locale override (for example, ``"en_GB"``) whose
             locale-specific deterministic patterns should also be active.
 
@@ -5836,7 +9522,13 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     Raises:
         ValueError: If the language is not supported
     """
-    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    locale_overlay_languages = {key.split("_", 1)[0] for key in LOCALE_PII_PATTERNS}
+    supported_pattern_languages = (
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | locale_overlay_languages
+    )
     base_lang = _normalize_pattern_language(lang)
     if base_lang not in supported_pattern_languages:
         raise ValueError(
@@ -5846,15 +9538,285 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
 
     from .pii_entity_merger import PII_PATTERNS
 
-    # English patterns serve as universal base
-    # MRZ and USCC patterns are language-agnostic, so they join the universal base.
-    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS + USCC_PII_PATTERNS
+    # English patterns serve as universal base. MRZ, USCC, Aadhaar, and India
+    # health-ID patterns are language-agnostic, so they join every route. The
+    # ambiguous India-specific shapes require nearby clinical context.
+    base = (
+        list(PII_PATTERNS)
+        + MRZ_PII_PATTERNS
+        + USCC_PII_PATTERNS
+        + AADHAAR_PII_PATTERNS
+        + INDIA_HEALTH_ID_PII_PATTERNS
+    )
 
     combined = base
     if base_lang != "en":
-        combined = combined + LANGUAGE_PII_PATTERNS.get(base_lang, [])
+        language_patterns = LANGUAGE_PII_PATTERNS.get(base_lang, [])
+        combined = combined + [
+            pattern
+            for pattern in language_patterns
+            if not any(pattern is existing for existing in combined)
+        ]
 
     for locale_key in _locale_pattern_keys(lang, locale):
-        combined = combined + LOCALE_PII_PATTERNS.get(locale_key, [])
+        combined = combined + [
+            pattern
+            for pattern in LOCALE_PII_PATTERNS.get(locale_key, [])
+            if not any(pattern is existing for existing in combined)
+        ]
+
+    if not include_indian_multi_id:
+        indian_pattern_ids = {id(pattern) for pattern in INDIAN_MULTI_ID_PII_PATTERNS}
+        combined = [
+            pattern for pattern in combined if id(pattern) not in indian_pattern_ids
+        ]
 
     return combined
+
+
+@dataclass(frozen=True)
+class CodeMixedTokenTag:
+    """One raw-text-free token language tag with exact character offsets."""
+
+    start: int
+    end: int
+    label: str
+
+
+_CODE_MIXED_LABEL_ALIASES = {
+    "en": "en",
+    "english": "en",
+    "hi": "hi",
+    "hi_latn": "hi",
+    "hinglish": "hi",
+    "ne": "ne",
+    "named_entity": "ne",
+    "other": "other",
+    "univ": "univ",
+    "universal": "univ",
+}
+
+
+def normalize_code_mixed_token_tags(
+    text: str,
+    token_language_tags: Sequence[Any],
+) -> tuple[CodeMixedTokenTag, ...]:
+    """Validate and normalize caller-supplied code-mixed token tags.
+
+    Tags may be mappings or objects with ``start``, ``end``, and ``label``
+    fields. Returned records contain offsets and normalized labels only; token
+    surfaces are never copied into metadata or logs.
+    """
+    if isinstance(token_language_tags, (str, bytes)):
+        raise TypeError("token_language_tags must be a sequence of tag records")
+
+    normalized: list[CodeMixedTokenTag] = []
+    previous_end = 0
+    for index, raw_tag in enumerate(token_language_tags):
+        if isinstance(raw_tag, Mapping):
+            start = raw_tag.get("start")
+            end = raw_tag.get("end")
+            raw_label = raw_tag.get("label", raw_tag.get("lang"))
+        else:
+            start = getattr(raw_tag, "start", None)
+            end = getattr(raw_tag, "end", None)
+            raw_label = getattr(raw_tag, "label", getattr(raw_tag, "lang", None))
+
+        if not isinstance(start, int) or not isinstance(end, int):
+            raise TypeError(
+                f"token_language_tags[{index}] requires integer start/end offsets"
+            )
+        if start < 0 or end <= start or end > len(text):
+            raise ValueError(
+                f"token_language_tags[{index}] offsets must satisfy "
+                f"0 <= start < end <= {len(text)}"
+            )
+        if normalized and start < previous_end:
+            raise ValueError("token language tags must be ordered and non-overlapping")
+
+        label_key = str(raw_label or "").strip().replace("-", "_").casefold()
+        label = _CODE_MIXED_LABEL_ALIASES.get(label_key)
+        if label is None:
+            raise ValueError(
+                f"unsupported token language label {raw_label!r}; expected one of "
+                "en, hi, ne, univ, or other"
+            )
+        normalized.append(CodeMixedTokenTag(start=start, end=end, label=label))
+        previous_end = end
+
+    if not normalized:
+        raise ValueError("token_language_tags must contain at least one tag")
+    return tuple(normalized)
+
+
+def code_mixed_route_active(
+    text: str,
+    token_language_tags: Sequence[Any],
+) -> bool:
+    """Return whether validated tags activate Roman-script Hindi patterns."""
+    return any(
+        tag.label == "hi"
+        for tag in normalize_code_mixed_token_tags(text, token_language_tags)
+    )
+
+
+def get_hinglish_patterns_for_token_tags(
+    text: str,
+    token_language_tags: Sequence[Any],
+) -> List[PIIPattern]:
+    """Return the Hinglish bank only when supplied tags contain Hindi tokens."""
+    if not code_mixed_route_active(text, token_language_tags):
+        return []
+    return list(_HINGLISH_PII_PATTERNS)
+
+
+def get_patterns_for_code_mixed_tags(
+    text: str,
+    token_language_tags: Sequence[Any],
+    *,
+    base_lang: str = "en",
+    locale: str | None = None,
+    include_indian_multi_id: bool = True,
+) -> List[PIIPattern]:
+    """Combine the base language pack with explicitly gated Hinglish patterns."""
+    patterns = list(
+        get_patterns_for_language(
+            base_lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        )
+    )
+    patterns.extend(get_hinglish_patterns_for_token_tags(text, token_language_tags))
+    return patterns
+
+
+@dataclass(frozen=True)
+class CodeMixedPatternRun:
+    """Offset-only pattern routing decision for one token-language run."""
+
+    start: int
+    end: int
+    token_label: str
+    languages: tuple[str, ...]
+    patterns: tuple[PIIPattern, ...]
+
+
+def get_code_mixed_pattern_runs(
+    text: str,
+    *,
+    base_lang: str = "en",
+    locale: str | None = None,
+    lid_model: TokenLIDHook | None = None,
+) -> tuple[CodeMixedPatternRun, ...]:
+    """Route deterministic Hinglish token runs without retaining surfaces."""
+    normalized_base = _normalize_pattern_language(base_lang)
+    runs = token_language_runs(identify_token_languages(text, model=lid_model))
+    routes: list[CodeMixedPatternRun] = []
+    for index, run in enumerate(runs):
+        languages = _languages_for_token_run(
+            index,
+            runs,
+            base_lang=normalized_base,
+        )
+        patterns = _deduplicate_patterns(
+            pattern
+            for language in languages
+            for pattern in get_patterns_for_language(language, locale=locale)
+        )
+        routes.append(
+            CodeMixedPatternRun(
+                start=run.start,
+                end=run.end,
+                token_label=run.label,
+                languages=languages,
+                patterns=tuple(patterns),
+            )
+        )
+    return tuple(routes)
+
+
+def get_patterns_for_code_mixed_text(
+    text: str,
+    *,
+    base_lang: str = "en",
+    locale: str | None = None,
+    lid_model: TokenLIDHook | None = None,
+) -> List[PIIPattern]:
+    """Infer offset-only tags and return the explicitly gated Hinglish bank."""
+    tags = identify_token_languages(text, model=lid_model)
+    if not tags:
+        return get_patterns_for_language(base_lang, locale=locale)
+    return _deduplicate_patterns(
+        get_patterns_for_code_mixed_tags(
+            text,
+            tags,
+            base_lang=base_lang,
+            locale=locale,
+        )
+    )
+
+
+def _languages_for_token_run(
+    index: int,
+    runs: Sequence[TokenLanguageRun],
+    *,
+    base_lang: str,
+) -> tuple[str, ...]:
+    label = runs[index].label
+    if label in {"hi", "en"}:
+        return (label,)
+    if label == "ne":
+        return ("hi", "en")
+
+    nearest = [
+        (abs(other_index - index), other_run.label)
+        for other_index, other_run in enumerate(runs)
+        if other_run.label in {"hi", "en"}
+    ]
+    if not nearest:
+        return (base_lang,)
+    minimum_distance = min(distance for distance, _ in nearest)
+    return tuple(
+        dict.fromkeys(
+            language for distance, language in nearest if distance == minimum_distance
+        )
+    )
+
+
+def _deduplicate_patterns(patterns: Iterable[PIIPattern]) -> List[PIIPattern]:
+    unique: list[PIIPattern] = []
+    seen: set[int] = set()
+    for pattern in patterns:
+        marker = id(pattern)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(pattern)
+    return unique
+
+
+def get_india_clinical_model_route(lang: str) -> IndiaClinicalModelRoute:
+    """Return the configured Indian-English clinical route for ``lang``.
+
+    Args:
+        lang: Hindi (``"hi"``) or Telugu (``"te"``).
+
+    Raises:
+        ValueError: If ``lang`` has no India clinical route.
+    """
+
+    normalized = _normalize_pattern_language(lang)
+    route = INDIA_CLINICAL_MODEL_ROUTES.get(normalized)
+    if route is None:
+        raise ValueError(
+            "India clinical NER is available only for lang='hi' or lang='te'"
+        )
+    return route
+
+
+def india_clinical_route_active(text: str, lang: str) -> bool:
+    """Return whether ``text`` activates mixed-script India clinical routing."""
+
+    from .script_detect import india_clinical_script_windows
+
+    return bool(india_clinical_script_windows(text, _normalize_pattern_language(lang)))

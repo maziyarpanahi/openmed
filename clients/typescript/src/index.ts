@@ -10,6 +10,9 @@ export type KeepAliveValue = number | string;
 export type AggregationStrategy = "simple" | "first" | "average" | "max";
 
 export type PIILanguage =
+  | "am"
+  | "as"
+  | "bn"
   | "en"
   | "fr"
   | "de"
@@ -17,6 +20,13 @@ export type PIILanguage =
   | "es"
   | "nl"
   | "hi"
+  | "gu"
+  | "kn"
+  | "ml"
+  | "mr"
+  | "or"
+  | "pa"
+  | "ta"
   | "te"
   | "pt"
   | "ar"
@@ -26,7 +36,11 @@ export type PIILanguage =
   | "id"
   | "th"
   | "ko"
-  | "ro";
+  | "ro"
+  | "sw"
+  | "zu"
+  | "xh"
+  | "zh";
 
 export type DeidentificationMethod =
   | "mask"

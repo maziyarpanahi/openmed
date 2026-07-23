@@ -45,7 +45,14 @@ def test_eval_modules_import_cleanly():
         "policy_compliance",
         "biomedical-ner",
         "multilingual-clinical-ner",
+        "masakhaner",
+        "cmeee",
+        "naamapadam",
+        "chinese-clinical-ner",
         "multimodal_dicom",
+        "code_mixed_routing",
+        "india_health_id_leakage",
+        "indian_multi_id",
     )
 
 

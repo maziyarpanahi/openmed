@@ -1,0 +1,98 @@
+[
+  {
+    "id": "ms_multiple_sclerosis",
+    "text": "Neurology assessment: relapsing MS with demyelinating lesions remains stable.",
+    "short_form": "MS",
+    "section": "neurology",
+    "entity_types": ["condition"],
+    "expected_long_form": "multiple sclerosis"
+  },
+  {
+    "id": "ms_mitral_stenosis",
+    "text": "The echocardiogram shows severe MS with a diastolic murmur.",
+    "short_form": "MS",
+    "section": "cardiology",
+    "entity_types": ["cardiac_finding"],
+    "expected_long_form": "mitral stenosis"
+  },
+  {
+    "id": "ms_morphine_sulfate",
+    "text": "Give MS 2 mg IV for pain control.",
+    "short_form": "MS",
+    "section": "medications",
+    "entity_types": ["medication", "dose", "route"],
+    "expected_long_form": "morphine sulfate"
+  },
+  {
+    "id": "pt_physical_therapy",
+    "text": "Continue PT for gait training and strengthening before discharge.",
+    "short_form": "PT",
+    "section": "rehabilitation",
+    "entity_types": ["procedure"],
+    "expected_long_form": "physical therapy"
+  },
+  {
+    "id": "pt_prothrombin_time",
+    "text": "PT was prolonged at 18 seconds with an INR of 1.8.",
+    "short_form": "PT",
+    "section": "coagulation",
+    "entity_types": ["laboratory_test", "lab_value"],
+    "expected_long_form": "prothrombin time"
+  },
+  {
+    "id": "pt_patient",
+    "text": "PT reports nausea but denies vomiting today.",
+    "short_form": "PT",
+    "section": "subjective",
+    "entity_types": ["person"],
+    "expected_long_form": "patient"
+  },
+  {
+    "id": "ra_rheumatoid_arthritis",
+    "text": "RA flare includes symmetric joint swelling and synovitis.",
+    "short_form": "RA",
+    "section": "rheumatology",
+    "entity_types": ["condition"],
+    "expected_long_form": "rheumatoid arthritis"
+  },
+  {
+    "id": "ra_right_atrium",
+    "text": "The echocardiogram demonstrates RA enlargement and right ventricle dilation.",
+    "short_form": "RA",
+    "section": "echocardiography",
+    "entity_types": ["anatomy", "cardiac_finding"],
+    "expected_long_form": "right atrium"
+  },
+  {
+    "id": "ra_room_air",
+    "text": "Oxygen saturation is 97% on RA without supplemental oxygen.",
+    "short_form": "RA",
+    "section": "vital signs",
+    "entity_types": ["oxygen_saturation"],
+    "expected_long_form": "room air"
+  },
+  {
+    "id": "ca_cancer",
+    "text": "The biopsy confirmed metastatic CA and chemotherapy was discussed.",
+    "short_form": "CA",
+    "section": "oncology",
+    "entity_types": ["condition"],
+    "expected_long_form": "cancer"
+  },
+  {
+    "id": "ca_calcium",
+    "text": "Serum CA is 11.2 mg/dL on the chemistry panel.",
+    "short_form": "CA",
+    "section": "laboratory",
+    "entity_types": ["laboratory_test", "lab_value"],
+    "expected_long_form": "calcium"
+  },
+  {
+    "id": "ca_cardiac_arrest",
+    "text": "Witnessed CA prompted immediate CPR and defibrillation.",
+    "short_form": "CA",
+    "section": "emergency",
+    "entity_types": ["condition", "procedure"],
+    "expected_long_form": "cardiac arrest"
+  }
+]

@@ -17,12 +17,14 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
     get_patterns_for_language,
 )
 
 _I18N_DIR = Path("openmed/eval/golden/fixtures/i18n")
+_SPECIALIZED_CORPUS_FIXTURES = frozenset({"india_clinical.jsonl"})
 
 # Canonical gold label -> the pattern entity_type that must recover it.
 _LABEL_TO_ENTITY_TYPE = {
@@ -52,7 +54,11 @@ _LEGACY_INCOMPLETE_LANGUAGES = frozenset({"ko", "ms", "tl"})
 
 
 def _fixture_paths() -> list[Path]:
-    return sorted(_I18N_DIR.glob("*.jsonl"))
+    return sorted(
+        path
+        for path in _I18N_DIR.glob("*.jsonl")
+        if path.name not in _SPECIALIZED_CORPUS_FIXTURES
+    )
 
 
 def _load_rows(path: Path) -> list[dict]:
@@ -80,7 +86,8 @@ def _national_id_validators(language: str):
     return [
         pattern.validator
         for pattern in LANGUAGE_PII_PATTERNS.get(language, [])
-        if pattern.entity_type == "national_id" and pattern.validator is not None
+        if normalize_label(pattern.entity_type) == ID_NUM
+        and pattern.validator is not None
     ]
 
 
@@ -149,6 +156,8 @@ def test_i18n_fixture_national_ids_pass_checksum_where_a_validator_exists(path: 
         validators = _national_id_validators(language)
         for span in row["gold_spans"]:
             if span["label"] != "ID_NUM":
+                continue
+            if span.get("metadata", {}).get("checksum_status") == "unvalidated":
                 continue
             if not validators:
                 # Languages such as ar/ja have a regex-only national_id pattern

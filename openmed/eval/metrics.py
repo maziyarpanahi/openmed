@@ -9,12 +9,15 @@ from datetime import date, datetime
 from math import ceil, isfinite
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from openmed.core.decoding.spans import iter_grapheme_cluster_spans
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.quality_gates import detect_overlapping_entities
+from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -91,6 +94,16 @@ class EvalSpan:
 
 
 @dataclass(frozen=True)
+class _GraphemeTally:
+    """Internal whole-grapheme counts for one gold span."""
+
+    matched: int
+    total: int
+    matched_by_script: Mapping[str, int]
+    total_by_script: Mapping[str, int]
+
+
+@dataclass(frozen=True)
 class RateMetric:
     """A metric represented as numerator / denominator."""
 
@@ -136,7 +149,11 @@ class F1Metrics:
 
 @dataclass(frozen=True)
 class LeakageMetrics:
-    """Character-weighted PHI leakage rate and required slices."""
+    """Grapheme-weighted PHI leakage rate and required slices.
+
+    The ``*_chars`` fields remain compatibility aliases, but their counts use
+    complete user-perceived grapheme clusters rather than Unicode code points.
+    """
 
     overall: float
     by_label: dict[str, float]
@@ -150,6 +167,19 @@ class LeakageMetrics:
     total_chars_by_language: dict[str, int]
     leaked_chars_by_device: dict[str, int]
     total_chars_by_device: dict[str, int]
+    by_script: dict[str, float] = field(default_factory=dict)
+    leaked_chars_by_script: dict[str, int] = field(default_factory=dict)
+    total_chars_by_script: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def leaked_graphemes(self) -> int:
+        """Return the number of leaked grapheme clusters."""
+        return self.leaked_chars
+
+    @property
+    def total_graphemes(self) -> int:
+        """Return the number of gold grapheme clusters."""
+        return self.total_chars
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -157,6 +187,10 @@ class LeakageMetrics:
             "by_label": self.by_label,
             "by_language": self.by_language,
             "by_device": self.by_device,
+            "by_script": self.by_script,
+            "unit": "grapheme_cluster",
+            "leaked_graphemes": self.leaked_graphemes,
+            "total_graphemes": self.total_graphemes,
             "leaked_chars": self.leaked_chars,
             "total_chars": self.total_chars,
             "leaked_chars_by_label": self.leaked_chars_by_label,
@@ -165,6 +199,36 @@ class LeakageMetrics:
             "total_chars_by_language": self.total_chars_by_language,
             "leaked_chars_by_device": self.leaked_chars_by_device,
             "total_chars_by_device": self.total_chars_by_device,
+            "leaked_graphemes_by_script": self.leaked_chars_by_script,
+            "total_graphemes_by_script": self.total_chars_by_script,
+            "leaked_chars_by_script": self.leaked_chars_by_script,
+            "total_chars_by_script": self.total_chars_by_script,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class MixedScriptLeakageMetrics:
+    """Leakage gate result for a confusable/mixed-script attack corpus."""
+
+    leakage: LeakageMetrics
+    ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING
+    pre_defense_baseline: float | None = None
+
+    @property
+    def passed(self) -> bool:
+        """Return whether leakage stays at or below the strict ceiling."""
+        return self.leakage.overall <= self.ceiling
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready gate payload."""
+        return {
+            **self.leakage.to_dict(),
+            "ceiling": self.ceiling,
+            "passed": self.passed,
+            "pre_defense_baseline": self.pre_defense_baseline,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -257,7 +321,7 @@ class AbstentionMetrics:
 
 @dataclass(frozen=True)
 class RecallSlices:
-    """Character recall sliced by label, language, and device."""
+    """Grapheme recall sliced by label, language, device, and script."""
 
     overall: float
     by_label: dict[str, float]
@@ -265,6 +329,19 @@ class RecallSlices:
     by_device: dict[str, float]
     covered_chars: int
     total_chars: int
+    by_script: dict[str, float] = field(default_factory=dict)
+    covered_chars_by_script: dict[str, int] = field(default_factory=dict)
+    total_chars_by_script: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def covered_graphemes(self) -> int:
+        """Return the number of fully covered gold grapheme clusters."""
+        return self.covered_chars
+
+    @property
+    def total_graphemes(self) -> int:
+        """Return the number of gold grapheme clusters."""
+        return self.total_chars
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -272,8 +349,16 @@ class RecallSlices:
             "by_label": self.by_label,
             "by_language": self.by_language,
             "by_device": self.by_device,
+            "by_script": self.by_script,
+            "unit": "grapheme_cluster",
+            "covered_graphemes": self.covered_graphemes,
+            "total_graphemes": self.total_graphemes,
             "covered_chars": self.covered_chars,
             "total_chars": self.total_chars,
+            "covered_graphemes_by_script": self.covered_chars_by_script,
+            "total_graphemes_by_script": self.total_chars_by_script,
+            "covered_chars_by_script": self.covered_chars_by_script,
+            "total_chars_by_script": self.total_chars_by_script,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -606,12 +691,12 @@ def compute_leakage_rate(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> LeakageMetrics:
-    """Compute first-class character-weighted PHI leakage.
+    """Compute first-class grapheme-cluster-weighted PHI leakage.
 
-    Leakage is the number of gold PHI characters not covered by any
-    same-label prediction divided by the total number of gold PHI characters.
+    Leakage is the number of gold PHI graphemes not fully covered by any
+    same-label prediction divided by the total number of gold PHI graphemes.
     The same numerator/denominator accounting is reported overall and by
-    label, language, and device.
+    label, language, device, and Unicode script.
     """
     gold = normalize_eval_spans(
         gold_spans,
@@ -626,12 +711,41 @@ def compute_leakage_rate(
         source_text=source_text,
     )
 
-    leaked_lengths: list[int] = []
-    for span in gold:
-        covered = _covered_char_count(span, predicted)
-        leaked_lengths.append(max(span.length - covered, 0))
+    leakage_tallies = [
+        _invert_grapheme_tally(_grapheme_coverage_tally(span, predicted))
+        for span in gold
+    ]
+    return _leakage_metrics_from_tallies(gold, leakage_tallies)
 
-    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+
+def compute_mixed_script_leakage(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING,
+    pre_defense_baseline: float | None = None,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> MixedScriptLeakageMetrics:
+    """Compute grapheme-cluster leakage and apply the evasion ceiling."""
+
+    if not 0.0 <= ceiling <= 1.0:
+        raise ValueError("mixed-script leakage ceiling must be between 0 and 1")
+    if pre_defense_baseline is not None and not 0.0 <= pre_defense_baseline <= 1.0:
+        raise ValueError("pre-defense leakage baseline must be between 0 and 1")
+    leakage = compute_leakage_rate(
+        gold_spans,
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    return MixedScriptLeakageMetrics(
+        leakage=leakage,
+        ceiling=ceiling,
+        pre_defense_baseline=pre_defense_baseline,
+    )
 
 
 def compute_extraction_reemission_leakage(
@@ -648,7 +762,7 @@ def compute_extraction_reemission_leakage(
     values, concept text, evidence spans, and FHIR-style resources. A gold PHI
     span is counted as leaked when its surface form is re-emitted in an output
     field or when an explicit output offset overlaps that gold span. Counts use
-    the same character-weighted numerator and denominator as
+    the same grapheme-weighted numerator and denominator as
     :func:`compute_leakage_rate`.
     """
     gold = normalize_eval_spans(
@@ -674,16 +788,16 @@ def compute_extraction_reemission_leakage(
             if overlap_start < overlap_end:
                 leaked_intervals[span_index].append((overlap_start, overlap_end))
 
-    leaked_lengths = [
-        _merged_interval_length(leaked_intervals.get(index, ()))
-        for index, _span in enumerate(gold)
+    leakage_tallies = [
+        _grapheme_overlap_tally(span, leaked_intervals.get(index, ()))
+        for index, span in enumerate(gold)
     ]
-    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+    return _leakage_metrics_from_tallies(gold, leakage_tallies)
 
 
-def _leakage_metrics_from_lengths(
+def _leakage_metrics_from_tallies(
     gold: Sequence[EvalSpan],
-    leaked_lengths: Sequence[int],
+    tallies: Sequence[_GraphemeTally],
 ) -> LeakageMetrics:
     leaked_by_label: defaultdict[str, int] = defaultdict(int)
     total_by_label: defaultdict[str, int] = defaultdict(int)
@@ -691,25 +805,32 @@ def _leakage_metrics_from_lengths(
     total_by_language: defaultdict[str, int] = defaultdict(int)
     leaked_by_device: defaultdict[str, int] = defaultdict(int)
     total_by_device: defaultdict[str, int] = defaultdict(int)
+    leaked_by_script: defaultdict[str, int] = defaultdict(int)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
 
     total_chars = 0
     leaked_chars = 0
-    for span, raw_leaked in zip(gold, leaked_lengths):
-        leaked = min(max(int(raw_leaked), 0), span.length)
-        total_chars += span.length
+    for span, tally in zip(gold, tallies):
+        leaked = min(max(int(tally.matched), 0), tally.total)
+        total_chars += tally.total
         leaked_chars += leaked
-        total_by_label[span.label] += span.length
+        total_by_label[span.label] += tally.total
         leaked_by_label[span.label] += leaked
-        total_by_language[span.language] += span.length
+        total_by_language[span.language] += tally.total
         leaked_by_language[span.language] += leaked
-        total_by_device[span.device] += span.length
+        total_by_device[span.device] += tally.total
         leaked_by_device[span.device] += leaked
+        for script, total in tally.total_by_script.items():
+            total_by_script[script] += int(total)
+        for script, script_leaked in tally.matched_by_script.items():
+            leaked_by_script[script] += int(script_leaked)
 
     label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, leaked_by_label)
     language_keys = _slice_keys(
         SUPPORTED_LANGUAGES, total_by_language, leaked_by_language
     )
     device_keys = _slice_keys(DEVICE_TIERS, total_by_device, leaked_by_device)
+    script_keys = tuple(sorted(set(total_by_script) | set(leaked_by_script)))
 
     return LeakageMetrics(
         overall=_safe_rate(leaked_chars, total_chars, zero_denominator=0.0),
@@ -718,6 +839,12 @@ def _leakage_metrics_from_lengths(
             language_keys, leaked_by_language, total_by_language, 0.0
         ),
         by_device=_rate_map(device_keys, leaked_by_device, total_by_device, 0.0),
+        by_script=_rate_map(
+            script_keys,
+            leaked_by_script,
+            total_by_script,
+            0.0,
+        ),
         leaked_chars=leaked_chars,
         total_chars=total_chars,
         leaked_chars_by_label=_count_map(label_keys, leaked_by_label),
@@ -726,6 +853,8 @@ def _leakage_metrics_from_lengths(
         total_chars_by_language=_count_map(language_keys, total_by_language),
         leaked_chars_by_device=_count_map(device_keys, leaked_by_device),
         total_chars_by_device=_count_map(device_keys, total_by_device),
+        leaked_chars_by_script=_count_map(script_keys, leaked_by_script),
+        total_chars_by_script=_count_map(script_keys, total_by_script),
     )
 
 
@@ -737,7 +866,7 @@ def compute_character_recall(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> RateMetric:
-    """Compute label-aware character recall over gold PHI spans."""
+    """Compute label-aware grapheme-cluster recall over gold PHI spans."""
     gold = normalize_eval_spans(
         gold_spans,
         default_language=default_language,
@@ -750,8 +879,9 @@ def compute_character_recall(
         default_device=default_device,
         source_text=source_text,
     )
-    total_chars = sum(span.length for span in gold)
-    covered_chars = sum(_covered_char_count(span, predicted) for span in gold)
+    tallies = [_grapheme_coverage_tally(span, predicted) for span in gold]
+    total_chars = sum(tally.total for tally in tallies)
+    covered_chars = sum(tally.matched for tally in tallies)
     return RateMetric(
         rate=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
         numerator=covered_chars,
@@ -767,7 +897,7 @@ def compute_recall_slices(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> RecallSlices:
-    """Compute character recall sliced by canonical labels, languages, devices."""
+    """Compute grapheme recall sliced by label, language, device, and script."""
     gold = normalize_eval_spans(
         gold_spans,
         default_language=default_language,
@@ -787,25 +917,33 @@ def compute_recall_slices(
     total_by_language: defaultdict[str, int] = defaultdict(int)
     covered_by_device: defaultdict[str, int] = defaultdict(int)
     total_by_device: defaultdict[str, int] = defaultdict(int)
+    covered_by_script: defaultdict[str, int] = defaultdict(int)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
 
     total_chars = 0
     covered_chars = 0
     for span in gold:
-        covered = _covered_char_count(span, predicted)
-        total_chars += span.length
+        tally = _grapheme_coverage_tally(span, predicted)
+        covered = tally.matched
+        total_chars += tally.total
         covered_chars += covered
-        total_by_label[span.label] += span.length
+        total_by_label[span.label] += tally.total
         covered_by_label[span.label] += covered
-        total_by_language[span.language] += span.length
+        total_by_language[span.language] += tally.total
         covered_by_language[span.language] += covered
-        total_by_device[span.device] += span.length
+        total_by_device[span.device] += tally.total
         covered_by_device[span.device] += covered
+        for script, total in tally.total_by_script.items():
+            total_by_script[script] += int(total)
+        for script, script_covered in tally.matched_by_script.items():
+            covered_by_script[script] += int(script_covered)
 
     label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, covered_by_label)
     language_keys = _slice_keys(
         SUPPORTED_LANGUAGES, total_by_language, covered_by_language
     )
     device_keys = _slice_keys(DEVICE_TIERS, total_by_device, covered_by_device)
+    script_keys = tuple(sorted(set(total_by_script) | set(covered_by_script)))
 
     return RecallSlices(
         overall=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
@@ -814,8 +952,16 @@ def compute_recall_slices(
             language_keys, covered_by_language, total_by_language, 1.0
         ),
         by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
+        by_script=_rate_map(
+            script_keys,
+            covered_by_script,
+            total_by_script,
+            1.0,
+        ),
         covered_chars=covered_chars,
         total_chars=total_chars,
+        covered_chars_by_script=_count_map(script_keys, covered_by_script),
+        total_chars_by_script=_count_map(script_keys, total_by_script),
     )
 
 
@@ -2100,6 +2246,117 @@ def _safe_rate(
     return float(numerator) / float(denominator)
 
 
+_RADIOLOGY_SECTION_KEYS = ("findings", "impression", "recommendation")
+
+
+def _normalize_section_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
+
+
+def section_boundary_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+    *,
+    section_keys: Sequence[str] = _RADIOLOGY_SECTION_KEYS,
+) -> RateMetric:
+    """Fraction of report sections whose predicted text matches the gold text.
+
+    ``predicted`` and ``gold`` are parallel iterables of per-report mappings,
+    each carrying ``<section>_text`` keys (e.g. ``findings_text``). Text is
+    whitespace-normalized before comparison so segmentation is scored, not
+    incidental spacing. Parser-agnostic: callers pass already-parsed sections.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        for key in section_keys:
+            total += 1
+            field = f"{key}_text"
+            if _normalize_section_text(
+                predicted_row.get(field)
+            ) == _normalize_section_text(gold_row.get(field)):
+                correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
+def stated_category_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> RateMetric:
+    """Fraction of reports whose stated ``(system, category)`` matches the gold.
+
+    A report with no stated category (both ``None``) counts as correct only when
+    the gold also has none, so inferring a category where none is written is
+    penalized. Parser-agnostic: callers pass already-parsed rows carrying
+    ``assessment_system`` and ``assessment_category``.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        predicted_pair = (
+            predicted_row.get("assessment_system"),
+            predicted_row.get("assessment_category"),
+        )
+        gold_pair = (
+            gold_row.get("assessment_system"),
+            gold_row.get("assessment_category"),
+        )
+        if predicted_pair == gold_pair:
+            correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
+_RADIOLOGY_FINDING_TUPLE_FIELDS = (
+    "finding",
+    "laterality",
+    "size_value",
+    "size_unit",
+    "location",
+)
+
+
+def _radiology_finding_tuple(item: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Return the deterministic evaluation key for one radiology finding."""
+    return tuple(item.get(field) for field in _RADIOLOGY_FINDING_TUPLE_FIELDS)
+
+
+def radiology_finding_tuple_f1(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> F1Metrics:
+    """Compute exact tuple precision, recall, and F1 for radiology findings.
+
+    A match requires equality of ``(finding, laterality, size_value,
+    size_unit, location)``. ``radlex_code`` and provenance are deliberately
+    excluded: callers may use different caller-supplied terminology mappings
+    and source offsets while agreeing on the extracted clinical attributes.
+    Duplicate tuples are counted with multiset semantics.
+    """
+    predicted_counts: dict[tuple[Any, ...], int] = defaultdict(int)
+    gold_counts: dict[tuple[Any, ...], int] = defaultdict(int)
+    for item in predicted:
+        predicted_counts[_radiology_finding_tuple(item)] += 1
+    for item in gold:
+        gold_counts[_radiology_finding_tuple(item)] += 1
+    true_positives = sum(
+        min(count, gold_counts.get(key, 0)) for key, count in predicted_counts.items()
+    )
+    return _f1_from_counts(
+        true_positives,
+        sum(predicted_counts.values()),
+        sum(gold_counts.values()),
+    )
+
+
 def _bounded_unit_interval(value: Any, field_name: str) -> float:
     result = float(value)
     if not isfinite(result) or not 0.0 <= result <= 1.0:
@@ -2169,6 +2426,18 @@ def _overlap_len(a: EvalSpan, b: EvalSpan) -> int:
 
 
 def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> int:
+    """Return fully covered graphemes (legacy private helper name)."""
+    return _grapheme_coverage_tally(gold_span, predicted).matched
+
+
+def _grapheme_count(gold_span: EvalSpan) -> int:
+    return len(_grapheme_units(gold_span))
+
+
+def _grapheme_coverage_tally(
+    gold_span: EvalSpan,
+    predicted: Sequence[EvalSpan],
+) -> _GraphemeTally:
     intervals: list[tuple[int, int]] = []
     for pred_span in predicted:
         if not _label_aware_overlap(gold_span, pred_span):
@@ -2177,7 +2446,98 @@ def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> i
         end = min(gold_span.end, pred_span.end)
         if start < end:
             intervals.append((start, end))
-    return _merged_interval_length(intervals)
+    merged = _merge_intervals(intervals)
+    units = _grapheme_units(gold_span)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
+    covered_by_script: defaultdict[str, int] = defaultdict(int)
+    covered = 0
+    for start, end, script in units:
+        total_by_script[script] += 1
+        if any(left <= start and end <= right for left, right in merged):
+            covered += 1
+            covered_by_script[script] += 1
+    return _GraphemeTally(
+        matched=covered,
+        total=len(units),
+        matched_by_script=dict(covered_by_script),
+        total_by_script=dict(total_by_script),
+    )
+
+
+def _grapheme_overlap_tally(
+    gold_span: EvalSpan,
+    intervals: Sequence[tuple[int, int]],
+) -> _GraphemeTally:
+    merged = _merge_intervals(intervals)
+    units = _grapheme_units(gold_span)
+    total_by_script: defaultdict[str, int] = defaultdict(int)
+    leaked_by_script: defaultdict[str, int] = defaultdict(int)
+    leaked = 0
+    for start, end, script in units:
+        total_by_script[script] += 1
+        if any(max(start, left) < min(end, right) for left, right in merged):
+            leaked += 1
+            leaked_by_script[script] += 1
+    return _GraphemeTally(
+        matched=leaked,
+        total=len(units),
+        matched_by_script=dict(leaked_by_script),
+        total_by_script=dict(total_by_script),
+    )
+
+
+def _invert_grapheme_tally(tally: _GraphemeTally) -> _GraphemeTally:
+    scripts = set(tally.total_by_script) | set(tally.matched_by_script)
+    return _GraphemeTally(
+        matched=max(tally.total - tally.matched, 0),
+        total=tally.total,
+        matched_by_script={
+            script: max(
+                int(tally.total_by_script.get(script, 0))
+                - int(tally.matched_by_script.get(script, 0)),
+                0,
+            )
+            for script in scripts
+        },
+        total_by_script=dict(tally.total_by_script),
+    )
+
+
+def _grapheme_units(gold_span: EvalSpan) -> list[tuple[int, int, str]]:
+    surface = gold_span.text
+    if not surface or len(surface) != gold_span.length:
+        return [
+            (offset, offset + 1, UNKNOWN_SCRIPT)
+            for offset in range(gold_span.start, gold_span.end)
+        ]
+
+    script_runs = tuple(segment_by_script(surface))
+    units: list[tuple[int, int, str]] = []
+    for local_start, local_end in iter_grapheme_cluster_spans(surface):
+        script = _script_for_grapheme(local_start, local_end, script_runs)
+        units.append(
+            (
+                gold_span.start + local_start,
+                gold_span.start + local_end,
+                script,
+            )
+        )
+    return units
+
+
+def _script_for_grapheme(
+    start: int,
+    end: int,
+    script_runs: Sequence[tuple[int, int, str]],
+) -> str:
+    overlaps = [
+        (max(0, min(end, run_end) - max(start, run_start)), -run_start, script)
+        for run_start, run_end, script in script_runs
+        if max(start, run_start) < min(end, run_end)
+    ]
+    if not overlaps:
+        return UNKNOWN_SCRIPT
+    return max(overlaps)[2]
 
 
 _OFFSET_START_KEYS = (
@@ -2346,8 +2706,12 @@ def _surface_boundaries_match(
 
 
 def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
-    if not intervals:
-        return 0
+    return sum(end - start for start, end in _merge_intervals(intervals))
+
+
+def _merge_intervals(
+    intervals: Sequence[tuple[int, int]],
+) -> list[tuple[int, int]]:
     merged: list[tuple[int, int]] = []
     for start, end in sorted(intervals):
         if not merged or start > merged[-1][1]:
@@ -2355,7 +2719,7 @@ def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
         else:
             old_start, old_end = merged[-1]
             merged[-1] = (old_start, max(old_end, end))
-    return sum(end - start for start, end in merged)
+    return merged
 
 
 def _positions_for_spans(spans: Sequence[EvalSpan]) -> set[int]:
@@ -2449,6 +2813,213 @@ def relation_assertion_consistency(
     )
 
 
+# ---------------------------------------------------------------------------
+# Inter-annotator agreement
+# ---------------------------------------------------------------------------
+
+#: Category assigned to an item an annotator did not label.
+_UNLABELED = "∅"  # empty-set symbol
+
+
+@dataclass(frozen=True)
+class InterAnnotatorAgreement:
+    """Agreement across two or more annotators on an extraction gold set.
+
+    ``cohen_kappa`` is populated for exactly two annotators; ``fleiss_kappa`` for
+    three or more. ``disagreements`` carries offsets and labels only -- never raw
+    clinical text.
+    """
+
+    n_annotators: int
+    n_items: int
+    cohen_kappa: float | None
+    fleiss_kappa: float | None
+    mean_span_f1: float
+    per_label: Mapping[str, float]
+    per_relation: Mapping[str, float]
+    disagreements: tuple[Mapping[str, Any], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "n_annotators": self.n_annotators,
+            "n_items": self.n_items,
+            "cohen_kappa": self.cohen_kappa,
+            "fleiss_kappa": self.fleiss_kappa,
+            "mean_span_f1": self.mean_span_f1,
+            "per_label": dict(self.per_label),
+            "per_relation": dict(self.per_relation),
+            "disagreements": [
+                {"offset": list(item["offset"]), "labels": list(item["labels"])}
+                for item in self.disagreements
+            ],
+        }
+
+
+def _coerce_annotation(span: Any) -> tuple[int, int, str]:
+    """Coerce a span (tuple or ``EvalSpan``) to ``(start, end, label)``."""
+
+    if isinstance(span, EvalSpan):
+        return span.start, span.end, span.label
+    if isinstance(span, Mapping):
+        return int(span["start"]), int(span["end"]), str(span["label"])
+    start, end, label = span
+    return int(start), int(end), str(label)
+
+
+def _annotation_map(annotator: Iterable[Any]) -> dict[tuple[int, int], str]:
+    return {(s, e): label for s, e, label in map(_coerce_annotation, annotator)}
+
+
+def _aligned_categories(
+    annotators: Sequence[Iterable[Any]],
+) -> tuple[list[tuple[int, int]], list[list[str]]]:
+    """Return the sorted item universe and the per-item annotator categories."""
+
+    maps = [_annotation_map(annotator) for annotator in annotators]
+    items = sorted({offset for mapping in maps for offset in mapping})
+    rows = [[mapping.get(item, _UNLABELED) for mapping in maps] for item in items]
+    return items, rows
+
+
+def _kappa_from_agreement(observed: float, expected: float) -> float:
+    if expected >= 1.0:
+        return 1.0
+    return (observed - expected) / (1.0 - expected)
+
+
+def cohen_kappa_agreement(*annotators: Iterable[Any]) -> float:
+    """Cohen kappa between exactly two annotators over offset-aligned labels."""
+
+    if len(annotators) != 2:
+        raise ValueError("cohen_kappa_agreement requires exactly two annotators")
+    items, rows = _aligned_categories(annotators)
+    if not items:
+        return 1.0
+
+    total = len(rows)
+    observed = sum(1 for a, b in rows if a == b) / total
+    first = defaultdict(float)
+    second = defaultdict(float)
+    for a, b in rows:
+        first[a] += 1 / total
+        second[b] += 1 / total
+    expected = sum(first[c] * second[c] for c in set(first) | set(second))
+    return _kappa_from_agreement(observed, expected)
+
+
+def fleiss_kappa_agreement(annotators: Sequence[Iterable[Any]]) -> float:
+    """Fleiss kappa across three or more annotators over offset-aligned labels."""
+
+    if len(annotators) < 3:
+        raise ValueError("fleiss_kappa_agreement requires at least three annotators")
+    items, rows = _aligned_categories(annotators)
+    if not items:
+        return 1.0
+
+    n_items = len(rows)
+    n_raters = len(annotators)
+    categories = {category for row in rows for category in row}
+
+    agreement_sum = 0.0
+    category_totals = defaultdict(int)
+    for row in rows:
+        counts = defaultdict(int)
+        for category in row:
+            counts[category] += 1
+            category_totals[category] += 1
+        agreement_sum += (
+            sum(count * count for count in counts.values()) - n_raters
+        ) / (n_raters * (n_raters - 1))
+
+    mean_agreement = agreement_sum / n_items
+    expected = sum((category_totals[c] / (n_items * n_raters)) ** 2 for c in categories)
+    return _kappa_from_agreement(mean_agreement, expected)
+
+
+def _mean_pairwise_span_f1(annotators: Sequence[Iterable[Any]]) -> float:
+    coerced = [
+        [
+            EvalSpan(start=s, end=e, label=label)
+            for s, e, label in map(_coerce_annotation, annotator)
+        ]
+        for annotator in annotators
+    ]
+    scores: list[float] = []
+    for i in range(len(coerced)):
+        for j in range(i + 1, len(coerced)):
+            scores.append(compute_relaxed_span_f1(coerced[i], coerced[j]).f1)
+    return sum(scores) / len(scores) if scores else 1.0
+
+
+def _label_agreement(items: Sequence[tuple[int, int]], rows: Sequence[Sequence[str]]):
+    """Per-label observed agreement over items involving that label."""
+
+    involved = defaultdict(list)
+    for item, row in zip(items, rows):
+        agreed = all(category == row[0] for category in row)
+        for label in set(row) - {_UNLABELED}:
+            involved[label].append(1.0 if agreed else 0.0)
+    return {
+        label: sum(involved[label]) / len(involved[label]) for label in sorted(involved)
+    }
+
+
+def inter_annotator_agreement(
+    annotators: Sequence[Iterable[Any]],
+    *,
+    relations: Sequence[Mapping[str, Iterable[Any]]] | None = None,
+) -> InterAnnotatorAgreement:
+    """Compute inter-annotator agreement over an extraction gold set.
+
+    ``annotators`` is one span set per annotator (tuples ``(start, end, label)``
+    or ``EvalSpan``). With two annotators Cohen kappa is reported; with three or
+    more, Fleiss kappa. ``relations`` optionally supplies, per annotator, a
+    mapping of relation type to its labeled spans for per-relation agreement.
+    """
+
+    if len(annotators) < 2:
+        raise ValueError("inter_annotator_agreement requires at least two annotators")
+    if relations is not None and len(relations) != len(annotators):
+        raise ValueError("relations must contain one mapping per annotator")
+
+    materialized = [tuple(annotator) for annotator in annotators]
+    items, rows = _aligned_categories(materialized)
+    n_annotators = len(materialized)
+
+    cohen = cohen_kappa_agreement(*materialized) if n_annotators == 2 else None
+    fleiss = fleiss_kappa_agreement(materialized) if n_annotators >= 3 else None
+
+    disagreements = tuple(
+        {"offset": item, "labels": tuple(sorted(set(row) - {_UNLABELED}))}
+        for item, row in zip(items, rows)
+        if any(category != row[0] for category in row)
+    )
+
+    per_relation: dict[str, float] = {}
+    if relations is not None:
+        relation_types = {rt for mapping in relations for rt in mapping}
+        for relation_type in sorted(relation_types):
+            _rel_items, rel_rows = _aligned_categories(
+                [mapping.get(relation_type, []) for mapping in relations]
+            )
+            if not rel_rows:
+                continue
+            per_relation[relation_type] = sum(
+                1 for row in rel_rows if all(c == row[0] for c in row)
+            ) / len(rel_rows)
+
+    return InterAnnotatorAgreement(
+        n_annotators=n_annotators,
+        n_items=len(items),
+        cohen_kappa=cohen,
+        fleiss_kappa=fleiss,
+        mean_span_f1=_mean_pairwise_span_f1(materialized),
+        per_label=_label_agreement(items, rows),
+        per_relation=per_relation,
+        disagreements=disagreements,
+    )
+
+
 __all__ = [
     "ABSTENTION_ROUTE_ACCEPT",
     "ABSTENTION_ROUTE_REDACT",
@@ -2459,6 +3030,7 @@ __all__ = [
     "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
     "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
+    "MIXED_SCRIPT_LEAKAGE_CEILING",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
@@ -2467,6 +3039,7 @@ __all__ = [
     "RateMetric",
     "F1Metrics",
     "LeakageMetrics",
+    "MixedScriptLeakageMetrics",
     "RecallSlices",
     "ConsistencyMetric",
     "LatencyMetrics",
@@ -2479,10 +3052,14 @@ __all__ = [
     "normalize_eval_spans",
     "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
+    "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
+    "section_boundary_accuracy",
+    "stated_category_accuracy",
+    "radiology_finding_tuple_f1",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
@@ -2505,4 +3082,8 @@ __all__ = [
     "apply_abstention_policy",
     "bootstrap_abstention_residual_risk",
     "relation_assertion_consistency",
+    "InterAnnotatorAgreement",
+    "cohen_kappa_agreement",
+    "fleiss_kappa_agreement",
+    "inter_annotator_agreement",
 ]

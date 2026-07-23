@@ -9,6 +9,7 @@ import pytest
 
 from openmed.cli import main_module
 from openmed.core.audit import AuditReport, AuditSpan, DetectorInfo, hash_text
+from openmed.core.audit_chain import AuditChain
 
 
 def _audit_report() -> AuditReport:
@@ -140,6 +141,93 @@ def test_audit_verify_fails_for_tampered_report(
     assert "Audit report verification: FAIL" in output
     assert "Reproducibility hash: FAIL" in output
     assert "HMAC signature: FAIL" in output
+
+
+def test_audit_verify_auto_detects_a_valid_chain(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chain_path = tmp_path / "audit-chain.json"
+    chain = AuditChain()
+    chain.append(_audit_report())
+    chain.write(chain_path)
+
+    result = main_module.main(["audit", "verify", str(chain_path)])
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "Audit chain verification: PASS" in output
+    assert "Entries checked: 1" in output
+
+
+def test_audit_verify_chain_checks_signed_report_membership(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = _audit_report().sign("release-key", key_id="unit")
+    report_path = tmp_path / "audit.json"
+    chain_path = tmp_path / "audit-chain.json"
+    _write_report(report_path, report)
+    chain = AuditChain()
+    chain.append(report)
+    chain.write(chain_path)
+
+    result = main_module.main(
+        [
+            "audit",
+            "verify-chain",
+            str(chain_path),
+            "--report",
+            str(report_path),
+            "--key",
+            "release-key",
+        ]
+    )
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "Audit chain verification: PASS" in output
+    assert "Audit report verification: PASS" in output
+    assert "Audit report chain membership: PASS" in output
+
+
+def test_audit_verify_chain_reports_tampering_reason(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chain = AuditChain()
+    chain.append(_audit_report())
+    payload = chain.to_dict()
+    payload["head_hash"] = hash_text("wrong head")
+    chain_path = tmp_path / "audit-chain.json"
+    chain_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = main_module.main(["audit", "verify-chain", str(chain_path)])
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "Audit chain verification: FAIL" in output
+    assert "Reason:" in output
+    assert "retained head hash" in output
+
+
+def test_audit_verify_chain_json_uses_one_success_envelope(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chain_path = tmp_path / "audit-chain.json"
+    chain = AuditChain()
+    chain.append(_audit_report())
+    chain.write(chain_path)
+
+    result = main_module.main(["audit", "verify-chain", str(chain_path), "--json"])
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "audit verify-chain"
+    assert payload["data"]["verified"] is True
+    assert payload["data"]["chain"]["entries_checked"] == 1
 
 
 def test_audit_show_prints_phi_safe_summary(

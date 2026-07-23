@@ -4,22 +4,32 @@ The helpers in this module are intentionally lightweight and stdlib-only. They
 use explicit Unicode block ranges plus :mod:`unicodedata` character categories
 to identify dominant scripts and preserve exact offsets while segmenting text
 into script-oriented runs.
+
+The curated confusable mappings are derived from Unicode UTS #39
+``confusables.txt`` version 17.0.0. Unicode data files are distributed under
+the Unicode License v3 (SPDX: ``Unicode-3.0``). The full data file is not
+embedded: only mappings needed for the supported Latin/Cyrillic/Greek/CJK PII
+evasion defense are retained.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import unicodedata
 import warnings
 from collections.abc import Iterator
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import NoReturn
 
-logger = logging.getLogger(__name__)
+from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
 UNKNOWN_SCRIPT = "Unknown"
+
+logger = logging.getLogger(__name__)
 
 MAX_INGESTION_BYTES = 16 * 1024 * 1024
 
@@ -47,34 +57,78 @@ _INGESTION_ENCODING_ALIASES = {
 }
 ALLOWED_INGESTION_ENCODINGS = frozenset(_INGESTION_ENCODING_ALIASES.values())
 
+CJK_SCRIPTS = frozenset({"Han", "Hiragana/Katakana", "Hangul"})
+INDIC_SCRIPTS = frozenset(
+    {
+        "Devanagari",
+        "Bengali",
+        "Gurmukhi",
+        "Gujarati",
+        "Odia",
+        "Tamil",
+        "Telugu",
+        "Kannada",
+        "Malayalam",
+    }
+)
+CONFUSABLE_DATA_VERSION = "17.0.0"
+CONFUSABLE_DATA_URL = "https://www.unicode.org/Public/17.0.0/security/confusables.txt"
+CONFUSABLE_DATA_LICENSE = "Unicode-3.0"
+
+
+class ChineseScriptVariant(str, Enum):
+    """Estimated Chinese character variant used in a text."""
+
+    SIMPLIFIED = "simplified"
+    TRADITIONAL = "traditional"
+    MIXED = "mixed"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class ChineseScriptEstimate:
+    """Ratio-based Simplified/Traditional estimate for synthetic text."""
+
+    variant: ChineseScriptVariant
+    simplified_count: int
+    traditional_count: int
+    simplified_ratio: float
+    traditional_ratio: float
+
+    @property
+    def script(self) -> ChineseScriptVariant:
+        """Alias for the estimated predominant variant."""
+
+        return self.variant
+
+    @property
+    def mixed(self) -> bool:
+        """Return whether both Simplified and Traditional evidence appears."""
+
+        return self.simplified_count > 0 and self.traditional_count > 0
+
+
 SUPPORTED_SCRIPTS = (
     "Latin",
     "Arabic",
+    "Ethiopic",
     "Han",
     "Hiragana/Katakana",
     "Hangul",
     "Cyrillic",
     "Devanagari",
+    "Bengali",
+    "Gurmukhi",
+    "Gujarati",
+    "Odia",
+    "Tamil",
     "Telugu",
+    "Kannada",
+    "Malayalam",
     "Greek",
     "Hebrew",
     "Thai",
 )
-
-SCRIPT_LANGUAGE_HINTS: dict[str, tuple[str, ...]] = {
-    "Latin": ("en", "fr", "de", "it", "es", "nl", "pt", "tr"),
-    "Arabic": ("ar",),
-    "Han": ("ja",),
-    "Hiragana/Katakana": ("ja",),
-    "Hangul": ("ko",),
-    "Cyrillic": ("en",),
-    "Devanagari": ("hi",),
-    "Telugu": ("te",),
-    "Greek": ("en",),
-    "Hebrew": ("en",),
-    "Thai": ("en",),
-    UNKNOWN_SCRIPT: ("en",),
-}
 
 ZERO_WIDTH_CHARS = frozenset(
     {
@@ -128,7 +182,289 @@ _CONFUSABLE_FOLD: dict[str, str] = {
     "\u0441": "c",
     "\u0445": "x",
     "\u0456": "i",
+    "\u3007": "O",
 }
+
+INDIAN_NAME_LANGUAGES = frozenset({"hi", "ta"})
+INDIAN_NAME_SCRIPTS = frozenset({"Devanagari", "Tamil"})
+
+_DEVANAGARI_CONSONANTS = {
+    "क": "k",
+    "ख": "kh",
+    "ग": "g",
+    "घ": "gh",
+    "ङ": "n",
+    "च": "ch",
+    "छ": "chh",
+    "ज": "j",
+    "झ": "jh",
+    "ञ": "n",
+    "ट": "t",
+    "ठ": "th",
+    "ड": "d",
+    "ढ": "dh",
+    "ण": "n",
+    "त": "t",
+    "थ": "th",
+    "द": "d",
+    "ध": "dh",
+    "न": "n",
+    "प": "p",
+    "फ": "ph",
+    "ब": "b",
+    "भ": "bh",
+    "म": "m",
+    "य": "y",
+    "र": "r",
+    "ल": "l",
+    "व": "v",
+    "श": "sh",
+    "ष": "sh",
+    "स": "s",
+    "ह": "h",
+    "क़": "k",
+    "ख़": "kh",
+    "ग़": "g",
+    "ज़": "j",
+    "ड़": "d",
+    "ढ़": "dh",
+    "फ़": "f",
+}
+_DEVANAGARI_VOWELS = {
+    "अ": "a",
+    "आ": "aa",
+    "इ": "i",
+    "ई": "ii",
+    "उ": "u",
+    "ऊ": "uu",
+    "ऋ": "r",
+    "ए": "e",
+    "ऐ": "ai",
+    "ओ": "o",
+    "औ": "au",
+}
+_DEVANAGARI_VOWEL_SIGNS = {
+    "ा": "aa",
+    "ि": "i",
+    "ी": "ii",
+    "ु": "u",
+    "ू": "uu",
+    "ृ": "r",
+    "े": "e",
+    "ै": "ai",
+    "ो": "o",
+    "ौ": "au",
+}
+
+_TAMIL_CONSONANTS = {
+    "க": "k",
+    "ங": "n",
+    "ச": "s",
+    "ஞ": "n",
+    "ட": "t",
+    "ண": "n",
+    "த": "t",
+    "ந": "n",
+    "ப": "p",
+    "ம": "m",
+    "ய": "y",
+    "ர": "r",
+    "ல": "l",
+    "வ": "v",
+    "ழ": "l",
+    "ள": "l",
+    "ற": "r",
+    "ன": "n",
+    "ஜ": "j",
+    "ஷ": "sh",
+    "ஸ": "s",
+    "ஹ": "h",
+}
+_TAMIL_VOWELS = {
+    "அ": "a",
+    "ஆ": "aa",
+    "இ": "i",
+    "ஈ": "ii",
+    "உ": "u",
+    "ஊ": "uu",
+    "எ": "e",
+    "ஏ": "e",
+    "ஐ": "ai",
+    "ஒ": "o",
+    "ஓ": "o",
+    "ஔ": "au",
+}
+_TAMIL_VOWEL_SIGNS = {
+    "ா": "aa",
+    "ி": "i",
+    "ீ": "ii",
+    "ு": "u",
+    "ூ": "uu",
+    "ெ": "e",
+    "ே": "e",
+    "ை": "ai",
+    "ொ": "o",
+    "ோ": "o",
+    "ௌ": "au",
+}
+
+_DEVANAGARI_RENDER_CONSONANTS = {
+    "kh": "ख",
+    "gh": "घ",
+    "ch": "च",
+    "jh": "झ",
+    "th": "थ",
+    "dh": "ध",
+    "ph": "फ",
+    "bh": "भ",
+    "sh": "श",
+    "k": "क",
+    "g": "ग",
+    "c": "च",
+    "j": "ज",
+    "t": "त",
+    "d": "द",
+    "n": "न",
+    "p": "प",
+    "b": "ब",
+    "m": "म",
+    "y": "य",
+    "r": "र",
+    "l": "ल",
+    "v": "व",
+    "w": "व",
+    "s": "स",
+    "h": "ह",
+    "f": "फ",
+    "q": "क",
+    "x": "क्स",
+    "z": "ज",
+}
+_DEVANAGARI_RENDER_VOWELS = {
+    "a": ("अ", ""),
+    "i": ("इ", "ि"),
+    "u": ("उ", "ु"),
+    "e": ("ए", "े"),
+    "o": ("ओ", "ो"),
+    "ai": ("ऐ", "ै"),
+    "au": ("औ", "ौ"),
+}
+
+_TAMIL_RENDER_CONSONANTS = {
+    "kh": "க",
+    "gh": "க",
+    "ch": "ச",
+    "jh": "ஜ",
+    "th": "த",
+    "dh": "த",
+    "ph": "ப",
+    "bh": "ப",
+    "sh": "ஷ",
+    "k": "க",
+    "g": "க",
+    "c": "ச",
+    "j": "ஜ",
+    "t": "த",
+    "d": "த",
+    "n": "ந",
+    "p": "ப",
+    "b": "ப",
+    "m": "ம",
+    "y": "ய",
+    "r": "ர",
+    "l": "ல",
+    "v": "வ",
+    "w": "வ",
+    "s": "ஸ",
+    "h": "ஹ",
+    "f": "ஃப",
+    "q": "க",
+    "x": "க்ஸ",
+    "z": "ஜ",
+}
+_TAMIL_RENDER_VOWELS = {
+    "a": ("அ", ""),
+    "i": ("இ", "ி"),
+    "u": ("உ", "ு"),
+    "e": ("எ", "ெ"),
+    "o": ("ஒ", "ொ"),
+    "ai": ("ஐ", "ை"),
+    "au": ("ஔ", "ௌ"),
+}
+
+_PHONETIC_VOWEL_FOLDS = (
+    ("ee", "i"),
+    ("ii", "i"),
+    ("oo", "u"),
+    ("uu", "u"),
+    ("aa", "a"),
+)
+
+
+@dataclass(frozen=True)
+class MixedScriptSpan:
+    """An identifier-like source span containing more than one script."""
+
+    start: int
+    end: int
+    scripts: tuple[str, ...]
+    confusable_count: int = 0
+    invisible_count: int = 0
+
+    def to_metadata(self) -> dict[str, object]:
+        """Return a raw-text-free representation suitable for audit metadata."""
+        return {
+            "confusable_count": self.confusable_count,
+            "end": self.end,
+            "invisible_count": self.invisible_count,
+            "scripts": list(self.scripts),
+            "start": self.start,
+        }
+
+
+# Unicode assigns both Simplified and Traditional Han characters to the same
+# script blocks. These curated, common one-sided variants provide deterministic
+# evidence without bundling a language model or copying OpenCC dictionaries.
+_SIMPLIFIED_VARIANT_RAW = frozenset(
+    "头药医门发后里网软台历叶万与东丝两严个临为乐书买乱云产亲仅从仓们"
+    "众会体余传伤伦儿兰关兴养写军农冲决况冻净减几凤击刘创别动务华"
+    "单卫厂厅压厌县双变号听员园圆场声处复备够夹夺奖妇妈孙学宁宝实"
+    "审宽对寻导将层岁岛岭帐帮广庄庆库应开张归当录忆怀总态恋恶惊惯"
+    "愿护报担拟拥拦拨择挂挤挥损换据摆敌数无旧时显晓术机杀杂权条来"
+    "杨极构枪柜树样档桥梦检欢欧残气汉汤沟泪泻泽洁浅测济浓涛涡润涨"
+    "湿滚满滤灭灯灵点炼热爱爷牵状犹独狮猫猪环现电画疗疮疯痒瘫盘盐"
+    "监盖盗矿码砖确础礼祷离种积称稳穷窍竞笔笼筑签简粮紧红纤约级纪"
+    "纯线练组细织终经结给络绝统绢继续绿编缘缝罗罚翘职联聪肃肠肤肿"
+    "胀胜胶脉脏脑脸艺节芜苹范茧荐荡荣莱莲获营萧萨蓝虑虚虫虽虾蚁蚕"
+    "补装见观规视览觉触计订认讲许论设访证评诉诊词译试诗诚话该详语"
+    "误说请诸读课调谈谢谣谱贝财责贤账货质购贵费贺资赌赏赔赖赞赢赵"
+    "车转轮轻载轿较辅辆辈输辑边达迁过运还这进远连迟适选递逻邓郑酱"
+    "释鉴钟钢钥钱铁铜铝银销锁锅锋锐错锡锣锦键锯镜长闪闭问闯闲间闷"
+    "闸闹闻阁阅阔队阳阴阵阶际陆陈险随隐难雾静韩页顶项顺须顾顿领颈"
+    "频题颜额风飞饭饮馆马驱驶骑验鱼鲜鲸鸟鸡鸭鹅鹤鹰黄齐齿龄龙龟"
+)
+_TRADITIONAL_VARIANT_RAW = frozenset(
+    "頭藥醫門發髮後裡裏網軟臺歷葉萬與東絲兩嚴個臨為樂書買亂雲產親"
+    "僅從倉們眾會體餘傳傷倫兒蘭關興養寫軍農衝決況凍淨減幾鳳擊劉創"
+    "別動務華單衛廠廳壓厭縣雙變號聽員園圓場聲處復備夠夾奪獎婦媽孫"
+    "學寧寶實審寬對尋導將層歲島嶺帳幫廣莊慶庫應開張歸當錄憶懷總態"
+    "戀惡驚慣願護報擔擬擁攔撥擇掛擠揮損換據擺敵數無舊時顯曉術機殺"
+    "雜權條來楊極構槍櫃樹樣檔橋夢檢歡歐殘氣漢湯溝淚瀉澤潔淺測濟濃"
+    "濤渦潤漲濕滾滿濾滅燈靈點煉熱愛爺牽狀猶獨獅貓豬環現電畫療瘡瘋"
+    "癢癱盤鹽監蓋盜礦碼磚確礎禮禱離種積稱穩窮竅競筆籠築簽簡糧緊紅"
+    "纖約級紀純線練組細織終經結給絡絕統絹繼續綠編緣縫羅罰翹職聯聰"
+    "肅腸膚腫脹勝膠脈臟腦臉藝節蕪蘋範繭薦蕩榮萊蓮獲營蕭薩藍慮虛蟲"
+    "雖蝦蟻蠶補裝見觀規視覽覺觸計訂認講許論設訪證評訴診詞譯試詩誠"
+    "話該詳語誤說請諸讀課調談謝謠譜貝財責賢賬貨質購貴費賀資賭賞賠"
+    "賴贊贏趙車轉輪輕載轎較輔輛輩輸輯邊達遷過運還這進遠連遲適選遞"
+    "邏鄧鄭醬釋鑒鐘鋼鑰錢鐵銅鋁銀銷鎖鍋鋒銳錯錫鑼錦鍵鋸鏡長閃閉問"
+    "闖閒間悶閘鬧聞閣閱闊隊陽陰陣階際陸陳險隨隱難霧靜韓頁頂項順須"
+    "顧頓領頸頻題顏額風飛飯飲館馬驅駛騎驗魚鮮鯨鳥雞鴨鵝鶴鷹黃齊齒"
+    "齡龍龜"
+)
+_SHARED_VARIANT_EVIDENCE = _SIMPLIFIED_VARIANT_RAW & _TRADITIONAL_VARIANT_RAW
+SIMPLIFIED_VARIANT_CHARS = _SIMPLIFIED_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
+TRADITIONAL_VARIANT_CHARS = _TRADITIONAL_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
 
 
 class EncodingIngestionError(ValueError):
@@ -181,8 +517,13 @@ class DetectionNormalization:
     stripped_combining_marks: int = 0
     folded_confusables: int = 0
     folded_native_digits: int = 0
+    indic_changes: int = 0
+    indic_scripts: tuple[str, ...] = ()
     scripts: tuple[str, ...] = ()
     mixed_script: bool = False
+    chinese_variant_normalized: bool = False
+    chinese_target_script: str | None = None
+    opencc_available: bool | None = None
 
     @property
     def changed(self) -> bool:
@@ -192,6 +533,8 @@ class DetectionNormalization:
             or self.stripped_combining_marks > 0
             or self.folded_confusables > 0
             or self.folded_native_digits > 0
+            or self.indic_changes > 0
+            or self.chinese_variant_normalized
         )
 
     def remap_span(self, start: int, end: int) -> tuple[int, int]:
@@ -216,13 +559,39 @@ class DetectionNormalization:
         """Return PHI-free normalization metadata."""
         return {
             "changed": self.changed,
+            "chinese_target_script": self.chinese_target_script,
+            "chinese_variant_normalized": self.chinese_variant_normalized,
             "folded_confusables": self.folded_confusables,
             "folded_native_digits": self.folded_native_digits,
+            "indic_changes": self.indic_changes,
+            "indic_scripts": list(self.indic_scripts),
             "mixed_script": self.mixed_script,
+            "opencc_available": self.opencc_available,
             "removed_zero_width": self.removed_zero_width,
             "scripts": list(self.scripts),
             "stripped_combining_marks": self.stripped_combining_marks,
         }
+
+
+@dataclass(frozen=True)
+class ScriptDetectionWindow:
+    """One offset-preserving inference window around a Unicode script run.
+
+    ``start`` and ``end`` delimit the context-bearing text sent to a detector,
+    while ``core_start`` and ``core_end`` retain the exact run that caused the
+    route to be selected. The source text is deliberately not stored.
+    """
+
+    start: int
+    end: int
+    core_start: int
+    core_end: int
+    script: str
+
+    def extract(self, text: str) -> str:
+        """Return this window's exact slice from ``text``."""
+
+        return text[self.start : self.end]
 
 
 _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
@@ -234,6 +603,10 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
             (0x00C0, 0x00FF),
             (0x0100, 0x017F),
             (0x0180, 0x024F),
+            # IPA Extensions contains lowercase Hausa hooked consonants
+            # U+0253 (ɓ) and U+0257 (ɗ); their uppercase forms live in
+            # Latin Extended-B above.
+            (0x0250, 0x02AF),
             (0x1E00, 0x1EFF),
             (0x2C60, 0x2C7F),
             (0xA720, 0xA7FF),
@@ -250,6 +623,16 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
             (0x08A0, 0x08FF),
             (0xFB50, 0xFDFF),
             (0xFE70, 0xFEFF),
+        ),
+    ),
+    (
+        "Ethiopic",
+        (
+            (0x1200, 0x137F),
+            (0x1380, 0x139F),
+            (0x2D80, 0x2DDF),
+            (0xAB00, 0xAB2F),
+            (0x1E7E0, 0x1E7FF),
         ),
     ),
     (
@@ -305,7 +688,14 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
             (0x11B00, 0x11B5F),
         ),
     ),
+    ("Bengali", ((0x0980, 0x09FF),)),
+    ("Gurmukhi", ((0x0A00, 0x0A7F),)),
+    ("Gujarati", ((0x0A80, 0x0AFF),)),
+    ("Odia", ((0x0B00, 0x0B7F),)),
+    ("Tamil", ((0x0B80, 0x0BFF),)),
     ("Telugu", ((0x0C00, 0x0C7F),)),
+    ("Kannada", ((0x0C80, 0x0CFF),)),
+    ("Malayalam", ((0x0D00, 0x0D7F),)),
     (
         "Greek",
         (
@@ -322,6 +712,193 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
     ),
     ("Thai", ((0x0E00, 0x0E7F),)),
 )
+
+
+def indian_name_script(text: str, lang: str = "hi") -> str | None:
+    """Return the rendering script for an Indian name surface, if in scope.
+
+    Native Devanagari and Tamil surfaces are unambiguous. Latin surfaces opt in
+    through a Hindi or Tamil language hint so unrelated Latin names retain their
+    existing exact vault key behavior.
+    """
+
+    script = detect_script(text)
+    if script in INDIAN_NAME_SCRIPTS:
+        return script
+    base_lang = str(lang or "").strip().replace("-", "_").split("_", 1)[0]
+    if script == "Latin" and base_lang.casefold() in INDIAN_NAME_LANGUAGES:
+        return script
+    return None
+
+
+def canonical_indian_name(text: str) -> str:
+    """Fold a Devanagari, Tamil, or Romanized name to one phonetic key.
+
+    This is a deterministic transliteration fold, not fuzzy entity resolution.
+    It handles common long-vowel Roman variants and Indic consonant spellings
+    while retaining the rest of each name, so similar but distinct names do not
+    merge merely because they share a prefix.
+    """
+
+    script = detect_script(text)
+    if script == "Devanagari":
+        transliterated = _indic_to_latin(
+            text,
+            consonants=_DEVANAGARI_CONSONANTS,
+            vowels=_DEVANAGARI_VOWELS,
+            vowel_signs=_DEVANAGARI_VOWEL_SIGNS,
+            virama="्",
+            nasal_marks=frozenset({"ं", "ँ"}),
+            ignored_marks=frozenset({"़"}),
+        )
+    elif script == "Tamil":
+        transliterated = _indic_to_latin(
+            text,
+            consonants=_TAMIL_CONSONANTS,
+            vowels=_TAMIL_VOWELS,
+            vowel_signs=_TAMIL_VOWEL_SIGNS,
+            virama="்",
+            nasal_marks=frozenset(),
+            ignored_marks=frozenset(),
+        )
+    else:
+        words = []
+        for word in text.split():
+            if word.endswith("a") and any(not char.isascii() for char in word):
+                word = word[:-1]
+            words.append(word)
+        transliterated = " ".join(words)
+    return _fold_indian_romanization(transliterated)
+
+
+def render_indian_name(canonical_name: str, script: str) -> str:
+    """Render one canonical Indian surrogate identity in ``script``."""
+
+    if script == "Devanagari":
+        return _latin_to_indic(
+            canonical_name,
+            consonants=_DEVANAGARI_RENDER_CONSONANTS,
+            vowels=_DEVANAGARI_RENDER_VOWELS,
+            virama="्",
+        )
+    if script == "Tamil":
+        return _latin_to_indic(
+            canonical_name,
+            consonants=_TAMIL_RENDER_CONSONANTS,
+            vowels=_TAMIL_RENDER_VOWELS,
+            virama="்",
+        )
+    return " ".join(part.capitalize() for part in canonical_name.split())
+
+
+def _indic_to_latin(
+    text: str,
+    *,
+    consonants: dict[str, str],
+    vowels: dict[str, str],
+    vowel_signs: dict[str, str],
+    virama: str,
+    nasal_marks: frozenset[str],
+    ignored_marks: frozenset[str],
+) -> str:
+    output: list[str] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        consonant = consonants.get(char)
+        if consonant is not None:
+            following = text[index + 1] if index + 1 < len(text) else ""
+            if following == virama:
+                output.append(consonant)
+                index += 2
+                continue
+            vowel_sign = vowel_signs.get(following)
+            if vowel_sign is not None:
+                output.append(consonant + vowel_sign)
+                index += 2
+                continue
+            output.append(consonant + "a")
+        elif char in vowels:
+            output.append(vowels[char])
+        elif char in nasal_marks:
+            output.append("n")
+        elif char in ignored_marks or char == virama:
+            pass
+        elif char.isascii() or char.isspace():
+            output.append(char)
+        index += 1
+
+    words = "".join(output).split()
+    return " ".join(word[:-1] if word.endswith("a") else word for word in words)
+
+
+def _fold_indian_romanization(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text).casefold()
+    ascii_letters = "".join(
+        char
+        for char in decomposed
+        if not unicodedata.combining(char) and (char.isascii() or char.isspace())
+    )
+    folded = re.sub(r"[^a-z]+", " ", ascii_letters).strip()
+    folded = folded.replace("sh", "s")
+    for source, replacement in _PHONETIC_VOWEL_FOLDS:
+        folded = folded.replace(source, replacement)
+    return " ".join(folded.split())
+
+
+def _latin_to_indic(
+    text: str,
+    *,
+    consonants: dict[str, str],
+    vowels: dict[str, tuple[str, str]],
+    virama: str,
+) -> str:
+    consonant_tokens = sorted(consonants, key=len, reverse=True)
+    vowel_tokens = sorted(vowels, key=len, reverse=True)
+    output: list[str] = []
+    index = 0
+    previous_was_consonant = False
+
+    while index < len(text):
+        char = text[index]
+        if not char.isalpha():
+            if previous_was_consonant:
+                output.append(virama)
+            output.append(char)
+            previous_was_consonant = False
+            index += 1
+            continue
+
+        consonant = next(
+            (token for token in consonant_tokens if text.startswith(token, index)),
+            None,
+        )
+        if consonant is not None:
+            if previous_was_consonant:
+                output.append(virama)
+            output.append(consonants[consonant])
+            previous_was_consonant = True
+            index += len(consonant)
+            continue
+
+        vowel = next(
+            (token for token in vowel_tokens if text.startswith(token, index)),
+            None,
+        )
+        if vowel is not None:
+            independent, sign = vowels[vowel]
+            output.append(sign if previous_was_consonant else independent)
+            previous_was_consonant = False
+            index += len(vowel)
+            continue
+
+        output.append(char)
+        previous_was_consonant = False
+        index += 1
+
+    if previous_was_consonant:
+        output.append(virama)
+    return "".join(output)
 
 
 def detect_script(text: str) -> str:
@@ -346,6 +923,51 @@ def detect_script(text: str) -> str:
         return UNKNOWN_SCRIPT
 
     return max(counts, key=lambda script: (counts[script], -first_seen[script]))
+
+
+def is_han_dominant(text: str) -> bool:
+    """Return whether Han is the dominant supported script in ``text``."""
+
+    counts = _script_counts(text)
+    han_count = counts.get("Han", 0)
+    return han_count > 0 and all(
+        han_count > count for script, count in counts.items() if script != "Han"
+    )
+
+
+def detect_chinese_script(text: str) -> ChineseScriptEstimate:
+    """Estimate the predominant Simplified/Traditional Chinese variant.
+
+    Unicode blocks cannot distinguish the variants, so the estimate uses
+    ratios over common characters that are exclusive to one form. Characters
+    shared by both forms are ignored. A tie with evidence on both sides is
+    reported as mixed; otherwise the larger evidence ratio is predominant.
+    """
+
+    simplified_count = sum(char in SIMPLIFIED_VARIANT_CHARS for char in text)
+    traditional_count = sum(char in TRADITIONAL_VARIANT_CHARS for char in text)
+    evidence_count = simplified_count + traditional_count
+    if evidence_count == 0:
+        variant = ChineseScriptVariant.UNKNOWN
+        simplified_ratio = 0.0
+        traditional_ratio = 0.0
+    else:
+        simplified_ratio = simplified_count / evidence_count
+        traditional_ratio = traditional_count / evidence_count
+        if simplified_count == traditional_count:
+            variant = ChineseScriptVariant.MIXED
+        elif simplified_count > traditional_count:
+            variant = ChineseScriptVariant.SIMPLIFIED
+        else:
+            variant = ChineseScriptVariant.TRADITIONAL
+
+    return ChineseScriptEstimate(
+        variant=variant,
+        simplified_count=simplified_count,
+        traditional_count=traditional_count,
+        simplified_ratio=simplified_ratio,
+        traditional_ratio=traditional_ratio,
+    )
 
 
 def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:
@@ -390,62 +1012,239 @@ def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
 
 
+def confusable_skeleton(text: str) -> str:
+    """Return a curated UTS #39-style skeleton for PII matching.
+
+    The mapper is deliberately narrower than general-purpose Unicode
+    normalization: it folds the supported cross-script lookalikes and ASCII
+    full-width forms, and removes the invisible controls used by the evasion
+    generator. It does not case-fold or strip diacritics.
+    """
+
+    output: list[str] = []
+    for char in text:
+        if char in ZERO_WIDTH_CHARS:
+            continue
+        output.append(_fold_confusable_char(char))
+    return "".join(output)
+
+
+def mixed_script_spans(text: str) -> tuple[MixedScriptSpan, ...]:
+    """Return identifier-like spans that mix Unicode scripts.
+
+    Script changes separated by whitespace or ordinary punctuation are normal
+    multilingual prose and are not flagged. Invisible controls stay attached
+    to the surrounding token so an inserted zero-width character cannot split
+    an otherwise suspicious identifier.
+    """
+
+    findings: list[MixedScriptSpan] = []
+    token_start: int | None = None
+    for index in range(len(text) + 1):
+        char = text[index] if index < len(text) else ""
+        if char and _is_identifier_char(char):
+            if token_start is None:
+                token_start = index
+            continue
+        if token_start is None:
+            continue
+
+        token = text[token_start:index]
+        scripts = tuple(sorted(_script_counts(token)))
+        if len(scripts) > 1:
+            findings.append(
+                MixedScriptSpan(
+                    start=token_start,
+                    end=index,
+                    scripts=scripts,
+                    confusable_count=sum(
+                        _fold_confusable_char(item) != item for item in token
+                    ),
+                    invisible_count=sum(item in ZERO_WIDTH_CHARS for item in token),
+                )
+            )
+        token_start = None
+    return tuple(findings)
+
+
+def detect_mixed_script(text: str) -> bool:
+    """Return whether an identifier-like span mixes Unicode scripts."""
+
+    return bool(mixed_script_spans(text))
+
+
+def india_clinical_script_windows(
+    text: str,
+    lang: str,
+    *,
+    context_chars: int = 64,
+) -> tuple[ScriptDetectionWindow, ...]:
+    """Return context-bearing Latin/Indic windows for Indian clinical NER.
+
+    The route activates only when Latin and an Indic script occur in the same
+    note. Hindi accepts Devanagari, while Telugu accepts Telugu or Devanagari
+    because Indian-English clinical notes can embed Hindi phrases even when
+    ``lang="te"`` is the closest configured language. Context is expanded on
+    both sides of each run and snapped to token boundaries so PERSON and
+    LOCATION spans are not truncated merely because the script changes.
+
+    Args:
+        text: Source note whose offsets the returned windows reference.
+        lang: OpenMed language code. Only ``"hi"`` and ``"te"`` activate the
+            India clinical route.
+        context_chars: Maximum context expansion on either side before token
+            boundary adjustment.
+
+    Returns:
+        Deduplicated inference windows in source order, or an empty tuple when
+        the text is not an eligible mixed-script Indian clinical note.
+    """
+
+    if lang not in {"hi", "te"} or not text:
+        return ()
+    if context_chars < 0:
+        raise ValueError("context_chars must be non-negative")
+
+    target_scripts = {"Devanagari"}
+    if lang == "te":
+        target_scripts.add("Telugu")
+
+    runs = list(segment_by_script(text))
+    scripts = {script for _start, _end, script in runs}
+    if "Latin" not in scripts or not (scripts & target_scripts):
+        return ()
+
+    windows: list[ScriptDetectionWindow] = []
+    seen: set[tuple[int, int, str]] = set()
+    for core_start, core_end, script in runs:
+        if script != "Latin" and script not in target_scripts:
+            continue
+        start, end = _expand_detection_window(
+            text,
+            core_start,
+            core_end,
+            context_chars=context_chars,
+        )
+        key = (start, end, script)
+        if key in seen:
+            continue
+        seen.add(key)
+        windows.append(
+            ScriptDetectionWindow(
+                start=start,
+                end=end,
+                core_start=core_start,
+                core_end=core_end,
+                script=script,
+            )
+        )
+    return tuple(windows)
+
+
 def normalize_for_pii_detection(
     text: str,
     *,
     width_convention: str = "cjk",
+    chinese_target_script: str | None = None,
 ) -> DetectionNormalization:
     """Fold adversarial Unicode artifacts while preserving offset remapping.
 
-    The defense strips zero-width controls and standalone combining marks, folds
-    common Latin-lookalike Greek/Cyrillic/full-width characters, folds Indic
-    decimal digits for ASCII validators, and records a script-consistency
+    Indic script runs first receive script-specific NFC canonicalization. The
+    defense then strips zero-width controls and standalone non-Indic combining
+    marks, while retaining Ethiopic marks attached to a preceding Ethiopic
+    grapheme. It folds common Latin-lookalike Greek/Cyrillic/full-width
+    characters and Indic decimal digits, and records a script-consistency
     summary without storing source text. ``width_convention`` selects the
     CJK-safe width fold or strict per-character NFKC normalization.
+    ``chinese_target_script`` optionally canonicalizes Han variants with OpenCC
+    after the Unicode defenses and composes its alignment into the source map.
     """
 
-    # Keep the reusable width-normalization API in ``processing`` while
-    # composing its explicit source map with this existing detection defense.
-    # The local import avoids making the lightweight script helpers import the
+    # Local imports keep the lightweight script helpers from importing the
     # broader processing package during module initialization.
-    from ..processing.text import fold_indic_digits
-    from ..processing.zh_normalize import normalize_width
+    from ..processing.text import INDIC_SCRIPTS, IndicNormalizer, fold_indic_digits
+    from ..processing.zh_normalize import normalize_chinese_variants, normalize_width
 
     scripts = tuple(sorted(_script_counts(text)))
-    width_normalization = normalize_width(text, convention=width_convention)
+    mixed_script = detect_mixed_script(text)
+    indic_normalizer = IndicNormalizer()
+    routed_chars: list[str] = []
+    routed_starts: list[int] = []
+    routed_ends: list[int] = []
+    indic_changes = 0
+    indic_scripts: list[str] = []
+    removed_zero_width = 0
+
+    for run_start, run_end, script in segment_by_script(text):
+        run = text[run_start:run_end]
+        if script in INDIC_SCRIPTS:
+            normalized = indic_normalizer.normalize_with_offsets(run, script=script)
+            routed_chars.extend(normalized.text)
+            routed_starts.extend(
+                run_start + offset for offset in normalized.offset_starts
+            )
+            routed_ends.extend(run_start + offset for offset in normalized.offset_ends)
+            indic_changes += normalized.changes
+            removed_zero_width += normalized.removed_joiners
+            if script not in indic_scripts:
+                indic_scripts.append(script)
+            continue
+
+        routed_chars.extend(run)
+        routed_starts.extend(range(run_start, run_end))
+        routed_ends.extend(range(run_start + 1, run_end + 1))
+
+    routed_text = "".join(routed_chars)
+    width_normalization = normalize_width(
+        routed_text,
+        convention=width_convention,
+    )
     digit_folding = fold_indic_digits(width_normalization.text)
     output: list[str] = []
     starts: list[int] = []
     ends: list[int] = []
-    removed_zero_width = 0
     stripped_combining_marks = 0
-    normalized_by_source: list[list[str]] = [[] for _ in text]
-    for char, (original_start, _original_end) in zip(
+    normalized_by_routed_source: list[list[str]] = [[] for _ in routed_text]
+    for char, (routed_start, _routed_end) in zip(
         width_normalization.text,
         width_normalization.char_origins,
     ):
-        normalized_by_source[original_start].append(char)
+        normalized_by_routed_source[routed_start].append(char)
     changed_source_indices = {
-        index
+        routed_starts[index]
         for index, (char, normalized_chars) in enumerate(
-            zip(text, normalized_by_source)
+            zip(routed_text, normalized_by_routed_source)
         )
         if "".join(normalized_chars) != char
     }
     folded_native_digit_sources = {
-        width_normalization.char_origins[index][0]
+        routed_starts[width_normalization.char_origins[index][0]]
         for index, (width_char, folded_char) in enumerate(
             zip(width_normalization.text, digit_folding.text)
         )
         if width_char != folded_char
     }
+    cluster_starts, cluster_ends = _base_mark_cluster_maps(text)
 
     for index, char in enumerate(digit_folding.text):
-        original_start, original_end = width_normalization.char_origins[index]
+        routed_start, routed_end = width_normalization.char_origins[index]
+        original_start = routed_starts[routed_start]
+        original_end = routed_ends[routed_end - 1]
         if char in ZERO_WIDTH_CHARS:
             removed_zero_width += 1
             continue
-        if unicodedata.category(char) == "Mn":
+        category = unicodedata.category(char)
+        attached_ethiopic_mark = (
+            category == "Mn"
+            and _script_for_char(char) == "Ethiopic"
+            and original_start > 0
+            and _script_for_char(text[original_start - 1]) == "Ethiopic"
+        )
+        if (
+            category == "Mn"
+            and _script_for_char(char) not in INDIC_SCRIPTS
+            and not attached_ethiopic_mark
+        ):
             stripped_combining_marks += 1
             continue
 
@@ -454,11 +1253,41 @@ def normalize_for_pii_detection(
             changed_source_indices.add(original_start)
         for replacement_char in replacement:
             output.append(replacement_char)
-            starts.append(original_start)
-            ends.append(original_end)
+            starts.append(cluster_starts[original_start])
+            ends.append(cluster_ends[original_end - 1])
+
+    normalized_text = "".join(output)
+    chinese_variant_normalized = False
+    opencc_available: bool | None = None
+    if chinese_target_script is not None:
+        conversion = normalize_chinese_variants(
+            normalized_text,
+            chinese_target_script,
+        )
+        converted_starts: list[int] = []
+        converted_ends: list[int] = []
+        for converted_start, converted_end in conversion.char_origins:
+            if converted_start < converted_end:
+                source_starts = starts[converted_start:converted_end]
+                source_ends = ends[converted_start:converted_end]
+                converted_starts.append(min(source_starts))
+                converted_ends.append(max(source_ends))
+            else:
+                anchor = (
+                    starts[converted_start]
+                    if converted_start < len(starts)
+                    else len(text)
+                )
+                converted_starts.append(anchor)
+                converted_ends.append(anchor)
+        normalized_text = conversion.text
+        starts = converted_starts
+        ends = converted_ends
+        chinese_variant_normalized = conversion.changed
+        opencc_available = conversion.opencc_available
 
     return DetectionNormalization(
-        text="".join(output),
+        text=normalized_text,
         original_length=len(text),
         offset_starts=tuple(starts),
         offset_ends=tuple(ends),
@@ -466,8 +1295,13 @@ def normalize_for_pii_detection(
         stripped_combining_marks=stripped_combining_marks,
         folded_confusables=len(changed_source_indices),
         folded_native_digits=len(folded_native_digit_sources),
+        indic_changes=indic_changes,
+        indic_scripts=tuple(indic_scripts),
         scripts=scripts,
-        mixed_script=len(scripts) > 1,
+        mixed_script=mixed_script,
+        chinese_variant_normalized=chinese_variant_normalized,
+        chinese_target_script=chinese_target_script,
+        opencc_available=opencc_available,
     )
 
 
@@ -491,7 +1325,9 @@ def decode_ingestion_bytes(
         encoding: Explicit allow-listed encoding name. Ambiguous or executable
             codecs such as ``utf-7`` and BOM-selected ``utf-16`` are rejected.
         source_path: Optional source path used only to derive a SHA-256 log key.
-        max_bytes: Positive input-size cap applied before decoding.
+        max_bytes: Positive input-size cap no greater than
+            :data:`MAX_INGESTION_BYTES`, applied before materialization and
+            decoding.
         warn_on_confusables: Emit :class:`ConfusableIngestionWarning` when the
             decoded text is mixed-script or contains folded confusables.
 
@@ -506,17 +1342,20 @@ def decode_ingestion_bytes(
         raise TypeError("data must be a bytes-like object")
     if not isinstance(encoding, str):
         raise TypeError("encoding must be text")
-    if max_bytes <= 0:
-        raise ValueError("max_bytes must be positive")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int):
+        raise TypeError("max_bytes must be an integer")
+    if not 0 < max_bytes <= MAX_INGESTION_BYTES:
+        raise ValueError(f"max_bytes must be between 1 and {MAX_INGESTION_BYTES}")
 
-    payload = bytes(data)
     path_hash = _ingestion_path_hash(source_path)
-    if len(payload) > max_bytes:
+    payload_size = data.nbytes if isinstance(data, memoryview) else len(data)
+    if payload_size > max_bytes:
         _reject_encoding(
             EncodingInputLimitError("Encoded input exceeds the configured limit"),
             path_hash=path_hash,
-            size_bytes=len(payload),
+            size_bytes=payload_size,
         )
+    payload = _materialize_ingestion_bytes(data)
 
     normalized_name = encoding.strip().casefold().replace("_", "-")
     codec_name = _INGESTION_ENCODING_ALIASES.get(normalized_name)
@@ -536,12 +1375,7 @@ def decode_ingestion_bytes(
             size_bytes=len(payload),
         )
 
-    normalization = normalize_for_pii_detection(text)
-    warning_codes: list[str] = []
-    if normalization.mixed_script:
-        warning_codes.append("mixed_script")
-    if normalization.folded_confusables:
-        warning_codes.append("confusable_characters")
+    warning_codes = list(_ingestion_warning_codes(text))
     if warning_codes and warn_on_confusables:
         warnings.warn(
             "decoded ingestion requires mixed-script/confusable review; "
@@ -556,6 +1390,47 @@ def decode_ingestion_bytes(
         byte_length=len(payload),
         warning_codes=tuple(warning_codes),
     )
+
+
+def _materialize_ingestion_bytes(
+    data: bytes | bytearray | memoryview,
+) -> bytes:
+    """Return immutable bytes after the caller has enforced the byte budget."""
+
+    return data if isinstance(data, bytes) else bytes(data)
+
+
+def _ingestion_warning_codes(text: str) -> tuple[str, ...]:
+    """Return content-free warnings without building normalization offset maps."""
+
+    warning_codes: list[str] = []
+    if _contains_mixed_script_identifier(text):
+        warning_codes.append("mixed_script")
+    if any(char == "\u3000" or _fold_confusable_char(char) != char for char in text):
+        warning_codes.append("confusable_characters")
+    return tuple(warning_codes)
+
+
+def _contains_mixed_script_identifier(text: str) -> bool:
+    """Detect mixed-script identifier runs in one pass and constant space."""
+
+    first_script: str | None = None
+    mixed = False
+    for char in text:
+        if not _is_identifier_char(char):
+            if mixed:
+                return True
+            first_script = None
+            mixed = False
+            continue
+        script = _script_for_char(char)
+        if script is None:
+            continue
+        if first_script is None:
+            first_script = script
+        elif script != first_script:
+            mixed = True
+    return mixed
 
 
 def decode_legacy_text(
@@ -605,16 +1480,62 @@ def _reject_encoding(
     raise error from None
 
 
+def _base_mark_cluster_maps(text: str) -> tuple[list[int], list[int]]:
+    """Return containing base-plus-mark bounds for every source code point."""
+
+    starts = [0] * len(text)
+    ends = [0] * len(text)
+    cluster_start = 0
+
+    for index, char in enumerate(text):
+        if index > 0 and not unicodedata.category(char).startswith("M"):
+            for cluster_index in range(cluster_start, index):
+                ends[cluster_index] = index
+            cluster_start = index
+        starts[index] = cluster_start
+
+    for cluster_index in range(cluster_start, len(text)):
+        ends[cluster_index] = len(text)
+    return starts, ends
+
+
 def _script_for_char(char: str) -> str | None:
+    codepoint = ord(char)
+    if codepoint == 0x3007:
+        return "Han"
+    # Python 3.10's Unicode 13 database predates Ethiopic Extended-B. Route the
+    # explicit Unicode block independently of ``unicodedata.category`` so the
+    # same text is detected consistently across supported Python versions.
+    if 0x1E7E0 <= codepoint <= 0x1E7FF:
+        return "Ethiopic"
+
     category = unicodedata.category(char)
     if category[0] not in {"L", "M"}:
         return None
 
-    codepoint = ord(char)
     for script, ranges in _SCRIPT_RANGES:
         if any(start <= codepoint <= end for start, end in ranges):
             return script
     return None
+
+
+def _expand_detection_window(
+    text: str,
+    core_start: int,
+    core_end: int,
+    *,
+    context_chars: int,
+) -> tuple[int, int]:
+    """Expand one script run without cutting through adjacent tokens."""
+
+    start = max(0, core_start - context_chars)
+    end = min(len(text), core_end + context_chars)
+
+    while start > 0 and not text[start - 1].isspace():
+        start -= 1
+    while end < len(text) and not text[end].isspace():
+        end += 1
+    return start, end
 
 
 def _script_counts(text: str) -> dict[str, int]:
@@ -639,24 +1560,52 @@ def _fold_confusable_char(char: str) -> str:
     return char
 
 
+def _is_identifier_char(char: str) -> bool:
+    if char in ZERO_WIDTH_CHARS:
+        return True
+    return unicodedata.category(char)[0] in {"L", "M", "N"}
+
+
 __all__ = [
     "ALLOWED_INGESTION_ENCODINGS",
+    "CJK_SCRIPTS",
+    "CONFUSABLE_DATA_LICENSE",
+    "CONFUSABLE_DATA_URL",
+    "CONFUSABLE_DATA_VERSION",
+    "ChineseScriptEstimate",
+    "ChineseScriptVariant",
     "ConfusableIngestionWarning",
     "DecodedIngestionText",
     "DetectionNormalization",
     "EncodingConversionError",
     "EncodingIngestionError",
     "EncodingInputLimitError",
+    "INDIC_SCRIPTS",
+    "INDIAN_NAME_LANGUAGES",
+    "INDIAN_NAME_SCRIPTS",
+    "MixedScriptSpan",
     "MAX_INGESTION_BYTES",
+    "ScriptDetectionWindow",
     "SCRIPT_LANGUAGE_HINTS",
+    "SIMPLIFIED_VARIANT_CHARS",
     "SUPPORTED_SCRIPTS",
+    "TRADITIONAL_VARIANT_CHARS",
     "UNKNOWN_SCRIPT",
     "UnsupportedIngestionEncodingError",
     "ZERO_WIDTH_CHARS",
+    "canonical_indian_name",
     "candidate_languages_for_script",
+    "confusable_skeleton",
+    "detect_chinese_script",
+    "detect_mixed_script",
+    "detect_script",
     "decode_ingestion_bytes",
     "decode_legacy_text",
-    "detect_script",
+    "india_clinical_script_windows",
+    "indian_name_script",
+    "is_han_dominant",
+    "mixed_script_spans",
     "normalize_for_pii_detection",
+    "render_indian_name",
     "segment_by_script",
 ]

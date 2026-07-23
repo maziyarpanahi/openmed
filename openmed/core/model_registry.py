@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
 
 
 @dataclass
@@ -33,7 +36,10 @@ class ModelInfo:
     benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    download_mb: Optional[float] = None
+    disk_mb: Optional[float] = None
     recommended_tier: Optional[str] = None
+    script_coverage: Dict[str, Dict[str, float | str]] = field(default_factory=dict)
     arxiv: Optional[str] = None
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
@@ -82,6 +88,18 @@ class ModelInfo:
             if token in self.model_id:
                 return value
         return None
+
+
+@dataclass(frozen=True)
+class ModelSizeEstimate:
+    """Offline-safe storage and memory estimate for a manifest model."""
+
+    repo_id: str
+    task: str
+    download_mb: Optional[float]
+    disk_mb: Optional[float]
+    peak_ram_mb: Optional[float]
+    source: str
 
 
 @dataclass(frozen=True)
@@ -139,17 +157,26 @@ _VERSION_RE = re.compile(r"^v\d+$", re.IGNORECASE)
 
 _LANGUAGE_NAME_TO_CODE = {
     "arabic": "ar",
+    "assamese": "as",
+    "bengali": "bn",
     "dutch": "nl",
     "english": "en",
     "french": "fr",
     "german": "de",
+    "gujarati": "gu",
     "hebrew": "he",
     "hindi": "hi",
     "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
+    "kannada": "kn",
+    "malayalam": "ml",
+    "marathi": "mr",
+    "odia": "or",
     "portuguese": "pt",
+    "punjabi": "pa",
     "spanish": "es",
+    "tamil": "ta",
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
@@ -362,6 +389,10 @@ def load_manifest_rows(path: Path = MANIFEST_PATH) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
 
+    from .model_integrity import verify_manifest_signature_if_present
+
+    verify_manifest_signature_if_present(path)
+
     rows: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -533,9 +564,12 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         benchmark=_benchmark_from_row(row),
         latency_ms=_number_map_from_row(row, "latency_ms"),
         peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        download_mb=_positive_number_from_row(row, "download_mb"),
+        disk_mb=_positive_number_from_row(row, "disk_mb"),
         recommended_tier=row.get("recommended_tier")
         if isinstance(row.get("recommended_tier"), str)
         else None,
+        script_coverage=_script_coverage_from_row(row),
         arxiv=row.get("arxiv"),
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
@@ -561,6 +595,123 @@ def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, floa
         for device, measurement in value.items()
         if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
     }
+
+
+def _script_coverage_from_row(
+    row: Dict[str, Any],
+) -> Dict[str, Dict[str, float | str]]:
+    value = row.get("script_coverage")
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(script): {
+            str(metric): measurement
+            for metric, measurement in metrics.items()
+            if isinstance(measurement, (int, float, str))
+            and not isinstance(measurement, bool)
+        }
+        for script, metrics in value.items()
+        if isinstance(metrics, dict)
+    }
+
+
+def _positive_number_from_row(row: Dict[str, Any], field_name: str) -> Optional[float]:
+    value = row.get(field_name)
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or value <= 0
+    ):
+        return None
+    return float(value)
+
+
+def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
+    recorded = _positive_number_from_row(row, "download_mb")
+    if recorded is not None:
+        return recorded
+
+    param_count = row.get("param_count")
+    if not isinstance(param_count, int) or isinstance(param_count, bool):
+        return None
+
+    formats = set(row.get("formats") or ())
+    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+        bytes_per_parameter = 0.55
+    elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
+        bytes_per_parameter = 1.05
+    else:
+        bytes_per_parameter = 2.0
+
+    # Allow for tokenizer/config files in addition to the model weights.
+    return (param_count * bytes_per_parameter / 1_000_000) + 1.5
+
+
+def _estimated_peak_ram_mb(
+    row: Dict[str, Any], disk_mb: Optional[float]
+) -> Optional[float]:
+    recorded = _number_map_from_row(row, "peak_ram_mb")
+    if recorded:
+        return max(recorded.values())
+    if disk_mb is None:
+        return None
+    return max(256.0, disk_mb * 1.25)
+
+
+def estimate_model_sizes(
+    model_key: Optional[str] = None,
+    *,
+    manifest_path: Path = MANIFEST_PATH,
+) -> List[ModelSizeEstimate]:
+    """Return deterministic model size estimates from committed metadata.
+
+    The function is deliberately network-free. Explicit manifest measurements
+    win; otherwise the download estimate is derived from parameter count and
+    artifact format. ``model_key`` may be a registry alias or a full repo id.
+
+    Args:
+        model_key: Optional registry alias or model repository id.
+        manifest_path: Manifest snapshot to read.
+
+    Returns:
+        Estimates sorted by repository id.
+    """
+
+    rows = load_manifest_rows(manifest_path)
+    if model_key is not None:
+        resolved = get_model_info(model_key)
+        repo_id = resolved.model_id if resolved is not None else model_key
+        rows = [row for row in rows if row.get("repo_id") == repo_id]
+
+    estimates: List[ModelSizeEstimate] = []
+    for row in rows:
+        repo_id = row.get("repo_id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+        download_mb = _estimated_download_mb(row)
+        disk_mb = _positive_number_from_row(row, "disk_mb") or download_mb
+        estimates.append(
+            ModelSizeEstimate(
+                repo_id=repo_id,
+                task=str(row.get("task") or "unknown"),
+                download_mb=_rounded_mb(download_mb),
+                disk_mb=_rounded_mb(disk_mb),
+                peak_ram_mb=_rounded_mb(_estimated_peak_ram_mb(row, disk_mb)),
+                source=(
+                    "manifest"
+                    if _positive_number_from_row(row, "download_mb") is not None
+                    else "estimated"
+                ),
+            )
+        )
+    return sorted(estimates, key=lambda estimate: estimate.repo_id.lower())
+
+
+def _rounded_mb(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return round(value, 3)
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -963,7 +1114,7 @@ def get_entity_types_by_category(category: str) -> List[str]:
 
 
 def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
-    """Return all single-language PII models for a given language."""
+    """Return PII models whose tokenizer supports the language's script."""
     if lang == "en":
         localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS
         return {
@@ -972,6 +1123,7 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
             if key.startswith("pii_")
             and info.category == "Privacy"
             and "en" in (info.languages or ["en"])
+            and _supports_pii_language(info, lang)
             and not any(key.startswith(f"pii_{lc}_") for lc in localized_prefixes)
         }
 
@@ -982,29 +1134,72 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         if key.startswith(prefix)
         and info.category == "Privacy"
         and lang in (info.languages or [])
+        and _supports_pii_language(info, lang)
     }
-    if language_models:
-        return language_models
+    optional_indic = _configured_indic_pii_model(lang)
 
     from .pii_i18n import DEFAULT_PII_MODELS
 
     default_model_id = DEFAULT_PII_MODELS.get(lang)
     if not default_model_id:
-        return {}
+        return optional_indic
     # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
     # so language-pack callers can reuse multilingual privacy filters safely.
-    return {
+    fallback_models = {
         key: info
         for key, info in OPENMED_MODELS.items()
         if key.startswith("pii_")
         and info.category == "Privacy"
         and info.model_id == default_model_id
         and lang in (info.languages or [])
+        and _supports_pii_language(info, lang)
     }
+    return {**language_models, **fallback_models, **optional_indic}
+
+
+def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
+    from ..ner.families.indic import configured_indic_ner_model
+    from .pii_i18n import INDIC_NER_LANGUAGES, LANGUAGE_NAMES
+
+    if lang not in INDIC_NER_LANGUAGES:
+        return {}
+    model_id = configured_indic_ner_model()
+    if model_id is None:
+        return {}
+    return {
+        f"pii_{lang}_indic_ner": ModelInfo(
+            model_id=model_id,
+            display_name=f"{LANGUAGE_NAMES[lang]} Indic NER (optional)",
+            category="Privacy",
+            specialization="Indic PER/LOC/ORG de-identification",
+            description="User-configured CoNLL-2003 Indic NER adapter",
+            entity_types=["PERSON", "LOCATION", "ORGANIZATION"],
+            size_category="Unknown",
+            recommended_confidence=0.50,
+            family="IndicNER",
+            task="token-classification",
+            languages=[lang],
+            formats=["transformers"],
+        )
+    }
+
+
+def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
+    normalized = lang.lower().replace("_", "-")
+    scripts = LANGUAGE_SCRIPT_TARGETS.get(normalized, ())
+    return not any(
+        info.script_coverage.get(script, {}).get("verdict") == "unsupported"
+        for script in scripts
+    )
 
 
 def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language."""
-    from .pii_i18n import DEFAULT_PII_MODELS
+    from .pii_i18n import DEFAULT_PII_MODELS, OPTIONAL_PII_MODEL
 
-    return DEFAULT_PII_MODELS.get(lang)
+    model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id != OPTIONAL_PII_MODEL:
+        return model_id
+    from ..ner.families.indic import configured_indic_ner_model
+
+    return configured_indic_ner_model()

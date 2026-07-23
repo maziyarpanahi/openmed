@@ -16,23 +16,30 @@ from openmed.core.anonymizer.locales import (
 )
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_chinese_resident_id,
     validate_dutch_bsn,
+    validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_za_id_number,
 )
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
+    "as",
+    "bn",
     "en",
     "fr",
     "de",
@@ -40,7 +47,15 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "es",
     "nl",
     "hi",
+    "gu",
+    "kn",
+    "ml",
+    "mr",
+    "or",
+    "pa",
+    "ta",
     "te",
+    "am",
     "pt",
     "ar",
     "he",
@@ -50,6 +65,10 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "th",
     "ko",
     "ro",
+    "sw",
+    "zu",
+    "xh",
+    "zh",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -79,6 +98,24 @@ _FIELD_LABELS: Final[Mapping[str, str]] = {
 }
 
 _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
+    "as": (
+        "ক্লিনিকেল টোকা: ৰোগী ",
+        " জন্ম ",
+        ". ৰোগী ID ",
+        ". ফোন ",
+        ". ঠিকনা ",
+        ". পৰৱৰ্তী তাৰিখ ",
+        ".",
+    ),
+    "bn": (
+        "ক্লিনিক্যাল নোট: রোগী ",
+        " জন্ম ",
+        ". রোগী ID ",
+        ". ফোন ",
+        ". ঠিকানা ",
+        ". পরবর্তী তারিখ ",
+        ".",
+    ),
     "en": (
         "Clinical note: patient ",
         " was born on ",
@@ -143,6 +180,69 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u0905\u0917\u0932\u0940 \u0924\u093e\u0930\u0940\u0916 ",
         ".",
     ),
+    "gu": (
+        "ક્લિનિકલ નોંધ: દર્દી ",
+        " જન્મ ",
+        ". દર્દી ID ",
+        ". ફોન ",
+        ". સરનામું ",
+        ". અનુવર્તી તારીખ ",
+        ".",
+    ),
+    "kn": (
+        "ಕ್ಲಿನಿಕಲ್ ಟಿಪ್ಪಣಿ: ರೋಗಿ ",
+        " ಜನನ ",
+        ". ರೋಗಿ ID ",
+        ". ಫೋನ್ ",
+        ". ವಿಳಾಸ ",
+        ". ಮುಂದಿನ ದಿನಾಂಕ ",
+        ".",
+    ),
+    "ml": (
+        "ക്ലിനിക്കൽ കുറിപ്പ്: രോഗി ",
+        " ജനനം ",
+        ". രോഗി ID ",
+        ". ഫോൺ ",
+        ". വിലാസം ",
+        ". തുടർ തീയതി ",
+        ".",
+    ),
+    "mr": (
+        "क्लिनिकल नोंद: रुग्ण ",
+        " जन्म ",
+        ". रुग्ण ID ",
+        ". फोन ",
+        ". पत्ता ",
+        ". पुढील तारीख ",
+        ".",
+    ),
+    "or": (
+        "କ୍ଲିନିକାଲ ଟିପ୍ପଣୀ: ରୋଗୀ ",
+        " ଜନ୍ମ ",
+        ". ରୋଗୀ ID ",
+        ". ଫୋନ ",
+        ". ଠିକଣା ",
+        ". ପରବର୍ତ୍ତୀ ତାରିଖ ",
+        ".",
+    ),
+    "pa": (
+        "ਕਲੀਨਿਕਲ ਨੋਟ: ਮਰੀਜ਼ ",
+        " ਜਨਮ ",
+        ". ਮਰੀਜ਼ ID ",
+        ". ਫੋਨ ",
+        ". ਪਤਾ ",
+        ". ਅਗਲੀ ਮਿਤੀ ",
+        ".",
+    ),
+    "ta": (
+        "மருத்துவ குறிப்பு: நோயாளி ",
+        " பிறந்த தேதி ",
+        ". நோயாளி ID ",
+        ". தொலைபேசி ",
+        ". முகவரி ",
+        ". அடுத்த தேதி ",
+        ".",
+    ),
     "te": (
         "\u0c15\u0c4d\u0c32\u0c3f\u0c28\u0c3f\u0c15\u0c32\u0c4d"
         " \u0c28\u0c4b\u0c1f\u0c4d: \u0c30\u0c4b\u0c17\u0c3f ",
@@ -152,6 +252,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e ",
         ". \u0c2b\u0c3e\u0c32\u0c4b-\u0c05\u0c2a\u0c4d \u0c24\u0c47\u0c26\u0c40 ",
         ".",
+    ),
+    "am": (
+        "ክሊኒካዊ ማስታወሻ፡ ታካሚ ",
+        " የትውልድ ቀን ",
+        "። የታካሚ መለያ ",
+        "። ስልክ ",
+        "። አድራሻ ",
+        "። የቀጠሮ ቀን ",
+        "።",
     ),
     "pt": (
         "Nota clinica: paciente ",
@@ -236,9 +345,46 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Control la ",
         ".",
     ),
+    "zh": (
+        "临床记录：患者",
+        "出生于",
+        "。患者编号",
+        "。电话",
+        "。地址",
+        "。复诊日期",
+        "。",
+    ),
+    "sw": (
+        "Dokezo la kliniki: mgonjwa ",
+        " alizaliwa tarehe ",
+        ". Nambari ya mgonjwa ",
+        ". Simu ",
+        ". Anwani ",
+        ". Tarehe ya ufuatiliaji ",
+        ".",
+    ),
+    "zu": (
+        "Inothi lomtholampilo: isiguli ",
+        " sazalwa ngo ",
+        ". Inombolo kamazisi ",
+        ". Ucingo ",
+        ". Ikheli ",
+        ". Usuku lokulandelela ",
+        ".",
+    ),
+    "xh": (
+        "Inqaku lekliniki: isigulane ",
+        " sazalwa ngo ",
+        ". Inombolo yesazisi ",
+        ". Ifowuni ",
+        ". Idilesi ",
+        ". Umhla wokulandelela ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
+    "am": validate_ethiopia_fayda,
     "en": clinical_ids.validate_ssn,
     "fr": validate_french_nir,
     "de": validate_german_steuer_id,
@@ -254,9 +400,14 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
+    "sw": validate_kenya_maisha_namba,
+    "zu": validate_za_id_number,
+    "xh": validate_za_id_number,
+    "zh": validate_chinese_resident_id,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
+    "am": "pii_i18n.validate_ethiopia_fayda",
     "en": "clinical_ids.validate_ssn",
     "fr": "pii_i18n.validate_french_nir",
     "de": "pii_i18n.validate_german_steuer_id",
@@ -272,6 +423,10 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "th": "pii_i18n.validate_thai_national_id",
     "ko": "pii_i18n.validate_korean_rrn",
     "ro": "pii_i18n.validate_romanian_cnp",
+    "sw": "pii_i18n.validate_kenya_maisha_namba",
+    "zu": "pii_i18n.validate_za_id_number",
+    "xh": "pii_i18n.validate_za_id_number",
+    "zh": "pii_i18n.validate_chinese_resident_id",
 }
 
 
@@ -332,7 +487,7 @@ class LocalePhiGenerator:
                 f"unsupported locale PHI language {language!r}; "
                 f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}"
             )
-        if language not in SUPPORTED_LANGUAGES:
+        if language not in SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES:
             raise ValueError(f"language {language!r} is not wired in OpenMed")
 
         locale = resolve_locale(language)

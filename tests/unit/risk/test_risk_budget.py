@@ -114,6 +114,7 @@ def test_default_budgets_cover_every_bundled_policy_and_strict_is_stricter():
     assert budget_for_policy("gdpr").name == "gdpr_pseudonymization"
     assert budget_for_policy("gdpr_health").name == "gdpr_art9_health"
     assert budget_for_policy("au_privacy").name == "australia_privacy_act"
+    assert budget_for_policy("china_pipl").name == "china_pipl"
 
 
 def test_exported_budget_api_is_available_from_package():

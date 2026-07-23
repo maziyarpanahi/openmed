@@ -22,12 +22,23 @@ Pick the track that matches how you'll use OpenMed:
 
 All tracks assume a working install. The minimal setup is:
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv (skip if present)
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install "openmed[hf]"                      # core + Hugging Face models
-```
+=== "macOS/Linux"
+
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv (skip if present)
+    uv venv --python 3.11
+    source .venv/bin/activate
+    uv pip install "openmed[hf]"                      # core + Hugging Face models
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    uv venv --python 3.11
+    .venv\Scripts\Activate.ps1
+    uv pip install "openmed[hf]"                      # core + Hugging Face models
+    ```
 
 The first model-backed call may download model artifacts. Clinical text is still
 processed locally; after warming the cache, use

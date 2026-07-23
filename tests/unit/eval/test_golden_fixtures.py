@@ -9,6 +9,7 @@ from pathlib import Path
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_entity_merger import validate_luhn
 from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
@@ -59,7 +60,9 @@ def test_golden_fixtures_cover_required_categories_and_languages():
 
     assert set(grouped) == set(GOLDEN_CATEGORIES)
     assert SUPPORTED_LANGUAGES.issubset(multilingual_languages)
-    assert multilingual_languages <= SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    assert multilingual_languages <= (
+        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    )
 
     multilingual = grouped["multilingual"]
     assert len(multilingual) >= len(SUPPORTED_LANGUAGES)

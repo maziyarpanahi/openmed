@@ -229,6 +229,16 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+Country-aware African French and Portuguese surrogates are available through
+conceptual locale overrides. `fr_SN`, `fr_CI`, and `fr_CM` use curated names,
+cities, addresses, and country-code phone formats while keeping the French PII
+model; `pt_MZ` and `pt_AO` do the same with the Portuguese model. Unsupported
+Faker methods delegate to `fr_FR` or `pt_PT`, so these overrides do not alter
+the default `fr` and `pt` output. Arabic also accepts `ar-DZ` and `ar-MA`; if
+the installed Faker release lacks the requested regional backend, OpenMed
+falls back to `ar_EG` and emits the same one-time warning used by the other
+Arabic regional overrides.
+
 For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
 default PII model, Faker locale, and a before/after example — see
 [Per-Language De-identification](languages.md).
@@ -278,6 +288,38 @@ The vault file stores `(canonical_label, lang, HMAC text_hash) -> surrogate`
 entries plus `schema_version` and `hmac_scheme`; it does not store raw source
 surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
 data anyway: it can connect records across documents even without plaintext.
+
+For person names, the vault derives that HMAC input from a deterministic ISO
+15919 pivot. Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu,
+Kannada, Malayalam, and ISO 15919 inputs can therefore share one in-memory join
+key and one surrogate without storing the romanized name. The same engine can
+normalize explicit ITRANS and Harvard-Kyoto input before conversion:
+
+```python
+from openmed.processing import from_latin, to_latin, transliteration_key
+
+result = to_latin("राम ராம rāma")
+assert result.text == "rāma rāma rāma"
+assert result.remap_span(0, 4) == (0, 3)
+assert transliteration_key("राम") == transliteration_key("ராம")
+assert transliteration_key("rAma", "ITRANS") == transliteration_key("rāma")
+assert from_latin("lakShmI", "Devanagari", scheme="itrans") == "लक्ष्मी"
+```
+
+The default `schwa_policy="preserve"` and `anusvara_policy="marker"` form the
+round-trip-safe subset. `schwa_policy="source"` applies northern word-final
+schwa deletion, while `anusvara_policy="homorganic"` expands a nasal according
+to the following consonant; both are intentionally lossy. The public
+`LOSSY_CASES` tuple also lists nukta and extended letters, Tamil distinctions
+that its orthography does not encode, Gurmukhi addak, and Malayalam chillu
+letters. The stdlib-only tables are a clean-room Unicode/ISO implementation
+interoperable with the conventions of Aksharamukha (AGPL-3.0) and the Indic NLP
+Library (MIT). No code, data, copyleft component, neural weights, or third-party
+mapping bundle from either project is included.
+
+Perso-Arabic Urdu is intentionally an unsupported stub. The built-in API fails
+closed with `ValueError`; deployments that need it must supply a separately
+licensed, out-of-process adapter.
 
 ### Format preservation
 
@@ -333,6 +375,48 @@ def my_first_name(faker, original, *, locale):
 register_label_generator("FIRST_NAME", my_first_name)
 ```
 
+## Chinese word segmentation
+
+Chinese routing uses a pluggable word segmenter that preserves exact Python
+string offsets. The default `jieba` backend and the small synthetic clinical
+dictionary ship with OpenMed; no model download is required:
+
+```python
+from openmed.core.config import OpenMedConfig
+from openmed.processing import create_chinese_segmenter_from_config
+
+config = OpenMedConfig(
+    chinese_segmentation_backend="jieba",
+    chinese_user_dict_path="/srv/openmed/zh_terms.txt",
+)
+segmenter = create_chinese_segmenter_from_config(config)
+tokens = segmenter.segment("患者王芳因心房颤动入院")
+
+assert all(token.text == "患者王芳因心房颤动入院"[token.start:token.end]
+           for token in tokens)
+```
+
+An additional dictionary is a UTF-8 text file with one entry per line in
+`term`, `term frequency`, or `term frequency POS` form. For example:
+
+```text
+心脏超声 90000 nz
+临床路径
+```
+
+Keep organization-specific dictionaries outside the package and point
+`chinese_user_dict_path` or `OPENMED_CHINESE_USER_DICT` at the local file. This
+avoids bundling private terminology or restricted lexicons.
+
+The optional `pkuseg` (MIT) and HanLP (Apache-2.0) adapters are installed with
+`openmed[zh-pkuseg]` and `openmed[zh-hanlp]`, respectively. Set
+`chinese_segmentation_backend` or `OPENMED_CHINESE_SEGMENTATION_BACKEND` to
+select one. `pkuseg` defaults to the `medicine` domain, configurable through
+`chinese_pkuseg_domain`; HanLP accepts a preloaded tokenizer or a local model
+path through `create_chinese_segmenter(..., hanlp_model=...)`. OpenMed never
+downloads optional model files implicitly, so provision those assets before
+selecting either backend.
+
 ## Privacy-filter family
 
 OpenMed ships three privacy-filter families, all **the same OpenAI
@@ -341,12 +425,19 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **17 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, and `tr`.
-These are the model-backed PII language allow-list.
+as its source of truth and supports **22 supported PII language codes**:
+`am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
+Chinese routing currently uses the documented multilingual default-model
+placeholder; dedicated Chinese model weights are not bundled.
+The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
+`gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve Hindi and
+Telugu. It loads only an explicit path or repository from
+`OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
-Polish, Latvian, Slovak, Malay, Filipino, and Danish without adding
-default PII models for those language codes.
+Polish, Latvian, Slovak, Malay, Filipino, Danish, and Urdu without adding
+default PII models for those language codes. Urdu's conceptual `ur_PK` locale
+uses Faker's installed `en_PK` backend for general surrogate data while CNIC
+generation remains provider-backed and format-valid.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 
@@ -354,7 +445,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 17-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 21 model-backed codes plus the documented `zh` routing placeholder | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

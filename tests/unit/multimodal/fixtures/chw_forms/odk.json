@@ -1,0 +1,51 @@
+{
+  "@odata.context": "synthetic ODK Central export",
+  "value": [
+    {
+      "__id": "uuid:odk-873-001",
+      "meta": {
+        "instanceID": "uuid:odk-instance-873-001",
+        "deviceID": "odk-device-873-001"
+      },
+      "household": {
+        "respondent_name": "Amina Njeri",
+        "phone": "+254700111222",
+        "national_id": "KEN-873-001",
+        "geopoint": "-1.292066 36.821946 1798 4",
+        "symptoms": "fever cough",
+        "visit_note": "Visited Amina Njeri at home"
+      },
+      "children": [
+        {
+          "name": "Neema Njeri",
+          "immunization_status": "complete"
+        },
+        {
+          "name": "Juma Njeri",
+          "immunization_status": "due_soon"
+        }
+      ]
+    },
+    {
+      "__id": "uuid:odk-873-002",
+      "meta": {
+        "instanceID": "uuid:odk-instance-873-002",
+        "deviceID": "odk-device-873-002"
+      },
+      "household": {
+        "respondent_name": "Otieno Kamau",
+        "phone": "+254700111223",
+        "national_id": "KEN-873-002",
+        "geopoint": "-1.283330 36.816670 1790 5",
+        "symptoms": "none",
+        "visit_note": "Otieno Kamau requested a follow-up"
+      },
+      "children": [
+        {
+          "name": "Ayo Kamau",
+          "immunization_status": "complete"
+        }
+      ]
+    }
+  ]
+}

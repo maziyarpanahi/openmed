@@ -19,14 +19,22 @@ deterministic:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - ABDM identifiers: 14-digit ABHA numbers, ABHA addresses,
+    PAN-shaped tax identifiers, and synthetic HPR/HFR registry identifiers
+  - Indian PIN codes, mobile numbers, PAN, GSTIN, and ABHA identifiers
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Chinese Resident Identity Card (18 characters with MOD 11-2 checksum)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
+  - East African national IDs for Tanzania, Uganda, Rwanda, and Ethiopia
   - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
   - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
+  - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
+  - Ghana Card PIN and Kenyan legacy/Maisha identity numbers
+  - South African ID (13 digits with an embedded birth date and Luhn checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
   - UK NHS Number, a patient health identifier validated with the NHS
@@ -102,6 +110,118 @@ def validate_phone_us(phone_text: str) -> bool:
     if exchange[0] == "0":
         return False
     return True
+
+
+def _matches_mobile_prefix(number: str, prefix: str) -> bool:
+    if len(number) < len(prefix):
+        return False
+    return all(
+        expected == "x" or expected == actual
+        for actual, expected in zip(number, prefix)
+    )
+
+
+def _match_african_mobile_phone(phone_text: str) -> tuple[int, int] | None:
+    """Return preserved digit count and total digit count for a known plan."""
+
+    if not isinstance(phone_text, str):
+        return None
+    stripped = phone_text.strip()
+    if not stripped or re.fullmatch(r"[+0-9\s.-]+", stripped) is None:
+        return None
+
+    from openmed.core.pii_i18n import AFRICAN_MOBILE_PLANS
+
+    digits = _digits_only(stripped)
+    candidates: list[tuple[int, int]] = []
+    for plan in AFRICAN_MOBILE_PLANS.values():
+        if stripped.startswith("+"):
+            international_prefix = plan.country_code
+            if not digits.startswith(international_prefix):
+                continue
+            nsn = digits[len(international_prefix) :]
+            rendering_prefix_length = len(international_prefix)
+        elif stripped.startswith("00"):
+            international_prefix = f"00{plan.country_code}"
+            if not digits.startswith(international_prefix):
+                continue
+            nsn = digits[len(international_prefix) :]
+            rendering_prefix_length = len(international_prefix)
+        elif stripped.startswith("0") and not stripped.startswith("00"):
+            nsn = digits[1:]
+            rendering_prefix_length = 1
+        else:
+            continue
+
+        if len(nsn) != plan.nsn_length:
+            continue
+        for prefix in plan.mobile_prefixes:
+            if _matches_mobile_prefix(nsn, prefix):
+                candidates.append(
+                    (
+                        rendering_prefix_length + len(prefix),
+                        len(digits),
+                    )
+                )
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate[0])
+
+
+def _different_phone_digit(original: str, *, rng: random.Random) -> str:
+    candidate = rng.randint(0, 8)
+    if candidate >= int(original):
+        candidate += 1
+    return str(candidate)
+
+
+def generate_african_phone(
+    original: str,
+    *,
+    rng: random.Random | None = None,
+) -> str | None:
+    """Generate a prefix-preserving surrogate for a registered African mobile.
+
+    Country/trunk digits, the matched operator-prefix class, separators, and
+    total length stay unchanged. Every subscriber digit is replaced, so a
+    successful surrogate can never equal its input.
+
+    Args:
+        original: Candidate E.164, ``00``-international, or national number.
+        rng: Optional seeded random source for deterministic generation.
+
+    Returns:
+        A non-identical surrogate, or ``None`` when no registered plan matches.
+    """
+
+    match = _match_african_mobile_phone(original)
+    if match is None:
+        return None
+    preserved_digits, _total_digits = match
+    source = rng or random.Random()
+
+    digit_index = 0
+    surrogate: list[str] = []
+    for char in original:
+        if not char.isdigit():
+            surrogate.append(char)
+            continue
+        if digit_index < preserved_digits:
+            surrogate.append(char)
+        else:
+            surrogate.append(_different_phone_digit(char, rng=source))
+        digit_index += 1
+    return "".join(surrogate)
+
+
+class AfricanPhoneProvider(BaseProvider):
+    """Faker provider for operator-prefix-preserving African mobile phones."""
+
+    def african_phone(self, original: str) -> str | None:
+        """Return a deterministic surrogate for a registered mobile number."""
+
+        return generate_african_phone(original, rng=self.generator.random)
 
 
 def validate_luhn(number_text: str) -> bool:
@@ -561,15 +681,500 @@ def _verhoeff_checksum(digits: Sequence[int]) -> int:
     return _VERHOEFF_INV[c]
 
 
+def generate_aadhaar(*, rng: random.Random | None = None) -> str:
+    """Generate a 12-digit Aadhaar value with a valid Verhoeff checksum."""
+
+    source = rng or random.Random()
+    digits = [source.randint(2, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(10))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
 class AadhaarProvider(BaseProvider):
     """Generates 12-digit Aadhaar numbers with valid Verhoeff checksums."""
 
     def aadhaar(self) -> str:
-        # First digit cannot be 0 or 1 per UIDAI spec.
-        digits = [self.generator.random.randint(2, 9)]
-        digits.extend(self.generator.random.randint(0, 9) for _ in range(10))
-        digits.append(_verhoeff_checksum(digits))
-        return "".join(str(d) for d in digits)
+        return generate_aadhaar(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Pakistani CNIC
+# ---------------------------------------------------------------------------
+class PakistaniCnicProvider(BaseProvider):
+    """Generate structurally valid synthetic Pakistani CNIC values."""
+
+    def cnic(self) -> str:
+        """Return a dashed 13-digit synthetic CNIC."""
+        province = self.random_int(1, 7)
+        district_tehsil = f"{self.random_int(1000, 9999):04d}"
+        region = f"{province}{district_tehsil}"
+        family = f"{self.random_int(0, 9999999):07d}"
+        sex_digit = self.random_int(0, 9)
+        return f"{region}-{family}-{sex_digit}"
+
+    def cnic_undashed(self) -> str:
+        """Return an undashed 13-digit synthetic CNIC."""
+        return self.cnic().replace("-", "")
+
+
+# ---------------------------------------------------------------------------
+# India ABDM / ABHA identifiers
+# ---------------------------------------------------------------------------
+
+_ABHA_ADDRESS_RE = re.compile(
+    r"^[a-z][a-z0-9]*(?:\.[a-z0-9]+)*@[a-z][a-z0-9-]{1,31}$",
+    re.IGNORECASE,
+)
+_ABDM_REGISTRY_ID_RE = re.compile(r"^(?:HPR|HFR)-[A-Z0-9][A-Z0-9-]{5,31}$")
+
+
+def validate_abha_number(text: str) -> bool:
+    """Validate the publicly documented 14-digit ABHA number shape.
+
+    This structural validator preserves the existing ABDM recognizer contract;
+    it does not query ABDM or claim that a matching value was issued.
+    """
+
+    value = str(text or "").strip()
+    if not re.fullmatch(r"\d(?:[\s-]?\d){13}", value):
+        return False
+    digits = _digits_only(value)
+    return digits != "0" * 14
+
+
+def validate_abha_address(text: str) -> bool:
+    """Validate the structural shape used for synthetic ABHA addresses."""
+
+    value = str(text or "").strip()
+    if not _ABHA_ADDRESS_RE.fullmatch(value):
+        return False
+    handle, _domain = value.split("@", 1)
+    return 4 <= len(handle) <= 32 and not handle.endswith(".")
+
+
+def validate_abdm_registry_id(text: str) -> bool:
+    """Validate OpenMed's synthetic HPR/HFR surrogate shape."""
+
+    return bool(_ABDM_REGISTRY_ID_RE.fullmatch(str(text or "").strip().upper()))
+
+
+class ABDMProvider(BaseProvider):
+    """Generate synthetic, validator-backed India ABDM identifiers."""
+
+    def abha_number(self) -> str:
+        return generate_abha_number(rng=self.generator.random)
+
+    def abha_address(self) -> str:
+        rng = self.generator.random
+        handle_length = rng.randint(6, 14)
+        first = rng.choice("abcdefghijklmnopqrstuvwxyz")
+        tail = "".join(
+            rng.choice("abcdefghijklmnopqrstuvwxyz0123456789")
+            for _ in range(handle_length - 1)
+        )
+        return f"{first}{tail}@{rng.choice(('abdm', 'sbx'))}"
+
+    def pan(self) -> str:
+        rng = self.generator.random
+        prefix = "".join(rng.choice(_UPPER_ALPHA) for _ in range(3))
+        holder_type = rng.choice(_PAN_HOLDER_TYPES)
+        surname_initial = rng.choice(_UPPER_ALPHA)
+        serial = f"{rng.randint(0, 9999):04d}"
+        check = rng.choice(_UPPER_ALPHA)
+        return f"{prefix}{holder_type}{surname_initial}{serial}{check}"
+
+    def abdm_hpr_id(self) -> str:
+        return self._registry_id("HPR")
+
+    def abdm_hfr_id(self) -> str:
+        return self._registry_id("HFR")
+
+    def _registry_id(self, prefix: str) -> str:
+        rng = self.generator.random
+        suffix = "".join(rng.choice(_UPPER_ALPHA + "0123456789") for _ in range(12))
+        return f"{prefix}-{suffix}"
+
+
+# ---------------------------------------------------------------------------
+# India health identifiers (ABHA, UPI, ration card)
+# ---------------------------------------------------------------------------
+
+_UPI_SURROGATE_PROVIDERS = (
+    "okaxis",
+    "okhdfcbank",
+    "oksbi",
+    "paytm",
+    "upi",
+    "ybl",
+)
+_RATION_CARD_STATE_PREFIXES = (
+    "AP",
+    "AS",
+    "BR",
+    "DL",
+    "GJ",
+    "KA",
+    "KL",
+    "MH",
+    "PB",
+    "RJ",
+    "TN",
+    "TS",
+    "UP",
+    "WB",
+)
+
+
+def generate_abha_number(*, rng: random.Random | None = None) -> str:
+    """Generate a 14-digit ABHA surrogate with a Verhoeff check digit."""
+
+    source = rng or random.Random()
+    digits = [source.randint(1, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(12))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
+def generate_abha_address(*, rng: random.Random | None = None) -> str:
+    """Generate a structurally valid synthetic ABHA Address."""
+
+    source = rng or random.Random()
+    stem = source.choice(("patient", "health", "record", "member"))
+    suffix = "".join(str(source.randint(0, 9)) for _ in range(6))
+    domain = source.choice(("abdm", "sbx"))
+    return f"{stem}.{suffix}@{domain}"
+
+
+def generate_upi_id(*, rng: random.Random | None = None) -> str:
+    """Generate a structurally valid synthetic UPI virtual payment address."""
+
+    source = rng or random.Random()
+    stem = source.choice(("patient", "refund", "member", "account"))
+    suffix = "".join(str(source.randint(0, 9)) for _ in range(6))
+    provider = source.choice(_UPI_SURROGATE_PROVIDERS)
+    return f"{stem}.{suffix}@{provider}"
+
+
+def generate_indian_ration_card(*, rng: random.Random | None = None) -> str:
+    """Generate a conservative synthetic Indian ration-card identifier."""
+
+    source = rng or random.Random()
+    prefix = source.choice(_RATION_CARD_STATE_PREFIXES)
+    digits = "".join(str(source.randint(0, 9)) for _ in range(10))
+    if len(set(digits)) == 1:
+        digits = f"{digits[:-1]}{(int(digits[-1]) + 1) % 10}"
+    return f"{prefix}-{digits}"
+
+
+class IndiaHealthIdProvider(BaseProvider):
+    """Faker provider for synthetic Indian health-adjacent identifiers."""
+
+    def abha_number(self) -> str:
+        return generate_abha_number(rng=self.generator.random)
+
+    def abha_address(self) -> str:
+        return generate_abha_address(rng=self.generator.random)
+
+    def upi_id(self) -> str:
+        return generate_upi_id(rng=self.generator.random)
+
+    def indian_ration_card(self) -> str:
+        return generate_indian_ration_card(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# India locale bundle (PIN, phone, PAN, GSTIN, and ABHA)
+# ---------------------------------------------------------------------------
+
+_INDIA_UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_INDIA_ALPHANUMERIC = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_PAN_HOLDER_TYPES = "ABCFGHJLPT"
+_PAN_SYNTHETIC_PREFIX = "OMD"
+_PAN_CHECK_WEIGHTS = (3, 7, 1, 3, 7, 1, 3, 7, 1)
+_GSTIN_VALUE = {character: index for index, character in enumerate(_INDIA_ALPHANUMERIC)}
+
+
+def validate_indian_pin(text: str) -> bool:
+    """Validate the public six-digit Indian Postal Index Number shape."""
+
+    return (
+        isinstance(text, str) and re.fullmatch(r"[1-9]\d{5}", text.strip()) is not None
+    )
+
+
+def generate_indian_pin(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic six-digit Indian PIN-shaped value."""
+
+    source = rng or random.Random()
+    return str(source.randint(100_000, 999_999))
+
+
+def validate_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile number with an optional ``+91``/``0`` prefix."""
+
+    if not isinstance(text, str):
+        return False
+    digits = _digits_only(text)
+    if text.strip().startswith("+"):
+        return len(digits) == 12 and digits.startswith("91") and digits[2] in "6789"
+    if len(digits) == 11 and digits.startswith("0"):
+        return digits[1] in "6789"
+    return len(digits) == 10 and digits[0] in "6789"
+
+
+def generate_indian_phone(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic ``+91`` Indian mobile number."""
+
+    source = rng or random.Random()
+    national = source.choice("6789") + "".join(
+        str(source.randint(0, 9)) for _ in range(9)
+    )
+    return f"+91 {national[:5]} {national[5:]}"
+
+
+def pan_check_letter(body9: str) -> str:
+    """Return the check letter for OpenMed's synthetic PAN series.
+
+    India's allocated PAN check-letter algorithm is not public. Synthetic PANs
+    therefore use the project-specific ``OMD`` prefix and this deterministic
+    local checksum; non-synthetic PANs are validated by public structure only.
+    """
+
+    body = str(body9).strip().upper()
+    if re.fullmatch(r"[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}", body) is None:
+        raise ValueError("PAN body must match AAAAA9999 with a valid holder type")
+    total = sum(
+        _GSTIN_VALUE[character] * weight
+        for character, weight in zip(body, _PAN_CHECK_WEIGHTS)
+    )
+    return _INDIA_UPPERCASE[total % len(_INDIA_UPPERCASE)]
+
+
+def validate_pan(text: str) -> bool:
+    """Validate an Indian Permanent Account Number offline."""
+
+    if not isinstance(text, str):
+        return False
+    code = text.strip().upper()
+    if re.fullmatch(r"[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z]", code) is None:
+        return False
+    if code[5:9] == "0000":
+        return False
+    if code.startswith(_PAN_SYNTHETIC_PREFIX):
+        return code[-1] == pan_check_letter(code[:9])
+    return True
+
+
+def generate_pan(*, rng: random.Random | None = None) -> str:
+    """Generate a structurally valid PAN in OpenMed's synthetic series."""
+
+    source = rng or random.Random()
+    body = (
+        _PAN_SYNTHETIC_PREFIX
+        + source.choice(_PAN_HOLDER_TYPES)
+        + source.choice(_INDIA_UPPERCASE)
+        + f"{source.randint(1, 9999):04d}"
+    )
+    return body + pan_check_letter(body)
+
+
+def gstin_check_char(body14: str) -> str:
+    """Return the Luhn mod-36 check character for a GSTIN body."""
+
+    body = str(body14).strip().upper()
+    if len(body) != 14 or any(character not in _GSTIN_VALUE for character in body):
+        raise ValueError("GSTIN body must contain 14 uppercase alphanumeric characters")
+
+    factor = 2
+    total = 0
+    for character in reversed(body):
+        addend = factor * _GSTIN_VALUE[character]
+        total += (addend // 36) + (addend % 36)
+        factor = 1 if factor == 2 else 2
+    return _INDIA_ALPHANUMERIC[(36 - (total % 36)) % 36]
+
+
+def validate_gstin(text: str) -> bool:
+    """Validate an Indian GSTIN, including embedded PAN and checksum."""
+
+    if not isinstance(text, str):
+        return False
+    code = text.strip().upper()
+    if re.fullmatch(r"\d{2}[A-Z0-9]{10}[1-9A-Z]Z[0-9A-Z]", code) is None:
+        return False
+    if not 1 <= int(code[:2]) <= 37:
+        return False
+    if not validate_pan(code[2:12]):
+        return False
+    return code[-1] == gstin_check_char(code[:14])
+
+
+def generate_gstin(*, rng: random.Random | None = None) -> str:
+    """Generate a state-, PAN-, and mod-36-valid synthetic GSTIN."""
+
+    source = rng or random.Random()
+    state = f"{source.randint(1, 37):02d}"
+    pan = generate_pan(rng=source)
+    entity = source.choice(_INDIA_ALPHANUMERIC[1:])
+    body = f"{state}{pan}{entity}Z"
+    return body + gstin_check_char(body)
+
+
+def generate_ifsc(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic 11-character IFSC-shaped bank-branch code."""
+
+    source = rng or random.Random()
+    bank = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(4))
+    branch = "".join(source.choice(_INDIA_ALPHANUMERIC) for _ in range(6))
+    if branch == "000000":  # pragma: no cover - vanishingly rare guard
+        branch = "000001"
+    return f"{bank}0{branch}"
+
+
+def generate_indian_passport(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Indian passport-shaped identifier."""
+
+    source = rng or random.Random()
+    return f"{source.choice(_INDIA_UPPERCASE)}{source.randint(1_000_000, 9_999_999)}"
+
+
+def generate_voter_id_epic(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic three-letter, seven-digit EPIC identifier."""
+
+    source = rng or random.Random()
+    prefix = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(3))
+    return f"{prefix}{source.randint(1, 9_999_999):07d}"
+
+
+def generate_indian_driving_licence(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic normalized Indian driving-licence identifier."""
+
+    source = rng or random.Random()
+    state = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(2))
+    rto = source.randint(1, 99)
+    year = source.randint(1980, 2026)
+    serial = source.randint(1, 9_999_999)
+    return f"{state}{rto:02d}{year:04d}{serial:07d}"
+
+
+def generate_vehicle_registration(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic standard RTO vehicle-registration identifier."""
+
+    source = rng or random.Random()
+    state = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(2))
+    rto = source.randint(1, 99)
+    series = "".join(
+        source.choice(_INDIA_UPPERCASE) for _ in range(source.randint(1, 3))
+    )
+    serial = source.randint(1, 9999)
+    return f"{state}{rto:02d}{series}{serial:04d}"
+
+
+def validate_abha(text: str) -> bool:
+    """Validate OpenMed's deterministic 14-digit synthetic ABHA contract."""
+
+    if not isinstance(text, str):
+        return False
+    digits = re.sub(r"[\s-]", "", text)
+    if re.fullmatch(r"\d{14}", digits) is None or len(set(digits)) == 1:
+        return False
+
+    checksum = 0
+    for index, digit in enumerate(reversed(digits)):
+        checksum = _VERHOEFF_D[checksum][_VERHOEFF_P[index % 8][int(digit)]]
+    return checksum == 0
+
+
+def generate_abha(*, rng: random.Random | None = None) -> str:
+    """Generate a 14-digit synthetic ABHA with a Verhoeff check digit."""
+
+    source = rng or random.Random()
+    digits = [source.randint(1, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(12))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
+class IndiaSurrogateProvider(BaseProvider):
+    """Faker bundle for locale-correct synthetic Indian surrogates."""
+
+    def indian_name(self) -> str:
+        """Return a name from the active Indian Faker locale."""
+
+        return self.generator.name()
+
+    def indian_first_name(self) -> str:
+        """Return a first name from the active Indian Faker locale."""
+
+        return self.generator.first_name()
+
+    def indian_last_name(self) -> str:
+        """Return a last name from the active Indian Faker locale."""
+
+        return self.generator.last_name()
+
+    def indian_pin(self) -> str:
+        """Return a synthetic six-digit Indian PIN."""
+
+        return generate_indian_pin(rng=self.generator.random)
+
+    def indian_address(self) -> str:
+        """Return a localized Indian street address carrying a PIN."""
+
+        return (
+            f"{self.generator.street_address()}, {self.generator.city()} "
+            f"{self.indian_pin()}"
+        )
+
+    def indian_phone_number(self) -> str:
+        """Return a synthetic Indian mobile number."""
+
+        return generate_indian_phone(rng=self.generator.random)
+
+    def pan(self) -> str:
+        """Return a synthetic checksum-bearing PAN."""
+
+        return generate_pan(rng=self.generator.random)
+
+    def gstin(self) -> str:
+        """Return a synthetic checksum-valid GSTIN."""
+
+        return generate_gstin(rng=self.generator.random)
+
+    def ifsc(self) -> str:
+        """Return a synthetic IFSC-shaped bank-branch code."""
+
+        return generate_ifsc(rng=self.generator.random)
+
+    def indian_passport(self) -> str:
+        """Return a synthetic Indian passport-shaped identifier."""
+
+        return generate_indian_passport(rng=self.generator.random)
+
+    def voter_id_epic(self) -> str:
+        """Return a synthetic EPIC identifier."""
+
+        return generate_voter_id_epic(rng=self.generator.random)
+
+    def indian_driving_licence(self) -> str:
+        """Return a synthetic Indian driving-licence identifier."""
+
+        return generate_indian_driving_licence(rng=self.generator.random)
+
+    def indian_vehicle_registration(self) -> str:
+        """Return a synthetic RTO vehicle-registration identifier."""
+
+        return generate_vehicle_registration(rng=self.generator.random)
+
+    def abha(self) -> str:
+        """Return a synthetic checksum-valid ABHA number."""
+
+        return generate_abha(rng=self.generator.random)
+
+
+class IndianIdentifierProvider(IndiaSurrogateProvider):
+    """Compatibility name for the Indian multi-identifier Faker provider."""
 
 
 # ---------------------------------------------------------------------------
@@ -735,6 +1340,683 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Chinese mobile, bank-card, passport, and travel-permit identifiers
+# ---------------------------------------------------------------------------
+
+
+def _distinct_digit_candidate(original: str, candidate: str) -> str:
+    """Return a same-length digit candidate that differs from ``original``."""
+
+    if candidate != original:
+        return candidate
+    final_digit = (int(candidate[-1]) + 1) % 10
+    return candidate[:-1] + str(final_digit)
+
+
+def generate_chinese_mobile_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic mainland China mobile number.
+
+    The result always uses the domestic 11-digit ``1[3-9]#########`` shape,
+    even when ``original`` includes the optional ``+86`` country prefix.
+    """
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    if len(original_digits) == 13 and original_digits.startswith("86"):
+        original_digits = original_digits[2:]
+
+    for _ in range(100):
+        candidate = (
+            "1"
+            + str(source.randint(3, 9))
+            + "".join(str(source.randint(0, 9)) for _ in range(9))
+        )
+        if candidate != original_digits:
+            return candidate
+
+    return _distinct_digit_candidate(original_digits, candidate)
+
+
+def generate_chinese_bank_card(
+    original: str | None = None,
+    *,
+    length: int | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a length-preserving, Luhn-valid synthetic bank-card number."""
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    card_length = length or len(original_digits) or 16
+    if card_length not in range(16, 20):
+        raise ValueError("Chinese bank-card length must be between 16 and 19 digits")
+
+    for _ in range(100):
+        candidate = generate_luhn_identifier(length=card_length, rng=source)
+        if candidate != original_digits:
+            return candidate
+
+    body = [int(digit) for digit in candidate[:-2]]
+    body.append((int(candidate[-2]) + 1) % 10)
+    return "".join(str(digit) for digit in body) + str(_luhn_check_digit(body))
+
+
+def generate_chinese_passport(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic PRC passport number in letter-plus-eight-digit form."""
+
+    source = rng or random.Random()
+    original_value = (original or "").strip().upper()
+    prefix = (
+        original_value[0]
+        if re.fullmatch(r"[EGDSP][0-9]{8}", original_value)
+        else source.choice("EGDSP")
+    )
+    for _ in range(100):
+        candidate = prefix + "".join(str(source.randint(0, 9)) for _ in range(8))
+        if candidate != original_value:
+            return candidate
+    return prefix + _distinct_digit_candidate(original_value[1:], candidate[1:])
+
+
+def generate_hong_kong_macau_permit(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic Hong Kong/Macau resident Home Return Permit."""
+
+    source = rng or random.Random()
+    original_value = (original or "").strip().upper()
+    prefix = (
+        original_value[0]
+        if re.fullmatch(r"[HM][0-9]{8}", original_value)
+        else source.choice("HM")
+    )
+    for _ in range(100):
+        candidate = prefix + "".join(str(source.randint(0, 9)) for _ in range(8))
+        if candidate != original_value:
+            return candidate
+    return prefix + _distinct_digit_candidate(original_value[1:], candidate[1:])
+
+
+def generate_taiwan_compatriot_permit(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic eight-digit Taiwan Compatriot Permit."""
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    for _ in range(100):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(8))
+        if candidate != original_digits:
+            return candidate
+    return _distinct_digit_candidate(original_digits, candidate)
+
+
+class ChineseIdentifierProvider(BaseProvider):
+    """Generate Chinese mobile, bank-card, passport, and permit surrogates."""
+
+    def chinese_mobile_number(self, original: str | None = None) -> str:
+        """Return a synthetic mainland China mobile number."""
+        return generate_chinese_mobile_number(original, rng=self.generator.random)
+
+    def chinese_bank_card(self, original: str | None = None) -> str:
+        """Return a length-preserving, Luhn-valid bank-card number."""
+        return generate_chinese_bank_card(original, rng=self.generator.random)
+
+    def chinese_passport(self, original: str | None = None) -> str:
+        """Return a synthetic PRC passport number."""
+        return generate_chinese_passport(original, rng=self.generator.random)
+
+    def hong_kong_macau_permit(self, original: str | None = None) -> str:
+        """Return a synthetic Hong Kong/Macau resident Home Return Permit."""
+        return generate_hong_kong_macau_permit(original, rng=self.generator.random)
+
+    def taiwan_compatriot_permit(self, original: str | None = None) -> str:
+        """Return a synthetic Taiwan Compatriot Permit."""
+        return generate_taiwan_compatriot_permit(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# South African identity number and mobile phone
+# ---------------------------------------------------------------------------
+
+
+def _south_african_birth_year(digits: str) -> int:
+    """Resolve the most recent non-future century for an encoded ``YYMMDD``."""
+    today = date.today()
+    year = int(digits[:2])
+    month = int(digits[2:4])
+    day = int(digits[4:6])
+    modern_year = 2000 + year
+    try:
+        modern_date = date(modern_year, month, day)
+    except ValueError:
+        modern_date = None
+    if modern_date is not None and modern_date <= today:
+        return modern_year
+    return 1900 + year
+
+
+def _shares_digit_substring(source: str, candidate: str, *, length: int = 6) -> bool:
+    """Return whether two digit strings share a substring of ``length``."""
+    if len(source) < length:
+        return False
+    return any(
+        source[index : index + length] in candidate
+        for index in range(len(source) - length + 1)
+    )
+
+
+def generate_south_african_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid South African ID surrogate.
+
+    When a 13-digit source is supplied, the surrogate preserves its decoded
+    decade of birth, gender band, and citizenship digit. The generated value
+    always has a valid calendar date and Luhn check digit and never equals the
+    source.
+
+    Args:
+        original: Optional source ID whose protected structural attributes are
+            preserved.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A checksum-valid 13-digit synthetic identity number.
+    """
+    import calendar
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    has_source_shape = len(original_digits) == 13
+    today = date.today()
+
+    if has_source_shape:
+        birth_year = _south_african_birth_year(original_digits)
+        decade_start = birth_year - birth_year % 10
+        gender_is_male = int(original_digits[6:10]) >= 5000
+        citizenship = (
+            int(original_digits[10])
+            if original_digits[10] in {"0", "1"}
+            else source.randint(0, 1)
+        )
+    else:
+        decade_start = source.randrange(1940, 2020, 10)
+        gender_is_male = bool(source.randint(0, 1))
+        citizenship = source.randint(0, 1)
+
+    latest_year = min(decade_start + 9, today.year)
+    if latest_year < decade_start:
+        decade_start = today.year - today.year % 10
+        latest_year = today.year
+
+    candidate = ""
+    for _ in range(100):
+        year = source.randint(decade_start, latest_year)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        birth_date = date(year, month, day)
+        if birth_date > today:
+            continue
+
+        gender_sequence = (
+            source.randint(5000, 9999) if gender_is_male else source.randint(0, 4999)
+        )
+        body = (
+            f"{year % 100:02d}{month:02d}{day:02d}"
+            f"{gender_sequence:04d}{citizenship}{source.randint(0, 9)}"
+        )
+        candidate = body + str(_luhn_check_digit([int(digit) for digit in body]))
+        if candidate != original_digits and not _shares_digit_substring(
+            original_digits,
+            candidate,
+        ):
+            return candidate
+
+    if not candidate:
+        year = decade_start
+        body = (
+            f"{year % 100:02d}0101{'5000' if gender_is_male else '0000'}{citizenship}0"
+        )
+        candidate = body + str(_luhn_check_digit([int(digit) for digit in body]))
+    body = candidate[:11] + str((int(candidate[11]) + 1) % 10)
+    return body + str(_luhn_check_digit([int(digit) for digit in body]))
+
+
+def generate_za_id_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a valid South African ID, preserving source structure."""
+    return generate_south_african_id(original, rng=rng)
+
+
+def generate_za_mobile_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a South African mobile surrogate preserving its prefix class."""
+    source = rng or random.Random()
+    original_text = (original or "").strip()
+    original_digits = _digits_only(original_text)
+
+    if len(original_digits) == 11 and original_digits.startswith("27"):
+        national = "0" + original_digits[2:]
+    elif len(original_digits) == 10 and original_digits.startswith("0"):
+        national = original_digits
+    else:
+        national = ""
+
+    if len(national) == 10 and national[:2] in {"06", "07", "08"}:
+        prefix = national[:3]
+    else:
+        prefix = f"0{source.choice('678')}{source.randint(0, 9)}"
+
+    domestic = ""
+    for _ in range(100):
+        domestic = prefix + "".join(str(source.randint(0, 9)) for _ in range(7))
+        if domestic != national and not _shares_digit_substring(national, domestic):
+            break
+    if domestic == national:
+        domestic = domestic[:-1] + str((int(domestic[-1]) + 1) % 10)
+
+    if original_text.startswith("+27"):
+        return f"+27 {domestic[1:3]} {domestic[3:6]} {domestic[6:]}"
+    if len(original_digits) == 11 and original_digits.startswith("27"):
+        return "27" + domestic[1:]
+    if any(separator in original_text for separator in (" ", "-", ".")):
+        return f"{domestic[:3]} {domestic[3:6]} {domestic[6:]}"
+    return domestic
+
+
+class SouthAfricanIdProvider(BaseProvider):
+    """Generate deterministic South African ID and mobile surrogates."""
+
+    def south_african_id(self, original: str | None = None) -> str:
+        """Return a Luhn-valid South African identity-number surrogate."""
+        return generate_south_african_id(original, rng=self.generator.random)
+
+    def za_mobile_number(self, original: str | None = None) -> str:
+        """Return a South African mobile surrogate with a stable prefix class."""
+        return generate_za_mobile_number(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Egyptian national ID and Moroccan CIN
+# ---------------------------------------------------------------------------
+
+_MOROCCAN_CIN_DEFAULT_PREFIXES = tuple("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + (
+    "AA",
+    "BK",
+    "BE",
+    "BH",
+    "BJ",
+)
+
+
+def generate_egyptian_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Egyptian national ID surrogate.
+
+    When ``original`` is valid, its century, birth date, governorate, and
+    gender parity are retained while its four-digit serial is changed. The
+    unpublished final check digit is generated but intentionally not validated.
+
+    Args:
+        original: Optional source ID in ASCII or Arabic-Indic digits.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A distinct 14-digit Egyptian national ID surrogate.
+    """
+    import calendar
+
+    from openmed.core.pii_i18n import (
+        EGYPTIAN_GOVERNORATE_CODES,
+        normalize_arabic_indic_digits,
+        validate_egyptian_national_id,
+    )
+
+    source = rng or random.Random()
+    original_text = (
+        normalize_arabic_indic_digits(original.strip())
+        if isinstance(original, str)
+        else ""
+    )
+
+    if validate_egyptian_national_id(original_text):
+        prefix = original_text[:9]
+        gender_parity = int(original_text[12]) % 2
+        original_serial = original_text[9:13]
+    else:
+        century_digit = source.choice(("2", "3"))
+        first_year = 1900 if century_digit == "2" else 2000
+        last_year = 1999 if century_digit == "2" else date.today().year
+        year = source.randint(first_year, last_year)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        governorate = source.choice(tuple(sorted(EGYPTIAN_GOVERNORATE_CODES)))
+        prefix = f"{century_digit}{year % 100:02d}{month:02d}{day:02d}{governorate}"
+        gender_parity = source.randint(0, 1)
+        original_serial = ""
+
+    serial = ""
+    for _ in range(100):
+        serial = "".join(str(source.randint(0, 9)) for _ in range(3))
+        serial += str(source.choice(tuple(range(gender_parity, 10, 2))))
+        if serial != original_serial:
+            break
+    else:  # pragma: no cover - hostile RNG fallback
+        serial = f"{(int(serial or '0') + 2) % 10_000:04d}"
+
+    check_digit = source.randint(0, 9)
+    return f"{prefix}{serial}{check_digit}"
+
+
+def generate_moroccan_cin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Moroccan CIN surrogate preserving its regional prefix.
+
+    A valid source retains its exact one- or two-letter prefix and digit width.
+    Without a valid source, a published regional prefix and six-digit serial are
+    generated.
+
+    Args:
+        original: Optional source CIN in ASCII or Arabic-Indic digits.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A structurally valid CIN distinct from ``original``.
+    """
+    from openmed.core.pii_i18n import (
+        normalize_arabic_indic_digits,
+        validate_moroccan_cin,
+    )
+
+    source = rng or random.Random()
+    original_text = (
+        normalize_arabic_indic_digits(original.strip()).upper()
+        if isinstance(original, str)
+        else ""
+    )
+    if validate_moroccan_cin(original_text):
+        match = re.fullmatch(r"([A-Z]{1,2})([0-9]{5,7})", original_text)
+        if match is None:  # pragma: no cover - validator contract
+            raise RuntimeError("validated Moroccan CIN could not be parsed")
+        prefix, original_serial = match.groups()
+        serial_length = len(original_serial)
+    else:
+        prefix = source.choice(_MOROCCAN_CIN_DEFAULT_PREFIXES)
+        original_serial = ""
+        serial_length = 6
+
+    serial = ""
+    for _ in range(100):
+        serial = "".join(str(source.randint(0, 9)) for _ in range(serial_length))
+        if serial != original_serial:
+            return prefix + serial
+
+    value = (int(serial or "0") + 1) % (10**serial_length)
+    return prefix + f"{value:0{serial_length}d}"
+
+
+class EgyptMoroccoIdProvider(BaseProvider):
+    """Generate format-preserving Egyptian and Moroccan ID surrogates."""
+
+    def egyptian_national_id(self, original: str | None = None) -> str:
+        """Return a structurally valid Egyptian national ID surrogate."""
+        return generate_egyptian_national_id(original, rng=self.generator.random)
+
+    def moroccan_cin(self, original: str | None = None) -> str:
+        """Return a format-preserving Moroccan CIN surrogate."""
+        return generate_moroccan_cin(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Nigerian NIN, BVN, and mobile phone
+# ---------------------------------------------------------------------------
+
+
+def generate_nigeria_nin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Nigerian NIN surrogate.
+
+    Args:
+        original: Optional source NIN that the surrogate must not equal.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A non-trivial synthetic 11-digit NIN.
+    """
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+
+    from openmed.core.pii_i18n import validate_nigeria_nin
+
+    for _ in range(100):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(11))
+        if candidate != original_digits and validate_nigeria_nin(candidate):
+            return candidate
+    return "52740618395"
+
+
+def generate_nigeria_bvn(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Nigerian BVN surrogate.
+
+    Args:
+        original: Optional source BVN that the surrogate must not equal.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A non-trivial synthetic 11-digit BVN.
+    """
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+
+    from openmed.core.pii_i18n import validate_nigeria_bvn
+
+    for _ in range(100):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(11))
+        if candidate != original_digits and validate_nigeria_bvn(candidate):
+            return candidate
+    return "28471390652"
+
+
+_NIGERIA_MOBILE_PREFIX_CLASSES = ("070", "080", "081", "090", "091")
+
+
+def generate_ng_mobile_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Nigerian mobile surrogate preserving its prefix class.
+
+    Recognized domestic prefixes retain their ``070x``, ``080x``, ``081x``,
+    ``090x``, or ``091x`` class. International ``+234`` presentation and common
+    digit grouping are retained as well.
+
+    Args:
+        original: Optional source mobile number whose prefix class and display
+            style should be preserved.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A synthetic Nigerian mobile number.
+    """
+    source = rng or random.Random()
+    original_text = (original or "").strip()
+    original_digits = _digits_only(original_text)
+
+    if len(original_digits) == 13 and original_digits.startswith("234"):
+        national = "0" + original_digits[3:]
+    elif len(original_digits) == 11 and original_digits.startswith("0"):
+        national = original_digits
+    else:
+        national = ""
+
+    prefix_class = (
+        national[:3]
+        if national[:3] in _NIGERIA_MOBILE_PREFIX_CLASSES
+        else source.choice(_NIGERIA_MOBILE_PREFIX_CLASSES)
+    )
+
+    domestic = ""
+    for _ in range(100):
+        domestic = prefix_class + "".join(str(source.randint(0, 9)) for _ in range(8))
+        if domestic != national:
+            break
+    if domestic == national:
+        domestic = domestic[:-1] + str((int(domestic[-1]) + 1) % 10)
+
+    if original_text.startswith("+234"):
+        return f"+234 {domestic[1:4]} {domestic[4:7]} {domestic[7:]}"
+    if len(original_digits) == 13 and original_digits.startswith("234"):
+        return "234" + domestic[1:]
+    if any(separator in original_text for separator in (" ", "-", ".")):
+        return f"{domestic[:4]} {domestic[4:7]} {domestic[7:]}"
+    return domestic
+
+
+class NigeriaIdProvider(BaseProvider):
+    """Generate deterministic Nigerian NIN, BVN, and mobile surrogates."""
+
+    def nigeria_nin(self, original: str | None = None) -> str:
+        """Return a structurally valid Nigerian NIN surrogate."""
+        return generate_nigeria_nin(original, rng=self.generator.random)
+
+    def nigeria_bvn(self, original: str | None = None) -> str:
+        """Return a structurally valid Nigerian BVN surrogate."""
+        return generate_nigeria_bvn(original, rng=self.generator.random)
+
+    def ng_mobile_number(self, original: str | None = None) -> str:
+        """Return a Nigerian mobile surrogate with a stable prefix class."""
+        return generate_ng_mobile_number(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Ghana Card PIN and Kenyan identity numbers
+# ---------------------------------------------------------------------------
+
+
+def _numeric_surrogate(
+    original: str | None,
+    *,
+    length: int,
+    rng: random.Random,
+) -> str:
+    """Return a deterministic numeric surrogate distinct from ``original``."""
+    original_text = (original or "").strip()
+    candidate = ""
+    for _ in range(100):
+        candidate = "".join(str(rng.randint(0, 9)) for _ in range(length))
+        if candidate != original_text:
+            return candidate
+
+    value = (int(candidate or "0") + 1) % (10**length)
+    candidate = f"{value:0{length}d}"
+    if candidate == original_text:  # pragma: no cover - defensive wraparound
+        candidate = f"{(value + 1) % (10**length):0{length}d}"
+    return candidate
+
+
+def generate_ghana_card_pin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Ghana Card PIN surrogate.
+
+    A valid source's ICAO prefix is retained; otherwise ``GHA`` is used. The
+    generated presentation always preserves both hyphens and the documented
+    ``GHA-#########-#`` card form. NIA does not publish an offline checksum.
+
+    Args:
+        original: Optional source PIN whose country prefix should be retained.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A distinct, structurally valid Ghana Card PIN.
+    """
+    source = rng or random.Random()
+    original_text = (original or "").strip().upper()
+    match = re.fullmatch(r"([A-Z]{3})-([0-9]{9})-([0-9])", original_text)
+    prefix = match.group(1) if match is not None else "GHA"
+    original_digits = "" if match is None else f"{match.group(2)}{match.group(3)}"
+    digits = _numeric_surrogate(original_digits, length=10, rng=source)
+    return f"{prefix}-{digits[:9]}-{digits[9]}"
+
+
+def generate_kenya_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a distinct seven- or eight-digit Kenyan national ID."""
+    original_text = (original or "").strip()
+    length = len(original_text) if re.fullmatch(r"[0-9]{7,8}", original_text) else 8
+    return _numeric_surrogate(original_text, length=length, rng=rng or random.Random())
+
+
+def generate_kenya_maisha_namba(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a distinct nine-digit Kenya Maisha Namba surrogate."""
+    return _numeric_surrogate(
+        (original or "").strip(),
+        length=9,
+        rng=rng or random.Random(),
+    )
+
+
+class GhanaKenyaIdProvider(BaseProvider):
+    """Generate deterministic Ghanaian and Kenyan identity surrogates."""
+
+    def ghana_card_pin(self, original: str | None = None) -> str:
+        """Return a structurally valid Ghana Card PIN surrogate."""
+        return generate_ghana_card_pin(original, rng=self.generator.random)
+
+    def kenya_national_id(self, original: str | None = None) -> str:
+        """Return a seven- or eight-digit Kenyan national ID surrogate."""
+        return generate_kenya_national_id(original, rng=self.generator.random)
+
+    def kenya_maisha_namba(self, original: str | None = None) -> str:
+        """Return a nine-digit Kenya Maisha Namba surrogate."""
+        return generate_kenya_maisha_namba(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # UK NHS Number and National Insurance Number
 # ---------------------------------------------------------------------------
 
@@ -833,6 +2115,52 @@ class UKNINOProvider(BaseProvider):
         digits = f"{rng.randint(0, 999999):06d}"
         suffix = rng.choice("ABCD")
         return f"{prefix} {digits[:2]} {digits[2:4]} {digits[4:]} {suffix}"
+
+
+# ---------------------------------------------------------------------------
+# Chinese Resident Identity Card (18 characters, ISO 7064 MOD 11-2)
+# ---------------------------------------------------------------------------
+
+_CHINESE_RESIDENT_ID_PREFECTURE_CODES = (*range(1, 71), 90)
+
+
+def generate_chinese_resident_id(*, rng: random.Random | None = None) -> str:
+    """Generate a checksum-valid synthetic Chinese Resident Identity Card ID.
+
+    The six-digit region portion uses a stable mainland GB/T 2260
+    province-level prefix and synthetic non-zero subdivision digits. Birth
+    dates and sequence values are generated rather than copied from any
+    person or dataset.
+    """
+    import calendar
+
+    from openmed.core.pii_i18n import (
+        CHINESE_RESIDENT_ID_REGION_PREFIXES,
+        chinese_resident_id_check_character,
+    )
+
+    source = rng or random.Random()
+    province_prefix = source.choice(tuple(sorted(CHINESE_RESIDENT_ID_REGION_PREFIXES)))
+    prefecture_code = source.choice(_CHINESE_RESIDENT_ID_PREFECTURE_CODES)
+    county_code = source.randint(1, 99)
+
+    year = source.randint(1940, 2020)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    sequence = source.randint(1, 999)
+
+    body = (
+        f"{province_prefix}{prefecture_code:02d}{county_code:02d}"
+        f"{year:04d}{month:02d}{day:02d}{sequence:03d}"
+    )
+    return f"{body}{chinese_resident_id_check_character(body)}"
+
+
+class ChineseResidentIdProvider(BaseProvider):
+    """Generates synthetic Chinese Resident IDs with valid MOD 11-2 checks."""
+
+    def chinese_resident_id(self) -> str:
+        return generate_chinese_resident_id(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -1184,6 +2512,108 @@ class VietnameseIdProvider(BaseProvider):
 
     def vietnamese_cmnd(self) -> str:
         return generate_vietnamese_cmnd(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# East African national IDs (Tanzania, Uganda, Rwanda, Ethiopia)
+# ---------------------------------------------------------------------------
+
+
+def generate_tanzania_nida(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Tanzania NIDA surrogate, preserving the birth decade."""
+    from openmed.core.pii_i18n import validate_tanzania_nida
+
+    source = rng or random.Random()
+    today = date.today()
+    if original is not None and validate_tanzania_nida(original):
+        original_year = int(re.sub(r"[^0-9]", "", original)[:4])
+        decade_start = (original_year // 10) * 10
+        first_date = date(decade_start, 1, 1)
+        last_date = min(date(decade_start + 9, 12, 31), today)
+    else:
+        first_date = date(1940, 1, 1)
+        last_date = today
+
+    birth_date = date.fromordinal(
+        source.randint(first_date.toordinal(), last_date.toordinal())
+    )
+    suffix = "".join(str(source.randint(0, 9)) for _ in range(12))
+    return f"{birth_date:%Y%m%d}{suffix}"
+
+
+def generate_uganda_nin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Uganda NIN surrogate, preserving class and gender."""
+    from openmed.core.pii_i18n import validate_uganda_nin
+
+    source = rng or random.Random()
+    if original is not None and validate_uganda_nin(original):
+        prefix = original.strip().upper()[:2]
+    else:
+        prefix = f"C{source.choice(('M', 'F'))}"
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    suffix = "".join(source.choice(alphabet) for _ in range(12))
+    return f"{prefix}{suffix}"
+
+
+def generate_rwanda_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Rwanda ID preserving status, birth decade, and gender."""
+    from openmed.core.pii_i18n import validate_rwanda_id
+
+    source = rng or random.Random()
+    current_year = date.today().year
+    if original is not None and validate_rwanda_id(original):
+        digits = original.strip()
+        status = digits[0]
+        gender = digits[5]
+        decade_start = (int(digits[1:5]) // 10) * 10
+        birth_year = source.randint(
+            decade_start,
+            min(decade_start + 9, current_year),
+        )
+    else:
+        status = str(source.randint(1, 9))
+        gender = source.choice(("7", "8"))
+        birth_year = source.randint(1940, current_year)
+
+    suffix = "".join(str(source.randint(0, 9)) for _ in range(10))
+    return f"{status}{birth_year:04d}{gender}{suffix}"
+
+
+def generate_ethiopia_fayda(*, rng: random.Random | None = None) -> str:
+    """Generate a 12-digit Fayda FAN with a valid Verhoeff checksum."""
+    source = rng or random.Random()
+    digits = [source.randint(2, 9)]
+    digits.extend(source.randint(0, 9) for _ in range(10))
+    digits.append(_verhoeff_checksum(digits))
+    return "".join(str(digit) for digit in digits)
+
+
+class EastAfricanIdProvider(BaseProvider):
+    """Generate structurally valid East African national-ID surrogates."""
+
+    def tanzania_nida(self, original: str | None = None) -> str:
+        return generate_tanzania_nida(original, rng=self.generator.random)
+
+    def uganda_nin(self, original: str | None = None) -> str:
+        return generate_uganda_nin(original, rng=self.generator.random)
+
+    def rwanda_id(self, original: str | None = None) -> str:
+        return generate_rwanda_id(original, rng=self.generator.random)
+
+    def ethiopia_fayda(self) -> str:
+        return generate_ethiopia_fayda(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -1857,6 +3287,192 @@ class AustralianTFNProvider(BaseProvider):
         return generate_australian_tfn(rng=self.generator.random)
 
 
+_MPESA_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+_MPESA_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_MPESA_DIGITS = "0123456789"
+
+
+def generate_mpesa_transaction_code(
+    original: str | None = None,
+    *,
+    leading_character: str | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid M-Pesa transaction-code surrogate.
+
+    When an original code or explicit leading character is supplied, the
+    first character is retained. M-Pesa uses that position as part of its date
+    encoding, so preserving it keeps receipt ordering signals without copying
+    the identifying transaction code.
+
+    Args:
+        original: Optional original transaction code whose first character is
+            preserved.
+        leading_character: Optional explicit first character. Takes precedence
+            over ``original``.
+        rng: Optional seeded random-number generator.
+
+    Returns:
+        A ten-character uppercase alphanumeric transaction code.
+    """
+
+    source = rng or random.Random()
+    preserved = leading_character
+    if preserved is None and original:
+        preserved = original[0]
+    if preserved is not None and re.fullmatch(r"[A-Z0-9]", preserved) is None:
+        raise ValueError("leading_character must be one uppercase letter or digit")
+
+    characters = [preserved or source.choice(_MPESA_ALPHABET)]
+    characters.extend(source.choice(_MPESA_ALPHABET) for _ in range(2))
+    characters.append(source.choice(_MPESA_DIGITS))
+    characters.extend(source.choice(_MPESA_ALPHABET) for _ in range(6))
+
+    if not any(character.isalpha() for character in characters):
+        index = source.choice((1, 2, 4, 5, 6, 7, 8, 9))
+        characters[index] = source.choice(_MPESA_LETTERS)
+
+    candidate = "".join(characters)
+    if original is not None and candidate == original:
+        alternatives = _MPESA_LETTERS.replace(original[1], "")
+        characters[1] = source.choice(alternatives)
+        candidate = "".join(characters)
+    return candidate
+
+
+class MpesaProvider(BaseProvider):
+    """Generates seeded M-Pesa transaction-code surrogates."""
+
+    def mpesa_transaction_code(self, original: str | None = None) -> str:
+        """Return a valid code, preserving the original leading character."""
+
+        return generate_mpesa_transaction_code(
+            original,
+            rng=self.generator.random,
+        )
+
+
+def _generate_mobile_money_digits(
+    original: str | None,
+    *,
+    allowed_lengths: range,
+    default_length: int,
+    rng: random.Random,
+) -> str:
+    """Generate a distinct, length-preserving numeric billing identifier."""
+
+    if original is None:
+        length = default_length
+    else:
+        if not isinstance(original, str) or not original.isascii():
+            raise ValueError("mobile-money identifiers must contain ASCII digits")
+        if not original.isdigit() or len(original) not in allowed_lengths:
+            raise ValueError("mobile-money identifier has an unsupported digit length")
+        length = len(original)
+
+    candidate = "".join(str(rng.randint(0, 9)) for _ in range(length))
+    if candidate == original:
+        replacement = str((int(candidate[-1]) + 1) % 10)
+        candidate = f"{candidate[:-1]}{replacement}"
+    return candidate
+
+
+class MobileMoneyProvider(BaseProvider):
+    """Generate seeded mobile-money billing identifier surrogates."""
+
+    def mobile_money_paybill(self, original: str | None = None) -> str:
+        """Return a five- to seven-digit paybill surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(5, 8),
+            default_length=6,
+            rng=self.generator.random,
+        )
+
+    def mobile_money_till(self, original: str | None = None) -> str:
+        """Return a five- to seven-digit till surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(5, 8),
+            default_length=6,
+            rng=self.generator.random,
+        )
+
+    def mobile_money_agent(self, original: str | None = None) -> str:
+        """Return a five- to seven-digit agent-number surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(5, 8),
+            default_length=6,
+            rng=self.generator.random,
+        )
+
+    def momo_reference(self, original: str | None = None) -> str:
+        """Return a 10- to 12-digit MTN MoMo reference surrogate."""
+
+        return _generate_mobile_money_digits(
+            original,
+            allowed_lengths=range(10, 13),
+            default_length=10,
+            rng=self.generator.random,
+        )
+
+
+# The Kenya Ministry of Health defines MFL codes as five-digit sequential
+# numbers. The high five-digit band and high Nigeria serial band keep generated
+# identifiers visibly synthetic without consulting either country's registry.
+KENYA_MFL_SYNTHETIC_MIN = 90_000
+KENYA_MFL_SYNTHETIC_MAX = 99_999
+NIGERIA_HFR_SYNTHETIC_SERIAL_MIN = 9_000
+NIGERIA_HFR_SYNTHETIC_SERIAL_MAX = 9_999
+
+
+class HealthFacilityCodeProvider(BaseProvider):
+    """Generate deterministic Kenya KMHFL and Nigeria HFR surrogates."""
+
+    def kmhfl_code(self, original: str | None = None) -> str:
+        """Return a five-digit Kenya MFL code from the synthetic high band."""
+
+        for _ in range(20):
+            candidate = str(
+                self.generator.random.randint(
+                    KENYA_MFL_SYNTHETIC_MIN,
+                    KENYA_MFL_SYNTHETIC_MAX,
+                )
+            )
+            if candidate != original:
+                return candidate
+
+        fallback = KENYA_MFL_SYNTHETIC_MIN
+        if str(fallback) == original:
+            fallback += 1
+        return str(fallback)
+
+    def hfr_facility_code(self, original: str | None = None) -> str:
+        """Return a structurally valid Nigeria HFR code with a synthetic serial."""
+
+        for _ in range(20):
+            state = self.generator.random.randint(1, 37)
+            lga = self.generator.random.randint(1, 44)
+            ownership = self.generator.random.randint(1, 2)
+            level_of_care = self.generator.random.randint(1, 3)
+            serial = self.generator.random.randint(
+                NIGERIA_HFR_SYNTHETIC_SERIAL_MIN,
+                NIGERIA_HFR_SYNTHETIC_SERIAL_MAX,
+            )
+            candidate = f"{state:02d}{lga:02d}{ownership}{level_of_care}{serial:04d}"
+            if candidate != original:
+                return candidate
+
+        fallback = f"010111{NIGERIA_HFR_SYNTHETIC_SERIAL_MIN:04d}"
+        if fallback == original:
+            fallback = f"010111{NIGERIA_HFR_SYNTHETIC_SERIAL_MIN + 1:04d}"
+        return fallback
+
+
 # ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
@@ -1903,44 +3519,80 @@ class UnifiedSocialCreditCodeProvider(BaseProvider):
         return generate_unified_social_credit_code(rng=self.generator.random)
 
 
-def register_clinical_providers(faker) -> None:
-    """Add every custom provider in this module to ``faker``."""
-    from .registry_ids import national_id_faker_provider_classes
+_extra_providers: list[type[BaseProvider]] = []
 
-    for provider in national_id_faker_provider_classes():
-        faker.add_provider(provider)
-    faker.add_provider(MedicalRecordNumberProvider)
-    faker.add_provider(FinancialIdentifierProvider)
-    faker.add_provider(MrzProvider)
-    faker.add_provider(UnifiedSocialCreditCodeProvider)
+
+def register_extra_clinical_provider(provider: type[BaseProvider]) -> None:
+    """Register a provider class for every subsequently built Faker instance."""
+
+    if provider not in _extra_providers:
+        _extra_providers.append(provider)
+
+
+def register_clinical_providers(faker) -> None:
+    """Add every built-in and caller-registered provider to ``faker``."""
+    from .registry_ids import clinical_faker_provider_classes
+
+    providers = (
+        *clinical_faker_provider_classes(),
+        MedicalRecordNumberProvider,
+        FinancialIdentifierProvider,
+        MrzProvider,
+        UnifiedSocialCreditCodeProvider,
+        *_extra_providers,
+    )
+    seen: set[type[BaseProvider]] = set()
+    for provider in providers:
+        if provider not in seen:
+            faker.add_provider(provider)
+            seen.add(provider)
 
 
 __all__ = [
+    "ABDMProvider",
     "AadhaarProvider",
+    "AfricanPhoneProvider",
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
+    "ChineseIdentifierProvider",
+    "ChineseResidentIdProvider",
     "DanishCPRProvider",
+    "EastAfricanIdProvider",
+    "EgyptMoroccoIdProvider",
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
+    "HealthFacilityCodeProvider",
+    "GhanaKenyaIdProvider",
     "HungarianTAJProvider",
+    "IndiaHealthIdProvider",
+    "IndianIdentifierProvider",
+    "IndiaSurrogateProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
+    "KENYA_MFL_SYNTHETIC_MAX",
+    "KENYA_MFL_SYNTHETIC_MIN",
     "LatvianPersonasKodsProvider",
     "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
+    "MobileMoneyProvider",
+    "MpesaProvider",
     "MrzProvider",
     "NPIProvider",
+    "NigeriaIdProvider",
+    "NIGERIA_HFR_SYNTHETIC_SERIAL_MAX",
+    "NIGERIA_HFR_SYNTHETIC_SERIAL_MIN",
     "UnifiedSocialCreditCodeProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",
     "RomanianCNPProvider",
     "RodneCisloProvider",
     "SerbianJmbgProvider",
+    "SouthAfricanIdProvider",
     "ThaiNationalIdProvider",
     "VietnameseIdProvider",
     "SpanishDNIProvider",
@@ -1950,47 +3602,94 @@ __all__ = [
     "UKNINOProvider",
     "generate_australian_medicare",
     "generate_australian_tfn",
+    "generate_aadhaar",
+    "generate_african_phone",
     "generate_bc_phn",
     "generate_bic",
     "generate_bulgarian_egn",
     "generate_canadian_sin",
+    "generate_chinese_bank_card",
+    "generate_chinese_mobile_number",
+    "generate_chinese_passport",
+    "generate_chinese_resident_id",
     "generate_danish_cpr",
+    "generate_egyptian_national_id",
     "generate_hungarian_taj",
+    "generate_abha_address",
+    "generate_abha_number",
+    "generate_abha",
+    "generate_gstin",
+    "generate_ifsc",
+    "generate_indian_driving_licence",
+    "generate_indian_passport",
+    "generate_indian_phone",
+    "generate_indian_pin",
+    "generate_pan",
     "generate_estonian_isikukood",
+    "generate_ethiopia_fayda",
+    "generate_ghana_card_pin",
+    "generate_hong_kong_macau_permit",
     "generate_iban",
     "generate_ontario_health_card",
+    "generate_rwanda_id",
     "generate_indonesian_nik",
+    "generate_indian_ration_card",
+    "generate_vehicle_registration",
+    "generate_voter_id_epic",
     "generate_jmbg",
+    "generate_kenya_maisha_namba",
+    "generate_kenya_national_id",
     "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
+    "generate_nigeria_bvn",
+    "generate_nigeria_nin",
     "generate_pesel",
     "generate_latvian_personas_kods",
     "generate_malaysian_mykad",
+    "generate_mpesa_transaction_code",
+    "generate_moroccan_cin",
+    "generate_ng_mobile_number",
     "generate_philhealth_pin",
     "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_romanian_cnp",
     "generate_portuguese_nif",
+    "generate_south_african_id",
     "generate_spanish_nie",
     "generate_ssn",
+    "generate_za_id_number",
+    "generate_za_mobile_number",
     "generate_thai_national_id",
+    "generate_taiwan_compatriot_permit",
+    "generate_tanzania_nida",
+    "generate_uganda_nin",
+    "generate_upi_id",
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "register_extra_clinical_provider",
     "validate_australian_medicare",
     "validate_australian_tfn",
+    "validate_abdm_registry_id",
+    "validate_abha_address",
+    "validate_abha_number",
     "validate_bc_phn",
     "validate_bic",
     "validate_canadian_sin",
     "validate_iban",
+    "validate_abha",
+    "validate_gstin",
+    "validate_indian_phone",
+    "validate_indian_pin",
     "validate_luhn",
     "validate_npi",
     "validate_ontario_health_card",
+    "validate_pan",
     "validate_phone_us",
     "validate_ssn",
     "validate_uk_nhs_number",

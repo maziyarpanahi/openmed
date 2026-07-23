@@ -117,12 +117,21 @@ published OpenMed installation.
 | Dask / DuckDB | `dask` / `duckdb` | `pip install "openmed[dask]"` / `pip install "openmed[duckdb]"` |
 | spaCy component | `spacy` | `pip install "openmed[spacy]"` |
 | Presidio bridge | `presidio` | `pip install "openmed[presidio]"` |
+| Chinese segmentation, script conversion, and pinyin | `zh` | `pip install "openmed[zh]"` |
+| Indic segmentation and transliteration | `indic` | `pip install "openmed[indic]"` |
 | Grounding (rapidfuzz) | `grounding` | `pip install "openmed[grounding]"` |
 | LangChain / LlamaIndex | `langchain` / `llamaindex` | `pip install "openmed[langchain]"` / `pip install "openmed[llamaindex]"` |
 | Kafka / cloud object storage | `kafka` / `cloud` | `pip install "openmed[kafka]"` / `pip install "openmed[cloud]"` |
 | AWQ / GPTQ export | `awq` / `gptq` | `pip install "openmed[awq]"` / `pip install "openmed[gptq]"` |
 
 You can stack extras: `pip install "openmed[hf,service]"` or `pip install "openmed[hf,mlx,docs]"`.
+
+For a combined Chinese and Indic smoke check:
+
+```bash
+pip install "openmed[zh,indic]"
+python -c 'from openmed.interop import indic, zh; assert zh.segment("患者张伟") and indic.segment("रोगी रवि")'
+```
 
 ### `TesseractNotFoundError` / OCR reports no engine — the system binary is missing
 
@@ -383,14 +392,18 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 **Symptom.** A PII call with an unrecognized `lang` raises:
 
 ```text
-ValueError: Unsupported language 'xx'. Supported: ['ar', 'de', 'en', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pt', 'ro', 'te', 'th', 'tr']
+ValueError: Unsupported language 'xx'. Supported: ['am', 'ar', 'as', 'bn', 'de', 'en', 'es', 'fr', 'gu', 'he', 'hi', 'id', 'it', 'ja', 'kn', 'ko', 'ml', 'mr', 'nl', 'or', 'pa', 'pt', 'ro', 'sw', 'ta', 'te', 'th', 'tr', 'xh', 'zh', 'zu']
 ```
 
-**Cause.** PII extraction and de-identification support **17 supported PII language codes: ar, de, en, es,
-fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr**. Passing anything outside that set (or a mistyped
-code) raises this error.
+**Cause.** PII extraction and de-identification support **22 supported PII language codes: am, ar, de, en, es,
+fr, he, hi, id, it, ja, ko, nl, pt, ro, sw, te, th, tr, xh, zh, and zu**. Chinese currently uses the documented
+multilingual default-model placeholder. Passing anything outside that set (or a mistyped code) raises this error.
+The accepted API set also includes nine optional Indic routes: `as`, `bn`,
+`gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`. Those codes require an explicit
+model or `OPENMED_INDIC_NER_MODEL`; Hindi and Telugu can use the adapter too.
 
-**Fix.** Use one of the supported codes with `extract_pii(..., lang="<code>")`. Clinical NER coverage depends
+**Fix.** Use a built-in code or a configured optional Indic route with
+`extract_pii(..., lang="<code>")`. Clinical NER coverage depends
 on the selected registry model — check each model's `languages` in the
 [Model Registry](model-registry.md). See the [FAQ](faq.md#which-languages-are-supported).
 

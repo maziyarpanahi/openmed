@@ -16,15 +16,18 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Install manifest dependencies
-        run: python -m pip install "huggingface-hub>=0.30"
+        run: python -m pip install -e . "huggingface-hub>=0.30"
 
       - name: Regenerate manifest
         run: python scripts/manifest/generate_manifest.py --output models.jsonl
+
+      - name: Validate regenerated manifest
+        run: python -m scripts.manifest.validate_manifest
 
       - name: Open manifest refresh PR
         uses: peter-evans/create-pull-request@v8

@@ -12,6 +12,7 @@ import openmed
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
@@ -292,10 +293,11 @@ def openmed_list_models(
         }
 
     if pii_language:
-        if pii_language not in SUPPORTED_LANGUAGES:
+        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        if pii_language not in accepted_languages:
             raise ValueError(
                 f"Unsupported language '{pii_language}'. "
-                f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+                f"Supported: {sorted(accepted_languages)}"
             )
         allowed = openmed.get_pii_models_by_language(pii_language)
         models = {key: model for key, model in models.items() if key in allowed}
@@ -312,7 +314,7 @@ def openmed_list_models(
 def openmed_list_pii_languages() -> Dict[str, Any]:
     """List supported PII languages and their default model IDs."""
     languages = []
-    for code in sorted(SUPPORTED_LANGUAGES):
+    for code in sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES):
         languages.append(
             {
                 "code": code,
@@ -423,11 +425,16 @@ def _workflow_egress_deidentifier(
     return deidentify_text
 
 
-def _register_tools(
-    server: Any,
+def build_mcp_tool_handlers(
     runtime_provider: Optional[RuntimeProvider],
-) -> None:
-    handlers: dict[str, Callable[..., Dict[str, Any]]] = {
+) -> dict[str, Callable[..., Dict[str, Any]]]:
+    """Return the MCP tool-name -> handler mapping bound to a runtime provider.
+
+    Exposed at module level so the tool-schema drift guard can assert this set
+    of registered tool names matches the canonical registry specs.
+    """
+
+    return {
         "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
             **kwargs,
             runtime_provider=runtime_provider,
@@ -458,6 +465,17 @@ def _register_tools(
         ),
     }
 
+
+# Canonical set of MCP-exposed tool names, kept in sync with TOOL_REGISTRY by
+# tests/unit/interop/test_tool_schema_sync.py.
+MCP_TOOL_NAMES: frozenset[str] = frozenset(build_mcp_tool_handlers(None))
+
+
+def _register_tools(
+    server: Any,
+    runtime_provider: Optional[RuntimeProvider],
+) -> None:
+    handlers = build_mcp_tool_handlers(runtime_provider)
     for spec in TOOL_REGISTRY.latest_specs():
         server.tool(name=spec.name)(render_mcp_tool(spec, handlers[spec.name]))
 

@@ -12,9 +12,11 @@ from typing import Any, Mapping, Sequence
 from openmed.core import pii as pii_module
 from openmed.core.labels import (
     CANONICAL_LABELS,
+    CLINICAL_CONCEPT,
     DIRECT_IDENTIFIER,
     HIPAA_SAFE_HARBOR_CLASSES,
     LABEL_TO_HIPAA,
+    QUASI_IDENTIFIER,
     policy_label_for,
 )
 from openmed.core.policy import PolicyName, PolicyProfile, load_policy
@@ -32,6 +34,15 @@ BUNDLED_DEIDENTIFICATION_POLICIES: tuple[str, ...] = tuple(
     policy.value for policy in PolicyName
 )
 EXPECTATION_SOURCE = "openmed.core.policy.PolicyProfile.action_for"
+BUNDLED_POLICY_LABEL_ACTION_REQUIREMENTS: Mapping[str, Mapping[str, str]] = {
+    PolicyName.CHINA_PIPL.value: {
+        DIRECT_IDENTIFIER: "replace",
+        QUASI_IDENTIFIER: "mask",
+        CLINICAL_CONCEPT: "mask",
+    }
+}
+DPDP_DIRECT_IDENTIFIER_METADATA_KEY = "dpdp_direct_identifier_type"
+DPDP_DIRECT_IDENTIFIER_TYPES = frozenset({"AADHAAR", "ABHA", "PAN", "PERSON", "PHONE"})
 
 
 @dataclass(frozen=True)
@@ -99,17 +110,25 @@ class PolicyProfileComplianceResult:
     expected_action_counts: Mapping[str, int]
     covered_safe_harbor_classes: tuple[str, ...] = ()
     missing_safe_harbor_classes: tuple[str, ...] = ()
+    covered_dpdp_direct_identifier_types: tuple[str, ...] = ()
+    missing_dpdp_direct_identifier_types: tuple[str, ...] = ()
     failures: tuple[PolicyComplianceFailure, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready representation."""
         return {
             "action_counts": dict(self.action_counts),
+            "covered_dpdp_direct_identifier_types": list(
+                self.covered_dpdp_direct_identifier_types
+            ),
             "covered_safe_harbor_classes": list(self.covered_safe_harbor_classes),
             "expected_action_counts": dict(self.expected_action_counts),
             "failure_count": len(self.failures),
             "failures": [failure.to_dict() for failure in self.failures],
             "fixture_count": self.fixture_count,
+            "missing_dpdp_direct_identifier_types": list(
+                self.missing_dpdp_direct_identifier_types
+            ),
             "missing_safe_harbor_classes": list(self.missing_safe_harbor_classes),
             "passed": self.passed,
             "profile": self.profile,
@@ -158,6 +177,7 @@ def policy_compliance_metadata(
     )
     return {
         "expectation_source": EXPECTATION_SOURCE,
+        "dpdp_direct_identifier_types": sorted(DPDP_DIRECT_IDENTIFIER_TYPES),
         "fixture_path": str(resolved_path),
         "profiles": list(profiles),
         "safe_harbor_classes": sorted(HIPAA_SAFE_HARBOR_CLASSES),
@@ -195,7 +215,7 @@ def evaluate_profile_compliance(
     """Evaluate one profile against policy compliance fixtures."""
     resolved = _resolve_profile(profile)
     expectations = derive_profile_expectations(resolved)
-    failures: list[PolicyComplianceFailure] = []
+    failures = _profile_action_requirement_failures(resolved, expectations)
     action_counts: Counter[str] = Counter()
     expected_action_counts: Counter[str] = Counter()
     residual_direct_identifier_count = 0
@@ -203,6 +223,13 @@ def evaluate_profile_compliance(
     missing_safe_harbor_classes = _missing_safe_harbor_classes(
         resolved,
         covered_safe_harbor_classes,
+    )
+    covered_dpdp_direct_identifier_types = _covered_dpdp_direct_identifier_types(
+        fixtures
+    )
+    missing_dpdp_direct_identifier_types = _missing_dpdp_direct_identifier_types(
+        resolved,
+        covered_dpdp_direct_identifier_types,
     )
 
     for safe_harbor_class in missing_safe_harbor_classes:
@@ -218,6 +245,22 @@ def evaluate_profile_compliance(
                 expected_action="non_keep",
                 observed_action=ACTION_KEEP,
                 reason="safe_harbor_class_missing",
+            )
+        )
+
+    for identifier_type in missing_dpdp_direct_identifier_types:
+        failures.append(
+            PolicyComplianceFailure(
+                fixture_id="__suite__",
+                label="",
+                policy_label=DIRECT_IDENTIFIER,
+                hipaa_safe_harbor_class=None,
+                start=0,
+                end=0,
+                span_hash="",
+                expected_action="replace",
+                observed_action=ACTION_KEEP,
+                reason=f"dpdp_direct_identifier_missing:{identifier_type}",
             )
         )
 
@@ -259,6 +302,25 @@ def evaluate_profile_compliance(
                     )
                 )
 
+            dpdp_identifier_type = _fixture_dpdp_direct_identifier_type(span)
+            if (
+                resolved.name == PolicyName.INDIA_DPDP_ACT.value
+                and dpdp_identifier_type is not None
+                and observed_action != "replace"
+            ):
+                failures.append(
+                    _failure(
+                        fixture,
+                        span,
+                        expectation=expectation,
+                        observed_action=observed_action,
+                        reason=(
+                            "dpdp_direct_identifier_not_replaced:"
+                            f"{dpdp_identifier_type}"
+                        ),
+                    )
+                )
+
             if (
                 resolved.name == PolicyName.HIPAA_SAFE_HARBOR.value
                 and _fixture_safe_harbor_class(span) is not None
@@ -284,8 +346,41 @@ def evaluate_profile_compliance(
         expected_action_counts=_action_counts(expected_action_counts),
         covered_safe_harbor_classes=tuple(sorted(covered_safe_harbor_classes)),
         missing_safe_harbor_classes=tuple(sorted(missing_safe_harbor_classes)),
+        covered_dpdp_direct_identifier_types=tuple(
+            sorted(covered_dpdp_direct_identifier_types)
+        ),
+        missing_dpdp_direct_identifier_types=tuple(
+            sorted(missing_dpdp_direct_identifier_types)
+        ),
         failures=tuple(failures),
     )
+
+
+def _profile_action_requirement_failures(
+    profile: PolicyProfile,
+    expectations: Mapping[str, PolicyActionExpectation],
+) -> list[PolicyComplianceFailure]:
+    requirements = BUNDLED_POLICY_LABEL_ACTION_REQUIREMENTS.get(profile.name, {})
+    failures: list[PolicyComplianceFailure] = []
+    for label, expectation in expectations.items():
+        required_action = requirements.get(expectation.policy_label)
+        if required_action is None or expectation.action == required_action:
+            continue
+        failures.append(
+            PolicyComplianceFailure(
+                fixture_id="__profile__",
+                label=label,
+                policy_label=expectation.policy_label,
+                hipaa_safe_harbor_class=expectation.hipaa_safe_harbor_class,
+                start=0,
+                end=0,
+                span_hash="",
+                expected_action=required_action,
+                observed_action=expectation.action,
+                reason="profile_action_requirement_mismatch",
+            )
+        )
+    return failures
 
 
 def run_policy_compliance(
@@ -446,6 +541,23 @@ def _validate_fixture(
                 f"{fixture_path}:{line_number} has unknown Safe Harbor class "
                 f"{safe_harbor_class!r}"
             )
+        dpdp_identifier_type = _fixture_dpdp_direct_identifier_type(span)
+        if (
+            dpdp_identifier_type is not None
+            and dpdp_identifier_type not in DPDP_DIRECT_IDENTIFIER_TYPES
+        ):
+            raise ValueError(
+                f"{fixture_path}:{line_number} has unknown DPDP direct identifier "
+                f"type {dpdp_identifier_type!r}"
+            )
+        if (
+            dpdp_identifier_type is not None
+            and policy_label_for(span.label) != DIRECT_IDENTIFIER
+        ):
+            raise ValueError(
+                f"{fixture_path}:{line_number} marks non-direct label "
+                f"{span.label!r} as DPDP direct identifier {dpdp_identifier_type!r}"
+            )
 
 
 def _validate_unique_fixture_ids(
@@ -483,8 +595,36 @@ def _covered_safe_harbor_classes(fixtures: Sequence[BenchmarkFixture]) -> set[st
     }
 
 
+def _missing_dpdp_direct_identifier_types(
+    profile: PolicyProfile,
+    covered_types: set[str],
+) -> set[str]:
+    if profile.name != PolicyName.INDIA_DPDP_ACT.value:
+        return set()
+    return set(DPDP_DIRECT_IDENTIFIER_TYPES) - covered_types
+
+
+def _covered_dpdp_direct_identifier_types(
+    fixtures: Sequence[BenchmarkFixture],
+) -> set[str]:
+    return {
+        identifier_type
+        for fixture in fixtures
+        for span in fixture.gold_spans
+        for identifier_type in [_fixture_dpdp_direct_identifier_type(span)]
+        if identifier_type is not None
+    }
+
+
 def _fixture_safe_harbor_class(span: EvalSpan) -> str | None:
     value = span.metadata.get("hipaa_safe_harbor_class")
+    if value is None:
+        return None
+    return str(value)
+
+
+def _fixture_dpdp_direct_identifier_type(span: EvalSpan) -> str | None:
+    value = span.metadata.get(DPDP_DIRECT_IDENTIFIER_METADATA_KEY)
     if value is None:
         return None
     return str(value)
@@ -531,6 +671,9 @@ def _action_counts(counter: Counter[str]) -> dict[str, int]:
 
 __all__ = [
     "BUNDLED_DEIDENTIFICATION_POLICIES",
+    "BUNDLED_POLICY_LABEL_ACTION_REQUIREMENTS",
+    "DPDP_DIRECT_IDENTIFIER_METADATA_KEY",
+    "DPDP_DIRECT_IDENTIFIER_TYPES",
     "EXPECTATION_SOURCE",
     "POLICY_COMPLIANCE",
     "POLICY_COMPLIANCE_FIXTURE_PATH",

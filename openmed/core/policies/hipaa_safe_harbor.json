@@ -18,6 +18,7 @@
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "mask",
     "QUASI_IDENTIFIER": "mask",
+    "SENSITIVE_ATTRIBUTE": "mask",
     "CLINICAL_CONCEPT": "mask"
   },
   "actions": {
@@ -58,6 +59,7 @@
     "LITECOIN_ADDRESS": "mask",
     "MASKED_NUMBER": "mask",
     "GENDER": "mask",
+    "ETHNICITY": "mask",
     "EYE_COLOR": "mask",
     "HEIGHT": "mask",
     "ORGANIZATION": "mask",
@@ -112,6 +114,9 @@
     "OXYGEN_SUPPORT": "mask",
     "RESPIRATORY_FINDING": "mask",
     "DYSPNEA_GRADE": "mask",
+    "GROWTH_PARAMETER": "mask",
+    "GROWTH_PERCENTILE": "mask",
+    "DEVELOPMENTAL_MILESTONE": "mask",
 
 
     "OTHER": "mask"

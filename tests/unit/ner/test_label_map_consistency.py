@@ -897,10 +897,17 @@ class TestModelRegistryEntityTypes:
 
     def test_at_least_one_pii_model_per_supported_language(self):
         """Every supported language should have at least one PII model in the registry."""
-        from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+        from openmed.core.pii_i18n import (
+            DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+            DEFAULT_PII_MODELS,
+            SUPPORTED_LANGUAGES,
+        )
 
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
         for lang in SUPPORTED_LANGUAGES:
+            if lang in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES:
+                assert DEFAULT_PII_MODELS[lang] == "OpenMed/privacy-filter-multilingual"
+                continue
             if lang == "en":
                 # English models don't have a language infix
                 assert any(

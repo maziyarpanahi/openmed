@@ -1,0 +1,373 @@
+{
+  "default_pii_models": {
+    "am": "OpenMed/privacy-filter-multilingual",
+    "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
+    "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+    "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
+    "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
+    "he": "OpenMed/privacy-filter-multilingual",
+    "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
+    "id": "OpenMed/privacy-filter-multilingual",
+    "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
+    "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
+    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+    "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
+    "ro": "OpenMed/privacy-filter-multilingual",
+    "sw": "OpenMed/privacy-filter-multilingual",
+    "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
+    "th": "OpenMed/privacy-filter-multilingual",
+    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "xh": "OpenMed/privacy-filter-multilingual",
+    "zh": "OpenMed/privacy-filter-multilingual",
+    "zu": "OpenMed/privacy-filter-multilingual"
+  },
+  "lang_to_locale": {
+    "af": "af_ZA",
+    "am": "am_ET",
+    "ar": "ar_EG",
+    "as": "as_IN",
+    "bg": "bg_BG",
+    "bn": "bn_BD",
+    "cs": "cs_CZ",
+    "da": "da_DK",
+    "de": "de_DE",
+    "el": "el_GR",
+    "en": "en_US",
+    "es": "es_ES",
+    "et": "et_EE",
+    "fi": "fi_FI",
+    "fr": "fr_FR",
+    "gu": "gu_IN",
+    "ha": "ha_NG",
+    "he": "he_IL",
+    "hi": "hi_IN",
+    "hr": "hr_HR",
+    "hu": "hu_HU",
+    "id": "id_ID",
+    "ig": "ig_NG",
+    "it": "it_IT",
+    "ja": "ja_JP",
+    "kn": "kn_IN",
+    "ko": "ko_KR",
+    "lv": "lv_LV",
+    "ml": "ml_IN",
+    "mr": "mr_IN",
+    "ms": "ms_MY",
+    "nl": "nl_NL",
+    "or": "or_IN",
+    "pa": "pa_IN",
+    "pl": "pl_PL",
+    "pt": "pt_PT",
+    "ro": "ro_RO",
+    "rw": "rw_RW",
+    "sk": "sk_SK",
+    "sr": "sr_RS",
+    "sw": "sw",
+    "ta": "ta_IN",
+    "te": "en_IN",
+    "th": "th_TH",
+    "tl": "fil_PH",
+    "tr": "tr_TR",
+    "ur": "ur_PK",
+    "vi": "vi_VN",
+    "xh": "xh_ZA",
+    "yo": "yo_NG",
+    "zh": "zh_CN",
+    "zu": "zu_ZA"
+  },
+  "national_id_only_languages": [
+    "af",
+    "bg",
+    "cs",
+    "da",
+    "el",
+    "et",
+    "fi",
+    "ha",
+    "hr",
+    "hu",
+    "ig",
+    "lv",
+    "ms",
+    "pl",
+    "rw",
+    "sk",
+    "sr",
+    "tl",
+    "ur",
+    "vi",
+    "yo"
+  ],
+  "national_id_providers": {
+    "af": [
+      "af_ZA",
+      "south_african_id"
+    ],
+    "am": [
+      "am_ET",
+      "ethiopia_fayda"
+    ],
+    "bg": [
+      "bg_BG",
+      "egn"
+    ],
+    "cs": [
+      "cs_CZ",
+      "rodne_cislo"
+    ],
+    "da": [
+      "da_DK",
+      "danish_cpr"
+    ],
+    "de": [
+      "de_DE",
+      "german_steuer_id"
+    ],
+    "el": [
+      "el_GR",
+      "ssn"
+    ],
+    "en": [
+      "en_US",
+      "ssn"
+    ],
+    "es": [
+      "es_ES",
+      "nie"
+    ],
+    "et": [
+      "et_EE",
+      "isikukood"
+    ],
+    "fi": [
+      "fi_FI",
+      "ssn"
+    ],
+    "fr": [
+      "fr_FR",
+      "ssn"
+    ],
+    "ha": [
+      "ha_NG",
+      "nigeria_nin"
+    ],
+    "he": [
+      "he_IL",
+      "teudat_zehut"
+    ],
+    "hi": [
+      "hi_IN",
+      "aadhaar"
+    ],
+    "hr": [
+      "hr_HR",
+      "ssn"
+    ],
+    "hu": [
+      "hu_HU",
+      "hungarian_taj"
+    ],
+    "id": [
+      "id_ID",
+      "indonesian_nik"
+    ],
+    "ig": [
+      "ig_NG",
+      "nigeria_nin"
+    ],
+    "it": [
+      "it_IT",
+      "ssn"
+    ],
+    "ko": [
+      "ko_KR",
+      "korean_rrn"
+    ],
+    "lv": [
+      "lv_LV",
+      "personas_kods"
+    ],
+    "ms": [
+      "ms_MY",
+      "mykad"
+    ],
+    "nl": [
+      "nl_NL",
+      "ssn"
+    ],
+    "pl": [
+      "pl_PL",
+      "pesel"
+    ],
+    "pt": [
+      "pt_BR",
+      "cpf"
+    ],
+    "ro": [
+      "ro_RO",
+      "romanian_cnp"
+    ],
+    "rw": [
+      "rw_RW",
+      "rwanda_id"
+    ],
+    "sk": [
+      "sk_SK",
+      "rodne_cislo"
+    ],
+    "sr": [
+      "sr_RS",
+      "jmbg"
+    ],
+    "sw": [
+      "sw",
+      "kenya_national_id"
+    ],
+    "te": [
+      "en_IN",
+      "aadhaar"
+    ],
+    "th": [
+      "th_TH",
+      "thai_national_id"
+    ],
+    "tl": [
+      "fil_PH",
+      "philsys_psn"
+    ],
+    "tr": [
+      "tr_TR",
+      "ssn"
+    ],
+    "ur": [
+      "ur_PK",
+      "cnic"
+    ],
+    "vi": [
+      "vi_VN",
+      "vietnamese_cccd"
+    ],
+    "xh": [
+      "xh_ZA",
+      "south_african_id"
+    ],
+    "yo": [
+      "yo_NG",
+      "nigeria_nin"
+    ],
+    "zh": [
+      "zh_CN",
+      "chinese_resident_id"
+    ],
+    "zu": [
+      "zu_ZA",
+      "south_african_id"
+    ]
+  },
+  "script_language_hints": {
+    "Arabic": [
+      "ar",
+      "ha",
+      "ur"
+    ],
+    "Bengali": [
+      "bn",
+      "as"
+    ],
+    "Cyrillic": [
+      "en"
+    ],
+    "Devanagari": [
+      "hi",
+      "mr",
+      "ne"
+    ],
+    "Ethiopic": [
+      "am"
+    ],
+    "Greek": [
+      "en"
+    ],
+    "Gujarati": [
+      "gu"
+    ],
+    "Gurmukhi": [
+      "pa"
+    ],
+    "Han": [
+      "zh",
+      "ja"
+    ],
+    "Hangul": [
+      "ko"
+    ],
+    "Hebrew": [
+      "en"
+    ],
+    "Hiragana/Katakana": [
+      "ja"
+    ],
+    "Kannada": [
+      "kn"
+    ],
+    "Latin": [
+      "en",
+      "fr",
+      "de",
+      "it",
+      "es",
+      "nl",
+      "pt",
+      "tr",
+      "sw",
+      "ig",
+      "yo",
+      "zu",
+      "xh"
+    ],
+    "Malayalam": [
+      "ml"
+    ],
+    "Odia": [
+      "or"
+    ],
+    "Tamil": [
+      "ta"
+    ],
+    "Telugu": [
+      "te"
+    ],
+    "Thai": [
+      "en"
+    ],
+    "Unknown": [
+      "en"
+    ]
+  },
+  "supported_languages": [
+    "am",
+    "ar",
+    "de",
+    "en",
+    "es",
+    "fr",
+    "he",
+    "hi",
+    "id",
+    "it",
+    "ja",
+    "ko",
+    "nl",
+    "pt",
+    "ro",
+    "sw",
+    "te",
+    "th",
+    "tr",
+    "xh",
+    "zh",
+    "zu"
+  ]
+}

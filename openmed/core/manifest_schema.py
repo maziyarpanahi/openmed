@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,9 +32,12 @@ REQUIRED_FIELDS = frozenset(
 )
 OPTIONAL_ENRICHMENT_FIELDS = frozenset(
     {
+        "disk_mb",
+        "download_mb",
         "latency_ms",
         "peak_ram_mb",
         "recommended_tier",
+        "script_coverage",
         "training_provenance",
     }
 )
@@ -87,6 +91,46 @@ ALLOWED_FORMATS = (
 )
 ALLOWED_LICENSES = ("apache-2.0", "other")
 ALLOWED_RECOMMENDED_TIERS = ("phone", "laptop", "workstation", "server")
+SCRIPT_COVERAGE_TARGETS = (
+    "han_simplified",
+    "han_traditional",
+    "devanagari",
+    "bengali",
+    "tamil",
+    "telugu",
+    "kannada",
+    "malayalam",
+    "gujarati",
+    "gurmukhi",
+    "odia",
+)
+SCRIPT_COVERAGE_FIELDS = frozenset(
+    {"unk_rate", "byte_fallback_rate", "tokens_per_grapheme", "verdict"}
+)
+SCRIPT_COVERAGE_VERDICTS = ("supported", "unsupported", "unclaimed")
+SCRIPT_COVERAGE_UNK_THRESHOLD = 0.01
+LANGUAGE_SCRIPT_TARGETS: Mapping[str, tuple[str, ...]] = {
+    "zh": ("han_simplified", "han_traditional"),
+    "zh-cn": ("han_simplified",),
+    "zh-hans": ("han_simplified",),
+    "zh-hant": ("han_traditional",),
+    "zh-hk": ("han_traditional",),
+    "zh-tw": ("han_traditional",),
+    "ja": ("han_simplified", "han_traditional"),
+    "hi": ("devanagari",),
+    "mr": ("devanagari",),
+    "ne": ("devanagari",),
+    "bn": ("bengali",),
+    "as": ("bengali",),
+    "ta": ("tamil",),
+    "te": ("telugu",),
+    "kn": ("kannada",),
+    "ml": ("malayalam",),
+    "gu": ("gujarati",),
+    "pa": ("gurmukhi",),
+    "or": ("odia",),
+    "od": ("odia",),
+}
 
 REPRODUCIBILITY_HASH_RE = re.compile(r"sha256:[0-9a-f]{64}$")
 RELEASED_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}$")
@@ -170,6 +214,14 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
         )
     for field in sorted(fields - MANIFEST_FIELDS):
         violations.append(ManifestViolation(line_number, f"unexpected key: {field}"))
+
+    if row.get("family") == "PII" and "script_coverage" not in row:
+        violations.append(
+            ManifestViolation(
+                line_number,
+                "PII entry missing required key: script_coverage",
+            )
+        )
 
     _validate_non_empty_string(violations, line_number, row, "family")
     _validate_non_empty_string(violations, line_number, row, "task")
@@ -293,6 +345,23 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
     if "peak_ram_mb" in row:
         _validate_number_map(violations, line_number, row["peak_ram_mb"], "peak_ram_mb")
 
+    for field in ("download_mb", "disk_mb"):
+        if field not in row:
+            continue
+        value = row[field]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or value <= 0
+        ):
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field} must be a positive number",
+                )
+            )
+
     if "recommended_tier" in row:
         value = row["recommended_tier"]
         if value is not None and not isinstance(value, str):
@@ -310,6 +379,14 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
                     f"{_allowed(ALLOWED_RECOMMENDED_TIERS, allow_null=True)}",
                 )
             )
+
+    if "script_coverage" in row:
+        _validate_script_coverage(
+            violations,
+            line_number,
+            row["script_coverage"],
+            row.get("languages"),
+        )
 
     if "training_provenance" in row:
         _validate_training_provenance(
@@ -374,6 +451,145 @@ def _validate_string_list(
             violations.append(
                 ManifestViolation(line_number, f"{field}[{index}] must be a string")
             )
+
+
+def _validate_script_coverage(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    languages: Any,
+) -> None:
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(line_number, "script_coverage must be an object")
+        )
+        return
+
+    scripts = set(value)
+    expected_scripts = set(SCRIPT_COVERAGE_TARGETS)
+    for script in sorted(expected_scripts - scripts):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"script_coverage missing required script: {script}",
+            )
+        )
+    for script in sorted(scripts - expected_scripts):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"script_coverage has unexpected script: {script}",
+            )
+        )
+
+    claimed_scripts = _claimed_scripts(languages)
+    for script in SCRIPT_COVERAGE_TARGETS:
+        if script not in value:
+            continue
+        metrics = value[script]
+        field = f"script_coverage.{script}"
+        if not isinstance(metrics, Mapping):
+            violations.append(
+                ManifestViolation(line_number, f"{field} must be an object")
+            )
+            continue
+
+        metric_fields = set(metrics)
+        for key in sorted(SCRIPT_COVERAGE_FIELDS - metric_fields):
+            violations.append(
+                ManifestViolation(line_number, f"{field} missing required key: {key}")
+            )
+        for key in sorted(metric_fields - SCRIPT_COVERAGE_FIELDS):
+            violations.append(
+                ManifestViolation(line_number, f"{field} has unexpected key: {key}")
+            )
+
+        unk_rate = _coverage_number(
+            violations,
+            line_number,
+            metrics.get("unk_rate"),
+            f"{field}.unk_rate",
+            minimum=0.0,
+            maximum=1.0,
+        )
+        _coverage_number(
+            violations,
+            line_number,
+            metrics.get("byte_fallback_rate"),
+            f"{field}.byte_fallback_rate",
+            minimum=0.0,
+            maximum=1.0,
+        )
+        _coverage_number(
+            violations,
+            line_number,
+            metrics.get("tokens_per_grapheme"),
+            f"{field}.tokens_per_grapheme",
+            minimum=0.0,
+        )
+
+        verdict = metrics.get("verdict")
+        if verdict not in SCRIPT_COVERAGE_VERDICTS:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field}.verdict must be one of: "
+                    f"{_allowed(SCRIPT_COVERAGE_VERDICTS)}",
+                )
+            )
+        elif unk_rate is not None:
+            expected_verdict = "unclaimed"
+            if script in claimed_scripts:
+                expected_verdict = (
+                    "unsupported"
+                    if unk_rate > SCRIPT_COVERAGE_UNK_THRESHOLD
+                    else "supported"
+                )
+            if verdict != expected_verdict:
+                violations.append(
+                    ManifestViolation(
+                        line_number,
+                        f"{field}.verdict must be {expected_verdict} for the "
+                        "declared languages and UNK rate",
+                    )
+                )
+
+
+def _claimed_scripts(languages: Any) -> set[str]:
+    if not isinstance(languages, list):
+        return set()
+    claimed: set[str] = set()
+    for language in languages:
+        if not isinstance(language, str):
+            continue
+        normalized = language.lower().replace("_", "-")
+        claimed.update(LANGUAGE_SCRIPT_TARGETS.get(normalized, ()))
+    return claimed
+
+
+def _coverage_number(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    field: str,
+    *,
+    minimum: float,
+    maximum: float | None = None,
+) -> float | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        violations.append(ManifestViolation(line_number, f"{field} must be a number"))
+        return None
+    number = float(value)
+    if number < minimum or (maximum is not None and number > maximum):
+        upper = f" and {maximum:g}" if maximum is not None else " or greater"
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"{field} must be between {minimum:g}{upper}",
+            )
+        )
+        return None
+    return number
 
 
 def _validate_benchmark(

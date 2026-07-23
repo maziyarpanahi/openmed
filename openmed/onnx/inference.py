@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -13,6 +14,70 @@ MODEL_FILENAMES = {
     "int8": "model_int8.onnx",
 }
 DEFAULT_VARIANT_ORDER = ("int8", "fp32", "fp16")
+
+
+class _TokenizersTokenizerAdapter:
+    """Expose the small tokenizer surface needed by :class:`OnnxModel`."""
+
+    def __init__(self, tokenizer: Any) -> None:
+        self._tokenizer = tokenizer
+        self._default_truncation = dict(tokenizer.truncation or {})
+        self.model_max_length = self._default_truncation.get("max_length")
+        self._lock = threading.Lock()
+        # The Transformers wrapper does not apply tokenizer.json padding unless
+        # callers request it. Match that behavior for single-note inference.
+        self._tokenizer.no_padding()
+
+    def __call__(self, text: str, **kwargs: Any) -> dict[str, list[Any]]:
+        """Encode one text without importing a model framework."""
+        if kwargs.get("return_offsets_mapping") is not True:
+            raise ValueError("ONNX tokenization requires return_offsets_mapping=True")
+        if kwargs.get("return_tensors") != "np":
+            raise ValueError("ONNX tokenization requires return_tensors='np'")
+
+        truncation = bool(kwargs.get("truncation", False))
+        max_length = kwargs.get("max_length")
+        with self._lock:
+            try:
+                if truncation:
+                    options = dict(self._default_truncation)
+                    if max_length is not None:
+                        options["max_length"] = int(max_length)
+                    if options:
+                        self._tokenizer.enable_truncation(**options)
+                else:
+                    self._tokenizer.no_truncation()
+                encoded = self._tokenizer.encode(text)
+            finally:
+                if self._default_truncation:
+                    self._tokenizer.enable_truncation(**self._default_truncation)
+                else:
+                    self._tokenizer.no_truncation()
+
+        return {
+            "input_ids": [encoded.ids],
+            "attention_mask": [encoded.attention_mask],
+            "token_type_ids": [encoded.type_ids],
+            "offset_mapping": [encoded.offsets],
+        }
+
+
+class _TokenizersTokenizerFactory:
+    """Load a fast tokenizer directly from a pinned artifact directory."""
+
+    def __init__(self, tokenizer_type: Any) -> None:
+        self._tokenizer_type = tokenizer_type
+
+    def from_pretrained(self, model_id: str, **kwargs: Any) -> Any:
+        """Load ``tokenizer.json`` while preserving the former factory API."""
+        del kwargs
+        tokenizer_path = Path(model_id) / "tokenizer.json"
+        if not tokenizer_path.is_file():
+            raise FileNotFoundError(
+                f"Required ONNX artifact metadata is missing: {tokenizer_path.name}"
+            )
+        tokenizer = self._tokenizer_type.from_file(str(tokenizer_path))
+        return _TokenizersTokenizerAdapter(tokenizer)
 
 
 @dataclass(frozen=True)
@@ -417,13 +482,13 @@ def _load_runtime_dependencies() -> tuple[Any, Any, Any, Any]:
         import numpy as np
         import onnxruntime as ort
         from huggingface_hub import snapshot_download
-        from transformers import AutoTokenizer
+        from tokenizers import Tokenizer
     except ImportError as exc:
         raise ImportError(
             "OpenMed ONNX inference requires the ONNX Runtime extra. "
             "Install with: pip install 'openmed[onnx-runtime]'"
         ) from exc
-    return np, ort, AutoTokenizer, snapshot_download
+    return np, ort, _TokenizersTokenizerFactory(Tokenizer), snapshot_download
 
 
 __all__ = ["OnnxEntity", "OnnxModel", "load_onnx_model"]
