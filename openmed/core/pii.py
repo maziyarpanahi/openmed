@@ -2032,11 +2032,32 @@ def _build_deidentification_result(
         from .anonymizer import Anonymizer
 
         effective_consistent = consistent or seed is not None
+        vault_name_matching = bool(
+            surrogate_vault is not None
+            and getattr(
+                surrogate_vault,
+                "transliteration_aware_name_matching",
+                False,
+            )
+        )
         anonymizer = Anonymizer(
             lang=lang,
             locale=locale,
             consistent=effective_consistent,
             seed=seed,
+            transliteration_aware_name_matching=vault_name_matching,
+            indic_name_similarity_threshold=float(
+                getattr(
+                    surrogate_vault,
+                    "indic_name_similarity_threshold",
+                    0.80,
+                )
+            ),
+            indic_name_normalizer=getattr(
+                surrogate_vault,
+                "indic_name_normalizer",
+                None,
+            ),
         )
 
     deidentified = text
@@ -2697,11 +2718,33 @@ def _redact_entity(
                 )
 
                 def _create_surrogate(attempt: int) -> str:
-                    source = original if attempt == 0 else f"{original}|{attempt}"
-                    return anonymizer.surrogate(
-                        source,
-                        surrogate_label,
+                    key = surrogate_vault.key_for(
+                        original,
+                        label=label,
                         lang=lang,
+                    )
+                    if key.lang == "indic":
+                        return anonymizer.surrogate_identity(
+                            original,
+                            surrogate_label,
+                            lang=lang,
+                            attempt=attempt,
+                        )
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(source, surrogate_label, lang=lang)
+
+                key = surrogate_vault.key_for(
+                    original,
+                    label=label,
+                    lang=lang,
+                )
+                render_surrogate = None
+                if key.lang == "indic":
+                    render_surrogate = lambda identity: (
+                        anonymizer.render_name_surrogate(
+                            identity,
+                            source_surface=original,
+                        )
                     )
 
                 return surrogate_vault.get_or_create(
@@ -2710,6 +2753,7 @@ def _redact_entity(
                     lang=lang,
                     create_surrogate=_create_surrogate,
                     required_script=_surrogate_script_constraint(entity),
+                    render_surrogate=render_surrogate,
                 )
             return anonymizer.surrogate(
                 original,

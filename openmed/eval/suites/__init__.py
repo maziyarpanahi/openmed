@@ -97,6 +97,12 @@ from openmed.eval.suites.indian_ids import (
     load_indian_id_fixtures,
     run_indian_id_evaluation,
 )
+from openmed.eval.suites.indic_name_consistency import (
+    INDIC_NAME_CONSISTENCY,
+    evaluate_indic_name_consistency,
+    indic_name_consistency_metadata,
+    load_indic_name_fixtures,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -150,6 +156,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     CODE_MIXED_ROUTING,
     INDIA_HEALTH_ID_LEAKAGE,
     INDIAN_MULTI_ID,
+    INDIC_NAME_CONSISTENCY,
 )
 
 
@@ -209,6 +216,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_india_health_id_fixtures(**kwargs)
     if suite == INDIAN_MULTI_ID:
         return load_indian_id_fixtures(kwargs.get("path"))
+    if suite == INDIC_NAME_CONSISTENCY:
+        return load_indic_name_fixtures(kwargs.get("path"))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -246,6 +255,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return india_health_id_metadata(**kwargs)
     if suite == INDIAN_MULTI_ID:
         return indian_id_suite_metadata(**kwargs)
+    if suite == INDIC_NAME_CONSISTENCY:
+        return indic_name_consistency_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -343,6 +354,7 @@ __all__ = [
     "CODE_MIXED_ROUTING",
     "INDIA_HEALTH_ID_LEAKAGE",
     "INDIAN_MULTI_ID",
+    "INDIC_NAME_CONSISTENCY",
     "RELATIONS",
     "RelationFixture",
     "RelationTrap",
@@ -405,4 +417,7 @@ __all__ = [
     "indian_id_suite_metadata",
     "load_indian_id_fixtures",
     "run_indian_id_evaluation",
+    "load_indic_name_fixtures",
+    "indic_name_consistency_metadata",
+    "evaluate_indic_name_consistency",
 ]
