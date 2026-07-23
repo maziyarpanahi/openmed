@@ -55,6 +55,16 @@ def test_format_parser_fuzz_workflow_is_opt_in_and_time_bounded() -> None:
         "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
     )
     assert int(job["timeout-minutes"]) <= 15
+    action_refs = {
+        step["uses"]
+        for step in job["steps"]
+        if isinstance(step, dict) and "uses" in step
+    }
+    assert action_refs == {
+        "actions/checkout@v7",
+        "actions/setup-python@v7",
+        "astral-sh/setup-uv@v8.3.2",
+    }
     assert any(
         step.get("env", {}).get("HYPOTHESIS_PROFILE") == "fuzz-nightly"
         and step.get("env", {}).get("OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS") == "0.5"

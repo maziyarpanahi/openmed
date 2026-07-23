@@ -41,7 +41,11 @@ SECTION_SOURCES = {
 }
 
 
-def _write_synthetic_epub(path: Path) -> Path:
+def _write_synthetic_epub(
+    path: Path,
+    *,
+    compression: int = zipfile.ZIP_STORED,
+) -> Path:
     manifest_items = "\n".join(
         [
             (
@@ -81,7 +85,7 @@ def _write_synthetic_epub(path: Path) -> Path:
   </rootfiles>
 </container>
 """
-    with zipfile.ZipFile(path, "w") as archive:
+    with zipfile.ZipFile(path, "w", compression=compression) as archive:
         archive.writestr("mimetype", "application/epub+zip")
         archive.writestr("META-INF/container.xml", container)
         archive.writestr("OEBPS/package.opf", package)
@@ -226,4 +230,54 @@ def test_encrypted_epub_entries_raise(tmp_path: Path):
     path.write_bytes(payload)
 
     with pytest.raises(UnsupportedDocumentError, match="Encrypted EPUB"):
+        extract_epub(path)
+
+
+def test_corrupt_deflate_stream_raises_supported_error(tmp_path: Path):
+    path = _write_synthetic_epub(
+        tmp_path / "corrupt_deflate.epub",
+        compression=zipfile.ZIP_DEFLATED,
+    )
+    with zipfile.ZipFile(path) as archive:
+        info = archive.getinfo("META-INF/container.xml")
+        compressed_data_offset = (
+            info.header_offset
+            + 30
+            + len(info.filename.encode("utf-8"))
+            + len(info.extra)
+        )
+
+    payload = bytearray(path.read_bytes())
+    payload[compressed_data_offset] ^= 0x2
+    path.write_bytes(payload)
+
+    with pytest.raises(UnsupportedDocumentError, match="valid ZIP archive"):
+        extract_epub(path)
+
+
+def test_unsupported_zip_feature_raises_supported_error(tmp_path: Path):
+    path = _write_synthetic_epub(
+        tmp_path / "unsupported_zip_feature.epub",
+        compression=zipfile.ZIP_DEFLATED,
+    )
+    payload = bytearray(path.read_bytes())
+    central_header = payload.find(b"PK\x01\x02")
+    while central_header >= 0:
+        filename_length = int.from_bytes(
+            payload[central_header + 28 : central_header + 30],
+            "little",
+        )
+        filename_start = central_header + 46
+        filename = bytes(
+            payload[filename_start : filename_start + filename_length]
+        ).decode("utf-8")
+        if filename == "META-INF/container.xml":
+            payload[central_header + 8] |= 0x20
+            break
+        central_header = payload.find(b"PK\x01\x02", central_header + 4)
+    else:
+        raise AssertionError("container.xml central-directory entry not found")
+    path.write_bytes(payload)
+
+    with pytest.raises(UnsupportedDocumentError, match="valid ZIP archive"):
         extract_epub(path)
