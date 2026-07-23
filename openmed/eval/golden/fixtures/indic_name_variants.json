@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "category": "indic_name_variants",
+    "contains_real_phi": false,
+    "synthetic": true
+  },
+  "groups": [
+    {
+      "id": "synthetic-sanjay",
+      "language": "hi",
+      "note": "Synthetic patient संजय is also written as Sanjay and Sanjai.",
+      "variants": ["संजय", "Sanjay", "Sanjai"],
+      "negative_surfaces": ["Sanjana"]
+    },
+    {
+      "id": "synthetic-krishna",
+      "language": "hi",
+      "note": "Synthetic patient कृष्णा is also written as Krishna and Krishnaa.",
+      "variants": ["कृष्णा", "Krishna", "Krishnaa"],
+      "negative_surfaces": ["Kritika"]
+    },
+    {
+      "id": "synthetic-lakshmi",
+      "language": "hi",
+      "note": "Synthetic patient लक्ष्मी is also written as Lakshmi and Laxmi.",
+      "variants": ["लक्ष्मी", "Lakshmi", "Laxmi"],
+      "negative_surfaces": ["Lakshman"]
+    }
+  ]
+}

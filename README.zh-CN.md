@@ -493,11 +493,11 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（支持 25 种语言）
+## 多语言 PII（支持 26 种语言）
 
-实体抽取和去标识化支持 **25 个 PII 语言代码**：
-`am`、`ar`、`da`、`de`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`sv`、`sw`、`te`、`th`、`tr`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
-中文路由目前使用文档中说明的多语言默认模型占位符，专用中文模型权重仍单独提供。
+实体抽取和去标识化支持 **26 个 PII 语言代码**：
+`am`、`ar`、`da`、`de`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`ru`、`sv`、`sw`、`te`、`th`、`tr`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
+俄语和中文路由目前使用文档中说明的多语言默认模型占位符，专用模型权重仍单独提供。
 一个由用户选择并配置的印度语言 NER 系列还支持九条额外路由
 （`as`、`bn`、`gu`、`kn`、`ml`、`mr`、`or`、`pa` 和 `ta`），
 并且也可服务于印地语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
