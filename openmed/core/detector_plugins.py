@@ -57,7 +57,18 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from .labels import CANONICAL_LABELS, id_subtype_for, normalize_label
+from .labels import (
+    CANONICAL_LABELS,
+    ID_SUBTYPE_ABHA,
+    ID_SUBTYPE_GSTIN,
+    ID_SUBTYPE_IFSC,
+    ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    ID_SUBTYPE_INDIAN_PASSPORT,
+    ID_SUBTYPE_PAN,
+    ID_SUBTYPE_VOTER_ID_EPIC,
+    id_subtype_for,
+    normalize_label,
+)
 from .schemas.span import OpenMedSpan, hmac_text_hash
 
 DETECTOR_ENTRY_POINT_GROUP = "openmed.detectors"
@@ -76,6 +87,15 @@ INDIAN_MULTI_ID_ENTITY_TYPES = frozenset(
         "voter_id_epic",
     }
 )
+INDIAN_MULTI_ID_SUBTYPES = {
+    "abha": ID_SUBTYPE_ABHA,
+    "gstin": ID_SUBTYPE_GSTIN,
+    "ifsc": ID_SUBTYPE_IFSC,
+    "indian_driving_licence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indian_passport": ID_SUBTYPE_INDIAN_PASSPORT,
+    "pan": ID_SUBTYPE_PAN,
+    "voter_id_epic": ID_SUBTYPE_VOTER_ID_EPIC,
+}
 
 DetectCallable = Callable[..., Sequence[OpenMedSpan]]
 
@@ -240,7 +260,10 @@ def detect_indian_identifiers(
             if has_context:
                 score = min(1.0, score + pattern.context_boost)
             canonical = normalize_label(pattern.entity_type)
-            subtype = id_subtype_for(pattern.entity_type)
+            subtype = INDIAN_MULTI_ID_SUBTYPES.get(
+                pattern.entity_type,
+                id_subtype_for(pattern.entity_type),
+            )
             validator_name = (
                 pattern.validator.__name__ if pattern.validator is not None else "none"
             )
@@ -507,6 +530,7 @@ __all__ = [
     "DETECTOR_STAGES",
     "INDIAN_MULTI_ID_DETECTOR",
     "INDIAN_MULTI_ID_ENTITY_TYPES",
+    "INDIAN_MULTI_ID_SUBTYPES",
     "DetectorCapability",
     "DetectorSpec",
     "DetectCallable",

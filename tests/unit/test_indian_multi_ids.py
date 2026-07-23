@@ -18,6 +18,7 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.detector_plugins import (
     INDIAN_MULTI_ID_DETECTOR,
+    INDIAN_MULTI_ID_SUBTYPES,
     detect_indian_identifiers,
     iter_detectors,
 )
@@ -31,6 +32,7 @@ from openmed.core.labels import (
     ID_SUBTYPE_IFSC,
     ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
     ID_SUBTYPE_INDIAN_PASSPORT,
+    ID_SUBTYPE_NATIONAL_ID,
     ID_SUBTYPE_PAN,
     ID_SUBTYPE_VOTER_ID_EPIC,
     ID_SUBTYPES,
@@ -191,17 +193,34 @@ def test_registry_exposes_all_india_aliases(alias, id_type):
 
 
 def test_label_subtypes_policy_and_hipaa_resolution():
-    expected = {
-        "pan": ID_SUBTYPE_PAN,
-        "gstin": ID_SUBTYPE_GSTIN,
+    compatibility_subtypes = {
+        "pan": ID_SUBTYPE_NATIONAL_ID,
+        "gstin": ID_SUBTYPE_NATIONAL_ID,
         "ifsc": ID_SUBTYPE_IFSC,
         "voter_id_epic": ID_SUBTYPE_VOTER_ID_EPIC,
         "indian_driving_licence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
         "indian_passport": ID_SUBTYPE_INDIAN_PASSPORT,
-        "abha": ID_SUBTYPE_ABHA,
+        "abha": ID_SUBTYPE_NATIONAL_ID,
     }
-    assert set(expected.values()).issubset(ID_SUBTYPES)
-    for entity_type, subtype in expected.items():
+    assert {
+        ID_SUBTYPE_ABHA,
+        ID_SUBTYPE_GSTIN,
+        ID_SUBTYPE_IFSC,
+        ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+        ID_SUBTYPE_INDIAN_PASSPORT,
+        ID_SUBTYPE_PAN,
+        ID_SUBTYPE_VOTER_ID_EPIC,
+    }.issubset(ID_SUBTYPES)
+    assert INDIAN_MULTI_ID_SUBTYPES == {
+        "abha": ID_SUBTYPE_ABHA,
+        "gstin": ID_SUBTYPE_GSTIN,
+        "ifsc": ID_SUBTYPE_IFSC,
+        "indian_driving_licence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+        "indian_passport": ID_SUBTYPE_INDIAN_PASSPORT,
+        "pan": ID_SUBTYPE_PAN,
+        "voter_id_epic": ID_SUBTYPE_VOTER_ID_EPIC,
+    }
+    for entity_type, subtype in compatibility_subtypes.items():
         assert normalize_label(entity_type) == ID_NUM
         assert id_subtype_for(entity_type) == subtype
         assert policy_label_for(entity_type) == DIRECT_IDENTIFIER
@@ -259,6 +278,17 @@ def test_builtin_detector_is_discoverable_and_rejects_all_invalid_cases():
         )
     )
     assert detect_indian_identifiers(invalid_text, lang="hi") == ()
+
+
+def test_builtin_detector_emits_granular_subtypes_without_changing_aliases():
+    text = "पैन नंबर OMDBR7117R; GSTIN 06OMDBX7342DTZM."
+
+    spans = detect_indian_identifiers(text, lang="hi")
+
+    assert {span.entity_type: span.metadata["identifier_type"] for span in spans} == {
+        "gstin": ID_SUBTYPE_GSTIN,
+        "pan": ID_SUBTYPE_PAN,
+    }
 
 
 def _empty_prediction(text: str, model_name: str = "stub") -> PredictionResult:

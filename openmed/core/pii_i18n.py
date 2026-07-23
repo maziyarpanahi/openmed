@@ -3529,7 +3529,7 @@ INDIAN_MULTI_ID_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<!\d)\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{2}(?!\d)",
         "abha",
-        priority=15,
+        priority=13,
         base_score=0.35,
         context_words=[
             "abha",
@@ -9493,7 +9493,12 @@ def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     return deduped
 
 
-def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIPattern]:
+def get_patterns_for_language(
+    lang: str,
+    locale: str | None = None,
+    *,
+    include_indian_multi_id: bool = True,
+) -> List[PIIPattern]:
     """Return combined PII patterns for the given language.
 
     English patterns (email, URL, IP, etc.) are universal and always
@@ -9558,6 +9563,12 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
             pattern
             for pattern in LOCALE_PII_PATTERNS.get(locale_key, [])
             if not any(pattern is existing for existing in combined)
+        ]
+
+    if not include_indian_multi_id:
+        indian_pattern_ids = {id(pattern) for pattern in INDIAN_MULTI_ID_PII_PATTERNS}
+        combined = [
+            pattern for pattern in combined if id(pattern) not in indian_pattern_ids
         ]
 
     return combined
@@ -9665,9 +9676,16 @@ def get_patterns_for_code_mixed_tags(
     *,
     base_lang: str = "en",
     locale: str | None = None,
+    include_indian_multi_id: bool = True,
 ) -> List[PIIPattern]:
     """Combine the base language pack with explicitly gated Hinglish patterns."""
-    patterns = list(get_patterns_for_language(base_lang, locale=locale))
+    patterns = list(
+        get_patterns_for_language(
+            base_lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        )
+    )
     patterns.extend(get_hinglish_patterns_for_token_tags(text, token_language_tags))
     return patterns
 
