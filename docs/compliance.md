@@ -34,6 +34,22 @@ issue, and without including real patient data.
   capture the canonical policy literals and default action posture used by the
   runtime.
 
+## Deployment Templates
+
+These artifacts are templates requiring legal review, not legal advice. Adapt
+them to the actual parties, purpose, data, jurisdiction, deployment boundaries,
+and supervisory-authority guidance:
+
+- [Data Protection Impact Assessment template](compliance/dpia-template.md)
+  connects a deployment's processing description, policy profile, audit
+  residual-risk score, validation evidence, safeguards, and approval decision.
+- [Data Processing Agreement template](compliance/dpa-template.md) covers the
+  local/on-device baseline, no-telemetry posture, sub-processor inventory, data
+  return or deletion, and reversible-pseudonymization key custody.
+- [EU AI Act and GDPR model-card field specification](compliance/model-card-eu-ai-act-fields.md)
+  defines intended-purpose, limitation, accuracy/leakage, human-oversight,
+  robustness, and GDPR fields for manifest- and `BenchmarkReport`-backed cards.
+
 ## Policy Literals
 
 Use these exact literals in docs, examples, and deployment configuration:
