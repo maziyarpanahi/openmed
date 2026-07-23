@@ -25,6 +25,9 @@ cache-only flags, passes `local_files_only=True` to Hub-backed loaders, and
 blocks outbound sockets during inference and de-identification. See
 [Local-only offline mode](configuration.md#local-only-offline-mode) and the
 [offline troubleshooting entry](troubleshooting.md#running-offline-air-gapped-or-offlinemodeerror-on-inference).
+For institutional pip mirrors, `HF_ENDPOINT`, HTTP proxies, resumable cache
+warming, and a metered-connection checklist, use the
+[low-bandwidth installation guide](low-bandwidth-install.md).
 
 ### Which package extras should I install?
 
