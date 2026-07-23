@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added PHI-free, hash-verifiable Africa data-residency attestations for audited
+  local de-identification runs, with data-driven jurisdiction wording, exact
+  policy and model provenance, conservative captured offline evidence, a public
+  JSON Schema, and an offline deployment and review guide (#1446).
 - Added an Igbo (`ig`) PII pack for Nigerian clinical text with NFC, NFD, and
   unmarked context support, native `ig_NG` surrogates, shared Nigerian NIN and
   phone patterns, and grapheme-safe replacement of dot-below names (#1441).

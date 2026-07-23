@@ -20,6 +20,7 @@ SCHEMA_NAMES = (
     "span",
     "action",
     "audit",
+    "attestation",
     "entity",
     "relation",
     "code",
