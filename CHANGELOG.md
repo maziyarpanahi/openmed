@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite
   evidence before a release can proceed (#1814).
+- Added a scrubadub adapter with `to_canonical()`/`from_canonical()` span
+  conversion and canonical label mapping for scrubadub's core `Filth` types
+  (including the `en_US`/`en_GB` locale detectors), splitting `credential`
+  matches into separate `USERNAME`/`PASSWORD` entities using scrubadub's
+  named regex groups, flattening scrubadub overlap wrappers without label loss,
+  and losslessly recombining credential matches on the return trip. Scoreless
+  scrubadub spans default to fallback priority during OpenMed arbitration.
+  scrubadub stays an optional `scrubadub` extra, and the adapter is
+  registered lazily as `scrubadub` in `openmed.interop` (#281).
+- Added a full Russian (`ru`) PII language pack, including Cyrillic date,
+  phone, postal-index, and street-address patterns, SNILS (insurance account
+  number) and OMS (health-insurance policy number) validators with
+  checksum-backed surrogates, and service/SDK wiring. Russian uses the
+  documented multilingual default-model placeholder until dedicated weights
+  ship; the supported PII language-code allow-list now covers 26 codes (#1860).
 - Added opt-in token-level language identification for Hinglish clinical text,
   with exact offset-only decisions, deterministic local fallback routing,
   optional caller-supplied model hooks, and synthetic token-accuracy and

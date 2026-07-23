@@ -511,6 +511,7 @@ _LOCALE_ID_METHODS = {
     "sk_SK": "rodne_cislo",
     "cs_CZ": "rodne_cislo",
     "ro_RO": "romanian_cnp",
+    "ru_RU": "snils",
     "fi_FI": "ssn",
     "bg_BG": "egn",
     "hr_HR": "ssn",
