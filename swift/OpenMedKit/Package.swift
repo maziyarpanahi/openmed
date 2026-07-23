@@ -13,7 +13,19 @@ let package = Package(
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        )
+        ),
+        .library(
+            name: "OpenMedExtensionSupport",
+            targets: ["OpenMedExtensionSupport"]
+        ),
+        .library(
+            name: "OpenMedShareExtension",
+            targets: ["ShareExtension"]
+        ),
+        .library(
+            name: "OpenMedActionExtension",
+            targets: ["ActionExtension"]
+        ),
     ],
     dependencies: [
         // swift-transformers for HuggingFace-compatible tokenization
@@ -34,9 +46,30 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .target(
+            name: "OpenMedExtensionSupport",
+            dependencies: ["OpenMedKit"]
+        ),
+        .target(
+            name: "ShareExtension",
+            dependencies: ["OpenMedExtensionSupport"]
+        ),
+        .target(
+            name: "ActionExtension",
+            dependencies: ["OpenMedExtensionSupport"]
+        ),
         .testTarget(
             name: "OpenMedKitTests",
             dependencies: ["OpenMedKit"]
+        ),
+        .testTarget(
+            name: "ExtensionTests",
+            dependencies: [
+                "OpenMedKit",
+                "OpenMedExtensionSupport",
+                "ShareExtension",
+                "ActionExtension",
+            ]
         ),
     ]
 )
