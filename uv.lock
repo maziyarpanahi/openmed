@@ -513,8 +513,8 @@ dependencies = [
     { name = "sentencepiece" },
     { name = "torch" },
     { name = "tqdm" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/90/e5/b22697903982284fe284568fb2663a2196694a8eee637f5cf4ccfe435a38/auto_gptq-0.7.1.tar.gz", hash = "sha256:5c61ad380e9b4c603757c254765e9083a90a820cd0aff1b5d2c6f7fd96c85e80", size = 126148, upload-time = "2024-03-01T13:09:30.998Z" }
 wheels = [
@@ -529,15 +529,15 @@ name = "autoawq"
 version = "0.2.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "accelerate" },
-    { name = "datasets" },
-    { name = "huggingface-hub" },
-    { name = "tokenizers" },
-    { name = "torch" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "triton" },
-    { name = "typing-extensions" },
-    { name = "zstandard" },
+    { name = "accelerate", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "datasets", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "huggingface-hub", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "tokenizers", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "torch", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "triton", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "typing-extensions", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "zstandard", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b3/58/58426405b68555a12364533b1426e7f3ccf59ce6fd7754b1dabb8c7de44a/autoawq-0.2.9.tar.gz", hash = "sha256:f3397687118c7d23c769de0de05ff1dca8950a2644acbe1b6eb1399c691fe7ee", size = 74313, upload-time = "2025-05-11T09:02:26.341Z" }
 
@@ -2748,8 +2748,8 @@ dependencies = [
     { name = "termcolor" },
     { name = "toposort" },
     { name = "torch" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/03/f91915b2f16f3334179f5b9ea0413c64172f4634c842c474809a9062f63e/hanlp-2.1.3.tar.gz", hash = "sha256:12d0c391065cf87db8854b41277b99ae4651ddaf407a95987fa1f057a50d1772", size = 503791, upload-time = "2025-10-19T02:48:37.38Z" }
 wheels = [
@@ -4068,8 +4068,8 @@ dependencies = [
     { name = "protobuf" },
     { name = "pyyaml" },
     { name = "sentencepiece" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/84/94/9a38d6b0c6fcca995b9136c94eb7da1e9c5165652edf228b96b29960fa7a/mlx_lm-0.31.3.tar.gz", hash = "sha256:61eb0e3ba09444f77f874aff295401d7ccd20b39495cbbce0c782a15474ce733", size = 304318, upload-time = "2026-04-22T07:37:27.922Z" }
 wheels = [
@@ -4757,7 +4757,7 @@ name = "nvidia-cudnn-cu12"
 version = "9.10.2.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas-cu12" },
+    { name = "nvidia-cublas-cu12", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'linux' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/41/e79269ce215c857c935fd86bcfe91a451a584dfc27f1e068f568b9ad1ab7/nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:c9132cc3f8958447b4910a1720036d9eff5928cc3179b0a51fb6d167c6cc87d8", size = 705026878, upload-time = "2025-06-06T21:52:51.348Z" },
@@ -4770,7 +4770,7 @@ name = "nvidia-cufft-cu12"
 version = "11.3.3.83"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-nvjitlink-cu12", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'linux' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/bc/7771846d3a0272026c416fbb7e5f4c1f146d6d80704534d0b187dd6f4800/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:848ef7224d6305cdb2a4df928759dca7b1201874787083b6e7550dd6765ce69a", size = 193109211, upload-time = "2025-03-07T01:44:56.873Z" },
@@ -4802,9 +4802,9 @@ name = "nvidia-cusolver-cu12"
 version = "11.7.3.90"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas-cu12" },
-    { name = "nvidia-cusparse-cu12" },
-    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-cublas-cu12", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'linux' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "nvidia-cusparse-cu12", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'linux' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "nvidia-nvjitlink-cu12", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'linux' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/32/f7cd6ce8a7690544d084ea21c26e910a97e077c9b7f07bf5de623ee19981/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:db9ed69dbef9715071232caa9b69c52ac7de3a95773c2db65bdba85916e4e5c0", size = 267229841, upload-time = "2025-03-07T01:46:54.356Z" },
@@ -4817,7 +4817,7 @@ name = "nvidia-cusparse-cu12"
 version = "12.5.8.93"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-nvjitlink-cu12", marker = "(python_full_version < '3.12' and sys_platform == 'win32') or (python_full_version >= '3.15' and sys_platform == 'win32') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'linux' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bc/f7/cd777c4109681367721b00a106f491e0d0d15cfa1fd59672ce580ce42a97/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9b6c161cb130be1a07a27ea6923df8141f3c295852f4b260c65f18f3e0a091dc", size = 288117129, upload-time = "2025-03-07T01:47:40.407Z" },
@@ -5127,8 +5127,8 @@ coreml = [
     { name = "coremltools" },
     { name = "huggingface-hub" },
     { name = "torch" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 dask = [
     { name = "dask", extra = ["dataframe"] },
@@ -5195,8 +5195,8 @@ hf = [
     { name = "accelerate" },
     { name = "huggingface-hub" },
     { name = "tokenizers" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 indic = [
     { name = "indic-nlp-library" },
@@ -5226,8 +5226,8 @@ mlx = [
     { name = "safetensors" },
     { name = "tiktoken" },
     { name = "tokenizers" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 multimodal = [
     { name = "easyocr" },
@@ -5252,8 +5252,8 @@ onnx = [
     { name = "onnxruntime" },
     { name = "onnxscript" },
     { name = "torch" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 onnx-runtime = [
     { name = "huggingface-hub" },
@@ -5269,8 +5269,8 @@ openvino = [
     { name = "nncf" },
     { name = "onnxruntime" },
     { name = "openvino" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 pandas = [
     { name = "pandas" },
@@ -5289,6 +5289,9 @@ presidio = [
 ]
 pydeid = [
     { name = "pydeid" },
+]
+scrubadub = [
+    { name = "scrubadub" },
 ]
 service = [
     { name = "fastapi" },
@@ -5433,6 +5436,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.22" },
     { name = "s3fs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
+    { name = "scrubadub", marker = "extra == 'scrubadub'", specifier = ">=2.0,<3" },
     { name = "spacy", marker = "extra == 'spacy'", specifier = ">=3.5" },
     { name = "tiktoken", marker = "extra == 'mlx'", specifier = ">=0.7" },
     { name = "tokenizers", marker = "extra == 'hf'", specifier = ">=0.15" },
@@ -5452,7 +5456,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "service", "spacy", "spark", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "scrubadub", "service", "spacy", "spark", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "opentelemetry-api"
@@ -5964,8 +5968,8 @@ dependencies = [
     { name = "safetensors" },
     { name = "torch" },
     { name = "tqdm" },
-    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "transformers", version = "5.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "transformers", version = "5.12.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/86/cf/037f1e3d5186496c05513a6754639e2dab3038a05f384284d49a9bd06a2d/peft-0.19.1.tar.gz", hash = "sha256:0d97542fe96dcdaa20d3b81c06f26f988618f416a73544ab23c3618ccb674a40", size = 763738, upload-time = "2026-04-16T15:46:45.105Z" }
 wheels = [
@@ -7579,6 +7583,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-stdnum"
+version = "2.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/7f/96c2b9de6024353177dc6139c33730d5ac25877bc33215515d6b95b84555/python_stdnum-2.2.tar.gz", hash = "sha256:e95fcfa858a703d4a40130cb3eaac133c60d8808a7f3c98efeedac968c2479b9", size = 1311813, upload-time = "2026-01-04T19:36:16.753Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/61/aa32d9c79f83a2fae033cd6496fb2a24aba918d31c73704271dfcfb48375/python_stdnum-2.2-py3-none-any.whl", hash = "sha256:bdf98fd117a0ca152e4047aa8ad254bae63853d4e915ddd4e0effb33ba0e9260", size = 1193213, upload-time = "2026-01-04T19:36:14.812Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2025.2"
 source = { registry = "https://pypi.org/simple" }
@@ -8411,6 +8424,25 @@ wheels = [
 ]
 
 [[package]]
+name = "scrubadub"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "catalogue" },
+    { name = "dateparser" },
+    { name = "faker" },
+    { name = "phonenumbers" },
+    { name = "python-stdnum" },
+    { name = "scikit-learn" },
+    { name = "textblob" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6f/24/f56c1b27689eff1809791b37660a9b1687ddfb157c0e380114245d67af1b/scrubadub-2.0.1.tar.gz", hash = "sha256:52a1fb8aa9bc0226043e02c3ec22d450bd4ebeede9e7e8db2def7c89b37c5aad", size = 46599, upload-time = "2023-09-01T14:50:26.964Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/c5/04b959566c85914b17327e40d25b0535b0209a5a5216006443b769bebe25/scrubadub-2.0.1-py3-none-any.whl", hash = "sha256:44b9004998a03aff4c6b5d9073a52895081742f994470083a7be610b373e62b7", size = 65152, upload-time = "2023-09-01T14:50:25.318Z" },
+]
+
+[[package]]
 name = "semver"
 version = "3.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -9018,6 +9050,18 @@ wheels = [
 ]
 
 [[package]]
+name = "textblob"
+version = "0.15.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nltk" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/1b/b27c15bab38cc581dfe05504b289c5de34d68f666aedd1f565b8b5dd2de8/textblob-0.15.3.tar.gz", hash = "sha256:7ff3c00cb5a85a30132ee6768b8c68cb2b9d76432fec18cd1b3ffe2f8594ec8c", size = 632467, upload-time = "2019-02-24T23:03:19.646Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/f0/1d9bfcc8ee6b83472ec571406bd0dd51c0e6330ff1a51b2d29861d389e85/textblob-0.15.3-py2.py3-none-any.whl", hash = "sha256:b0eafd8b129c9b196c8128056caed891d64b7fa20ba570e1fcde438f4f7dd312", size = 636507, upload-time = "2019-02-24T23:03:17.3Z" },
+]
+
+[[package]]
 name = "thinc"
 version = "8.3.9"
 source = { registry = "https://pypi.org/simple" }
@@ -9401,39 +9445,30 @@ name = "transformers"
 version = "5.5.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15' and sys_platform == 'darwin'",
     "python_full_version >= '3.15' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version >= '3.15' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.15' and sys_platform != 'darwin' and sys_platform != 'linux')",
-    "python_full_version == '3.14.*' and sys_platform == 'win32'",
-    "python_full_version == '3.14.*' and sys_platform == 'darwin'",
     "python_full_version == '3.14.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version == '3.14.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.14.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
-    "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.13.*' and sys_platform == 'darwin'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version == '3.13.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
-    "python_full_version == '3.12.*' and sys_platform == 'darwin'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version == '3.12.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.12.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
-    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
     "python_full_version == '3.11.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
-    "python_full_version < '3.11' and sys_platform == 'darwin'",
     "python_full_version < '3.11' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version < '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux')",
 ]
 dependencies = [
-    { name = "huggingface-hub", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and extra == 'extra-7-openmed-awq') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and extra == 'extra-7-openmed-awq') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
-    { name = "packaging", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "pyyaml", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "regex", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "safetensors", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "tokenizers", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "tqdm", marker = "extra == 'extra-7-openmed-awq'" },
-    { name = "typer", marker = "extra == 'extra-7-openmed-awq'" },
+    { name = "huggingface-hub", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.14' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version < '3.14' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "packaging", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "pyyaml", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "regex", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "safetensors", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "tokenizers", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "tqdm", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "typer", marker = "(python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq') or (sys_platform == 'darwin' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform == 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ff/9d/fb46e729b461985f41a5740167688b924a4019141e5c164bea77548d3d9e/transformers-5.5.0.tar.gz", hash = "sha256:c8db656cf51c600cd8c75f06b20ef85c72e8b8ff9abc880c5d3e8bc70e0ddcbd", size = 8237745, upload-time = "2026-04-02T16:13:08.113Z" }
 wheels = [
@@ -9468,16 +9503,16 @@ resolution-markers = [
     "(python_full_version < '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux')",
 ]
 dependencies = [
-    { name = "huggingface-hub", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and extra != 'extra-7-openmed-awq') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and extra != 'extra-7-openmed-awq') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
-    { name = "packaging", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "pyyaml", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "regex", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "safetensors", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "tokenizers", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "tqdm", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
-    { name = "typer", marker = "extra == 'extra-7-openmed-gliner' or extra != 'extra-7-openmed-awq'" },
+    { name = "huggingface-hub", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32') or (python_full_version < '3.14' and sys_platform == 'darwin') or (python_full_version < '3.14' and sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and sys_platform == 'win32' and extra == 'extra-7-openmed-gliner') or (python_full_version < '3.12' and sys_platform == 'win32' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.14' and sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.14' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform == 'darwin') or (python_full_version == '3.14.*' and sys_platform == 'win32') or (python_full_version >= '3.14' and sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.14' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "packaging", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "pyyaml", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "regex", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "safetensors", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "tokenizers", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "tqdm", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "typer", marker = "(python_full_version >= '3.12' and python_full_version < '3.15' and sys_platform == 'win32') or (python_full_version < '3.12' and extra != 'extra-7-openmed-awq') or (python_full_version >= '3.15' and extra != 'extra-7-openmed-awq') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version >= '3.15' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or sys_platform == 'darwin' or (sys_platform != 'win32' and extra != 'extra-7-openmed-awq') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/aa/7c/8240f612819718100a9346dc28dea6a11370c3ca9c8c6eabadd3dea4ef29/transformers-5.12.1.tar.gz", hash = "sha256:679ee731c8225347889ad4fb3b2c926a62e9da3b7d284e9d12c791da7272466b", size = 8924054, upload-time = "2026-06-15T17:27:50.604Z" }
 wheels = [
