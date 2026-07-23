@@ -116,6 +116,10 @@
     "GROWTH_PARAMETER": "mask",
     "GROWTH_PERCENTILE": "mask",
     "DEVELOPMENTAL_MILESTONE": "mask",
+    "INTAKE_OUTPUT": "mask",
+    "LINE_DRAIN_TUBE": "mask",
+    "NURSING_RISK_SCORE": "mask", 
+    "CARE_INTERVENTION": "mask",
     "OTHER": "mask"
   },
   "metadata": {
