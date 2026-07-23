@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conversion and canonical label mapping for scrubadub's core `Filth` types
   (including the `en_US`/`en_GB` locale detectors), splitting `credential`
   matches into separate `USERNAME`/`PASSWORD` entities using scrubadub's
-  named regex groups and losslessly recombining them on the return trip.
+  named regex groups, flattening scrubadub overlap wrappers without label loss,
+  and losslessly recombining credential matches on the return trip. Scoreless
+  scrubadub spans default to fallback priority during OpenMed arbitration.
   scrubadub stays an optional `scrubadub` extra, and the adapter is
   registered lazily as `scrubadub` in `openmed.interop` (#281).
 - Added opt-in token-level language identification for Hinglish clinical text,
