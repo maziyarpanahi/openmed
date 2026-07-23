@@ -115,6 +115,7 @@ nav:
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android Quickstart: android-quickstart.md
+      - Android Integration & Model Catalog: android-integration.md
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
