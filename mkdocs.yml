@@ -68,6 +68,7 @@ nav:
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
+      - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - Device Tiers & SLOs: tiers.md
