@@ -93,6 +93,7 @@ nav:
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
+      - HL7 v2 Narrative Extraction: interop/hl7v2-narrative-extraction.md
       - Compliance Posture: compliance.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
       - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
