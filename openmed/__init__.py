@@ -156,8 +156,109 @@ from .utils.validation import (
 )
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE)
+_HARD_LINE_BREAK_PATTERN = re.compile(r"\r\n|[\n\r\v\f\x85\u2028\u2029]")
 
 logger = logging.getLogger(__name__)
+
+
+def _trim_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """Trim whitespace from a source span while preserving exact offsets."""
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+def _split_prediction_at_boundaries(
+    prediction: Dict[str, Any],
+    text: str,
+    segments: List[Dict[str, Any]],
+    *,
+    sentence_detection: bool,
+) -> List[Dict[str, Any]]:
+    """Split a model span at hard line breaks and detected sentence boundaries."""
+    start = prediction.get("start")
+    end = prediction.get("end")
+    if not (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and 0 <= start < end <= len(text)
+    ):
+        return []
+
+    line_ranges: List[tuple[int, int]] = []
+    cursor = start
+    for match in _HARD_LINE_BREAK_PATTERN.finditer(text, start, end):
+        fragment_start, fragment_end = _trim_span(text, cursor, match.start())
+        if fragment_end > fragment_start:
+            line_ranges.append((fragment_start, fragment_end))
+        cursor = match.end()
+    fragment_start, fragment_end = _trim_span(text, cursor, end)
+    if fragment_end > fragment_start:
+        line_ranges.append((fragment_start, fragment_end))
+
+    fragments: List[Dict[str, Any]] = []
+    for line_start, line_end in line_ranges:
+        overlapping_segments = (
+            [
+                segment
+                for segment in segments
+                if segment["end"] > line_start and segment["start"] < line_end
+            ]
+            if sentence_detection
+            else []
+        )
+        ranges = (
+            [
+                (
+                    max(line_start, segment["start"]),
+                    min(line_end, segment["end"]),
+                    segment,
+                )
+                for segment in overlapping_segments
+            ]
+            if overlapping_segments
+            else [(line_start, line_end, None)]
+        )
+
+        for range_start, range_end, segment in ranges:
+            range_start, range_end = _trim_span(text, range_start, range_end)
+            if range_end <= range_start:
+                continue
+            if segment is not None and segment.get("suppress_predictions"):
+                continue
+
+            fragment = dict(prediction)
+            fragment["start"] = range_start
+            fragment["end"] = range_end
+            fragment["word"] = text[range_start:range_end]
+
+            if sentence_detection:
+                span_metadata = dict(fragment.get("metadata") or {})
+                if segment is None:
+                    span_metadata.update(
+                        {
+                            "sentence_index": -1,
+                            "sentence_text": "",
+                            "sentence_start": range_start,
+                            "sentence_end": range_end,
+                        }
+                    )
+                else:
+                    span_metadata.update(
+                        {
+                            "sentence_index": segment["index"],
+                            "sentence_text": segment["text"],
+                            "sentence_start": segment["start"],
+                            "sentence_end": segment["end"],
+                        }
+                    )
+                fragment["metadata"] = span_metadata
+
+            fragments.append(fragment)
+
+    return fragments
 
 
 def list_models(
@@ -508,6 +609,9 @@ def analyze_text(
 
     flattened_predictions: List[Dict[str, Any]] = []
     for chunk_idx, chunk in enumerate(chunk_descriptors):
+        chunk_segments = [
+            processed_segments[idx] for idx in chunk.get("segment_indices", [])
+        ]
         if chunk_idx < len(normalized_predictions):
             segment_predictions = normalized_predictions[chunk_idx]
         else:
@@ -526,63 +630,16 @@ def analyze_text(
             if isinstance(end, int):
                 adjusted["end"] = end + chunk["start"]
 
-            sentence_index: Optional[int] = None
-            for idx in chunk.get("segment_indices", []):
-                seg_meta = processed_segments[idx]
-                seg_start = seg_meta["start"]
-                seg_end = seg_meta["end"]
-                adj_start = adjusted.get("start")
-                adj_end = adjusted.get("end")
-                if isinstance(adj_start, int) and seg_start <= adj_start < seg_end:
-                    sentence_index = idx
-                    break
-                if (
-                    sentence_index is None
-                    and isinstance(adj_end, int)
-                    and seg_start < adj_end <= seg_end
-                ):
-                    sentence_index = idx
-                    break
-
-            if sentence_index is None and chunk.get("segment_indices"):
-                sentence_index = chunk["segment_indices"][0]
-
-            if sentence_index is not None:
-                seg_meta = processed_segments[sentence_index]
-                if seg_meta.get("suppress_predictions"):
-                    continue
-                span_metadata = dict(adjusted.get("metadata") or {})
-                span_metadata.setdefault("sentence_index", sentence_index)
-                span_metadata.setdefault("sentence_text", seg_meta["text"])
-                span_metadata.setdefault("sentence_start", seg_meta["start"])
-                span_metadata.setdefault("sentence_end", seg_meta["end"])
-                adjusted["metadata"] = span_metadata
-            elif sentence_detection:
-                span_metadata = dict(adjusted.get("metadata") or {})
-                span_metadata.setdefault("sentence_index", -1)
-                span_metadata.setdefault("sentence_text", "")
-                span_metadata.setdefault("sentence_start", chunk["start"])
-                span_metadata.setdefault("sentence_end", chunk["end"])
-                adjusted["metadata"] = span_metadata
-
-            adj_start = adjusted.get("start")
-            adj_end = adjusted.get("end")
-
-            if not (
-                isinstance(adj_start, int)
-                and isinstance(adj_end, int)
-                and adj_end > adj_start
+            for fragment in _split_prediction_at_boundaries(
+                adjusted,
+                validated_text,
+                chunk_segments,
+                sentence_detection=sentence_detection,
             ):
-                continue
-
-            span_slice = validated_text[adj_start:adj_end]
-            stripped = span_slice.strip()
-            if not stripped:
-                continue
-            if _PLACEHOLDER_SEGMENT_PATTERN.search(stripped):
-                continue
-
-            flattened_predictions.append(adjusted)
+                span_slice = validated_text[fragment["start"] : fragment["end"]]
+                if _PLACEHOLDER_SEGMENT_PATTERN.search(span_slice):
+                    continue
+                flattened_predictions.append(fragment)
 
     base_metadata = dict(metadata) if metadata else {}
     base_metadata.setdefault("sentence_detection", sentence_detection)

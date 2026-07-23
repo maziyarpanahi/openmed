@@ -337,6 +337,16 @@ class OutputFormatter:
 
             last_sentence = (last_entity.metadata or {}).get("sentence_index")
             current_sentence = (entity.metadata or {}).get("sentence_index")
+            gap_text = ""
+            if (
+                self._current_text is not None
+                and entity.start is not None
+                and last_entity.end is not None
+            ):
+                gap_text = self._current_text[last_entity.end : entity.start]
+            crosses_hard_line = any(
+                char in "\r\n\v\f\x85\u2028\u2029" for char in gap_text
+            )
 
             # Check if entities are adjacent and same label
             if (
@@ -345,6 +355,7 @@ class OutputFormatter:
                 and last_entity.end is not None
                 and entity.start <= last_entity.end + 2  # Allow small gaps
                 and last_sentence == current_sentence
+                and not crosses_hard_line
             ):
                 current_group.append(entity)
             else:

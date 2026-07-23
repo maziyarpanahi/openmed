@@ -617,6 +617,7 @@ def update_manifest_script_coverage(
     for source in manifest_rows:
         row = dict(source)
         if row.get("family") != "PII":
+            row.pop("script_coverage", None)
             updated.append(row)
             continue
         model_id = row.get("repo_id")

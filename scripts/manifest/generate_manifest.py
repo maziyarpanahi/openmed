@@ -178,6 +178,14 @@ def _siblings(model: Any) -> list[str]:
 
 
 def _family(repo_id: str, tags: list[str], task: str) -> str:
+    repo_lower = _repo_name(repo_id).lower()
+    if "openmed-pii-" in repo_lower or "privacy-filter" in repo_lower:
+        return "PII"
+    if "zero-shot" in repo_lower or "zeroshot" in repo_lower:
+        return "ZeroShot"
+    if "openmed-ner-" in repo_lower:
+        return "NER"
+
     lowered = " ".join([repo_id, *tags]).lower()
     if "pii" in lowered or "privacy-filter" in lowered:
         return "PII"
@@ -324,6 +332,9 @@ def _canonical_labels(family: str, repo_id: str, tags: list[str]) -> list[str]:
         return list(PII_CANONICAL_LABELS)
 
     lowered = " ".join([repo_id, *tags]).lower()
+    if "openmed-ner-pharmadetect-" in lowered:
+        return ["CHEM"]
+
     labels: list[str] = []
     for token, token_labels in DOMAIN_LABELS.items():
         if token in lowered:
@@ -462,6 +473,8 @@ def preserve_existing_enrichment(
         if previous is None:
             continue
         for field in PRESERVED_ENRICHMENT_FIELDS:
+            if field == "script_coverage" and row.get("family") != "PII":
+                continue
             if field in previous:
                 row[field] = previous[field]
     return generated
