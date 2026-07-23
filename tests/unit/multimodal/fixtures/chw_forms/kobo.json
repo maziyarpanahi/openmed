@@ -1,0 +1,40 @@
+[
+  {
+    "_id": "kobo-row-873-001",
+    "_uuid": "uuid:kobo-873-001",
+    "_submission_time": "2026-07-18T08:00:00Z",
+    "household/respondent_name": "Mariam Diallo",
+    "household/phone": "+221771112233",
+    "household/national_id": "SN-873-001",
+    "household/geolocation": "14.716677 -17.467686 25 3",
+    "household/symptoms": "fever malaria_test",
+    "household/counselling_notes": "Mariam Diallo received counselling",
+    "children": [
+      {
+        "name": "Awa Diallo",
+        "status": "registered"
+      },
+      {
+        "name": "Ibrahima Diallo",
+        "status": "follow_up"
+      }
+    ]
+  },
+  {
+    "_id": "kobo-row-873-002",
+    "_uuid": "uuid:kobo-873-002",
+    "_submission_time": "2026-07-18T09:00:00Z",
+    "household/respondent_name": "Fatou Sarr",
+    "household/phone": "+221771112234",
+    "household/national_id": "SN-873-002",
+    "household/geolocation": "14.692778 -17.446667 22 4",
+    "household/symptoms": "none",
+    "household/counselling_notes": "Fatou Sarr requested follow-up",
+    "children": [
+      {
+        "name": "Moussa Sarr",
+        "status": "registered"
+      }
+    ]
+  }
+]

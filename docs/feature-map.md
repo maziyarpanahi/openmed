@@ -26,6 +26,7 @@ coverage, see
 | Markup and metadata | Markdown/AsciiDoc and EPUB extraction, DOCX offset extraction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_docx.py`, `openmed/multimodal/epub.py`, `openmed/multimodal/metadata_scrub.py`, `examples/v17_multimodal_browser_interop.py` |
 | DICOM, contacts, and PDFs | DICOM header de-identification, burned-in pixel OCR redaction, vCard/iCalendar PHI redaction, and redacted-PDF text-layer leakage/fidelity checks. | `openmed/multimodal/dicom.py`, `openmed/multimodal/contacts_calendar.py`, `openmed/multimodal/verify_pdf.py`, [EPUB Extraction](./multimodal/epub-extraction.md) |
 | Chat logs and tabular data | JSONL chat-log redaction with speaker pseudonymization, CSV/TSV PHI column classification, column actions, and PHI-safe manifests. | `openmed/multimodal/chatlog_jsonl.py`, `openmed/multimodal/tabular_csv.py`, `examples/v17_multimodal_browser_interop.py` |
+| Community health worker forms | ODK, CommCare, and KoBoToolbox JSON/CSV export detection, XForm path semantics, repeat preservation, narrative de-identification, metadata hashing, and coordinate generalization. | `openmed/multimodal/chw_forms.py`, [CHW Form Export De-identification](./chw-form-deid.md), `examples/chw_form_deid.py` |
 
 ## Health-data Interop
 

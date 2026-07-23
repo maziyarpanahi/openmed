@@ -78,6 +78,7 @@ content-security policy blocks the optional inline styling.
 | `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
 | `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
 | `examples/v17_multimodal_browser_interop.py` | Demonstrates v1.7 multimodal and interop surfaces: AsciiDoc offset projection, OCR contracts, chat JSONL, CSV manifests, FHIR, HL7 v2, and Transformers.js browser bundle checks. |
+| `examples/chw_form_deid.py` | De-identifies local ODK, CommCare, or KoBoToolbox JSON/CSV form exports and emits a value-free field-policy manifest. |
 | `examples/privacy_gateway_quickstart.py` | Shows redaction before an external model call and safe re-identification after the protected boundary. |
 | `examples/dbt-deidentify/` | Demonstrates the v1.8 warehouse transformation package for table redaction macros and redacted staging models. |
 | `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
