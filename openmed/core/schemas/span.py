@@ -152,8 +152,11 @@ class OpenMedSpan:
     @classmethod
     def from_json(cls, text: str) -> "OpenMedSpan":
         """Deserialize a span from JSON text."""
-
-        return cls.from_dict(json.loads(text))
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON: {exc}") from exc
+        return cls.from_dict(data)
 
 
 @dataclass(frozen=True)
@@ -238,7 +241,10 @@ def load_schema_snapshot(path: str | Path | None = None) -> dict[str, dict[str, 
         resource = resources.files(SCHEMA_PACKAGE).joinpath("schema-fingerprints.json")
         with resource.open("r", encoding="utf-8") as handle:
             return json.load(handle)
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON: {exc}") from exc
 
 
 def compare_schema_drift(

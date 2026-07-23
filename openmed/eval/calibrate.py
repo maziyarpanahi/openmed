@@ -1005,7 +1005,10 @@ def load_calibration_samples(
 ) -> list[CalibrationSample]:
     """Load reliability samples from JSON."""
 
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON: {exc}") from exc
     rows = payload.get("samples") if isinstance(payload, Mapping) else payload
     if not isinstance(rows, list):
         raise ValueError("calibration sample JSON must be a list or contain samples")
@@ -1064,7 +1067,10 @@ def load_calibration_thresholds(path: str | Path) -> CalibrationThresholdSet:
 
     candidate = Path(path)
     threshold_path = candidate / "thresholds.json" if candidate.is_dir() else candidate
-    payload = json.loads(threshold_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(threshold_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{threshold_path}: invalid JSON: {exc}") from exc
     return coerce_calibration_thresholds(payload, source_path=str(threshold_path))
 
 

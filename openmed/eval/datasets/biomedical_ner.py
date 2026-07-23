@@ -873,12 +873,23 @@ def _tag_names_from_dataset(dataset: Any) -> tuple[str, ...]:
 
 def _load_mapping_rows(path: Path) -> list[Mapping[str, Any]]:
     if path.suffix.lower() in {".jsonl", ".ndjson"}:
-        return [
-            json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-    raw = json.loads(path.read_text(encoding="utf-8"))
+        rows: list[Mapping[str, Any]] = []
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"{path}:{line_number}: invalid JSON: {exc}"
+                ) from exc
+        return rows
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON: {exc}") from exc
     if isinstance(raw, Mapping):
         rows = (
             raw.get("records")

@@ -383,15 +383,27 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     """
     fixture_path = Path(path)
     if fixture_path.suffix.lower() == ".jsonl":
-        fixtures = [
-            BenchmarkFixture.from_mapping(json.loads(line))
-            for line in fixture_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        fixtures = []
+        for line_number, line in enumerate(
+            fixture_path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if not line.strip():
+                continue
+            try:
+                fixtures.append(
+                    BenchmarkFixture.from_mapping(json.loads(line))
+                )
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"{fixture_path}:{line_number}: invalid JSON: {exc}"
+                ) from exc
         _validate_unique_fixture_ids(fixtures)
         return fixtures
 
-    raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{fixture_path}: invalid JSON: {exc}") from exc
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):
         raise ValueError(

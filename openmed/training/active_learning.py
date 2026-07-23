@@ -299,7 +299,10 @@ class ActiveLearningQueue:
         for line in self.event_log.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            event = json.loads(line)
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             if not isinstance(event, Mapping):
                 continue
             event_type = event.get("event")

@@ -98,16 +98,24 @@ def _load_records(paths: Iterable[Path]) -> Iterable[Mapping[str, Any]]:
     for path in paths:
         text = path.read_text(encoding="utf-8")
         if path.suffix == ".jsonl":
-            for line in text.splitlines():
+            for line_number, line in enumerate(text.splitlines(), start=1):
                 if not line.strip():
                     continue
-                record = json.loads(line)
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"{path}:{line_number}: invalid JSON: {exc}"
+                    ) from exc
                 if not isinstance(record, Mapping):
                     raise ValueError(f"{path} contains a non-object JSONL row")
                 yield record
             continue
 
-        payload = json.loads(text)
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path}: invalid JSON: {exc}") from exc
         if isinstance(payload, Mapping):
             yield payload
         elif isinstance(payload, list):

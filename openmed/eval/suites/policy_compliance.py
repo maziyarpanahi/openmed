@@ -148,7 +148,12 @@ def load_policy_compliance_fixtures(
             stripped = line.strip()
             if not stripped:
                 continue
-            payload = json.loads(stripped)
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"{fixture_path}:{line_number}: invalid JSON: {exc}"
+                ) from exc
             if not isinstance(payload, Mapping):
                 raise ValueError(
                     f"{fixture_path}:{line_number} must contain a JSON object"

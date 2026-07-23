@@ -399,7 +399,10 @@ def _coerce_fixtures(
 
 def _load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     fixture_path = Path(path)
-    raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{fixture_path}: invalid JSON: {exc}") from exc
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):
         raise ValueError(

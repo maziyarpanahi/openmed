@@ -586,11 +586,17 @@ def _load_config(config: Mapping[str, Any] | str | Path) -> Mapping[str, Any]:
     path = Path(config).expanduser()
     suffix = path.suffix.lower()
     if suffix == ".json":
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON in {path}: {exc}") from exc
     elif suffix in {".yaml", ".yml"}:
         import yaml
 
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+        try:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            raise ValueError(f"invalid YAML in {path}: {exc}") from exc
     else:
         raise ValueError("custom recognizer config path must be JSON or YAML")
 
