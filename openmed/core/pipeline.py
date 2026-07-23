@@ -906,6 +906,17 @@ class Pipeline:
         return tuple(normalized_tags)
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
+        from ..processing.legacy_encoding import convert_legacy_encoding
+
+        legacy_conversion = convert_legacy_encoding(text)
+        legacy_text = legacy_conversion.text
+        if legacy_conversion.encoding == "unicode":
+            legacy_origins = tuple((index, index + 1) for index in range(len(text)))
+        else:
+            # Auto-detected ISCII reaches this API as a Latin-1 surrogate
+            # string, so original byte and source-character offsets coincide.
+            legacy_origins = legacy_conversion.offset_map.converted_to_original_spans
+
         repair_encoding, encoding_repair_metadata = _encoding_repairer()
         # Encoding repair is an optional (ftfy) capability. When it is
         # unavailable the repairer is the identity function, so calling it once
@@ -920,7 +931,9 @@ class Pipeline:
         normalized_to_original_span: list[tuple[int, int]] = []
         normalized_length = 0
 
-        for start, end, segment, is_whitespace in _iter_normalization_segments(text):
+        for start, end, segment, is_whitespace in _iter_normalization_segments(
+            legacy_text
+        ):
             normalized_start = normalized_length
             if is_whitespace:
                 normalized_segment = " "
@@ -935,14 +948,17 @@ class Pipeline:
             if not normalized_segment:
                 continue
 
-            for index in range(start, end):
+            source_spans = legacy_origins[start:end]
+            source_start = min(span[0] for span in source_spans)
+            source_end = max(span[1] for span in source_spans)
+            for index in range(source_start, source_end):
                 original_to_normalized[index] = normalized_start
 
             normalized_parts.append(normalized_segment)
             normalized_length += len(normalized_segment)
             for _ in normalized_segment:
-                normalized_to_original.append(start)
-                normalized_to_original_span.append((start, end))
+                normalized_to_original.append(source_start)
+                normalized_to_original_span.append((source_start, source_end))
 
         normalized_text = "".join(normalized_parts)
         offset_map = OffsetMap(
@@ -960,6 +976,15 @@ class Pipeline:
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
                 "encoding_repair": encoding_repair_metadata,
+                "legacy_encoding": {
+                    "encoding": legacy_conversion.encoding,
+                    "changed": legacy_conversion.changed,
+                    "converted_bytes": (
+                        sum(ord(char) >= 0x80 for char in text)
+                        if legacy_conversion.encoding == "iscii"
+                        else 0
+                    ),
+                },
             },
         )
         target_script = getattr(self.config, "chinese_target_script", None)
