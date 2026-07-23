@@ -35,9 +35,10 @@ Use a different cached model or local directory when needed:
   --output artifacts/redteam-report.json
 ```
 
-The threshold is inclusive: a measured rate equal to the configured maximum
-passes, while a higher rate exits with status 1. CI can set the same optional
-gate without changing the command:
+The threshold is inclusive and applies to the overall rate, every attack-type
+rate, and every mapped abuse-case rate. All of those rates must be at or below
+the configured maximum; otherwise the harness exits with status 1. CI can set
+the same optional gate without changing the command:
 
 ```bash
 export OPENMED_REDTEAM_MAX_BYPASS_RATE=0
@@ -71,7 +72,8 @@ Supported matching modes are:
 A case is a bypass if any expected-protected assertion survives or if the
 pipeline fails to return de-identified text. The overall bypass rate is
 `bypassed cases / total cases`; the report also groups the same rate by attack
-type and retains the mapped abuse-case ids.
+type and abuse-case id so a fully bypassed attack family cannot be hidden by
+unrelated passing cases.
 
 Reports never include input text, de-identified output, protected values, or
 exception messages. Case results contain only ids, counts, exception types,
@@ -107,4 +109,7 @@ Every new JSONL row must:
 4. use only generated, documentation-only fixtures with no real PHI.
 
 The loader rejects missing assertions, unknown abuse-case-id shapes, duplicate
-ids, malformed JSON, and any row not explicitly marked synthetic.
+ids or JSON keys, unsupported fields, malformed or non-UTF-8 JSON, and any row
+not explicitly marked synthetic. It also bounds corpus bytes, case count, case
+text, assertions per case, and de-identified output size; repeated assertions
+and comparison values that normalize to an empty string are rejected.

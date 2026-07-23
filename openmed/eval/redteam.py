@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -17,17 +18,43 @@ from typing import Any
 REDTEAM_REPORT_SCHEMA_VERSION = 1
 REDTEAM_THRESHOLD_ENV_VAR = "OPENMED_REDTEAM_MAX_BYPASS_RATE"
 DEFAULT_REDTEAM_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-DEFAULT_REDTEAM_CORPUS = (
+MAX_REDTEAM_CORPUS_BYTES = 5 * 1024 * 1024
+MAX_REDTEAM_CASES = 1_000
+MAX_REDTEAM_CASE_TEXT_CHARS = 100_000
+MAX_REDTEAM_ASSERTIONS_PER_CASE = 128
+MAX_REDTEAM_OUTPUT_CHARS = 1_000_000
+_SOURCE_REDTEAM_CORPUS = (
     Path(__file__).resolve().parents[2]
     / "eval"
     / "redteam"
     / "corpus"
     / "adversarial_phi.jsonl"
 )
+_PACKAGED_REDTEAM_CORPUS = (
+    Path(__file__).resolve().parent / "data" / "adversarial_phi.jsonl"
+)
+DEFAULT_REDTEAM_CORPUS = (
+    _PACKAGED_REDTEAM_CORPUS
+    if _PACKAGED_REDTEAM_CORPUS.is_file()
+    else _SOURCE_REDTEAM_CORPUS
+)
 
 _ABUSE_CASE_ID = re.compile(r"^AC-\d{2}$")
 _REPORT_SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,127}$")
+_LANGUAGE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
 _MATCH_MODES = frozenset({"exact", "casefold", "normalized", "alnum"})
+_ASSERTION_FIELDS = frozenset({"label", "value", "match"})
+_CASE_FIELDS = frozenset(
+    {
+        "id",
+        "abuse_case_id",
+        "attack_type",
+        "text",
+        "expected_protected",
+        "language",
+        "synthetic",
+    }
+)
 
 
 class RedTeamCorpusError(ValueError):
@@ -52,6 +79,11 @@ class ProtectedAssertion:
     ) -> ProtectedAssertion:
         """Validate and build one expected-protected assertion."""
 
+        if set(data) - _ASSERTION_FIELDS:
+            raise RedTeamCorpusError(
+                f"case {case_id!r} assertion {index} contains unsupported fields"
+            )
+
         label = data.get("label")
         value = data.get("value")
         match = data.get("match", "normalized")
@@ -60,9 +92,21 @@ class ProtectedAssertion:
             raise RedTeamCorpusError(f"{prefix} requires a non-empty label")
         if not isinstance(value, str) or not value:
             raise RedTeamCorpusError(f"{prefix} requires a non-empty value")
+        if len(value) > MAX_REDTEAM_CASE_TEXT_CHARS:
+            raise RedTeamCorpusError(f"{prefix} value is too long")
         if not isinstance(match, str) or match not in _MATCH_MODES:
             allowed = ", ".join(sorted(_MATCH_MODES))
             raise RedTeamCorpusError(f"{prefix} match must be one of: {allowed}")
+        if match in {"normalized", "alnum"}:
+            comparison_value = _normalized_surface(value)
+            if match == "alnum":
+                comparison_value = "".join(
+                    character for character in comparison_value if character.isalnum()
+                )
+            if not comparison_value:
+                raise RedTeamCorpusError(
+                    f"{prefix} becomes empty in {match} matching mode"
+                )
         return cls(label=label.strip(), value=value, match=match)
 
     @property
@@ -94,6 +138,11 @@ class RedTeamCase:
     ) -> RedTeamCase:
         """Validate and build one corpus case."""
 
+        if set(data) - _CASE_FIELDS:
+            raise RedTeamCorpusError(
+                f"corpus line {line_number} contains unsupported fields"
+            )
+
         case_id = data.get("id")
         if not isinstance(case_id, str) or not case_id.strip():
             raise RedTeamCorpusError(
@@ -124,6 +173,8 @@ class RedTeamCase:
         text = data.get("text")
         if not isinstance(text, str) or not text:
             raise RedTeamCorpusError(f"case {case_id!r} requires non-empty text")
+        if len(text) > MAX_REDTEAM_CASE_TEXT_CHARS:
+            raise RedTeamCorpusError(f"case {case_id!r} text is too long")
 
         if data.get("synthetic") is not True:
             raise RedTeamCorpusError(
@@ -131,15 +182,22 @@ class RedTeamCase:
             )
 
         language = data.get("language", "en")
-        if not isinstance(language, str) or not language.strip():
-            raise RedTeamCorpusError(f"case {case_id!r} requires a non-empty language")
+        if not isinstance(language, str) or not _LANGUAGE_ID.fullmatch(language):
+            raise RedTeamCorpusError(
+                f"case {case_id!r} requires a safe language identifier"
+            )
 
         raw_assertions = data.get("expected_protected")
         if not isinstance(raw_assertions, list) or not raw_assertions:
             raise RedTeamCorpusError(
                 f"case {case_id!r} requires expected_protected assertions"
             )
+        if len(raw_assertions) > MAX_REDTEAM_ASSERTIONS_PER_CASE:
+            raise RedTeamCorpusError(
+                f"case {case_id!r} has too many expected_protected assertions"
+            )
         assertions: list[ProtectedAssertion] = []
+        seen_assertions: set[tuple[str, str]] = set()
         for index, assertion in enumerate(raw_assertions, start=1):
             if not isinstance(assertion, Mapping):
                 raise RedTeamCorpusError(
@@ -154,6 +212,12 @@ class RedTeamCase:
                 raise RedTeamCorpusError(
                     f"case {case_id!r} assertion {index} is absent from its text"
                 )
+            assertion_key = (parsed.value, parsed.match)
+            if assertion_key in seen_assertions:
+                raise RedTeamCorpusError(
+                    f"case {case_id!r} repeats an expected_protected assertion"
+                )
+            seen_assertions.add(assertion_key)
             assertions.append(parsed)
 
         return cls(
@@ -162,7 +226,7 @@ class RedTeamCase:
             attack_type=attack_type.strip(),
             text=text,
             expected_protected=tuple(assertions),
-            language=language.strip(),
+            language=language,
         )
 
 
@@ -217,12 +281,35 @@ class AttackBypassReport:
 
 
 @dataclass(frozen=True)
+class AbuseCaseBypassReport:
+    """Aggregate bypass rate for one threat-model abuse case."""
+
+    abuse_case_id: str
+    attack_types: tuple[str, ...]
+    case_count: int
+    bypassed_cases: int
+    bypass_rate: float
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready per-abuse-case report."""
+
+        return {
+            "abuse_case_id": self.abuse_case_id,
+            "attack_types": list(self.attack_types),
+            "bypass_rate": self.bypass_rate,
+            "bypassed_cases": self.bypassed_cases,
+            "case_count": self.case_count,
+        }
+
+
+@dataclass(frozen=True)
 class RedTeamReport:
     """Adversarial-PHI bypass report and optional threshold decision."""
 
     corpus_sha256: str
     case_results: tuple[RedTeamCaseResult, ...]
     attack_reports: tuple[AttackBypassReport, ...]
+    abuse_case_reports: tuple[AbuseCaseBypassReport, ...]
     bypassed_cases: int
     bypass_rate: float
     max_bypass_rate: float | None
@@ -253,6 +340,9 @@ class RedTeamReport:
         """Return the complete PHI-free report payload."""
 
         return {
+            "abuse_case_reports": [
+                report.to_dict() for report in self.abuse_case_reports
+            ],
             "attack_reports": [report.to_dict() for report in self.attack_reports],
             "bypass_rate": self.bypass_rate,
             "bypassed_cases": self.bypassed_cases,
@@ -267,14 +357,32 @@ class RedTeamReport:
         }
 
     def write_json(self, path: str | Path) -> Path:
-        """Write a deterministic JSON report and return its path."""
+        """Atomically write a deterministic JSON report and return its path."""
 
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+        if output_path.is_symlink():
+            raise ValueError("report output path must not be a symbolic link")
+        if output_path.exists() and not output_path.is_file():
+            raise ValueError("report output path must be a regular file")
+
+        payload = (json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n").encode(
+            "utf-8"
         )
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as output_file:
+                output_file.write(payload)
+                output_file.flush()
+                os.fsync(output_file.fileno())
+            os.replace(temporary_path, output_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
         return output_path
 
 
@@ -316,20 +424,44 @@ def load_redteam_corpus(
 ) -> tuple[RedTeamCase, ...]:
     """Load and fail-closed validate a synthetic adversarial JSONL corpus."""
 
-    corpus_path = Path(path)
+    _, cases = _read_redteam_corpus(Path(path))
+    return cases
+
+
+def _read_redteam_corpus(
+    corpus_path: Path,
+) -> tuple[bytes, tuple[RedTeamCase, ...]]:
     if not corpus_path.is_file():
         raise RedTeamCorpusError(f"red-team corpus not found: {corpus_path}")
+    try:
+        corpus_bytes = corpus_path.read_bytes()
+    except OSError as exc:
+        raise RedTeamCorpusError(
+            f"red-team corpus could not be read: {corpus_path}"
+        ) from exc
+    if len(corpus_bytes) > MAX_REDTEAM_CORPUS_BYTES:
+        raise RedTeamCorpusError("red-team corpus exceeds the maximum byte size")
+    try:
+        corpus_text = corpus_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RedTeamCorpusError("red-team corpus must be valid UTF-8") from exc
 
     cases: list[RedTeamCase] = []
     seen_ids: set[str] = set()
     for line_number, raw_line in enumerate(
-        corpus_path.read_text(encoding="utf-8").splitlines(),
+        corpus_text.splitlines(),
         start=1,
     ):
         if not raw_line.strip():
             continue
+        if len(cases) >= MAX_REDTEAM_CASES:
+            raise RedTeamCorpusError("red-team corpus contains too many cases")
         try:
-            payload = json.loads(raw_line)
+            payload = json.loads(
+                raw_line,
+                object_pairs_hook=_strict_json_object,
+                parse_constant=_reject_json_constant,
+            )
         except json.JSONDecodeError as exc:
             raise RedTeamCorpusError(
                 f"invalid JSON on corpus line {line_number}"
@@ -346,7 +478,22 @@ def load_redteam_corpus(
 
     if not cases:
         raise RedTeamCorpusError("red-team corpus must contain at least one case")
-    return tuple(cases)
+    return corpus_bytes, tuple(cases)
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise RedTeamCorpusError("corpus JSON objects must not repeat keys")
+        payload[key] = value
+    return payload
+
+
+def _reject_json_constant(value: str) -> Any:
+    raise RedTeamCorpusError(
+        f"corpus JSON must not contain the non-finite number {value}"
+    )
 
 
 def run_redteam(
@@ -379,19 +526,28 @@ def run_redteam(
 
     _validate_threshold(max_bypass_rate)
     corpus_path = Path(corpus_path)
-    cases = load_redteam_corpus(corpus_path)
+    corpus_bytes, cases = _read_redteam_corpus(corpus_path)
     runner = deidentifier or _LocalPipelineRunner(model_name)
 
     results = tuple(_run_case(case, runner) for case in cases)
     bypassed_cases = sum(result.bypassed for result in results)
     bypass_rate = bypassed_cases / len(results)
     attack_reports = _aggregate_attacks(results)
-    gate_passed = max_bypass_rate is None or bypass_rate <= max_bypass_rate
-    corpus_hash = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
+    abuse_case_reports = _aggregate_abuse_cases(results)
+    evaluated_rates = (
+        bypass_rate,
+        *(report.bypass_rate for report in attack_reports),
+        *(report.bypass_rate for report in abuse_case_reports),
+    )
+    gate_passed = max_bypass_rate is None or all(
+        rate <= max_bypass_rate for rate in evaluated_rates
+    )
+    corpus_hash = hashlib.sha256(corpus_bytes).hexdigest()
     return RedTeamReport(
         corpus_sha256=f"sha256:{corpus_hash}",
         case_results=results,
         attack_reports=attack_reports,
+        abuse_case_reports=abuse_case_reports,
         bypassed_cases=bypassed_cases,
         bypass_rate=bypass_rate,
         max_bypass_rate=max_bypass_rate,
@@ -437,10 +593,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"red-team harness configuration error: {exc}", file=sys.stderr)
         return 2
 
-    if args.output is None:
-        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
-    else:
-        report.write_json(args.output)
+    try:
+        if args.output is None:
+            print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        else:
+            report.write_json(args.output)
+    except (OSError, ValueError):
+        print("red-team report could not be written safely", file=sys.stderr)
+        return 2
     return 0 if report.gate_passed else 1
 
 
@@ -472,6 +632,7 @@ def _run_case(
 ) -> RedTeamCaseResult:
     try:
         output = _coerce_deidentified_text(runner(case))
+        leaked = _leaked_assertion_hashes(case.expected_protected, output)
     except Exception as exc:
         return RedTeamCaseResult(
             case_id=case.case_id,
@@ -483,11 +644,6 @@ def _run_case(
             error_type=type(exc).__name__,
         )
 
-    leaked = tuple(
-        assertion.value_hash
-        for assertion in case.expected_protected
-        if _assertion_survives(assertion, output)
-    )
     return RedTeamCaseResult(
         case_id=case.case_id,
         abuse_case_id=case.abuse_case_id,
@@ -501,8 +657,8 @@ def _run_case(
 
 def _coerce_deidentified_text(value: Any) -> str:
     if isinstance(value, str):
-        return value
-    if isinstance(value, Mapping):
+        output = value
+    elif isinstance(value, Mapping):
         output = value.get("deidentified_text")
     else:
         output = getattr(value, "deidentified_text", None)
@@ -510,21 +666,47 @@ def _coerce_deidentified_text(value: Any) -> str:
         raise TypeError(
             "deidentifier must return text or an object with deidentified_text"
         )
+    if len(output) > MAX_REDTEAM_OUTPUT_CHARS:
+        raise ValueError("deidentified output exceeds the red-team size limit")
     return output
 
 
-def _assertion_survives(assertion: ProtectedAssertion, output: str) -> bool:
-    if assertion.match == "exact":
-        return assertion.value in output
-    if assertion.match == "casefold":
-        return assertion.value.casefold() in output.casefold()
+def _leaked_assertion_hashes(
+    assertions: Sequence[ProtectedAssertion],
+    output: str,
+) -> tuple[str, ...]:
+    casefold_output: str | None = None
+    normalized_output: str | None = None
+    alnum_output: str | None = None
+    leaked_hashes: list[str] = []
 
-    expected = _normalized_surface(assertion.value)
-    observed = _normalized_surface(output)
-    if assertion.match == "alnum":
-        expected = "".join(char for char in expected if char.isalnum())
-        observed = "".join(char for char in observed if char.isalnum())
-    return bool(expected) and expected in observed
+    for assertion in assertions:
+        if assertion.match == "exact":
+            survives = assertion.value in output
+        elif assertion.match == "casefold":
+            if casefold_output is None:
+                casefold_output = output.casefold()
+            survives = assertion.value.casefold() in casefold_output
+        else:
+            if normalized_output is None:
+                normalized_output = _normalized_surface(output)
+            expected = _normalized_surface(assertion.value)
+            observed = normalized_output
+            if assertion.match == "alnum":
+                expected = "".join(
+                    character for character in expected if character.isalnum()
+                )
+                if alnum_output is None:
+                    alnum_output = "".join(
+                        character
+                        for character in normalized_output
+                        if character.isalnum()
+                    )
+                observed = alnum_output
+            survives = expected in observed
+        if survives:
+            leaked_hashes.append(assertion.value_hash)
+    return tuple(leaked_hashes)
 
 
 def _normalized_surface(value: str) -> str:
@@ -558,9 +740,36 @@ def _aggregate_attacks(
     return tuple(reports)
 
 
+def _aggregate_abuse_cases(
+    results: Sequence[RedTeamCaseResult],
+) -> tuple[AbuseCaseBypassReport, ...]:
+    grouped: defaultdict[str, list[RedTeamCaseResult]] = defaultdict(list)
+    for result in results:
+        grouped[result.abuse_case_id].append(result)
+
+    reports: list[AbuseCaseBypassReport] = []
+    for abuse_case_id in sorted(grouped):
+        abuse_results = grouped[abuse_case_id]
+        bypassed_cases = sum(result.bypassed for result in abuse_results)
+        reports.append(
+            AbuseCaseBypassReport(
+                abuse_case_id=abuse_case_id,
+                attack_types=tuple(
+                    sorted({result.attack_type for result in abuse_results})
+                ),
+                case_count=len(abuse_results),
+                bypassed_cases=bypassed_cases,
+                bypass_rate=bypassed_cases / len(abuse_results),
+            )
+        )
+    return tuple(reports)
+
+
 def _validate_threshold(value: float | None) -> None:
     if value is None:
         return
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("max_bypass_rate must be a number between 0 and 1")
     if not 0.0 <= value <= 1.0:
         raise ValueError("max_bypass_rate must be between 0 and 1")
 
@@ -581,6 +790,7 @@ def _configured_threshold(cli_value: float | None) -> float | None:
 
 
 __all__ = [
+    "AbuseCaseBypassReport",
     "AttackBypassReport",
     "DEFAULT_REDTEAM_CORPUS",
     "DEFAULT_REDTEAM_MODEL",
