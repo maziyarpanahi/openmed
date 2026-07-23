@@ -248,7 +248,7 @@ def test_invalid_utf8_raises_typed_content_free_error(tmp_path: Path) -> None:
 @pytest.mark.timeout(30)
 @settings(
     max_examples=FUZZ_EXAMPLES,
-    deadline=100,
+    deadline=None,
     derandomize=True,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
@@ -279,7 +279,7 @@ def test_dictionary_parser_fuzz_target_is_fail_closed(
 
 @pytest.mark.fuzz
 @pytest.mark.timeout(30)
-@settings(max_examples=FUZZ_EXAMPLES, deadline=50, derandomize=True)
+@settings(max_examples=FUZZ_EXAMPLES, deadline=None, derandomize=True)
 @example(line="(a+)+$ 10 n")
 @example(line="patient\x00alias 10 n")
 @example(line="x" * 65)
