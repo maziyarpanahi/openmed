@@ -1,0 +1,91 @@
+name: Flutter plugin
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/flutter-ci.yml'
+      - 'js/openmedkit-flutter/**'
+      - 'tests/mobile/test_flutter_ffi.*'
+      - 'tests/mobile/fixtures/flutter_ffi_golden.json'
+      - 'examples/flutter/**'
+  pull_request:
+    paths:
+      - '.github/workflows/flutter-ci.yml'
+      - 'js/openmedkit-flutter/**'
+      - 'tests/mobile/test_flutter_ffi.*'
+      - 'tests/mobile/fixtures/flutter_ffi_golden.json'
+      - 'examples/flutter/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ffi-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build native fixture session
+        run: |
+          cmake -S js/openmedkit-flutter/native -B build/flutter-ffi \
+            -DOPENMED_FFI_ENABLE_TEST_SESSION=ON \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/flutter-ffi --config Release
+      - name: Run Dart FFI tests
+        working-directory: js/openmedkit-flutter
+        env:
+          OPENMED_FFI_LIBRARY: ${{ github.workspace }}/build/flutter-ffi/libopenmed_ffi.so
+          OPENMED_FFI_TEST_SESSION: '1'
+        run: |
+          flutter pub get
+          flutter test test/openmedkit_ffi_test.dart
+
+  mobile-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build Android consumer
+        run: |
+          flutter create --platforms=android --project-name=openmed_flutter_mobile \
+            "$RUNNER_TEMP/openmed_flutter_mobile"
+          cd "$RUNNER_TEMP/openmed_flutter_mobile"
+          perl -0pi -e 's/minSdk = flutter\.minSdkVersion/minSdk = 26/' \
+            android/app/build.gradle.kts
+          flutter pub add openmedkit_flutter \
+            --path "$GITHUB_WORKSPACE/js/openmedkit-flutter"
+          flutter build apk --debug
+
+  desktop-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Linux desktop toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang cmake libgtk-3-dev ninja-build pkg-config
+      - name: Build Linux consumer
+        run: |
+          flutter config --enable-linux-desktop
+          flutter create --platforms=linux --project-name=openmed_flutter_desktop \
+            "$RUNNER_TEMP/openmed_flutter_desktop"
+          cd "$RUNNER_TEMP/openmed_flutter_desktop"
+          flutter pub add openmedkit_flutter \
+            --path "$GITHUB_WORKSPACE/js/openmedkit-flutter"
+          flutter build linux --debug
