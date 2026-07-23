@@ -2357,6 +2357,49 @@ def radiology_finding_tuple_f1(
     )
 
 
+TNM_FIELDS: tuple[str, ...] = (
+    "basis",
+    "t",
+    "t_subcategory",
+    "n",
+    "n_subcategory",
+    "m",
+    "m_subcategory",
+)
+
+
+def tnm_field_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+    *,
+    fields: Sequence[str] = TNM_FIELDS,
+) -> dict[str, RateMetric]:
+    """Per-field accuracy for parsed TNM stages against gold.
+
+    ``predicted`` and ``gold`` are parallel iterables of stage mappings, each
+    carrying ``basis``/``t``/``n``/``m`` and the ``*_subcategory`` fields. For
+    every field the accuracy is the fraction of rows whose predicted value
+    equals the gold value; ``None == None`` counts as correct so a genuinely
+    absent category is not penalized. Parser-agnostic: callers pass already-
+    parsed stage mappings.
+    """
+    correct = {field: 0 for field in fields}
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        for field in fields:
+            if predicted_row.get(field) == gold_row.get(field):
+                correct[field] += 1
+    return {
+        field: RateMetric(
+            rate=_safe_rate(correct[field], total, zero_denominator=1.0),
+            numerator=correct[field],
+            denominator=total,
+        )
+        for field in fields
+    }
+
+
 def _bounded_unit_interval(value: Any, field_name: str) -> float:
     result = float(value)
     if not isfinite(result) or not 0.0 <= result <= 1.0:
@@ -3060,6 +3103,8 @@ __all__ = [
     "section_boundary_accuracy",
     "stated_category_accuracy",
     "radiology_finding_tuple_f1",
+    "TNM_FIELDS",
+    "tnm_field_accuracy",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
