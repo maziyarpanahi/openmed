@@ -1,30 +1,32 @@
-"""Tests for the release-readiness gate (#1814)."""
+"""Tests for the fail-closed release-readiness gate (#1814)."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
 
-import pytest
-
-from openmed.core.audit import AuditSignature
-from openmed.eval.release_gates import QUARANTINED, RELEASABLE, GateCheck, GateReport
+from openmed.eval.release_gates import (
+    QUARANTINED,
+    RELEASABLE,
+    GateCheck,
+    GateReport,
+)
 from openmed.eval.release_readiness import (
     NOT_READY,
     READY,
     ReadinessReport,
     evaluate_readiness,
-    _DISCLAIMER_CONSTANT as DISCLAIMER_CONSTANT,
+    main,
 )
 
+GATE_KEY = "test-release-gate-key"
+READINESS_KEY = "test-readiness-key"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
-def _make_releasable_report() -> GateReport:
-    """Return a minimal RELEASABLE GateReport."""
+def _make_gate_report(*, decision: str = RELEASABLE) -> GateReport:
+    gate_results: tuple[GateCheck, ...] = ()
+    if decision != RELEASABLE:
+        gate_results = (GateCheck("g1a_recall", False, reason="Recall 0.900 < 0.995"),)
     return GateReport(
         repo_id="test/model",
         family="pii",
@@ -33,242 +35,275 @@ def _make_releasable_report() -> GateReport:
         format="pytorch",
         per_label_recall={"PERSON": 0.999},
         per_label_precision={"PERSON": 0.999},
-        critical_leakage_count=0,
-        residual_leakage_rate=0.001,
+        critical_leakage_count=0 if decision == RELEASABLE else 5,
+        residual_leakage_rate=0.001 if decision == RELEASABLE else 0.05,
         quant_recall_delta=None,
         p50_ms=10.0,
         p95_ms=20.0,
         ram_mb=256.0,
         eval_set_hash="abc123",
         leakage_fixture_hash="def456",
-        decision=RELEASABLE,
-    )
+        decision=decision,
+        gate_results=gate_results,
+    ).sign(GATE_KEY)
 
 
-def _make_quarantined_report() -> GateReport:
-    """Return a minimal QUARANTINED GateReport."""
-    return GateReport(
-        repo_id="test/model",
-        family="pii",
-        tier="t1",
-        param_count=100,
-        format="pytorch",
-        per_label_recall={"PERSON": 0.900},
-        per_label_precision={"PERSON": 0.900},
-        critical_leakage_count=5,
-        residual_leakage_rate=0.05,
-        quant_recall_delta=None,
-        p50_ms=10.0,
-        p95_ms=20.0,
-        ram_mb=256.0,
-        eval_set_hash="abc123",
-        leakage_fixture_hash="def456",
-        decision=QUARANTINED,
-        gate_results=(
-            GateCheck("g1a_recall", False, reason="Recall 0.900 < 0.995"),
-        ),
-    )
-
-
-def _make_repo_root(tmp_path: Path, *, include_docs=True, include_disclaimer=True,
-                     include_baseline=True, include_e2e=True) -> Path:
-    """Create a minimal repo structure for testing."""
+def _make_repo_root(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
+    (root / "README.md").write_text("# OpenMed\n", encoding="utf-8")
+    (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
-    if include_docs:
-        (root / "README.md").write_text("# OpenMed\n")
-        (root / "CHANGELOG.md").write_text("# Changelog\n")
-        (root / "MIGRATION.md").write_text("# Migration Guide\n")
+    migration = root / "docs" / "migration" / "1.9-to-2.0.md"
+    migration.parent.mkdir(parents=True)
+    migration.write_text("# Migration Guide\n", encoding="utf-8")
 
-    if include_baseline:
-        gates_dir = root / "gates"
-        gates_dir.mkdir()
-        (gates_dir / "baseline.json").write_text(
-            json.dumps({"api_surface": {"exports": ["deid", "ner"]}}),
-        )
+    gates = root / "gates"
+    gates.mkdir()
+    (gates / "api_compat_report.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "before_ref": "v1.9.0",
+                "after_ref": "v2.0.0",
+                "summary": {
+                    "before_symbols": 100,
+                    "after_symbols": 105,
+                    "added": 5,
+                    "deprecated": 0,
+                    "breaking": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (gates / "e2e_golden_pass.json").write_text(
+        json.dumps({"passed": True, "suite": "golden_v2"}),
+        encoding="utf-8",
+    )
 
-    if include_e2e:
-        gates_dir = root / "gates"
-        gates_dir.mkdir(exist_ok=True)
-        (gates_dir / "e2e_golden_pass.json").write_text(
-            json.dumps({"passed": True, "suite": "golden_v2"}),
-        )
-
-    clinical_dir = root / "openmed" / "clinical"
-    clinical_dir.mkdir(parents=True)
-    disclaimer_content = f'{DISCLAIMER_CONSTANT} = "OpenMed is not a medical device."'
-    (clinical_dir / "disclaimer.py").write_text(disclaimer_content + "\n")
-
+    clinical = root / "openmed" / "clinical"
+    clinical.mkdir(parents=True)
+    (clinical / "__init__.py").write_text(
+        "OPENMED_CLINICAL_DISCLAIMER = 'Assistive output; not a medical device.'\n"
+        "__all__ = ['OPENMED_CLINICAL_DISCLAIMER']\n",
+        encoding="utf-8",
+    )
     return root
 
 
-# ---------------------------------------------------------------------------
-# Tests: all checks pass
-# ---------------------------------------------------------------------------
+def _evaluate(root: Path, **kwargs) -> ReadinessReport:
+    return evaluate_readiness(
+        repo_root=root,
+        gate_report=_make_gate_report(),
+        gate_report_key=GATE_KEY,
+        signing_key=READINESS_KEY,
+        **kwargs,
+    )
 
 
-class TestReadinessGate:
-    """Test the release-readiness gate evaluation."""
+def test_ready_when_all_signed_inputs_are_satisfied(tmp_path):
+    report = _evaluate(_make_repo_root(tmp_path))
 
-    def test_ready_when_all_inputs_satisfied(self, tmp_path):
-        """All checks pass => READY."""
-        repo_root = _make_repo_root(tmp_path)
-        gate_report = _make_releasable_report()
-
-        report = evaluate_readiness(
-            repo_root=repo_root,
-            gate_report=gate_report,
-        )
-
-        assert report.decision == READY
-        assert all(c.passed for c in report.checks)
-        assert len(report.checks) == 5
-
-    def test_signed_and_verifiable(self, tmp_path):
-        """Report is signed and verify() succeeds."""
-        repo_root = _make_repo_root(tmp_path)
-        gate_report = _make_releasable_report()
-        key = "test-signing-key"
-
-        report = evaluate_readiness(
-            repo_root=repo_root,
-            gate_report=gate_report,
-            signing_key=key,
-        )
-
-        assert report.signature is not None
-        assert report.verify(key)
-        assert not report.verify("wrong-key")
-
-    def test_repro_hash_is_stable(self, tmp_path):
-        """Two evaluations with the same inputs produce the same repro_hash."""
-        repo_root = _make_repo_root(tmp_path)
-        gate_report = _make_releasable_report()
-
-        r1 = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-        r2 = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-
-        assert r1.repro_hash == r2.repro_hash
+    assert report.decision == READY
+    assert len(report.checks) == 5
+    assert all(check.passed for check in report.checks)
 
 
-# ---------------------------------------------------------------------------
-# Tests: fail-closed on missing evidence
-# ---------------------------------------------------------------------------
+def test_report_signature_covers_hash_decision_and_checks(tmp_path):
+    report = _evaluate(_make_repo_root(tmp_path))
+
+    assert report.verify(READINESS_KEY)
+    assert not report.verify("wrong-key")
+
+    report.checks = (
+        GateCheck("extraction_gates", False, reason="tampered"),
+        *report.checks[1:],
+    )
+    assert not report.verify(READINESS_KEY)
 
 
-class TestFailClosed:
-    """Missing evidence yields NOT_READY, never a default-pass."""
+def test_repro_hash_is_stable(tmp_path):
+    root = _make_repo_root(tmp_path)
 
-    def test_not_ready_without_gate_report(self, tmp_path):
-        """No gate report => NOT_READY (extraction_gates fails)."""
-        repo_root = _make_repo_root(tmp_path)
+    first = _evaluate(root)
+    second = _evaluate(root)
 
-        report = evaluate_readiness(repo_root=repo_root, gate_report=None)
-
-        assert report.decision == NOT_READY
-        failing = report.failing_checks()
-        assert any(c.gate == "extraction_gates" for c in failing)
-
-    def test_not_ready_when_migration_missing(self, tmp_path):
-        """Missing MIGRATION.md => NOT_READY."""
-        repo_root = _make_repo_root(tmp_path)
-        (repo_root / "MIGRATION.md").unlink()
-        gate_report = _make_releasable_report()
-
-        report = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-
-        assert report.decision == NOT_READY
-        failing = report.failing_checks()
-        docs_check = next(c for c in failing if c.gate == "required_docs")
-        assert "MIGRATION.md" in docs_check.reason
-
-    def test_not_ready_when_disclaimer_missing(self, tmp_path):
-        """Missing disclaimer constant => NOT_READY."""
-        repo_root = _make_repo_root(tmp_path)
-        # Remove disclaimer file
-        for f in (repo_root / "openmed" / "clinical").iterdir():
-            if f.suffix == ".py":
-                f.unlink()
-        gate_report = _make_releasable_report()
-
-        report = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-
-        assert report.decision == NOT_READY
-        failing = report.failing_checks()
-        assert any(c.gate == "clinical_disclaimer" for c in failing)
-
-    def test_not_ready_when_baseline_missing(self, tmp_path):
-        """Missing API-compat baseline => NOT_READY."""
-        repo_root = _make_repo_root(tmp_path, include_baseline=False)
-        gate_report = _make_releasable_report()
-
-        report = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-
-        assert report.decision == NOT_READY
-        failing = report.failing_checks()
-        assert any(c.gate == "api_compat" for c in failing)
-
-    def test_not_ready_when_e2e_missing(self, tmp_path):
-        """Missing e2e golden marker => NOT_READY."""
-        repo_root = _make_repo_root(tmp_path, include_e2e=False)
-        gate_report = _make_releasable_report()
-
-        report = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-
-        assert report.decision == NOT_READY
-        failing = report.failing_checks()
-        assert any(c.gate == "e2e_golden" for c in failing)
+    assert first.repro_hash == second.repro_hash
 
 
-# ---------------------------------------------------------------------------
-# Tests: quarantined extraction gate propagates
-# ---------------------------------------------------------------------------
+def test_unsigned_extraction_report_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    unsigned = _make_gate_report()
+    unsigned.signature = None
+
+    report = evaluate_readiness(
+        repo_root=root,
+        gate_report=unsigned,
+        gate_report_key=GATE_KEY,
+    )
+
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].gate == "extraction_gates"
+    assert "signature" in report.failing_checks()[0].reason
 
 
-class TestQuarantinedPropagation:
-    """A QUARANTINED extraction gate propagates to NOT_READY."""
+def test_tampered_extraction_report_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    gate_report = _make_gate_report()
+    gate_report.per_label_recall = {"PERSON": 0.1}
 
-    def test_quarantined_gate_yields_not_ready(self, tmp_path):
-        repo_root = _make_repo_root(tmp_path)
-        gate_report = _make_quarantined_report()
+    report = evaluate_readiness(
+        repo_root=root,
+        gate_report=gate_report,
+        gate_report_key=GATE_KEY,
+    )
 
-        report = evaluate_readiness(repo_root=repo_root, gate_report=gate_report)
-
-        assert report.decision == NOT_READY
-        failing = report.failing_checks()
-        ext_check = next(c for c in failing if c.gate == "extraction_gates")
-        assert "QUARANTINED" in ext_check.reason
-
-
-# ---------------------------------------------------------------------------
-# Tests: serialization round-trip
-# ---------------------------------------------------------------------------
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].gate == "extraction_gates"
 
 
-class TestSerialization:
-    """ReadinessReport round-trips through to_dict/from_dict."""
+def test_missing_gate_report_fails_closed(tmp_path):
+    report = evaluate_readiness(repo_root=_make_repo_root(tmp_path))
 
-    def test_round_trip(self, tmp_path):
-        repo_root = _make_repo_root(tmp_path)
-        gate_report = _make_releasable_report()
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].gate == "extraction_gates"
 
-        original = evaluate_readiness(
-            repo_root=repo_root,
-            gate_report=gate_report,
-            signing_key="round-trip-key",
-        )
 
-        data = original.to_dict()
-        restored = ReadinessReport.from_dict(data)
+def test_quarantined_extraction_gate_propagates(tmp_path):
+    report = evaluate_readiness(
+        repo_root=_make_repo_root(tmp_path),
+        gate_report=_make_gate_report(decision=QUARANTINED),
+        gate_report_key=GATE_KEY,
+    )
 
-        assert restored.version == original.version
-        assert restored.decision == original.decision
-        assert restored.repro_hash == original.repro_hash
-        assert len(restored.checks) == len(original.checks)
-        for orig_check, rest_check in zip(original.checks, restored.checks):
-            assert rest_check.gate == orig_check.gate
-            assert rest_check.passed == orig_check.passed
-            assert rest_check.reason == orig_check.reason
-        assert restored.signature is not None
-        assert restored.verify("round-trip-key")
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "extraction_gates"
+    )
+    assert "QUARANTINED" in check.reason
+    assert check.details["failing_gates"] == ["g1a_recall"]
+
+
+def test_missing_migration_guide_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "docs" / "migration" / "1.9-to-2.0.md").unlink()
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "required_docs"
+    )
+    assert "docs/migration/1.9-to-2.0.md" in check.reason
+
+
+def test_disclaimer_comment_does_not_satisfy_gate(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "openmed" / "clinical" / "__init__.py").write_text(
+        "# OPENMED_CLINICAL_DISCLAIMER is intentionally absent\n",
+        encoding="utf-8",
+    )
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "clinical_disclaimer"
+    )
+    assert "non-empty string" in check.reason
+
+
+def test_disclaimer_must_be_publicly_exported(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "openmed" / "clinical" / "__init__.py").write_text(
+        "OPENMED_CLINICAL_DISCLAIMER = 'Not a medical device.'\n__all__ = []\n",
+        encoding="utf-8",
+    )
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "clinical_disclaimer"
+    )
+    assert "omit" in check.reason
+
+
+def test_breaking_api_report_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    path = root / "gates" / "api_compat_report.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["summary"]["breaking"] = 2
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(item for item in report.failing_checks() if item.gate == "api_compat")
+    assert "2 breaking change" in check.reason
+
+
+def test_non_boolean_or_unnamed_golden_result_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "gates" / "e2e_golden_pass.json").write_text(
+        json.dumps({"passed": 1, "suite": ""}),
+        encoding="utf-8",
+    )
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(item for item in report.failing_checks() if item.gate == "e2e_golden")
+    assert "named passing suite" in check.reason
+
+
+def test_report_serialization_round_trip_remains_verifiable(tmp_path):
+    original = _evaluate(_make_repo_root(tmp_path))
+
+    restored = ReadinessReport.from_dict(original.to_dict())
+
+    assert restored.to_dict() == original.to_dict()
+    assert restored.verify(READINESS_KEY)
+
+
+def test_cli_writes_report_and_returns_success(tmp_path):
+    root = _make_repo_root(tmp_path)
+    gate_report_path = root / "release-gate-report.json"
+    gate_report_path.write_text(
+        json.dumps(_make_gate_report().to_dict()),
+        encoding="utf-8",
+    )
+    output = root / "release-readiness-report.json"
+
+    result = main(
+        [
+            "--repo-root",
+            str(root),
+            "--gate-report",
+            str(gate_report_path),
+            "--gate-report-key",
+            GATE_KEY,
+            "--signing-key",
+            READINESS_KEY,
+            "--output",
+            str(output),
+            "--json",
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["decision"] == READY
+
+
+def test_release_workflow_gates_publish_on_readiness():
+    workflow = Path(".github/workflows/release-gates.yml").read_text(encoding="utf-8")
+
+    assert "Generate API compatibility evidence" in workflow
+    assert "tests/integration/test_end_to_end.py" in workflow
+    assert "Run release-readiness gate" in workflow
+    assert "--gate-report release-gate-report.json" in workflow
+    assert "--output release-readiness-report.json" in workflow
+    assert "steps.readiness.outcome == 'success'" in workflow
+    assert "steps.readiness.outcome != 'success'" in workflow

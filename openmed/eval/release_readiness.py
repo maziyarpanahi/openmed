@@ -1,60 +1,52 @@
-"""Release-readiness gate for v2.0.
+"""Fail-closed release-readiness aggregation for OpenMed releases.
 
-Aggregates extraction/model gate results, required documentation presence,
-API-compat baseline, mandatory clinical disclaimers, and e2e golden-suite
-status into a single signed READY / NOT_READY decision.
-
-Each requirement is represented as a :class:`GateCheck` with an explicit
-reason and evidence path so a NOT_READY decision names exactly what is
-missing.  Missing evidence yields NOT_READY (fail-closed).
-
-PHI-free: only paths, hashes, and boolean evidence are recorded.
+The gate combines signed model-gate evidence, required release documentation,
+an API-surface compatibility report, the public clinical disclaimer, and a
+workflow-produced golden-suite result into one signed ``READY`` or
+``NOT_READY`` decision. Evidence contains only paths, hashes, counts, and
+booleans.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import hmac
 import json
 import os
-from dataclasses import dataclass, field
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.audit import AuditSignature, stable_hash
 from openmed.eval.release_gates import (
-    QUARANTINED,
+    _SIGNATURE_ALGORITHM,
     RELEASABLE,
     GateCheck,
     GateReport,
-    _SIGNATURE_ALGORITHM,
 )
 
 READY = "READY"
 NOT_READY = "NOT_READY"
 
-# Required documentation files that must exist for a shippable release.
-_REQUIRED_DOCS: tuple[str, ...] = (
-    "README.md",
-    "CHANGELOG.md",
-    "MIGRATION.md",
-)
-
-# Mandatory disclaimer constant that must be present in shipped clinical
-# outputs.  Checked by grepping the source for the literal string.
+_REQUIRED_DOCS: tuple[str, ...] = ("README.md", "CHANGELOG.md")
+_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/1.9-to-2.0.md")
+_DEFAULT_API_COMPAT_REPORT = Path("gates/api_compat_report.json")
+_DEFAULT_E2E_REPORT = Path("gates/e2e_golden_pass.json")
+_DISCLAIMER_MODULE = Path("openmed/clinical/__init__.py")
 _DISCLAIMER_CONSTANT = "OPENMED_CLINICAL_DISCLAIMER"
-
-# Default signing key (same as release_gates for local/dev usage).
-_DEFAULT_SIGNING_KEY = "openmed-release-readiness-local-key"
+_DEFAULT_GATE_SIGNING_KEY = "openmed-release-gate-local-key"
+_DEFAULT_READINESS_SIGNING_KEY = "openmed-release-readiness-local-key"
 
 
 @dataclass
 class ReadinessReport:
-    """Signed release-readiness decision and evidence payload."""
+    """Signed release-readiness decision and PHI-free evidence payload."""
 
     version: str
-    decision: str  # READY or NOT_READY
+    decision: str
     checks: tuple[GateCheck, ...] = ()
     repro_hash: str = ""
     signature: AuditSignature | None = None
@@ -62,105 +54,142 @@ class ReadinessReport:
     def __post_init__(self) -> None:
         self.checks = tuple(self.checks)
         if not self.repro_hash:
-            self.repro_hash = self._compute_repro_hash()
+            self.repro_hash = self.recompute_repro_hash()
 
-    def _compute_repro_hash(self) -> str:
-        payload = {
+    def _payload(
+        self,
+        *,
+        include_repro_hash: bool,
+        include_signature: bool,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "version": self.version,
             "decision": self.decision,
-            "checks": [c.to_dict() for c in self.checks],
+            "checks": [check.to_dict() for check in self.checks],
         }
-        return stable_hash(payload)
+        if include_repro_hash:
+            payload["repro_hash"] = self.repro_hash
+        if include_signature:
+            payload["signature"] = (
+                self.signature.to_dict() if self.signature is not None else None
+            )
+        return payload
 
-    def sign(self, key: bytes | str, *, key_id: str = "release-readiness") -> ReadinessReport:
-        """Return a signed copy of this report."""
-        if isinstance(key, str):
-            key = key.encode("utf-8")
-        payload = json.dumps(
-            {"repro_hash": self.repro_hash, "decision": self.decision},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        sig_value = hmac.new(key, payload, hashlib.sha256).hexdigest()
+    def recompute_repro_hash(self) -> str:
+        """Recompute the evidence hash without trusting the stored value."""
+
+        return stable_hash(
+            self._payload(include_repro_hash=False, include_signature=False)
+        )
+
+    def sign(
+        self,
+        key: bytes | str,
+        *,
+        key_id: str = "release-readiness",
+    ) -> ReadinessReport:
+        """Return a signed copy whose signature covers all report evidence."""
+
         signed = ReadinessReport(
             version=self.version,
             decision=self.decision,
             checks=self.checks,
-            repro_hash=self.repro_hash,
-            signature=AuditSignature(
-                key_id=key_id,
-                algorithm=_SIGNATURE_ALGORITHM,
-                value=sig_value,
-            ),
+        )
+        message = _canonical_json(
+            signed._payload(include_repro_hash=True, include_signature=False)
+        ).encode("utf-8")
+        signed.signature = AuditSignature(
+            key_id=key_id,
+            algorithm=_SIGNATURE_ALGORITHM,
+            value=hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest(),
         )
         return signed
 
     def verify(self, key: bytes | str) -> bool:
-        """Return True if the signature is valid."""
-        if self.signature is None:
+        """Return whether both the evidence hash and signature are valid."""
+
+        if self.recompute_repro_hash() != self.repro_hash:
             return False
-        if isinstance(key, str):
-            key = key.encode("utf-8")
-        payload = json.dumps(
-            {"repro_hash": self.repro_hash, "decision": self.decision},
-            sort_keys=True,
-            separators=(",", ":"),
+        if self.signature is None or self.signature.algorithm != _SIGNATURE_ALGORITHM:
+            return False
+        message = _canonical_json(
+            self._payload(include_repro_hash=True, include_signature=False)
         ).encode("utf-8")
-        expected = hmac.new(key, payload, hashlib.sha256).hexdigest()
+        expected = hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, self.signature.value)
 
     def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "version": self.version,
-            "decision": self.decision,
-            "checks": [c.to_dict() for c in self.checks],
-            "repro_hash": self.repro_hash,
-        }
-        if self.signature is not None:
-            result["signature"] = self.signature.to_dict()
-        return result
+        """Return the stable JSON-compatible report payload."""
+
+        return self._payload(include_repro_hash=True, include_signature=True)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ReadinessReport:
+        """Restore a readiness report from its JSON-compatible payload."""
+
         checks = tuple(
-            GateCheck.from_dict(c) for c in (data.get("checks") or ())
+            GateCheck.from_dict(check) for check in (data.get("checks") or ())
         )
-        sig_data = data.get("signature")
-        signature = AuditSignature.from_dict(sig_data) if sig_data else None
+        signature_data = data.get("signature")
         return cls(
             version=str(data.get("version", "")),
             decision=str(data.get("decision", NOT_READY)),
             checks=checks,
             repro_hash=str(data.get("repro_hash", "")),
-            signature=signature,
+            signature=(
+                AuditSignature.from_dict(signature_data)
+                if isinstance(signature_data, Mapping)
+                else None
+            ),
         )
 
     def failing_checks(self) -> list[GateCheck]:
-        return [c for c in self.checks if not c.passed]
+        """Return failed component checks in report order."""
+
+        return [check for check in self.checks if not check.passed]
 
 
-def _check_extraction_gates(gate_report: GateReport | None) -> GateCheck:
-    """(a) All extraction/model gates RELEASABLE."""
+def _check_extraction_gates(
+    gate_report: GateReport | None,
+    *,
+    verification_key: bytes | str,
+) -> GateCheck:
     if gate_report is None:
         return GateCheck(
             "extraction_gates",
             False,
-            reason="No gate report provided",
+            reason="No signed extraction/model gate report was provided",
+        )
+    if not gate_report.verify(verification_key):
+        return GateCheck(
+            "extraction_gates",
+            False,
+            reason="Extraction/model gate report signature or evidence hash is invalid",
         )
     if gate_report.decision != RELEASABLE:
-        failing = [g.gate for g in gate_report.gate_results if not g.passed]
+        failing = [check.gate for check in gate_report.gate_results if not check.passed]
         return GateCheck(
             "extraction_gates",
             False,
             reason=f"Gate decision is {gate_report.decision}",
             details={"failing_gates": failing},
         )
-    return GateCheck("extraction_gates", True)
+    return GateCheck(
+        "extraction_gates",
+        True,
+        details={
+            "gate_report_hash": gate_report.repro_hash,
+            "key_id": gate_report.signature.key_id,
+        },
+    )
 
 
-def _check_required_docs(repo_root: Path) -> GateCheck:
-    """(b) Required docs present (README, CHANGELOG, MIGRATION)."""
-    missing = [name for name in _REQUIRED_DOCS if not (repo_root / name).is_file()]
+def _check_required_docs(repo_root: Path, migration_guide: Path) -> GateCheck:
+    required = [repo_root / name for name in _REQUIRED_DOCS]
+    required.append(_resolve_path(repo_root, migration_guide))
+    missing = [
+        _display_path(path, repo_root) for path in required if not path.is_file()
+    ]
     if missing:
         return GateCheck(
             "required_docs",
@@ -168,110 +197,135 @@ def _check_required_docs(repo_root: Path) -> GateCheck:
             reason=f"Missing required docs: {', '.join(missing)}",
             details={"missing": missing},
         )
-    return GateCheck("required_docs", True)
+    return GateCheck(
+        "required_docs",
+        True,
+        details={
+            "files": {
+                _display_path(path, repo_root): _file_hash(path) for path in required
+            }
+        },
+    )
 
 
-def _check_api_compat(repo_root: Path) -> GateCheck:
-    """(c) API-compat baseline clean.
-
-    Checks that the API surface baseline file exists and is non-empty.
-    A more thorough check would diff against the previous release, but
-    for the readiness gate we verify the baseline artifact is present.
-    """
-    baseline_path = repo_root / "gates" / "baseline.json"
-    if not baseline_path.is_file():
+def _check_api_compat(repo_root: Path, report_path: Path) -> GateCheck:
+    path = _resolve_path(repo_root, report_path)
+    if not path.is_file():
         return GateCheck(
             "api_compat",
             False,
-            reason="API-compat baseline not found at gates/baseline.json",
+            reason=f"API-compat report not found at {_display_path(path, repo_root)}",
         )
     try:
-        content = baseline_path.read_text(encoding="utf-8").strip()
-        if not content:
+        data = _read_json_object(path)
+        summary = data.get("summary")
+        if data.get("schema_version") != 1 or not isinstance(summary, Mapping):
+            raise ValueError("unsupported or missing API-compat report schema")
+        breaking = int(summary.get("breaking", -1))
+        if breaking != 0:
             return GateCheck(
                 "api_compat",
                 False,
-                reason="API-compat baseline is empty",
+                reason=f"API-compat report contains {breaking} breaking change(s)",
+                details={
+                    "report_hash": _file_hash(path),
+                    "breaking": breaking,
+                },
             )
-        data = json.loads(content)
         return GateCheck(
             "api_compat",
             True,
-            details={"baseline_hash": stable_hash(data)},
+            details={
+                "report_hash": _file_hash(path),
+                "before_ref": str(data.get("before_ref", "")),
+                "after_ref": str(data.get("after_ref", "")),
+                "breaking": 0,
+            },
         )
-    except (json.JSONDecodeError, OSError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         return GateCheck(
             "api_compat",
             False,
-            reason=f"API-compat baseline unreadable: {exc}",
+            reason=f"API-compat report is invalid: {exc}",
         )
 
 
 def _check_disclaimer(repo_root: Path) -> GateCheck:
-    """(d) Mandatory disclaimer constant present in shipped clinical outputs.
-
-    Searches the openmed/clinical/ directory for the disclaimer constant.
-    Fail-closed: if the directory doesn't exist or the constant is missing,
-    the check fails.
-    """
-    clinical_dir = repo_root / "openmed" / "clinical"
-    if not clinical_dir.is_dir():
+    path = repo_root / _DISCLAIMER_MODULE
+    if not path.is_file():
         return GateCheck(
             "clinical_disclaimer",
             False,
-            reason="openmed/clinical/ directory not found",
+            reason=f"{_DISCLAIMER_MODULE} was not found",
         )
-    for py_file in clinical_dir.rglob("*.py"):
-        try:
-            content = py_file.read_text(encoding="utf-8")
-            if _DISCLAIMER_CONSTANT in content:
-                return GateCheck(
-                    "clinical_disclaimer",
-                    True,
-                    details={"found_in": str(py_file.relative_to(repo_root))},
-                )
-        except OSError:
-            continue
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError) as exc:
+        return GateCheck(
+            "clinical_disclaimer",
+            False,
+            reason=f"Clinical disclaimer module is unreadable: {exc}",
+        )
+
+    value = _literal_assignment(tree, _DISCLAIMER_CONSTANT)
+    if not isinstance(value, str) or not value.strip():
+        return GateCheck(
+            "clinical_disclaimer",
+            False,
+            reason=(
+                f"Public constant {_DISCLAIMER_CONSTANT} is not assigned a "
+                f"non-empty string in {_DISCLAIMER_MODULE}"
+            ),
+        )
+    exports = _literal_assignment(tree, "__all__")
+    if not isinstance(exports, (list, tuple)) or _DISCLAIMER_CONSTANT not in exports:
+        return GateCheck(
+            "clinical_disclaimer",
+            False,
+            reason=f"Public exports in {_DISCLAIMER_MODULE} omit {_DISCLAIMER_CONSTANT}",
+        )
     return GateCheck(
         "clinical_disclaimer",
-        False,
-        reason=f"Disclaimer constant {_DISCLAIMER_CONSTANT!r} not found in openmed/clinical/",
+        True,
+        details={
+            "source_path": str(_DISCLAIMER_MODULE),
+            "disclaimer_hash": stable_hash(value),
+        },
     )
 
 
-def _check_e2e_golden(repo_root: Path) -> GateCheck:
-    """(e) e2e golden suite green marker.
-
-    Checks for a golden-suite pass marker file.  The CI workflow writes
-    this marker after a successful e2e run.  Fail-closed if absent.
-    """
-    marker_path = repo_root / "gates" / "e2e_golden_pass.json"
-    if not marker_path.is_file():
+def _check_e2e_golden(repo_root: Path, report_path: Path) -> GateCheck:
+    path = _resolve_path(repo_root, report_path)
+    if not path.is_file():
         return GateCheck(
             "e2e_golden",
             False,
-            reason="e2e golden-suite pass marker not found at gates/e2e_golden_pass.json",
+            reason=f"Golden-suite report not found at {_display_path(path, repo_root)}",
         )
     try:
-        data = json.loads(marker_path.read_text(encoding="utf-8"))
-        passed = bool(data.get("passed", False))
-        if not passed:
+        data = _read_json_object(path)
+        passed = data.get("passed") is True
+        suite = str(data.get("suite", "")).strip()
+        if not passed or not suite:
             return GateCheck(
                 "e2e_golden",
                 False,
-                reason="e2e golden-suite marker indicates failure",
-                details=data,
+                reason="Golden-suite report does not record a named passing suite",
+                details={"passed": passed, "suite": suite},
             )
         return GateCheck(
             "e2e_golden",
             True,
-            details={"marker_hash": stable_hash(data)},
+            details={
+                "report_hash": _file_hash(path),
+                "suite": suite,
+            },
         )
-    except (json.JSONDecodeError, OSError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         return GateCheck(
             "e2e_golden",
             False,
-            reason=f"e2e golden-suite marker unreadable: {exc}",
+            reason=f"Golden-suite report is invalid: {exc}",
         )
 
 
@@ -280,136 +334,187 @@ def evaluate_readiness(
     version: str = "2.0.0",
     repo_root: Path | str | None = None,
     gate_report: GateReport | None = None,
+    gate_report_key: bytes | str | None = None,
+    migration_guide: Path | str = _DEFAULT_MIGRATION_GUIDE,
+    api_compat_report: Path | str = _DEFAULT_API_COMPAT_REPORT,
+    e2e_report: Path | str = _DEFAULT_E2E_REPORT,
     signing_key: bytes | str | None = None,
     key_id: str | None = None,
 ) -> ReadinessReport:
-    """Evaluate release readiness and return a signed report.
+    """Evaluate all release requirements and return a signed report.
 
-    Parameters
-    ----------
-    version:
-        Release version string (for the report payload).
-    repo_root:
-        Root of the repository.  Defaults to the current working directory.
-    gate_report:
-        Optional pre-computed :class:`GateReport` from the extraction gates.
-        If ``None``, the extraction-gates check fails closed.
-    signing_key:
-        HMAC signing key.  Defaults to the local dev key.
-    key_id:
-        Key identifier for the signature metadata.
+    Args:
+        version: Release version recorded in the report.
+        repo_root: Repository root. Defaults to the current directory.
+        gate_report: Signed extraction/model ``GateReport``.
+        gate_report_key: Key used to verify ``gate_report``.
+        migration_guide: Required migration-guide path.
+        api_compat_report: Machine-readable API-surface diff path.
+        e2e_report: Workflow-produced golden-suite result path.
+        signing_key: Key used to sign the readiness report.
+        key_id: Identifier recorded with the readiness signature.
 
-    Returns
-    -------
-    ReadinessReport
-        Signed readiness report with per-check evidence.
+    Returns:
+        A signed, PHI-free readiness report.
     """
-    if repo_root is None:
-        repo_root = Path.cwd()
-    elif isinstance(repo_root, str):
-        repo_root = Path(repo_root)
 
-    checks = [
-        _check_extraction_gates(gate_report),
-        _check_required_docs(repo_root),
-        _check_api_compat(repo_root),
-        _check_disclaimer(repo_root),
-        _check_e2e_golden(repo_root),
-    ]
-
-    all_passed = all(c.passed for c in checks)
-    decision = READY if all_passed else NOT_READY
-
+    root = Path(repo_root or Path.cwd())
+    verification_key = (
+        gate_report_key
+        or os.environ.get("OPENMED_RELEASE_GATE_KEY")
+        or _DEFAULT_GATE_SIGNING_KEY
+    )
+    readiness_key = (
+        signing_key
+        or os.environ.get("OPENMED_READINESS_KEY")
+        or _DEFAULT_READINESS_SIGNING_KEY
+    )
+    checks = (
+        _check_extraction_gates(
+            gate_report,
+            verification_key=verification_key,
+        ),
+        _check_required_docs(root, Path(migration_guide)),
+        _check_api_compat(root, Path(api_compat_report)),
+        _check_disclaimer(root),
+        _check_e2e_golden(root, Path(e2e_report)),
+    )
     report = ReadinessReport(
         version=version,
-        decision=decision,
-        checks=tuple(checks),
+        decision=READY if all(check.passed for check in checks) else NOT_READY,
+        checks=checks,
     )
-
-    return report.sign(
-        signing_key or _DEFAULT_SIGNING_KEY,
-        key_id=key_id or "release-readiness",
-    )
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+    return report.sign(readiness_key, key_id=key_id or "release-readiness")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the release-readiness command-line parser."""
+
     parser = argparse.ArgumentParser(
-        description="Evaluate OpenMed release-readiness gate.",
+        description="Evaluate the fail-closed OpenMed release-readiness gate."
     )
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument("--gate-report", type=Path)
+    parser.add_argument("--gate-report-key")
     parser.add_argument(
-        "--repo-root",
+        "--migration-guide",
         type=Path,
-        default=None,
-        help="Repository root (default: cwd).",
+        default=_DEFAULT_MIGRATION_GUIDE,
     )
     parser.add_argument(
-        "--gate-report",
+        "--api-compat-report",
         type=Path,
-        default=None,
-        help="Path to a signed GateReport JSON file.",
+        default=_DEFAULT_API_COMPAT_REPORT,
     )
-    parser.add_argument(
-        "--version",
-        default="2.0.0",
-        help="Release version string.",
-    )
-    parser.add_argument(
-        "--signing-key",
-        default=None,
-        help="HMAC signing key (or set OPENMED_READINESS_KEY env var).",
-    )
-    parser.add_argument(
-        "--key-id",
-        default=None,
-        help="Key identifier for the signature.",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output the report as JSON.",
-    )
+    parser.add_argument("--e2e-report", type=Path, default=_DEFAULT_E2E_REPORT)
+    parser.add_argument("--version", default="2.0.0")
+    parser.add_argument("--signing-key")
+    parser.add_argument("--key-id", default="release-readiness")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--json", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entrypoint for the release-readiness gate."""
+    """Run the release-readiness CLI and fail closed on missing evidence."""
+
     parser = build_arg_parser()
     args = parser.parse_args(argv)
-
-    repo_root = args.repo_root or Path.cwd()
-    signing_key = args.signing_key or os.environ.get("OPENMED_READINESS_KEY")
-
     gate_report: GateReport | None = None
-    if args.gate_report and args.gate_report.is_file():
-        raw = json.loads(args.gate_report.read_text(encoding="utf-8"))
-        gate_report = GateReport.from_dict(raw)
+    try:
+        if args.gate_report is not None:
+            gate_report = GateReport.from_dict(_read_json_object(args.gate_report))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"release-readiness: invalid gate report: {exc}", file=sys.stderr)
+        return 2
 
     report = evaluate_readiness(
         version=args.version,
-        repo_root=repo_root,
+        repo_root=args.repo_root,
         gate_report=gate_report,
-        signing_key=signing_key,
+        gate_report_key=args.gate_report_key,
+        migration_guide=args.migration_guide,
+        api_compat_report=args.api_compat_report,
+        e2e_report=args.e2e_report,
+        signing_key=args.signing_key,
         key_id=args.key_id,
     )
+    rendered = json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered, encoding="utf-8")
 
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
+        print(rendered, end="")
     else:
         print(f"Release Readiness: {report.version} -> {report.decision}")
         for check in report.checks:
             status = "PASS" if check.passed else "FAIL"
             print(f"  [{status}] {check.gate}: {check.reason}")
-        if report.failing_checks():
-            print(f"\nResult: {NOT_READY} — {len(report.failing_checks())} check(s) failed.")
-        else:
-            print(f"\nResult: {READY}")
-
     return 0 if report.decision == READY else 1
+
+
+def _literal_assignment(tree: ast.Module, name: str) -> Any:
+    for statement in tree.body:
+        value: ast.expr | None = None
+        if isinstance(statement, ast.Assign):
+            if any(
+                isinstance(target, ast.Name) and target.id == name
+                for target in statement.targets
+            ):
+                value = statement.value
+        elif (
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.target.id == name
+        ):
+            value = statement.value
+        if value is not None:
+            try:
+                return ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                return None
+    return None
+
+
+def _resolve_path(repo_root: Path, path: Path) -> Path:
+    return path if path.is_absolute() else repo_root / path
+
+
+def _display_path(path: Path, repo_root: Path) -> str:
+    try:
+        return str(path.relative_to(repo_root))
+    except ValueError:
+        return str(path)
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, Mapping):
+        raise ValueError(f"{path} must contain a JSON object")
+    return dict(data)
+
+
+def _file_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _canonical_json(data: Any) -> str:
+    return json.dumps(
+        data,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _key_bytes(key: bytes | str) -> bytes:
+    if isinstance(key, bytes):
+        return key
+    if isinstance(key, str):
+        return key.encode("utf-8")
+    raise TypeError("signing key must be bytes or str")
 
 
 if __name__ == "__main__":

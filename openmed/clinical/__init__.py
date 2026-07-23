@@ -4,6 +4,11 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
+OPENMED_CLINICAL_DISCLAIMER = (
+    "OpenMed clinical outputs are assistive software outputs, not a medical "
+    "device, diagnosis, or substitute for qualified clinical judgment."
+)
+
 from .abbreviation import (
     ABBREVIATION_DISAMBIGUATION_ADVISORY,
     DEFAULT_SENSE_INVENTORY_RESOURCE,
@@ -298,6 +303,7 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "OPENMED_CLINICAL_DISCLAIMER",
     "ABBREVIATION_DISAMBIGUATION_ADVISORY",
     "DEFAULT_SENSE_INVENTORY_RESOURCE",
     "AbbreviationAnnotation",
