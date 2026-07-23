@@ -47,6 +47,9 @@ from openmed.core.pii_i18n import (
     validate_greek_amka,
     validate_hong_kong_macau_permit,
     validate_hungarian_taj,
+    validate_ifsc,
+    validate_indian_driving_licence,
+    validate_indian_passport,
     validate_indian_ration_card,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
@@ -85,8 +88,10 @@ from openmed.core.pii_i18n import (
     validate_uk_nhs_number,
     validate_uk_nino,
     validate_upi_id,
+    validate_vehicle_registration,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
+    validate_voter_id_epic,
     validate_za_id_number,
 )
 
@@ -501,6 +506,41 @@ def _register_builtin_specs() -> None:
         id_type="gstin",
         validate=validate_gstin,
         faker_method="gstin",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="ifsc",
+        validate=validate_ifsc,
+        faker_method="ifsc",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="voter_id_epic",
+        validate=validate_voter_id_epic,
+        faker_method="voter_id_epic",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="indian_driving_licence",
+        validate=validate_indian_driving_licence,
+        faker_method="indian_driving_licence",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="indian_passport",
+        validate=validate_indian_passport,
+        faker_method="indian_passport",
+        faker_provider=IndiaSurrogateProvider,
+    )
+    _register_aliases(
+        india_aliases,
+        id_type="vehicle_registration",
+        validate=validate_vehicle_registration,
+        faker_method="indian_vehicle_registration",
         faker_provider=IndiaSurrogateProvider,
     )
     _register_aliases(

@@ -969,6 +969,7 @@ def _apply_pii_smart_merging(
     code_mixed: bool = False,
     token_language_tags: Optional[Sequence[Any]] = None,
     india_clinical: bool = False,
+    include_indian_multi_id: bool = True,
 ) -> Any:
     """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
@@ -986,9 +987,14 @@ def _apply_pii_smart_merging(
             token_language_tags,
             base_lang=lang,
             locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
         )
     else:
-        lang_patterns = get_patterns_for_language(lang, locale=locale)
+        lang_patterns = get_patterns_for_language(
+            lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        )
     entity_dicts = [
         {
             "entity_type": e.label,
@@ -1195,6 +1201,11 @@ def _extract_pii_batch(
             result = _mutable_prediction_result(result)
             results.append(result)
 
+    indian_multi_id_enabled = abdm_mode_enabled(
+        abdm,
+        lang=lang,
+        locale=locale,
+    )
     if use_smart_merging:
         results = [
             (
@@ -1206,6 +1217,7 @@ def _extract_pii_batch(
                     code_mixed=code_mixed,
                     token_language_tags=token_language_tags,
                     india_clinical=india_clinical,
+                    include_indian_multi_id=indian_multi_id_enabled,
                 )
                 if not uses_privacy_filter or india_clinical
                 else result
@@ -1219,7 +1231,7 @@ def _extract_pii_batch(
     ]
 
     recognizer_config = custom_recognizer
-    if abdm_mode_enabled(abdm, lang=lang, locale=locale):
+    if indian_multi_id_enabled:
         recognizer_config = with_abdm_recognizer(recognizer_config)
     recognizer = coerce_custom_recognizer(recognizer_config)
     if recognizer is not None:
@@ -2314,6 +2326,12 @@ def _deidentify_batch(
                     resolved_token_language_tags,
                     base_lang=lang,
                     locale=locale,
+                    include_indian_multi_id=abdm_mode_enabled(
+                        abdm,
+                        policy=policy,
+                        lang=lang,
+                        locale=locale,
+                    ),
                 )
             pii_result, _ = _apply_safety_sweep_to_result(
                 source_text,
@@ -2543,7 +2561,13 @@ def deidentify(
     from .pipeline import Pipeline
 
     recognizer_config = custom_recognizer
-    if abdm_mode_enabled(abdm, policy=policy, lang=lang, locale=locale):
+    indian_multi_id_enabled = abdm_mode_enabled(
+        abdm,
+        policy=policy,
+        lang=lang,
+        locale=locale,
+    )
+    if indian_multi_id_enabled:
         recognizer_config = with_abdm_recognizer(recognizer_config)
 
     pipeline = Pipeline(
@@ -2562,6 +2586,7 @@ def deidentify(
             else None
         ),
         custom_recognizer=recognizer_config,
+        indian_multi_id=indian_multi_id_enabled,
         code_mixed=code_mixed,
         token_language_tags=token_language_tags,
         lid_model=lid_model,

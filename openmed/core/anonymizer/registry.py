@@ -823,11 +823,21 @@ def _indian_id_surrogate(faker, original):
         validate_gstin,
         validate_pan,
     )
-    from openmed.core.pii_i18n import validate_aadhaar
+    from openmed.core.pii_i18n import (
+        validate_aadhaar,
+        validate_ifsc,
+        validate_indian_driving_licence,
+        validate_indian_passport,
+        validate_voter_id_epic,
+    )
 
     validators_and_methods = (
         (validate_gstin, "gstin"),
         (validate_pan, "pan"),
+        (validate_ifsc, "ifsc"),
+        (validate_indian_driving_licence, "indian_driving_licence"),
+        (validate_indian_passport, "indian_passport"),
+        (validate_voter_id_epic, "voter_id_epic"),
         (validate_abha, "abha"),
         (validate_aadhaar, "aadhaar"),
     )
@@ -1023,6 +1033,12 @@ def _gen_vin(faker, original, *, locale):
 
 
 def _gen_vehicle_registration(faker, original, *, locale):
+    from openmed.core.pii_i18n import validate_vehicle_registration
+
+    if validate_vehicle_registration(original) and hasattr(
+        faker, "indian_vehicle_registration"
+    ):
+        return _draw_distinct(faker, original, "indian_vehicle_registration")
     return (
         faker.license_plate()
         if hasattr(faker, "license_plate")

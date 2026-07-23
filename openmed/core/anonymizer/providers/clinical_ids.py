@@ -1003,7 +1003,7 @@ def validate_gstin(text: str) -> bool:
     code = text.strip().upper()
     if re.fullmatch(r"\d{2}[A-Z0-9]{10}[1-9A-Z]Z[0-9A-Z]", code) is None:
         return False
-    if not 1 <= int(code[:2]) <= 38:
+    if not 1 <= int(code[:2]) <= 37:
         return False
     if not validate_pan(code[2:12]):
         return False
@@ -1014,11 +1014,61 @@ def generate_gstin(*, rng: random.Random | None = None) -> str:
     """Generate a state-, PAN-, and mod-36-valid synthetic GSTIN."""
 
     source = rng or random.Random()
-    state = f"{source.randint(1, 38):02d}"
+    state = f"{source.randint(1, 37):02d}"
     pan = generate_pan(rng=source)
     entity = source.choice(_INDIA_ALPHANUMERIC[1:])
     body = f"{state}{pan}{entity}Z"
     return body + gstin_check_char(body)
+
+
+def generate_ifsc(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic 11-character IFSC-shaped bank-branch code."""
+
+    source = rng or random.Random()
+    bank = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(4))
+    branch = "".join(source.choice(_INDIA_ALPHANUMERIC) for _ in range(6))
+    if branch == "000000":  # pragma: no cover - vanishingly rare guard
+        branch = "000001"
+    return f"{bank}0{branch}"
+
+
+def generate_indian_passport(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Indian passport-shaped identifier."""
+
+    source = rng or random.Random()
+    return f"{source.choice(_INDIA_UPPERCASE)}{source.randint(1_000_000, 9_999_999)}"
+
+
+def generate_voter_id_epic(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic three-letter, seven-digit EPIC identifier."""
+
+    source = rng or random.Random()
+    prefix = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(3))
+    return f"{prefix}{source.randint(1, 9_999_999):07d}"
+
+
+def generate_indian_driving_licence(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic normalized Indian driving-licence identifier."""
+
+    source = rng or random.Random()
+    state = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(2))
+    rto = source.randint(1, 99)
+    year = source.randint(1980, 2026)
+    serial = source.randint(1, 9_999_999)
+    return f"{state}{rto:02d}{year:04d}{serial:07d}"
+
+
+def generate_vehicle_registration(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic standard RTO vehicle-registration identifier."""
+
+    source = rng or random.Random()
+    state = "".join(source.choice(_INDIA_UPPERCASE) for _ in range(2))
+    rto = source.randint(1, 99)
+    series = "".join(
+        source.choice(_INDIA_UPPERCASE) for _ in range(source.randint(1, 3))
+    )
+    serial = source.randint(1, 9999)
+    return f"{state}{rto:02d}{series}{serial:04d}"
 
 
 def validate_abha(text: str) -> bool:
@@ -1092,10 +1142,39 @@ class IndiaSurrogateProvider(BaseProvider):
 
         return generate_gstin(rng=self.generator.random)
 
+    def ifsc(self) -> str:
+        """Return a synthetic IFSC-shaped bank-branch code."""
+
+        return generate_ifsc(rng=self.generator.random)
+
+    def indian_passport(self) -> str:
+        """Return a synthetic Indian passport-shaped identifier."""
+
+        return generate_indian_passport(rng=self.generator.random)
+
+    def voter_id_epic(self) -> str:
+        """Return a synthetic EPIC identifier."""
+
+        return generate_voter_id_epic(rng=self.generator.random)
+
+    def indian_driving_licence(self) -> str:
+        """Return a synthetic Indian driving-licence identifier."""
+
+        return generate_indian_driving_licence(rng=self.generator.random)
+
+    def indian_vehicle_registration(self) -> str:
+        """Return a synthetic RTO vehicle-registration identifier."""
+
+        return generate_vehicle_registration(rng=self.generator.random)
+
     def abha(self) -> str:
         """Return a synthetic checksum-valid ABHA number."""
 
         return generate_abha(rng=self.generator.random)
+
+
+class IndianIdentifierProvider(IndiaSurrogateProvider):
+    """Compatibility name for the Indian multi-identifier Faker provider."""
 
 
 # ---------------------------------------------------------------------------
@@ -3490,6 +3569,7 @@ __all__ = [
     "GhanaKenyaIdProvider",
     "HungarianTAJProvider",
     "IndiaHealthIdProvider",
+    "IndianIdentifierProvider",
     "IndiaSurrogateProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
@@ -3539,6 +3619,9 @@ __all__ = [
     "generate_abha_number",
     "generate_abha",
     "generate_gstin",
+    "generate_ifsc",
+    "generate_indian_driving_licence",
+    "generate_indian_passport",
     "generate_indian_phone",
     "generate_indian_pin",
     "generate_pan",
@@ -3551,6 +3634,8 @@ __all__ = [
     "generate_rwanda_id",
     "generate_indonesian_nik",
     "generate_indian_ration_card",
+    "generate_vehicle_registration",
+    "generate_voter_id_epic",
     "generate_jmbg",
     "generate_kenya_maisha_namba",
     "generate_kenya_national_id",
