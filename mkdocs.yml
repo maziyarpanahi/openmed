@@ -89,6 +89,7 @@ nav:
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Ray Data Batch De-identification: integrations/ray-map-batches.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
