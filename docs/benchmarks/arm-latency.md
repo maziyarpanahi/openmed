@@ -3,7 +3,9 @@
 OpenMed gates cached INT8 ONNX PII inference over a committed corpus of
 synthetic clinical messages. Every message is 280 characters or shorter, the
 report contains aggregate measurements only, and the measured command blocks
-Python socket connections for its entire model-load and inference window.
+Python socket connections for its entire model-load and inference window. It
+also verifies the exact `model_int8.onnx` bytes against the committed SHA-256
+digest before any warm-up or measured inference.
 
 ## Raspberry Pi 5 reference envelope
 
@@ -51,8 +53,11 @@ OPENMED_OFFLINE=1 openmed benchmark latency \
 
 The command always requests `model_int8.onnx`, passes
 `local_files_only=True`, and activates OpenMed's socket guard even when
-`OPENMED_OFFLINE` was not already set. It exits non-zero when measured p95 is
-greater than 1,800 ms, while still writing and printing the JSON report.
+`OPENMED_OFFLINE` was not already set. Before measuring, it requires SHA-256
+`48a0b2e9269933bef0cf8913239d07996fa2afb107cd223ced95c8decd24ae6b`,
+which pins the downloaded INT8 graph in addition to the model revision. It
+exits non-zero when measured p95 is greater than 1,800 ms, while still writing
+and printing the JSON report.
 
 The default run performs one excluded warm-up inference and measures three
 passes over `openmed/eval/fixtures/sms_clinical.jsonl`. Override `--repeat` or
@@ -68,6 +73,10 @@ The JSON document includes these stable top-level measurements:
   "latency_ms": {"p50": 0.0, "p95": 0.0},
   "throughput_texts_per_second": 0.0,
   "peak_rss_mib": 0.0,
+  "model": {
+    "artifact": "model_int8.onnx",
+    "artifact_sha256": "48a0b2e9269933bef0cf8913239d07996fa2afb107cd223ced95c8decd24ae6b"
+  },
   "offline": true,
   "passed": true
 }

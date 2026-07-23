@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -58,6 +59,7 @@ class ArmLatencyBudget:
     regression_tolerance: float
     model_id: str
     model_revision: str
+    artifact_sha256: str
     quantization: str
 
     @property
@@ -80,6 +82,7 @@ class ArmLatencyBudget:
 
         return {
             "maximum_p95_ms": round(self.maximum_p95_ms, 6),
+            "artifact_sha256": self.artifact_sha256,
             "model_id": self.model_id,
             "model_revision": self.model_revision,
             "name": self.name,
@@ -223,6 +226,7 @@ def load_arm_latency_budget(
         regression_tolerance=float(payload.get("regression_tolerance", -1.0)),
         model_id=str(reference.get("model_id") or ""),
         model_revision=str(reference.get("model_revision") or ""),
+        artifact_sha256=str(reference.get("artifact_sha256") or ""),
         quantization=str(reference.get("quantization") or ""),
     )
     _validate_budget(budget)
@@ -262,11 +266,17 @@ def run_arm_latency_benchmark(
     )
     _validate_documents(selected_documents)
     selected_budget = budget or load_arm_latency_budget()
+    _validate_budget(selected_budget)
+    if model_id != selected_budget.model_id:
+        raise ValueError("model id does not match the committed ARM latency budget")
     if model_revision != selected_budget.model_revision:
         raise ValueError(
             "model revision does not match the committed ARM latency budget"
         )
-    _validate_int8_model(model)
+    artifact_sha256 = _validate_int8_model(
+        model,
+        expected_sha256=selected_budget.artifact_sha256,
+    )
 
     run_document = runner or _default_latency_runner
     now = clock or time.perf_counter
@@ -307,7 +317,12 @@ def run_arm_latency_benchmark(
         p50_ms=latency.p50_ms,
         p95_ms=latency.p95_ms,
         peak_rss_mib=peak_rss_mib,
-        model=_model_metadata(model, model_id=model_id, revision=model_revision),
+        model=_model_metadata(
+            model,
+            model_id=model_id,
+            revision=model_revision,
+            artifact_sha256=artifact_sha256,
+        ),
         machine=_machine_metadata(),
         corpus={
             "max_characters": max(len(item.text) for item in selected_documents),
@@ -361,15 +376,42 @@ def _validate_budget(budget: ArmLatencyBudget) -> None:
         raise ValueError("ARM latency regression_tolerance must be between 0 and 1")
     if budget.quantization != "int8":
         raise ValueError("ARM latency budget must target int8 quantization")
-    if not budget.model_id or not budget.model_revision:
+    if not budget.model_id:
         raise ValueError("ARM latency budget requires pinned model provenance")
+    if len(budget.model_revision) != 40 or any(
+        character not in "0123456789abcdef" for character in budget.model_revision
+    ):
+        raise ValueError(
+            "ARM latency budget requires a lowercase 40-character revision"
+        )
+    if len(budget.artifact_sha256) != 64 or any(
+        character not in "0123456789abcdef" for character in budget.artifact_sha256
+    ):
+        raise ValueError("ARM latency budget requires a lowercase SHA-256 digest")
 
 
-def _validate_int8_model(model: Any) -> None:
+def _validate_int8_model(model: Any, *, expected_sha256: str) -> str:
     variant = str(getattr(model, "variant", "")).lower()
     model_path = Path(str(getattr(model, "model_path", "")))
     if variant != "int8" or model_path.name != "model_int8.onnx":
         raise ValueError("ARM latency benchmark requires model_int8.onnx")
+    if not model_path.is_file():
+        raise ValueError("ARM latency benchmark model_int8.onnx does not exist")
+    artifact_sha256 = _sha256_file(model_path)
+    if artifact_sha256 != expected_sha256:
+        raise ValueError(
+            "ARM latency benchmark model_int8.onnx does not match the committed "
+            "SHA-256 digest"
+        )
+    return artifact_sha256
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _model_metadata(
@@ -377,10 +419,12 @@ def _model_metadata(
     *,
     model_id: str,
     revision: str,
+    artifact_sha256: str,
 ) -> dict[str, Any]:
     model_path = Path(str(getattr(model, "model_path", "")))
     return {
         "artifact": model_path.name,
+        "artifact_sha256": artifact_sha256,
         "id": model_id,
         "onnxruntime_version": _package_version("onnxruntime"),
         "quantization": "int8",

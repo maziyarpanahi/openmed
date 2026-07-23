@@ -2528,7 +2528,7 @@ def _handle_benchmark_latency(args: argparse.Namespace) -> int:
             )
             report = arm_latency_module.run_arm_latency_benchmark(
                 model,
-                model_id=str(args.model),
+                model_id=budget.model_id,
                 model_revision=str(args.revision),
                 documents=documents,
                 budget=budget,

@@ -67,6 +67,8 @@ def test_arm_latency_docs_record_budget_and_reproduction_commands():
     assert "1,800 ms" in content
     assert "OPENMED_OFFLINE=1 openmed benchmark latency" in content
     assert "model_int8.onnx" in content
+    assert "48a0b2e9269933bef0cf8913239d07996fa2afb107cd223ced95c8decd24ae6b" in content
+    assert "SHA-256" in content
     assert "test_intentionally_slowed_fixture_trips_gate" in content
     assert "test_latency_command_emits_offline_int8_json_and_blocks_sockets" in content
 

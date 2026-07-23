@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import socket
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from openmed.cli import main_module
 from openmed.core.offline import HF_OFFLINE_ENV_VARS, OfflineModeError
+from openmed.eval import arm_latency as arm_latency_module
 from openmed.eval import harness
 from openmed.eval.report import BenchmarkReport
 from openmed.onnx.inference import OnnxModel
@@ -212,27 +215,41 @@ def test_latency_command_emits_offline_int8_json_and_blocks_sockets(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    model_path = tmp_path / "model_int8.onnx"
+    model_path.write_bytes(b"")
+    loader_socket_guard_seen = False
+    inference_socket_guard_seen = False
+
     class FakeModel:
         variant = "int8"
-        model_path = Path("model_int8.onnx")
+
+        def __init__(self) -> None:
+            self.model_path = model_path
 
         def predict(self, text: str) -> list[object]:
+            nonlocal inference_socket_guard_seen
+            with pytest.raises(OfflineModeError, match="socket connection"):
+                socket.create_connection(("example.invalid", 443))
+            inference_socket_guard_seen = True
             return []
 
-    socket_guard_seen = False
-
     def fake_from_pretrained(cls, model_id, **kwargs):
-        nonlocal socket_guard_seen
+        nonlocal loader_socket_guard_seen
         assert kwargs["variant"] == "int8"
         assert kwargs["local_files_only"] is True
         with pytest.raises(OfflineModeError, match="socket connection"):
             socket.create_connection(("example.invalid", 443))
-        socket_guard_seen = True
+        loader_socket_guard_seen = True
         return FakeModel()
 
     monkeypatch.setenv("OPENMED_OFFLINE", "1")
     for name in HF_OFFLINE_ENV_VARS:
         monkeypatch.setenv(name, "0")
+    budget = replace(
+        arm_latency_module.load_arm_latency_budget(),
+        artifact_sha256=hashlib.sha256(b"").hexdigest(),
+    )
+    monkeypatch.setattr(arm_latency_module, "load_arm_latency_budget", lambda _: budget)
     monkeypatch.setattr(OnnxModel, "from_pretrained", classmethod(fake_from_pretrained))
     output_path = tmp_path / "arm-latency.json"
 
@@ -252,13 +269,16 @@ def test_latency_command_emits_offline_int8_json_and_blocks_sockets(
     )
 
     assert result == 0
-    assert socket_guard_seen is True
+    assert loader_socket_guard_seen is True
+    assert inference_socket_guard_seen is True
     captured = capsys.readouterr()
     assert captured.err == ""
     payload = json.loads(captured.out)
     assert payload["benchmark"] == "sms_arm_latency"
     assert payload["offline"] is True
     assert payload["model"]["artifact"] == "model_int8.onnx"
+    assert payload["model"]["artifact_sha256"] == hashlib.sha256(b"").hexdigest()
+    assert payload["model"]["id"] == budget.model_id
     assert payload["model"]["quantization"] == "int8"
     assert payload["latency_ms"]["p50"] >= 0.0
     assert "throughput_texts_per_second" in payload
