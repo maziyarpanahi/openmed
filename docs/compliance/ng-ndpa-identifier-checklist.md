@@ -30,7 +30,7 @@ personal data under the NDPA.
 | NDPA class key | Statutory category | Canonical label anchors | Profile action |
 |---|---|---|---|
 | `GENETIC_AND_BIOMETRIC_DATA` | Sections 65 and 30: genetic and biometric data used to uniquely identify a natural person | `ID_NUM`, `EYE_COLOR`, `HEIGHT`, `GENE_SYMBOL`, `VARIANT_DESCRIPTOR`, `PROTEIN_CHANGE`, `ZYGOSITY`, `CLINICAL_SIGNIFICANCE` | `mask` |
-| `RACE_OR_ETHNIC_ORIGIN` | Sections 65 and 30: race or ethnic origin | `OTHER` | `mask` |
+| `RACE_OR_ETHNIC_ORIGIN` | Sections 65 and 30: race or ethnic origin | `ETHNICITY`, `OTHER` | `mask` |
 | `RELIGIOUS_OR_SIMILAR_BELIEFS` | Sections 65 and 30: religious or similar beliefs, including conscience or philosophy | `OTHER` | `mask` |
 | `HEALTH_STATUS` | Sections 65 and 30: health status, including health-record identifiers and clinical content under this profile | `ID_NUM`, `MICROORGANISM`, `ANTIBIOTIC`, `SUSCEPTIBILITY`, `CONDITION`, `MEDICATION`, `LAB_TEST`, `PROCEDURE`, `BODY_SITE`, `ANESTHESIA_TYPE`, `ANESTHETIC_AGENT`, `AIRWAY_MANAGEMENT`, `ASA_CLASS`, `DIET_TYPE`, `NUTRITION_TARGET`, `FEEDING_ROUTE`, `NUTRITIONAL_STATUS`, `VACCINE_NAME`, `DOSE_NUMBER`, `ADMINISTRATION_ROUTE`, `VACCINE_LOT`, `VACCINE_SERIES`, `GENE_SYMBOL`, `VARIANT_DESCRIPTOR`, `PROTEIN_CHANGE`, `ZYGOSITY`, `CLINICAL_SIGNIFICANCE`, `GLYCEMIC_MEASURE`, `THYROID_MEASURE`, `HORMONE_LEVEL`, `INSULIN_REGIMEN`, `ENDOSCOPIC_FINDING`, `GI_SYMPTOM`, `GI_SCORE`, `POLYP_DESCRIPTOR`, `CKD_STAGE`, `DIALYSIS_MODALITY`, `RENAL_FUNCTION_MEASURE`, `URINE_FINDING`, `SPIROMETRY_MEASURE`, `OXYGEN_SUPPORT`, `RESPIRATORY_FINDING`, `DYSPNEA_GRADE`, `GROWTH_PARAMETER`, `GROWTH_PERCENTILE`, `DEVELOPMENTAL_MILESTONE` | `mask` |
 | `SEX_LIFE` | Sections 65 and 30: sex life | `GENDER`, `OTHER` | `mask` |
@@ -39,10 +39,11 @@ personal data under the NDPA.
 | `OTHER_COMMISSION_PRESCRIBED_DATA` | Sections 30(2) and 65: other information prescribed as sensitive personal data by the Commission | `OTHER` | `mask` |
 <!-- ndpa-sensitive-data-table:end -->
 
-`OTHER` is the conservative fallback for sensitive attributes that do not yet
-have a dedicated canonical label. The profile action protects a correctly
-normalised detection; it does not itself discover ethnicity, belief, sex-life,
-political, or trade-union terms. Sites should validate detector coverage on
+`ETHNICITY` represents explicitly contextualized race or ethnic-affiliation
+detections; `OTHER` remains the conservative fallback for sensitive attributes
+without a dedicated canonical label. The profile action protects a correctly
+normalised detection; it does not itself discover belief, sex-life, political,
+or trade-union terms. Sites should validate detector coverage on
 synthetic or otherwise approved local data and add approved custom recognizers
 where necessary. `EYE_COLOR` and `HEIGHT` are treated only as biometric hints;
 the table does not claim that they are biometric data in every context.

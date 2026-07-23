@@ -18,6 +18,7 @@
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "mask",
     "QUASI_IDENTIFIER": "keep",
+    "SENSITIVE_ATTRIBUTE": "keep",
     "CLINICAL_CONCEPT": "keep"
   },
   "actions": {
@@ -58,6 +59,7 @@
     "LITECOIN_ADDRESS": "mask",
     "MASKED_NUMBER": "mask",
     "GENDER": "keep",
+    "ETHNICITY": "keep",
     "EYE_COLOR": "keep",
     "HEIGHT": "keep",
     "ORGANIZATION": "keep",

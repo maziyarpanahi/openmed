@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added data-driven African healthcare-context safety-sweep terms for named
+  facilities, mobile-money references, and context-gated ethnic affiliations,
+  with non-keep defaults across the initial African policy profiles and
+  synthetic no-leak fixtures (#1447).
 - Added PHI-free, hash-verifiable Africa data-residency attestations for audited
   local de-identification runs, with data-driven jurisdiction wording, exact
   policy and model provenance, conservative captured offline evidence, a public

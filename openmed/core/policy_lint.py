@@ -9,6 +9,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping
 
+from .africa_context import profile_defaults_for
 from .labels import (
     CANONICAL_LABELS,
     DIRECT_IDENTIFIER,
@@ -302,7 +303,9 @@ def _action_label_errors(payload: Mapping[str, Any]) -> list[PolicyLintFinding]:
                 )
             )
 
-    missing = sorted(CANONICAL_LABELS - action_labels)
+    profile_defaults = profile_defaults_for(str(payload.get("name") or ""))
+    effective_action_labels = action_labels | set(profile_defaults["actions"])
+    missing = sorted(CANONICAL_LABELS - effective_action_labels)
     if missing:
         findings.append(
             PolicyLintFinding(
