@@ -2,16 +2,31 @@
 
 यह गाइड आपको कुछ ही मिनटों में खाली वर्कस्टेशन से दस्तावेज़ के परिणाम चलाने और कॉपी करने तक ले जाता है। यह डिपेंडेंसी प्रबंधन के लिए [uv](https://github.com/astral-sh/uv) का उपयोग करता है, लेकिन कोई भी Python 3.11+ वातावरण काम करेगा।
 
+यदि आप रुक-रुककर मिलने वाली connectivity, offline clinics, OpenMRS या DHIS2 के साथ काम कर रहे हैं, तो low-bandwidth model setup, local-only inference, privacy-profile guidance और FHIR integration recipes के लिए [African developer onboarding guide](africa-onboarding.md) का उपयोग करें।
+
 ## 1. वातावरण तैयार करें
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh  # uv इंस्टॉल करें (पहले से हो तो छोड़ें)
-uv venv --python 3.11                           # समर्पित वर्चुअल वातावरण बनाएँ
-source .venv/bin/activate                       # या सीधे `uv python` का उपयोग करें
+=== "macOS/Linux"
 
-# Hugging Face extras और दस्तावेज़ टूलिंग के साथ OpenMed इंस्टॉल करें
-uv pip install ".[hf]"
-```
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh  # uv इंस्टॉल करें (पहले से हो तो छोड़ें)
+    uv venv --python 3.11                           # समर्पित वर्चुअल वातावरण बनाएँ
+    source .venv/bin/activate                       # या सीधे `uv python` का उपयोग करें
+
+    # Hugging Face extras और दस्तावेज़ टूलिंग के साथ OpenMed इंस्टॉल करें
+    uv pip install ".[hf]"
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    uv venv --python 3.11
+    .venv\Scripts\Activate.ps1
+
+    # Hugging Face extras और दस्तावेज़ टूलिंग के साथ OpenMed इंस्टॉल करें
+    uv pip install ".[hf]"
+    ```
 
 zero-shot GLiNER स्टैक या डेवलपमेंट टूल चाहिए? आवश्यकतानुसार extras जोड़ें:
 
@@ -88,11 +103,30 @@ print(result.deidentified_text)
 
 `deidentify()` पाँच विधियों (`mask`, `remove`, `replace`, `hash`, `shift_dates`) का समर्थन करता है। प्रत्येक का चलने योग्य उदाहरण और `reidentify()` से परिणाम वापस पाने का तरीका [अनामिकरण त्वरित शुरुआत](anonymization.md#quickstart-choosing-a-method) में देखें।
 
-## 4. दस्तावेज़ से कोड स्निपेट कॉपी करें
+## 4. Offline उपयोग के लिए model को विश्वसनीय तरीके से pull करें
+
+Offline काम शुरू करने से पहले Hugging Face cache को warm करने के लिए model pull command चलाएँ। बाधित transfer के बाद download दोबारा शुरू होता है, अस्थायी network failures पर retry करता है और Hub metadata के विरुद्ध हर file को verify करता है:
+
+```bash
+openmed models pull disease_detection_superclinical
+```
+
+Metered या unstable connection पर revision pin करें, transfer speed सीमित करें और retry count स्पष्ट रूप से सेट करें:
+
+```bash
+openmed models pull disease_detection_superclinical \
+  --revision main \
+  --max-bandwidth 524288 \
+  --retries 5
+```
+
+Progress में केवल repository filenames और byte/file totals होते हैं। Pull पूरा होने के बाद `OPENMED_OFFLINE=1` सेट करें; वही command तब केवल cache lookup करता है और network connection का प्रयास नहीं करता।
+
+## 5. दस्तावेज़ से कोड स्निपेट कॉपी करें
 
 सभी कोड ब्लॉक में Material for MkDocs के कॉपी बटन उपलब्ध हैं। कमांड पैलेट (`/` या `cmd/ctrl + K`) खोलकर “GLiNER,” “OpenMedConfig,” या “token classification” खोजें और पूर्वावलोकन में दिखा स्निपेट कॉपी करें। यदि आप AI कोडिंग सहायक का उपयोग करते हैं, तो उसे प्रकाशित दस्तावेज़ URL दें, ताकि वह इसी संरचित Markdown को पढ़े और प्रामाणिक उत्तर दिखाए।
 
-## 5. वैकल्पिक: कॉन्फ़िगरेशन पिन करें
+## 6. वैकल्पिक: कॉन्फ़िगरेशन पिन करें
 
 ```python
 from openmed.core import OpenMedConfig, ModelLoader

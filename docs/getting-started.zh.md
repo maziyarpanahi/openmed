@@ -2,16 +2,31 @@
 
 本指南帮助你在几分钟内从空白工作站开始运行示例并复制文档中的结果。示例使用 [uv](https://github.com/astral-sh/uv) 管理依赖，但任何 Python 3.11+ 环境都可以使用。
 
+如果你面临间歇性网络连接、离线诊所、OpenMRS 或 DHIS2 环境，请使用[非洲开发者入门指南](africa-onboarding.md)，其中包含低带宽模型设置、纯本地推理、隐私配置提示和基于 FHIR 的集成示例。
+
 ## 1. 初始化环境
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh  # 安装 uv（已安装则跳过）
-uv venv --python 3.11                           # 创建专用虚拟环境
-source .venv/bin/activate                       # 也可以直接使用 `uv python`
+=== "macOS/Linux"
 
-# 安装 OpenMed、Hugging Face 扩展和文档工具
-uv pip install ".[hf]"
-```
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh  # 安装 uv（已安装则跳过）
+    uv venv --python 3.11                           # 创建专用虚拟环境
+    source .venv/bin/activate                       # 也可以直接使用 `uv python`
+
+    # 安装 OpenMed、Hugging Face 扩展和文档工具
+    uv pip install ".[hf]"
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    uv venv --python 3.11
+    .venv\Scripts\Activate.ps1
+
+    # 安装 OpenMed、Hugging Face 扩展和文档工具
+    uv pip install ".[hf]"
+    ```
 
 需要 zero-shot GLiNER 技术栈或开发工具？按需组合扩展：
 
@@ -88,11 +103,30 @@ print(result.deidentified_text)
 
 `deidentify()` 支持五种方法（`mask`、`remove`、`replace`、`hash`、`shift_dates`）。请参阅[匿名化快速入门](anonymization.md#quickstart-choosing-a-method)，其中包含每种方法的可运行示例以及使用 `reidentify()` 还原结果的方式。
 
-## 4. 从文档复制代码片段
+## 4. 可靠地拉取模型以供离线使用
+
+在离线工作前，使用模型拉取命令预热 Hugging Face 缓存。下载会在中断后续传，对短暂网络故障重试，并根据 Hub 元数据验证每个文件：
+
+```bash
+openmed models pull disease_detection_superclinical
+```
+
+在按流量计费或不稳定的连接上，可以显式锁定修订版本、限制传输速度并调整重试次数：
+
+```bash
+openmed models pull disease_detection_superclinical \
+  --revision main \
+  --max-bandwidth 524288 \
+  --retries 5
+```
+
+进度输出仅包含仓库文件名和字节/文件总数。拉取完成后，设置 `OPENMED_OFFLINE=1`；同一命令随后只查找缓存，不会尝试网络连接。
+
+## 5. 从文档复制代码片段
 
 所有代码块均使用 Material for MkDocs 的复制按钮。打开命令面板（`/` 或 `cmd/ctrl + K`）后，可以搜索 “GLiNER”、“OpenMedConfig” 或 “token classification”，再复制预览窗格中的片段。如果你使用 AI 编程助手，请让它读取已发布的文档网址，以便它引用同一份结构化 Markdown 并给出规范答案。
 
-## 5. 可选：固定配置
+## 6. 可选：固定配置
 
 ```python
 from openmed.core import OpenMedConfig, ModelLoader

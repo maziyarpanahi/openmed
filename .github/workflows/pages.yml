@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: "pages-${{ github.workflow }}-${{ github.ref }}"
+  group: "pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'deploy' }}"
   # Pages deployments should finish once started; cancelling them can leave
   # the final deploy-pages handoff in a failed state during merge bursts.
   cancel-in-progress: false

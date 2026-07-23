@@ -2,12 +2,12 @@
 
 OpenMed 集成了精选的生物医学模型、高级去标识化、多模态输入、结构化健康数据工具以及单次调用编排，帮助你无需处理繁杂的基础设施即可交付临床自然语言处理工作流。本文档让可复制的代码片段和工作流触手可及：所有章节均以 Markdown 为基础，支持搜索，并针对快速浏览以及复制到笔记本进行了优化。
 
-OpenMed `1.9.1` 完成了 `1.9` 版本的跨平台交付：Python、浏览器、Node.js 和 Android 共用同一份 ONNX 词元分类模型契约，同时修正 Swift 软件包，扩展临床抽取能力和 17 种语言的 PII 覆盖，并强化发布证据：
+OpenMed `1.9.1` 完成了 `1.9` 版本的跨平台交付：Python、浏览器、Node.js 和 Android 共用同一份 ONNX 词元分类模型契约，同时修正 Swift 软件包，扩展临床抽取能力和 22 种语言的 PII 覆盖，并强化发布证据：
 
 - **策略感知的去标识化**：提供签名审计报告、可复现性哈希、审查包、脱敏预览和发布门禁。
 - **多模态与结构化输入**：覆盖 OCR、图像、PDF、DOCX、EPUB、vCard/iCalendar、DICOM、CSV/TSV、JSONL 聊天记录、HL7 v2、CDA/C-CDA、FHIR 操作以及 FHIR Bulk NDJSON。
 - **Python、Swift、Kotlin/Android、REST、gRPC、React Native、TypeScript 和浏览器路径**：包括 OpenMedKit、类型化 REST 客户端、ONNX/WebGPU 和 Transformers.js 导出包。
-- **17 个受支持的 PII 语言代码：ar、de、en、es、fr、he、hi、id、it、ja、ko、nl、pt、ro、te、th 和 tr**：模型支持列表包含区域感知的验证与替代值生成；仅提供证件号验证的区域也有额外覆盖。
+- **22 个受支持的 PII 语言代码：am、ar、de、en、es、fr、he、hi、id、it、ja、ko、nl、pt、ro、sw、te、th、tr、xh、zh 和 zu**：中文使用文档化的多语言默认模型占位符，并提供区域感知的验证与替代值生成。用户配置的 Indic NER 适配器还可添加 9 条可选路由，其中也可服务于印地语和泰卢固语。仅提供证件号验证的区域仍有额外覆盖。
 - **发布证据**：包括泄漏热力图、模型评分卡、阈值扫描、k-匿名性/l-多样性/t-接近性、效用损失、SBOM、签名镜像、SLSA 来源证明、密钥扫描和可复现依赖锁。
 
 ## 你将获得什么
@@ -23,6 +23,9 @@ OpenMed `1.9.1` 完成了 `1.9` 版本的跨平台交付：Python、浏览器、
 
 !!! tip "便于复制的默认设置"
     本站每个页面的代码块都带有复制按钮和提示框，方便团队成员直接使用所需片段。使用搜索快捷键（`/` 或 `cmd/ctrl + K`）可直接跳转到实体、API 调用或 API 接口。
+
+!!! tip "LLM 友好的文档"
+    使用精选的 [llms.txt](https://openmed.life/docs/llms.txt) 索引查找快速入门、API 和工具接口；如需一次加载完整的渲染内容，请使用 [llms-full.txt](https://openmed.life/docs/llms-full.txt)。文档构建会重新生成这两个文件。
 
 ## 初次体验
 

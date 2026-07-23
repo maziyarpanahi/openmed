@@ -1,6 +1,6 @@
 # OpenMed onboarding for users in India
 
-[हिन्दी संस्करण](onboarding-india.hi.md)
+[हिन्दी संस्करण](../hi/onboarding-india/)
 
 This guide shows an India-oriented, local-first de-identification setup: start
 with a policy that OpenMed ships today, de-identify synthetic Aadhaar- and
