@@ -82,8 +82,10 @@ config = OpenMedConfig(chinese_target_script="simplified")
 
 OpenMed keeps a code-point alignment from the converted text to the source, so
 detected PHI spans are projected back to the exact original characters before
-redaction. If OpenCC is absent, the pre-pass returns the input unchanged with
-identity alignment and emits one optional-dependency warning.
+redaction. Context-dependent phrase rewrites map conservatively to their full
+source phrase rather than guessing partial offsets. If OpenCC is absent, the
+pre-pass returns the input unchanged with identity alignment and emits one
+optional-dependency warning.
 
 ## PyTorch attention backends
 

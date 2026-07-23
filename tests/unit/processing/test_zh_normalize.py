@@ -259,6 +259,38 @@ def test_length_changing_phrase_alignment_covers_the_complete_source_phrase():
     assert converted.offset_map == converted.alignment == converted.char_origins
 
 
+def test_single_character_phi_anchor_next_to_phrase_maps_exactly():
+    original = "鼠标王互联网"
+    converted = convert_script(original, OpenCCConfig.S2TWP)
+
+    assert converted.text == "滑鼠王網際網路"
+    start = converted.text.index("王")
+    original_start, original_end = converted.to_original_span(start, start + 1)
+
+    assert (original_start, original_end) == (2, 3)
+    assert original[original_start:original_end] == "王"
+
+
+def test_context_dependent_phrase_alignment_fails_closed():
+    converted = convert_script("鼠标", OpenCCConfig.S2TWP)
+
+    assert converted.text == "滑鼠"
+    assert converted.char_origins == ((0, 2), (0, 2))
+    assert converted.to_original_span(0, 1) == (0, 2)
+    assert converted.to_original_span(1, 2) == (0, 2)
+
+
+def test_repeated_phrase_alignment_preserves_each_phi_anchor():
+    original = "鼠标王互联网，" * 50
+    converted = convert_script(original, OpenCCConfig.S2TWP)
+
+    for index, character in enumerate(converted.text):
+        if character != "王":
+            continue
+        original_start, original_end = converted.to_original_span(index, index + 1)
+        assert original[original_start:original_end] == "王"
+
+
 @pytest.mark.parametrize("config", list(OpenCCConfig))
 def test_all_supported_opencc_configs_load(config):
     result = convert_script("患者头痛", config)

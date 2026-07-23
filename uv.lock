@@ -4937,9 +4937,6 @@ agents = [
 awq = [
     { name = "autoawq" },
 ]
-chinese = [
-    { name = "opencc" },
-]
 cli = [
     { name = "rich" },
     { name = "typer" },

@@ -20,10 +20,10 @@ and strict per-character NFKC.
 The module also wraps the optional Apache-2.0 OpenCC package for Simplified,
 Traditional, Taiwan, and Hong Kong conversions. OpenCC phrase conversions are
 not always one code point in to one code point out, so :func:`convert_script`
-aligns unchanged anchors and maps every converted character back to the source
-span that produced it. Downstream PHI detectors can therefore run on a
-canonical Chinese script and safely project detected spans onto the original
-document before redaction.
+aligns independently reproducible conversion units. Context-dependent phrase
+rewrites map conservatively to the complete source phrase. Downstream PHI
+detectors can therefore run on a canonical Chinese script and safely project
+detected spans onto the original document before redaction.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ import unicodedata
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from enum import Enum
 from functools import lru_cache
 from typing import Any
@@ -49,6 +48,10 @@ _FULLWIDTH_END = 0xFF5E
 _WIDTH_OFFSET = 0xFEE0
 #: Ideographic space, normalized to a configurable target.
 IDEOGRAPHIC_SPACE = "　"
+# OpenCC's standard dictionary phrases are short. Limiting independent chunk
+# probes keeps alignment linear in document length; an unresolved longer rule
+# falls back to one conservative source span rather than guessing offsets.
+_MAX_ALIGNMENT_SOURCE_CHARS = 32
 
 
 class OpenCCConfig(str, Enum):
@@ -118,8 +121,8 @@ class ScriptConversion:
 
     ``char_origins[i]`` is the ``(start, end)`` source span that produced
     converted character ``i``. Unchanged anchors map one-to-one. Characters in
-    a length-changing phrase replacement share or cover proportional portions
-    of the source phrase while remaining monotonic.
+    a context-dependent phrase replacement share the complete source-phrase
+    span so partial detections cannot point at adjacent text.
     """
 
     text: str
@@ -222,58 +225,114 @@ def _identity_char_origins(text: str) -> tuple[tuple[int, int], ...]:
 
 
 def _align_replacement(
+    source: str,
+    converted: str,
     source_start: int,
     source_end: int,
-    converted_length: int,
+    converted_start: int,
+    converted_end: int,
+    convert_chunk: Callable[[str], str],
 ) -> list[tuple[int, int]]:
+    source_chunk = source[source_start:source_end]
+    converted_chunk = converted[converted_start:converted_end]
+    converted_length = len(converted_chunk)
     source_length = source_end - source_start
     if converted_length <= 0:
         return []
     if source_length <= 0:
         return [(source_start, source_start)] * converted_length
 
-    spans = []
-    for index in range(converted_length):
-        start = source_start + (index * source_length) // converted_length
-        end = source_start + (
-            ((index + 1) * source_length + converted_length - 1) // converted_length
-        )
-        spans.append((start, max(start + 1, min(end, source_end))))
-    return spans
+    if source_length == converted_length:
+        character_converted = [convert_chunk(character) for character in source_chunk]
+        if (
+            all(len(value) == 1 for value in character_converted)
+            and "".join(character_converted) == converted_chunk
+        ):
+            return [
+                (source_start + index, source_start + index + 1)
+                for index in range(source_length)
+            ]
+
+    # A phrase-level rewrite can reorder, expand, or contract source characters.
+    # Without token provenance from OpenCC, assigning proportional sub-spans can
+    # point a detected identifier at adjacent text. Map every output character
+    # to the complete rewritten source chunk instead so redaction fails closed.
+    return [(source_start, source_end)] * converted_length
 
 
 def _align_converted_text(
     source: str,
     converted: str,
+    converter: Any,
 ) -> tuple[tuple[int, int], ...]:
-    """Align converted characters between unchanged source anchors."""
+    """Align independent conversion units and fail closed for phrase rewrites."""
 
-    if len(source) == len(converted):
-        return _identity_char_origins(source)
     if not converted:
         return ()
     if not source:
         return tuple((0, 0) for _ in converted)
 
-    matcher = SequenceMatcher(None, source, converted, autojunk=False)
-    anchors = [block for block in matcher.get_matching_blocks() if block.size >= 2]
-    anchors.append((len(source), len(converted), 0))
+    conversion_cache: dict[str, str] = {}
+
+    def convert_chunk(chunk: str) -> str:
+        if chunk not in conversion_cache:
+            conversion_cache[chunk] = str(converter.convert(chunk))
+        return conversion_cache[chunk]
+
     origins: list[tuple[int, int]] = []
     source_cursor = 0
     converted_cursor = 0
-    for source_start, converted_start, size in anchors:
+    while source_cursor < len(source) and converted_cursor < len(converted):
+        probe_limit = min(
+            len(source),
+            source_cursor + _MAX_ALIGNMENT_SOURCE_CHARS,
+        )
+        matched = False
+        for source_end in range(source_cursor + 1, probe_limit + 1):
+            chunk_converted = convert_chunk(source[source_cursor:source_end])
+            if not chunk_converted or not converted.startswith(
+                chunk_converted,
+                converted_cursor,
+            ):
+                continue
+            converted_end = converted_cursor + len(chunk_converted)
+            origins.extend(
+                _align_replacement(
+                    source,
+                    converted,
+                    source_cursor,
+                    source_end,
+                    converted_cursor,
+                    converted_end,
+                    convert_chunk,
+                )
+            )
+            source_cursor = source_end
+            converted_cursor = converted_end
+            matched = True
+            break
+
+        if matched:
+            continue
+
         origins.extend(
             _align_replacement(
+                source,
+                converted,
                 source_cursor,
-                source_start,
-                converted_start - converted_cursor,
+                len(source),
+                converted_cursor,
+                len(converted),
+                convert_chunk,
             )
         )
+        source_cursor = len(source)
+        converted_cursor = len(converted)
+
+    if converted_cursor < len(converted):
         origins.extend(
-            (source_start + index, source_start + index + 1) for index in range(size)
+            [(len(source), len(source))] * (len(converted) - converted_cursor)
         )
-        source_cursor = source_start + size
-        converted_cursor = converted_start + size
 
     if len(origins) != len(converted):
         raise RuntimeError("OpenCC alignment did not cover converted text")
@@ -314,7 +373,7 @@ def convert_script(
     return ScriptConversion(
         text=converted,
         original=text,
-        char_origins=_align_converted_text(text, converted),
+        char_origins=_align_converted_text(text, converted, converter),
         config=resolved_config,
     )
 
