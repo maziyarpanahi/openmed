@@ -66,9 +66,9 @@
         },
         {
           "source_heading": "Multilingual PII (26 supported languages)",
-          "source_sha256": "e503f0666006a983aea8ce8398887b7fcd839afe32e454bb90c22bd77aa8e98e",
+          "source_sha256": "62355d148c3ee27e70a0581e75c3a0f18fee84b496dad821cab181f81622f6c3",
           "translation_heading": "बहुभाषी PII (26 समर्थित भाषाएँ)",
-          "translation_sha256": "09e5657e8faf263af15fbe7fb6754b437c4f3546362621ef6109e8df0a2a6a8c"
+          "translation_sha256": "75a95c96879bf4cbffd30eae228607795160666388a98e81910ace36836b5f01"
         },
         {
           "source_heading": "REST API",
@@ -190,9 +190,9 @@
         },
         {
           "source_heading": "Multilingual PII (26 supported languages)",
-          "source_sha256": "e503f0666006a983aea8ce8398887b7fcd839afe32e454bb90c22bd77aa8e98e",
+          "source_sha256": "62355d148c3ee27e70a0581e75c3a0f18fee84b496dad821cab181f81622f6c3",
           "translation_heading": "PII ya lugha nyingi (lugha 26 zinazoungwa mkono)",
-          "translation_sha256": "8702238614e3fd05483ebf8e8536858f0b4fd8af06925e805f7aa38a49bbbc83"
+          "translation_sha256": "b6d87963c83995c7bc95f3eab549e74b0339ed60b4dc0483fe378468d4cc3760"
         },
         {
           "source_heading": "REST API",
@@ -314,9 +314,9 @@
         },
         {
           "source_heading": "Multilingual PII (26 supported languages)",
-          "source_sha256": "e503f0666006a983aea8ce8398887b7fcd839afe32e454bb90c22bd77aa8e98e",
+          "source_sha256": "62355d148c3ee27e70a0581e75c3a0f18fee84b496dad821cab181f81622f6c3",
           "translation_heading": "多语言 PII（支持 26 种语言）",
-          "translation_sha256": "c763c1bd3b86f38aac269d8287c4f391a763d857364b0c0ff64f28dd55dbff16"
+          "translation_sha256": "d31c4809d5d81414f15c0390490df5a9ea391ebd833ed51a00904f9966f09326"
         },
         {
           "source_heading": "REST API",

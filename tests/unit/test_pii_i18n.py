@@ -4114,6 +4114,7 @@ def test_validate_russian_snils():
     assert not validate_russian_snils("abcdef")
     assert not validate_russian_snils("123")
     assert not validate_russian_snils("112233445")
+    assert not validate_russian_snils("112x233x445x95")
     assert not validate_russian_snils(None)
 
 
@@ -4177,6 +4178,21 @@ def test_russian_clinical_sample_expected_spans():
             observed.add((pattern.entity_type, match.start(), match.end(), value))
 
     assert expected <= observed
+
+
+def test_russian_phone_pattern_requires_balanced_parentheses():
+    patterns = [
+        pattern
+        for pattern in get_patterns_for_language("ru")
+        if pattern.entity_type == "phone_number"
+    ]
+
+    assert any(
+        re.search(pattern.pattern, "телефон 8 (495) 123-45-67") for pattern in patterns
+    )
+    assert not any(
+        re.search(pattern.pattern, "телефон 8 (495 123-45-67") for pattern in patterns
+    )
 
 
 def test_russian_i18n_golden_fixture_offsets():

@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a full Russian (`ru`) PII language pack, including Cyrillic date,
   phone, postal-index, and street-address patterns, SNILS (insurance account
   number) and OMS (health-insurance policy number) validators with
-  checksum-backed surrogates, and model/service/SDK wiring. The model-backed
-  PII allow-list now covers 26 language codes (#1860).
+  checksum-backed surrogates, and service/SDK wiring. Russian uses the
+  documented multilingual default-model placeholder until dedicated weights
+  ship; the supported PII language-code allow-list now covers 26 codes (#1860).
 - Added opt-in token-level language identification for Hinglish clinical text,
   with exact offset-only decisions, deterministic local fallback routing,
   optional caller-supplied model hooks, and synthetic token-accuracy and

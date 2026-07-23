@@ -2624,9 +2624,13 @@ def validate_russian_snils(text: str) -> bool:
     """
     if not isinstance(text, str):
         return False
-    digits = re.sub(r"[^0-9]", "", text)
-    if len(digits) != 11:
+    value = text.strip()
+    if (
+        re.fullmatch(r"(?:[0-9]{11}|[0-9]{3}-[0-9]{3}-[0-9]{3} [0-9]{2})", value)
+        is None
+    ):
         return False
+    digits = re.sub(r"[- ]", "", value)
 
     numbers = [int(digit) for digit in digits]
     weights = range(9, 0, -1)
@@ -8067,7 +8071,8 @@ _RUSSIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
     # Dates with Cyrillic month names, genitive or nominative ("23 июля 1985").
     PIIPattern(
-        rf"\b\d{{1,2}}\s+(?:{_RUSSIAN_MONTH_PATTERN})\s+\d{{4}}(?:\s*(?:г\.?|года))?\b",
+        rf"\b\d{{1,2}}\s+(?:{_RUSSIAN_MONTH_PATTERN})\s+\d{{4}}"
+        r"(?:\s*г(?:ода)?\.?)?(?!\w)",
         "date",
         priority=8,
         base_score=0.7,
@@ -8084,7 +8089,8 @@ _RUSSIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
     # Russian phones: +7 or national 8 prefix, optional parenthesized area code.
     PIIPattern(
-        r"(?<!\w)(?:\+7|8)[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?!\d)",
+        r"(?<!\w)(?:\+7|8)[\s-]?(?:\(\d{3}\)|\d{3})"
+        r"[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?!\d)",
         "phone_number",
         priority=8,
         base_score=0.55,
@@ -9769,7 +9775,7 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "EMAIL": ["pacient@example.ru", "kontakt@example.org"],
         "PHONE": ["+7 916 123-45-67", "8 (495) 123-45-67"],
         "ID_NUM": ["112-233-445 95", "1234567890123452"],
-        "STREET_ADDRESS": ["ул. Ленина, дом 12a", "пр-т Мира, дом 45, кв. 7"],
+        "STREET_ADDRESS": ["ул. Ленина, дом 12а", "пр-т Мира, дом 45, кв. 7"],
         "URL_PERSONAL": ["https://example.ru"],
         "USERNAME": ["pacient123", "polzovatel456"],
         "DATE": ["16.11.1975", "01.01.2000"],

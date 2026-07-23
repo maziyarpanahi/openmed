@@ -508,8 +508,8 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 Extraction and de-identification support **26 supported PII language codes**:
 `am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
-Chinese routing currently uses the documented multilingual default-model
-placeholder while dedicated Chinese model weights remain separate.
+Russian and Chinese routing currently use documented multilingual
+default-model placeholders while dedicated model weights remain separate.
 An optional, user-configured Indic NER family accepts nine additional routes
 (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve
 Hindi and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
