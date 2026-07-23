@@ -22,7 +22,11 @@ from openmed.mcp.tool_registry import (
     render_tool_registry_document,
     validate_registered_tool_output,
 )
-from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
+from openmed.mcp.workflow import (
+    WorkflowRunner,
+    builtin_workflow_step_executors,
+    plan_clinical_pipeline,
+)
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
@@ -371,6 +375,86 @@ def openmed_run_workflow(
     return validate_registered_tool_output("openmed_run_workflow", response)
 
 
+def openmed_ground(
+    spans: list[Dict[str, Any]],
+    vocabularies: Optional[list[str]] = None,
+    max_candidates: int = 5,
+    allow_external_llm: bool = False,
+) -> Dict[str, Any]:
+    """Return the registered grounding contract until runtime work lands."""
+    del vocabularies, max_candidates, allow_external_llm
+    response = {
+        "schema_version": "openmed.ground.v1",
+        "status": "unimplemented",
+        "spans": list(spans),
+        "grounded_concepts": [],
+        "error": _pending_contract_error("ground"),
+    }
+    return validate_registered_tool_output("openmed_ground", response)
+
+
+def openmed_export_fhir(
+    spans: list[Dict[str, Any]],
+    resources: Optional[list[Dict[str, Any]]] = None,
+    doc_id: str = "workflow",
+    bundle_type: str = "collection",
+) -> Dict[str, Any]:
+    """Return the registered FHIR export contract until runtime work lands."""
+    del spans, resources, doc_id, bundle_type
+    response = {
+        "schema_version": "openmed.export_fhir.v1",
+        "status": "unimplemented",
+        "bundle": {},
+        "resource_count": 0,
+        "error": _pending_contract_error("export"),
+    }
+    return validate_registered_tool_output("openmed_export_fhir", response)
+
+
+def openmed_risk_score(
+    spans: list[Dict[str, Any]],
+    deidentified_text: Optional[str] = None,
+    records: Optional[list[Dict[str, Any]]] = None,
+    quasi_identifiers: Optional[list[str]] = None,
+) -> Dict[str, Any]:
+    """Return the registered risk-score contract until runtime work lands."""
+    del spans, deidentified_text, records, quasi_identifiers
+    response = {
+        "schema_version": "openmed.risk_score.v1",
+        "status": "unimplemented",
+        "risk_report": {},
+        "error": _pending_contract_error("risk"),
+    }
+    return validate_registered_tool_output("openmed_risk_score", response)
+
+
+def openmed_clinical_pipeline(
+    stages: list[str],
+    text: Optional[str] = None,
+    spans: Optional[list[Dict[str, Any]]] = None,
+    options: Optional[Dict[str, Any]] = None,
+    allow_external_llm: bool = False,
+    session_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Plan and validate the registered clinical pipeline contract."""
+    del text, spans, options, allow_external_llm, session_id, workflow_id
+    response = plan_clinical_pipeline(stages)
+    return validate_registered_tool_output("openmed_clinical_pipeline", response)
+
+
+def _pending_contract_error(stage: str) -> Dict[str, Any]:
+    return {
+        "code": "handler_pending",
+        "message": (
+            "This MCP tool contract is registered; runtime execution is tracked "
+            "by the next OM-754 child issue."
+        ),
+        "stage": stage,
+        "details": {"implemented": False},
+    }
+
+
 def _workflow_step_executors(
     runtime_provider: Optional[RuntimeProvider],
 ) -> Dict[str, Callable[..., Any]]:
@@ -462,6 +546,12 @@ def build_mcp_tool_handlers(
         "openmed_run_workflow": lambda **kwargs: openmed_run_workflow(
             **kwargs,
             runtime_provider=runtime_provider,
+        ),
+        "openmed_ground": lambda **kwargs: openmed_ground(**kwargs),
+        "openmed_export_fhir": lambda **kwargs: openmed_export_fhir(**kwargs),
+        "openmed_risk_score": lambda **kwargs: openmed_risk_score(**kwargs),
+        "openmed_clinical_pipeline": (
+            lambda **kwargs: openmed_clinical_pipeline(**kwargs)
         ),
     }
 
