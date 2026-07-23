@@ -515,6 +515,8 @@ def detect_variant_normalized(
         original_start, original_end = conversion.to_original_span(start, end)
         results.append((original_start, original_end, *tuple(item[2:])))
     return results
+
+
 def _parse_below_ten_thousand(numeral: str) -> int:
     if not numeral:
         return 0

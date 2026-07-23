@@ -594,6 +594,46 @@ def test_chinese_quantity_pattern_covers_only_the_numeral_run():
     assert score == pytest.approx(0.7)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "出生于二〇二四年十三月三十二日",
+        "出生于一百十百年十二月三日",
+        "剂量〇毫升",
+        "剂量一百十百毫升",
+    ],
+)
+def test_chinese_patterns_reject_invalid_numeral_and_calendar_surfaces(text):
+    units = find_semantic_units(text, get_patterns_for_language("zh"))
+
+    assert not any(unit[2] in {"date", "quantity"} for unit in units)
+
+
+def test_chinese_numeral_patterns_preserve_existing_chinese_patterns():
+    patterns = get_patterns_for_language("zh")
+    text = "患者王伟今日复诊，病历号：贰零贰肆零零壹"
+
+    units = find_semantic_units(text, patterns)
+
+    assert any(
+        text[start:end] == "王伟" and kind == "person" for start, end, kind, *_ in units
+    )
+    assert any(
+        text[start:end] == "贰零贰肆零零壹" and kind == "medical_record_number"
+        for start, end, kind, *_ in units
+    )
+
+
+def test_chinese_numeral_helpers_are_exported_from_processing():
+    from openmed import processing
+
+    assert processing.parse_chinese_numeral("一百零一") == 101
+    assert processing.find_chinese_numbers("剂量三毫升")[0].span == (2, 3)
+    assert processing.normalize_chinese_dates("二〇二四年三月五日")[0].normalized == (
+        "2024-03-05"
+    )
+
+
 def test_chinese_patterns_do_not_mutate_existing_language_pattern_lists():
     from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
 

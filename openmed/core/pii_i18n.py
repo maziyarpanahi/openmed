@@ -7798,6 +7798,33 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 _CHINESE_NUMERAL_CHARS = "〇零一二三四五六七八九十百千万亿壹贰叁肆伍陆柒捌玖拾佰仟萬億"
 _CHINESE_NUMERAL_RUN = rf"[{_CHINESE_NUMERAL_CHARS}]+"
 
+
+def _validate_chinese_numeral_surface(value: str) -> bool:
+    """Return whether ``value`` is a structurally valid Chinese numeral."""
+
+    # Keep the registry import-cycle-free while sharing the public parser at
+    # match time instead of maintaining a second unit-order implementation.
+    from openmed.processing.zh_normalize import parse_chinese_numeral
+
+    try:
+        parse_chinese_numeral(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _validate_chinese_date_surface(value: str) -> bool:
+    """Return whether ``value`` is one complete, valid Chinese calendar date."""
+
+    from openmed.processing.zh_normalize import normalize_chinese_dates
+
+    try:
+        matches = normalize_chinese_dates(value)
+    except TypeError:
+        return False
+    return len(matches) == 1 and matches[0].span == (0, len(value))
+
+
 _CHINESE_NUMERAL_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         rf"(?<![{_CHINESE_NUMERAL_CHARS}]){_CHINESE_NUMERAL_RUN}\s*年\s*"
@@ -7808,6 +7835,8 @@ _CHINESE_NUMERAL_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.65,
         context_words=["出生", "生于", "出生日期", "出生年月日", "生日"],
         context_boost=0.3,
+        validator=_validate_chinese_date_surface,
+        reject_on_validation_failure=True,
     ),
     PIIPattern(
         r"(?:(?<=病历号：)|(?<=病历号:)|(?<=病历号)|"
@@ -7841,6 +7870,8 @@ _CHINESE_NUMERAL_PII_PATTERNS: List[PIIPattern] = [
             "公斤",
         ],
         context_boost=0.45,
+        validator=_validate_chinese_numeral_surface,
+        reject_on_validation_failure=True,
         safety_sweep_requires_context=True,
     ),
 ]
