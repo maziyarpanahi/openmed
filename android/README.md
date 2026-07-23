@@ -52,6 +52,12 @@ baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
 local-first pipeline.
 
+## R8 and ProGuard
+
+The OpenMedKit AAR includes consumer rules for reflectively loaded inference
+classes, JNI-bound ONNX Runtime types, and model catalog serialization. Apps can
+enable R8 or ProGuard without adding any OpenMedKit-specific configuration.
+
 ## Optional Maven Central Publishing
 
 JitPack is the public installation path documented above. The separate, optional
