@@ -32,6 +32,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_mpesa_transaction_code,
     generate_philhealth_pin,
     generate_portuguese_nif,
+    generate_russian_oms,
+    generate_russian_snils,
     generate_rwanda_id,
     generate_tanzania_nida,
     generate_uganda_nin,
@@ -103,6 +105,8 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_portuguese_nif,
+    validate_russian_oms,
+    validate_russian_snils,
     validate_rwanda_id,
     validate_south_african_id,
     validate_spanish_dni,
@@ -144,6 +148,7 @@ class TestConstants:
             "th",
             "ko",
             "ro",
+            "ru",
             "sv",
             "da",
             "no",
@@ -4092,6 +4097,166 @@ def test_bulgarian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
     assert added_count == len(row["gold_spans"])
     for span in row["gold_spans"]:
         assert span["text"] not in result.deidentified_text
+
+
+def test_validate_russian_snils():
+    # Checksum-valid SNILS values (grouped and plain-digit forms).
+    assert validate_russian_snils("112-233-445 95")
+    assert validate_russian_snils("11223344595")
+    assert validate_russian_snils("46257310279")
+    assert validate_russian_snils("08765430300")
+
+    # Transposed/incremented digits break the mod-101 checksum.
+    assert validate_russian_snils("11223344559") is False
+    assert validate_russian_snils("12123344595") is False
+    assert validate_russian_snils("11223345495") is False
+
+    assert not validate_russian_snils("abcdef")
+    assert not validate_russian_snils("123")
+    assert not validate_russian_snils("112233445")
+    assert not validate_russian_snils(None)
+
+
+def test_validate_russian_oms():
+    # Checksum-valid 16-digit ENP/OMS policy number.
+    assert validate_russian_oms("1234567890123452")
+
+    # Transposed/incremented digits break the Luhn-style check digit.
+    assert validate_russian_oms("1234567890123425") is False
+    assert validate_russian_oms("2134567890123452") is False
+    assert validate_russian_oms("1234567890123453") is False
+
+    assert not validate_russian_oms("abcdef")
+    assert not validate_russian_oms("123")
+    assert not validate_russian_oms("123456789012345")
+    assert not validate_russian_oms(None)
+
+
+def test_generated_russian_snils_round_trips_validator():
+    rng = random.Random(1234)
+    for _ in range(200):
+        assert validate_russian_snils(generate_russian_snils(rng=rng))
+
+
+def test_generated_russian_oms_round_trips_validator():
+    rng = random.Random(1234)
+    for _ in range(200):
+        assert validate_russian_oms(generate_russian_oms(rng=rng))
+
+
+def test_generated_russian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["ru"] == "ru_RU"
+
+    anonymizer = Anonymizer(lang="ru", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("112-233-445 95", "national_id")
+
+    assert validate_russian_snils(surrogate) is True
+
+
+def test_russian_clinical_sample_expected_spans():
+    text = (
+        "Пациент: Иван Петров. Дата рождения 16.11.1975, "
+        "телефон +7 916 123-45-67, СНИЛС 112-233-445 95, "
+        "полис ОМС 1234567890123452, "
+        "адрес: улица Ленина, дом 12, индекс 101000."
+    )
+    expected = {
+        ("date", 36, 46, "16.11.1975"),
+        ("phone_number", 56, 72, "+7 916 123-45-67"),
+        ("national_id", 80, 94, "112-233-445 95"),
+        ("national_id", 106, 122, "1234567890123452"),
+        ("street_address", 131, 151, "улица Ленина, дом 12"),
+        ("postcode", 160, 166, "101000"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("ru"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_russian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ru.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 2
+    for row in rows:
+        assert row["language"] == "ru"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        for span in row["gold_spans"]:
+            assert text[span["start"] : span["end"]] == span["text"], span["label"]
+
+        ids_by_type = {
+            span["metadata"]["identifier_type"]: span["text"]
+            for span in row["gold_spans"]
+            if span["label"] == "ID_NUM"
+        }
+        if "snils" in ids_by_type:
+            assert validate_russian_snils(ids_by_type["snils"])
+        if "oms" in ids_by_type:
+            assert validate_russian_oms(ids_by_type["oms"])
+
+    labels = {span["label"] for row in rows for span in row["gold_spans"]}
+    assert labels == {"DATE", "PHONE", "ID_NUM", "STREET_ADDRESS", "ZIPCODE"}
+
+
+def test_russian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ru.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 2
+    for row in rows:
+        empty_result = PredictionResult(
+            text=row["text"],
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-14T00:00:00Z",
+            metadata={},
+        )
+
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            row["text"],
+            empty_result,
+            lang="ru",
+        )
+        result = _build_deidentification_result(
+            row["text"],
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="ru",
+            consistent=False,
+            seed=None,
+            locale=None,
+            use_safety_sweep=True,
+        )
+
+        assert added_count == len(row["gold_spans"])
+        for span in row["gold_spans"]:
+            assert span["text"] not in result.deidentified_text
 
 
 def test_validate_finnish_hetu():

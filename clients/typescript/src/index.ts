@@ -37,6 +37,7 @@ export type PIILanguage =
   | "th"
   | "ko"
   | "ro"
+  | "ru"
   | "sv"
   | "da"
   | "no"

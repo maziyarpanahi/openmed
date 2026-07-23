@@ -392,11 +392,11 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 **Symptom.** A PII call with an unrecognized `lang` raises:
 
 ```text
-ValueError: Unsupported language 'xx'. Supported: ['am', 'ar', 'as', 'bn', 'da', 'de', 'en', 'es', 'fr', 'gu', 'he', 'hi', 'id', 'it', 'ja', 'kn', 'ko', 'ml', 'mr', 'nl', 'no', 'or', 'pa', 'pt', 'ro', 'sv', 'sw', 'ta', 'te', 'th', 'tr', 'xh', 'zh', 'zu']
+ValueError: Unsupported language 'xx'. Supported: ['am', 'ar', 'as', 'bn', 'da', 'de', 'en', 'es', 'fr', 'gu', 'he', 'hi', 'id', 'it', 'ja', 'kn', 'ko', 'ml', 'mr', 'nl', 'no', 'or', 'pa', 'pt', 'ro', 'ru', 'sv', 'sw', 'ta', 'te', 'th', 'tr', 'xh', 'zh', 'zu']
 ```
 
-**Cause.** PII extraction and de-identification support **25 supported PII language codes: am, ar, da, de, en,
-es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, sv, sw, te, th, tr, xh, zh, and zu**. Chinese currently uses the documented
+**Cause.** PII extraction and de-identification support **26 supported PII language codes: am, ar, da, de, en,
+es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, xh, zh, and zu**. Chinese currently uses the documented
 multilingual default-model placeholder. Passing anything outside that set (or a mistyped code) raises this error.
 The accepted API set also includes nine optional Indic routes: `as`, `bn`,
 `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`. Those codes require an explicit
