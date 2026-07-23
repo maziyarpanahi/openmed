@@ -221,6 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
+    _add_release_command(subparsers)
     _add_config_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
@@ -1154,6 +1155,12 @@ def _add_doctor_command(
     doctor_parser.set_defaults(
         handler=_handle_doctor,
     )
+
+
+def _add_release_command(subparsers: argparse._SubParsersAction) -> None:
+    from .release import add_release_command
+
+    add_release_command(subparsers)
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
