@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Mapping
 
 from openmed.core.terminology_licenses import (
@@ -185,25 +186,27 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
 }
 
 
-PERMISSIVE_ENCODER_LICENSES: Mapping[str, EncoderLicense] = {
-    "muril": EncoderLicense(
-        family="MuRIL",
-        license_id="Apache-2.0",
-        source_url="https://huggingface.co/google/muril-base-cased",
-        redistribution="user-supplied-reference-only",
-        notes=(
-            "OpenMed bundles no weights. MuRIL supports 17 Indian languages "
-            "and transliterated text, including Hinglish/code-mixed paths."
+PERMISSIVE_ENCODER_LICENSES: Mapping[str, EncoderLicense] = MappingProxyType(
+    {
+        "muril": EncoderLicense(
+            family="MuRIL",
+            license_id="Apache-2.0",
+            source_url="https://huggingface.co/google/muril-base-cased",
+            redistribution="user-supplied-reference-only",
+            notes=(
+                "OpenMed bundles no weights. MuRIL supports 17 Indian languages "
+                "and transliterated text, including Hinglish/code-mixed paths."
+            ),
         ),
-    ),
-    "indicbert": EncoderLicense(
-        family="IndicBERT",
-        license_id="MIT",
-        source_url="https://huggingface.co/ai4bharat/indic-bert",
-        redistribution="user-supplied-reference-only",
-        notes="OpenMed bundles no weights; users resolve an approved repo or local path.",
-    ),
-}
+        "indicbert": EncoderLicense(
+            family="IndicBERT",
+            license_id="MIT",
+            source_url="https://huggingface.co/ai4bharat/indic-bert",
+            redistribution="user-supplied-reference-only",
+            notes="OpenMed bundles no weights; users resolve an approved repo or local path.",
+        ),
+    }
+)
 
 
 def license_for(dataset: str) -> DatasetLicense:

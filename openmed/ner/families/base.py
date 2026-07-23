@@ -70,15 +70,27 @@ class EncoderOutput:
         hidden_shape = _shape(self.last_hidden_state)
         if len(input_shape) != 2 or input_shape[0] != 1:
             raise ValueError("encoder input_ids must have shape [1, sequence]")
+        if input_shape[1] <= 0:
+            raise ValueError("encoder input_ids must contain at least one token")
         if mask_shape != input_shape:
             raise ValueError("encoder attention_mask must align with input_ids")
         if len(hidden_shape) != 3 or hidden_shape[:2] != input_shape:
             raise ValueError(
                 "encoder last_hidden_state must have shape [1, sequence, hidden]"
             )
+        if hidden_shape[2] <= 0:
+            raise ValueError("encoder hidden size must be positive")
         if len(self.offset_mapping) != input_shape[1]:
             raise ValueError("encoder offsets must align with the token sequence")
-        if any(start < 0 or end < start for start, end in self.offset_mapping):
+        if any(
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 0
+            or end < start
+            for start, end in self.offset_mapping
+        ):
             raise ValueError("encoder offsets must be ordered, non-negative spans")
         if len(self.text_sha256) != 64 or any(
             char not in "0123456789abcdef" for char in self.text_sha256

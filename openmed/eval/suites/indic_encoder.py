@@ -150,6 +150,9 @@ def run_indic_encoder_recall_delta(
         encoder_leaked_chars += leakage.leaked_chars
         gold_chars += leakage.total_chars
 
+    if gold_count == 0:
+        raise ValueError("Indic encoder recall evaluation requires a gold entity")
+
     regex_recall = regex_matches / gold_count if gold_count else 1.0
     encoder_recall = encoder_matches / gold_count if gold_count else 1.0
     return IndicRecallDeltaReport(

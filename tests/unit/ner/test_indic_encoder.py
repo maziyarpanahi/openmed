@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -76,6 +77,64 @@ def test_loader_reports_missing_optional_dependency(monkeypatch):
     assert result.metadata is not None
     assert result.metadata.license_id == "Apache-2.0"
     assert "transformers" in result.skip_reason
+
+
+def test_loader_treats_broken_optional_runtime_as_unavailable(monkeypatch):
+    def broken_import(name):
+        raise RuntimeError(f"broken optional runtime: {name}")
+
+    monkeypatch.setattr(indic.importlib, "import_module", broken_import)
+
+    assert indic.is_indic_encoder_available() is False
+    result = indic.load_indic_encoder("google/muril-base-cased")
+    assert result.available is False
+    assert "transformers" in result.skip_reason
+
+
+def test_loader_rejects_invalid_source_type():
+    with pytest.raises(TypeError, match="source"):
+        indic.load_indic_encoder(123)
+
+
+def test_loader_accepts_path_source_with_explicit_family(monkeypatch):
+    tokenizer_loader = _Loader(_FakeTokenizer())
+    model_loader = _Loader(_FakeModel())
+    transformers = SimpleNamespace(
+        AutoTokenizer=tokenizer_loader,
+        AutoModel=model_loader,
+    )
+    monkeypatch.setattr(
+        indic,
+        "_optional_module",
+        lambda name: transformers if name == "transformers" else SimpleNamespace(),
+    )
+
+    result = indic.load_indic_encoder(Path("/models/muril"), family="muril")
+
+    assert result.available is True
+    assert result.handle.source == "/models/muril"
+
+
+def test_loader_rejects_non_integer_offsets(monkeypatch):
+    class InvalidOffsetTokenizer(_FakeTokenizer):
+        def __call__(self, text: str, **kwargs):
+            encoded = super().__call__(text, **kwargs)
+            encoded["offset_mapping"] = [[(0, 0), (0.0, len(text)), (0, 0)]]
+            return encoded
+
+    transformers = SimpleNamespace(
+        AutoTokenizer=_Loader(InvalidOffsetTokenizer()),
+        AutoModel=_Loader(_FakeModel()),
+    )
+    monkeypatch.setattr(
+        indic,
+        "_optional_module",
+        lambda name: transformers if name == "transformers" else SimpleNamespace(),
+    )
+    result = indic.load_indic_encoder("google/muril-base-cased")
+
+    with pytest.raises(ValueError, match="integer boundaries"):
+        result.handle.encode("Asha")
 
 
 def test_loader_exposes_aligned_hidden_state_contract_without_raw_logs(
@@ -189,4 +248,26 @@ def test_registry_rejects_language_not_supported_by_family():
             "ai4bharat/indic-bert",
             family="indicbert",
             languages=("ur",),
+        )
+
+
+def test_registry_only_infers_family_for_official_sources():
+    assert (
+        model_registry.get_indic_encoder_spec(source="google/muril-base-cased").family
+        == "muril"
+    )
+    with pytest.raises(ValueError, match="unrecognized source"):
+        model_registry.get_indic_encoder_spec(source="someone/muril-lookalike")
+
+
+def test_registry_metadata_and_token_representation_are_safe():
+    config = model_registry.configure_indic_encoder(
+        "google/muril-base-cased",
+        token="private-token",
+    )
+
+    assert "private-token" not in repr(config)
+    with pytest.raises(TypeError):
+        model_registry.INDIC_ENCODER_SPECS["other"] = (  # type: ignore[index]
+            model_registry.INDIC_ENCODER_SPECS["muril"]
         )

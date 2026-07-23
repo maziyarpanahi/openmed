@@ -346,7 +346,7 @@ def is_indic_encoder_available() -> bool:
 
 
 def load_indic_encoder(
-    source: str | None,
+    source: str | Path | None,
     *,
     family: str | None = None,
     cache_dir: str | Path | None = None,
@@ -362,15 +362,22 @@ def load_indic_encoder(
     one explicitly; existing filesystem paths are always loaded locally.
     """
 
-    if source is None or not isinstance(source, str) or not source.strip():
+    if source is None:
         return IndicEncoderLoadResult(
             handle=None,
             skip_reason="no Indic encoder weights are configured",
         )
+    if not isinstance(source, (str, Path)):
+        raise TypeError("encoder source must be a string, path, or None")
     if not isinstance(local_files_only, bool):
         raise TypeError("local_files_only must be a boolean")
 
-    source_value = source.strip()
+    source_value = str(source).strip()
+    if not source_value:
+        return IndicEncoderLoadResult(
+            handle=None,
+            skip_reason="no Indic encoder weights are configured",
+        )
     metadata = get_indic_encoder_spec(family, source=source_value)
     transformers_module = _optional_module("transformers")
     torch_module = _optional_module("torch")
@@ -449,7 +456,7 @@ def load_indic_encoder(
 def _optional_module(name: str) -> Any | None:
     try:
         return importlib.import_module(name)
-    except (ImportError, OSError):
+    except (ImportError, OSError, RuntimeError, ValueError):
         return None
 
 
@@ -475,10 +482,20 @@ def _normalize_offsets(value: Any) -> tuple[tuple[int, int], ...]:
         value = value[0]
     if not isinstance(value, (list, tuple)):
         raise ValueError("encoder offsets must be a single batched sequence")
-    try:
-        return tuple((int(offset[0]), int(offset[1])) for offset in value)
-    except (IndexError, TypeError, ValueError) as exc:
-        raise ValueError("encoder offsets contain an invalid span") from exc
+    offsets: list[tuple[int, int]] = []
+    for offset in value:
+        if not isinstance(offset, (list, tuple)) or len(offset) != 2:
+            raise ValueError("encoder offsets contain an invalid span")
+        start, end = offset
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+        ):
+            raise ValueError("encoder offsets must contain integer boundaries")
+        offsets.append((start, end))
+    return tuple(offsets)
 
 
 def _move_to_device(

@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
@@ -163,44 +164,51 @@ class IndicEncoderLoadResult:
         return self.handle is not None
 
 
-INDIC_ENCODER_SPECS: Mapping[str, IndicEncoderSpec] = {
-    "muril": IndicEncoderSpec(
-        family="muril",
-        display_name="MuRIL",
-        license_id="Apache-2.0",
-        source_url="https://huggingface.co/google/muril-base-cased",
-        languages=frozenset(
-            {
-                "as",
-                "bn",
-                "en",
-                "gu",
-                "hi",
-                "kn",
-                "ks",
-                "ml",
-                "mr",
-                "ne",
-                "or",
-                "pa",
-                "sa",
-                "sd",
-                "ta",
-                "te",
-                "ur",
-            }
+INDIC_ENCODER_SPECS: Mapping[str, IndicEncoderSpec] = MappingProxyType(
+    {
+        "muril": IndicEncoderSpec(
+            family="muril",
+            display_name="MuRIL",
+            license_id="Apache-2.0",
+            source_url="https://huggingface.co/google/muril-base-cased",
+            languages=frozenset(
+                {
+                    "as",
+                    "bn",
+                    "en",
+                    "gu",
+                    "hi",
+                    "kn",
+                    "ks",
+                    "ml",
+                    "mr",
+                    "ne",
+                    "or",
+                    "pa",
+                    "sa",
+                    "sd",
+                    "ta",
+                    "te",
+                    "ur",
+                }
+            ),
+            supports_transliterated_text=True,
         ),
-        supports_transliterated_text=True,
-    ),
-    "indicbert": IndicEncoderSpec(
-        family="indicbert",
-        display_name="IndicBERT",
-        license_id="MIT",
-        source_url="https://huggingface.co/ai4bharat/indic-bert",
-        languages=frozenset(
-            {"as", "bn", "en", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+        "indicbert": IndicEncoderSpec(
+            family="indicbert",
+            display_name="IndicBERT",
+            license_id="MIT",
+            source_url="https://huggingface.co/ai4bharat/indic-bert",
+            languages=frozenset(
+                {"as", "bn", "en", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+            ),
         ),
-    ),
+    }
+)
+
+_INDIC_ENCODER_OFFICIAL_SOURCES = {
+    "google/muril-base-cased": "muril",
+    "ai4bharat/indic-bert": "indicbert",
 }
 
 
@@ -1216,15 +1224,13 @@ def get_indic_encoder_spec(
     else:
         if source is not None and not isinstance(source, str):
             raise TypeError("source must be a string or None")
-        normalized_source = (source or "").casefold().replace("-", "")
-        if "muril" in normalized_source:
-            normalized = "muril"
-        elif "indicbert" in normalized_source:
-            normalized = "indicbert"
-        else:
+        normalized_source = (source or "").strip().casefold().rstrip("/")
+        try:
+            normalized = _INDIC_ENCODER_OFFICIAL_SOURCES[normalized_source]
+        except KeyError as exc:
             raise ValueError(
                 "family must be 'muril' or 'indicbert' for an unrecognized source"
-            )
+            ) from exc
     try:
         return INDIC_ENCODER_SPECS[normalized]
     except KeyError as exc:

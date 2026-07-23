@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
+import pytest
+
 from openmed.eval.metrics import EvalSpan
 from openmed.eval.suites.indic_encoder import (
     SYNTHETIC_INDIC_GOLD,
@@ -54,3 +56,8 @@ def test_encoder_backed_synthetic_recall_beats_regex_with_zero_leakage():
     assert report.recall_delta > 0.0
     assert report.entity_leakage == 0
     assert report.encoder_leakage_rate == 0.0
+
+
+def test_encoder_recall_suite_rejects_empty_gold_set():
+    with pytest.raises(ValueError, match="requires a gold entity"):
+        run_indic_encoder_recall_delta(_SyntheticPerfectAdapter(), fixtures=())

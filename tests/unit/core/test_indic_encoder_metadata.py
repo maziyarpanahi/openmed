@@ -1,3 +1,5 @@
+import pytest
+
 from openmed.core.model_card import render_model_card
 from openmed.eval.datasets.licenses import (
     PERMISSIVE_ENCODER_LICENSES,
@@ -35,6 +37,10 @@ def test_permissive_encoder_license_registry_matches_loader_metadata():
         assert registered.license_id == metadata.license_id
         assert registered.source_url == metadata.source_url
         assert registered.redistribution == "user-supplied-reference-only"
+    with pytest.raises(TypeError):
+        PERMISSIVE_ENCODER_LICENSES["other"] = (  # type: ignore[index]
+            PERMISSIVE_ENCODER_LICENSES["muril"]
+        )
 
 
 def test_model_card_surfaces_encoder_license_and_provenance():
