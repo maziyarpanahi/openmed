@@ -654,8 +654,8 @@ class TestPediatricGrowthConceptLabels:
             assert policy_label_for(label) == CLINICAL_CONCEPT
             assert system_hints_for(label)
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
-            
-            
+
+
 class TestNursingObservationConceptLabels:
     """Nursing-care observation labels (issue #910)."""
 
@@ -704,7 +704,6 @@ class TestNursingObservationConceptLabels:
             assert policy_label_for(label) == CLINICAL_CONCEPT
             assert system_hints_for(label)
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
-            
 
 
 class TestClinicalLabelsAreAdditive:

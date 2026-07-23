@@ -447,6 +447,7 @@ class TestImmunizationDomain:
 # --------
 class TestNursingObservation:
     """Nursing-care observation domain and offline fixture coverage."""
+
     EXPECTED_LABELS = [
         "IntakeOutput",
         "LineDrainTube",
@@ -454,7 +455,7 @@ class TestNursingObservation:
         "MobilityStatus",
         "CareIntervention",
         "PainScore",
-        "SkinAssessment"
+        "SkinAssessment",
     ]
     CANONICAL_LABELS_BY_DISPLAY = {
         "IntakeOutput": "INTAKE_OUTPUT",
