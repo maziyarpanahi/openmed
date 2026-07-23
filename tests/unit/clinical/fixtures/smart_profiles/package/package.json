@@ -1,0 +1,7 @@
+{
+  "name": "openmed.synthetic.smart-anc",
+  "version": "0.0.1",
+  "type": "fhir.ig",
+  "fhirVersions": ["4.0.1"],
+  "description": "Synthetic SMART ANC-style profiles for offline tests"
+}

@@ -1,0 +1,70 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "smart-anc-observation",
+  "url": "https://openmed.example/fhir/StructureDefinition/smart-anc-observation",
+  "version": "0.0.1",
+  "name": "SyntheticSmartAncObservation",
+  "status": "draft",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "snapshot": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Observation.status",
+        "path": "Observation.status",
+        "min": 1,
+        "max": "1",
+        "fixedCode": "final"
+      },
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "min": 0,
+        "max": "*",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "$this"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Observation.category:anc",
+        "path": "Observation.category",
+        "sliceName": "anc",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://openmed.example/smart-anc/category",
+              "code": "anc-contact"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "min": 1,
+        "max": "1",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://openmed.example/fhir/ValueSet/smart-anc-observation-codes"
+        }
+      }
+    ]
+  }
+}
