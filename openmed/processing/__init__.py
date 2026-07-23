@@ -50,6 +50,16 @@ from .kafka_connector import (
     deidentify_stream,
     replay,
 )
+from .legacy_encoding import (
+    ISCII_MAPPING_PROVENANCE,
+    ConversionOffsetMap,
+    LegacyConversion,
+    LegacyFontMap,
+    convert_legacy_encoding,
+    detect_legacy_encoding,
+    iscii_to_unicode,
+    unicode_to_iscii,
+)
 from .object_storage import (
     ObjectProgressCallback,
     ObjectStorageBatchResult,
@@ -64,6 +74,7 @@ from .text import (
     IndicNormalization,
     IndicNormalizer,
     TextProcessor,
+    normalize_indic_text,
     postprocess_text,
     preprocess_text,
 )
@@ -128,6 +139,15 @@ __all__ = [
     "INDIC_SCRIPTS",
     "IndicNormalization",
     "IndicNormalizer",
+    "normalize_indic_text",
+    "ConversionOffsetMap",
+    "ISCII_MAPPING_PROVENANCE",
+    "LegacyConversion",
+    "LegacyFontMap",
+    "convert_legacy_encoding",
+    "detect_legacy_encoding",
+    "iscii_to_unicode",
+    "unicode_to_iscii",
     "preprocess_text",
     "postprocess_text",
     "TokenizationHelper",
