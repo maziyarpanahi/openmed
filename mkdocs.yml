@@ -125,6 +125,7 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
+      - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
