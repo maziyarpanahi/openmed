@@ -105,6 +105,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "th": "Thai",
     "ko": "Korean",
     "ro": "Romanian",
+    "ru": "Russian",
     "zh": "Chinese",
     "sw": "Swahili",
     "zu": "isiZulu",
@@ -142,6 +143,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "th": "Thai-",
     "ko": "Korean-",
     "ro": "Romanian-",
+    "ru": "Russian-",
     "zh": "Chinese-",
     "sw": "Swahili-",
     "zu": "isiZulu-",
@@ -2601,6 +2603,89 @@ def validate_romanian_cnp(text: str) -> bool:
     return numbers[12] == control
 
 
+def validate_russian_snils(text: str) -> bool:
+    """Validate a Russian SNILS (social insurance account number).
+
+    SNILS is an 11-digit identifier, conventionally formatted
+    ``AAA-AAA-AAA CC``, where the first nine digits carry a weighted mod-101
+    checksum:
+
+    - Weights 9 down to 1 are applied to the first nine digits.
+    - ``control = sum(weight * digit) % 101``.
+    - A remainder of 100 or 101 maps to a control value of 0.
+    - The final two digits must equal the control value.
+
+    Args:
+        text: SNILS string with exactly 11 digits. Conventional ``-``/space
+            separators are stripped before validation.
+
+    Returns:
+        True if the SNILS has 11 digits and a matching checksum.
+    """
+    if not isinstance(text, str):
+        return False
+    value = text.strip()
+    if (
+        re.fullmatch(r"(?:[0-9]{11}|[0-9]{3}-[0-9]{3}-[0-9]{3} [0-9]{2})", value)
+        is None
+    ):
+        return False
+    digits = re.sub(r"[- ]", "", value)
+
+    numbers = [int(digit) for digit in digits]
+    weights = range(9, 0, -1)
+    total = sum(weight * digit for weight, digit in zip(weights, numbers[:9]))
+    control = total % 101
+    if control in (100, 101):
+        control = 0
+
+    return numbers[9] * 10 + numbers[10] == control
+
+
+def validate_russian_oms(text: str) -> bool:
+    """Validate a Russian OMS policy number (obligatory medical insurance).
+
+    The ENP is a 16-digit identifier whose final digit is a Luhn-style check
+    digit over the preceding 15 digits:
+
+    - Reading the first 15 digits from the right, digits in odd positions
+      (immediately adjacent to the check digit, then every other digit) are
+      doubled; digits over 9 have 9 subtracted (equivalent to summing their
+      own digits). Even positions are kept as-is.
+    - The digits are summed, then rounded up to the nearest multiple of 10;
+      the difference is the expected check digit (0 if the sum is already a
+      multiple of 10).
+
+    Args:
+        text: OMS policy number containing exactly 16 ASCII digits.
+            Surrounding whitespace is ignored, but internal separators are
+            invalid.
+
+    Returns:
+        True if the OMS number has 16 digits and a matching check digit.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{16}", digits) is None:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    body = numbers[:15]
+    check_digit = numbers[15]
+
+    total = 0
+    for position, digit in enumerate(reversed(body), start=1):
+        if position % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    expected = (10 - total % 10) % 10
+
+    return expected == check_digit
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -3083,6 +3168,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "octombrie",
         "noiembrie",
         "decembrie",
+    ],
+    "ru": [
+        "январь",
+        "февраль",
+        "март",
+        "апрель",
+        "май",
+        "июнь",
+        "июль",
+        "август",
+        "сентябрь",
+        "октябрь",
+        "ноябрь",
+        "декабрь",
     ],
     "zh": [
         "一月",
@@ -7937,6 +8036,127 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Russian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_RUSSIAN_MONTH_PATTERN = (
+    r"январ[яь]|феврал[яь]|март[а]?|апрел[яь]|ма[яй]|июн[яь]|июл[яь]|"
+    r"август[а]?|сентябр[яь]|октябр[яь]|ноябр[яь]|декабр[яь]"
+)
+
+_RUSSIAN_STREET_TYPES = (
+    r"улица|ул\.|проспект|пр-т|просп\.|набережная|наб\.|"
+    r"переулок|бульвар|шоссе|тупик|проезд"
+)
+
+_RUSSIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Numeric dates: DD.MM.YYYY (also tolerate / separators).
+    PIIPattern(
+        r"\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "рождения",
+            "родился",
+            "родилась",
+            "поступил",
+            "поступила",
+            "выписан",
+            "выписана",
+        ],
+        context_boost=0.3,
+    ),
+    # Dates with Cyrillic month names, genitive or nominative ("23 июля 1985").
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_RUSSIAN_MONTH_PATTERN})\s+\d{{4}}"
+        r"(?:\s*г(?:ода)?\.?)?(?!\w)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "дата",
+            "рождения",
+            "родился",
+            "родилась",
+            "поступил",
+            "поступила",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Russian phones: +7 or national 8 prefix, optional parenthesized area code.
+    PIIPattern(
+        r"(?<!\w)(?:\+7|8)[\s-]?(?:\(\d{3}\)|\d{3})"
+        r"[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "моб", "мобильный"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    # SNILS (insurance account number): 11 digits, conventionally grouped
+    # "AAA-AAA-AAA CC", guarded by the mod-101 checksum validator.
+    PIIPattern(
+        r"(?<!\d)(?:\d{3}-\d{3}-\d{3}\s\d{2}|\d{11})(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "снилс",
+            "страховой номер",
+            "номер снилс",
+        ],
+        context_boost=0.4,
+        validator=validate_russian_snils,
+    ),
+    # OMS policy number (ENP): 16 contiguous digits, guarded by the Luhn-style
+    # check-digit validator.
+    PIIPattern(
+        r"(?<!\d)\d{16}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "омс",
+            "полис омс",
+            "полис",
+            "единый номер полиса",
+            "енп",
+        ],
+        context_boost=0.4,
+        validator=validate_russian_oms,
+    ),
+    # Russian street addresses ("улица Ленина, дом 12").
+    PIIPattern(
+        rf"\b(?:{_RUSSIAN_STREET_TYPES})\s+[А-ЯЁ][а-яёА-ЯЁ\s-]{{1,40}}?,?\s*"
+        r"(?:д\.?|дом)\s*\d{1,4}[А-Яа-я]?"
+        r"(?:\s*,?\s*(?:корпус|корп\.?|строение|стр\.?|блок)\s*\d+)?"
+        r"(?:\s*,?\s*(?:квартира|кв\.?)\s*\d+)?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адрес", "место жительства", "проживает"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Russian postal index: six contiguous digits.
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["индекс", "почтовый индекс", "адрес"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
     r"m[aá]j(?:a)?|j[uú]n(?:a)?|j[uú]l(?:a)?|august(?:a)?|"
@@ -8568,6 +8788,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "da": _DANISH_PII_PATTERNS,
     "no": _NORWEGIAN_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "ru": _RUSSIAN_PII_PATTERNS,
     "fi": _FINNISH_PII_PATTERNS,
     "bg": _BULGARIAN_PII_PATTERNS,
     "hr": _CROATIAN_PII_PATTERNS,
@@ -9546,6 +9767,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
+    },
+    "ru": {
+        "NAME": ["Иван Петров", "Мария Иванова", "Сергей Смирнов", "Елена Кузнецова"],
+        "FIRST_NAME": ["Иван", "Мария", "Сергей", "Елена"],
+        "LAST_NAME": ["Петров", "Иванова", "Смирнов", "Кузнецова"],
+        "EMAIL": ["pacient@example.ru", "kontakt@example.org"],
+        "PHONE": ["+7 916 123-45-67", "8 (495) 123-45-67"],
+        "ID_NUM": ["112-233-445 95", "1234567890123452"],
+        "STREET_ADDRESS": ["ул. Ленина, дом 12а", "пр-т Мира, дом 45, кв. 7"],
+        "URL_PERSONAL": ["https://example.ru"],
+        "USERNAME": ["pacient123", "polzovatel456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Москва", "Ленинск-Кузнецкий", "Краснодар"],
+        "ZIPCODE": ["101000", "190000", "630000"],
     },
     "fi": {
         "NAME": ["Matti Virtanen", "Liisa Korhonen", "Juha Nieminen", "Anna Laine"],

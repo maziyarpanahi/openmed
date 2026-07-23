@@ -24,7 +24,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until a dedicated
 # PII model is published. They must not be represented as trained/model-backed
 # languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"zh"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru", "zh"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -194,6 +194,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("ro_RO", "romanian_cnp"),
     ),
     _pack(
+        "ru",
+        "OpenMed/privacy-filter-multilingual",
+        "ru_RU",
+        ("Cyrillic",),
+        national_id_provider=("ru_RU", "snils"),
+    ),
+    _pack(
         "sw",
         "OpenMed/privacy-filter-multilingual",
         "sw",
@@ -342,6 +349,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
         "xh",
     ),
     "Arabic": ("ar", "ha", "ur"),
+    "Cyrillic": ("ru",),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
     "Bengali": ("bn", "as"),
@@ -384,6 +392,7 @@ _LOCALE_ORDER = (
     "tl",
     "da",
     "ro",
+    "ru",
     "sw",
     "rw",
     "af",
@@ -425,6 +434,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "tl",
     "da",
     "ro",
+    "ru",
     "sw",
     "rw",
     "af",

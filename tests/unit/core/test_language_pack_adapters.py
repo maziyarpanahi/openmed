@@ -119,7 +119,9 @@ def test_segmenter_resolver_rejects_undeclared_ids() -> None:
     assert not is_registered_segmenter("no-such-segmenter")
 
 
-def test_chinese_pack_keeps_placeholder_model_explicit() -> None:
-    assert DEFAULT_MODEL_PLACEHOLDER_LANGUAGES == {"zh"}
+def test_language_packs_keep_placeholder_models_explicit() -> None:
+    assert DEFAULT_MODEL_PLACEHOLDER_LANGUAGES == {"ru", "zh"}
+    assert DEFAULT_PII_MODELS["ru"] == "OpenMed/privacy-filter-multilingual"
     assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
+    assert SCRIPT_LANGUAGE_HINTS["Cyrillic"] == ("ru",)
     assert SCRIPT_LANGUAGE_HINTS["Han"] == ("zh", "ja")
