@@ -111,4 +111,3 @@ current exact citation text from section 1.3 of WHO's license agreement.
 
 OpenMed does not redistribute the full classification. The bundled test
 snapshot is small, synthetic, and unsuitable for clinical coding.
-<!-- PR synchronization marker. -->
