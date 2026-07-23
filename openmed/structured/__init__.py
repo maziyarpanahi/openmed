@@ -4,6 +4,14 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .discharge_summary import (
+    REQUIRED_DISCHARGE_SLOTS,
+    DischargeSlotName,
+    DischargeSummary,
+    DischargeSummarySection,
+    canonical_discharge_slot,
+    structure_discharge_summary,
+)
 from .flowsheet import (
     FLOWSHEET_ADVISORY,
     Flowsheet,
@@ -25,13 +33,19 @@ __all__ = [
     "FLOWSHEET_ADVISORY",
     "LAB_PANEL_ADVISORY",
     "PANEL_ORDER",
+    "REQUIRED_DISCHARGE_SLOTS",
     "AnalyteRow",
+    "DischargeSlotName",
+    "DischargeSummary",
+    "DischargeSummarySection",
     "Flowsheet",
     "LabPanel",
     "ParameterSeries",
     "TimeSeriesPoint",
     "canonical_analyte",
+    "canonical_discharge_slot",
     "parse_lab_report",
+    "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
 ]
