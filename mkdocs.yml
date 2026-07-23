@@ -95,6 +95,7 @@ nav:
       - Africa Attestation Review Template: compliance/templates/africa-data-residency-attestation.md
       - African Context-sensitive Attributes: compliance/africa-context-sensitive-attributes.md
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
+      - ISO 27701/27001 Evidence Pack: compliance/iso-27701-control-evidence.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
