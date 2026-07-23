@@ -77,6 +77,7 @@ nav:
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
+      - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md

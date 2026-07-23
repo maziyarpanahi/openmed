@@ -788,6 +788,25 @@ class Pipeline:
             normalized,
             self.hmac_secret,
         )
+        if surrogate_vault is not None and bool(
+            getattr(
+                self.config,
+                "transliteration_aware_name_matching",
+                False,
+            )
+        ):
+            normalizer = getattr(surrogate_vault, "indic_name_normalizer", None)
+            surrogate_vault.configure_name_matching(
+                enabled=True,
+                similarity_threshold=float(
+                    getattr(
+                        self.config,
+                        "indic_name_similarity_threshold",
+                        0.80,
+                    )
+                ),
+                transliterator=getattr(normalizer, "transliterator", None),
+            )
         with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
             deidentified = self.stage10_emit(
                 normalized.original_text,

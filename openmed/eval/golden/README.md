@@ -39,6 +39,9 @@ Required fields:
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
   `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
   `policy_profile_actions`, `hard_negatives`, or `critical_findings`.
+  The standalone `indic_name_variants` fixture uses its dedicated consistency
+  suite schema because it groups multiple spellings under one synthetic
+  identity rather than representing detector spans.
 - `metadata.expected_output`: expected post-action output, including `method`
   and resulting `text`.
 - `metadata.synthetic`: must be `true`.
