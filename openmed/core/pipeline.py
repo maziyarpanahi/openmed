@@ -10,7 +10,18 @@ import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from time import perf_counter
-from typing import Any, Callable, Iterator, Literal, Mapping, Optional, Sequence, cast
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    cast,
+)
+
+from openmed.compliance.data_use import DataUseAction, DataUsePolicy, DataUseTag
 
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -156,6 +167,7 @@ class PipelineContext:
     token_language_tags: tuple[Any, ...] = ()
     section_metadata: Mapping[str, Any] = field(default_factory=dict)
     locale: str | None = None
+    data_use_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -171,6 +183,8 @@ class PipelineResult:
     deidentification_result: Any = None
     stage_durations_ms: Mapping[str, float] = field(default_factory=dict)
     cascade_duration_ms: float | None = None
+    data_use_tags: tuple[str, ...] = ()
+    data_use_decision: Mapping[str, Any] = field(default_factory=dict)
 
     def stage(self, name: str) -> PipelineStageResult:
         for result in self.stage_results:
@@ -261,6 +275,7 @@ class Pipeline:
         strict_no_leak: bool = False,
         policy_profile: str | None = None,
         policy: Any = None,
+        data_use_policy: DataUsePolicy | None = None,
         threshold_matrix: Mapping[str, Any] | None = None,
         calibration_thresholds_path: str | None = None,
         calibration_thresholds: Mapping[str, Any] | Any | None = None,
@@ -297,6 +312,7 @@ class Pipeline:
         configured_pii_model = getattr(config, "pii_model", None)
         if configured_pii_model and model_name in {None, pii._DEFAULT_EN_MODEL}:
             model_name = configured_pii_model
+        self.data_use_policy = data_use_policy
         self.model_name = model_name or pii._DEFAULT_EN_MODEL
         self.confidence_threshold = confidence_threshold
         self.config = config
@@ -367,7 +383,28 @@ class Pipeline:
         doc_id: str | None = None,
         audit: bool = False,
         explain: bool = False,
+        data_use_tags: Sequence[DataUseTag | str] | DataUseTag | str = (),
+        data_use_action: DataUseAction | str = "process",
     ) -> PipelineResult:
+        from openmed.compliance.data_use import (
+            DEFAULT_DATA_USE_POLICY,
+            DataUseAction,
+            DataUsePolicy,
+        )
+
+        resolved_data_use_policy = self.data_use_policy or DEFAULT_DATA_USE_POLICY
+        if not isinstance(resolved_data_use_policy, DataUsePolicy):
+            raise TypeError("data_use_policy must be a DataUsePolicy")
+        attempted_data_use_actions: list[DataUseAction | str] = [data_use_action]
+        if surrogate_vault is not None:
+            attempted_data_use_actions.append(DataUseAction.SURROGATE_VAULT)
+        data_use_evaluation = resolved_data_use_policy.enforce(
+            data_use_tags,
+            attempted_data_use_actions,
+        )
+        resolved_data_use_tags = tuple(tag.value for tag in data_use_evaluation.tags)
+        serialized_data_use_decision = data_use_evaluation.to_dict()
+
         from . import pii
 
         effective_method = pii._resolve_deidentification_method(
@@ -409,6 +446,7 @@ class Pipeline:
             token_language_tags=token_language_tags,
             section_metadata=section_metadata,
             locale=locale,
+            data_use_tags=resolved_data_use_tags,
         )
 
         stage_results: list[PipelineStageResult] = [
@@ -804,11 +842,19 @@ class Pipeline:
                 },
             )
         )
+        if resolved_data_use_tags:
+            deidentified.metadata = {
+                **(deidentified.metadata or {}),
+                "data_use": copy.deepcopy(serialized_data_use_decision),
+            }
         audit_record = self._audit_record(
             context,
             stage_results,
             emission_spans,
             redacted_text=deidentified.deidentified_text,
+            data_use_decision=(
+                serialized_data_use_decision if resolved_data_use_tags else None
+            ),
         )
 
         return PipelineResult(
@@ -823,6 +869,8 @@ class Pipeline:
             deidentification_result=deidentified,
             stage_durations_ms=dict(stage_durations_ms),
             cascade_duration_ms=cascade_duration_ms,
+            data_use_tags=resolved_data_use_tags,
+            data_use_decision=serialized_data_use_decision,
         )
 
     def _normalize_code_mixed_tags(
@@ -1660,6 +1708,7 @@ class Pipeline:
         final_spans: Sequence[OpenMedSpan],
         *,
         redacted_text: str,
+        data_use_decision: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any]:
         # The audit record is reproducible: it carries only offsets, hashes,
         # counts, and provenance -- never wall-clock timings, which are
@@ -1694,6 +1743,8 @@ class Pipeline:
                 "arbitration_mode": self.policy.arbitration_mode,
                 "threshold_profile": self.policy.threshold_profile,
             }
+        if data_use_decision is not None:
+            record["data_use"] = copy.deepcopy(dict(data_use_decision))
         return record
 
 

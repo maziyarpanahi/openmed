@@ -96,6 +96,7 @@ nav:
       - African Context-sensitive Attributes: compliance/africa-context-sensitive-attributes.md
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
       - ISO 27701/27001 Evidence Pack: compliance/iso-27701-control-evidence.md
+      - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
