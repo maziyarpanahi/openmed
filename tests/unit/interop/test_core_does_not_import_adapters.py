@@ -40,10 +40,14 @@ def _is_optional_adapter_module(name: str) -> bool:
 
 def test_import_openmed_does_not_import_optional_adapter_dependencies():
     _clear_optional_adapter_modules()
+    for name in list(sys.modules):
+        if name == "openmed.plugins" or name.startswith("openmed.plugins."):
+            sys.modules.pop(name, None)
 
     import openmed  # noqa: F401
 
     assert not any(_is_optional_adapter_module(name) for name in sys.modules)
+    assert "openmed.plugins" not in sys.modules
 
 
 def test_import_interop_registry_does_not_import_optional_adapter_dependencies():
