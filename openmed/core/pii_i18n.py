@@ -7793,6 +7793,89 @@ _VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# Keep this character set aligned with processing.zh_normalize without making
+# the core pattern registry depend on the processing package at import time.
+_CHINESE_NUMERAL_CHARS = "〇零一二三四五六七八九十百千万亿壹贰叁肆伍陆柒捌玖拾佰仟萬億"
+_CHINESE_NUMERAL_RUN = rf"[{_CHINESE_NUMERAL_CHARS}]+"
+
+
+def _validate_chinese_numeral_surface(value: str) -> bool:
+    """Return whether ``value`` is a structurally valid Chinese numeral."""
+
+    # Keep the registry import-cycle-free while sharing the public parser at
+    # match time instead of maintaining a second unit-order implementation.
+    from openmed.processing.zh_normalize import parse_chinese_numeral
+
+    try:
+        parse_chinese_numeral(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _validate_chinese_date_surface(value: str) -> bool:
+    """Return whether ``value`` is one complete, valid Chinese calendar date."""
+
+    from openmed.processing.zh_normalize import normalize_chinese_dates
+
+    try:
+        matches = normalize_chinese_dates(value)
+    except TypeError:
+        return False
+    return len(matches) == 1 and matches[0].span == (0, len(value))
+
+
+_CHINESE_NUMERAL_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![{_CHINESE_NUMERAL_CHARS}]){_CHINESE_NUMERAL_RUN}\s*年\s*"
+        rf"{_CHINESE_NUMERAL_RUN}\s*月\s*{_CHINESE_NUMERAL_RUN}\s*日"
+        rf"(?![{_CHINESE_NUMERAL_CHARS}])",
+        "date",
+        priority=10,
+        base_score=0.65,
+        context_words=["出生", "生于", "出生日期", "出生年月日", "生日"],
+        context_boost=0.3,
+        validator=_validate_chinese_date_surface,
+        reject_on_validation_failure=True,
+    ),
+    PIIPattern(
+        r"(?:(?<=病历号：)|(?<=病历号:)|(?<=病历号)|"
+        r"(?<=病历号码：)|(?<=病历号码:)|(?<=病历号码)|"
+        r"(?<=住院号：)|(?<=住院号:)|(?<=住院号)|"
+        r"(?<=住院号码：)|(?<=住院号码:)|(?<=住院号码)|"
+        r"(?<=患者编号：)|(?<=患者编号:)|(?<=患者编号))"
+        rf"[{_CHINESE_NUMERAL_CHARS}]{{3,24}}"
+        rf"(?![{_CHINESE_NUMERAL_CHARS}])",
+        "medical_record_number",
+        priority=9,
+        base_score=0.3,
+        context_words=["病历号", "病历号码", "住院号", "住院号码", "患者编号"],
+        context_boost=0.6,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        rf"(?<![{_CHINESE_NUMERAL_CHARS}]){_CHINESE_NUMERAL_RUN}"
+        r"(?=\s*(?:毫升|毫克|微克|克|千克|公斤|单位|片|粒|支|袋|次))",
+        "quantity",
+        priority=7,
+        base_score=0.25,
+        context_words=[
+            "剂量",
+            "用量",
+            "容量",
+            "毫升",
+            "毫克",
+            "微克",
+            "千克",
+            "公斤",
+        ],
+        context_boost=0.45,
+        validator=_validate_chinese_numeral_surface,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+    ),
+]
+
 _TANZANIA_NIDA_PII_PATTERNS = [
     PIIPattern(
         r"(?<![A-Za-z0-9])(?:\d{20}|\d{8}-\d{5}-\d{5}-\d{2})(?![A-Za-z0-9])",
@@ -7869,7 +7952,6 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
     ),
 ]
 
-
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "af": _NGUNI_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
@@ -7893,6 +7975,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *_CHINESE_PII_PATTERNS,
         *_CHINESE_ADDRESS_PII_PATTERNS,
         *_CHINESE_IDENTIFIER_PII_PATTERNS,
+        *_CHINESE_NUMERAL_PII_PATTERNS,
     ],
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
@@ -9169,7 +9252,8 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
         lang: ISO 639-1 language code, optionally with a region suffix for
             pattern lookup. Model-backed languages are listed in
             :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
-            in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
+            in :data:`NATIONAL_ID_ONLY_LANGUAGES`. Deterministic-only language
+            packs may also be exposed directly in :data:`LANGUAGE_PII_PATTERNS`.
         locale: Optional locale override (for example, ``"en_GB"``) whose
             locale-specific deterministic patterns should also be active.
 
