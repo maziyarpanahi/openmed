@@ -2959,6 +2959,57 @@ class RomanianCNPProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Russian SNILS (insurance account number) and OMS policy number (ENP)
+# ---------------------------------------------------------------------------
+
+
+def generate_russian_snils(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Russian SNILS accepted by its validator."""
+    source = rng or random.Random()
+
+    body = [source.randint(0, 9) for _ in range(9)]
+    check = _snils_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + f"{check:02d}"
+
+
+def _snils_check_digit(digits: list[int]) -> int:
+    weights = range(9, 0, -1)
+    control = sum(weight * digit for weight, digit in zip(weights, digits)) % 101
+    return 0 if control in (100, 101) else control
+
+
+class RussianSnilsProvider(BaseProvider):
+    """Generate synthetic Russian SNILS values."""
+
+    def snils(self) -> str:
+        return generate_russian_snils(rng=self.generator.random)
+
+
+def generate_russian_oms(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Russian OMS policy number (ENP) that passes
+    :func:`validate_russian_oms`.
+    """
+    source = rng or random.Random()
+
+    body = [source.randint(0, 9) for _ in range(15)]
+    check = _oms_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _oms_check_digit(digits: list[int]) -> int:
+    total = 0
+    for position, digit in enumerate(reversed(digits), start=1):
+        if position % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return (10 - total % 10) % 10
+
+
+# ---------------------------------------------------------------------------
 # Canadian Social Insurance Number and provincial health-card numbers
 #
 # These identify Canadian residents and patients:
@@ -3590,6 +3641,7 @@ __all__ = [
     "PhilippinesIdProvider",
     "PolishPeselProvider",
     "RomanianCNPProvider",
+    "RussianSnilsProvider",
     "RodneCisloProvider",
     "SerbianJmbgProvider",
     "SouthAfricanIdProvider",
@@ -3655,6 +3707,8 @@ __all__ = [
     "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_romanian_cnp",
+    "generate_russian_snils",
+    "generate_russian_oms",
     "generate_portuguese_nif",
     "generate_south_african_id",
     "generate_spanish_nie",

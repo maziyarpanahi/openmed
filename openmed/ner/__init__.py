@@ -9,11 +9,18 @@ from __future__ import annotations
 from .adapter import TokenAnnotation, TokenClassificationResult, to_token_classification
 from .exceptions import MissingDependencyError
 from .families import (
+    INDIC_ENCODER_SPECS,
+    EncoderOutput,
+    IndicEncoderLoadResult,
+    IndicEncoderSpec,
     ModelFamily,
+    SupportsEncoding,
     ensure_gliner2_available,
     ensure_gliner_available,
     is_gliner2_available,
     is_gliner_available,
+    is_indic_encoder_available,
+    load_indic_encoder,
 )
 from .indexing import (
     ModelIndex,
@@ -39,6 +46,13 @@ __all__ = [
     "write_index",
     "load_index",
     "ModelFamily",
+    "EncoderOutput",
+    "SupportsEncoding",
+    "INDIC_ENCODER_SPECS",
+    "IndicEncoderSpec",
+    "IndicEncoderLoadResult",
+    "is_indic_encoder_available",
+    "load_indic_encoder",
     "MissingDependencyError",
     "ensure_gliner_available",
     "is_gliner_available",
