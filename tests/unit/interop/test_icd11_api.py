@@ -323,7 +323,8 @@ def test_snapshot_integrity_accepts_windows_checkout_line_endings(
 ) -> None:
     snapshot_copy = tmp_path / "synthetic-snapshot.json"
     manifest_copy = tmp_path / "synthetic-snapshot.manifest.json"
-    snapshot_copy.write_bytes(SYNTHETIC_SNAPSHOT.read_bytes().replace(b"\n", b"\r\n"))
+    source_bytes = SYNTHETIC_SNAPSHOT.read_bytes().replace(b"\r\n", b"\n")
+    snapshot_copy.write_bytes(source_bytes.replace(b"\n", b"\r\n"))
     manifest_copy.write_bytes(
         SYNTHETIC_SNAPSHOT.with_suffix(".manifest.json").read_bytes()
     )
