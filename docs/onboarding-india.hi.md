@@ -1,6 +1,6 @@
 # भारत के उपयोगकर्ताओं के लिए OpenMed ऑनबोर्डिंग
 
-[English version](onboarding-india.md)
+[English version](../../onboarding-india/)
 
 यह गाइड भारत के लिए लोकल-फर्स्ट डी-आइडेंटिफिकेशन सेटअप दिखाती है: आज उपलब्ध
 OpenMed पॉलिसी से शुरू करें, सिंथेटिक Aadhaar और ABHA फ़ॉर्मैट पहचानकर्ताओं को

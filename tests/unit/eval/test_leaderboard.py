@@ -307,14 +307,17 @@ def test_committed_public_leaderboard_does_not_drift(tmp_path: Path) -> None:
     assert _snapshot(generated) == _snapshot(PUBLIC_LEADERBOARD)
 
 
-def test_pages_workflow_renders_on_master_and_release_tags() -> None:
+def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None:
     workflow_text = PAGES_WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.load(
         workflow_text,
         Loader=yaml.BaseLoader,
     )
     push = workflow["on"]["push"]
-    steps = workflow["jobs"]["deploy"]["steps"]
+    pull_request = workflow["on"]["pull_request"]
+    build = workflow["jobs"]["build"]
+    deploy = workflow["jobs"]["deploy"]
+    steps = build["steps"]
     render_step = next(
         step
         for step in steps
@@ -323,9 +326,19 @@ def test_pages_workflow_renders_on_master_and_release_tags() -> None:
 
     assert push["branches"] == ["master"]
     assert push["tags"] == ["v*"]
+    assert pull_request["branches"] == ["master"]
+    assert "docs/**" in pull_request["paths"]
     assert workflow_text.count('tags: ["v*"]') == 1
+    assert (
+        "github.event.pull_request.number || 'deploy'"
+        in workflow["concurrency"]["group"]
+    )
+    assert deploy["needs"] == "build"
+    assert deploy["if"] == "github.event_name != 'pull_request'"
     assert "python -m openmed.eval.leaderboard" in render_step["run"]
     assert "docs/eval/benchmark-leaderboard" in render_step["run"]
     assert 'release_tag="$GITHUB_REF_NAME"' in render_step["run"]
     assert "test -s site/docs/llms.txt" in workflow_text
     assert "test -s site/docs/llms-full.txt" in workflow_text
+    assert "test -f site/docs/zh/index.html" in workflow_text
+    assert "test -f site/docs/hi/index.html" in workflow_text

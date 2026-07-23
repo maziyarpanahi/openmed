@@ -1,6 +1,6 @@
 # OpenMed onboarding for users in China
 
-[简体中文版](onboarding-china.zh.md)
+[简体中文版](../zh/onboarding-china/)
 
 This guide keeps the first OpenMed install and model download practical on
 networks where the default PyPI and Hugging Face endpoints are slow or

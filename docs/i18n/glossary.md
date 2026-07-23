@@ -1,4 +1,8 @@
-# README translation glossary
+# Translation glossary
+
+Use these canonical renderings across translated READMEs and documentation.
+Keep product, package, API, function, model, protocol, command, and code names
+in their official form when translation would make them harder to identify.
 
 ## Simplified Chinese
 
@@ -52,3 +56,22 @@ After reviewing any translation update, refresh and verify the section manifest:
 python scripts/i18n/check_readme_drift.py --update
 python scripts/i18n/check_readme_drift.py
 ```
+
+## Documentation-specific terms
+
+| English term | Simplified Chinese (`zh`) | Hindi (`hi`) |
+|---|---|---|
+| clinical NLP | 临床自然语言处理 | क्लिनिकल NLP |
+| personally identifiable information (PII) | 个人身份信息 (PII) | व्यक्तिगत पहचान योग्य जानकारी (PII) |
+| protected health information (PHI) | 受保护健康信息 (PHI) | संरक्षित स्वास्थ्य जानकारी (PHI) |
+| entity | 实体 | एंटिटी |
+| surrogate value | 替代值 | प्रतिस्थापन मान |
+| fallback | 回退 | फ़ॉलबैक |
+| pipeline | 流水线 | पाइपलाइन |
+| batch processing | 批处理 | बैच प्रोसेसिंग |
+| model registry | 模型注册表 | मॉडल रजिस्ट्री |
+| confidence threshold | 置信度阈值 | कॉन्फ़िडेंस थ्रेशोल्ड |
+
+Prefer clear native-language prose around established technical terms. Retain
+widely recognized names such as OpenMed, OpenMedKit, Python, REST, MLX, ONNX,
+FHIR, HL7, HIPAA, PyTorch, and Hugging Face.

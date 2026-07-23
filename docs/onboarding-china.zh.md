@@ -1,6 +1,6 @@
 # 中国用户 OpenMed 上手指南
 
-[English](onboarding-china.md)
+[English](../../onboarding-china/)
 
 在默认 PyPI 或 Hugging Face 端点速度较慢、无法稳定访问的网络环境中，
 本指南帮助你完成首次 OpenMed 安装和模型下载。内容包括 Python 软件包镜像、

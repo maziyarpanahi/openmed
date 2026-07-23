@@ -20,9 +20,7 @@ nav:
       - African Developer Onboarding: africa-onboarding.md
       - Persona Quickstarts: quickstarts.md
       - China Onboarding: onboarding-china.md
-      - 中国用户上手指南: onboarding-china.zh.md
       - India Onboarding: onboarding-india.md
-      - भारत के उपयोगकर्ताओं के लिए गाइड: onboarding-india.hi.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
@@ -167,7 +165,6 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
   features:
-    - navigation.instant
     - navigation.sections
     - navigation.tabs
     - navigation.tracking
@@ -195,6 +192,39 @@ extra:
 
 plugins:
   - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: zh
+          name: 简体中文
+          build: true
+          nav_translations:
+            Overview: 概览
+            Welcome: 欢迎
+            Quick Start: 快速开始
+            China Onboarding: 中国用户上手指南
+            Core Guides: 核心指南
+            PII & De-identification: PII 与去标识化
+            Apple Silicon & Mobile: Apple Silicon 与移动端
+            Project: 项目
+        - locale: hi
+          name: हिन्दी
+          build: true
+          nav_translations:
+            Overview: अवलोकन
+            Welcome: स्वागत
+            Quick Start: त्वरित शुरुआत
+            India Onboarding: भारत के उपयोगकर्ताओं के लिए गाइड
+            Core Guides: मुख्य गाइड
+            PII & De-identification: PII और डी-आइडेंटिफिकेशन
+            Apple Silicon & Mobile: Apple Silicon और मोबाइल
+            Project: परियोजना
   - llmstxt:
       markdown_description: >
         OpenMed is a local-first healthcare NLP toolkit for clinical entity
