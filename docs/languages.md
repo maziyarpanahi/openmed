@@ -71,6 +71,7 @@ routing is first requested, and do not download or bundle model weights.
 | `ar`   | Arabic     | `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1`    | `ar_EG`      | Egypt is the most-populous Arabic locale; override per call. |
 | `as`   | Assamese   | `env:OPENMED_INDIC_NER_MODEL`                               | `as_IN`      | Optional Indic NER weights; Bengali Faker backend.           |
 | `bn`   | Bengali    | `env:OPENMED_INDIC_NER_MODEL`                               | `bn_BD`      | Optional Indic NER weights.                                  |
+| `da`   | Danish     | `OpenMed/privacy-filter-multilingual`                       | `da_DK`      | CPR-aware Nordic language pack.                              |
 | `de`   | German     | `OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1`    | `de_DE`      | Steuer-ID surrogates via `GermanSteuerIdProvider`.           |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
 | `es`   | Spanish    | `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1`   | `es_ES`      | DNI/NIE checksum-aware surrogates.                           |
@@ -86,10 +87,12 @@ routing is first requested, and do not download or bundle model weights.
 | `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `mr`   | Marathi    | `env:OPENMED_INDIC_NER_MODEL`                               | `mr_IN`      | Optional Indic NER weights; Hindi Faker backend.             |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
+| `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
 | `or`   | Odia       | `env:OPENMED_INDIC_NER_MODEL`                               | `or_IN`      | Optional Indic NER weights.                                  |
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
+| `sv`   | Swedish    | `OpenMed/privacy-filter-multilingual`                       | `sv_SE`      | Personnummer Luhn validation and surrogates.                 |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `ta`   | Tamil      | `env:OPENMED_INDIC_NER_MODEL`                               | `ta_IN`      | Optional Indic NER weights.                                  |
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
@@ -102,7 +105,7 @@ routing is first requested, and do not download or bundle model weights.
 Chinese segmentation and Han-script routing are supported, but the `zh`
 default remains an explicit multilingual placeholder rather than a claim that
 a dedicated Chinese PII model has shipped. Codes outside this list (for example
-`pl`, `lv`, `sk`, `ms`, `tl`, `da`, and `ur`) are **not** model-backed PII languages.
+`pl`, `lv`, `sk`, `ms`, `tl`, `fi`, and `ur`) are **not** model-backed PII languages.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
@@ -224,6 +227,15 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] গ'ল।
 ```text
 Before: অরুণ কলকাতায় আনন্দ হাসপাতালে গেলেন।
 After:  [PERSON] [LOCATION] [ORGANIZATION] গেলেন।
+```
+
+### Danish — `da`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `da_DK`
+
+```text
+Before: Patient Anna Nielsen, CPR 170885-1234
+After:  Patient [NAME], CPR [ID]
 ```
 
 ### German — `de`
@@ -388,6 +400,15 @@ Before: Patiënt Eva de Vries, BSN 123456782
 After:  Patiënt [NAME], BSN [ID]
 ```
 
+### Norwegian — `no`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `no_NO`
+
+```text
+Before: Pasient Ingrid Hansen, fødselsnummer 12035101460
+After:  Pasient [NAME], fødselsnummer [ID]
+```
+
 ### Portuguese — `pt`
 
 - Model: `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` · locale `pt_PT`
@@ -405,6 +426,15 @@ After:  Paciente [NAME], CPF [ID]
 ```text
 Before: Pacient Ion Popescu, CNP 1960101221144
 After:  Pacient [NAME], CNP [ID]
+```
+
+### Swedish — `sv`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `sv_SE`
+
+```text
+Before: Patient Anna Andersson, personnummer 510312-1140
+After:  Patient [NAME], personnummer [ID]
 ```
 
 ### Swahili — `sw`

@@ -69,6 +69,7 @@ from openmed.core.pii_i18n import (
     validate_nigeria_bvn,
     validate_nigeria_hfr_code,
     validate_nigeria_nin,
+    validate_norwegian_fodselsnummer,
     validate_pakistani_cnic,
     validate_philhealth_pin,
     validate_philsys_psn,
@@ -80,6 +81,7 @@ from openmed.core.pii_i18n import (
     validate_rwanda_id,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_swedish_personnummer,
     validate_taiwan_compatriot_permit,
     validate_tanzania_nida,
     validate_thai_national_id,
@@ -591,6 +593,18 @@ def _register_builtin_specs() -> None:
         validate=validate_danish_cpr,
         faker_method="danish_cpr",
         faker_provider=DanishCPRProvider,
+    )
+    _register_aliases(
+        ("sv", "sv_SE", "se"),
+        id_type="personnummer",
+        validate=validate_swedish_personnummer,
+        faker_method="ssn",
+    )
+    _register_aliases(
+        ("no", "no_NO", "nb", "nb_NO"),
+        id_type="fodselsnummer",
+        validate=validate_norwegian_fodselsnummer,
+        faker_method="ssn",
     )
     _register_aliases(
         ("th", "th_TH"),
