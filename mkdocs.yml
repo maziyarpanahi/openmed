@@ -54,6 +54,7 @@ nav:
       - Configuration Profiles: profiles.md
       - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
+      - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Low-resource Benchmark: benchmarks/low-resource.md
       - Zero-shot NER How-to: zero-shot-howto.md
