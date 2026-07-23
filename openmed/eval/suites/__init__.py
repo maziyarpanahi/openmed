@@ -231,9 +231,7 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     if suite == MULTIMODAL_DICOM:
         return multimodal_dicom_metadata(**kwargs)
     if suite == CODE_MIXED_ROUTING:
-        return code_mixed_routing_metadata(
-            fixture_path=kwargs.get("fixture_path")
-        )
+        return code_mixed_routing_metadata(fixture_path=kwargs.get("fixture_path"))
     if suite == INDIA_HEALTH_ID_LEAKAGE:
         return india_health_id_metadata(**kwargs)
     return {"suite": suite}

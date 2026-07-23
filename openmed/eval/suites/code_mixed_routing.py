@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, cast
 
+from openmed.core.custom_recognizer import build_transliterated_name_recognizer
+from openmed.core.labels import normalize_label
 from openmed.core.lang_id_codemix import (
     TokenLanguage,
     TokenLIDHook,
     identify_token_languages,
 )
-from openmed.core.custom_recognizer import build_transliterated_name_recognizer
-from openmed.core.labels import normalize_label
 from openmed.core.pii_entity_merger import (
     PIIPattern,
     find_semantic_units,
@@ -198,7 +198,9 @@ def load_code_mixed_fixtures(
 
 
 def evaluate_code_mixed_routing(
-    fixtures: Sequence[CodeMixedFixture] | Sequence[CodeMixedRoutingFixture] | None = None,
+    fixtures: Sequence[CodeMixedFixture]
+    | Sequence[CodeMixedRoutingFixture]
+    | None = None,
     *,
     lid_model: TokenLIDHook | None = None,
 ) -> CodeMixedRoutingReport | CodeMixedRoutingResult:
@@ -206,8 +208,8 @@ def evaluate_code_mixed_routing(
     if lid_model is not None or (
         fixtures and isinstance(fixtures[0], CodeMixedRoutingFixture)
     ):
-        routing_fixtures = (
-            list(fixtures)
+        routing_fixtures: Sequence[CodeMixedRoutingFixture] = (
+            cast(Sequence[CodeMixedRoutingFixture], fixtures)
             if fixtures is not None
             else load_code_mixed_routing_fixtures()
         )
@@ -216,8 +218,10 @@ def evaluate_code_mixed_routing(
             lid_model=lid_model,
         )
 
-    fixture_rows = (
-        list(fixtures) if fixtures is not None else load_code_mixed_fixtures()
+    fixture_rows: Sequence[CodeMixedFixture] = (
+        cast(Sequence[CodeMixedFixture], fixtures)
+        if fixtures is not None
+        else load_code_mixed_fixtures()
     )
     matched = 0
     gold_count = 0
@@ -489,14 +493,14 @@ def _evaluate_token_lid_routing(
         )
         for gold_span in fixture.gold_spans:
             gold_span_total += 1
-            expected = (
+            expected_span = (
                 gold_span.start,
                 gold_span.end,
                 _GOLD_TO_PATTERN_LABEL[gold_span.label],
             )
-            if expected in baseline:
+            if expected_span in baseline:
                 baseline_hits += 1
-            if expected in routed:
+            if expected_span in routed:
                 routed_hits += 1
             else:
                 entity_leakage_count += 1
@@ -604,8 +608,11 @@ def _validate_routing_fixture_offsets(fixture: CodeMixedRoutingFixture) -> None:
     observed_bounds = [(token.start, token.end) for token in observed]
     if expected_bounds != observed_bounds:
         raise ValueError(f"fixture {fixture.fixture_id} token offsets do not align")
-    for item in (*fixture.gold_tokens, *fixture.gold_spans):
-        if not (0 <= item.start < item.end <= len(fixture.text)):
+    for token in fixture.gold_tokens:
+        if not (0 <= token.start < token.end <= len(fixture.text)):
+            raise ValueError(f"fixture {fixture.fixture_id} contains invalid offsets")
+    for span in fixture.gold_spans:
+        if not (0 <= span.start < span.end <= len(fixture.text)):
             raise ValueError(f"fixture {fixture.fixture_id} contains invalid offsets")
 
 

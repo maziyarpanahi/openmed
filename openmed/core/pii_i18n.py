@@ -35,18 +35,18 @@ from .anonymizer.providers.clinical_ids import (
     validate_uk_nhs_number,
     validate_uk_nino,
 )
+from .lang_id_codemix import (
+    TokenLanguageRun,
+    TokenLIDHook,
+    identify_token_languages,
+    token_language_runs,
+)
 from .language_pack_catalog import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USER_SUPPLIED_MODEL_LANGUAGES,
-)
-from .lang_id_codemix import (
-    TokenLanguageRun,
-    TokenLIDHook,
-    identify_token_languages,
-    token_language_runs,
 )
 from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 
@@ -9512,9 +9512,7 @@ def _languages_for_token_run(
     minimum_distance = min(distance for distance, _ in nearest)
     return tuple(
         dict.fromkeys(
-            language
-            for distance, language in nearest
-            if distance == minimum_distance
+            language for distance, language in nearest if distance == minimum_distance
         )
     )
 

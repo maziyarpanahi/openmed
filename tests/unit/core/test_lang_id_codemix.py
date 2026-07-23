@@ -94,6 +94,28 @@ def test_model_hook_must_return_one_supported_label_per_token():
         )
 
 
+def test_explicit_tags_take_precedence_over_model_hook(monkeypatch):
+    text = "Patient Ravi ka phone 9876543210 hai."
+    tags = identify_token_languages(text)
+
+    def unexpected_hook(model_text, spans):
+        raise AssertionError("explicit tags must bypass the model hook")
+
+    monkeypatch.setattr(
+        "openmed.analyze_text", lambda *args, **kwargs: _empty_prediction(text)
+    )
+    result = extract_pii(
+        text,
+        model_name="fixture-pii-model",
+        lang="en",
+        code_mixed=True,
+        token_language_tags=tags,
+        lid_model=unexpected_hook,
+    )
+
+    assert any(entity.start == 22 and entity.end == 32 for entity in result.entities)
+
+
 def test_named_entity_runs_route_to_both_language_packs():
     routes = get_code_mixed_pattern_runs("Patient Ravi ko fever hai.")
     named_entity_routes = [route for route in routes if route.token_label == "ne"]

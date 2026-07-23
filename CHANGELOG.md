@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added opt-in token-level language identification for Hinglish clinical text,
+  with exact offset-only decisions, deterministic local fallback routing,
+  optional caller-supplied model hooks, and synthetic token-accuracy and
+  de-identification recall gates (#1490).
 - Added an offline, native ARM64 SMS-scale INT8 latency benchmark with a
   committed synthetic corpus, exact model artifact provenance, aggregate
   p50/p95/throughput/peak-RSS reporting, a Raspberry Pi 5 target envelope, and
