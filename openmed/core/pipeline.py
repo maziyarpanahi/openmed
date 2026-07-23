@@ -272,6 +272,7 @@ class Pipeline:
         custom_recognizer: Any = None,
         code_mixed: bool = False,
         token_language_tags: Sequence[Any] | None = None,
+        lid_model: Any = None,
         transliterated_name_config: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
@@ -327,11 +328,14 @@ class Pipeline:
         self.section_detector = section_detector
         self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
         self.code_mixed = bool(code_mixed)
-        if self.code_mixed and token_language_tags is None:
-            raise ValueError("code_mixed=True requires token_language_tags")
         if not self.code_mixed and token_language_tags is not None:
             raise ValueError("token_language_tags requires code_mixed=True")
-        self.token_language_tags = tuple(token_language_tags or ())
+        if not self.code_mixed and lid_model is not None:
+            raise ValueError("lid_model requires code_mixed=True")
+        self.token_language_tags = (
+            tuple(token_language_tags) if token_language_tags is not None else None
+        )
+        self.lid_model = lid_model
         self.transliterated_name_recognizer = (
             build_transliterated_name_recognizer(transliterated_name_config)
             if self.code_mixed
@@ -821,9 +825,17 @@ class Pipeline:
 
         from .pii_i18n import CodeMixedTokenTag, normalize_code_mixed_token_tags
 
+        raw_tags = self.token_language_tags
+        if raw_tags is None:
+            from .lang_id_codemix import identify_token_languages
+
+            raw_tags = identify_token_languages(
+                document.original_text,
+                model=self.lid_model,
+            )
         source_tags = normalize_code_mixed_token_tags(
             document.original_text,
-            self.token_language_tags,
+            raw_tags,
         )
         normalized_tags = []
         for tag in source_tags:

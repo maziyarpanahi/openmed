@@ -117,6 +117,27 @@ model and the Naamapadam-style suite reports a structured skip reason.
 
 ## Indian-English and code-mixed clinical notes
 
+Latin-script Hinglish routing remains explicit. Set `code_mixed=True` to add
+the Roman-Hindi rule bank while keeping the English model route. When token
+tags are omitted, OpenMed's stdlib-only fallback derives exact offset/label
+records locally; no model weights or network access are required:
+
+```python
+from openmed import deidentify
+
+result = deidentify(
+    "Patient Ravi ka aadhaar 246778325484 hai.",
+    lang="en",
+    code_mixed=True,
+)
+```
+
+Callers with a locally hosted token classifier can pass `lid_model=`. The hook
+receives the input and offset-only token spans and must return one of `hi`,
+`en`, `ne`, `univ`, or `other` for every span. Explicit
+`token_language_tags=` still take precedence. Audit metadata retains offsets,
+labels, and hashes rather than token surfaces.
+
 For `lang="hi"` or `lang="te"`, a note containing both Latin and Devanagari
 (or Latin and Telugu) automatically activates the India clinical route. OpenMed
 segments the note into offset-preserving script runs, adds bounded context to
