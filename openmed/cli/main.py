@@ -216,6 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_risk_command(subparsers)
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
+    _add_icd11_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
@@ -855,6 +856,50 @@ def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
         help="Path to write the FHIR Bundle JSON.",
     )
     bundle_parser.set_defaults(handler=_handle_fhir_bundle)
+
+
+def _add_icd11_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add offline ICD-11 snapshot management commands."""
+    icd11_parser = subparsers.add_parser(
+        "icd11",
+        help="Build local ICD-11 MMS grounding snapshots.",
+    )
+    icd11_sub = icd11_parser.add_subparsers(dest="icd11_command")
+
+    build_parser = icd11_sub.add_parser(
+        "build-snapshot",
+        help="Build a release-pinned chapter subset from the WHO ICD-API.",
+    )
+    build_parser.add_argument(
+        "--release",
+        required=True,
+        help="Pinned WHO ICD-11 release in YYYY-MM form.",
+    )
+    build_parser.add_argument(
+        "--chapter",
+        dest="chapters",
+        action="append",
+        required=True,
+        help="Chapter code to include; repeat for multiple chapters.",
+    )
+    build_parser.add_argument(
+        "--language",
+        default="en",
+        help="WHO response language (default: en).",
+    )
+    build_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Snapshot output directory (default: OPENMED_ICD11_CACHE_DIR).",
+    )
+    build_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="Per-request timeout in seconds (default: 30).",
+    )
+    build_parser.set_defaults(handler=_handle_icd11_build_snapshot)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -2159,6 +2204,56 @@ def _handle_fhir_bundle(args: argparse.Namespace) -> int:
         "resource_count": len(resources),
     }
     return emit(args, payload, human=f"FHIR Bundle written to: {args.output}")
+
+
+def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
+    """Build one local ICD-11 snapshot using environment-held credentials."""
+    from ..interop.icd11_api import (
+        CLIENT_ID_ENV,
+        CLIENT_SECRET_ENV,
+        ICD11APIClient,
+        ICD11APIError,
+        build_snapshot,
+    )
+
+    client_id = os.environ.get(CLIENT_ID_ENV, "")
+    client_secret = os.environ.get(CLIENT_SECRET_ENV, "")
+    if not client_id or not client_secret:
+        sys.stderr.write(
+            f"Set {CLIENT_ID_ENV} and {CLIENT_SECRET_ENV} before building a snapshot.\n"
+        )
+        return 2
+
+    try:
+        client = ICD11APIClient(
+            client_id,
+            client_secret,
+            language=args.language,
+            timeout=args.timeout,
+        )
+        result = build_snapshot(
+            client,
+            release=args.release,
+            chapters=args.chapters,
+            cache_dir=args.cache_dir,
+        )
+    except (ICD11APIError, OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to build ICD-11 snapshot: {exc}\n")
+        return 1
+
+    sys.stdout.write(
+        json.dumps(
+            {
+                "entity_count": result.entity_count,
+                "manifest_path": str(result.manifest_path),
+                "snapshot_path": str(result.snapshot_path),
+                "snapshot_sha256": result.snapshot_sha256,
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return 0
 
 
 def _extract_fhir_doc_id(payload: Any) -> str:

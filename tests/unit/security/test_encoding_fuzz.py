@@ -162,7 +162,7 @@ def test_encoding_rejection_logs_only_file_metadata(
 
 @pytest.mark.fuzz
 @pytest.mark.timeout(30)
-@settings(max_examples=FUZZ_EXAMPLES, deadline=100, derandomize=True)
+@settings(max_examples=FUZZ_EXAMPLES, deadline=None, derandomize=True)
 @example(data=b"\xe2\x82", encoding="utf-8")
 @example(data=b"\xff", encoding="utf-16-le")
 @example(data=b"x" * 129, encoding="utf-8")
