@@ -3,7 +3,10 @@ FROM python:3.11-slim@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
-    OPENMED_SERVICE_KEEP_ALIVE=10m
+    OPENMED_SERVICE_KEEP_ALIVE=10m \
+    HOME=/home/appuser \
+    XDG_CACHE_HOME=/home/appuser/.cache \
+    HF_HOME=/home/appuser/.cache/huggingface
 
 WORKDIR /app
 
@@ -16,6 +19,14 @@ RUN python -m pip install --no-cache-dir --upgrade \
         "jaraco.context==6.1.2" \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && pip install --no-cache-dir ".[hf,service]"
+
+# Run as an unprivileged user. Created after install (which needs root); the
+# --create-home flag gives appuser a writable HOME for the Hugging Face model
+# cache pulled at runtime.
+RUN useradd --create-home --uid 1000 appuser \
+    && mkdir -p /home/appuser/.cache/openmed /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /app /home/appuser
+USER appuser
 
 EXPOSE 8080
 
