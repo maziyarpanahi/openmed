@@ -219,25 +219,84 @@ class LocaleFormatHint:
         raise KeyError(key)
 
 
+@dataclass(frozen=True)
+class LocalePIIFormat:
+    """Declarative deterministic PII format for a region-qualified locale.
+
+    Args:
+        name: Stable format identifier used to resolve optional validators.
+        entity_type: Source entity label emitted by the deterministic detector.
+        pattern: Regular expression used to locate the value in clinical text.
+        examples: Synthetic samples that must be accepted by ``pattern``.
+        priority: Pattern precedence when deterministic matches overlap.
+        base_score: Confidence assigned without a nearby context word.
+        context_words: Locale-specific terms that raise match confidence.
+        context_boost: Confidence added when context is present.
+        requires_context: Whether semantic merging rejects a bare match without
+            a nearby context word.
+        safety_sweep_requires_context: Whether the safety sweep rejects a bare
+            match without a nearby context word.
+        validator: Optional validator key resolved by :mod:`openmed.core.pii_i18n`.
+        flags: ``re`` flags used when compiling the expression.
+    """
+
+    name: str
+    entity_type: str
+    pattern: str
+    examples: tuple[str, ...]
+    priority: int = 10
+    base_score: float = 0.5
+    context_words: tuple[str, ...] = ()
+    context_boost: float = 0.35
+    requires_context: bool = False
+    safety_sweep_requires_context: bool = False
+    validator: str | None = None
+    flags: int = re.IGNORECASE
+
+
 WIRED_LOCALES: Final = frozenset(
-    {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "ko", "tr"}
+    {
+        "ar",
+        "as",
+        "bn",
+        "de",
+        "en",
+        "es",
+        "fr",
+        "gu",
+        "he",
+        "hi",
+        "id",
+        "it",
+        "ja",
+        "kn",
+        "ko",
+        "ml",
+        "mr",
+        "nl",
+        "or",
+        "pa",
+        "pt",
+        "ro",
+        "ta",
+        "te",
+        "th",
+        "tr",
+    }
 )
 BACKLOG_LOCALES: Final = frozenset(
     {
+        "am",
         "bn",
         "cs",
         "da",
         "el",
         "fa",
-        "he",
-        "id",
         "ms",
         "no",
         "pl",
-        "ro",
         "ru",
         "sv",
-        "th",
         "tl",
         "uk",
         "vi",
@@ -257,36 +316,54 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "te": "dmy",
     "pt": "dmy",
     "ar": "dmy",
+    "as": "dmy",
+    "bn": "dmy",
+    "gu": "dmy",
+    "kn": "dmy",
+    "ml": "dmy",
+    "mr": "dmy",
+    "or": "dmy",
+    "pa": "dmy",
+    "ta": "dmy",
     "ja": "ymd",
     "ko": "ymd",
     "tr": "dmy",
     # Backlog and national-ID-only locales.
+    "af": "dmy",
+    "am": "dmy",
     "bg": "dmy",
-    "bn": "dmy",
     "cs": "dmy",
     "da": "dmy",
     "el": "dmy",
     "fa": "ymd",
     "fi": "dmy",
+    "ha": "dmy",
     "he": "dmy",
     "hr": "dmy",
     "hu": "ymd",
     "id": "dmy",
+    "ig": "dmy",
     "ms": "dmy",
     "no": "dmy",
     "pl": "dmy",
     "ro": "dmy",
+    "rw": "dmy",
     "ru": "dmy",
     "sk": "dmy",
     "sr": "dmy",
+    "sw": "dmy",
     "sv": "ymd",
     "th": "dmy",
     "tl": "dmy",
+    "ur": "dmy",
     "lv": "dmy",
     "et": "dmy",
     "uk": "dmy",
     "vi": "dmy",
+    "yo": "dmy",
+    "xh": "dmy",
     "zh": "ymd",
+    "zu": "dmy",
 }
 
 _DOT_DECIMAL_COMMA_GROUPS: Final = NumberSeparators(".", (",",))
@@ -313,36 +390,192 @@ LOCALE_NUMBER_SEP: Final[Mapping[str, NumberSeparators]] = {
     "te": _DOT_DECIMAL_COMMA_GROUPS,
     "pt": _COMMA_DECIMAL_DOT_GROUPS,
     "ar": _ARABIC_NUMBER_SEPARATORS,
+    "as": _DOT_DECIMAL_COMMA_GROUPS,
+    "bn": _DOT_DECIMAL_COMMA_GROUPS,
+    "gu": _DOT_DECIMAL_COMMA_GROUPS,
+    "kn": _DOT_DECIMAL_COMMA_GROUPS,
+    "ml": _DOT_DECIMAL_COMMA_GROUPS,
+    "mr": _DOT_DECIMAL_COMMA_GROUPS,
+    "or": _DOT_DECIMAL_COMMA_GROUPS,
+    "pa": _DOT_DECIMAL_COMMA_GROUPS,
+    "ta": _DOT_DECIMAL_COMMA_GROUPS,
     "ja": _DOT_DECIMAL_COMMA_GROUPS,
     "ko": _DOT_DECIMAL_COMMA_GROUPS,
     "tr": _COMMA_DECIMAL_DOT_GROUPS,
     # Backlog and national-ID-only locales.
+    "af": _COMMA_DECIMAL_SPACE_GROUPS,
+    "am": _DOT_DECIMAL_COMMA_GROUPS,
     "bg": _COMMA_DECIMAL_SPACE_GROUPS,
-    "bn": _DOT_DECIMAL_COMMA_GROUPS,
     "cs": _COMMA_DECIMAL_SPACE_GROUPS,
     "da": _COMMA_DECIMAL_DOT_GROUPS,
     "el": _COMMA_DECIMAL_DOT_GROUPS,
     "fa": _ARABIC_NUMBER_SEPARATORS,
     "fi": _COMMA_DECIMAL_SPACE_GROUPS,
+    "ha": _DOT_DECIMAL_COMMA_GROUPS,
     "he": _DOT_DECIMAL_COMMA_GROUPS,
     "hr": _COMMA_DECIMAL_DOT_GROUPS,
     "hu": _COMMA_DECIMAL_SPACE_GROUPS,
     "id": _COMMA_DECIMAL_DOT_GROUPS,
+    "ig": _DOT_DECIMAL_COMMA_GROUPS,
     "ms": _DOT_DECIMAL_COMMA_GROUPS,
     "no": _COMMA_DECIMAL_SPACE_GROUPS,
     "pl": _COMMA_DECIMAL_SPACE_GROUPS,
     "ro": _COMMA_DECIMAL_DOT_GROUPS,
+    "rw": _DOT_DECIMAL_COMMA_GROUPS,
     "ru": _COMMA_DECIMAL_SPACE_GROUPS,
     "sk": _COMMA_DECIMAL_SPACE_GROUPS,
     "sr": _COMMA_DECIMAL_DOT_GROUPS,
+    "sw": _DOT_DECIMAL_COMMA_GROUPS,
     "sv": _COMMA_DECIMAL_SPACE_GROUPS,
     "th": _DOT_DECIMAL_COMMA_GROUPS,
     "tl": _DOT_DECIMAL_COMMA_GROUPS,
+    "ur": _ARABIC_NUMBER_SEPARATORS,
     "lv": _COMMA_DECIMAL_SPACE_GROUPS,
     "et": _COMMA_DECIMAL_SPACE_GROUPS,
     "uk": _COMMA_DECIMAL_SPACE_GROUPS,
     "vi": _COMMA_DECIMAL_DOT_GROUPS,
+    "yo": _DOT_DECIMAL_COMMA_GROUPS,
+    "xh": _DOT_DECIMAL_COMMA_GROUPS,
     "zh": _DOT_DECIMAL_COMMA_GROUPS,
+    "zu": _DOT_DECIMAL_COMMA_GROUPS,
+}
+
+
+_ARABIC_CLINICAL_NAME_FORMAT = LocalePIIFormat(
+    name="labeled_arabic_clinical_name",
+    entity_type="person",
+    pattern=(
+        r"(?<=اسم المريض: )[\u0621-\u064AÀ-ÖØ-öø-ÿA-Za-z]+"
+        r"(?:[ -][\u0621-\u064AÀ-ÖØ-öø-ÿA-Za-z]+){1,3}"
+        r"(?=\s+(?:اسم المريض|العنوان|الرقم القومي|رقم البطاقة الوطنية|الهاتف|التاريخ)|$)"
+    ),
+    examples=("اسم المريض: أحمد علي", "اسم المريض: Ahmed Hassan"),
+    priority=13,
+    base_score=0.99,
+)
+_ARABIC_CLINICAL_ADDRESS_FORMAT = LocalePIIFormat(
+    name="labeled_arabic_clinical_address",
+    entity_type="street_address",
+    pattern=(
+        r"(?<=العنوان: )[\u0600-\u06FF\d ,.،-]{3,80}?"
+        r"(?=\s+(?:الرقم القومي|رقم البطاقة الوطنية|الهاتف|التاريخ)|$)"
+    ),
+    examples=(
+        "العنوان: ١٢ شارع النيل، القاهرة",
+        "العنوان: ١٥ زنقة الأطلس، الدار البيضاء",
+    ),
+    priority=12,
+    base_score=0.99,
+)
+_ARABIC_GREGORIAN_DATE_FORMAT = LocalePIIFormat(
+    name="arabic_gregorian_date",
+    entity_type="date",
+    pattern=r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*(?:م|ميلادي)?(?!\d)",
+    examples=("15/03/2026 م", "١٥/٠٣/٢٠٢٦ م"),
+    priority=10,
+    base_score=0.65,
+    context_words=("التاريخ الميلادي", "تاريخ الميلاد", "ميلادي"),
+    context_boost=0.3,
+)
+_ARABIC_HIJRI_DATE_FORMAT = LocalePIIFormat(
+    name="arabic_hijri_date",
+    entity_type="date",
+    pattern=r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{4}\s*(?:هـ|هجر[يى]ة?)(?!\d)",
+    examples=("15/09/1447 هـ", "١٥/٠٩/١٤٤٧ هـ"),
+    priority=10,
+    base_score=0.75,
+    context_words=("التاريخ الهجري", "هجري", "هجرية"),
+    context_boost=0.2,
+)
+
+
+# Region-qualified Arabic formats stay in data, separate from detector-engine
+# code. ``pii_i18n`` converts these records to ``PIIPattern`` overlays.
+LOCALE_PII_FORMATS: Final[Mapping[str, tuple[LocalePIIFormat, ...]]] = {
+    "ar_eg": (
+        _ARABIC_CLINICAL_NAME_FORMAT,
+        _ARABIC_CLINICAL_ADDRESS_FORMAT,
+        _ARABIC_GREGORIAN_DATE_FORMAT,
+        _ARABIC_HIJRI_DATE_FORMAT,
+        LocalePIIFormat(
+            name="egyptian_national_id",
+            entity_type="national_id",
+            pattern=r"(?<!\d)[23٢٣۲۳]\d{13}(?!\d)",
+            examples=("29801011234567", "٢٩٨٠١٠١١٢٣٤٥٦٧"),
+            priority=15,
+            base_score=0.8,
+            context_words=(
+                "الرقم القومي",
+                "رقم قومي",
+                "بطاقة الرقم القومي",
+                "national id",
+                "national id number",
+                "egyptian id",
+                "رقم الهوية",
+            ),
+            context_boost=0.15,
+            validator="egyptian_national_id",
+        ),
+        LocalePIIFormat(
+            name="egyptian_phone",
+            entity_type="phone_number",
+            pattern=(
+                r"(?<![A-Za-z0-9])(?:\+|00)20[\s.-]?"
+                r"(?:1[0125](?:[\s.-]?\d){8}|[2-9](?:[\s.-]?\d){7,8})"
+                r"(?![A-Za-z0-9])"
+            ),
+            examples=("+20 10 1234 5678", "0020 10 1234 5678"),
+            priority=12,
+            base_score=0.65,
+            context_words=("هاتف", "تليفون", "موبايل", "رقم الهاتف"),
+            context_boost=0.3,
+        ),
+    ),
+    "ar_ma": (
+        _ARABIC_CLINICAL_NAME_FORMAT,
+        _ARABIC_CLINICAL_ADDRESS_FORMAT,
+        _ARABIC_GREGORIAN_DATE_FORMAT,
+        _ARABIC_HIJRI_DATE_FORMAT,
+        LocalePIIFormat(
+            name="moroccan_cin",
+            entity_type="national_id",
+            pattern=r"(?<![A-Za-z0-9])[A-Z]{1,2}\d{5,7}(?![A-Za-z0-9])",
+            examples=("AB123456", "B123456"),
+            priority=14,
+            base_score=0.5,
+            context_words=(
+                "cin number",
+                "رقم البطاقة الوطنية",
+                "البطاقة الوطنية",
+                "cin",
+                "carte nationale",
+                "carte d'identité nationale",
+                "carte d identite nationale",
+                "بطاقة التعريف الوطنية",
+                "بطاقة وطنية",
+                "بيطاقة التعريف الوطنية",
+                "bitaqa",
+                "bitaqa watania",
+            ),
+            context_boost=0.45,
+            requires_context=True,
+            safety_sweep_requires_context=True,
+            validator="moroccan_cin",
+        ),
+        LocalePIIFormat(
+            name="moroccan_phone",
+            entity_type="phone_number",
+            pattern=(
+                r"(?<![A-Za-z0-9])(?:\+|00)212[\s.-]?[5-7]"
+                r"(?:[\s.-]?\d){8}(?![A-Za-z0-9])"
+            ),
+            examples=("+212 6 12 34 56 78", "00212 6 12 34 56 78"),
+            priority=12,
+            base_score=0.65,
+            context_words=("هاتف", "الهاتف", "تيليفون", "رقم الهاتف"),
+            context_boost=0.3,
+        ),
+    ),
 }
 
 
@@ -728,9 +961,11 @@ __all__ = [
     "BACKLOG_LOCALES",
     "LOCALE_DATE_ORDER",
     "LOCALE_NUMBER_SEP",
+    "LOCALE_PII_FORMATS",
     "WIRED_LOCALES",
     "DateCandidate",
     "LocaleFormatHint",
+    "LocalePIIFormat",
     "NormalizedNumber",
     "NumberSeparators",
     "ParsedDate",

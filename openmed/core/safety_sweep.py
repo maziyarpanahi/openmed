@@ -51,7 +51,9 @@ def _overlaps(start: int, end: int, spans: Sequence[Any]) -> bool:
 
 def _patterns_for_language(lang: str, locale: str | None = None) -> list[PIIPattern]:
     if lang == "en" and locale is None:
-        return list(PII_PATTERNS)
+        from .pii_i18n import AADHAAR_PII_PATTERNS
+
+        return [*PII_PATTERNS, *AADHAAR_PII_PATTERNS]
 
     from .pii_i18n import get_patterns_for_language
 
@@ -67,7 +69,14 @@ def _validated(pattern: PIIPattern, text: str) -> bool:
         return False
 
 
-def _has_context(text: str, start: int, end: int, pattern: PIIPattern) -> bool:
+def _has_context(
+    text: str,
+    start: int,
+    end: int,
+    pattern: PIIPattern,
+    *,
+    require_boundaries: bool = False,
+) -> bool:
     return bool(
         pattern.context_words
         and find_context_words(
@@ -75,6 +84,7 @@ def _has_context(text: str, start: int, end: int, pattern: PIIPattern) -> bool:
             start,
             end,
             pattern.context_words,
+            require_boundaries=require_boundaries,
         )
     )
 
@@ -114,7 +124,17 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
             matched_text = text[start:end]
             if not _validated(pattern, matched_text):
                 continue
-            if pattern.safety_sweep_requires_context and not _has_context(
+            if pattern.requires_context and not _has_context(
+                text,
+                start,
+                end,
+                pattern,
+                require_boundaries=True,
+            ):
+                continue
+            if (
+                pattern.context_required or pattern.safety_sweep_requires_context
+            ) and not _has_context(
                 text,
                 start,
                 end,
@@ -196,6 +216,32 @@ def safety_sweep(
     return resolve_overlapping_entities(ordered)
 
 
+def safety_sweep_code_mixed(
+    text: str,
+    spans: Sequence[Any],
+    *,
+    token_language_tags: Sequence[Any],
+    base_lang: str = "en",
+    locale: str | None = None,
+) -> list[Any]:
+    """Sweep merged model/rule spans with explicitly gated Hinglish patterns."""
+    from .pii_i18n import get_patterns_for_code_mixed_tags
+
+    patterns = get_patterns_for_code_mixed_tags(
+        text,
+        token_language_tags,
+        base_lang=base_lang,
+        locale=locale,
+    )
+    return safety_sweep(
+        text,
+        spans,
+        lang=base_lang,
+        locale=locale,
+        patterns=patterns,
+    )
+
+
 def hashed_span_surface(
     text: str,
     start: int,
@@ -227,4 +273,5 @@ __all__ = [
     "SAFETY_SWEEP_SOURCE",
     "hashed_span_surface",
     "safety_sweep",
+    "safety_sweep_code_mixed",
 ]

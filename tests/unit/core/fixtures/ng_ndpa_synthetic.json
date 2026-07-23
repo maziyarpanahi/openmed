@@ -1,0 +1,102 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic-only Nigerian policy fixtures; no real personal or patient data.",
+  "cases": [
+    {
+      "id": "igbo-name-and-spaced-phone",
+      "text": "Patient Chiamaka Okafor can be reached on +234 803 000 0101.",
+      "detections": [
+        {
+          "surface": "Chiamaka Okafor",
+          "label": "PERSON"
+        },
+        {
+          "surface": "+234 803 000 0101",
+          "label": "PHONE"
+        }
+      ]
+    },
+    {
+      "id": "yoruba-name-and-hyphenated-phone",
+      "text": "Adebayo Balogun confirmed the visit at +234-706-000-0102.",
+      "detections": [
+        {
+          "surface": "Adebayo Balogun",
+          "label": "PERSON"
+        },
+        {
+          "surface": "+234-706-000-0102",
+          "label": "PHONE"
+        }
+      ]
+    },
+    {
+      "id": "lagos-address-and-nin",
+      "text": "Zainab Musa lives at 14 Example Health Way, Surulere, Lagos; synthetic NIN 12345678901.",
+      "detections": [
+        {
+          "surface": "Zainab Musa",
+          "label": "PERSON"
+        },
+        {
+          "surface": "14 Example Health Way, Surulere, Lagos",
+          "label": "STREET_ADDRESS"
+        },
+        {
+          "surface": "12345678901",
+          "label": "ID_NUM"
+        }
+      ]
+    },
+    {
+      "id": "abuja-address-and-bvn",
+      "text": "Ifeoma Eze uses 27 Sample Clinic Road, Wuse 2, Abuja; synthetic BVN 22345678902.",
+      "detections": [
+        {
+          "surface": "Ifeoma Eze",
+          "label": "PERSON"
+        },
+        {
+          "surface": "27 Sample Clinic Road, Wuse 2, Abuja",
+          "label": "STREET_ADDRESS"
+        },
+        {
+          "surface": "22345678902",
+          "label": "ACCOUNT_NUMBER"
+        }
+      ]
+    },
+    {
+      "id": "health-record-and-biometric-hint",
+      "text": "The synthetic health record LUTH-MRN-004281 references retina template BIO-NG-0008842.",
+      "detections": [
+        {
+          "surface": "LUTH-MRN-004281",
+          "label": "ID_NUM"
+        },
+        {
+          "surface": "BIO-NG-0008842",
+          "label": "ID_NUM"
+        }
+      ]
+    },
+    {
+      "id": "sensitive-attribute-fallbacks",
+      "text": "The synthetic record lists Yoruba ethnicity, Muslim belief, and sickle cell trait.",
+      "detections": [
+        {
+          "surface": "Yoruba",
+          "label": "OTHER"
+        },
+        {
+          "surface": "Muslim",
+          "label": "OTHER"
+        },
+        {
+          "surface": "sickle cell trait",
+          "label": "CONDITION"
+        }
+      ]
+    }
+  ]
+}

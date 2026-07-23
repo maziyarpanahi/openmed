@@ -9,6 +9,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added opt-in token-level language identification for Hinglish clinical text,
+  with exact offset-only decisions, deterministic local fallback routing,
+  optional caller-supplied model hooks, and synthetic token-accuracy and
+  de-identification recall gates (#1490).
+- Added an offline, native ARM64 SMS-scale INT8 latency benchmark with a
+  committed synthetic corpus, exact model artifact provenance, aggregate
+  p50/p95/throughput/peak-RSS reporting, a Raspberry Pi 5 target envelope, and
+  a CI gate that fails regressions beyond the permitted 20% tolerance (#1456).
+- Added opt-in Simplified/Traditional Chinese normalization through OpenCC,
+  including Taiwan and Hong Kong conversion configs, mixed-variant detection,
+  and offset-preserving span projection back to original text (#1467).
+- Added source-aligned Chinese numeral parsing for everyday and financial
+  forms, valid year/month/day normalization, and contextual Chinese date,
+  medical-record identifier, and clinical-quantity PII patterns (#1469).
+- Added a Swahili README and an African developer onboarding guide covering
+  bandwidth-aware model sizing and offline setup, POPIA/NDPA policy pointers,
+  OpenMRS FHIR and DHIS2 Tracker recipes, community links, and shared
+  translation-drift enforcement (#1455).
+- Added an offline-first `openmed models size` command with committed download,
+  disk, and peak-RAM estimates, cache-aware remaining bytes, per-task bandwidth
+  recommendations, JSON output, and explicitly opt-in remote refinement (#1453).
+- Added an opt-in, offline FHIR R4 profile checker for locally supplied WHO
+  SMART Guidelines implementation-guide packages, including cardinality,
+  fixed-value, locally enumerable binding, identifier/category slice, and
+  post-de-identification conformance checks (#1451).
+- Added local, structure-preserving de-identification for ODK Central,
+  CommCare HQ, and KoBoToolbox JSON/CSV form exports, including XForm path
+  semantics, repeat fidelity, safe unknown-text handling, geopoint
+  generalization, and value-free policy manifests (#1450).
+- Added an opt-in OpenHIM de-identification mediator with authenticated
+  registration and heartbeats, FHIR and text transformation envelopes,
+  byte-preserving opaque pass-through, and an offline container smoke fixture
+  for deployment inside an HIE trust boundary (#1448).
+- Added data-driven African healthcare-context safety-sweep terms for named
+  facilities, mobile-money references, and context-gated ethnic affiliations,
+  with non-keep defaults across the initial African policy profiles and
+  synthetic no-leak fixtures (#1447).
+- Added PHI-free, hash-verifiable Africa data-residency attestations for audited
+  local de-identification runs, with data-driven jurisdiction wording, exact
+  policy and model provenance, conservative captured offline evidence, a public
+  JSON Schema, and an offline deployment and review guide (#1446).
+- Added an Igbo (`ig`) PII pack for Nigerian clinical text with NFC, NFD, and
+  unmarked context support, native `ig_NG` surrogates, shared Nigerian NIN and
+  phone patterns, and grapheme-safe replacement of dot-below names (#1441).
+- Added a Yoruba (`yo`) PII pack with NFC, NFD, and unmarked context support,
+  native `yo_NG` surrogates, and grapheme-safe normalized span remapping and
+  replacement boundaries for stacked dot-below and tone marks (#1440).
+- Added a deterministic Hausa (`ha`) PII pack for Boko and numeric Ajami text,
+  including Nigerian NINs, Nigerian and Nigerien phone numbers, exact-offset
+  native-digit matching, `ha_NG` surrogates, and Arabic-script arbitration
+  without claiming Ajami lexical coverage (#1439).
+- Added build-generated `llms.txt` and `llms-full.txt` documentation feeds with
+  curated quickstart, API, de-identification, agent, MCP, and REST coverage,
+  plus strict local and Pages build checks (#1787).
+- Added a Prefect integration with a `deidentify_file_task` task and a
+  `deidentify_dataset_flow` flow that fan the local dataset redaction runner
+  over lists of files and return PHI-free count summaries. Prefect stays an
+  optional `prefect` extra, and the adapter is registered lazily as
+  `prefect` in `openmed.interop` (#471).
+- Added a deterministic radiology report parser that separates findings,
+  impression, and recommendation text with provenance spans, captures only
+  explicitly stated BI-RADS or Lung-RADS categories, and includes synthetic
+  offline accuracy gates (#1838).
+- Added a deterministic radiology-finding extractor that binds laterality,
+  measured size, and anatomic location with per-field provenance, supports
+  caller-supplied offline RadLex JSON mappings, and includes a synthetic
+  finding-tuple-F1 gate (#1837).
+- Added a deterministic, offline ISO 15919 transliteration pivot for nine Indic
+  scripts, ITRANS and Harvard-Kyoto parsing, offset-preserving romanization,
+  and cross-script person-name linkage in surrogate vaults (#1483).
 - Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
   and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
   five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
@@ -18,6 +88,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
   installed Faker fall back to `ar_EG` with a one-time warning, and
   `list_regional_locales('ar')` enumerates the supported tags (#483).
+- Added curated conceptual surrogate locales for Senegal, Côte d’Ivoire,
+  Cameroon, Mozambique, and Angola (`fr_SN`, `fr_CI`, `fr_CM`, `pt_MZ`, and
+  `pt_AO`), including in-country names, addresses, cities, phone formats, and
+  context-only Senegal CNI and Angola BI detection. Arabic regional overrides
+  now also document `ar-DZ` and `ar-MA`; unavailable Faker backends retain the
+  existing one-time-warning fallback to `ar_EG` (#1443).
+- Added conservative Egypt PDPL and Morocco Law 09-08 policy profiles with
+  complete mask action maps, no reversible mappings, mandatory safety sweeps,
+  declarative `ar_EG`/`ar_MA` clinical identifier formats, and a decision-support
+  compliance checklist covering sensitive-data and transfer controls (#1444).
 - Added a release evidence job that keylessly signs each wheel and source
   distribution with Sigstore and attaches the SLSA provenance bundle, the
   release artifact digest manifest, and the Sigstore bundles to the tagged

@@ -1,0 +1,85 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 46,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          },
+          "start": 32,
+          "text": "9664 8088 5109"
+        }
+      ],
+      "id": "golden-aadhaar-english-masking",
+      "language": "en",
+      "metadata": {
+        "category": "checksum_ids",
+        "expected_output": {
+          "method": "aadhaar_mask",
+          "text": "Synthetic English note: Aadhaar XXXX XXXX 5109; invalid UID 919876543210; masked copy XXXX XXXX 5109."
+        },
+        "hard_negatives": [
+          {
+            "end": 72,
+            "identifier_type": "aadhaar",
+            "reason": "fails_verhoeff",
+            "start": 60,
+            "text": "919876543210"
+          },
+          {
+            "end": 100,
+            "identifier_type": "masked_aadhaar",
+            "reason": "already_masked",
+            "start": 86,
+            "text": "XXXX XXXX 5109"
+          }
+        ],
+        "locale": "en_IN",
+        "synthetic": true
+      },
+      "text": "Synthetic English note: Aadhaar 9664 8088 5109; invalid UID 919876543210; masked copy XXXX XXXX 5109."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 57,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          },
+          "start": 43,
+          "text": "4679 3014 1424"
+        }
+      ],
+      "id": "golden-aadhaar-code-mixed-masking",
+      "language": "en",
+      "metadata": {
+        "category": "checksum_ids",
+        "expected_output": {
+          "method": "aadhaar_mask",
+          "text": "Synthetic code-mixed note: मरीज का Aadhaar XXXX XXXX 1424 है; random 234567890123."
+        },
+        "hard_negatives": [
+          {
+            "end": 81,
+            "identifier_type": "aadhaar",
+            "reason": "fails_verhoeff",
+            "start": 69,
+            "text": "234567890123"
+          }
+        ],
+        "locale": "en_IN",
+        "synthetic": true
+      },
+      "text": "Synthetic code-mixed note: मरीज का Aadhaar 4679 3014 1424 है; random 234567890123."
+    }
+  ],
+  "notice": "Synthetic-only Aadhaar fixtures; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}

@@ -1,15 +1,85 @@
-"""Sentence segmentation utilities built on top of pySBD."""
+"""Language-aware sentence segmentation utilities."""
 
 from __future__ import annotations
 
+import unicodedata
 import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from ..core.decoding.spans import is_grapheme_boundary, is_indic_text
+from ..core.script_detect import is_han_dominant
 
 # Python 3.12 emits SyntaxWarnings for old-style regex escapes in pysbd.
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 _SEGMENTER_CACHE: Dict[Tuple[str, bool], Any] = {}
+
+_CHINESE_TERMINATORS = frozenset({"。", "！", "？", "；", "．", "｡", "!", "?", ";"})
+_CHINESE_OPEN_TO_CLOSE = {
+    "「": "」",
+    "『": "』",
+    "《": "》",
+    "（": "）",
+    "〔": "〕",
+}
+_CHINESE_QUOTE_OPENERS = frozenset({"「", "『"})
+_CHINESE_CLOSERS = frozenset(_CHINESE_OPEN_TO_CLOSE.values())
+_CHINESE_CONTINUATION_PUNCTUATION = frozenset({",", ":", "、", "，", "："})
+_COMMON_LATIN_ABBREVIATIONS = frozenset(
+    {
+        "dr",
+        "e.g",
+        "etc",
+        "fig",
+        "i.e",
+        "jr",
+        "mr",
+        "mrs",
+        "ms",
+        "no",
+        "prof",
+        "sr",
+        "st",
+        "vs",
+    }
+)
+_INDIC_TERMINATORS = frozenset({".", "!", "?", "।", "॥"})
+_INDIC_SENTENCE_CONTINUATIONS = _INDIC_TERMINATORS | frozenset(
+    {
+        "'",
+        '"',
+        ")",
+        "]",
+        "}",
+        "»",
+        "’",
+        "”",
+        "›",
+        "」",
+        "』",
+    }
+)
+_INDIC_HONORIFICS = frozenset(
+    {
+        "dr",
+        "mr",
+        "mrs",
+        "ms",
+        "prof",
+        "डॉ",
+        "डा",
+        "श्री",
+        "श्रीमती",
+        "कु",
+        "চি",
+        "ডা",
+        "ডাঃ",
+        "ডঃ",
+        "డా",
+        "శ్రీ",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -77,6 +147,187 @@ def _fallback_spans(text: str, sentences: Iterable[str]) -> List[SentenceSpan]:
     return spans
 
 
+def _uses_chinese_segmenter(text: str, language: str) -> bool:
+    normalized_language = language.casefold().replace("_", "-")
+    return (
+        normalized_language == "zh"
+        or normalized_language.startswith("zh-")
+        or is_han_dominant(text)
+    )
+
+
+def _is_non_boundary_fullwidth_period(text: str, index: int) -> bool:
+    if text[index] != "．" or index == 0:
+        return False
+
+    previous = text[index - 1]
+    following = text[index + 1] if index + 1 < len(text) else ""
+    if previous.isdigit() and following.isdigit():
+        return True
+    if (
+        previous.isascii()
+        and previous.isalpha()
+        and following.isascii()
+        and following.isalpha()
+    ):
+        return True
+
+    token_start = index - 1
+    while token_start >= 0:
+        char = text[token_start]
+        if not ((char.isascii() and char.isalpha()) or char in {".", "．"}):
+            break
+        token_start -= 1
+    token = text[token_start + 1 : index].replace("．", ".").casefold().strip(".")
+    return token in _COMMON_LATIN_ABBREVIATIONS
+
+
+def _continues_chinese_sentence(char: str) -> bool:
+    return char.isspace() or char in _CHINESE_TERMINATORS or char in _CHINESE_CLOSERS
+
+
+def _chinese_spans(text: str) -> List[SentenceSpan]:
+    spans: List[SentenceSpan] = []
+    stack: List[str] = []
+    start = 0
+    boundary_ready = False
+    deferred_boundary = False
+
+    for index, char in enumerate(text):
+        if deferred_boundary and stack and not _continues_chinese_sentence(char):
+            deferred_boundary = False
+
+        if boundary_ready:
+            if char in _CHINESE_CONTINUATION_PUNCTUATION:
+                boundary_ready = False
+            elif not _continues_chinese_sentence(char):
+                spans.append(SentenceSpan(text[start:index], start, index))
+                start = index
+                boundary_ready = False
+
+        if char in _CHINESE_OPEN_TO_CLOSE:
+            stack.append(char)
+            continue
+
+        if char in _CHINESE_CLOSERS:
+            if stack and _CHINESE_OPEN_TO_CLOSE[stack[-1]] == char:
+                stack.pop()
+                if deferred_boundary and not stack:
+                    boundary_ready = True
+                    deferred_boundary = False
+            continue
+
+        if char not in _CHINESE_TERMINATORS or _is_non_boundary_fullwidth_period(
+            text,
+            index,
+        ):
+            continue
+
+        if stack and stack[-1] in _CHINESE_QUOTE_OPENERS:
+            deferred_boundary = True
+        elif not stack:
+            boundary_ready = True
+
+    if start < len(text):
+        spans.append(SentenceSpan(text[start:], start, len(text)))
+
+    if all(text[span.start : span.end] == span.text for span in spans):
+        return spans
+    return _fallback_spans(text, (span.text for span in spans))
+
+
+def segment_chinese_text(text: str) -> List[SentenceSpan]:
+    """Split Chinese text while preserving exact source-code-point offsets."""
+    if not text:
+        return []
+    return _chinese_spans(text)
+
+
+def _previous_word(text: str, terminator_index: int) -> str:
+    cursor = terminator_index
+    while cursor > 0:
+        category = unicodedata.category(text[cursor - 1])
+        if category[0] not in {"L", "M"}:
+            break
+        cursor -= 1
+    return text[cursor:terminator_index].casefold()
+
+
+def _next_nonspace(text: str, index: int) -> str:
+    cursor = index + 1
+    while cursor < len(text) and text[cursor].isspace():
+        cursor += 1
+    return text[cursor] if cursor < len(text) else ""
+
+
+def _is_guarded_terminator(text: str, index: int) -> bool:
+    char = text[index]
+    if (
+        char == "."
+        and index > 0
+        and index + 1 < len(text)
+        and text[index - 1].isdecimal()
+        and text[index + 1].isdecimal()
+    ):
+        return True
+
+    previous_word = _previous_word(text, index)
+    if not previous_word:
+        return False
+    if char not in {".", "।"}:
+        return False
+    next_char = _next_nonspace(text, index)
+    next_is_word = bool(next_char) and unicodedata.category(next_char)[0] in {
+        "L",
+        "M",
+    }
+    return next_is_word and (
+        previous_word in _INDIC_HONORIFICS or (char == "." and len(previous_word) == 1)
+    )
+
+
+def _continues_indic_sentence(char: str) -> bool:
+    return char.isspace() or char in _INDIC_SENTENCE_CONTINUATIONS
+
+
+def segment_indic_text(text: str) -> List[SentenceSpan]:
+    """Split Indic text on script-aware terminators with exact offsets.
+
+    Danda and double-danda are treated as first-class sentence terminators.
+    Common Indic and Latin honorifics, initials, and decimal points are guarded
+    so embedded punctuation does not create a false boundary.
+    """
+
+    if not text:
+        return []
+
+    spans: List[SentenceSpan] = []
+    start = 0
+    boundary_ready = False
+
+    for index, char in enumerate(text):
+        if boundary_ready and not _continues_indic_sentence(char):
+            if not (
+                is_grapheme_boundary(start, text) and is_grapheme_boundary(index, text)
+            ):
+                raise ValueError("Indic sentence boundary splits a grapheme cluster")
+            spans.append(SentenceSpan(text[start:index], start, index))
+            start = index
+            boundary_ready = False
+
+        if char in _INDIC_TERMINATORS and not _is_guarded_terminator(text, index):
+            boundary_ready = True
+
+    if start < len(text):
+        if not (
+            is_grapheme_boundary(start, text) and is_grapheme_boundary(len(text), text)
+        ):
+            raise ValueError("Indic sentence boundary splits a grapheme cluster")
+        spans.append(SentenceSpan(text[start:], start, len(text)))
+
+    return spans
+
+
 def segment_text(
     text: str,
     *,
@@ -84,9 +335,20 @@ def segment_text(
     clean: bool = False,
     segmenter: Optional[Any] = None,
 ) -> List[SentenceSpan]:
-    """Split ``text`` into sentences using pySBD and capture character spans."""
+    """Split ``text`` into sentences and capture exact character spans.
+
+    Indic text uses the built-in danda-aware path, while Chinese and
+    Han-dominant text uses the built-in CJK-aware path. Other text retains the
+    existing pySBD behavior.
+    """
     if not text:
         return []
+
+    if segmenter is None and is_indic_text(text):
+        return segment_indic_text(text)
+
+    if segmenter is None and _uses_chinese_segmenter(text, language):
+        return segment_chinese_text(text)
 
     seg = _get_segmenter(language=language, clean=clean, segmenter=segmenter)
     sentences = seg.segment(text)
@@ -111,4 +373,9 @@ def segment_text(
     return spans
 
 
-__all__ = ["SentenceSpan", "segment_text"]
+__all__ = [
+    "SentenceSpan",
+    "segment_chinese_text",
+    "segment_indic_text",
+    "segment_text",
+]

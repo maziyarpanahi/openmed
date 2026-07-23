@@ -73,6 +73,8 @@ def test_export_transformersjs_bundle_writes_layout_and_manifest(
         "path": "transformersjs",
         "precision": "int8",
     }
+    assert "segmenter" not in manifest
+    assert not (result.output_dir / "segmenter").exists()
 
 
 def test_validate_transformersjs_contract_rejects_static_sequence_axis(
@@ -86,6 +88,32 @@ def test_validate_transformersjs_contract_rejects_static_sequence_axis(
 
     with pytest.raises(ValueError, match="axis sequence must be dynamic"):
         module.validate_transformersjs_contract(model_path)
+
+
+def test_export_packages_and_validates_optional_segmenter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    source_dir = _write_source_export(tmp_path / "onnx-export")
+    _install_fake_onnx_stack(monkeypatch)
+
+    result = module.export_transformersjs_bundle(
+        source_dir,
+        segmenter_id="openmed-cjk-indic-v1",
+    )
+
+    bundle_manifest = json.loads(
+        (result.output_dir / "openmed-onnx.json").read_text(encoding="utf-8")
+    )
+    assert bundle_manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+    assert module.validate_transformersjs_bundle(result.output_dir)
+    source_manifest = json.loads(
+        (source_dir / "openmed-onnx.json").read_text(encoding="utf-8")
+    )
+    assert source_manifest["segmenter"]["resource_files"][0]["path"].startswith(
+        "transformersjs/segmenter/"
+    )
 
 
 def test_validate_transformersjs_contract_rejects_old_opset(
@@ -174,7 +202,10 @@ def test_convert_can_include_transformersjs_bundle(
 
 
 def test_manifest_schema_accepts_transformersjs_format() -> None:
-    from openmed.core.manifest_schema import validate_manifest_row
+    from openmed.core.manifest_schema import (
+        SCRIPT_COVERAGE_TARGETS,
+        validate_manifest_row,
+    )
 
     row = {
         "repo_id": "OpenMed/test-model-v1-transformersjs",
@@ -192,6 +223,15 @@ def test_manifest_schema_accepts_transformersjs_format() -> None:
         "license": "apache-2.0",
         "reproducibility_hash": "sha256:" + "0" * 64,
         "released": "2026-06-28",
+        "script_coverage": {
+            script: {
+                "unk_rate": 0.0,
+                "byte_fallback_rate": 0.0,
+                "tokens_per_grapheme": 1.0,
+                "verdict": "unclaimed",
+            }
+            for script in SCRIPT_COVERAGE_TARGETS
+        },
     }
 
     assert validate_manifest_row(row, line_number=1) == []

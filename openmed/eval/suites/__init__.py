@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+import warnings
+from dataclasses import replace
+from typing import Any, Mapping
 
 from openmed.eval.comparators import (
     ComparatorAdapter,
@@ -17,6 +19,13 @@ from openmed.eval.datasets.biomedical_ner import (
     load_biomedical_ner_fixtures,
     run_biomedical_ner_benchmark,
 )
+from openmed.eval.datasets.cmeee import (
+    CMEEE,
+    CMEEE_PATH_ENV,
+    cmeee_suite_metadata,
+    configured_cmeee_path,
+    load_cmeee_fixtures,
+)
 from openmed.eval.datasets.drugprot import (
     DRUGPROT,
     drugprot_suite_metadata,
@@ -29,19 +38,77 @@ from openmed.eval.datasets.i2b2 import (
     i2b2_suite_metadata,
     load_i2b2_deid,
 )
+from openmed.eval.datasets.masakhaner import (
+    MASAKHANER,
+    load_masakhaner_fixtures,
+    masakhaner_suite_metadata,
+    run_masakhaner_benchmark,
+)
 from openmed.eval.datasets.multilingual_ner import (
     MULTILINGUAL_NER,
     load_multilingual_ner_fixtures,
     multilingual_ner_suite_metadata,
 )
+from openmed.eval.datasets.naamapadam import (
+    NAAMAPADAM_PATH_ENV,
+    configured_naamapadam_path,
+)
+from openmed.eval.datasets.naamapadam import (
+    load_naamapadam_fixtures as load_naamapadam_corpus_fixtures,
+)
+from openmed.eval.datasets.naamapadam import (
+    naamapadam_suite_metadata as naamapadam_corpus_suite_metadata,
+)
 from openmed.eval.golden import load_benchmark_fixtures
-from openmed.eval.harness import BenchmarkFixture
+from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
+from openmed.eval.report import BenchmarkReport
+from openmed.eval.suites.chinese_clinical_ner import (
+    CHINESE_CLINICAL_NER,
+    ChineseClinicalNerLeakageError,
+    PhiTokenLeakageFinding,
+    chinese_clinical_ner_metadata,
+    load_chinese_clinical_ner_fixtures,
+    run_chinese_clinical_ner_suite,
+    run_synthetic_chinese_clinical_ner_smoke,
+)
+from openmed.eval.suites.chinese_terminology import (
+    ChineseTerminologyLeakageReport,
+    evaluate_chinese_terminology_leakage,
+)
+from openmed.eval.suites.code_mixed_routing import (
+    CODE_MIXED_ROUTING,
+    code_mixed_routing_metadata,
+    evaluate_code_mixed_routing,
+    load_code_mixed_fixtures,
+    load_code_mixed_routing_fixtures,
+    run_code_mixed_routing,
+)
+from openmed.eval.suites.india_health_ids import (
+    INDIA_HEALTH_ID_LEAKAGE,
+    assert_india_health_id_leakage_gate,
+    india_health_id_metadata,
+    load_india_health_id_fixtures,
+    run_india_health_id_leakage_gate,
+)
+from openmed.eval.suites.indian_ids import (
+    INDIAN_MULTI_ID,
+    evaluate_indian_id_recognizer,
+    indian_id_suite_metadata,
+    load_indian_id_fixtures,
+    run_indian_id_evaluation,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
     load_multimodal_dicom_fixtures,
     multimodal_dicom_metadata,
     run_multimodal_dicom,
+)
+from openmed.eval.suites.naamapadam import (
+    NAAMAPADAM,
+    load_naamapadam_fixtures,
+    naamapadam_suite_metadata,
+    run_naamapadam,
 )
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
@@ -75,7 +142,14 @@ DEFAULT_SUITES: tuple[str, ...] = (
     POLICY_COMPLIANCE,
     BIOMEDICAL_NER,
     MULTILINGUAL_NER,
+    MASAKHANER,
+    CMEEE,
+    NAAMAPADAM,
+    CHINESE_CLINICAL_NER,
     MULTIMODAL_DICOM,
+    CODE_MIXED_ROUTING,
+    INDIA_HEALTH_ID_LEAKAGE,
+    INDIAN_MULTI_ID,
 )
 
 
@@ -110,8 +184,31 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     if suite == MULTILINGUAL_NER:
         paths = kwargs.pop("paths", kwargs.pop("path", None))
         return load_multilingual_ner_fixtures(paths=paths, **kwargs)
+    if suite == MASAKHANER:
+        paths = kwargs.pop("paths", kwargs.pop("path", None))
+        return load_masakhaner_fixtures(paths=paths, **kwargs)
+    if suite == CMEEE:
+        path = kwargs.pop("path", None)
+        if configured_cmeee_path(path) is None:
+            _warn_skipped_suite(CMEEE, CMEEE_PATH_ENV)
+            return []
+        return load_cmeee_fixtures(path=path, **kwargs)
+    if suite == NAAMAPADAM:
+        path = kwargs.pop("path", None)
+        if configured_naamapadam_path(path) is None:
+            _warn_skipped_suite(NAAMAPADAM, NAAMAPADAM_PATH_ENV)
+            return []
+        return load_naamapadam_corpus_fixtures(path=path, **kwargs)
+    if suite == CHINESE_CLINICAL_NER:
+        return load_chinese_clinical_ner_fixtures(kwargs.get("path"))
     if suite == MULTIMODAL_DICOM:
         return load_multimodal_dicom_fixtures(**kwargs)
+    if suite == CODE_MIXED_ROUTING:
+        return load_code_mixed_fixtures(kwargs.get("path"))
+    if suite == INDIA_HEALTH_ID_LEAKAGE:
+        return load_india_health_id_fixtures(**kwargs)
+    if suite == INDIAN_MULTI_ID:
+        return load_indian_id_fixtures(kwargs.get("path"))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -133,9 +230,100 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return biomedical_ner_suite_metadata(**kwargs)
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
+    if suite == MASAKHANER:
+        return masakhaner_suite_metadata(**kwargs)
+    if suite == CMEEE:
+        return cmeee_suite_metadata(path=kwargs.get("path"))
+    if suite == NAAMAPADAM:
+        return naamapadam_corpus_suite_metadata(path=kwargs.get("path"))
+    if suite == CHINESE_CLINICAL_NER:
+        return chinese_clinical_ner_metadata()
     if suite == MULTIMODAL_DICOM:
         return multimodal_dicom_metadata(**kwargs)
+    if suite == CODE_MIXED_ROUTING:
+        return code_mixed_routing_metadata(fixture_path=kwargs.get("fixture_path"))
+    if suite == INDIA_HEALTH_ID_LEAKAGE:
+        return india_health_id_metadata(**kwargs)
+    if suite == INDIAN_MULTI_ID:
+        return indian_id_suite_metadata(**kwargs)
     return {"suite": suite}
+
+
+def run_script_ner_benchmark(
+    name: str,
+    *,
+    model_name: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    load_kwargs: Mapping[str, Any] | None = None,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Run a CMeEE or Naamapadam suite with micro-F1 per writing script."""
+
+    suite = validate_suite_name(name)
+    if suite not in {CMEEE, NAAMAPADAM}:
+        raise ValueError("script-aware NER reporting supports cmeee and naamapadam")
+    loader_options = dict(load_kwargs or {})
+    fixtures = load_suite_fixtures(suite, **loader_options)
+    metadata = suite_metadata(suite, path=loader_options.get("path"))
+    if not fixtures:
+        skip_reason = str(metadata["availability"]["reason"])
+        return BenchmarkReport(
+            suite=suite,
+            model_name=model_name,
+            device=device,
+            fixture_count=0,
+            generated_at=generated_at,
+            metrics={
+                "micro_f1_by_script": {},
+                "skip_reason": skip_reason,
+                "skipped": True,
+            },
+            metadata=metadata,
+        )
+
+    overall = run_benchmark(
+        fixtures,
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        runner=runner,
+        generated_at=generated_at,
+        metadata=metadata,
+    )
+    grouped: dict[str, list[BenchmarkFixture]] = {}
+    for fixture in fixtures:
+        script = str(fixture.metadata.get("script") or "Unknown")
+        grouped.setdefault(script, []).append(fixture)
+    micro_f1_by_script: dict[str, float] = {}
+    for script, script_fixtures in sorted(grouped.items()):
+        script_report = run_benchmark(
+            script_fixtures,
+            suite=suite,
+            model_name=model_name,
+            device=device,
+            runner=runner,
+            generated_at=generated_at,
+            metadata={**metadata, "script": script},
+        )
+        micro_f1_by_script[script] = float(script_report.metrics["exact_span_f1"]["f1"])
+    metrics = dict(overall.metrics)
+    metrics.update(
+        {
+            "micro_f1": float(overall.metrics["exact_span_f1"]["f1"]),
+            "micro_f1_by_script": micro_f1_by_script,
+            "skipped": False,
+        }
+    )
+    return replace(overall, metrics=metrics)
+
+
+def _warn_skipped_suite(suite: str, path_env: str) -> None:
+    warnings.warn(
+        f"Skipping {suite}: {path_env} is not set and no explicit path was provided",
+        UserWarning,
+        stacklevel=2,
+    )
 
 
 __all__ = [
@@ -147,7 +335,14 @@ __all__ = [
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
+    "MASAKHANER",
+    "CMEEE",
+    "NAAMAPADAM",
+    "CHINESE_CLINICAL_NER",
     "MULTIMODAL_DICOM",
+    "CODE_MIXED_ROUTING",
+    "INDIA_HEALTH_ID_LEAKAGE",
+    "INDIAN_MULTI_ID",
     "RELATIONS",
     "RelationFixture",
     "RelationTrap",
@@ -155,19 +350,30 @@ __all__ = [
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
     "ComparatorUnavailable",
+    "ChineseTerminologyLeakageReport",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
     "run_comparator_matrix",
+    "evaluate_chinese_terminology_leakage",
+    "run_script_ner_benchmark",
     "load_i2b2_deid",
     "i2b2_suite_metadata",
     "biomedical_ner_suite_metadata",
     "multilingual_ner_suite_metadata",
+    "masakhaner_suite_metadata",
+    "ChineseClinicalNerLeakageError",
+    "PhiTokenLeakageFinding",
+    "chinese_clinical_ner_metadata",
+    "load_chinese_clinical_ner_fixtures",
+    "run_chinese_clinical_ner_suite",
+    "run_synthetic_chinese_clinical_ner_smoke",
     "load_drugprot_fixtures",
     "load_biomedical_ner_fixtures",
     "load_multilingual_ner_fixtures",
+    "load_masakhaner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
     "shield_suite_metadata",
@@ -178,8 +384,25 @@ __all__ = [
     "relation_trap_summary",
     "score_relation_fixtures",
     "run_biomedical_ner_benchmark",
+    "run_masakhaner_benchmark",
+    "load_naamapadam_fixtures",
+    "naamapadam_suite_metadata",
+    "run_naamapadam",
     "load_multimodal_dicom_fixtures",
     "multimodal_dicom_metadata",
     "run_multimodal_dicom",
     "generate_synthetic_dicom_corpus",
+    "evaluate_code_mixed_routing",
+    "load_code_mixed_fixtures",
+    "load_code_mixed_routing_fixtures",
+    "code_mixed_routing_metadata",
+    "run_code_mixed_routing",
+    "assert_india_health_id_leakage_gate",
+    "india_health_id_metadata",
+    "load_india_health_id_fixtures",
+    "run_india_health_id_leakage_gate",
+    "evaluate_indian_id_recognizer",
+    "indian_id_suite_metadata",
+    "load_indian_id_fixtures",
+    "run_indian_id_evaluation",
 ]

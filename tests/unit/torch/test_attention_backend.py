@@ -184,6 +184,7 @@ def test_loader_only_forwards_explicit_attention_backends(
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
 @patch("openmed.core.models.pipeline")
 @pytest.mark.parametrize(
     ("attention_backend", "expected_backend"),

@@ -45,6 +45,12 @@ Both files are deterministic for the same API content, release, language, and
 chapter subset. No build timestamp or local path is embedded. Set
 `OPENMED_ICD11_CACHE_DIR` to change the default cache location.
 
+The network client accepts HTTPS endpoints (plus loopback HTTP for a locally
+deployed test service), rejects redirects so OAuth credentials cannot be
+forwarded to another origin, caps each JSON response at 8 MiB, and stops a
+chapter traversal above 100,000 entities. Generated snapshots are capped at
+128 MiB.
+
 Refresh by running the same command with a new explicit release id. Existing
 release-pinned files remain separate, so production can validate and switch to
 the new snapshot deliberately.
@@ -54,13 +60,16 @@ the new snapshot deliberately.
 Load the snapshot once and reuse its in-memory exact-match index:
 
 ```python
+import os
+
 from openmed.interop.icd11_api import (
     ground_to_codeable_concept,
     load_snapshot,
 )
 
 snapshot = load_snapshot(
-    "/srv/openmed/icd11/icd11-mms-2026-01-en-01-05.json"
+    "/srv/openmed/icd11/icd11-mms-2026-01-en-01-05.json",
+    expected_sha256=os.environ["OPENMED_ICD11_SNAPSHOT_SHA256"],
 )
 concept = ground_to_codeable_concept("type 2 diabetes", snapshot)
 ```
@@ -77,8 +86,16 @@ snapshot SHA-256. `CodeableConcept.text` is the canonical snapshot title; raw
 note context and the caller's surface form are not copied into the export.
 
 The loader verifies the sidecar manifest and digest before indexing. Move the
-snapshot and its `.manifest.json` file together. A missing, mismatched, or
-tampered manifest fails closed.
+snapshot and its `.manifest.json` file together. A missing or mismatched pair
+fails closed. Snapshot files are limited to 128 MiB,
+manifests to 64 KiB, and indexes to 100,000 entities; oversized or structurally
+invalid artifacts fail before indexing.
+
+The adjacent manifest detects accidental corruption and single-file changes;
+it is not a signature. When a snapshot crosses a trust boundary, obtain the
+builder's SHA-256 through a trusted channel and pass it as `expected_sha256` as
+shown above. Do not import an untrusted snapshot and its manifest without an
+independent digest pin.
 
 ## License and attribution
 

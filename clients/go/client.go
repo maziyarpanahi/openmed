@@ -70,6 +70,9 @@ type PIILanguage string
 
 // Languages supported by the PII endpoints.
 const (
+	LangAM PIILanguage = "am"
+	LangAS PIILanguage = "as"
+	LangBN PIILanguage = "bn"
 	LangEN PIILanguage = "en"
 	LangFR PIILanguage = "fr"
 	LangDE PIILanguage = "de"
@@ -77,6 +80,13 @@ const (
 	LangES PIILanguage = "es"
 	LangNL PIILanguage = "nl"
 	LangHI PIILanguage = "hi"
+	LangGU PIILanguage = "gu"
+	LangKN PIILanguage = "kn"
+	LangML PIILanguage = "ml"
+	LangMR PIILanguage = "mr"
+	LangOR PIILanguage = "or"
+	LangPA PIILanguage = "pa"
+	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"
@@ -87,6 +97,10 @@ const (
 	LangTH PIILanguage = "th"
 	LangKO PIILanguage = "ko"
 	LangRO PIILanguage = "ro"
+	LangSW PIILanguage = "sw"
+	LangZU PIILanguage = "zu"
+	LangXH PIILanguage = "xh"
+	LangZH PIILanguage = "zh"
 )
 
 // DeidentificationMethod selects how detected PII spans are transformed by the

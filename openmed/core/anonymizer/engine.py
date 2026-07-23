@@ -29,14 +29,18 @@ helpers in :mod:`format_preserve`; clinical-ID providers in
 from __future__ import annotations
 
 import hashlib
+import re
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from .. import labels as L
 from ..labels import normalize_label
+from ..language_pack import get_language_pack
 from ..name_order import CJK_LANGUAGES, normalize_person_span
+from ..script_detect import detect_script
 from .format_preserve import (
+    mask_aadhaar,
     preserve_date_format,
     preserve_email_pattern,
     preserve_id_pattern,
@@ -44,7 +48,7 @@ from .format_preserve import (
 )
 from .locales import resolve_faker_backend_locale, resolve_locale
 from .providers import register_clinical_providers
-from .registry import LABEL_GENERATORS
+from .registry import resolve_label_generator
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -150,6 +154,22 @@ class Anonymizer:
         digest = hashlib.blake2b(material, digest_size=8).digest()
         return int.from_bytes(digest, "big", signed=False)
 
+    @staticmethod
+    def _seed_value_for_identifier(
+        canonical_label: str,
+        original_value: str,
+        locale: str,
+    ) -> str:
+        """Canonicalize alternate renderings of the same Tanzania NIDA."""
+        if canonical_label != L.ID_NUM or locale not in {"en_TZ", "sw", "sw_TZ"}:
+            return original_value
+
+        from ..pii_i18n import validate_tanzania_nida
+
+        if validate_tanzania_nida(original_value):
+            return re.sub(r"[^0-9]", "", original_value)
+        return original_value
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -178,7 +198,6 @@ class Anonymizer:
             when no specific generator is registered.
         """
         effective_lang = lang or self.config.lang
-        effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
         canonical = normalize_label(label, effective_lang)
 
         # CJK PERSON spans: peel a trailing honorific (さん/様/씨/님/先生/…) so
@@ -200,11 +219,33 @@ class Anonymizer:
                 seed_value = core_name
                 generator_input = core_name
 
+        script = detect_script(generator_input)
+        language_pack = get_language_pack(effective_lang)
+        source_key = str(label).strip().upper().replace("-", "_").replace(" ", "_")
+        generator, is_script_specific = resolve_label_generator(
+            canonical,
+            language_pack=language_pack,
+            script=script,
+            source_label=source_key,
+        )
+        effective_locale = resolve_locale(
+            effective_lang,
+            locale or self.config.locale,
+            warn_approximation=not is_script_specific,
+        )
+        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(original):
+            # Aadhaar stays checksum-valid even when an English/code-mixed
+            # note routes through the generic en_US locale.
+            effective_locale = "en_IN"
+        seed_value = self._seed_value_for_identifier(
+            canonical,
+            seed_value,
+            effective_locale,
+        )
         faker = self._get_faker(effective_locale)
         if self.config.consistent:
             faker.seed_instance(self._derive_seed(canonical, seed_value))
 
-        generator = LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"])
         try:
             generated = generator(faker, generator_input, locale=effective_locale)
             return f"{generated}{honorific_suffix}"
@@ -216,6 +257,39 @@ class Anonymizer:
                 stacklevel=2,
             )
             return f"[{label}]{honorific_suffix}"
+
+    def anonymize_aadhaar(
+        self,
+        original: str,
+        *,
+        strategy: Literal["uidai_mask", "surrogate"] = "uidai_mask",
+    ) -> str:
+        """Apply a dedicated Aadhaar anonymization strategy.
+
+        Args:
+            original: A checksum-valid Aadhaar value.
+            strategy: ``"uidai_mask"`` preserves only the last four digits;
+                ``"surrogate"`` returns a checksum-valid synthetic Aadhaar.
+
+        Returns:
+            A UIDAI-masked value or a Verhoeff-valid synthetic Aadhaar.
+
+        Raises:
+            ValueError: If the source is invalid or the strategy is unknown.
+        """
+
+        if not _is_valid_aadhaar(original):
+            raise ValueError("Aadhaar must have a valid Verhoeff checksum")
+        if strategy == "uidai_mask":
+            return mask_aadhaar(original)
+        if strategy == "surrogate":
+            return self.surrogate(
+                original,
+                "aadhaar",
+                lang="en",
+                locale="en_IN",
+            )
+        raise ValueError("strategy must be 'uidai_mask' or 'surrogate'")
 
     def can_format_preserve(
         self,
@@ -262,6 +336,10 @@ class Anonymizer:
             faker.seed_instance(self._derive_seed(canonical, original_value))
 
         if canonical == L.PHONE:
+            if hasattr(faker, "african_phone"):
+                african_surrogate = faker.african_phone(original_value)
+                if african_surrogate is not None:
+                    return african_surrogate
             return preserve_phone_format(original_value, rng=faker.random)
         if canonical in _FORMAT_PRESERVE_DATE_LABELS:
             day_first = effective_locale in _FORMAT_PRESERVE_DAY_FIRST_LOCALES
@@ -322,6 +400,9 @@ _FORMAT_PRESERVE_DAY_FIRST_LOCALES = frozenset(
         "pt_PT",
         "pt_BR",
         "cs_CZ",
+        "sw",
+        "zu_ZA",
+        "xh_ZA",
     }
 )
 
@@ -332,6 +413,19 @@ def _non_identical_surrogate(original: str, generator: Any) -> str | None:
         if surrogate != original:
             return surrogate
     return None
+
+
+def _is_valid_aadhaar(value: str) -> bool:
+    from ..pii_i18n import validate_aadhaar
+
+    return validate_aadhaar(value)
+
+
+def _is_aadhaar_surrogate_source(value: str) -> bool:
+    if _is_valid_aadhaar(value):
+        return True
+    source, separator, attempt = value.rpartition("|")
+    return bool(separator and attempt.isdigit() and _is_valid_aadhaar(source))
 
 
 __all__ = ["Anonymizer", "AnonymizerConfig"]

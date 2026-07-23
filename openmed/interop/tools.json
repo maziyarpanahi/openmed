@@ -1,0 +1,948 @@
+{
+  "schema_version": "1.0.0",
+  "tools": [
+    {
+      "description": "Run OpenMed named-entity recognition on clinical text.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregation_strategy": {
+            "default": "simple",
+            "enum": [
+              "average",
+              "first",
+              "max",
+              "simple",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence_threshold": {
+            "default": 0.0,
+            "description": "Minimum confidence score for returned entities.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "group_entities": {
+            "default": false,
+            "type": "boolean"
+          },
+          "keep_alive": {
+            "default": null,
+            "description": "Optional model keep-alive duration for the service runtime.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model_name": {
+            "default": "disease_detection_superclinical",
+            "description": "OpenMed model registry key, local model path, or model identifier.",
+            "type": "string"
+          },
+          "sentence_clean": {
+            "default": false,
+            "type": "boolean"
+          },
+          "sentence_detection": {
+            "default": true,
+            "type": "boolean"
+          },
+          "sentence_language": {
+            "default": "en",
+            "type": "string"
+          },
+          "text": {
+            "description": "Clinical text to process.",
+            "type": "string"
+          },
+          "use_fast_tokenizer": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_analyze_text",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "entities": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "confidence": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "start": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "label",
+                "confidence",
+                "start",
+                "end",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "model_name": {
+            "type": "string"
+          },
+          "processing_time": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "entities",
+          "model_name",
+          "timestamp",
+          "processing_time",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "De-identify text by masking, removing, replacing, hashing, or shifting.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.7,
+            "description": "Minimum confidence score for de-identification.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "date_shift_days": {
+            "default": null,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "keep_alive": {
+            "default": null,
+            "description": "Optional model keep-alive duration for the service runtime.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "keep_mapping": {
+            "default": false,
+            "type": "boolean"
+          },
+          "keep_year": {
+            "default": false,
+            "type": "boolean"
+          },
+          "lang": {
+            "default": "en",
+            "description": "PII language code.",
+            "enum": [
+              "am",
+              "ar",
+              "as",
+              "bn",
+              "de",
+              "en",
+              "es",
+              "fr",
+              "gu",
+              "he",
+              "hi",
+              "id",
+              "it",
+              "ja",
+              "kn",
+              "ko",
+              "ml",
+              "mr",
+              "nl",
+              "or",
+              "pa",
+              "pt",
+              "ro",
+              "sw",
+              "ta",
+              "te",
+              "th",
+              "tr",
+              "xh",
+              "zh",
+              "zu"
+            ],
+            "type": "string"
+          },
+          "method": {
+            "default": "mask",
+            "enum": [
+              "hash",
+              "mask",
+              "remove",
+              "replace",
+              "shift_dates"
+            ],
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "description": "PII model registry key, local model path, or model identifier.",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "default": null,
+            "description": "Override language-specific accent normalization.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "shift_dates": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "Clinical text to process.",
+            "type": "string"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_deidentify",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "audit_report": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "deidentified_text": {
+            "type": "string"
+          },
+          "mapping": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "method": {
+            "type": "string"
+          },
+          "num_entities_redacted": {
+            "type": "integer"
+          },
+          "original_text": {
+            "type": "string"
+          },
+          "pii_entities": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "action": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "canonical_label": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "confidence": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "entity_type": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "redacted_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": "string"
+                },
+                "sources": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "start": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "surrogate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "threshold": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "text",
+                "label",
+                "entity_type",
+                "start",
+                "end",
+                "confidence",
+                "redacted_text",
+                "canonical_label",
+                "sources",
+                "evidence",
+                "threshold",
+                "action",
+                "surrogate",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "original_text",
+          "deidentified_text",
+          "pii_entities",
+          "method",
+          "timestamp",
+          "num_entities_redacted",
+          "metadata",
+          "audit_report"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Extract PII/PHI entities from clinical text.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.5,
+            "description": "Minimum confidence score for returned PII entities.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "keep_alive": {
+            "default": null,
+            "description": "Optional model keep-alive duration for the service runtime.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lang": {
+            "default": "en",
+            "description": "PII language code.",
+            "enum": [
+              "am",
+              "ar",
+              "as",
+              "bn",
+              "de",
+              "en",
+              "es",
+              "fr",
+              "gu",
+              "he",
+              "hi",
+              "id",
+              "it",
+              "ja",
+              "kn",
+              "ko",
+              "ml",
+              "mr",
+              "nl",
+              "or",
+              "pa",
+              "pt",
+              "ro",
+              "sw",
+              "ta",
+              "te",
+              "th",
+              "tr",
+              "xh",
+              "zh",
+              "zu"
+            ],
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "description": "PII model registry key, local model path, or model identifier.",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "default": null,
+            "description": "Override language-specific accent normalization.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "Clinical text to process.",
+            "type": "string"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_extract_pii",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "entities": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "confidence": {
+                  "type": "number"
+                },
+                "end": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "start": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "label",
+                "confidence",
+                "start",
+                "end",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "model_name": {
+            "type": "string"
+          },
+          "processing_time": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "entities",
+          "model_name",
+          "timestamp",
+          "processing_time",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "List OpenMed model registry entries.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pii_language": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_list_models",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "entity_types": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "model_id": {
+                  "type": "string"
+                },
+                "size_category": {
+                  "type": "string"
+                },
+                "size_mb": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "specialization": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "model_id",
+                "display_name",
+                "category",
+                "specialization",
+                "description",
+                "entity_types",
+                "size_category",
+                "size_mb"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "returned": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "returned",
+          "models"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "List supported PII languages and default models.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_list_pii_languages",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "languages": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "default_pii_model": {
+                  "type": "string"
+                },
+                "model_count": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "name",
+                "default_pii_model",
+                "model_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "languages"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Return currently loaded model resources.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_loaded_models",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Run a stateful multi-step OpenMed workflow with server-side intermediate handles and PHI-safe egress.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "pipeline": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "session_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workflow_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "pipeline"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_run_workflow",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "final_handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "final_output": {},
+          "handles": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "outputs": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "schema_version": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "trace": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "attempt_count": {
+                  "type": "integer"
+                },
+                "duration_ms": {
+                  "type": "number"
+                },
+                "error_type": {
+                  "type": "string"
+                },
+                "input_handles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "output_handle": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "resumed": {
+                  "type": "boolean"
+                },
+                "retry_count": {
+                  "type": "integer"
+                },
+                "status": {
+                  "enum": [
+                    "completed",
+                    "failed",
+                    "resumed",
+                    "skipped"
+                  ],
+                  "type": "string"
+                },
+                "step_id": {
+                  "type": "string"
+                },
+                "tool": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step_id",
+                "tool",
+                "status",
+                "duration_ms",
+                "retry_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "workflow_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "session_id",
+          "workflow_id",
+          "status",
+          "handles",
+          "final_handle",
+          "final_output",
+          "outputs",
+          "trace"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Unload one inactive model, or all inactive models.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "all_models": {
+            "default": false,
+            "type": "boolean"
+          },
+          "model_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_unload_model",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    }
+  ]
+}

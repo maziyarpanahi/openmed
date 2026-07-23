@@ -17,6 +17,10 @@ from openmed.mlx.models import (
     normalize_model_type,
     resolve_model_type,
 )
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
+)
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
@@ -405,6 +409,7 @@ def save_mlx_model(
     source_model_id: str | None = None,
     cache_dir: str | None = None,
     quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
+    segmenter_id: str | None = None,
 ) -> Path:
     """Save converted weights and config to *output_dir*."""
     try:
@@ -479,6 +484,7 @@ def save_mlx_model(
         source_model_id=source_model_id,
         config=config_to_save,
         cache_dir=cache_dir,
+        segmenter_id=segmenter_id,
     )
 
     logger.info("Saved MLX model to %s", output_dir)
@@ -491,6 +497,7 @@ def save_numpy_model(
     output_dir: str | Path,
     source_model_id: str | None = None,
     cache_dir: str | None = None,
+    segmenter_id: str | None = None,
 ) -> Path:
     """Save converted weights without MLX, preferring ``.safetensors``."""
     import numpy as np
@@ -544,6 +551,7 @@ def save_numpy_model(
         source_model_id=source_model_id,
         config=config_to_save,
         cache_dir=cache_dir,
+        segmenter_id=segmenter_id,
     )
 
     logger.info(
@@ -879,6 +887,7 @@ def _finalize_artifact(
     source_model_id: str | None,
     config: dict[str, Any],
     cache_dir: str | None,
+    segmenter_id: str | None,
 ) -> None:
     if source_model_id is None:
         return
@@ -904,11 +913,17 @@ def _finalize_artifact(
             exc,
         )
 
+    segmenter = (
+        package_segmenter_resources(output_dir, segmenter_id)
+        if segmenter_id is not None
+        else None
+    )
     write_manifest(
         output_dir,
         source_model_id=source_model_id,
         config=config,
         tokenizer_files=tokenizer_files,
+        segmenter=segmenter,
     )
 
 
@@ -928,6 +943,7 @@ def convert(
     quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
     eval_suite_path: str | Path | None = None,
     recall_delta_report_path: str | Path | None = None,
+    segmenter_id: str | None = None,
 ) -> Path:
     """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
@@ -944,6 +960,7 @@ def convert(
             source_model_id=model_id,
             cache_dir=cache_dir,
             quantize_group_size=quantize_group_size,
+            segmenter_id=segmenter_id,
         )
         quantized = quantize_bits is not None
     except ImportError:
@@ -958,6 +975,7 @@ def convert(
             output_dir,
             source_model_id=model_id,
             cache_dir=cache_dir,
+            segmenter_id=segmenter_id,
         )
 
     if eval_suite_path is not None:
@@ -1051,6 +1069,12 @@ def main() -> None:
         help="Hugging Face cache directory",
     )
     parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -1102,6 +1126,7 @@ def main() -> None:
         eval_suite_path=args.eval_suite,
         recall_delta_report_path=args.recall_delta_report,
         quantize_group_size=args.quantize_group_size,
+        segmenter_id=args.segmenter,
         publish_to_hub=args.publish_to_hub,
         publish_repo_id=args.publish_repo_id,
         publish_org=args.publish_org,

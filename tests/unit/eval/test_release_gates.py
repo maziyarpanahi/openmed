@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from openmed.eval import release_gates
+from openmed.eval.metrics import compute_metrics_bundle
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -250,6 +251,70 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     restored = GateReport.from_json(result.to_json())
     assert restored.verify(SIGNING_KEY)
     assert restored.to_json() == result.to_json()
+
+
+def test_cross_script_gate_blocks_telugu_drop_while_latin_stays_green(
+    tmp_path: Path,
+) -> None:
+    fixture_path = (
+        Path(__file__).parents[2] / "fixtures" / "eval" / "non_latin_script_phi.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    bundle = compute_metrics_bundle(
+        fixture["gold_spans"],
+        fixture["predicted_spans_telugu_drop"],
+        source_text=fixture["text"],
+    )
+    candidate = _report(
+        tmp_path,
+        metric_updates={
+            "leakage": bundle["leakage"],
+            "recall_slices": bundle["recall_slices"],
+        },
+    )
+
+    result = _gate().evaluate(candidate, _baseline())
+    check = _check(result, release_gates.CROSS_SCRIPT_GATE)
+
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["per_script_recall"]["Latin"] == 1.0
+    assert check.details["per_script_recall"]["Telugu"] == 0.0
+    assert check.details["recall_floors"]["Telugu"] >= 0.99
+    assert "Telugu recall" in check.reason
+    assert "Telugu leakage" in check.reason
+
+
+def test_cross_script_gate_passes_when_all_fixture_scripts_are_covered(
+    tmp_path: Path,
+) -> None:
+    fixture_path = (
+        Path(__file__).parents[2] / "fixtures" / "eval" / "non_latin_script_phi.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    bundle = compute_metrics_bundle(
+        fixture["gold_spans"],
+        fixture["predicted_spans_all_covered"],
+        source_text=fixture["text"],
+    )
+    candidate = _report(
+        tmp_path,
+        metric_updates={
+            "leakage": bundle["leakage"],
+            "recall_slices": bundle["recall_slices"],
+        },
+    )
+
+    result = _gate().evaluate(candidate, _baseline())
+    check = _check(result, release_gates.CROSS_SCRIPT_GATE)
+
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["applicable_scripts"] == (
+        "Devanagari",
+        "Han",
+        "Telugu",
+    )
 
 
 def test_surrogate_quality_gate_requires_evidence_when_applicable(

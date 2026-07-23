@@ -15,9 +15,11 @@ from openmed.clinical.exporters.code_provenance import (
     CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL,
 )
 from openmed.interop import RedactionMapping, assert_redacted
+from openmed.interop import icd11_api as icd11_module
 from openmed.interop.icd11_api import (
     ICD11_MMS_SYSTEM,
     ICD11APIClient,
+    ICD11APIError,
     SnapshotIntegrityError,
     build_snapshot,
     ground_mention,
@@ -40,8 +42,8 @@ class _FixtureResponse:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def read(self) -> bytes:
-        return self._payload
+    def read(self, size: int = -1) -> bytes:
+        return self._payload if size < 0 else self._payload[:size]
 
 
 class _RecordedFixtureOpener:
@@ -136,6 +138,51 @@ def test_client_rejects_lookup_outside_pinned_who_release() -> None:
             "https://id.who.int/icd/release/11/2025-01/mms/1",
             release="2026-01",
         )
+    with pytest.raises(ValueError, match="outside the pinned WHO MMS release"):
+        client.get_entity(
+            "https://id.who.int/icd/release/11/2026-01/mms/../../2025-01/mms/1",
+            release="2026-01",
+        )
+
+
+def test_client_rejects_insecure_endpoints_redirects_and_oversized_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="HTTPS or loopback HTTP"):
+        ICD11APIClient(
+            "client",
+            "secret",
+            api_base_url="http://example.test",
+        )
+    with pytest.raises(ValueError, match="finite number"):
+        ICD11APIClient("client", "secret", timeout=float("nan"))
+
+    request = urlrequest.Request(
+        "https://id.who.int/icd/release/11/2026-01/mms",
+        headers={"Authorization": "Bearer secret"},
+    )
+    handler = icd11_module._RejectRedirectHandler()
+    assert (
+        handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://example.test/collect",
+        )
+        is None
+    )
+
+    monkeypatch.setattr(icd11_module, "MAX_API_RESPONSE_BYTES", 32)
+    oversized = _FixtureResponse(b"{" + b"x" * 32 + b"}")
+    client = ICD11APIClient(
+        "client",
+        "secret",
+        opener=lambda request, timeout: oversized,
+    )
+    with pytest.raises(ICD11APIError, match="response exceeds 32 bytes"):
+        client.access_token()
 
 
 def test_release_and_chapter_pins_reject_invalid_values() -> None:
@@ -185,6 +232,21 @@ def test_builder_writes_byte_identical_snapshot_and_manifest(
         )
         for request in opener.requests
     )
+
+
+def test_builder_caps_remote_entity_traversal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(icd11_module, "MAX_SNAPSHOT_ENTITIES", 1)
+
+    with pytest.raises(ICD11APIError, match="traversal exceeds 1 entities"):
+        build_snapshot(
+            _client(_RecordedFixtureOpener()),
+            release="2026-01",
+            chapters=["05"],
+            cache_dir=tmp_path,
+        )
 
 
 def test_round_trip_grounding_exports_fhir_coding_and_provenance() -> None:
@@ -254,6 +316,23 @@ def test_snapshot_integrity_failure_is_closed(tmp_path: Path) -> None:
 
     with pytest.raises(SnapshotIntegrityError, match="sha256"):
         load_snapshot(snapshot_copy)
+
+
+def test_snapshot_loader_enforces_size_and_optional_trusted_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trusted_digest = "3b147f95cc5ed6fb86ebabad4a3eaa38145f94fe6406520a29efdeda44a702a4"
+    loaded = load_snapshot(SYNTHETIC_SNAPSHOT, expected_sha256=trusted_digest)
+    assert loaded.snapshot_sha256 == trusted_digest
+    with pytest.raises(SnapshotIntegrityError, match="trusted pin"):
+        load_snapshot(SYNTHETIC_SNAPSHOT, expected_sha256="0" * 64)
+
+    oversized = tmp_path / "oversized.json"
+    oversized.write_bytes(b"x" * 33)
+    monkeypatch.setattr(icd11_module, "MAX_SNAPSHOT_BYTES", 32)
+    with pytest.raises(SnapshotIntegrityError, match="snapshot exceeds 32 bytes"):
+        load_snapshot(oversized)
 
 
 def test_cli_registers_release_pinned_snapshot_builder() -> None:

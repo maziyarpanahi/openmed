@@ -619,6 +619,54 @@ DEFAULT_POLICY_BUDGETS: Mapping[str, RiskBudget] = {
         max_surviving_direct_ids=0,
         max_singleton_records=0,
     ),
+    "china_pipl": RiskBudget(
+        name="china_pipl",
+        max_residual_qi_weight=2.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "india_dpdp_act": RiskBudget(
+        name="india_dpdp_act",
+        max_residual_qi_weight=3.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "za_popia": RiskBudget(
+        name="za_popia",
+        max_residual_qi_weight=0.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "ng_ndpa": RiskBudget(
+        name="ng_ndpa",
+        max_residual_qi_weight=0.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "ke_dpa": RiskBudget(
+        name="ke_dpa",
+        max_residual_qi_weight=0.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "india_health_id": RiskBudget(
+        name="india_health_id",
+        max_residual_qi_weight=0.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "eg_pdpl": RiskBudget(
+        name="eg_pdpl",
+        max_residual_qi_weight=0.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "ma_law_09_08": RiskBudget(
+        name="ma_law_09_08",
+        max_residual_qi_weight=0.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
 }
 
 if set(DEFAULT_POLICY_BUDGETS) != set(CANONICAL_POLICY_NAMES):

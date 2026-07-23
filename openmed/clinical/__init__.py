@@ -4,6 +4,20 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
+from .abbreviation import (
+    ABBREVIATION_DISAMBIGUATION_ADVISORY,
+    DEFAULT_SENSE_INVENTORY_RESOURCE,
+    AbbreviationAnnotation,
+    AbbreviationDisambiguator,
+    AbbreviationSense,
+    SenseAlternative,
+    SenseDefinition,
+    SenseInventory,
+    disambiguate_abbreviation,
+    expand_abbreviations,
+    load_abbreviation_inventory,
+    load_sense_inventory,
+)
 from .assertion_graph import (
     ASSERTION_GRAPH_ADVISORY,
     ASSERTION_GRAPH_AXES,
@@ -25,6 +39,7 @@ from .context import (
     FAMILY_EXPERIENCER,
     HISTORICAL,
     HYPOTHETICAL,
+    INDIA_CLINICAL_NER_DISCLAIMER,
     NEGATED,
     NEGATION_VALUES,
     PATIENT_EXPERIENCER,
@@ -69,6 +84,14 @@ from .coref import (
     canonicalize_text,
     link_mentions,
     score_mention_pair,
+)
+from .coreference import (
+    COREFERENCE_FEATURES,
+    COREFERENCE_RESOLUTION_ADVISORY,
+    DEFAULT_COREFERENCE_THRESHOLD,
+    CoreferenceChain,
+    SpanChainKey,
+    resolve_coreference,
 )
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
@@ -131,6 +154,21 @@ from .negation_scope import (
     detect_negation_scopes,
     negated_spans,
 )
+from .normalization import (
+    CHINESE_DRUG_SYSTEM,
+    CHINESE_ICD_10_SYSTEM,
+    CHINESE_TERMINOLOGY_DISCLAIMER,
+    CHINESE_TERMINOLOGY_VOCABULARY_NOTE,
+    ChineseTerminologyDictionary,
+    ChineseTerminologyEntry,
+    ChineseTerminologyError,
+    ChineseTerminologyGrounder,
+    ChineseTerminologyLicenseError,
+    ChineseTerminologyMatch,
+    ChineseTerminologyPathError,
+    load_chinese_terminology_dictionary,
+    normalize_chinese_clinical_surface,
+)
 from .problem_list import (
     ACTIVE,
     INACTIVE,
@@ -144,6 +182,21 @@ from .problem_list import (
     SpanOffset,
     clinical_status_from_assertion,
     deduplicate_problem_list,
+    problem_mentions_from_grounded_terms,
+)
+from .radiology_finding import (
+    RADIOLOGY_FINDING_ADVISORY,
+    RADIOLOGY_LATERALITY_LEXICON,
+    Laterality,
+    ProvenanceSpan,
+    RadiologyFinding,
+    RadLexMappingSource,
+    extract_radiology_findings,
+)
+from .radiology_report import (
+    RADIOLOGY_REPORT_ADVISORY,
+    RadiologyReportTemplate,
+    parse_radiology_report,
 )
 from .relations import (
     MEDICATION_LINK_ADVISORY,
@@ -199,6 +252,7 @@ from .summary_card import (
     ClinicalSummaryCard,
     build_summary_card,
 )
+from .temporal_normalizer import NormalizedTimex, normalize_temporal
 from .timeline import (
     TIMELINE_ASSISTIVE_DISCLAIMER,
     NormalizedInterval,
@@ -238,6 +292,18 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "ABBREVIATION_DISAMBIGUATION_ADVISORY",
+    "DEFAULT_SENSE_INVENTORY_RESOURCE",
+    "AbbreviationAnnotation",
+    "AbbreviationDisambiguator",
+    "AbbreviationSense",
+    "SenseAlternative",
+    "SenseDefinition",
+    "SenseInventory",
+    "disambiguate_abbreviation",
+    "expand_abbreviations",
+    "load_abbreviation_inventory",
+    "load_sense_inventory",
     "AFFIRMED",
     "NEGATED",
     "NEGATION_VALUES",
@@ -282,6 +348,7 @@ __all__ = [
     "AxisProvenance",
     "ReconciledAssertion",
     "reconcile_assertions",
+    "INDIA_CLINICAL_NER_DISCLAIMER",
     "AbnormalFlag",
     "LabValueAttributeMention",
     "LabValueAttributeRole",
@@ -305,6 +372,12 @@ __all__ = [
     "canonicalize_text",
     "link_mentions",
     "score_mention_pair",
+    "COREFERENCE_FEATURES",
+    "COREFERENCE_RESOLUTION_ADVISORY",
+    "DEFAULT_COREFERENCE_THRESHOLD",
+    "CoreferenceChain",
+    "SpanChainKey",
+    "resolve_coreference",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",
@@ -332,6 +405,8 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "NormalizedTimex",
+    "normalize_temporal",
     "TemporalExpression",
     "detect_timexes",
     "NormalizedInterval",
@@ -360,12 +435,23 @@ __all__ = [
     "REFUTED",
     "PROBLEM_CLINICAL_STATUS_VALUES",
     "PROBLEM_LIST_RECONCILIATION_ADVISORY",
+    "RADIOLOGY_FINDING_ADVISORY",
+    "RADIOLOGY_LATERALITY_LEXICON",
+    "RADIOLOGY_REPORT_ADVISORY",
+    "Laterality",
+    "ProvenanceSpan",
+    "RadLexMappingSource",
+    "RadiologyFinding",
+    "RadiologyReportTemplate",
+    "extract_radiology_findings",
+    "parse_radiology_report",
     "ProblemClinicalStatus",
     "ProblemMention",
     "ReconciledProblem",
     "SpanOffset",
     "clinical_status_from_assertion",
     "deduplicate_problem_list",
+    "problem_mentions_from_grounded_terms",
     "FrequencyNormalization",
     "DurationNormalization",
     "MEDICATION_SIG_ADVISORY",
@@ -428,6 +514,19 @@ __all__ = [
     "NegationScope",
     "detect_negation_scopes",
     "negated_spans",
+    "CHINESE_DRUG_SYSTEM",
+    "CHINESE_ICD_10_SYSTEM",
+    "CHINESE_TERMINOLOGY_DISCLAIMER",
+    "CHINESE_TERMINOLOGY_VOCABULARY_NOTE",
+    "ChineseTerminologyDictionary",
+    "ChineseTerminologyEntry",
+    "ChineseTerminologyError",
+    "ChineseTerminologyGrounder",
+    "ChineseTerminologyLicenseError",
+    "ChineseTerminologyMatch",
+    "ChineseTerminologyPathError",
+    "load_chinese_terminology_dictionary",
+    "normalize_chinese_clinical_surface",
     "OTHER_EXPERIENCER",
     "Experiencer",
     "EXPERIENCER_REFINED_VALUES",

@@ -58,6 +58,21 @@ def test_broken_manifest_reports_all_line_numbered_violations(tmp_path: Path) ->
     ]
 
 
+def test_manifest_validator_requires_reproducibility_hash(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    row = _row()
+    del row["reproducibility_hash"]
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    exit_code = validate_manifest.main(["--manifest", str(manifest)])
+
+    assert exit_code == 1
+    assert "missing required key: reproducibility_hash" in capsys.readouterr().err
+
+
 def test_module_validator_exits_zero_for_committed_manifest(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -67,6 +82,18 @@ def test_module_validator_exits_zero_for_committed_manifest(
     assert exit_code == 0
     assert "OK" in captured.out
     assert captured.err == ""
+
+
+def test_pii_entry_without_script_coverage_fails_validation(tmp_path: Path) -> None:
+    row = _row(family="PII", canonical_labels=["PERSON"])
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    result = validate_manifest_file(manifest)
+
+    assert [str(violation) for violation in result.violations] == [
+        "line 1: PII entry missing required key: script_coverage"
+    ]
 
 
 def test_openmed_models_validate_shares_validator_verdict(

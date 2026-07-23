@@ -17,30 +17,44 @@ nav:
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
+      - African Developer Onboarding: africa-onboarding.md
       - Persona Quickstarts: quickstarts.md
+      - China Onboarding: onboarding-china.md
+      - India Onboarding: onboarding-india.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - MCP Client Connections: mcp-clients.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
+      - Offline & Air-Gapped Installation: offline-install.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
       - gRPC Service: serving/grpc.md
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
+      - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
+      - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+      - Clinical Coreference Resolution: clinical/coreference.md
+      - Temporal Normalization: clinical/temporal-normalization.md
+      - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
+      - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
+      - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
+      - Low-resource Benchmark: benchmarks/low-resource.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
@@ -48,6 +62,8 @@ nav:
       - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Public Benchmark Leaderboard: eval/leaderboard.md
+      - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
@@ -55,21 +71,34 @@ nav:
       - GPTQ Export: export-gptq.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
+      - CHW Form Export De-identification: chw-form-deid.md
       - Per-Language De-identification: languages.md
+      - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
+      - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
+      - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
+      - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
+      - Africa Attestation Review Template: compliance/templates/africa-data-residency-attestation.md
+      - African Context-sensitive Attributes: compliance/africa-context-sensitive-attributes.md
+      - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
+      - De-identified DHIS2 Export: dhis2-export.md
+      - OpenMRS Adapter: openmrs-adapter.md
+      - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
@@ -81,6 +110,7 @@ nav:
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
+      - On-device Segmenters: on-device-segmenters.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
@@ -88,10 +118,12 @@ nav:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md
       - Onboarding: onboarding.md
+      - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - No-Telemetry Guarantee: security/no-telemetry.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
@@ -101,6 +133,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
       - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
       - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
@@ -134,7 +167,6 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
   features:
-    - navigation.instant
     - navigation.sections
     - navigation.tabs
     - navigation.tracking
@@ -162,6 +194,60 @@ extra:
 
 plugins:
   - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: zh
+          name: 简体中文
+          build: true
+          nav_translations:
+            Overview: 概览
+            Welcome: 欢迎
+            Quick Start: 快速开始
+            China Onboarding: 中国用户上手指南
+            Core Guides: 核心指南
+            PII & De-identification: PII 与去标识化
+            Apple Silicon & Mobile: Apple Silicon 与移动端
+            Project: 项目
+        - locale: hi
+          name: हिन्दी
+          build: true
+          nav_translations:
+            Overview: अवलोकन
+            Welcome: स्वागत
+            Quick Start: त्वरित शुरुआत
+            India Onboarding: भारत के उपयोगकर्ताओं के लिए गाइड
+            Core Guides: मुख्य गाइड
+            PII & De-identification: PII और डी-आइडेंटिफिकेशन
+            Apple Silicon & Mobile: Apple Silicon और मोबाइल
+            Project: परियोजना
+  - llmstxt:
+      markdown_description: >
+        OpenMed is a local-first healthcare NLP toolkit for clinical entity
+        extraction, de-identification, model discovery, and on-device or
+        self-hosted integrations.
+      full_output: llms-full.txt
+      sections:
+        Getting started:
+          - index.md: OpenMed documentation overview
+          - getting-started.md: Installation and first local workflow
+          - quickstarts.md: Persona quickstarts, including AI agent usage over MCP
+        APIs and de-identification:
+          - analyze-text.md: Top-level text analysis API
+          - api-reference.md: Public Python API reference
+          - api/deidentification.md: De-identification API reference
+          - output-formatting.md: Output formats and agent-facing tool schemas
+        Agents and tool surfaces:
+          - mcp-clients.md: MCP client setup and transport guidance
+          - rest-service.md: REST service endpoints and deployment
+          - rest-recipes.md: Copy-ready REST API recipes
+          - plugin-sdk.md: Detector plugin interfaces
   - git-revision-date-localized:
       enable_creation_date: true
       fallback_to_build_date: true

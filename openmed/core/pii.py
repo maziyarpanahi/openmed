@@ -36,17 +36,28 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequen
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
-from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
+from .custom_recognizer import (
+    CUSTOM_DENY_DETECTOR,
+    abdm_mode_enabled,
+    coerce_custom_recognizer,
+    with_abdm_recognizer,
+)
 from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
 )
+from .decoding import remap_normalized_span, snap_span_to_grapheme_boundaries
 from .offline import network_blocked_if_offline
-from .script_detect import DetectionNormalization, normalize_for_pii_detection
+from .script_detect import (
+    DetectionNormalization,
+    india_clinical_script_windows,
+    normalize_for_pii_detection,
+)
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
+    from .lang_id_codemix import TokenLIDHook
     from .models import ModelLoader
     from .surrogate_vault import SurrogateVault
 
@@ -58,6 +69,7 @@ from .result_cache import (
 # Type alias for de-identification methods
 DEIDENTIFICATION_METHODS = (
     "mask",
+    "aadhaar_mask",
     "remove",
     "replace",
     "hash",
@@ -66,6 +78,7 @@ DEIDENTIFICATION_METHODS = (
 )
 DeidentificationMethod = Literal[
     "mask",
+    "aadhaar_mask",
     "remove",
     "replace",
     "hash",
@@ -187,7 +200,9 @@ class DeidentificationResult:
         pii_entities: List of detected and redacted PII entities
         method: De-identification method used
         timestamp: When de-identification was performed
-        mapping: Optional mapping for re-identification (redacted -> original)
+        mapping: Optional mapping for re-identification. Colliding replacement
+            surfaces use private occurrence keys so separate source spellings
+            remain reversible without changing the de-identified text.
     """
 
     original_text: str
@@ -324,10 +339,25 @@ class DeidentificationResult:
 # For these, input is automatically stripped of accents before model
 # inference and entity positions are mapped back to the original text.
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
+_OCCURRENCE_MAPPING_PREFIX = "__openmed_occurrence_v1__:"
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset(
-    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr", "cs"}
+    {
+        "fr",
+        "de",
+        "it",
+        "es",
+        "nl",
+        "hi",
+        "te",
+        "pt",
+        "ar",
+        "tr",
+        "cs",
+        "zu",
+        "xh",
+    }
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
@@ -558,15 +588,27 @@ def _strip_accents(text: str) -> str:
 
 def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     """Validate language and resolve language-specific default PII model."""
-    from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+    from .model_registry import get_default_pii_model
+    from .pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        INDIC_NER_MODEL_ENV,
+        SUPPORTED_LANGUAGES,
+    )
 
-    if lang not in SUPPORTED_LANGUAGES:
+    accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    if lang not in accepted_languages:
         raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. Supported: {sorted(accepted_languages)}"
         )
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
-        return DEFAULT_PII_MODELS[lang]
+        resolved = get_default_pii_model(lang)
+        if resolved is None:
+            raise ValueError(
+                f"Language '{lang}' uses optional Indic NER weights; pass an "
+                f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
+            )
+        return resolved
     return model_name
 
 
@@ -584,20 +626,43 @@ def _prepare_pii_text(
     lang: str,
     normalize_accents: Optional[bool],
     config: Optional[OpenMedConfig] = None,
+    preserve_whitespace: bool = False,
 ) -> _PreparedPIIText:
-    """Return original stripped text, inference text, and normalization flag."""
+    """Return source text, inference text, and normalization metadata."""
     do_normalize = (
         normalize_accents
         if normalize_accents is not None
         else (lang in _ACCENT_NORMALIZE_LANGS)
     )
 
-    original_text = text.strip()
+    original_text = text if preserve_whitespace else text.strip()
     width_convention = config.cjk_width_convention if config is not None else "cjk"
     detection_normalization = normalize_for_pii_detection(
         original_text,
         width_convention=width_convention,
+        chinese_target_script=(
+            config.chinese_target_script if config is not None else None
+        ),
     )
+    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() == "ar":
+        from .pii_i18n import normalize_arabic_indic_digits
+
+        normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)
+        folded_arabic_digits = sum(
+            before != after
+            for before, after in zip(
+                detection_normalization.text,
+                normalized_arabic,
+            )
+        )
+        if folded_arabic_digits:
+            detection_normalization = replace(
+                detection_normalization,
+                text=normalized_arabic,
+                folded_native_digits=(
+                    detection_normalization.folded_native_digits + folded_arabic_digits
+                ),
+            )
     inference_text = detection_normalization.text
     if do_normalize:
         inference_text = _strip_accents(inference_text)
@@ -655,12 +720,17 @@ def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
     for entity in result.entities:
         start = int(entity.start or 0)
         end = int(entity.end or start)
-        original_start, original_end = normalization.remap_span(start, end)
+        original_start, original_end, original_surface = remap_normalized_span(
+            start,
+            end,
+            prepared.original_text,
+            normalization,
+        )
         metadata = dict(entity.metadata or {})
         metadata.setdefault("unicode_defense", normalization.to_metadata())
         entities.append(
             EntityPrediction(
-                text=prepared.original_text[original_start:original_end],
+                text=original_surface,
                 label=entity.label,
                 start=original_start,
                 end=original_end,
@@ -679,19 +749,252 @@ def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
     )
 
 
+def _snap_entities_to_grapheme_boundaries(
+    text: str,
+    entities: list[EntityPrediction],
+) -> list[EntityPrediction]:
+    """Return entities whose source spans cannot bisect grapheme clusters."""
+
+    snapped_entities: list[EntityPrediction] = []
+    for entity in entities:
+        if entity.start is None or entity.end is None:
+            snapped_entities.append(entity)
+            continue
+
+        start, end = snap_span_to_grapheme_boundaries(
+            int(entity.start),
+            int(entity.end),
+            text,
+        )
+        if start == end:
+            snapped_entities.append(entity)
+            continue
+
+        if (start, end) == (entity.start, entity.end):
+            snapped_entities.append(entity)
+            continue
+
+        metadata = dict(entity.metadata or {})
+        metadata["grapheme_boundary_adjustment"] = {
+            "start_codepoints": int(entity.start) - start,
+            "end_codepoints": end - int(entity.end),
+        }
+        snapped_entities.append(
+            replace(
+                entity,
+                text=text[start:end],
+                start=start,
+                end=end,
+                metadata=metadata,
+            )
+        )
+    return snapped_entities
+
+
+def _extract_india_clinical_via_script_windows(
+    text: str,
+    *,
+    lang: str,
+    effective_model: str,
+    user_model: str | None,
+    confidence_threshold: float,
+    config: Optional[OpenMedConfig],
+    loader: Optional["ModelLoader"],
+    pipeline_kwargs: Mapping[str, Any],
+) -> Any:
+    """Run Latin and Indic context windows through their configured models."""
+
+    from .. import analyze_text
+    from ..clinical.context import INDIA_CLINICAL_NER_DISCLAIMER
+    from ..processing.outputs import EntityPrediction
+    from .models import HF_AVAILABLE, ModelLoader
+    from .pii_i18n import get_india_clinical_model_route
+
+    windows = india_clinical_script_windows(text, lang)
+    if not windows:
+        raise ValueError("India clinical routing requires mixed Latin/Indic text")
+
+    route = get_india_clinical_model_route(lang)
+    # Keep the analyzer injection boundary usable in core-only installs. The
+    # real ``analyze_text`` path will still raise its normal optional-dependency
+    # error when Transformers is absent, while test/custom analyzers can run
+    # without constructing a Hugging Face loader they do not use.
+    shared_loader = loader
+    if shared_loader is None and HF_AVAILABLE:
+        shared_loader = ModelLoader(config)
+    routed_results: list[Any] = []
+    routed_entities: list[EntityPrediction] = []
+    route_metadata: list[dict[str, Any]] = []
+    seen_requests: set[tuple[int, int, str, str]] = set()
+
+    for window in windows:
+        selected_model = route.model_for_script(
+            window.script,
+            user_model=user_model,
+        )
+        request_key = (window.start, window.end, selected_model, window.script)
+        if request_key in seen_requests:
+            continue
+        seen_requests.add(request_key)
+
+        window_text = window.extract(text)
+        result = analyze_text(
+            window_text,
+            model_name=selected_model,
+            confidence_threshold=confidence_threshold,
+            config=config,
+            loader=shared_loader,
+            group_entities=True,
+            **pipeline_kwargs,
+        )
+        result = _mutable_prediction_result(result)
+        routed_results.append(result)
+
+        # Tests and custom adapters sometimes return a full-note result even
+        # when invoked with a window. Accept that shape without double-offsetting.
+        base_offset = 0 if result.text == text else window.start
+        for entity in result.entities:
+            local_start = int(entity.start or 0)
+            local_end = int(entity.end or local_start)
+            start = base_offset + local_start
+            end = base_offset + local_end
+            if start < 0 or end < start or end > len(text):
+                raise ValueError("India clinical model returned an invalid span")
+            metadata = dict(entity.metadata or {})
+            metadata["india_clinical_route"] = {
+                "core_end": window.core_end,
+                "core_start": window.core_start,
+                "model": selected_model,
+                "script": window.script,
+                "window_end": window.end,
+                "window_start": window.start,
+            }
+            routed_entities.append(
+                EntityPrediction(
+                    text=text[start:end],
+                    label=entity.label,
+                    start=start,
+                    end=end,
+                    confidence=entity.confidence,
+                    metadata=metadata,
+                )
+            )
+        route_metadata.append(
+            {
+                "core_end": window.core_end,
+                "core_start": window.core_start,
+                "model": selected_model,
+                "script": window.script,
+                "window_end": window.end,
+                "window_start": window.start,
+            }
+        )
+
+    if not routed_results:
+        raise RuntimeError("India clinical routing produced no inference requests")
+
+    base_result = routed_results[0]
+    metadata = dict(getattr(base_result, "metadata", None) or {})
+    metadata["india_clinical"] = {
+        "active": True,
+        "disclaimer": INDIA_CLINICAL_NER_DISCLAIMER,
+        "fallback_model": route.fallback_model,
+        "language": lang,
+        "routes": route_metadata,
+    }
+    processing_times = [
+        float(result.processing_time)
+        for result in routed_results
+        if result.processing_time is not None
+    ]
+    return _replace_analysis_result(
+        base_result,
+        text=text,
+        entities=_coalesce_india_routed_entities(routed_entities, text),
+        model_name=effective_model,
+        processing_time=sum(processing_times) if processing_times else None,
+        metadata=metadata,
+    )
+
+
+def _coalesce_india_routed_entities(
+    entities: Sequence[EntityPrediction],
+    text: str,
+) -> list[EntityPrediction]:
+    """Union duplicate same-label detections emitted by overlapping windows."""
+
+    from .pii_entity_merger import normalize_label
+
+    ordered = sorted(
+        entities,
+        key=lambda entity: (int(entity.start or 0), int(entity.end or 0)),
+    )
+    coalesced: list[EntityPrediction] = []
+    for entity in ordered:
+        if not coalesced:
+            coalesced.append(entity)
+            continue
+        previous = coalesced[-1]
+        previous_start = int(previous.start or 0)
+        previous_end = int(previous.end or previous_start)
+        start = int(entity.start or 0)
+        end = int(entity.end or start)
+        same_family = normalize_label(previous.label) == normalize_label(entity.label)
+        if start >= previous_end or not same_family:
+            coalesced.append(entity)
+            continue
+
+        merged_start = min(previous_start, start)
+        merged_end = max(previous_end, end)
+        winner = max((previous, entity), key=lambda item: float(item.confidence))
+        metadata = dict(winner.metadata or {})
+        metadata["india_clinical_window_union"] = True
+        coalesced[-1] = EntityPrediction(
+            text=text[merged_start:merged_end],
+            label=winner.label,
+            start=merged_start,
+            end=merged_end,
+            confidence=max(float(previous.confidence), float(entity.confidence)),
+            metadata=metadata,
+        )
+    return coalesced
+
+
 def _apply_pii_smart_merging(
     result: Any,
     effective_model: str,
     lang: str,
     *,
     locale: Optional[str] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    india_clinical: bool = False,
+    include_indian_multi_id: bool = True,
 ) -> Any:
     """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
-    from .pii_i18n import get_patterns_for_language
+    from .pii_i18n import (
+        get_patterns_for_code_mixed_tags,
+        get_patterns_for_language,
+    )
 
-    lang_patterns = get_patterns_for_language(lang, locale=locale)
+    if code_mixed:
+        if token_language_tags is None:
+            raise ValueError("code_mixed=True requires token_language_tags")
+        lang_patterns = get_patterns_for_code_mixed_tags(
+            result.text,
+            token_language_tags,
+            base_lang=lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        )
+    else:
+        lang_patterns = get_patterns_for_language(
+            lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        )
     entity_dicts = [
         {
             "entity_type": e.label,
@@ -716,6 +1019,7 @@ def _apply_pii_smart_merging(
         prefer_model_labels=True,
         allow_semantic_only_matches=not model_led_merging,
         allow_label_expansion=not model_led_merging,
+        india_clinical=india_clinical,
     )
 
     merged_entities = [
@@ -725,20 +1029,57 @@ def _apply_pii_smart_merging(
             start=e["start"],
             end=e["end"],
             confidence=e["score"],
-            metadata=(
-                {
-                    "semantic_merge": {
-                        "source_labels": list(e.get("source_labels", ())),
-                        "mixed_label_union": bool(e.get("mixed_label_union", False)),
-                    }
-                }
-                if e.get("source_labels")
-                else None
-            ),
+            metadata=_pii_merge_metadata(e),
         )
         for e in merged_dicts
     ]
     return _replace_analysis_result(result, entities=merged_entities)
+
+
+def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return structured metadata retained from semantic/clinical merging."""
+
+    metadata: dict[str, Any] = {}
+    if entity.get("source_labels"):
+        metadata["semantic_merge"] = {
+            "source_labels": list(entity.get("source_labels", ())),
+            "mixed_label_union": bool(entity.get("mixed_label_union", False)),
+        }
+    if entity.get("normalized_word"):
+        # Keep result/audit metadata surface-free. The merger's internal
+        # ``normalized_word`` drives span logic, while public provenance records
+        # only the registered abbreviation keys and normalization version.
+        metadata["clinical_normalization"] = dict(
+            entity.get("clinical_normalization") or {}
+        )
+    if entity.get("india_clinical_merge"):
+        metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    return metadata or None
+
+
+def _resolve_code_mixed_token_tags(
+    text: str,
+    *,
+    code_mixed: bool,
+    token_language_tags: Optional[Sequence[Any]],
+    lid_model: Optional["TokenLIDHook"],
+) -> Optional[tuple[Any, ...]]:
+    """Return caller-supplied or locally inferred offset-only language tags."""
+    if not code_mixed:
+        if token_language_tags is not None:
+            raise ValueError("token_language_tags requires code_mixed=True")
+        if lid_model is not None:
+            raise ValueError("lid_model requires code_mixed=True")
+        return None
+    if token_language_tags is not None:
+        return tuple(token_language_tags)
+
+    from .lang_id_codemix import identify_token_languages
+
+    inferred = identify_token_languages(text, model=lid_model)
+    if not inferred:
+        raise ValueError("code-mixed text must contain at least one token")
+    return tuple(inferred)
 
 
 def _extract_pii_batch(
@@ -750,13 +1091,21 @@ def _extract_pii_batch(
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
+    transliterated_name_config: Any = None,
     *,
+    preserve_whitespace: bool = False,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
 ) -> list[Any]:
     """Extract PII for multiple texts while reusing the same backend resources."""
+    if code_mixed and len(texts) != 1:
+        raise ValueError("code-mixed token tags currently require one input text")
     effective_model = _resolve_effective_pii_model(model_name, lang)
     prepared = [
         _prepare_pii_text(
@@ -764,12 +1113,25 @@ def _extract_pii_batch(
             lang=lang,
             normalize_accents=normalize_accents,
             config=config,
+            preserve_whitespace=preserve_whitespace,
         )
         for text in texts
     ]
 
     if not prepared:
         return []
+
+    token_language_tags = _resolve_code_mixed_token_tags(
+        prepared[0].inference_text,
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        lid_model=lid_model,
+    )
+
+    india_clinical_flags = [
+        bool(india_clinical_script_windows(item.inference_text, lang))
+        for item in prepared
+    ]
 
     uses_privacy_filter = _looks_like_privacy_filter_identifier(
         effective_model
@@ -812,23 +1174,55 @@ def _extract_pii_batch(
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
-        for item in prepared:
-            result = analyze_text(
-                item.inference_text,
-                model_name=effective_model,
-                confidence_threshold=confidence_threshold,
-                config=config,
-                loader=shared_loader,
-                group_entities=True,
-                **pipeline_kwargs,
-            )
+        for item, india_clinical in zip(prepared, india_clinical_flags):
+            if india_clinical:
+                result = _extract_india_clinical_via_script_windows(
+                    item.inference_text,
+                    lang=lang,
+                    effective_model=effective_model,
+                    user_model=(
+                        None if model_name == _DEFAULT_EN_MODEL else effective_model
+                    ),
+                    confidence_threshold=confidence_threshold,
+                    config=config,
+                    loader=shared_loader,
+                    pipeline_kwargs=pipeline_kwargs,
+                )
+            else:
+                result = analyze_text(
+                    item.inference_text,
+                    model_name=effective_model,
+                    confidence_threshold=confidence_threshold,
+                    config=config,
+                    loader=shared_loader,
+                    group_entities=True,
+                    **pipeline_kwargs,
+                )
             result = _mutable_prediction_result(result)
             results.append(result)
 
-    if use_smart_merging and not uses_privacy_filter:
+    indian_multi_id_enabled = abdm_mode_enabled(
+        abdm,
+        lang=lang,
+        locale=locale,
+    )
+    if use_smart_merging:
         results = [
-            _apply_pii_smart_merging(result, effective_model, lang, locale=locale)
-            for result in results
+            (
+                _apply_pii_smart_merging(
+                    result,
+                    effective_model,
+                    lang,
+                    locale=locale,
+                    code_mixed=code_mixed,
+                    token_language_tags=token_language_tags,
+                    india_clinical=india_clinical,
+                    include_indian_multi_id=indian_multi_id_enabled,
+                )
+                if not uses_privacy_filter or india_clinical
+                else result
+            )
+            for result, india_clinical in zip(results, india_clinical_flags)
         ]
 
     results = [
@@ -836,10 +1230,32 @@ def _extract_pii_batch(
         for result, item in zip(results, prepared)
     ]
 
-    recognizer = coerce_custom_recognizer(custom_recognizer)
+    recognizer_config = custom_recognizer
+    if indian_multi_id_enabled:
+        recognizer_config = with_abdm_recognizer(recognizer_config)
+    recognizer = coerce_custom_recognizer(recognizer_config)
     if recognizer is not None:
         for result in results:
             recognizer.apply_to_prediction_result(result)
+
+    if code_mixed:
+        from .custom_recognizer import build_transliterated_name_recognizer
+        from .pii_i18n import code_mixed_route_active
+
+        if token_language_tags is not None and code_mixed_route_active(
+            results[0].text,
+            token_language_tags,
+        ):
+            name_recognizer = build_transliterated_name_recognizer(
+                transliterated_name_config
+            )
+            previous_metadata = dict(getattr(results[0], "metadata", None) or {})
+            name_recognizer.apply_to_prediction_result(results[0])
+            metadata = dict(getattr(results[0], "metadata", None) or {})
+            bridge_metadata = metadata.pop("custom_recognizer", {})
+            metadata.update(previous_metadata)
+            metadata["transliterated_name_bridge"] = bridge_metadata
+            results[0].metadata = metadata
 
     for result in results:
         _apply_clinical_protection_to_result(
@@ -868,9 +1284,17 @@ def extract_pii(
     max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
+    preserve_whitespace: bool = False,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
+    batch_size: Optional[int] = None,
+    num_workers: Optional[int] = None,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
+    transliterated_name_config: Any = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -892,17 +1316,38 @@ def extract_pii(
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
         lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
             ar, ja, tr). Controls which
-            default model and regex patterns are used.
+            default model and regex patterns are used. Mixed Latin/Devanagari
+            or Latin/Telugu notes automatically use script-aware India
+            clinical routing for ``hi`` and ``te``.
         normalize_accents: Strip diacritical marks before model inference so
             that models trained on accent-free text still detect accented
             names.  Entity spans in the result reference the *original*
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
+        preserve_whitespace: Preserve leading and trailing source whitespace
+            so returned entity offsets refer to the exact input string.
         loader: Optional shared model loader to reuse warmed pipelines.
+        batch_size: Optional backend inference batch size.
+        num_workers: Optional backend inference worker count.
         custom_recognizer: Optional deny-list/allow-list recognizer config,
             ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
             matches are added with ``custom:deny`` provenance; allow-list
             matches suppress overlapping spans from any detector.
+        abdm: Enable the India ABDM identifier bundle. ``None`` auto-enables
+            it for Hindi/Telugu and India locales; ``False`` explicitly
+            disables that automatic activation.
+        code_mixed: Enable the explicit English/Hinglish route. This preserves
+            English model detection while adding Roman-Hindi context patterns.
+        token_language_tags: Required with ``code_mixed=True``. Ordered,
+            non-overlapping records with ``start``, ``end``, and ``label``
+            (``en``, ``hi``, ``ne``, ``univ``, or ``other``). Tags are consumed
+            as offsets/labels only and are never copied with raw token surfaces.
+            When omitted in code-mixed mode, the deterministic token-LID
+            fallback derives them from the input.
+        lid_model: Optional user-supplied token language-ID hook used only when
+            ``code_mixed=True`` and ``token_language_tags`` is omitted.
+        transliterated_name_config: Optional configuration for the conservative
+            Latin-script Indian given/family-name allow/deny bridge.
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
@@ -944,6 +1389,11 @@ def extract_pii(
         final_result = cache.get(cache_key)
         if final_result is not None:
             return final_result
+    runtime_kwargs = {}
+    if batch_size is not None:
+        runtime_kwargs["batch_size"] = batch_size
+    if num_workers is not None:
+        runtime_kwargs["num_workers"] = num_workers
     final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
@@ -952,9 +1402,16 @@ def extract_pii(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        preserve_whitespace=preserve_whitespace,
         locale=locale,
         loader=loader,
         custom_recognizer=custom_recognizer,
+        abdm=abdm,
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        lid_model=lid_model,
+        transliterated_name_config=transliterated_name_config,
+        **runtime_kwargs,
     )[0]
     if cache_results:
         cache.set(cache_key, final_result)
@@ -1007,6 +1464,7 @@ def _apply_safety_sweep_to_result(
     *,
     lang: str,
     locale: Optional[str] = None,
+    patterns: Optional[Sequence[Any]] = None,
 ) -> tuple[Any, int]:
     """Run the deterministic sweep and record its net span contribution."""
     from .quality_gates import validate_entity_spans
@@ -1017,11 +1475,18 @@ def _apply_safety_sweep_to_result(
     )
 
     before_count = len(pii_result.entities)
-    entities = safety_sweep(text, pii_result.entities, lang=lang, locale=locale)
+    entities = safety_sweep(
+        text,
+        pii_result.entities,
+        lang=lang,
+        locale=locale,
+        patterns=patterns,
+    )
     added_count = len(entities) - before_count
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
     metadata["safety_sweep"] = {
+        "enabled": True,
         "source": SAFETY_SWEEP_SOURCE,
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
         "spans_added": added_count,
@@ -1036,7 +1501,9 @@ def _apply_safety_sweep_to_result(
 
 
 _AUDIT_TEXT_KEYS = {
+    "canonical_transliteration_key",
     "text",
+    "transliteration_key",
     "word",
     "value",
     "surface",
@@ -1338,7 +1805,10 @@ def _resolved_audit_profile(
     normalize_accents: Optional[bool],
     use_smart_merging: bool,
     use_safety_sweep: bool,
+    config: Any = None,
 ) -> dict[str, Any]:
+    from .offline import offline_mode_assertion
+
     return {
         "method": method,
         "model_name": model_name,
@@ -1349,6 +1819,7 @@ def _resolved_audit_profile(
         "normalize_accents": normalize_accents,
         "use_smart_merging": bool(use_smart_merging),
         "use_safety_sweep": bool(use_safety_sweep),
+        "offline_assertion": offline_mode_assertion(config),
     }
 
 
@@ -1409,6 +1880,7 @@ def _build_audit_report(
     use_smart_merging: bool,
     use_safety_sweep: bool,
     policy: str,
+    config: Any = None,
 ) -> Any:
     from ..__about__ import __version__
     from .audit import AuditReport, hash_text, manifest_hash
@@ -1445,6 +1917,7 @@ def _build_audit_report(
             normalize_accents=normalize_accents,
             use_smart_merging=use_smart_merging,
             use_safety_sweep=use_safety_sweep,
+            config=config,
         ),
         detectors=_detector_infos(
             pii_result,
@@ -1494,12 +1967,17 @@ def _build_deidentification_result(
     policy_name: Optional[str] = None,
     policy: str = "hipaa_safe_harbor",
     audit: bool = False,
+    config: Any = None,
 ) -> DeidentificationResult:
     """Build a de-identification result from an existing PII result."""
     from .labels import normalize_label
     from .quality_gates import resolve_overlapping_entities
 
-    resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
+    grapheme_safe_entities = _snap_entities_to_grapheme_boundaries(
+        text,
+        list(pii_result.entities),
+    )
+    resolved_entities = resolve_overlapping_entities(grapheme_safe_entities)
     pii_result = _replace_analysis_result(pii_result, entities=resolved_entities)
 
     active_thresholds = _active_calibration_thresholds(pii_result, lang=lang)
@@ -1559,7 +2037,9 @@ def _build_deidentification_result(
         )
 
     deidentified = text
-    mapping = {} if keep_mapping else None
+    mapping: dict[str, str] | None = None
+    mapping_occurrences: dict[str, list[tuple[int, str]]] = {}
+    source_surrogates: dict[tuple[str, str], str] = {}
     entity_occurrence_indexes: dict[int, int] = {}
     if keep_mapping:
         entity_type_counts: dict[str, int] = {}
@@ -1591,20 +2071,37 @@ def _build_deidentification_result(
             lang,
         ):
             actual_entity_method = "mask"
-        redacted = _redact_entity(
-            entity,
-            actual_entity_method,
-            keep_year=keep_year,
-            date_shift_days=(
-                date_shift_days if actual_entity_method == "shift_dates" else None
-            ),
-            lang=lang,
-            anonymizer=anonymizer,
-            require_dateutil=effective_method == "shift_dates",
-            surrogate_vault=surrogate_vault,
+        source_key = (
+            entity.canonical_label or entity.entity_type,
+            entity.original_text or entity.text,
         )
+        if (
+            keep_mapping
+            and actual_entity_method in {"replace", "format_preserve"}
+            and source_key in source_surrogates
+        ):
+            redacted = source_surrogates[source_key]
+        else:
+            redacted = _redact_entity(
+                entity,
+                actual_entity_method,
+                keep_year=keep_year,
+                date_shift_days=(
+                    date_shift_days if actual_entity_method == "shift_dates" else None
+                ),
+                lang=lang,
+                anonymizer=anonymizer,
+                require_dateutil=effective_method == "shift_dates",
+                surrogate_vault=surrogate_vault,
+            )
         if entity_method == "format_preserve" and redacted == _mask_placeholder(entity):
             actual_entity_method = "mask"
+        if (
+            keep_mapping
+            and actual_entity_method in {"replace", "format_preserve"}
+            and redacted
+        ):
+            source_surrogates.setdefault(source_key, redacted)
 
         if keep_mapping and actual_entity_method == "remove":
             redacted = f"[{entity.entity_type}_REMOVED]"
@@ -1631,8 +2128,13 @@ def _build_deidentification_result(
             deidentified[: entity.start] + redacted + deidentified[entity.end :]
         )
 
-        if keep_mapping and mapping is not None:
-            mapping[redacted] = entity.original_text or entity.text
+        if keep_mapping:
+            mapping_occurrences.setdefault(redacted, []).append(
+                (entity.start, entity.original_text or entity.text)
+            )
+
+    if keep_mapping:
+        mapping = _build_reidentification_mapping(mapping_occurrences)
 
     audit_report = None
     if audit:
@@ -1651,6 +2153,7 @@ def _build_deidentification_result(
             use_smart_merging=use_smart_merging,
             use_safety_sweep=use_safety_sweep,
             policy=policy,
+            config=config,
         )
 
     return DeidentificationResult(
@@ -1743,7 +2246,13 @@ def _deidentify_batch(
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
+    preserve_whitespace: bool = False,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
+    transliterated_name_config: Any = None,
     policy: Optional[str] = None,
     *,
     consistent: bool = False,
@@ -1763,18 +2272,41 @@ def _deidentify_batch(
         date_shift_max_days=date_shift_max_days,
         date_shift_secret=date_shift_secret,
     )
-    stripped_texts = [text.strip() for text in texts]
+    source_texts = [text if preserve_whitespace else text.strip() for text in texts]
+    if code_mixed and len(source_texts) != 1:
+        raise ValueError("code-mixed token tags currently require one input text")
+    resolved_token_language_tags = (
+        _resolve_code_mixed_token_tags(
+            source_texts[0],
+            code_mixed=code_mixed,
+            token_language_tags=token_language_tags,
+            lid_model=lid_model,
+        )
+        if source_texts
+        else None
+    )
     recognizer = coerce_custom_recognizer(custom_recognizer)
     pii_results = _extract_pii_batch(
-        stripped_texts,
+        source_texts,
         model_name=model_name,
         confidence_threshold=confidence_threshold,
         config=config,
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        preserve_whitespace=preserve_whitespace,
         locale=locale,
         custom_recognizer=recognizer,
+        abdm=abdm_mode_enabled(
+            abdm,
+            policy=policy,
+            lang=lang,
+            locale=locale,
+        ),
+        code_mixed=code_mixed,
+        token_language_tags=resolved_token_language_tags,
+        lid_model=lid_model,
+        transliterated_name_config=transliterated_name_config,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
@@ -1782,14 +2314,33 @@ def _deidentify_batch(
 
     if use_safety_sweep:
         swept_results = []
-        for stripped_text, pii_result in zip(stripped_texts, pii_results):
+        for source_text, pii_result in zip(source_texts, pii_results):
+            sweep_patterns = None
+            if code_mixed:
+                if resolved_token_language_tags is None:
+                    raise ValueError("code-mixed routing requires token language tags")
+                from .pii_i18n import get_patterns_for_code_mixed_tags
+
+                sweep_patterns = get_patterns_for_code_mixed_tags(
+                    source_text,
+                    resolved_token_language_tags,
+                    base_lang=lang,
+                    locale=locale,
+                    include_indian_multi_id=abdm_mode_enabled(
+                        abdm,
+                        policy=policy,
+                        lang=lang,
+                        locale=locale,
+                    ),
+                )
             pii_result, _ = _apply_safety_sweep_to_result(
-                stripped_text,
+                source_text,
                 pii_result,
                 lang=lang,
                 locale=locale,
+                patterns=sweep_patterns,
             )
-            _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
+            _suppress_custom_allowed_entities(source_text, pii_result, recognizer)
             swept_results.append(pii_result)
         pii_results = swept_results
 
@@ -1816,7 +2367,7 @@ def _deidentify_batch(
             surrogate_vault=surrogate_vault,
             policy=policy or "hipaa_safe_harbor",
         )
-        for text, pii_result in zip(stripped_texts, pii_results)
+        for text, pii_result in zip(source_texts, pii_results)
     ]
 
 
@@ -1846,6 +2397,11 @@ def deidentify(
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
+    code_mixed: bool = False,
+    token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
+    transliterated_name_config: Any = None,
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
@@ -1855,6 +2411,8 @@ def deidentify(
     Implements multiple de-identification strategies for HIPAA compliance:
 
     - **mask**: Replace with placeholders like [NAME], [EMAIL], etc.
+    - **aadhaar_mask**: Render valid Aadhaar values as ``XXXX XXXX NNNN``;
+      use ordinary placeholders for every other entity
     - **remove**: Remove PII text entirely (empty string)
     - **replace**: Replace with fake but realistic data
     - **hash**: Replace with consistent hashed values for entity linking
@@ -1865,10 +2423,16 @@ def deidentify(
     Smart merging uses regex patterns to merge fragmented entities (e.g., dates
     split into '01' and '/15/1970' are merged into complete '01/15/1970').
 
+    Code-mixed mode is explicit and offset driven. With ``code_mixed=True`` and
+    per-token language tags, the English NER path remains active while a
+    separate Roman-script Hindi pattern bank detects cues such as ``naam``,
+    ``umar``, ``pata``, ``mobile``, and ``janm``. The combined spans pass
+    through the normal entity merger and final safety sweep before redaction.
+
     Args:
         text: Input text to de-identify
-        method: De-identification method (mask, remove, replace, hash,
-            shift_dates, format_preserve)
+        method: De-identification method (mask, aadhaar_mask, remove, replace,
+            hash, shift_dates, format_preserve)
         model_name: PII detection model
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
@@ -1893,7 +2457,9 @@ def deidentify(
             after model detection and before redaction.
         lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
             ar, ja, tr). Controls model
-            selection, regex patterns, and fake data for replacement.
+            selection, regex patterns, and fake data for replacement. Mixed
+            Latin/Devanagari or Latin/Telugu notes automatically use the
+            script-aware India clinical route for ``hi`` and ``te``.
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
         loader: Optional shared model loader to reuse warmed pipelines.
@@ -1908,9 +2474,10 @@ def deidentify(
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
         surrogate_vault: Optional cross-document surrogate vault. When provided
-            with ``method="replace"``, OpenMed stores only HMAC source hashes
-            and reuses the same surrogate for the same label/language/source
-            identifier across calls.
+            with ``method="replace"``, OpenMed stores only HMAC source hashes.
+            Indian names in Devanagari, Tamil, or opted-in Romanization use one
+            HMAC of an in-memory phonetic fold and render the reused identity in
+            the input script; the fold itself is never persisted or audited.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path
@@ -1920,6 +2487,20 @@ def deidentify(
             ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
             matches are redacted with ``custom:deny`` provenance; allow-list
             matches suppress overlapping spans from any detector.
+        abdm: Enable the India ABDM recognizer bundle. ``None`` auto-enables
+            it for ``policy="india_dpdp_act"``, Hindi/Telugu, or an India
+            locale. Pass ``False`` to opt out of automatic activation.
+        code_mixed: Enable the explicit English/Hinglish de-identification path.
+        token_language_tags: Required with ``code_mixed=True``. Ordered token
+            records with exact ``start``/``end`` offsets and an ``en``, ``hi``,
+            ``ne``, ``univ``, or ``other`` label. A pure-English tag stream does
+            not activate Roman-Hindi patterns. When omitted in code-mixed mode,
+            the deterministic token-LID fallback derives the tags.
+        lid_model: Optional user-supplied token language-ID hook used only when
+            code-mixed tags are inferred.
+        transliterated_name_config: Optional configuration for the
+            Latin-script Indian name allow/deny bridge. The default bridge is
+            conservative and can be replaced or extended by configuration.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
@@ -1979,6 +2560,16 @@ def deidentify(
             return final_result
     from .pipeline import Pipeline
 
+    recognizer_config = custom_recognizer
+    indian_multi_id_enabled = abdm_mode_enabled(
+        abdm,
+        policy=policy,
+        lang=lang,
+        locale=locale,
+    )
+    if indian_multi_id_enabled:
+        recognizer_config = with_abdm_recognizer(recognizer_config)
+
     pipeline = Pipeline(
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -1994,7 +2585,12 @@ def deidentify(
             if calibration_thresholds_path is not None
             else None
         ),
-        custom_recognizer=custom_recognizer,
+        custom_recognizer=recognizer_config,
+        indian_multi_id=indian_multi_id_enabled,
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        lid_model=lid_model,
+        transliterated_name_config=transliterated_name_config,
     )
     result = pipeline.run(
         text,
@@ -2070,6 +2666,16 @@ def _redact_entity(
         # Replace with placeholder
         return _mask_placeholder(entity)
 
+    elif method == "aadhaar_mask":
+        original = entity.original_text or entity.text
+        from .pii_i18n import validate_aadhaar
+
+        if validate_aadhaar(original):
+            from .anonymizer.format_preserve import mask_aadhaar
+
+            return mask_aadhaar(original)
+        return _mask_placeholder(entity)
+
     elif method == "remove":
         # Remove entirely (replace with empty string)
         return ""
@@ -2100,6 +2706,7 @@ def _redact_entity(
                     label=label,
                     lang=lang,
                     create_surrogate=_create_surrogate,
+                    required_script=_surrogate_script_constraint(entity),
                 )
             return anonymizer.surrogate(
                 original,
@@ -2144,6 +2751,18 @@ def _redact_entity(
             return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
+    """Keep Roman-script personal names in their source script run."""
+    label = str(entity.canonical_label or entity.entity_type).upper()
+    if label not in {"NAME", "PATIENT", "PERSON"}:
+        return None
+    source = entity.original_text or entity.text
+    letters = [char for char in source if char.isalpha()]
+    if letters and all("LATIN" in unicodedata.name(char, "") for char in letters):
+        return "Latin"
+    return None
 
 
 def _mask_placeholder(entity: PIIEntity) -> str:
@@ -2742,7 +3361,8 @@ def reidentify(
 
     Args:
         deidentified_text: De-identified text
-        mapping: Mapping from redacted to original text
+        mapping: Mapping from redacted to original text, optionally including
+            occurrence-aware entries emitted for colliding replacement values.
 
     Returns:
         Re-identified text with original PII restored
@@ -2760,8 +3380,57 @@ def reidentify(
         Requires proper authorization and audit logging in production.
     """
     result = deidentified_text
-
+    regular_mapping: dict[str, str] = {}
+    occurrence_mapping: dict[str, list[tuple[int, str]]] = {}
     for redacted, original in mapping.items():
+        parsed = _parse_occurrence_mapping_key(redacted)
+        if parsed is None:
+            regular_mapping[redacted] = original
+            continue
+        ordinal, surface = parsed
+        occurrence_mapping.setdefault(surface, []).append((ordinal, original))
+
+    for redacted in sorted(occurrence_mapping, key=len, reverse=True):
+        originals = [original for _, original in sorted(occurrence_mapping[redacted])]
+        occurrence_index = 0
+
+        def restore_occurrence(match: re.Match[str]) -> str:
+            nonlocal occurrence_index
+            if occurrence_index >= len(originals):
+                return match.group(0)
+            original = originals[occurrence_index]
+            occurrence_index += 1
+            return original
+
+        result = re.sub(re.escape(redacted), restore_occurrence, result)
+
+    for redacted, original in regular_mapping.items():
         result = result.replace(redacted, original)
 
     return result
+
+
+def _build_reidentification_mapping(
+    occurrences: Mapping[str, list[tuple[int, str]]],
+) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for redacted, values in occurrences.items():
+        ordered = sorted(values)
+        originals = [original for _, original in ordered]
+        if len(set(originals)) == 1:
+            mapping[redacted] = originals[0]
+            continue
+        for ordinal, original in enumerate(originals, start=1):
+            key = f"{_OCCURRENCE_MAPPING_PREFIX}{ordinal:08d}:{redacted}"
+            mapping[key] = original
+    return mapping
+
+
+def _parse_occurrence_mapping_key(key: str) -> tuple[int, str] | None:
+    if not key.startswith(_OCCURRENCE_MAPPING_PREFIX):
+        return None
+    payload = key[len(_OCCURRENCE_MAPPING_PREFIX) :]
+    ordinal_text, separator, redacted = payload.partition(":")
+    if not separator or not ordinal_text.isdigit() or not redacted:
+        return None
+    return int(ordinal_text), redacted

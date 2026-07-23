@@ -180,6 +180,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -187,6 +190,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -196,7 +206,11 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "sw",
+              "zu",
+              "xh",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -401,6 +415,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -408,6 +425,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -417,7 +441,11 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "sw",
+              "zu",
+              "xh",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -524,6 +552,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -531,6 +562,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -540,7 +578,11 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "sw",
+              "zu",
+              "xh",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -620,6 +662,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -627,6 +672,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -636,7 +688,11 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "sw",
+              "zu",
+              "xh",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -736,6 +792,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -743,6 +802,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -752,7 +818,11 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "sw",
+              "zu",
+              "xh",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -860,6 +930,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -867,6 +940,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -876,7 +956,11 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "sw",
+              "zu",
+              "xh",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
