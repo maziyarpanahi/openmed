@@ -18,6 +18,7 @@ import re
 import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
+from enum import Enum
 
 from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
@@ -40,6 +41,39 @@ INDIC_SCRIPTS = frozenset(
 CONFUSABLE_DATA_VERSION = "17.0.0"
 CONFUSABLE_DATA_URL = "https://www.unicode.org/Public/17.0.0/security/confusables.txt"
 CONFUSABLE_DATA_LICENSE = "Unicode-3.0"
+
+
+class ChineseScriptVariant(str, Enum):
+    """Estimated Chinese character variant used in a text."""
+
+    SIMPLIFIED = "simplified"
+    TRADITIONAL = "traditional"
+    MIXED = "mixed"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class ChineseScriptEstimate:
+    """Ratio-based Simplified/Traditional estimate for synthetic text."""
+
+    variant: ChineseScriptVariant
+    simplified_count: int
+    traditional_count: int
+    simplified_ratio: float
+    traditional_ratio: float
+
+    @property
+    def script(self) -> ChineseScriptVariant:
+        """Alias for the estimated predominant variant."""
+
+        return self.variant
+
+    @property
+    def mixed(self) -> bool:
+        """Return whether both Simplified and Traditional evidence appears."""
+
+        return self.simplified_count > 0 and self.traditional_count > 0
+
 
 SUPPORTED_SCRIPTS = (
     "Latin",
@@ -355,6 +389,51 @@ class MixedScriptSpan:
         }
 
 
+# Unicode assigns both Simplified and Traditional Han characters to the same
+# script blocks. These curated, common one-sided variants provide deterministic
+# evidence without bundling a language model or copying OpenCC dictionaries.
+_SIMPLIFIED_VARIANT_RAW = frozenset(
+    "头药医门发后里网软台历叶万与东丝两严个临为乐书买乱云产亲仅从仓们"
+    "众会体余传伤伦儿兰关兴养写军农冲决况冻净减几凤击刘创别动务华"
+    "单卫厂厅压厌县双变号听员园圆场声处复备够夹夺奖妇妈孙学宁宝实"
+    "审宽对寻导将层岁岛岭帐帮广庄庆库应开张归当录忆怀总态恋恶惊惯"
+    "愿护报担拟拥拦拨择挂挤挥损换据摆敌数无旧时显晓术机杀杂权条来"
+    "杨极构枪柜树样档桥梦检欢欧残气汉汤沟泪泻泽洁浅测济浓涛涡润涨"
+    "湿滚满滤灭灯灵点炼热爱爷牵状犹独狮猫猪环现电画疗疮疯痒瘫盘盐"
+    "监盖盗矿码砖确础礼祷离种积称稳穷窍竞笔笼筑签简粮紧红纤约级纪"
+    "纯线练组细织终经结给络绝统绢继续绿编缘缝罗罚翘职联聪肃肠肤肿"
+    "胀胜胶脉脏脑脸艺节芜苹范茧荐荡荣莱莲获营萧萨蓝虑虚虫虽虾蚁蚕"
+    "补装见观规视览觉触计订认讲许论设访证评诉诊词译试诗诚话该详语"
+    "误说请诸读课调谈谢谣谱贝财责贤账货质购贵费贺资赌赏赔赖赞赢赵"
+    "车转轮轻载轿较辅辆辈输辑边达迁过运还这进远连迟适选递逻邓郑酱"
+    "释鉴钟钢钥钱铁铜铝银销锁锅锋锐错锡锣锦键锯镜长闪闭问闯闲间闷"
+    "闸闹闻阁阅阔队阳阴阵阶际陆陈险随隐难雾静韩页顶项顺须顾顿领颈"
+    "频题颜额风飞饭饮馆马驱驶骑验鱼鲜鲸鸟鸡鸭鹅鹤鹰黄齐齿龄龙龟"
+)
+_TRADITIONAL_VARIANT_RAW = frozenset(
+    "頭藥醫門發髮後裡裏網軟臺歷葉萬與東絲兩嚴個臨為樂書買亂雲產親"
+    "僅從倉們眾會體餘傳傷倫兒蘭關興養寫軍農衝決況凍淨減幾鳳擊劉創"
+    "別動務華單衛廠廳壓厭縣雙變號聽員園圓場聲處復備夠夾奪獎婦媽孫"
+    "學寧寶實審寬對尋導將層歲島嶺帳幫廣莊慶庫應開張歸當錄憶懷總態"
+    "戀惡驚慣願護報擔擬擁攔撥擇掛擠揮損換據擺敵數無舊時顯曉術機殺"
+    "雜權條來楊極構槍櫃樹樣檔橋夢檢歡歐殘氣漢湯溝淚瀉澤潔淺測濟濃"
+    "濤渦潤漲濕滾滿濾滅燈靈點煉熱愛爺牽狀猶獨獅貓豬環現電畫療瘡瘋"
+    "癢癱盤鹽監蓋盜礦碼磚確礎禮禱離種積稱穩窮竅競筆籠築簽簡糧緊紅"
+    "纖約級紀純線練組細織終經結給絡絕統絹繼續綠編緣縫羅罰翹職聯聰"
+    "肅腸膚腫脹勝膠脈臟腦臉藝節蕪蘋範繭薦蕩榮萊蓮獲營蕭薩藍慮虛蟲"
+    "雖蝦蟻蠶補裝見觀規視覽覺觸計訂認講許論設訪證評訴診詞譯試詩誠"
+    "話該詳語誤說請諸讀課調談謝謠譜貝財責賢賬貨質購貴費賀資賭賞賠"
+    "賴贊贏趙車轉輪輕載轎較輔輛輩輸輯邊達遷過運還這進遠連遲適選遞"
+    "邏鄧鄭醬釋鑒鐘鋼鑰錢鐵銅鋁銀銷鎖鍋鋒銳錯錫鑼錦鍵鋸鏡長閃閉問"
+    "闖閒間悶閘鬧聞閣閱闊隊陽陰陣階際陸陳險隨隱難霧靜韓頁頂項順須"
+    "顧頓領頸頻題顏額風飛飯飲館馬驅駛騎驗魚鮮鯨鳥雞鴨鵝鶴鷹黃齊齒"
+    "齡龍龜"
+)
+_SHARED_VARIANT_EVIDENCE = _SIMPLIFIED_VARIANT_RAW & _TRADITIONAL_VARIANT_RAW
+SIMPLIFIED_VARIANT_CHARS = _SIMPLIFIED_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
+TRADITIONAL_VARIANT_CHARS = _TRADITIONAL_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
+
+
 @dataclass(frozen=True)
 class DetectionNormalization:
     """Offset-preserving Unicode normalization for PII detection."""
@@ -371,6 +450,9 @@ class DetectionNormalization:
     indic_scripts: tuple[str, ...] = ()
     scripts: tuple[str, ...] = ()
     mixed_script: bool = False
+    chinese_variant_normalized: bool = False
+    chinese_target_script: str | None = None
+    opencc_available: bool | None = None
 
     @property
     def changed(self) -> bool:
@@ -381,6 +463,7 @@ class DetectionNormalization:
             or self.folded_confusables > 0
             or self.folded_native_digits > 0
             or self.indic_changes > 0
+            or self.chinese_variant_normalized
         )
 
     def remap_span(self, start: int, end: int) -> tuple[int, int]:
@@ -405,11 +488,14 @@ class DetectionNormalization:
         """Return PHI-free normalization metadata."""
         return {
             "changed": self.changed,
+            "chinese_target_script": self.chinese_target_script,
+            "chinese_variant_normalized": self.chinese_variant_normalized,
             "folded_confusables": self.folded_confusables,
             "folded_native_digits": self.folded_native_digits,
             "indic_changes": self.indic_changes,
             "indic_scripts": list(self.indic_scripts),
             "mixed_script": self.mixed_script,
+            "opencc_available": self.opencc_available,
             "removed_zero_width": self.removed_zero_width,
             "scripts": list(self.scripts),
             "stripped_combining_marks": self.stripped_combining_marks,
@@ -778,6 +864,41 @@ def is_han_dominant(text: str) -> bool:
     )
 
 
+def detect_chinese_script(text: str) -> ChineseScriptEstimate:
+    """Estimate the predominant Simplified/Traditional Chinese variant.
+
+    Unicode blocks cannot distinguish the variants, so the estimate uses
+    ratios over common characters that are exclusive to one form. Characters
+    shared by both forms are ignored. A tie with evidence on both sides is
+    reported as mixed; otherwise the larger evidence ratio is predominant.
+    """
+
+    simplified_count = sum(char in SIMPLIFIED_VARIANT_CHARS for char in text)
+    traditional_count = sum(char in TRADITIONAL_VARIANT_CHARS for char in text)
+    evidence_count = simplified_count + traditional_count
+    if evidence_count == 0:
+        variant = ChineseScriptVariant.UNKNOWN
+        simplified_ratio = 0.0
+        traditional_ratio = 0.0
+    else:
+        simplified_ratio = simplified_count / evidence_count
+        traditional_ratio = traditional_count / evidence_count
+        if simplified_count == traditional_count:
+            variant = ChineseScriptVariant.MIXED
+        elif simplified_count > traditional_count:
+            variant = ChineseScriptVariant.SIMPLIFIED
+        else:
+            variant = ChineseScriptVariant.TRADITIONAL
+
+    return ChineseScriptEstimate(
+        variant=variant,
+        simplified_count=simplified_count,
+        traditional_count=traditional_count,
+        simplified_ratio=simplified_ratio,
+        traditional_ratio=traditional_ratio,
+    )
+
+
 def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:
     """Yield contiguous ``(start, end, script)`` runs covering ``text``.
 
@@ -953,6 +1074,7 @@ def normalize_for_pii_detection(
     text: str,
     *,
     width_convention: str = "cjk",
+    chinese_target_script: str | None = None,
 ) -> DetectionNormalization:
     """Fold adversarial Unicode artifacts while preserving offset remapping.
 
@@ -963,12 +1085,14 @@ def normalize_for_pii_detection(
     characters and Indic decimal digits, and records a script-consistency
     summary without storing source text. ``width_convention`` selects the
     CJK-safe width fold or strict per-character NFKC normalization.
+    ``chinese_target_script`` optionally canonicalizes Han variants with OpenCC
+    after the Unicode defenses and composes its alignment into the source map.
     """
 
     # Local imports keep the lightweight script helpers from importing the
     # broader processing package during module initialization.
     from ..processing.text import INDIC_SCRIPTS, IndicNormalizer, fold_indic_digits
-    from ..processing.zh_normalize import normalize_width
+    from ..processing.zh_normalize import normalize_chinese_variants, normalize_width
 
     scripts = tuple(sorted(_script_counts(text)))
     mixed_script = detect_mixed_script(text)
@@ -1061,8 +1185,38 @@ def normalize_for_pii_detection(
             starts.append(cluster_starts[original_start])
             ends.append(cluster_ends[original_end - 1])
 
+    normalized_text = "".join(output)
+    chinese_variant_normalized = False
+    opencc_available: bool | None = None
+    if chinese_target_script is not None:
+        conversion = normalize_chinese_variants(
+            normalized_text,
+            chinese_target_script,
+        )
+        converted_starts: list[int] = []
+        converted_ends: list[int] = []
+        for converted_start, converted_end in conversion.char_origins:
+            if converted_start < converted_end:
+                source_starts = starts[converted_start:converted_end]
+                source_ends = ends[converted_start:converted_end]
+                converted_starts.append(min(source_starts))
+                converted_ends.append(max(source_ends))
+            else:
+                anchor = (
+                    starts[converted_start]
+                    if converted_start < len(starts)
+                    else len(text)
+                )
+                converted_starts.append(anchor)
+                converted_ends.append(anchor)
+        normalized_text = conversion.text
+        starts = converted_starts
+        ends = converted_ends
+        chinese_variant_normalized = conversion.changed
+        opencc_available = conversion.opencc_available
+
     return DetectionNormalization(
-        text="".join(output),
+        text=normalized_text,
         original_length=len(text),
         offset_starts=tuple(starts),
         offset_ends=tuple(ends),
@@ -1074,6 +1228,9 @@ def normalize_for_pii_detection(
         indic_scripts=tuple(indic_scripts),
         scripts=scripts,
         mixed_script=mixed_script,
+        chinese_variant_normalized=chinese_variant_normalized,
+        chinese_target_script=chinese_target_script,
+        opencc_available=opencc_available,
     )
 
 
@@ -1168,6 +1325,8 @@ __all__ = [
     "CONFUSABLE_DATA_LICENSE",
     "CONFUSABLE_DATA_URL",
     "CONFUSABLE_DATA_VERSION",
+    "ChineseScriptEstimate",
+    "ChineseScriptVariant",
     "DetectionNormalization",
     "INDIC_SCRIPTS",
     "INDIAN_NAME_LANGUAGES",
@@ -1175,12 +1334,15 @@ __all__ = [
     "MixedScriptSpan",
     "ScriptDetectionWindow",
     "SCRIPT_LANGUAGE_HINTS",
+    "SIMPLIFIED_VARIANT_CHARS",
     "SUPPORTED_SCRIPTS",
+    "TRADITIONAL_VARIANT_CHARS",
     "UNKNOWN_SCRIPT",
     "ZERO_WIDTH_CHARS",
     "canonical_indian_name",
     "candidate_languages_for_script",
     "confusable_skeleton",
+    "detect_chinese_script",
     "detect_mixed_script",
     "detect_script",
     "india_clinical_script_windows",

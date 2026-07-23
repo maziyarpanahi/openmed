@@ -881,7 +881,7 @@ class Pipeline:
             normalized_to_original=tuple(normalized_to_original),
             normalized_to_original_span=tuple(normalized_to_original_span),
         )
-        return NormalizedDocument(
+        document = NormalizedDocument(
             original_text=text,
             normalized_text=normalized_text,
             offset_map=offset_map,
@@ -893,6 +893,10 @@ class Pipeline:
                 "encoding_repair": encoding_repair_metadata,
             },
         )
+        target_script = getattr(self.config, "chinese_target_script", None)
+        if target_script is None:
+            return document
+        return _normalize_chinese_document(document, target_script)
 
     def stage2_language_script(self, text: str) -> LanguageRoute:
         from . import pii
@@ -1639,6 +1643,65 @@ def _iter_normalization_segments(text: str):
 
 def _identity_text(text: str) -> str:
     return text
+
+
+def _normalize_chinese_document(
+    document: NormalizedDocument,
+    target_script: str,
+) -> NormalizedDocument:
+    """Compose optional OpenCC conversion into a stage-one source map."""
+
+    from ..processing.zh_normalize import normalize_chinese_variants
+
+    conversion = normalize_chinese_variants(
+        document.normalized_text,
+        target_script,
+    )
+    base_spans = document.offset_map.normalized_to_original_span
+    composed_spans: list[tuple[int, int]] = []
+    for source_start, source_end in conversion.char_origins:
+        if source_start < source_end:
+            spans = base_spans[source_start:source_end]
+            composed_spans.append(
+                (
+                    min(span[0] for span in spans),
+                    max(span[1] for span in spans),
+                )
+            )
+        else:
+            anchor = (
+                base_spans[source_start][0]
+                if source_start < len(base_spans)
+                else len(document.original_text)
+            )
+            composed_spans.append((anchor, anchor))
+
+    original_to_normalized: list[int | None] = [None] * len(document.original_text)
+    for normalized_index, (original_start, original_end) in enumerate(composed_spans):
+        for original_index in range(original_start, original_end):
+            if original_to_normalized[original_index] is None:
+                original_to_normalized[original_index] = normalized_index
+
+    offset_map = OffsetMap(
+        original_to_normalized=tuple(original_to_normalized),
+        normalized_to_original=tuple(span[0] for span in composed_spans),
+        normalized_to_original_span=tuple(composed_spans),
+    )
+    metadata = dict(document.metadata)
+    metadata["normalized_length"] = len(conversion.text)
+    metadata["chinese_variant_normalization"] = {
+        "changed": conversion.changed,
+        "config": conversion.config.value,
+        "enabled": True,
+        "opencc_available": conversion.opencc_available,
+        "target_script": target_script,
+    }
+    return NormalizedDocument(
+        original_text=document.original_text,
+        normalized_text=conversion.text,
+        offset_map=offset_map,
+        metadata=metadata,
+    )
 
 
 def _encoding_repairer() -> tuple[Callable[[str], str], Mapping[str, Any]]:

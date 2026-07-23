@@ -78,6 +78,15 @@ from .transliteration import (
     transliterate,
     transliteration_key,
 )
+from .zh_normalize import (
+    ChineseTargetScript,
+    OpenCCConfig,
+    OpenCCUnavailableWarning,
+    ScriptConversion,
+    convert_script,
+    detect_variant_normalized,
+    normalize_chinese_variants,
+)
 from .zh_segmentation import (
     ChineseSegmentationConfig,
     ChineseSegmenter,
@@ -114,6 +123,13 @@ __all__ = [
     "validate_segmentation",
     "get_tokenizer",
     "clear_tokenizer_cache",
+    "ChineseTargetScript",
+    "OpenCCConfig",
+    "OpenCCUnavailableWarning",
+    "ScriptConversion",
+    "convert_script",
+    "detect_variant_normalized",
+    "normalize_chinese_variants",
     "OutputFormatter",
     "format_predictions",
     "render_spans_html",

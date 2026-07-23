@@ -61,6 +61,32 @@ Set `cjk_width_convention="nfkc"` to apply strict per-character NFKC
 normalization instead. Both modes retain an explicit source map so expanded
 compatibility characters still remap to their original code-point spans.
 
+## Chinese script normalization
+
+Install the optional Apache-2.0 OpenCC integration when clinical text can mix
+Simplified and Traditional Chinese:
+
+```bash
+pip install "openmed[zh]"
+```
+
+Script conversion is disabled by default. Set `chinese_target_script` to
+`"simplified"` or `"traditional"` to canonicalize Chinese variants before PII
+detection and segmentation:
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(chinese_target_script="simplified")
+```
+
+OpenMed keeps a code-point alignment from the converted text to the source, so
+detected PHI spans are projected back to the exact original characters before
+redaction. Context-dependent phrase rewrites map conservatively to their full
+source phrase rather than guessing partial offsets. If OpenCC is absent, the
+pre-pass returns the input unchanged with identity alignment and emits one
+optional-dependency warning.
+
 ## PyTorch attention backends
 
 `torch_attention_backend="auto"` is the default. In OpenMed 1.8.1 and later,
