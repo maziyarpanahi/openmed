@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import os
 import random
 import shutil
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, List, Mapping, Optional, Sequence
@@ -277,9 +279,9 @@ def _prefetch_online(
         retries=retries,
     )
     commit_hash = getattr(repo_info, "sha", None)
-    if not isinstance(commit_hash, str) or not commit_hash:
+    if not (_is_hex_digest(commit_hash, 40) or _is_hex_digest(commit_hash, 64)):
         raise DownloadIntegrityError(
-            f"Cannot verify {repo_id}: the Hub did not report a commit hash."
+            f"Cannot verify {repo_id}: the Hub did not report a valid commit hash."
         )
 
     remote_files = _remote_files_from_info(
@@ -336,7 +338,13 @@ def _prefetch_online(
         )
 
     first_file, first_path = downloaded[0]
-    return str(_snapshot_root(first_path, first_file.filename))
+    snapshot_root = _snapshot_root(first_path, first_file.filename)
+    _cache_revision_reference(
+        snapshot_root=snapshot_root,
+        revision=revision,
+        commit_hash=commit_hash,
+    )
+    return str(snapshot_root)
 
 
 def _download_remote_file(
@@ -471,6 +479,51 @@ def _snapshot_root(path: Path, filename: str) -> Path:
     for _ in PurePosixPath(filename).parts:
         root = root.parent
     return root
+
+
+def _cache_revision_reference(
+    *,
+    snapshot_root: Path,
+    revision: str | None,
+    commit_hash: str,
+) -> None:
+    """Record a verified branch or tag so later offline pulls can resolve it."""
+    revision_name = revision or "main"
+    if revision_name == commit_hash or snapshot_root.name != commit_hash:
+        return
+    if snapshot_root.parent.name != "snapshots":
+        return
+
+    revision_path = PurePosixPath(revision_name)
+    if (
+        not revision_path.parts
+        or revision_path.is_absolute()
+        or ".." in revision_path.parts
+        or "\\" in revision_name
+        or any(not character.isprintable() for character in revision_name)
+    ):
+        raise DownloadIntegrityError(
+            "Cannot cache the requested revision because its name is unsafe."
+        )
+
+    refs_root = snapshot_root.parent.parent / "refs"
+    ref_path = refs_root / Path(*revision_path.parts)
+    try:
+        ref_path.resolve().relative_to(refs_root.resolve())
+    except ValueError as exc:
+        raise DownloadIntegrityError(
+            "Cannot cache the requested revision outside the model cache."
+        ) from exc
+    ref_path.parent.mkdir(parents=True, exist_ok=True)
+    if ref_path.exists() and ref_path.read_text(encoding="utf-8") == commit_hash:
+        return
+
+    temporary_path = ref_path.with_name(f"{ref_path.name}.{uuid.uuid4().hex[:8]}.tmp")
+    try:
+        temporary_path.write_text(commit_hash, encoding="utf-8")
+        os.replace(temporary_path, ref_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _normalise_patterns(

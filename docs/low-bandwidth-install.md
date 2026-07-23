@@ -53,13 +53,19 @@ export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-300}"
 Use the exact HTTPS endpoint approved by the institution. The public Hub is the
 fallback above. A mirror must implement the compatible Hub repository-info and
 file-download routes; a generic caching web proxy is not automatically a Hub
+mirror. Hub clients can send an implicitly discovered Hugging Face token to a
+custom endpoint. For an anonymous mirror, set
+`HF_HUB_DISABLE_IMPLICIT_TOKEN=1`; for an authenticated mirror, use only a
+mirror-scoped credential. Never send a broader Hub credential to an untrusted
 mirror.
 
 ## Configure an HTTP proxy
 
 Python, pip, and `huggingface_hub` honor the conventional proxy variables. Both
 uppercase and lowercase spellings are common; keep the values consistent if a
-host application sets both.
+host application sets both. Lowercase values take precedence when both forms
+are present. `ALL_PROXY` is also honored when one proxy should handle every
+scheme.
 
 ```bash
 export HTTP_PROXY="http://proxy.example.org:8080"
@@ -156,9 +162,9 @@ openmed doctor --json
 ```
 
 The report includes the active Hub endpoint, `HTTP_PROXY`, `HTTPS_PROXY`,
-`NO_PROXY`, Hugging Face cache, and `OPENMED_OFFLINE` state. It performs no
-network request and never prints a Hugging Face token. Proxy URL credentials
-are replaced with `***`.
+`ALL_PROXY`, `NO_PROXY`, Hugging Face cache, and `OPENMED_OFFLINE` state. It
+performs no network request and never prints a Hugging Face token. URL
+credentials, query strings, and fragments are omitted from diagnostic output.
 
 If an online prefetch still fails, compare those fields with the institution's
 network configuration. For an offline cache miss, temporarily disable offline

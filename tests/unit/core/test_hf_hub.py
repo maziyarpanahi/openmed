@@ -171,12 +171,27 @@ def _make_mirror_handler(
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
             path = self._record_request()
-            if path == f"/api/models/{_MIRROR_REPO_ID}/revision/main":
+            if path in {
+                f"/api/models/{_MIRROR_REPO_ID}",
+                f"/api/models/{_MIRROR_REPO_ID}/revision/main",
+            }:
                 payload = json.dumps(
                     {
                         "id": _MIRROR_REPO_ID,
                         "sha": _MIRROR_COMMIT,
-                        "siblings": [{"rfilename": _MIRROR_FILENAME}],
+                        "siblings": [
+                            {
+                                "rfilename": _MIRROR_FILENAME,
+                                "size": len(_MIRROR_CONTENT),
+                                "lfs": {
+                                    "size": len(_MIRROR_CONTENT),
+                                    "sha256": hashlib.sha256(
+                                        _MIRROR_CONTENT
+                                    ).hexdigest(),
+                                    "pointerSize": 128,
+                                },
+                            }
+                        ],
                     }
                 ).encode("utf-8")
                 self._send_bytes(payload, content_type="application/json")
@@ -362,6 +377,7 @@ def test_prefetch_model_downloads_through_hf_endpoint_mirror(
             "HF_ENDPOINT": endpoint,
             "HF_HOME": str(tmp_path / "hf-home"),
             "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+            "HF_HUB_DISABLE_IMPLICIT_TOKEN": "1",
             "HF_HUB_DISABLE_XET": "1",
             "NO_PROXY": "127.0.0.1,localhost",
             "no_proxy": "127.0.0.1,localhost",
@@ -378,6 +394,10 @@ def test_prefetch_model_downloads_through_hf_endpoint_mirror(
         "http_proxy",
         "https_proxy",
         "all_proxy",
+        "HF_TOKEN",
+        "HUGGINGFACE_HUB_TOKEN",
+        "HUGGING_FACE_HUB_TOKEN",
+        "HF_TOKEN_PATH",
     ):
         env.pop(name, None)
 
@@ -417,7 +437,7 @@ def test_prefetch_model_downloads_through_hf_endpoint_mirror(
     try:
         completed = subprocess.run(
             [sys.executable, "-c", script, str(cache_dir)],
-            check=True,
+            check=False,
             capture_output=True,
             env=env,
             text=True,
@@ -428,11 +448,14 @@ def test_prefetch_model_downloads_through_hf_endpoint_mirror(
         server.server_close()
         server_thread.join(timeout=5)
 
+    assert completed.returncode == 0, (
+        f"mirror subprocess exited with status {completed.returncode}"
+    )
     payload = json.loads(completed.stdout)
     assert json.loads(payload["content"]) == {"downloaded_from": "local-mirror"}
     assert payload["cached"] == payload["path"]
     assert payload["offline"] is True
-    assert ("GET", f"/api/models/{_MIRROR_REPO_ID}/revision/main") in requests
+    assert ("GET", f"/api/models/{_MIRROR_REPO_ID}") in requests
     download_path = f"/{_MIRROR_REPO_ID}/resolve/{_MIRROR_COMMIT}/{_MIRROR_FILENAME}"
     assert ("HEAD", download_path) in requests
     assert ("GET", download_path) in requests
