@@ -651,7 +651,7 @@ def load_snapshot(
     if not isinstance(payload, dict) or not isinstance(manifest, dict):
         raise SnapshotIntegrityError("snapshot and manifest must be JSON objects")
 
-    actual_sha256 = hashlib.sha256(snapshot_bytes).hexdigest()
+    actual_sha256 = _snapshot_sha256(snapshot_bytes)
     if manifest.get("snapshot_sha256") != actual_sha256:
         raise SnapshotIntegrityError("snapshot sha256 does not match its manifest")
     if expected_sha256 is not None:
@@ -811,7 +811,7 @@ def _write_snapshot(
     snapshot_bytes = _canonical_json_bytes(snapshot.to_payload())
     if len(snapshot_bytes) > MAX_SNAPSHOT_BYTES:
         raise ICD11APIError(f"generated snapshot exceeds {MAX_SNAPSHOT_BYTES} bytes")
-    snapshot_sha256 = hashlib.sha256(snapshot_bytes).hexdigest()
+    snapshot_sha256 = _snapshot_sha256(snapshot_bytes)
     manifest = {
         "chapters": list(snapshot.chapters),
         "entity_count": len(snapshot.entities),
@@ -876,6 +876,12 @@ def _canonical_json_bytes(payload: Mapping[str, Any]) -> bytes:
         )
         + "\n"
     ).encode("utf-8")
+
+
+def _snapshot_sha256(content: bytes) -> str:
+    """Hash canonical snapshot JSON independent of checkout line endings."""
+
+    return hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _entity_from_api_payload(payload: Mapping[str, Any]) -> ICD11Entity | None:

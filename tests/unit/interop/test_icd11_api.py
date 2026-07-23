@@ -318,6 +318,24 @@ def test_snapshot_integrity_failure_is_closed(tmp_path: Path) -> None:
         load_snapshot(snapshot_copy)
 
 
+def test_snapshot_integrity_accepts_windows_checkout_line_endings(
+    tmp_path: Path,
+) -> None:
+    snapshot_copy = tmp_path / "synthetic-snapshot.json"
+    manifest_copy = tmp_path / "synthetic-snapshot.manifest.json"
+    snapshot_copy.write_bytes(SYNTHETIC_SNAPSHOT.read_bytes().replace(b"\n", b"\r\n"))
+    manifest_copy.write_bytes(
+        SYNTHETIC_SNAPSHOT.with_suffix(".manifest.json").read_bytes()
+    )
+
+    loaded = load_snapshot(snapshot_copy)
+
+    assert (
+        loaded.snapshot_sha256
+        == "3b147f95cc5ed6fb86ebabad4a3eaa38145f94fe6406520a29efdeda44a702a4"
+    )
+
+
 def test_snapshot_loader_enforces_size_and_optional_trusted_digest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

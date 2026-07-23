@@ -87,7 +87,9 @@ note context and the caller's surface form are not copied into the export.
 
 The loader verifies the sidecar manifest and digest before indexing. Move the
 snapshot and its `.manifest.json` file together. A missing or mismatched pair
-fails closed. Snapshot files are limited to 128 MiB,
+fails closed. The digest normalizes CRLF checkout line endings to LF so the
+canonical JSON remains portable across platforms; every other byte change is
+still detected. Snapshot files are limited to 128 MiB,
 manifests to 64 KiB, and indexes to 100,000 entities; oversized or structurally
 invalid artifacts fail before indexing.
 
