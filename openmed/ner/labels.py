@@ -34,6 +34,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
     "immunization": "tests/fixtures/clinical/immunization.jsonl",
     "nephrology_renal": "tests/fixtures/clinical/nephrology_renal.jsonl",
+    "nursing_observation": "tests/fixtures/clinical/nursing_observation.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",

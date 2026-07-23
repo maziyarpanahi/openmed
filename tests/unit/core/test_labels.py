@@ -18,6 +18,7 @@ from openmed.core.labels import (
     BODY_SITE,
     BUILDING_NUMBER,
     CANONICAL_LABELS,
+    CARE_INTERVENTION,
     CKD_STAGE,
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
@@ -59,11 +60,13 @@ from openmed.core.labels import (
     ID_SUBTYPES,
     IMEI,
     INSULIN_REGIMEN,
+    INTAKE_OUTPUT,
     IP_ADDRESS,
     JOB_DEPARTMENT,
     JOB_TITLE,
     LAB_TEST,
     LAST_NAME,
+    LINE_DRAIN_TUBE,
     LITECOIN_ADDRESS,
     LOCATION,
     MAC_ADDRESS,
@@ -71,6 +74,7 @@ from openmed.core.labels import (
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
+    NURSING_RISK_SCORE,
     NUTRITION_TARGET,
     NUTRITIONAL_STATUS,
     OCCUPATION,
@@ -650,6 +654,57 @@ class TestPediatricGrowthConceptLabels:
             assert policy_label_for(label) == CLINICAL_CONCEPT
             assert system_hints_for(label)
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+            
+            
+class TestNursingObservationConceptLabels:
+    """Nursing-care observation labels (issue #910)."""
+
+    NEW_LABELS = (
+        INTAKE_OUTPUT,
+        LINE_DRAIN_TUBE,
+        NURSING_RISK_SCORE,
+        CARE_INTERVENTION,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("intake output", INTAKE_OUTPUT),
+            ("intake and output", INTAKE_OUTPUT),
+            ("urine output", INTAKE_OUTPUT),
+            ("line drain tube", LINE_DRAIN_TUBE),
+            ("foley", LINE_DRAIN_TUBE),
+            ("foley catheter", LINE_DRAIN_TUBE),
+            ("central line", LINE_DRAIN_TUBE),
+            ("chest tube", LINE_DRAIN_TUBE),
+            ("nursing risk score", NURSING_RISK_SCORE),
+            ("braden score", NURSING_RISK_SCORE),
+            ("braden", NURSING_RISK_SCORE),
+            ("morse fall scale", NURSING_RISK_SCORE),
+            ("fall risk", NURSING_RISK_SCORE),
+            ("care intervention", CARE_INTERVENTION),
+            ("wound dressing", CARE_INTERVENTION),
+            ("dressing change", CARE_INTERVENTION),
+            ("repositioning", CARE_INTERVENTION),
+            ("mobility status", OTHER),
+            ("pain score", OTHER),
+            ("skin assessment", BODY_SITE),
+        ],
+    )
+    def test_nursing_observation_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_nursing_observation_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_nursing_observation_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+            
 
 
 class TestClinicalLabelsAreAdditive:
@@ -758,6 +813,10 @@ class TestClinicalLabelsAreAdditive:
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
             ETHNICITY,
+            INTAKE_OUTPUT,
+            LINE_DRAIN_TUBE,
+            NURSING_RISK_SCORE,
+            CARE_INTERVENTION,
         }
     )
 

@@ -273,3 +273,15 @@
 | DevelopmentalMilestone | DEVELOPMENTAL_MILESTONE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/pediatrics_growth.jsonl |
 | FeedingHistory | NUTRITIONAL_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pediatrics_growth.jsonl |
 | PediatricFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/pediatrics_growth.jsonl |
+
+## Nursing Observation
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| IntakeOutput | INTAKE_OUTPUT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+| LineDrainTube | LINE_DRAIN_TUBE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+| RiskScore | NURSING_RISK_SCORE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
+| MobilityStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
+| CareIntervention | CARE_INTERVENTION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+| PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
+| SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
