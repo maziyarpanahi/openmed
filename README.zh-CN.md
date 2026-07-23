@@ -45,7 +45,8 @@ OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除
   <a href="README.te.md">తెలుగు</a> ·
   <a href="README.ja.md">日本語</a> ·
   <a href="README.tr.md">Türkçe</a> ·
-  <a href="README.fa.md">فارسی</a>
+  <a href="README.fa.md">فارسی</a> ·
+  <a href="README.sw.md">Kiswahili</a>
 </p>
 
 </div>
@@ -629,7 +630,7 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [OpenMed 1.9.0 发行说明](docs/release/v1.9.0.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
 | [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [检测器插件 SDK](docs/plugin-sdk.md) |
-| [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | |
+| [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |
 
 ---
 
