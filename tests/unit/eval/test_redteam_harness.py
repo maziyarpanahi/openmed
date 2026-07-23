@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import openmed
+from openmed.core import models as core_models
 from openmed.eval import redteam
 from openmed.eval.redteam import (
     DEFAULT_REDTEAM_CORPUS,
@@ -366,10 +367,15 @@ def test_default_runner_forces_local_only_pipeline(
     )
     calls: list[tuple[str, dict[str, object]]] = []
 
+    class FakeModelLoader:
+        def __init__(self, config: object) -> None:
+            self.config = config
+
     def fake_deidentify(text: str, **kwargs: object) -> SimpleNamespace:
         calls.append((text, kwargs))
         return SimpleNamespace(deidentified_text="Synthetic SSN [SSN].")
 
+    monkeypatch.setattr(core_models, "ModelLoader", FakeModelLoader)
     monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
     report = run_redteam(
         corpus,
