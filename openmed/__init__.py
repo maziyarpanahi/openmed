@@ -34,6 +34,12 @@ from .core.hf_hub import (
     prefetch_model,
     resolve_repo_id,
 )
+from .core.indic_name_match import (
+    IndicNameNormalizer,
+    canonical_indic_name_key,
+    detect_name_script,
+    indic_names_match,
+)
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -842,4 +848,8 @@ __all__ = [
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "ENCRYPTION_SCHEME",
+    "IndicNameNormalizer",
+    "canonical_indic_name_key",
+    "indic_names_match",
+    "detect_name_script",
 ]

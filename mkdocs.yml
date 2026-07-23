@@ -40,6 +40,7 @@ nav:
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
+      - Indic Encoder Backbones: indic-encoders.md
       - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
@@ -77,6 +78,7 @@ nav:
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
+      - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md

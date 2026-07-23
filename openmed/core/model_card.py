@@ -215,6 +215,9 @@ def render_model_card(row: dict[str, Any]) -> str:
     training_provenance_lines = _training_provenance_block(row)
     if training_provenance_lines:
         lines.extend(["", "## Training Provenance", "", *training_provenance_lines])
+    encoder_provenance_lines = _encoder_provenance_block(row)
+    if encoder_provenance_lines:
+        lines.extend(["", "## Encoder Provenance", "", *encoder_provenance_lines])
     return "\n".join(lines) + "\n"
 
 
@@ -767,6 +770,41 @@ def _training_provenance_block(row: dict[str, Any]) -> list[str]:
         f"| Provenance reproducibility hash | `{_string(payload.get('reproducibility_hash'), 'Not reported')}` |",
     ]
     return lines
+
+
+def _encoder_provenance_block(row: dict[str, Any]) -> list[str]:
+    payload = row.get("encoder_provenance")
+    if not isinstance(payload, dict):
+        payload = row.get("indic_encoder")
+    if not isinstance(payload, dict):
+        return []
+
+    family = _string(payload.get("family"), "Not specified")
+    source = _string(
+        payload.get("source") or payload.get("repo_id"),
+        "Not specified",
+    )
+    license_name = _string(payload.get("license"), "Not specified")
+    provenance = _string(payload.get("provenance"), "user-supplied")
+    weights = _string(payload.get("weights"), "user-supplied; not bundled")
+    transliterated = payload.get("supports_transliterated_text")
+    transliterated_value = (
+        "Yes"
+        if transliterated is True
+        else "No"
+        if transliterated is False
+        else "Not specified"
+    )
+    return [
+        "| Field | Value |",
+        "|---|---|",
+        f"| Encoder family | {family} |",
+        f"| Source | `{source}` |",
+        f"| License | {license_name} |",
+        f"| Provenance | {provenance} |",
+        f"| Weights | {weights} |",
+        f"| Transliterated text | {transliterated_value} |",
+    ]
 
 
 def _gate_status(value: Any) -> str:
