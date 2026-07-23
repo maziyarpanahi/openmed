@@ -54,6 +54,7 @@ nav:
       - Configuration Profiles: profiles.md
       - Detector Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
+      - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Low-resource Benchmark: benchmarks/low-resource.md
       - Zero-shot NER How-to: zero-shot-howto.md
@@ -67,6 +68,7 @@ nav:
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - OpenVINO Runtime: runtimes/openvino.md
+      - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
@@ -75,12 +77,14 @@ nav:
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
+      - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
@@ -94,6 +98,8 @@ nav:
       - Africa Attestation Review Template: compliance/templates/africa-data-residency-attestation.md
       - African Context-sensitive Attributes: compliance/africa-context-sensitive-attributes.md
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
+      - ISO 27701/27001 Evidence Pack: compliance/iso-27701-control-evidence.md
+      - Consent and Data-Use Tags: compliance/consent-data-use-tags.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md
       - FHIR Interop Helpers: fhir-interop.md
@@ -296,5 +302,6 @@ watch:
   - openmed/zero_shot
 
 exclude_docs: |
+  demo/web/README.md
   website/**
   brand/**

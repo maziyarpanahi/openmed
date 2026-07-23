@@ -327,6 +327,13 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
     }
 )
 
+# Boundary morphology is limited to labels that unambiguously identify a
+# person's name. Prefixes and usernames remain excluded because suffix-like
+# text can be part of those identifiers.
+NAME_BOUNDARY_REFINEMENT_LABELS: Final[FrozenSet[str]] = frozenset(
+    {PERSON, FIRST_NAME, LAST_NAME, MIDDLE_NAME}
+)
+
 
 # ---------------------------------------------------------------------------
 # Policy metadata
@@ -1524,6 +1531,12 @@ def normalize_label(label: str, lang: str = "en") -> str:
     return OTHER
 
 
+def supports_name_boundary_refinement(label: str, lang: str = "en") -> bool:
+    """Return whether ``label`` is eligible for conservative name stemming."""
+
+    return normalize_label(label, lang=lang) in NAME_BOUNDARY_REFINEMENT_LABELS
+
+
 def id_subtype_for(label: str, lang: str = "en") -> str | None:
     """Return optional ID_NUM subtype metadata for a source label.
 
@@ -1579,7 +1592,9 @@ _validate_label_metadata()
 
 __all__ = [
     "CANONICAL_LABELS",
+    "NAME_BOUNDARY_REFINEMENT_LABELS",
     "normalize_label",
+    "supports_name_boundary_refinement",
     "CMEEE_LABEL_TO_CANONICAL",
     "id_subtype_for",
     "ID_ALIAS_SUBTYPES",
