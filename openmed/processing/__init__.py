@@ -79,13 +79,20 @@ from .transliteration import (
     transliteration_key,
 )
 from .zh_normalize import (
+    CHINESE_NUMERAL_CHARACTERS,
+    CHINESE_NUMERAL_PATTERN,
+    ChineseDateNormalization,
+    ChineseNumberSpan,
     ChineseTargetScript,
     OpenCCConfig,
     OpenCCUnavailableWarning,
     ScriptConversion,
     convert_script,
     detect_variant_normalized,
+    find_chinese_numbers,
+    normalize_chinese_dates,
     normalize_chinese_variants,
+    parse_chinese_numeral,
 )
 from .zh_segmentation import (
     ChineseSegmentationConfig,
@@ -190,4 +197,11 @@ __all__ = [
     "to_latin",
     "transliterate",
     "transliteration_key",
+    "CHINESE_NUMERAL_CHARACTERS",
+    "CHINESE_NUMERAL_PATTERN",
+    "ChineseDateNormalization",
+    "ChineseNumberSpan",
+    "parse_chinese_numeral",
+    "find_chinese_numbers",
+    "normalize_chinese_dates",
 ]

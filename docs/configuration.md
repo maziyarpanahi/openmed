@@ -87,6 +87,26 @@ source phrase rather than guessing partial offsets. If OpenCC is absent, the
 pre-pass returns the input unchanged with identity alignment and emits one
 optional-dependency warning.
 
+Chinese numeral helpers do not require the optional script-conversion package.
+They parse everyday and financial forms, return exact source code-point spans,
+and recognize valid year/month/day expressions:
+
+```python
+from openmed.processing import (
+    find_chinese_numbers,
+    normalize_chinese_dates,
+    parse_chinese_numeral,
+)
+
+assert parse_chinese_numeral("一百零一") == 101
+numbers = find_chinese_numbers("剂量三千五百毫升")
+dates = normalize_chinese_dates("出生于一九八五年十二月三日")
+```
+
+When PII detection uses `lang="zh"`, contextual patterns also recognize valid
+Chinese-numeral dates, medical-record identifiers, and clinical quantities.
+Invalid unit sequences and impossible calendar dates are rejected.
+
 ## PyTorch attention backends
 
 `torch_attention_backend="auto"` is the default. In OpenMed 1.8.1 and later,

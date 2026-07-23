@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added opt-in Simplified/Traditional Chinese normalization through OpenCC,
   including Taiwan and Hong Kong conversion configs, mixed-variant detection,
   and offset-preserving span projection back to original text (#1467).
+- Added source-aligned Chinese numeral parsing for everyday and financial
+  forms, valid year/month/day normalization, and contextual Chinese date,
+  medical-record identifier, and clinical-quantity PII patterns (#1469).
 - Added a Swahili README and an African developer onboarding guide covering
   bandwidth-aware model sizing and offline setup, POPIA/NDPA policy pointers,
   OpenMRS FHIR and DHIS2 Tracker recipes, community links, and shared
