@@ -107,6 +107,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="pydeid",
         description="pyDeid PHI span adapter",
     ),
+    "scrubadub": AdapterSpec(
+        name="scrubadub",
+        module="openmed.interop.scrubadub",
+        extra="scrubadub",
+        description="scrubadub Filth span adapter",
+    ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",
         module="openmed.interop.gliner_biomed",
