@@ -30,6 +30,13 @@ from .assertion_graph import (
     ReconciledAssertion,
     reconcile_assertions,
 )
+from .cancer_staging import (
+    TNM_STAGING_ADVISORY,
+    TnmBasis,
+    TnmStage,
+    UnparsedToken,
+    parse_tnm,
+)
 from .context import (
     AFFIRMED,
     CANONICAL_SECTION_LABELS,
@@ -451,6 +458,11 @@ __all__ = [
     "RadiologyReportTemplate",
     "extract_radiology_findings",
     "parse_radiology_report",
+    "TNM_STAGING_ADVISORY",
+    "TnmBasis",
+    "TnmStage",
+    "UnparsedToken",
+    "parse_tnm",
     "ProblemClinicalStatus",
     "ProblemMention",
     "ReconciledProblem",
