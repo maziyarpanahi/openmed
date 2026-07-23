@@ -25,12 +25,25 @@ from .candidate import (
     MedicationRelationGroup,
     MedicationRelationType,
     RelationCandidate,
+    SpanPairCandidate,
     SpanReference,
+    generate_span_pair_candidates,
+    normalize_relation_label,
 )
 from .medication_links import (
     MEDICATION_LINK_ADVISORY,
     MedicationRelationScorer,
     link_medication_attributes,
+)
+from .temporal import (
+    TEMPORAL_RELATION_SCHEMA_VERSION,
+    TEMPORAL_RELATION_TYPES,
+    TemporalCueReference,
+    TemporalRelationCandidate,
+    TemporalRelationType,
+    TemporalSpanReference,
+    TemporalSpanRole,
+    extract_tlink_candidates,
 )
 
 __all__ = [
@@ -57,7 +70,18 @@ __all__ = [
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
+    "TEMPORAL_RELATION_SCHEMA_VERSION",
+    "TEMPORAL_RELATION_TYPES",
     "RelationCandidate",
+    "SpanPairCandidate",
     "SpanReference",
+    "TemporalCueReference",
+    "TemporalRelationCandidate",
+    "TemporalRelationType",
+    "TemporalSpanReference",
+    "TemporalSpanRole",
+    "extract_tlink_candidates",
+    "generate_span_pair_candidates",
     "link_medication_attributes",
+    "normalize_relation_label",
 ]

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from openmed.core.decoding.spans import stable_span_key
 from openmed.processing.advanced_ner import EntitySpan
 
 MedicationAttributeType = Literal["dose", "route", "frequency", "duration"]
@@ -37,6 +40,13 @@ ATTRIBUTE_RELATION_TYPES: dict[MedicationAttributeType, MedicationRelationType] 
     attribute_type: relation_type
     for relation_type, attribute_type in RELATION_ATTRIBUTE_TYPES.items()
 }
+SpanLabelPredicate = Callable[[str], bool]
+
+
+def normalize_relation_label(label: str) -> str:
+    """Return a stable normalized label for relation candidate filtering."""
+
+    return re.sub(r"[^a-z0-9]+", "_", label.casefold()).strip("_")
 
 
 @dataclass(frozen=True)
@@ -92,6 +102,145 @@ class SpanReference:
         if self.section is not None:
             payload["section"] = self.section
         return payload
+
+
+@dataclass(frozen=True)
+class SpanPairCandidate:
+    """Ordered span pair shared by deterministic relation extractors."""
+
+    left: SpanReference
+    right: SpanReference
+    char_distance: int
+    intervening_span_count: int
+
+    def stable_key(self) -> tuple[int, int, int, int]:
+        """Return a deterministic sort key for the span pair."""
+
+        return (
+            self.left.start,
+            self.right.start,
+            self.left.end,
+            self.right.end,
+        )
+
+
+def generate_span_pair_candidates(
+    text: str,
+    spans: Iterable[EntitySpan | Mapping[str, Any]],
+    *,
+    include_labels: Iterable[str] | None = None,
+    label_predicate: SpanLabelPredicate | None = None,
+    max_char_distance: int | None = None,
+    section_by_span: Mapping[tuple[int, int], str] | None = None,
+) -> tuple[SpanPairCandidate, ...]:
+    """Generate ordered non-overlapping span pairs for relation extractors.
+
+    Args:
+        text: Original document text.
+        spans: Entity spans as ``EntitySpan`` objects or mappings.
+        include_labels: Optional case-insensitive label allow-list.
+        label_predicate: Optional predicate evaluated against raw span labels.
+        max_char_distance: Optional maximum character gap between spans.
+        section_by_span: Optional section labels keyed by ``(start, end)``.
+
+    Returns:
+        Deterministically ordered span-pair candidates with distance features.
+    """
+
+    refs = _coerce_relation_spans(
+        text,
+        spans,
+        include_labels=include_labels,
+        label_predicate=label_predicate,
+        section_by_span=section_by_span,
+    )
+    pairs: list[SpanPairCandidate] = []
+    for left_index, left in enumerate(refs):
+        for right in refs[left_index + 1 :]:
+            if left.end > right.start:
+                continue
+            char_distance = max(0, right.start - left.end)
+            if max_char_distance is not None and char_distance > max_char_distance:
+                continue
+            pairs.append(
+                SpanPairCandidate(
+                    left=left,
+                    right=right,
+                    char_distance=char_distance,
+                    intervening_span_count=_intervening_pair_span_count(
+                        left,
+                        right,
+                        refs,
+                    ),
+                )
+            )
+    return tuple(sorted(pairs, key=lambda pair: pair.stable_key()))
+
+
+def _coerce_relation_spans(
+    text: str,
+    spans: Iterable[EntitySpan | Mapping[str, Any]],
+    *,
+    include_labels: Iterable[str] | None,
+    label_predicate: SpanLabelPredicate | None,
+    section_by_span: Mapping[tuple[int, int], str] | None,
+) -> tuple[SpanReference, ...]:
+    section_by_span = section_by_span or {}
+    normalized_labels = (
+        {normalize_relation_label(label) for label in include_labels}
+        if include_labels is not None
+        else None
+    )
+    refs: list[SpanReference] = []
+    for item in spans:
+        span = item if isinstance(item, EntitySpan) else EntitySpan.from_mapping(item)
+        if span.start < 0 or span.end < span.start or span.end > len(text):
+            continue
+        if normalized_labels is not None and (
+            normalize_relation_label(span.label) not in normalized_labels
+        ):
+            continue
+        if label_predicate is not None and not label_predicate(span.label):
+            continue
+        refs.append(
+            SpanReference.from_entity(
+                span,
+                document_text=text,
+                section=_relation_span_section(
+                    item,
+                    span=span,
+                    section_by_span=section_by_span,
+                ),
+            )
+        )
+    return tuple(sorted(refs, key=stable_span_key))
+
+
+def _relation_span_section(
+    item: EntitySpan | Mapping[str, Any],
+    *,
+    span: EntitySpan,
+    section_by_span: Mapping[tuple[int, int], str],
+) -> str | None:
+    if isinstance(item, Mapping):
+        section = item.get("section")
+        if section is not None:
+            return str(section)
+    return section_by_span.get((span.start, span.end))
+
+
+def _intervening_pair_span_count(
+    left: SpanReference,
+    right: SpanReference,
+    spans: tuple[SpanReference, ...],
+) -> int:
+    return sum(
+        1
+        for span in spans
+        if span.offset_key() not in {left.offset_key(), right.offset_key()}
+        and left.end <= span.start
+        and span.end <= right.start
+    )
 
 
 @dataclass(frozen=True)
@@ -213,5 +362,9 @@ __all__ = [
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
     "RelationCandidate",
+    "SpanLabelPredicate",
+    "SpanPairCandidate",
     "SpanReference",
+    "generate_span_pair_candidates",
+    "normalize_relation_label",
 ]
