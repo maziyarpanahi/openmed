@@ -190,6 +190,12 @@ _UNICODE_TO_ISCII = {
 _ISCII_CORE_LETTERS = frozenset(range(0xB3, 0xD9))
 _ISCII_UNDEFINED = frozenset(range(0xEB, 0xEF)) | frozenset(range(0xFB, 0x100))
 _LEGACY_GAP_BYTES = frozenset(b" \t\r\n-_/.,:;()[]{}")
+_MAX_FONT_MAP_FILE_BYTES = 1024 * 1024
+_MAX_FONT_MAP_VALUE_CHARS = 64
+_MAX_FONT_MAP_NAME_CHARS = 256
+_MAX_FONT_MAP_PROVENANCE_CHARS = 1024
+_MIN_AUTO_ISCII_CORE_LETTERS = 4
+_MIN_AUTO_ISCII_DENSITY = 0.6
 
 
 @dataclass(frozen=True)
@@ -268,14 +274,24 @@ class LegacyFontMap:
     def __post_init__(self) -> None:
         """Validate and freeze the mapping."""
 
-        if not self.name.strip():
+        if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("legacy font map name must not be empty")
+        if len(self.name) > _MAX_FONT_MAP_NAME_CHARS:
+            raise ValueError("legacy font map name is too long")
+        if not isinstance(self.provenance, str):
+            raise ValueError("legacy font map provenance must be text")
+        if len(self.provenance) > _MAX_FONT_MAP_PROVENANCE_CHARS:
+            raise ValueError("legacy font map provenance is too long")
         validated: dict[int, str] = {}
         for key, value in self.mapping.items():
             if isinstance(key, bool) or not isinstance(key, int) or not 0 <= key <= 255:
                 raise ValueError("legacy font map keys must be byte values 0..255")
             if not isinstance(value, str) or not value:
                 raise ValueError("legacy font map values must be non-empty strings")
+            if len(value) > _MAX_FONT_MAP_VALUE_CHARS:
+                raise ValueError(
+                    "legacy font map values may contain at most 64 characters"
+                )
             validated[key] = value
         if not validated:
             raise ValueError("legacy font map must contain at least one mapping")
@@ -298,12 +314,18 @@ class LegacyFontMap:
         """
 
         source = Path(path)
-        if source.suffix.lower() == ".json":
-            payload = json.loads(source.read_text(encoding="utf-8"))
-        elif source.suffix.lower() in {".yaml", ".yml"}:
-            payload = yaml.safe_load(source.read_text(encoding="utf-8"))
-        else:
+        suffix = source.suffix.lower()
+        if suffix not in {".json", ".yaml", ".yml"}:
             raise ValueError("legacy font map must be JSON, YAML, or YML")
+        with source.open("rb") as handle:
+            raw_payload = handle.read(_MAX_FONT_MAP_FILE_BYTES + 1)
+        if len(raw_payload) > _MAX_FONT_MAP_FILE_BYTES:
+            raise ValueError("legacy font map file exceeds the 1 MiB limit")
+        source_text = raw_payload.decode("utf-8")
+        if suffix == ".json":
+            payload = json.loads(source_text)
+        else:
+            payload = yaml.safe_load(source_text)
         if not isinstance(payload, Mapping):
             raise ValueError("legacy font map file must contain an object")
 
@@ -318,8 +340,12 @@ class LegacyFontMap:
             if not isinstance(value, str):
                 raise ValueError("legacy font map values must be strings")
             mapping[byte_key] = value
-        name = str(payload.get("name", source.stem))
-        provenance = str(payload.get("provenance", f"user-supplied:{source.name}"))
+        name = payload.get("name", source.stem)
+        provenance = payload.get("provenance", f"user-supplied:{source.name}")
+        if not isinstance(name, str):
+            raise ValueError("legacy font map name must be text")
+        if not isinstance(provenance, str):
+            raise ValueError("legacy font map provenance must be text")
         return cls(name=name, mapping=mapping, provenance=provenance)
 
 
@@ -342,15 +368,18 @@ def detect_legacy_encoding(
         return "unicode"
     if _is_non_ascii_utf8(raw):
         return "unicode"
-    if b"\xef\x42" in raw:
+    if raw.startswith(b"\xef\x42"):
         return "iscii"
 
-    high_bytes = [byte for byte in raw if byte >= 0xA0]
+    content_bytes = [byte for byte in raw if byte not in _LEGACY_GAP_BYTES]
+    high_bytes = [byte for byte in content_bytes if byte >= 0xA0]
     valid_high = [byte for byte in high_bytes if byte in _ISCII_TO_UNICODE]
     if (
-        len(valid_high) >= 2
+        len(valid_high) >= _MIN_AUTO_ISCII_CORE_LETTERS
         and len(valid_high) / max(1, len(high_bytes)) >= 0.8
-        and any(byte in _ISCII_CORE_LETTERS for byte in valid_high)
+        and len(valid_high) / max(1, len(content_bytes)) >= _MIN_AUTO_ISCII_DENSITY
+        and sum(byte in _ISCII_CORE_LETTERS for byte in valid_high)
+        >= _MIN_AUTO_ISCII_CORE_LETTERS
         and not any(0x80 <= byte <= 0x9F for byte in raw)
         and not any(byte in _ISCII_UNDEFINED for byte in high_bytes)
     ):
@@ -661,16 +690,18 @@ def _decode_unicode(
         origins = tuple((index, index + 1) for index in range(len(text)))
         original_bytes = data
     else:
-        error_handler = "strict" if errors == "strict" else "replace"
-        text = data.decode("utf-8", errors=error_handler)
         original_bytes = data
-        origins_list: list[tuple[int, int]] = []
-        cursor = 0
-        for char in text:
-            width = len(char.encode("utf-8"))
-            origins_list.append((cursor, min(len(data), cursor + width)))
-            cursor += width
-        origins = tuple(origins_list)
+        if errors == "strict":
+            text = data.decode("utf-8")
+            origins_list: list[tuple[int, int]] = []
+            cursor = 0
+            for char in text:
+                width = len(char.encode("utf-8"))
+                origins_list.append((cursor, cursor + width))
+                cursor += width
+            origins = tuple(origins_list)
+        else:
+            text, origins = _decode_utf8_replacing_invalid(data)
     return LegacyConversion(
         text=text,
         original=original_bytes,
@@ -695,6 +726,64 @@ def _unicode_identity(text: str) -> LegacyConversion:
         offset_map=_build_offset_map(len(data), tuple(origins)),
         changed=False,
     )
+
+
+def _decode_utf8_replacing_invalid(
+    data: bytes,
+) -> tuple[str, tuple[tuple[int, int], ...]]:
+    """Decode UTF-8 with replacement characters aligned to consumed bytes."""
+
+    chars: list[str] = []
+    origins: list[tuple[int, int]] = []
+    cursor = 0
+    while cursor < len(data):
+        first = data[cursor]
+        if first < 0x80:
+            chars.append(chr(first))
+            origins.append((cursor, cursor + 1))
+            cursor += 1
+            continue
+
+        if 0xC2 <= first <= 0xDF:
+            width, second_min, second_max = 2, 0x80, 0xBF
+        elif first == 0xE0:
+            width, second_min, second_max = 3, 0xA0, 0xBF
+        elif 0xE1 <= first <= 0xEC or 0xEE <= first <= 0xEF:
+            width, second_min, second_max = 3, 0x80, 0xBF
+        elif first == 0xED:
+            width, second_min, second_max = 3, 0x80, 0x9F
+        elif first == 0xF0:
+            width, second_min, second_max = 4, 0x90, 0xBF
+        elif 0xF1 <= first <= 0xF3:
+            width, second_min, second_max = 4, 0x80, 0xBF
+        elif first == 0xF4:
+            width, second_min, second_max = 4, 0x80, 0x8F
+        else:
+            chars.append("\ufffd")
+            origins.append((cursor, cursor + 1))
+            cursor += 1
+            continue
+
+        valid_width = 1
+        while valid_width < width and cursor + valid_width < len(data):
+            byte = data[cursor + valid_width]
+            lower = second_min if valid_width == 1 else 0x80
+            upper = second_max if valid_width == 1 else 0xBF
+            if not lower <= byte <= upper:
+                break
+            valid_width += 1
+
+        if valid_width == width:
+            end = cursor + width
+            chars.append(data[cursor:end].decode("utf-8"))
+            origins.append((cursor, end))
+            cursor = end
+            continue
+
+        chars.append("\ufffd")
+        origins.append((cursor, cursor + valid_width))
+        cursor += valid_width
+    return "".join(chars), tuple(origins)
 
 
 def _build_offset_map(
@@ -801,8 +890,12 @@ def _parse_map_key(key: object) -> int:
         if len(key) == 1:
             value = ord(key)
         elif key.lower().startswith("0x"):
+            if len(key) > 4:
+                raise ValueError(f"invalid legacy font map key: {key!r}")
             value = int(key, 16)
         elif key.isdecimal():
+            if len(key) > 3:
+                raise ValueError(f"invalid legacy font map key: {key!r}")
             value = int(key, 10)
         else:
             raise ValueError(f"invalid legacy font map key: {key!r}")

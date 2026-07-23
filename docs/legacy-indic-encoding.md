@@ -51,7 +51,9 @@ a JSON or YAML file for a font whose mapping you are licensed to use:
 
 Keys may be byte integers, single-byte characters, decimal byte strings, or
 hexadecimal byte strings. Values are Unicode strings and may expand a single
-legacy glyph into multiple Unicode characters.
+legacy glyph into multiple Unicode characters. Mapping files are limited to
+1 MiB and each replacement to 64 Unicode code points to bound untrusted input
+and expansion costs.
 
 ```python
 from openmed.processing import LegacyFontMap, convert_legacy_encoding

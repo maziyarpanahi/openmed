@@ -45,6 +45,16 @@ def test_non_vedic_iscii_round_trips_byte_identically():
     assert unicode_to_iscii(converted.text) == _ISCII_NAME
 
 
+def test_prefixed_devanagari_attribute_is_auto_detected():
+    source = bytes.fromhex("ef 42") + _ISCII_NAME
+
+    assert detect_legacy_encoding(source) == "iscii"
+    converted = convert_legacy_encoding(source)
+
+    assert converted.text == "रमेश शर्मा"
+    assert converted.to_original_span(0, len(converted.text)) == (2, len(source))
+
+
 def test_nukta_and_virama_sequences_are_logically_ordered_and_lossless():
     # QA + virama: KA + NUKTA + HALANT in ISCII.
     source = bytes.fromhex("b3 e9 e8")
@@ -148,6 +158,15 @@ def test_c1_control_bytes_prevent_false_iscii_detection():
     assert convert_legacy_encoding(text).text == text
 
 
+@pytest.mark.parametrize(
+    "text",
+    ["À côté", "ÀÉÎ", "Crème brûlée", "José", "Patient naïB cell"],
+)
+def test_latin1_clinical_text_is_not_misdetected_as_iscii(text):
+    assert detect_legacy_encoding(text) == "unicode"
+    assert convert_legacy_encoding(text).text == text
+
+
 def test_detection_normalizer_routes_iscii_and_maps_span_to_source():
     # Latin-1 is the compatibility representation used when an application has
     # already placed the raw legacy bytes in a Python string.
@@ -224,6 +243,34 @@ def test_invalid_iscii_and_invalid_mapping_are_rejected(tmp_path):
     path.write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="JSON, YAML, or YML"):
         LegacyFontMap.from_file(path)
+
+
+def test_legacy_map_file_and_expansion_are_bounded(tmp_path):
+    oversized = tmp_path / "oversized.json"
+    oversized.write_bytes(b" " * (1024 * 1024 + 1))
+
+    with pytest.raises(ValueError, match="1 MiB"):
+        LegacyFontMap.from_file(oversized)
+    with pytest.raises(ValueError, match="at most 64"):
+        LegacyFontMap(name="expanding", mapping={65: "क" * 65})
+
+
+def test_unicode_replacement_offsets_track_consumed_invalid_bytes():
+    source = b"A\xe2\x82B\xff"
+
+    converted = convert_legacy_encoding(
+        source,
+        encoding="unicode",
+        errors="replace",
+    )
+
+    assert converted.text == source.decode("utf-8", errors="replace")
+    assert converted.offset_map.converted_to_original_spans == (
+        (0, 1),
+        (1, 3),
+        (3, 4),
+        (4, 5),
+    )
 
 
 def test_mapping_provenance_documents_public_standard_and_license():
