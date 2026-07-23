@@ -15,6 +15,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from openmed.core.labels import CANONICAL_LABELS
@@ -132,6 +133,14 @@ class LeakageDashboard:
     run_count: int
     languages: tuple[LanguageLeakageSummary, ...]
     thresholds: Mapping[str, float]
+
+    def __post_init__(self) -> None:
+        """Snapshot threshold configuration to keep artifacts deterministic."""
+        object.__setattr__(
+            self,
+            "thresholds",
+            MappingProxyType(dict(self.thresholds)),
+        )
 
     @classmethod
     def from_runs(
@@ -409,6 +418,8 @@ def write_leakage_dashboard(
     output_json = (
         Path(json_path) if json_path is not None else output_html.with_suffix(".json")
     )
+    if output_html.resolve() == output_json.resolve():
+        raise ValueError("HTML and JSON dashboard paths must be distinct")
     output_html.parent.mkdir(parents=True, exist_ok=True)
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_html.write_text(dashboard.to_html(), encoding="utf-8")
@@ -597,7 +608,7 @@ def _counts(value: Mapping[str, Any], *, context: str) -> tuple[int, int]:
 def _count(value: Any, *, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field} must be a non-negative integer")
-    if not math.isfinite(value):
+    if isinstance(value, float) and not math.isfinite(value):
         raise ValueError(f"{field} must be a non-negative integer")
     count = int(value)
     if count != value or count < 0:
@@ -608,14 +619,14 @@ def _count(value: Any, *, field: str) -> int:
 def _canonical_label(value: Any) -> str:
     label = str(value)
     if label not in CANONICAL_LABELS:
-        raise ValueError(f"unsupported leakage label: {label!r}")
+        raise ValueError("unsupported leakage label")
     return label
 
 
 def _language(value: Any) -> str:
     language = str(value)
     if language not in SUPPORTED_LANGUAGES:
-        raise ValueError(f"unsupported PII language: {language!r}")
+        raise ValueError("unsupported PII language")
     return language
 
 
@@ -647,10 +658,11 @@ def _resolve_thresholds(
 def _unit_rate(value: Any, *, field: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field} must be between 0 and 1")
-    rate = float(value)
-    if not math.isfinite(rate) or not 0.0 <= rate <= 1.0:
+    if isinstance(value, float) and not math.isfinite(value):
         raise ValueError(f"{field} must be between 0 and 1")
-    return rate
+    if not 0 <= value <= 1:
+        raise ValueError(f"{field} must be between 0 and 1")
+    return float(value)
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any] | None:

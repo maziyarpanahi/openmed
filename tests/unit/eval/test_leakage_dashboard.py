@@ -160,6 +160,21 @@ def test_companion_json_is_deterministic_phi_free_and_gate_ready() -> None:
     )
 
 
+def test_dashboard_snapshots_thresholds_to_prevent_gate_drift() -> None:
+    configured_thresholds = {"en": 0.5}
+    dashboard = build_leakage_dashboard(
+        _reports(),
+        thresholds=configured_thresholds,
+    )
+    original = dashboard.to_json()
+
+    configured_thresholds["en"] = 1.0
+    with pytest.raises(TypeError):
+        dashboard.thresholds["en"] = 1.0  # type: ignore[index]
+
+    assert dashboard.to_json() == original
+
+
 def test_html_is_self_contained_sortable_phi_free_and_has_every_panel() -> None:
     dashboard = build_leakage_dashboard(_reports(), thresholds={"fr": 0.7})
 
@@ -177,7 +192,7 @@ def test_html_is_self_contained_sortable_phi_free_and_has_every_panel() -> None:
     assert 'id="language-fr"' in first
     assert 'button type="button" class="sort" data-sort="rate"' in first
     assert "addEventListener" in first
-    assert not re.search(r"\\b(?:src|href)=[\"']https?://", first)
+    assert not re.search(r"\b(?:src|href)=[\"']https?://", first)
     assert "Patient Alice" not in first
     assert "123-45-6789" not in first
     assert "Patient Bob" not in first
@@ -195,6 +210,16 @@ def test_write_dashboard_emits_html_and_companion_json(tmp_path: Path) -> None:
     assert paths.json == html_path.with_suffix(".json")
     assert paths.html.read_text(encoding="utf-8") == dashboard.to_html()
     assert json.loads(paths.json.read_text(encoding="utf-8")) == dashboard.to_dict()
+
+
+def test_write_dashboard_rejects_colliding_artifact_paths(tmp_path: Path) -> None:
+    dashboard = build_leakage_dashboard(_reports())
+    shared_path = tmp_path / "leakage.json"
+
+    with pytest.raises(ValueError, match="paths must be distinct"):
+        write_leakage_dashboard(dashboard, shared_path, json_path=shared_path)
+
+    assert not shared_path.exists()
 
 
 def test_single_language_benchmark_leakage_metrics_are_supported() -> None:
@@ -237,12 +262,47 @@ def test_multi_language_metrics_require_heatmap_for_label_attribution() -> None:
 
 
 def test_dashboard_rejects_noncanonical_labels_before_rendering() -> None:
+    raw_identifier = "Alice 123-45-6789"
+    heatmap = {"cells": {raw_identifier: {"en": {"leaked_chars": 1, "total_chars": 1}}}}
+
+    with pytest.raises(ValueError, match="unsupported leakage label") as exc_info:
+        build_leakage_dashboard([heatmap])
+
+    assert raw_identifier not in str(exc_info.value)
+
+
+def test_dashboard_rejects_invalid_language_without_echoing_input() -> None:
+    raw_identifier = "Patient Alice 123-45-6789"
     heatmap = {
-        "cells": {"Alice 123-45-6789": {"en": {"leaked_chars": 1, "total_chars": 1}}}
+        "cells": {
+            "PERSON": {
+                raw_identifier: {"leaked_chars": 1, "total_chars": 1},
+            }
+        }
     }
 
-    with pytest.raises(ValueError, match="unsupported leakage label"):
+    with pytest.raises(ValueError, match="unsupported PII language") as exc_info:
         build_leakage_dashboard([heatmap])
+
+    assert raw_identifier not in str(exc_info.value)
+
+
+def test_dashboard_handles_large_counts_and_rejects_oversized_thresholds() -> None:
+    huge_count = 10**1000
+    heatmap = {
+        "cells": {
+            "PERSON": {
+                "en": {"leaked_chars": huge_count, "total_chars": huge_count},
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="thresholds must be between 0 and 1"):
+        build_leakage_dashboard(_reports(), thresholds=huge_count)
+
+    dashboard = build_leakage_dashboard([heatmap])
+    english = next(item for item in dashboard.languages if item.language == "en")
+    assert english.leaked_chars == huge_count
 
 
 def _walk_keys(value: Any) -> set[str]:
