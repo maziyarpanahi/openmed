@@ -9,31 +9,23 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from .tokenization import SpanToken
+from .tokenization import (
+    DEFAULT_DICTIONARY_LIMITS,
+    DictionaryLimits,
+    SpanToken,
+    UserDictionaryEntry,
+)
+from .tokenization import (
+    load_user_dictionary as _load_bounded_user_dictionary,
+)
 
 DEFAULT_MEDICAL_USER_DICTIONARY = (
     Path(__file__).with_name("data") / "zh_medical_terms.txt"
 )
 SUPPORTED_CHINESE_SEGMENTATION_BACKENDS = frozenset({"jieba", "pkuseg", "hanlp"})
-
-
-@dataclass(frozen=True)
-class UserDictionaryEntry:
-    """One jieba-compatible user-dictionary entry.
-
-    Args:
-        term: Word that the segmenter should keep intact.
-        frequency: Optional positive frequency hint.
-        pos: Optional part-of-speech tag.
-    """
-
-    term: str
-    frequency: int | None = None
-    pos: str | None = None
 
 
 @runtime_checkable
@@ -75,8 +67,12 @@ class JiebaSegmenter:
         self._tokenizer = jieba.Tokenizer()
         self._tokenizer.load_userdict(str(DEFAULT_MEDICAL_USER_DICTIONARY))
         if user_dict_path is not None:
-            custom_path = _validated_dictionary_path(user_dict_path)
-            self._tokenizer.load_userdict(str(custom_path))
+            for entry in load_user_dictionary(user_dict_path):
+                self._tokenizer.add_word(
+                    entry.term,
+                    freq=entry.frequency,
+                    tag=entry.pos,
+                )
         self._hmm = bool(hmm)
 
     def segment(self, text: str) -> list[SpanToken]:
@@ -268,53 +264,22 @@ def create_chinese_segmenter_from_config(
 
 def load_user_dictionary(
     path: str | Path = DEFAULT_MEDICAL_USER_DICTIONARY,
+    *,
+    limits: DictionaryLimits = DEFAULT_DICTIONARY_LIMITS,
 ) -> tuple[UserDictionaryEntry, ...]:
-    """Load a jieba-format medical user dictionary.
+    """Load a jieba-format medical dictionary through bounded validation.
 
     Args:
-        path: UTF-8 dictionary path. Lines contain a term followed by optional
-            frequency and POS fields. Blank lines and ``#`` comments are ignored.
+        path: Plain UTF-8 dictionary or single-member ZIP archive.
+        limits: Positive resource and entry limits.
 
     Returns:
         Parsed immutable dictionary entries.
 
     Raises:
-        ValueError: If an entry is malformed.
-        FileNotFoundError: If the path does not exist.
+        DictionaryIngestionError: If the source or an entry is unsafe.
     """
-
-    dictionary_path = _validated_dictionary_path(path)
-    entries: list[UserDictionaryEntry] = []
-    with dictionary_path.open("r", encoding="utf-8") as handle:
-        for line_number, raw_line in enumerate(handle, start=1):
-            line = raw_line.split("#", 1)[0].strip()
-            if not line:
-                continue
-            fields = line.split()
-            if len(fields) > 3:
-                raise ValueError(
-                    f"Invalid user dictionary entry at {dictionary_path}:{line_number}"
-                )
-            term = fields[0]
-            frequency: int | None = None
-            pos: str | None = None
-            if len(fields) >= 2:
-                try:
-                    frequency = int(fields[1])
-                except ValueError as exc:
-                    raise ValueError(
-                        f"Invalid dictionary frequency at "
-                        f"{dictionary_path}:{line_number}"
-                    ) from exc
-                if frequency <= 0:
-                    raise ValueError(
-                        f"Dictionary frequency must be positive at "
-                        f"{dictionary_path}:{line_number}"
-                    )
-            if len(fields) == 3:
-                pos = fields[2]
-            entries.append(UserDictionaryEntry(term, frequency, pos))
-    return tuple(entries)
+    return _load_bounded_user_dictionary(path, limits=limits)
 
 
 def validate_segmentation(text: str, tokens: Sequence[SpanToken]) -> None:
@@ -513,13 +478,6 @@ def _interior_boundaries(tokens: Sequence[SpanToken]) -> set[int]:
         return set()
     terminal = max(token.end for token in tokens)
     return {token.end for token in tokens if token.end != terminal}
-
-
-def _validated_dictionary_path(path: str | Path) -> Path:
-    dictionary_path = Path(path).expanduser()
-    if not dictionary_path.is_file():
-        raise FileNotFoundError(f"Chinese user dictionary not found: {dictionary_path}")
-    return dictionary_path
 
 
 def _require_text(text: str) -> None:
