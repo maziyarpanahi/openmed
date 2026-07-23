@@ -18,6 +18,7 @@ nav:
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - African Developer Onboarding: africa-onboarding.md
+      - Low-Bandwidth & Proxy Install: low-bandwidth-install.md
       - Persona Quickstarts: quickstarts.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md

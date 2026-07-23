@@ -160,6 +160,11 @@ message prefix:
 OPENMED_OFFLINE/local_only=True blocks outbound network access after model loading.
 ```
 
+For `HF_ENDPOINT`, pip mirror, proxy, retry, and metered-connection setup, see
+the [low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md).
+It includes a cache-warming checklist and the `openmed doctor` fields used to
+confirm the active network environment before switching offline.
+
 ## Validation helpers
 
 ```python

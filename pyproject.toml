@@ -45,6 +45,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "pytest-timeout>=2.3",
+  "huggingface-hub>=0.30",
   "jsonschema>=4.0",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
