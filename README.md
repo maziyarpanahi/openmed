@@ -49,7 +49,8 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
   <a href="README.te.md">తెలుగు</a> ·
   <a href="README.ja.md">日本語</a> ·
   <a href="README.tr.md">Türkçe</a> ·
-  <a href="README.fa.md">فارسی</a>
+  <a href="README.fa.md">فارسی</a> ·
+  <a href="README.sw.md">Kiswahili</a>
 </p>
 
 </div>
@@ -644,7 +645,7 @@ MkDocs build.
 | [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [OpenMed 1.9.0 Release Notes](docs/release/v1.9.0.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Detector Plugin SDK](docs/plugin-sdk.md) |
-| [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | |
+| [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |
 
 ---
 
