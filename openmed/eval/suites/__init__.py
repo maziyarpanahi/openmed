@@ -77,8 +77,11 @@ from openmed.eval.suites.chinese_terminology import (
 )
 from openmed.eval.suites.code_mixed_routing import (
     CODE_MIXED_ROUTING,
+    code_mixed_routing_metadata,
     evaluate_code_mixed_routing,
     load_code_mixed_fixtures,
+    load_code_mixed_routing_fixtures,
+    run_code_mixed_routing,
 )
 from openmed.eval.suites.india_health_ids import (
     INDIA_HEALTH_ID_LEAKAGE,
@@ -228,14 +231,7 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     if suite == MULTIMODAL_DICOM:
         return multimodal_dicom_metadata(**kwargs)
     if suite == CODE_MIXED_ROUTING:
-        return {
-            "suite": CODE_MIXED_ROUTING,
-            "synthetic": True,
-            "gates": {
-                "phi_recall_min": 1.0,
-                "entity_leakage_max": 0,
-            },
-        }
+        return code_mixed_routing_metadata(fixture_path=kwargs.get("fixture_path"))
     if suite == INDIA_HEALTH_ID_LEAKAGE:
         return india_health_id_metadata(**kwargs)
     return {"suite": suite}
@@ -385,6 +381,9 @@ __all__ = [
     "generate_synthetic_dicom_corpus",
     "evaluate_code_mixed_routing",
     "load_code_mixed_fixtures",
+    "load_code_mixed_routing_fixtures",
+    "code_mixed_routing_metadata",
+    "run_code_mixed_routing",
     "assert_india_health_id_leakage_gate",
     "india_health_id_metadata",
     "load_india_health_id_fixtures",
