@@ -52,6 +52,22 @@ def test_fit_profiles_marginals_and_pairwise_numeric_correlations() -> None:
     assert len(profile.source_row_hashes) == 240
 
 
+def test_pairwise_correlations_use_each_pairs_complete_rows() -> None:
+    source = [
+        {"left": 1, "bridge": 10, "right": None},
+        {"left": 2, "bridge": 20, "right": None},
+        {"left": None, "bridge": 30, "right": 3},
+        {"left": None, "bridge": 40, "right": 4},
+    ]
+
+    profile = fit_tabular_profile(source)
+
+    assert profile.correlation_columns == ("left", "bridge", "right")
+    assert profile.correlation_matrix[0][1] == pytest.approx(1.0)
+    assert profile.correlation_matrix[1][2] == pytest.approx(1.0)
+    assert profile.correlation_matrix[0][2] == 0.0
+
+
 def test_generation_is_reproducible_and_seed_sensitive() -> None:
     profile = fit_tabular_profile(_source_rows())
 
@@ -89,6 +105,22 @@ def test_output_contains_no_rows_copied_from_source() -> None:
     assert tabular_fidelity_report(source, synthetic)["copied_row_count"] == 0
 
 
+def test_copied_rows_use_canonical_numeric_fingerprints() -> None:
+    source = [
+        {"value": 1, "cohort": "integer"},
+        {"value": -0.0, "cohort": "zero"},
+    ]
+    equivalent = [
+        {"value": 1.0, "cohort": "integer"},
+        {"value": 0.0, "cohort": "zero"},
+    ]
+
+    report = tabular_fidelity_report(source, equivalent)
+
+    assert report["copied_row_count"] == 2
+    assert report["passed"] is False
+
+
 def test_marginals_cover_missing_constant_and_categorical_values() -> None:
     source = [
         {"constant": 7, "score": 10.0, "status": "a", "optional": None},
@@ -106,6 +138,15 @@ def test_marginals_cover_missing_constant_and_categorical_values() -> None:
         value is None or math.isfinite(value)
         for value in (row["optional"] for row in synthetic)
     )
+
+
+def test_integral_profiles_preserve_values_beyond_float_range() -> None:
+    huge = 10**400
+
+    profile = fit_tabular_profile([{"value": huge}, {"value": huge + 10_000}])
+
+    assert profile.columns[0].values == (huge, huge + 10_000)
+    assert profile.columns[0].integral is True
 
 
 def test_fidelity_report_detects_distribution_shift_and_source_copies() -> None:

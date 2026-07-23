@@ -23,9 +23,10 @@ from bisect import bisect_right
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from numbers import Integral, Real
 from statistics import NormalDist
-from typing import Any
+from typing import Any, TypeGuard
 
 DEFAULT_MARGINAL_TOLERANCE = 0.10
 DEFAULT_CORRELATION_TOLERANCE = 0.15
@@ -307,14 +308,17 @@ def _maybe_dataframe_records(data: Any) -> list[Mapping[str, Any]] | None:
 def _normalize_cell(value: Any) -> Any:
     if value is None or isinstance(value, (str, bool)):
         return value
+    if isinstance(value, Integral):
+        return int(value)
     if isinstance(value, Real):
-        numeric = float(value)
+        try:
+            numeric = float(value)
+        except OverflowError as error:
+            raise ValueError("numeric cells must be finite") from error
         if math.isnan(numeric):
             return None
         if not math.isfinite(numeric):
             raise ValueError("numeric cells must be finite")
-        if isinstance(value, Integral):
-            return int(value)
         return numeric
     raise TypeError("table cells must be strings, booleans, finite numbers, or None")
 
@@ -328,7 +332,11 @@ def _fit_column(name: str, rows: Sequence[Mapping[str, Any]]) -> ColumnDistribut
     )
     if is_numeric:
         integral = all(isinstance(value, Integral) for value in nonmissing)
-        values = tuple(sorted(float(value) for value in nonmissing))
+        values = (
+            tuple(sorted(int(value) for value in nonmissing))
+            if integral
+            else tuple(sorted(float(value) for value in nonmissing))
+        )
         return ColumnDistribution(
             name=name,
             kind="numeric",
@@ -367,37 +375,38 @@ def _correlation_matrix(
     size = len(names)
     if not size:
         return ()
-    complete = [
-        row
-        for row in rows
-        if all(
-            row.get(name) is not None
-            and isinstance(row.get(name), Real)
-            and not isinstance(row.get(name), bool)
-            for name in names
-        )
-    ]
-    if len(complete) < 2:
-        return _identity_matrix(size)
-
-    ranked = [_normal_scores([float(row[name]) for row in complete]) for name in names]
     matrix: list[list[float]] = [[0.0] * size for _ in range(size)]
     for left in range(size):
         matrix[left][left] = 1.0
         for right in range(left + 1, size):
-            value = _pearson(ranked[left], ranked[right])
+            paired: list[tuple[Real, Real]] = []
+            for row in rows:
+                left_value = row.get(names[left])
+                right_value = row.get(names[right])
+                if _is_numeric_cell(left_value) and _is_numeric_cell(right_value):
+                    paired.append((left_value, right_value))
+            if len(paired) < 2:
+                value = 0.0
+            else:
+                left_ranked = _normal_scores([pair[0] for pair in paired])
+                right_ranked = _normal_scores([pair[1] for pair in paired])
+                value = _pearson(left_ranked, right_ranked)
             matrix[left][right] = value
             matrix[right][left] = value
     return tuple(tuple(value for value in row) for row in matrix)
 
 
-def _normal_scores(values: Sequence[float]) -> list[float]:
+def _is_numeric_cell(value: Any) -> TypeGuard[Real]:
+    return isinstance(value, Real) and not isinstance(value, bool)
+
+
+def _normal_scores(values: Sequence[Real]) -> list[float]:
     ranks = _average_ranks(values)
     count = len(ranks)
     return [_NORMAL.inv_cdf((rank - 0.5) / count) for rank in ranks]
 
 
-def _average_ranks(values: Sequence[float]) -> list[float]:
+def _average_ranks(values: Sequence[Real]) -> list[float]:
     order = sorted(range(len(values)), key=values.__getitem__)
     ranks = [0.0] * len(values)
     position = 0
@@ -547,17 +556,23 @@ def _allocated_nonmissing_count(row_count: int, missing_probability: float) -> i
 
 
 def _empirical_quantile(
-    values: Sequence[float], probability: float, *, integral: bool
+    values: Sequence[int | float], probability: float, *, integral: bool
 ) -> int | float:
     if len(values) == 1:
-        value = values[0]
-    else:
-        position = probability * (len(values) - 1)
-        lower = int(math.floor(position))
-        upper = min(lower + 1, len(values) - 1)
-        fraction = position - lower
-        value = values[lower] * (1.0 - fraction) + values[upper] * fraction
-    return int(round(value)) if integral else float(value)
+        return int(values[0]) if integral else float(values[0])
+
+    position = probability * (len(values) - 1)
+    lower = int(math.floor(position))
+    upper = min(lower + 1, len(values) - 1)
+    fraction = position - lower
+    if integral:
+        weight = Fraction.from_float(fraction)
+        interpolated = (
+            Fraction(int(values[lower])) * (1 - weight)
+            + Fraction(int(values[upper])) * weight
+        )
+        return int(round(interpolated))
+    return float(values[lower] * (1.0 - fraction) + values[upper] * fraction)
 
 
 def _stratified_categorical_values(
@@ -665,10 +680,11 @@ def _typed_value(value: Any) -> list[Any]:
         return ["none", None]
     if isinstance(value, bool):
         return ["bool", value]
-    if isinstance(value, int):
-        return ["int", value]
-    if isinstance(value, float):
-        return ["float", value.hex()]
+    if isinstance(value, Integral):
+        return ["number", int(value), 1]
+    if isinstance(value, Real):
+        numerator, denominator = float(value).as_integer_ratio()
+        return ["number", numerator, denominator]
     return ["str", str(value)]
 
 
@@ -677,14 +693,14 @@ def _numeric_marginal_distance(
 ) -> float:
     source_missing = sum(value is None for value in source) / len(source)
     synthetic_missing = sum(value is None for value in synthetic) / len(synthetic)
-    source_numeric = sorted(float(value) for value in source if value is not None)
+    source_numeric = sorted(value for value in source if value is not None)
     synthetic_nonmissing = [value for value in synthetic if value is not None]
     if not all(
         isinstance(value, Real) and not isinstance(value, bool)
         for value in synthetic_nonmissing
     ):
         return 1.0
-    synthetic_numeric = sorted(float(value) for value in synthetic_nonmissing)
+    synthetic_numeric = sorted(synthetic_nonmissing)
     if not source_numeric or not synthetic_numeric:
         ks_distance = 0.0 if source_numeric == synthetic_numeric else 1.0
     else:
@@ -692,7 +708,7 @@ def _numeric_marginal_distance(
     return max(abs(source_missing - synthetic_missing), ks_distance)
 
 
-def _ks_distance(left: Sequence[float], right: Sequence[float]) -> float:
+def _ks_distance(left: Sequence[Real], right: Sequence[Real]) -> float:
     points = sorted(set(left) | set(right))
     return max(
         abs(
