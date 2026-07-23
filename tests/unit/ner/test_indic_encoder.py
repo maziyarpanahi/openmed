@@ -109,10 +109,11 @@ def test_loader_accepts_path_source_with_explicit_family(monkeypatch):
         lambda name: transformers if name == "transformers" else SimpleNamespace(),
     )
 
-    result = indic.load_indic_encoder(Path("/models/muril"), family="muril")
+    source = Path("/models/muril")
+    result = indic.load_indic_encoder(source, family="muril")
 
     assert result.available is True
-    assert result.handle.source == "/models/muril"
+    assert result.handle.source == str(source)
 
 
 def test_loader_rejects_non_integer_offsets(monkeypatch):
