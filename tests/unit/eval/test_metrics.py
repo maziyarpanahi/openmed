@@ -53,6 +53,7 @@ def test_eval_modules_import_cleanly():
         "code_mixed_routing",
         "india_health_id_leakage",
         "indian_multi_id",
+        "indic-name-consistency",
     )
 
 
