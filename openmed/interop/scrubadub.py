@@ -27,7 +27,7 @@ _SCRUBADUB_TO_CANONICAL = {
     "email": "EMAIL",
     "location": "LOCATION",
     "name": "PERSON",
-    "national_insurance_number": "SSN",
+    "national_insurance_number": "ID_NUM",
     "organization": "ORGANIZATION",
     "phone": "PHONE",
     "postalcode": "ZIPCODE",
@@ -64,7 +64,7 @@ class ScrubadubAdapterConfig:
     """Runtime conversion options for scrubadub interoperability."""
 
     source: str = "scrubadub"
-    default_confidence: float = 1.0
+    default_confidence: float = 0.0
     preserve_scrubadub_types: bool = True
     allow_semantic_only_matches: bool = False
 
@@ -146,6 +146,16 @@ def _record_to_entities(
     text: str | None,
     config: ScrubadubAdapterConfig,
 ) -> list[PIIEntity]:
+    nested = value(record, "filths")
+    if nested is not None and not isinstance(nested, (str, bytes, Mapping)):
+        entities: list[PIIEntity] = []
+        for nested_record in nested:
+            entities.extend(
+                _record_to_entities(nested_record, text=text, config=config)
+            )
+        if entities:
+            return entities
+
     source_type = str(value(record, ("type",), "unknown"))
     if source_type == "credential":
         split = _split_credential_record(record, config=config)
@@ -180,6 +190,8 @@ def _split_credential_record(
 
     detector_name = value(record, "detector_name")
     document_name = value(record, "document_name")
+    locale = value(record, "locale")
+    replacement_string = value(record, "replacement_string")
     entities: list[PIIEntity] = []
     for group_name, label in (("username", "USERNAME"), ("password", "PASSWORD")):
         group_text = groups.get(group_name)
@@ -196,6 +208,10 @@ def _split_credential_record(
             metadata["detector_name"] = str(detector_name)
         if document_name is not None:
             metadata["document_name"] = str(document_name)
+        if locale is not None:
+            metadata["locale"] = str(locale)
+        if replacement_string is not None:
+            metadata["replacement_string"] = str(replacement_string)
         entities.append(
             make_entity(
                 text=group_text,
@@ -220,6 +236,7 @@ def _record_to_entity(
 ) -> PIIEntity:
     start = coerce_int(value(record, ("beg", "start")), field="beg")
     end = coerce_int(value(record, ("end", "stop")), field="end")
+    _validate_span(start, end, text=text)
     source_type = str(value(record, ("type",), "unknown"))
     confidence = coerce_confidence(
         value(record, ("prob", "score", "confidence")),
@@ -239,6 +256,12 @@ def _record_to_entity(
     document_name = value(record, "document_name")
     if document_name is not None:
         metadata["document_name"] = str(document_name)
+    locale = value(record, "locale")
+    if locale is not None:
+        metadata["locale"] = str(locale)
+    replacement_string = value(record, "replacement_string")
+    if replacement_string is not None:
+        metadata["replacement_string"] = str(replacement_string)
     return make_entity(
         text=surface,
         label=_canonical_label(source_type),
@@ -289,15 +312,18 @@ def _credential_pair_to_record(
     text = metadata.get("scrubadub_credential_text")
     if text is None:
         text = f"{pair['username'].text} {pair['password'].text}"
-    return {
+    record = {
         "beg": beg,
         "end": end,
         "text": text,
         "type": "credential",
         "detector_name": metadata.get("detector_name", config.source),
         "document_name": metadata.get("document_name"),
-        "replacement_string": None,
+        "replacement_string": metadata.get("replacement_string"),
     }
+    if "locale" in metadata:
+        record["locale"] = metadata["locale"]
+    return record
 
 
 def _entity_to_record(
@@ -312,20 +338,32 @@ def _entity_to_record(
         source_type = metadata.get("scrubadub_type")
     if not source_type:
         source_type = _CANONICAL_TO_SCRUBADUB.get(canonical, canonical.lower())
-    return {
+    record = {
         "beg": int(entity.start or 0),
         "end": int(entity.end or 0),
         "text": entity.text,
         "type": source_type,
         "detector_name": metadata.get("detector_name", config.source),
         "document_name": metadata.get("document_name"),
-        "replacement_string": None,
+        "replacement_string": metadata.get("replacement_string"),
     }
+    if "locale" in metadata:
+        record["locale"] = metadata["locale"]
+    return record
 
 
 def _canonical_label(source_type: str) -> str:
     mapped = _SCRUBADUB_TO_CANONICAL.get(source_type.strip().lower())
     return mapped or normalize_label(source_type)
+
+
+def _validate_span(start: int, end: int, *, text: str | None) -> None:
+    if start < 0 or end <= start:
+        raise ValueError(f"invalid scrubadub span [{start}, {end})")
+    if text is not None and end > len(text):
+        raise ValueError(
+            f"scrubadub span [{start}, {end}) exceeds source text length {len(text)}"
+        )
 
 
 def _as_sequence(result: Any) -> list[Any]:
