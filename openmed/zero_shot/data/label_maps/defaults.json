@@ -187,5 +187,14 @@
     "DevelopmentalMilestone",
     "FeedingHistory",
     "PediatricFinding"
+  ],
+  "nursing_observation": [
+    "IntakeOutput",
+    "LineDrainTube",
+    "RiskScore",
+    "MobilityStatus",
+    "CareIntervention",
+    "PainScore",
+    "SkinAssessment"
   ]
 }
