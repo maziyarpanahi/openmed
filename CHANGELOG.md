@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local, structure-preserving de-identification for ODK Central,
+  CommCare HQ, and KoBoToolbox JSON/CSV form exports, including XForm path
+  semantics, repeat fidelity, safe unknown-text handling, geopoint
+  generalization, and value-free policy manifests (#1450).
 - Added an opt-in OpenHIM de-identification mediator with authenticated
   registration and heartbeats, FHIR and text transformation envelopes,
   byte-preserving opaque pass-through, and an offline container smoke fixture
