@@ -44,6 +44,29 @@ def test_convert_workflow_publishes_downloaded_conversion_artifacts():
     assert "published-model-manifest" in workflow
 
 
+def test_convert_workflow_passes_dispatch_inputs_through_safe_env_vars():
+    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
+
+    assert workflow.count("MODEL_ID: ${{ github.event.inputs.model_id }}") == 4
+    assert workflow.count("QUANTIZE: ${{ github.event.inputs.quantize }}") == 2
+    assert workflow.count('--model "$MODEL_ID"') == 4
+    assert workflow.count('case "$QUANTIZE" in') == 2
+    assert workflow.count('[[ ! "$MODEL_ID" =~') == 4
+    assert '--model "${{ github.event.inputs.model_id }}"' not in workflow
+    assert '[ "${{ github.event.inputs.quantize }}"' not in workflow
+    assert (
+        'QUANTIZE_ARG="--quantize ${{ github.event.inputs.quantize }}"' not in workflow
+    )
+
+
+def test_convert_workflow_keeps_dispatch_inputs_out_of_shell_blocks():
+    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
+    run_blocks = re.findall(r"(?m)^\s+run: \|\n((?:^\s{8,}.*\n?)+)", workflow)
+
+    assert run_blocks
+    assert "github.event.inputs" not in "\n".join(run_blocks)
+
+
 def test_hf_token_policy_documents_scope_storage_rotation_and_revocation():
     policy = HF_TOKEN_POLICY.read_text(encoding="utf-8")
 
