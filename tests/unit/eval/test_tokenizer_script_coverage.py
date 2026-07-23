@@ -118,7 +118,12 @@ def test_resume_refreshes_language_claims_and_verdicts_without_reloading() -> No
 def test_report_populates_manifest_and_flags_threshold_in_markdown() -> None:
     rows = [
         {"repo_id": "OpenMed/pii-hi", "family": "PII", "languages": ["hi"]},
-        {"repo_id": "OpenMed/ner", "family": "NER", "languages": ["en"]},
+        {
+            "repo_id": "OpenMed/ner",
+            "family": "NER",
+            "languages": ["en"],
+            "script_coverage": {"stale": {}},
+        },
     ]
     report = audit_pii_tokenizers(
         rows,

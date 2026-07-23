@@ -1330,15 +1330,27 @@ def remap_predictions_to_tokens(
         scores = [token_scores[i]]
         meta = token_meta[i] or {}
         j = i + 1
-        while (
-            j < len(tokens)
-            and token_labels[j] == label
-            and tokens[j].start <= end + gap
-        ):
+        while j < len(tokens) and token_labels[j] == label:
+            next_start = tokens[j].start
+            if next_start > end + gap:
+                break
+
+            current_sentence = meta.get("sentence_index")
+            next_meta = token_meta[j] or {}
+            next_sentence = next_meta.get("sentence_index")
+            if (
+                current_sentence is not None or next_sentence is not None
+            ) and current_sentence != next_sentence:
+                break
+
+            separator = text[end:next_start]
+            if any(char in "\r\n\v\f\x85\u2028\u2029" for char in separator):
+                break
+
             end = tokens[j].end
             scores.append(token_scores[j])
             if not meta and token_meta[j]:
-                meta = token_meta[j] or {}
+                meta = next_meta
             j += 1
 
         remapped.append(
