@@ -41,6 +41,17 @@ from .metrics import (
     PrometheusMetricsRegistry,
     metrics_enabled_from_env,
 )
+from .openhim_mediator import (
+    OPENHIM_HEARTBEAT_PATH,
+    OPENHIM_MEDIA_TYPE,
+    OPENHIM_MEDIATOR_PATH,
+    OpenHIMMediatorSettings,
+    build_openhim_envelope,
+    create_openhim_mediator,
+    failed_openhim_result,
+    mediator_response_headers,
+    transform_mediator_payload,
+)
 from .privacy_gateway import (
     HttpExternalLLMTransport,
     InMemoryReidentificationStore,
@@ -93,6 +104,7 @@ _MODEL_BACKED_PATHS = frozenset(
         "/jobs",
         _PRIVACY_GATEWAY_PATH,
         _SMART_BACKEND_START_PATH,
+        OPENHIM_MEDIATOR_PATH,
     }
 )
 _ServicePayload = Dict[str, Any]
@@ -372,6 +384,8 @@ def _metrics_route_label(request: Request) -> str:
 def create_app() -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
+    openhim_settings = OpenHIMMediatorSettings.from_env()
+
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
         runtime = ServiceRuntime.from_env(
@@ -383,9 +397,19 @@ def create_app() -> FastAPI:
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
+        fastapi_app.state.openhim_mediator = None
 
         if runtime.preload_models:
             await run_in_threadpool(runtime.preload)
+
+        if openhim_settings.enabled:
+            mediator = create_openhim_mediator(openhim_settings)
+            fastapi_app.state.openhim_mediator = mediator
+            try:
+                await mediator.start()
+            except Exception:
+                await mediator.stop()
+                raise
 
         fastapi_app.state.ready = True
 
@@ -394,6 +418,9 @@ def create_app() -> FastAPI:
         finally:
             fastapi_app.state.ready = False
             fastapi_app.state.shutting_down = True
+            mediator = getattr(fastapi_app.state, "openhim_mediator", None)
+            if mediator is not None:
+                await mediator.stop()
             loop = asyncio.get_event_loop()
             deadline = loop.time() + float(
                 getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
@@ -440,6 +467,8 @@ def create_app() -> FastAPI:
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )
     app.state.tracing = service_tracing_from_env()
+    app.state.openhim_settings = openhim_settings
+    app.state.openhim_deidentifier = None
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -658,6 +687,76 @@ def create_app() -> FastAPI:
             "Service preload has not completed",
             details=None,
         )
+
+    if openhim_settings.enabled:
+
+        @app.get(OPENHIM_HEARTBEAT_PATH)
+        async def openhim_heartbeat(request: Request) -> Dict[str, Any]:
+            mediator = getattr(request.app.state, "openhim_mediator", None)
+            if mediator is None:
+                return {
+                    "enabled": True,
+                    "registered": False,
+                    "urn": str(openhim_settings.registration["urn"]),
+                    "last_heartbeat_at": None,
+                    "last_error": "not_started",
+                }
+            return mediator.status()
+
+        @app.post(OPENHIM_MEDIATOR_PATH)
+        async def openhim_deidentify(request: Request) -> Response:
+            runtime = _get_service_runtime(request)
+            headers = mediator_response_headers(request.headers)
+            body = await request.body()
+            configured_deidentifier = getattr(
+                request.app.state, "openhim_deidentifier", None
+            )
+
+            def _runtime_deidentifier(text: str, **kwargs: Any) -> Any:
+                if configured_deidentifier is not None:
+                    return configured_deidentifier(text, **kwargs)
+                return openmed.deidentify(
+                    text,
+                    config=runtime.config,
+                    loader=runtime.get_loader(),
+                    **kwargs,
+                )
+
+            def _transform() -> Any:
+                return transform_mediator_payload(
+                    body,
+                    headers,
+                    200,
+                    deidentifier=_runtime_deidentifier,
+                    policy=openhim_settings.policy,
+                    method=openhim_settings.method,
+                )
+
+            try:
+                result = await _run_with_timeout(runtime, _transform)
+            except (TypeError, ValueError, UnicodeError, json.JSONDecodeError):
+                result = failed_openhim_result(400, "invalid_payload")
+            except Exception:
+                result = failed_openhim_result(500, "processing_failed")
+
+            if not result.transformed:
+                return Response(
+                    content=result.body,
+                    status_code=result.status_code,
+                    headers=dict(result.headers),
+                )
+
+            envelope = build_openhim_envelope(
+                result,
+                urn=str(openhim_settings.registration["urn"]),
+                request_method=request.method,
+                request_path=request.url.path,
+            )
+            return Response(
+                content=json.dumps(envelope, ensure_ascii=False, separators=(",", ":")),
+                status_code=200,
+                media_type=OPENHIM_MEDIA_TYPE,
+            )
 
     @app.get("/models/loaded")
     async def loaded_models(request: Request) -> Dict[str, Any]:

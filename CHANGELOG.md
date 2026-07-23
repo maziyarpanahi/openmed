@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an opt-in OpenHIM de-identification mediator with authenticated
+  registration and heartbeats, FHIR and text transformation envelopes,
+  byte-preserving opaque pass-through, and an offline container smoke fixture
+  for deployment inside an HIE trust boundary (#1448).
 - Added data-driven African healthcare-context safety-sweep terms for named
   facilities, mobile-money references, and context-gated ethnic affiliations,
   with non-keep defaults across the initial African policy profiles and

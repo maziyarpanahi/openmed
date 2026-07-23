@@ -35,6 +35,7 @@ nav:
       - gRPC Service: serving/grpc.md
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
+      - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
