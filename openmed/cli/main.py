@@ -6,6 +6,7 @@ import argparse
 import csv
 import difflib
 import json
+import math
 import os
 import sys
 import tempfile
@@ -28,11 +29,19 @@ from ..core.config import (
     save_profile,
     set_config,
 )
+from ..core.hf_hub import get_remote_model_size_mb, list_cached_models
 from ..core.manifest_diff import ManifestDiff, diff_manifests
 from ..core.model_card import render_model_card
 from ..core.model_integrity import ModelIntegrityError, verify_cached_models
-from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
+from ..core.model_registry import (
+    MANIFEST_PATH,
+    ModelSizeEstimate,
+    estimate_model_sizes,
+    get_model_info,
+    load_manifest_rows,
+)
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
+from ..core.offline import OfflineModeError
 from ..core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
 from ._output import (
     EXIT_ERROR,
@@ -156,6 +165,15 @@ def _positive_int(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("value must be greater than 0")
+    return parsed
+
+
+def _non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed < 0:
+        raise argparse.ArgumentTypeError(
+            "value must be a finite number greater than or equal to 0"
+        )
     return parsed
 
 
@@ -905,6 +923,36 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Verify every cached model with integrity metadata.",
     )
     models_verify.set_defaults(handler=_handle_models_verify)
+
+    models_size = models_sub.add_parser(
+        "size",
+        help="Show model download, disk, and peak RAM estimates.",
+    )
+    models_size.add_argument(
+        "model_key",
+        nargs="?",
+        default=None,
+        help="Optional registry alias or full model repository id.",
+    )
+    models_size.add_argument(
+        "--remote",
+        action="store_true",
+        help="Refine snapshot sizes from Hugging Face Hub metadata.",
+    )
+    models_size.add_argument(
+        "--budget-mb",
+        type=_non_negative_float,
+        default=None,
+        help="Only show models needing at most this many MB to download.",
+    )
+    models_size.add_argument(
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        dest="output_format",
+        help="Output format (default: table).",
+    )
+    models_size.set_defaults(handler=_handle_models_size)
 
     models_search = models_sub.add_parser(
         "search",
@@ -2707,6 +2755,212 @@ def _parse_model_args(values: Sequence[str]) -> list[str]:
     if "@manifest" in models:
         raise ValueError("--models @manifest cannot be combined with explicit ids")
     return models
+
+
+def build_models_size_report(
+    model_key: str | None = None,
+    *,
+    budget_mb: float | None = None,
+    remote: bool = False,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    """Build the shared argparse/Typer model-size report payload."""
+
+    if budget_mb is not None and (
+        not isinstance(budget_mb, (int, float))
+        or isinstance(budget_mb, bool)
+        or not math.isfinite(float(budget_mb))
+        or budget_mb < 0
+    ):
+        raise ValueError("budget_mb must be a finite non-negative number")
+
+    estimates = estimate_model_sizes(
+        model_key,
+        manifest_path=manifest_path or MANIFEST_PATH,
+    )
+    if model_key is not None and not estimates:
+        raise ValueError(f"Unknown model key: {model_key}")
+
+    try:
+        cached_by_id = {model.repo_id: model for model in list_cached_models()}
+    except ImportError:
+        # Size inspection remains useful in the minimal install. Cache
+        # awareness activates automatically when the optional HF extra exists.
+        cached_by_id = {}
+
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    for estimate in estimates:
+        remote_mb = _remote_size_or_none(estimate, remote=remote, warnings=warnings)
+        snapshot_mb = remote_mb or estimate.download_mb
+        disk_mb = remote_mb or estimate.disk_mb
+        source = "remote" if remote_mb is not None else estimate.source
+
+        cached = cached_by_id.get(estimate.repo_id)
+        is_cached = cached is not None and cached.size_on_disk > 0
+        if is_cached:
+            disk_mb = round(cached.size_on_disk / 1_000_000, 3)
+            if snapshot_mb is None:
+                snapshot_mb = disk_mb
+
+        peak_ram_mb = estimate.peak_ram_mb
+        if remote_mb is not None and estimate.source == "estimated":
+            peak_ram_mb = round(max(256.0, remote_mb * 1.25), 3)
+
+        download_mb = 0.0 if is_cached else snapshot_mb
+        if budget_mb is not None and (download_mb is None or download_mb > budget_mb):
+            continue
+
+        rows.append(
+            {
+                "repo_id": estimate.repo_id,
+                "task": estimate.task,
+                "download_mb": download_mb,
+                "snapshot_mb": snapshot_mb,
+                "disk_mb": disk_mb,
+                "peak_ram_mb": peak_ram_mb,
+                "cached": is_cached,
+                "status": ("cached — 0 MB to download" if is_cached else "not cached"),
+                "source": source,
+                "recommended": False,
+            }
+        )
+
+    recommendations: list[dict[str, Any]] = []
+    if budget_mb is not None:
+        recommendations = _size_recommendations(rows)
+        recommended_ids = {
+            recommendation["repo_id"] for recommendation in recommendations
+        }
+        for row in rows:
+            row["recommended"] = row["repo_id"] in recommended_ids
+
+    return {
+        "budget_mb": budget_mb,
+        "remote": remote,
+        "models": rows,
+        "recommendations": recommendations,
+        "warnings": warnings,
+    }
+
+
+def _remote_size_or_none(
+    estimate: ModelSizeEstimate,
+    *,
+    remote: bool,
+    warnings: list[str],
+) -> float | None:
+    if not remote:
+        return None
+    try:
+        return get_remote_model_size_mb(estimate.repo_id)
+    except (ImportError, OfflineModeError):
+        raise
+    except Exception as exc:  # pragma: no cover - depends on remote service
+        warnings.append(f"{estimate.repo_id}: {exc}")
+        return None
+
+
+def _size_recommendations(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    by_task: dict[str, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        snapshot_mb = row.get("snapshot_mb")
+        if not isinstance(snapshot_mb, (int, float)):
+            continue
+        by_task.setdefault(str(row.get("task") or "unknown"), []).append(row)
+
+    recommendations = []
+    for task, task_rows in sorted(by_task.items()):
+        recommended = min(
+            task_rows,
+            key=lambda row: (float(row["snapshot_mb"]), str(row["repo_id"])),
+        )
+        recommendations.append(
+            {
+                "task": task,
+                "repo_id": recommended["repo_id"],
+                "snapshot_mb": recommended["snapshot_mb"],
+            }
+        )
+    return recommendations
+
+
+def _handle_models_size(args: argparse.Namespace) -> int:
+    try:
+        report = build_models_size_report(
+            args.model_key,
+            budget_mb=args.budget_mb,
+            remote=args.remote,
+        )
+    except (ImportError, OfflineModeError, OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to inspect model sizes: {exc}\n")
+        return 1
+
+    if not report["models"]:
+        if args.budget_mb is None:
+            message = "No model size metadata is available."
+        else:
+            message = f"No models fit the {args.budget_mb:g} MB download budget."
+        sys.stderr.write(f"{message}\n")
+        return 1
+
+    for warning in report["warnings"]:
+        sys.stderr.write(f"Remote size lookup warning: {warning}\n")
+
+    if args.output_format == "json":
+        sys.stdout.write(f"{json.dumps(report, indent=2)}\n")
+    else:
+        sys.stdout.write(_format_models_size_table(report))
+    return 0
+
+
+def _format_models_size_table(report: Mapping[str, Any]) -> str:
+    columns = (
+        ("repo_id", "model"),
+        ("task", "task"),
+        ("download_mb", "download_mb"),
+        ("disk_mb", "disk_mb"),
+        ("peak_ram_mb", "peak_ram_mb"),
+        ("status", "status"),
+    )
+    rows = [
+        {
+            "repo_id": str(row["repo_id"]),
+            "task": str(row["task"]),
+            "download_mb": _format_models_size_mb(row["download_mb"]),
+            "disk_mb": _format_models_size_mb(row["disk_mb"]),
+            "peak_ram_mb": _format_models_size_mb(row["peak_ram_mb"]),
+            "status": str(row["status"]),
+        }
+        for row in report["models"]
+    ]
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+    lines = [
+        "  ".join(header.ljust(widths[key]) for key, header in columns),
+        "  ".join("-" * widths[key] for key, _header in columns),
+        *[
+            "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+            for row in rows
+        ],
+    ]
+    if report["recommendations"]:
+        lines.append("")
+        lines.extend(
+            "Recommended for "
+            f"{recommendation['task']}: {recommendation['repo_id']} "
+            f"({_format_models_size_mb(recommendation['snapshot_mb'])} MB snapshot)"
+            for recommendation in report["recommendations"]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _format_models_size_mb(value: Any) -> str:
+    if not isinstance(value, (int, float)):
+        return "unknown"
+    return f"{float(value):.1f}"
 
 
 def _handle_models_search(args: argparse.Namespace) -> int:

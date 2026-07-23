@@ -44,6 +44,33 @@ for model_key, info, reason in suggestions:
   claimed by that language. The underlying UNK, byte-fallback, and tokens-per-grapheme measurements remain available on
   `ModelInfo.script_coverage` for diagnostics and UI warnings.
 
+## Plan downloads before using data
+
+Use `models size` to inspect download, disk, and estimated peak RAM requirements
+from the committed manifest. The default path is offline-safe and does not
+contact Hugging Face:
+
+```bash
+OPENMED_OFFLINE=1 openmed models size disease_detection_tiny
+openmed models size --budget-mb 100
+openmed models size --budget-mb 100 --format json
+```
+
+With a budget, the command lists only models whose remaining download fits and
+recommends the smallest qualifying snapshot for each task. Models already in
+the local Hugging Face cache are marked `cached — 0 MB to download` and count
+as zero against the budget.
+
+Use `--remote` only when you explicitly want to refresh an estimate from the
+current Hub file metadata. Supplying an alias keeps that opt-in lookup focused:
+
+```bash
+openmed models size disease_detection_tiny --remote
+```
+
+Sizes use decimal megabytes (1 MB = 1,000,000 bytes). Remote inspection requires
+the optional `openmed[hf]` dependencies; ordinary offline estimates do not.
+
 ## Keeping the registry fresh
 
 If you add a new Hugging Face checkpoint, refresh `models.jsonl` and, when measurements are available, enrich it with

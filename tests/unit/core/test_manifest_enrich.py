@@ -11,6 +11,14 @@ from scripts.manifest import enrich_manifest
 
 def test_enrich_manifest_merges_measurements_by_repo_id_and_preserves_unmatched():
     matched = _manifest_row("OpenMed/OpenMed-PII-Fixture-Tiny-65M")
+    matched["script_coverage"] = {
+        "devanagari": {
+            "unk_rate": 0.0,
+            "byte_fallback_rate": 0.0,
+            "tokens_per_grapheme": 1.0,
+            "verdict": "unclaimed",
+        }
+    }
     unmatched = _manifest_row("OpenMed/OpenMed-NER-Unmatched-Base-184M")
     unmatched_line = json.dumps(unmatched, indent=2)
     lines = [
@@ -19,6 +27,8 @@ def test_enrich_manifest_merges_measurements_by_repo_id_and_preserves_unmatched(
     ]
     measurements = {
         "OpenMed/OpenMed-PII-Fixture-Tiny-65M": {
+            "download_mb": 131.794,
+            "disk_mb": 131.794,
             "latency_ms": {"iphone_15_pro": 18.4, "m2_air": 7.0},
             "peak_ram_mb": {"iphone_15_pro": 512, "m2_air": 384},
             "recommended_tier": "phone",
@@ -38,10 +48,13 @@ def test_enrich_manifest_merges_measurements_by_repo_id_and_preserves_unmatched(
 
     assert updated == 1
     enriched = json.loads(output[0])
+    assert enriched["download_mb"] == 131.794
+    assert enriched["disk_mb"] == 131.794
     assert enriched["latency_ms"] == {"iphone_15_pro": 18.4, "m2_air": 7.0}
     assert enriched["peak_ram_mb"] == {"iphone_15_pro": 512, "m2_air": 384}
     assert enriched["recommended_tier"] == "phone"
     assert enriched["benchmark"][0]["suite"] == "shield"
+    assert enriched["script_coverage"] == matched["script_coverage"]
     assert output[1] == unmatched_line + "\n"
 
 
