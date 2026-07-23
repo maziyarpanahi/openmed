@@ -40,8 +40,8 @@ opening files or resolving codecs directly.
   including archive headers, line boundaries, encodings, Unicode controls, and
   mixed-script text. They cannot execute code in the OpenMed process.
 - **Operator:** selects a local source path, an allow-listed codec, and optional
-  lower resource limits. The operator cannot disable a limit by setting it to
-  zero or a negative value.
+  lower resource limits. The operator cannot raise a built-in ceiling or
+  disable a limit with a zero, negative, non-finite, or non-integral value.
 - **Package developer:** controls the Python-defined locale and PII-pattern
   tables. Changing those tables is a code-review and package-integrity event,
   not an attacker-controlled runtime ingestion path.
@@ -50,14 +50,15 @@ opening files or resolving codecs directly.
 
 ### Trust boundaries and invariants
 
-1. **Filesystem to archive preflight.** Before a ZIP member is opened,
-   compressed size, member count, encryption, compression method, declared
-   uncompressed size, and expansion ratio are checked. A dictionary archive has
-   exactly one regular member and is never extracted to disk.
+1. **Filesystem to archive preflight.** Before Python materializes the ZIP
+   central directory, the bounded end record must declare exactly one entry on
+   one disk. Before that regular member is opened, compressed size, encryption,
+   compression method, declared uncompressed size, and expansion ratio are
+   checked. A dictionary archive is never extracted to disk.
 2. **Archive/plain stream to parser.** The parser reads fixed-size chunks,
-   bounds decompressed bytes and per-entry bytes, and stops at the first entry
-   beyond the configured count. It never reads the entire source merely to
-   decide that it is too large.
+   bounds decompressed bytes, physical records, accepted entries, and per-entry
+   bytes, and stops at the first count beyond any configured ceiling. It never
+   reads the entire source merely to decide that it is too large.
 3. **Entry parser to consumer.** Strict UTF-8, term length, Unicode-control,
    literal-regex, frequency, and POS rules are enforced before an immutable
    `UserDictionaryEntry` reaches a segmenter.
@@ -67,8 +68,9 @@ opening files or resolving codecs directly.
    `utf-7` are not permitted.
 5. **Unicode to downstream detection.** Script analysis reports only
    `mixed_script` and `confusable_characters` warning codes. The original text
-   remains unchanged for offset correctness, while downstream PII detection can
-   use the existing offset-preserving normalization.
+   remains unchanged for offset correctness. Warning analysis is a single-pass,
+   constant-space check; downstream PII detection can separately request the
+   existing offset-preserving normalization when it needs alignment maps.
 6. **Locale tables to parsers.** Locale selection uses fixed mappings and frozen
    value objects. Missing locale evidence preserves ambiguity instead of
    guessing; unsupported locale hints fail explicitly.
@@ -92,12 +94,12 @@ provenance and clinical suitability of supplied vocabularies.
 | MI-03 | Tampering / elevation of privilege | A user term such as a nested-quantifier expression becomes executable regex and creates catastrophic backtracking or changes match semantics. | Terms are literal-only; regex construct characters are rejected with the named `executable_regex_construct` rule before consumer access. | [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
 | MI-04 | Repudiation | An operator cannot distinguish a resource rejection from malformed content without exposing the offending term. | Typed exceptions expose stable classes/rule names, while logs carry only hashed-path and numeric metadata in [`tokenization.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/processing/tokenization.py) and [`script_detect.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/script_detect.py). | [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py), [`test_encoding_fuzz.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_encoding_fuzz.py) |
 | MI-05 | Information disclosure | A PHI-like custom term, filename, undecodable byte sequence, or codec exception is copied into a warning or log. | Central rejection helpers never format raw paths, entries, decoded text, or caught exception messages. Confusable warnings contain only warning codes. | Log-capture and warning-capture cases in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) and [`test_encoding_fuzz.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_encoding_fuzz.py) |
-| MI-06 | Denial of service | A highly compressed ZIP expands at least 100-fold and consumes memory or CPU before validation. | Single-member ZIP preflight rejects declared decompressed size and expansion ratio `>= 100` before `ZipFile.open`; only stored and deflated members are accepted. | `test_zip_bomb_is_rejected_before_member_decompression` in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
-| MI-07 | Denial of service | A plain or compressed dictionary contains 10 million short entries. | Fixed-chunk streaming stops on entry `100001` under the default `100000` cap, before full parse; decompressed bytes and individual lines have independent caps. | `test_ten_million_entries_stop_at_the_default_cap` in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
+| MI-06 | Denial of service | A highly compressed ZIP or a central directory with many metadata-only entries consumes memory or CPU before validation. | A bounded end-record check rejects any count other than one before `ZipFile` parses the central directory; declared decompressed size and expansion ratio `>= 100` are rejected before `ZipFile.open`; only stored and deflated members are accepted. | ZIP bomb and central-directory preflight cases in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
+| MI-07 | Denial of service | A plain or compressed dictionary contains 10 million short, blank, or comment records. | Fixed-chunk streaming stops on accepted entry `100001` or physical record `200001`; decompressed bytes and individual lines have independent caps. | Entry-count and record-count cases in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
 | MI-08 | Denial of service | A source contains one unterminated entry or a massive malformed UTF-8 sequence. | Pending line bytes are bounded before decode; decoding is strict UTF-8 and produces a typed content-free error. | Unit and property cases in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
 | MI-09 | Spoofing / tampering | An input author chooses UTF-7, a BOM-dependent codec, a dynamically registered codec, or truncated multibyte data to change visible text. | A static encoding alias map is consulted before codec lookup; only explicit allow-listed codecs are decoded, with `errors="strict"` and a byte cap. | [`test_encoding_fuzz.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_encoding_fuzz.py) |
 | MI-10 | Tampering | Locale-free dates/numbers or an unsupported locale are coerced into a convenient interpretation, changing which identifiers are detected. | Frozen locale values and conservative parsers in [`locale_formats.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/locale_formats.py) preserve ambiguous results; [`get_patterns_for_language`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py) rejects unsupported languages. | [`test_locale_formats.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/core/test_locale_formats.py), [`test_pii_i18n.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/test_pii_i18n.py) |
-| MI-11 | Elevation of privilege | A ZIP uses encryption, multiple members, a non-file member layout, or a high-complexity compression method to escape the intended parser boundary. | The archive boundary accepts exactly one unencrypted regular member and an explicit compression-method allow-list; no member is extracted to the filesystem. | Archive cases and the bounded dictionary property target in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
+| MI-11 | Elevation of privilege | A ZIP uses encryption, multiple members, a non-file member layout, ZIP64/multi-disk metadata, or a high-complexity compression method to escape the intended parser boundary. | The archive boundary accepts one standard single-disk end record, exactly one unencrypted regular member, and an explicit compression-method allow-list; no member is extracted to the filesystem. | Archive cases and the bounded dictionary property target in [`test_dictionary_hardening.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_dictionary_hardening.py) |
 
 ### Hardening decision and tradeoffs
 
@@ -106,9 +108,10 @@ each future segmenter or converter to duplicate checks. This preserves the
 local-first architecture and adds no network, subprocess, cache, or persistent
 state. The main compatibility cost is intentional: dictionaries containing
 regex metacharacters, Unicode controls, non-UTF-8 text, multiple ZIP members, or
-more than 100,000 entries must be cleaned or split before use. The main runtime
-cost is one bounded streaming validation pass; memory is bounded by the entry
-objects plus a 64 KiB read chunk and one bounded pending line.
+more than 100,000 accepted entries or 200,000 physical records must be cleaned
+or split before use. The main runtime cost is one bounded streaming validation
+pass; memory is bounded by the entry objects plus a 64 KiB read chunk and one
+bounded pending line.
 
 We considered accepting arbitrary codecs through `codecs.lookup` and escaping
 regex-like terms instead of rejecting them. Both options are more compatible,
@@ -118,8 +121,9 @@ model. The fail-closed boundary is preferable for a PHI-processing library.
 
 Residual risks remain:
 
-- ZIP central-directory parsing occurs before member validation, so the
-  compressed-source cap remains important.
+- Standard ZIP end-record parsing now bounds the entry count before central
+  directory materialization; the compressed-source cap remains an independent
+  defense against oversized metadata and comments.
 - A syntactically valid dictionary can still poison segmentation quality or
   suppress PII recall. Provenance, review, and recall gates remain necessary.
 - Confusable detection is a warning, not a rejection, because legitimate

@@ -1325,7 +1325,9 @@ def decode_ingestion_bytes(
         encoding: Explicit allow-listed encoding name. Ambiguous or executable
             codecs such as ``utf-7`` and BOM-selected ``utf-16`` are rejected.
         source_path: Optional source path used only to derive a SHA-256 log key.
-        max_bytes: Positive input-size cap applied before decoding.
+        max_bytes: Positive input-size cap no greater than
+            :data:`MAX_INGESTION_BYTES`, applied before materialization and
+            decoding.
         warn_on_confusables: Emit :class:`ConfusableIngestionWarning` when the
             decoded text is mixed-script or contains folded confusables.
 
@@ -1340,17 +1342,20 @@ def decode_ingestion_bytes(
         raise TypeError("data must be a bytes-like object")
     if not isinstance(encoding, str):
         raise TypeError("encoding must be text")
-    if max_bytes <= 0:
-        raise ValueError("max_bytes must be positive")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int):
+        raise TypeError("max_bytes must be an integer")
+    if not 0 < max_bytes <= MAX_INGESTION_BYTES:
+        raise ValueError(f"max_bytes must be between 1 and {MAX_INGESTION_BYTES}")
 
-    payload = bytes(data)
     path_hash = _ingestion_path_hash(source_path)
-    if len(payload) > max_bytes:
+    payload_size = data.nbytes if isinstance(data, memoryview) else len(data)
+    if payload_size > max_bytes:
         _reject_encoding(
             EncodingInputLimitError("Encoded input exceeds the configured limit"),
             path_hash=path_hash,
-            size_bytes=len(payload),
+            size_bytes=payload_size,
         )
+    payload = _materialize_ingestion_bytes(data)
 
     normalized_name = encoding.strip().casefold().replace("_", "-")
     codec_name = _INGESTION_ENCODING_ALIASES.get(normalized_name)
@@ -1370,12 +1375,7 @@ def decode_ingestion_bytes(
             size_bytes=len(payload),
         )
 
-    normalization = normalize_for_pii_detection(text)
-    warning_codes: list[str] = []
-    if normalization.mixed_script:
-        warning_codes.append("mixed_script")
-    if normalization.folded_confusables:
-        warning_codes.append("confusable_characters")
+    warning_codes = list(_ingestion_warning_codes(text))
     if warning_codes and warn_on_confusables:
         warnings.warn(
             "decoded ingestion requires mixed-script/confusable review; "
@@ -1390,6 +1390,47 @@ def decode_ingestion_bytes(
         byte_length=len(payload),
         warning_codes=tuple(warning_codes),
     )
+
+
+def _materialize_ingestion_bytes(
+    data: bytes | bytearray | memoryview,
+) -> bytes:
+    """Return immutable bytes after the caller has enforced the byte budget."""
+
+    return data if isinstance(data, bytes) else bytes(data)
+
+
+def _ingestion_warning_codes(text: str) -> tuple[str, ...]:
+    """Return content-free warnings without building normalization offset maps."""
+
+    warning_codes: list[str] = []
+    if _contains_mixed_script_identifier(text):
+        warning_codes.append("mixed_script")
+    if any(char == "\u3000" or _fold_confusable_char(char) != char for char in text):
+        warning_codes.append("confusable_characters")
+    return tuple(warning_codes)
+
+
+def _contains_mixed_script_identifier(text: str) -> bool:
+    """Detect mixed-script identifier runs in one pass and constant space."""
+
+    first_script: str | None = None
+    mixed = False
+    for char in text:
+        if not _is_identifier_char(char):
+            if mixed:
+                return True
+            first_script = None
+            mixed = False
+            continue
+        script = _script_for_char(char)
+        if script is None:
+            continue
+        if first_script is None:
+            first_script = script
+        elif script != first_script:
+            mixed = True
+    return mixed
 
 
 def decode_legacy_text(

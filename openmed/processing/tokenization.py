@@ -4,8 +4,11 @@ import hashlib
 import importlib
 import json
 import logging
+import math
 import re
 import shutil
+import stat
+import struct
 import unicodedata
 import zipfile
 from dataclasses import dataclass
@@ -36,8 +39,18 @@ logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
 _DICTIONARY_READ_CHUNK_BYTES = 64 * 1024
+_ZIP_EOCD_MIN_BYTES = 22
+_ZIP_MAX_COMMENT_BYTES = 65_535
+_ZIP_EOCD_SIGNATURE = b"PK\x05\x06"
 _REGEX_CONSTRUCT_CHARS = frozenset(r".^$*+?{}[]\|()")
 _ALLOWED_DICTIONARY_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
+_MAX_DICTIONARY_COMPRESSED_BYTES = 16 * 1024 * 1024
+_MAX_DICTIONARY_DECOMPRESSED_BYTES = 64 * 1024 * 1024
+_MAX_DICTIONARY_ENTRIES = 100_000
+_MAX_DICTIONARY_RECORDS = 200_000
+_MAX_DICTIONARY_ENTRY_BYTES = 4 * 1024
+_MAX_DICTIONARY_TERM_CHARACTERS = 256
+_MAX_DICTIONARY_EXPANSION_RATIO = 100.0
 SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES = 64 * 1024
 SEGMENTER_RESOURCE_DIRECTORY = "segmenter"
 DEFAULT_SEGMENTER_ID = "openmed-cjk-indic-v1"
@@ -95,31 +108,61 @@ _NUMERIC_CONNECTORS = frozenset({"/", "-", ".", ",", ":"})
 
 @dataclass(frozen=True)
 class DictionaryLimits:
-    """Resource and entry limits for untrusted dictionary files."""
+    """Lower-only resource, record, and entry limits for dictionaries."""
 
-    max_compressed_bytes: int = 16 * 1024 * 1024
-    max_decompressed_bytes: int = 64 * 1024 * 1024
-    max_entries: int = 100_000
-    max_entry_bytes: int = 4 * 1024
-    max_term_characters: int = 256
-    max_expansion_ratio: float = 100.0
+    max_compressed_bytes: int = _MAX_DICTIONARY_COMPRESSED_BYTES
+    max_decompressed_bytes: int = _MAX_DICTIONARY_DECOMPRESSED_BYTES
+    max_entries: int = _MAX_DICTIONARY_ENTRIES
+    max_records: int = _MAX_DICTIONARY_RECORDS
+    max_entry_bytes: int = _MAX_DICTIONARY_ENTRY_BYTES
+    max_term_characters: int = _MAX_DICTIONARY_TERM_CHARACTERS
+    max_expansion_ratio: float = _MAX_DICTIONARY_EXPANSION_RATIO
 
     def __post_init__(self) -> None:
-        """Reject non-positive limits instead of silently removing a guard."""
-        values = {
-            "max_compressed_bytes": self.max_compressed_bytes,
-            "max_decompressed_bytes": self.max_decompressed_bytes,
-            "max_entries": self.max_entries,
-            "max_entry_bytes": self.max_entry_bytes,
-            "max_term_characters": self.max_term_characters,
-            "max_expansion_ratio": self.max_expansion_ratio,
+        """Allow callers to lower, but never raise or disable, a guard."""
+        integer_limits = {
+            "max_compressed_bytes": (
+                self.max_compressed_bytes,
+                _MAX_DICTIONARY_COMPRESSED_BYTES,
+            ),
+            "max_decompressed_bytes": (
+                self.max_decompressed_bytes,
+                _MAX_DICTIONARY_DECOMPRESSED_BYTES,
+            ),
+            "max_entries": (self.max_entries, _MAX_DICTIONARY_ENTRIES),
+            "max_records": (self.max_records, _MAX_DICTIONARY_RECORDS),
+            "max_entry_bytes": (
+                self.max_entry_bytes,
+                _MAX_DICTIONARY_ENTRY_BYTES,
+            ),
+            "max_term_characters": (
+                self.max_term_characters,
+                _MAX_DICTIONARY_TERM_CHARACTERS,
+            ),
         }
-        for name, value in values.items():
-            if value <= 0:
-                raise ValueError(f"Dictionary limit {name} must be positive")
+        for name, (value, ceiling) in integer_limits.items():
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"Dictionary limit {name} must be an integer")
+            if not 0 < value <= ceiling:
+                raise ValueError(
+                    f"Dictionary limit {name} must be between 1 and {ceiling}"
+                )
+
+        ratio = self.max_expansion_ratio
+        if isinstance(ratio, bool) or not isinstance(ratio, (int, float)):
+            raise TypeError("Dictionary limit max_expansion_ratio must be numeric")
+        if not math.isfinite(ratio) or not 0 < ratio <= _MAX_DICTIONARY_EXPANSION_RATIO:
+            raise ValueError(
+                "Dictionary limit max_expansion_ratio must be finite and between "
+                f"0 and {_MAX_DICTIONARY_EXPANSION_RATIO}"
+            )
 
 
 DEFAULT_DICTIONARY_LIMITS = DictionaryLimits()
+_SEGMENTER_RESOURCE_DICTIONARY_LIMITS = DictionaryLimits(
+    max_compressed_bytes=SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES,
+    max_decompressed_bytes=SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES,
+)
 
 
 @dataclass(frozen=True)
@@ -171,6 +214,16 @@ class DictionaryEntryLimitError(DictionaryIngestionError):
         super().__init__("Dictionary entry count exceeds the configured limit")
 
 
+class DictionaryRecordLimitError(DictionaryIngestionError):
+    """Raised as soon as physical dictionary records cross their cap."""
+
+    reason = "record_limit"
+
+    def __init__(self, observed_count: int) -> None:
+        self.observed_count = observed_count
+        super().__init__("Dictionary record count exceeds the configured limit")
+
+
 class DictionaryEncodingError(DictionaryIngestionError):
     """Raised when a dictionary is not strict UTF-8."""
 
@@ -195,6 +248,7 @@ class _DictionaryMetadata:
     path_hash: str
     size_bytes: int
     entry_count: int = 0
+    record_count: int = 0
 
 
 def load_user_dictionary(
@@ -302,8 +356,9 @@ def _load_zipped_dictionary(
     metadata: _DictionaryMetadata,
 ) -> tuple[UserDictionaryEntry, ...]:
     try:
+        _preflight_single_member_zip(path, metadata)
         with zipfile.ZipFile(path) as archive:
-            members = [info for info in archive.infolist() if not info.is_dir()]
+            members = archive.infolist()
             if len(members) != 1:
                 _reject_dictionary(
                     DictionaryArchiveError(
@@ -312,6 +367,14 @@ def _load_zipped_dictionary(
                     metadata,
                 )
             member = members[0]
+            member_type = stat.S_IFMT(member.external_attr >> 16)
+            if member.is_dir() or member_type not in {0, stat.S_IFREG}:
+                _reject_dictionary(
+                    DictionaryArchiveError(
+                        "Dictionary archive member must be a regular file"
+                    ),
+                    metadata,
+                )
             if member.flag_bits & 0x1:
                 _reject_dictionary(
                     DictionaryArchiveError(
@@ -351,6 +414,108 @@ def _load_zipped_dictionary(
         )
 
 
+def _preflight_single_member_zip(
+    path: Path,
+    metadata: _DictionaryMetadata,
+) -> None:
+    """Reject multi-entry and multi-disk ZIPs before central-directory parsing."""
+
+    if metadata.size_bytes < _ZIP_EOCD_MIN_BYTES:
+        _reject_dictionary(
+            DictionaryArchiveError("Dictionary archive is invalid"), metadata
+        )
+
+    tail_size = min(
+        metadata.size_bytes,
+        _ZIP_EOCD_MIN_BYTES + _ZIP_MAX_COMMENT_BYTES,
+    )
+    with path.open("rb") as handle:
+        handle.seek(-tail_size, 2)
+        tail = handle.read(tail_size)
+
+    position = tail.rfind(_ZIP_EOCD_SIGNATURE)
+    end_record: tuple[bytes, int, int, int, int, int, int, int] | None = None
+    while position >= 0:
+        if position + _ZIP_EOCD_MIN_BYTES <= len(tail):
+            candidate = struct.unpack_from("<4s4H2IH", tail, position)
+            comment_length = candidate[-1]
+            if position + _ZIP_EOCD_MIN_BYTES + comment_length == len(tail):
+                end_record = candidate
+                break
+        position = tail.rfind(_ZIP_EOCD_SIGNATURE, 0, position)
+
+    if end_record is None:
+        _reject_dictionary(
+            DictionaryArchiveError("Dictionary archive is invalid"), metadata
+        )
+
+    end_record_offset = metadata.size_bytes - tail_size + position
+
+    (
+        _signature,
+        disk_number,
+        central_directory_disk,
+        entries_on_disk,
+        total_entries,
+        central_directory_size,
+        central_directory_offset,
+        _comment_length,
+    ) = end_record
+    if (
+        disk_number != 0
+        or central_directory_disk != 0
+        or entries_on_disk != 1
+        or total_entries != 1
+        or central_directory_size == 0xFFFFFFFF
+        or central_directory_offset == 0xFFFFFFFF
+    ):
+        _reject_dictionary(
+            DictionaryArchiveError(
+                "Dictionary archive must contain exactly one regular file"
+            ),
+            metadata,
+        )
+
+    prefix_size = end_record_offset - central_directory_size - central_directory_offset
+    actual_directory_offset = central_directory_offset + prefix_size
+    if prefix_size < 0 or actual_directory_offset < 0:
+        _reject_dictionary(
+            DictionaryArchiveError("Dictionary archive is invalid"), metadata
+        )
+
+    with path.open("rb") as handle:
+        handle.seek(actual_directory_offset)
+        central_header = handle.read(46)
+    if len(central_header) != 46:
+        _reject_dictionary(
+            DictionaryArchiveError("Dictionary archive is invalid"), metadata
+        )
+    central_fields = struct.unpack("<4s6H3I5H2I", central_header)
+    filename_length = central_fields[10]
+    extra_length = central_fields[11]
+    comment_length = central_fields[12]
+    disk_start = central_fields[13]
+    compressed_size = central_fields[8]
+    uncompressed_size = central_fields[9]
+    local_header_offset = central_fields[16]
+    single_entry_size = 46 + filename_length + extra_length + comment_length
+    if (
+        central_fields[0] != b"PK\x01\x02"
+        or disk_start != 0
+        or compressed_size == 0xFFFFFFFF
+        or uncompressed_size == 0xFFFFFFFF
+        or local_header_offset == 0xFFFFFFFF
+        or single_entry_size != central_directory_size
+        or actual_directory_offset + single_entry_size != end_record_offset
+    ):
+        _reject_dictionary(
+            DictionaryArchiveError(
+                "Dictionary archive must contain exactly one regular file"
+            ),
+            metadata,
+        )
+
+
 def _parse_dictionary_stream(
     handle: Any,
     limits: DictionaryLimits,
@@ -374,21 +539,16 @@ def _parse_dictionary_stream(
                 metadata,
             )
         pending.extend(chunk)
-        while True:
-            newline_index = pending.find(b"\n")
-            if newline_index < 0:
-                if len(pending) > limits.max_entry_bytes:
-                    _reject_dictionary(
-                        DictionaryEntryValidationError(
-                            "entry_byte_length", line_number + 1
-                        ),
-                        metadata,
-                    )
-                break
-            raw_line = bytes(pending[:newline_index])
-            del pending[: newline_index + 1]
+        complete_lines = pending.split(b"\n")
+        pending = bytearray(complete_lines.pop())
+        for raw_line in complete_lines:
             line_number += 1
             _append_dictionary_entry(raw_line, line_number, entries, limits, metadata)
+        if len(pending) > limits.max_entry_bytes:
+            _reject_dictionary(
+                DictionaryEntryValidationError("entry_byte_length", line_number + 1),
+                metadata,
+            )
 
     if pending:
         line_number += 1
@@ -398,12 +558,18 @@ def _parse_dictionary_stream(
 
 
 def _append_dictionary_entry(
-    raw_line: bytes,
+    raw_line: bytes | bytearray,
     line_number: int,
     entries: list[UserDictionaryEntry],
     limits: DictionaryLimits,
     metadata: _DictionaryMetadata,
 ) -> None:
+    metadata.record_count += 1
+    if metadata.record_count > limits.max_records:
+        _reject_dictionary(
+            DictionaryRecordLimitError(metadata.record_count),
+            metadata,
+        )
     if len(raw_line) > limits.max_entry_bytes:
         _reject_dictionary(
             DictionaryEntryValidationError("entry_byte_length", line_number),
@@ -854,9 +1020,11 @@ class ResourceSegmenter:
             role = resource.get("role")
             if role == "han_dictionary":
                 words = {
-                    line.split()[0]
-                    for line in path.read_text(encoding="utf-8").splitlines()
-                    if line.strip() and not line.lstrip().startswith("#")
+                    entry.term
+                    for entry in load_user_dictionary(
+                        path,
+                        limits=_SEGMENTER_RESOURCE_DICTIONARY_LIMITS,
+                    )
                 }
                 self._han_words = frozenset(words)
                 self._max_han_word_length = max(map(len, words), default=1)
