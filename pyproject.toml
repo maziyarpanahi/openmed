@@ -295,6 +295,7 @@ include = [
   "openmed/core/thresholds.json",
   "openmed/core/policies/*.json",
   "openmed/core/schemas/json/*.json",
+  "eval/redteam/corpus/adversarial_phi.jsonl",
   "gates/baseline.json",
   "models.jsonl",
   "models.jsonl.sigstore.json",
@@ -303,6 +304,9 @@ include = [
   "README.md",
   "pyproject.toml"
 ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"eval/redteam/corpus/adversarial_phi.jsonl" = "openmed/eval/data/adversarial_phi.jsonl"
 
 [tool.hatch.version]
 path = "openmed/__about__.py"
