@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Mapping
 
 from openmed.core.terminology_licenses import (
@@ -26,6 +27,26 @@ class DatasetLicense:
     def to_dict(self) -> dict[str, str]:
         return {
             "dataset": self.dataset,
+            "license_id": self.license_id,
+            "source_url": self.source_url,
+            "redistribution": self.redistribution,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
+class EncoderLicense:
+    """License and provenance policy for an optional encoder backbone."""
+
+    family: str
+    license_id: str
+    source_url: str
+    redistribution: str
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "family": self.family,
             "license_id": self.license_id,
             "source_url": self.source_url,
             "redistribution": self.redistribution,
@@ -165,6 +186,29 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
 }
 
 
+PERMISSIVE_ENCODER_LICENSES: Mapping[str, EncoderLicense] = MappingProxyType(
+    {
+        "muril": EncoderLicense(
+            family="MuRIL",
+            license_id="Apache-2.0",
+            source_url="https://huggingface.co/google/muril-base-cased",
+            redistribution="user-supplied-reference-only",
+            notes=(
+                "OpenMed bundles no weights. MuRIL supports 17 Indian languages "
+                "and transliterated text, including Hinglish/code-mixed paths."
+            ),
+        ),
+        "indicbert": EncoderLicense(
+            family="IndicBERT",
+            license_id="MIT",
+            source_url="https://huggingface.co/ai4bharat/indic-bert",
+            redistribution="user-supplied-reference-only",
+            notes="OpenMed bundles no weights; users resolve an approved repo or local path.",
+        ),
+    }
+)
+
+
 def license_for(dataset: str) -> DatasetLicense:
     try:
         return PUBLIC_DATASET_LICENSES[dataset]
@@ -172,14 +216,29 @@ def license_for(dataset: str) -> DatasetLicense:
         raise ValueError(f"unknown dataset license: {dataset}") from exc
 
 
+def encoder_license_for(family: str) -> EncoderLicense:
+    """Return permissive license metadata for a supported Indic encoder."""
+
+    if not isinstance(family, str):
+        raise TypeError("encoder family must be a string")
+    normalized = family.strip().casefold().replace("-", "").replace("_", "")
+    try:
+        return PERMISSIVE_ENCODER_LICENSES[normalized]
+    except KeyError as exc:
+        raise ValueError(f"unknown permissive encoder family: {family}") from exc
+
+
 __all__ = [
     "DatasetLicense",
+    "EncoderLicense",
+    "PERMISSIVE_ENCODER_LICENSES",
     "PUBLIC_DATASET_LICENSES",
     "RestrictedTerminologyLocationError",
     "TERMINOLOGY_REDISTRIBUTION_PERMITTED",
     "TERMINOLOGY_REDISTRIBUTION_RESTRICTED",
     "TERMINOLOGY_REDISTRIBUTION_VALUES",
     "TerminologyLicense",
+    "encoder_license_for",
     "license_for",
     "validate_terminology_source_path",
 ]
