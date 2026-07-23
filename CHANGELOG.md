@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline, native ARM64 SMS-scale INT8 latency benchmark with a
+  committed synthetic corpus, exact model artifact provenance, aggregate
+  p50/p95/throughput/peak-RSS reporting, a Raspberry Pi 5 target envelope, and
+  a CI gate that fails regressions beyond the permitted 20% tolerance (#1456).
 - Added a Swahili README and an African developer onboarding guide covering
   bandwidth-aware model sizing and offline setup, POPIA/NDPA policy pointers,
   OpenMRS FHIR and DHIS2 Tracker recipes, community links, and shared
