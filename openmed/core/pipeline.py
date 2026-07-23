@@ -766,6 +766,7 @@ class Pipeline:
                     self.policy.name if self.policy is not None else "hipaa_safe_harbor"
                 ),
                 audit=audit,
+                config=self.config,
             )
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
@@ -1326,6 +1327,7 @@ class Pipeline:
         policy_name: Optional[str] = None,
         policy: str = "hipaa_safe_harbor",
         audit: bool = False,
+        config: Any = None,
     ) -> Any:
         from . import pii
 
@@ -1353,6 +1355,7 @@ class Pipeline:
             policy_name=policy_name,
             policy=policy,
             audit=audit,
+            config=config,
         )
 
     def _entities_to_spans(

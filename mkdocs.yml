@@ -87,6 +87,8 @@ nav:
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
+      - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
+      - Africa Attestation Review Template: compliance/templates/africa-data-residency-attestation.md
       - HIPAA Safe Harbor Attestation: compliance/hipaa-safe-harbor-attestation.md
       - Breach Notification Runbook: compliance/breach-notification-runbook.md
       - Breach Report Template: compliance/templates/breach-report-template.md

@@ -662,6 +662,39 @@ class AuditReport:
     def export_review_bundle_json(self) -> str:
         return _canonical_json(self.export_review_bundle())
 
+    def attest(
+        self,
+        profile: str,
+        *,
+        model_artifacts: Mapping[str, str | Path],
+        generated_at: Any = None,
+        template_path: str | Path | None = None,
+    ) -> Any:
+        """Create a data-residency attestation from this audit report.
+
+        Args:
+            profile: Bundled jurisdiction attestation profile identifier.
+            model_artifacts: Mapping of model labels to local files or
+                directories. Contents are hashed without being copied into the
+                attestation.
+            generated_at: Optional timezone-aware timestamp override.
+            template_path: Optional JSON template path for controlled wording
+                overrides.
+
+        Returns:
+            An ``AttestationReport`` with JSON and Markdown renderers.
+        """
+
+        from .attestation import generate_attestation
+
+        return generate_attestation(
+            self,
+            profile,
+            model_artifacts=model_artifacts,
+            generated_at=generated_at,
+            template_path=template_path,
+        )
+
 
 def recompute_repro_hash(report: AuditReport | Mapping[str, Any]) -> str:
     """Offline helper to recompute a report hash from an object or mapping."""
