@@ -162,7 +162,8 @@ zh-hanlp = [
 ]
 
 awq = [
-  "autoawq>=0.2.9",
+  "autoawq==0.2.9; sys_platform == 'linux'",
+  "transformers==5.5.0; sys_platform == 'linux'",
 ]
 
 gptq = [
@@ -287,6 +288,14 @@ docs = [
 [project.scripts]
 openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "awq" },
+    { extra = "gliner" },
+  ],
+]
 
 [tool.hatch.build]
 include = [

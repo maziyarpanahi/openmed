@@ -67,6 +67,7 @@ nav:
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
       - OpenVINO Runtime: runtimes/openvino.md
+      - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
