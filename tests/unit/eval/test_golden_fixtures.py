@@ -604,11 +604,11 @@ def test_danish_i18n_jsonl_fixture_offsets_and_cpr():
         (span.label, span.start, span.end, span.text) for span in fixture.gold_spans
     }
     assert spans == {
-        ("DATE", 27, 37, "17/08/1985"),
-        ("PHONE", 47, 62, "+45 20 12 34 56"),
-        ("ID_NUM", 68, 79, "170885-1234"),
-        ("STREET_ADDRESS", 89, 100, "Bredgade 12"),
-        ("ZIPCODE", 102, 106, "1260"),
+        ("DATE", 26, 36, "1985-08-17"),
+        ("PHONE", 46, 61, "+45 20 12 34 56"),
+        ("ID_NUM", 67, 78, "170885-1234"),
+        ("STREET_ADDRESS", 88, 103, "Nørrebrogade 12"),
+        ("ZIPCODE", 105, 109, "2200"),
     }
 
     gold_by_label = {span.label: span.text for span in fixture.gold_spans}

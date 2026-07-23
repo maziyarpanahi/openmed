@@ -166,7 +166,8 @@ zh-hanlp = [
 ]
 
 awq = [
-  "autoawq>=0.2.9",
+  "autoawq==0.2.9; sys_platform == 'linux'",
+  "transformers==5.5.0; sys_platform == 'linux'",
 ]
 
 gptq = [
@@ -292,6 +293,14 @@ docs = [
 openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"
 
+[tool.uv]
+conflicts = [
+  [
+    { extra = "awq" },
+    { extra = "gliner" },
+  ],
+]
+
 [tool.hatch.build]
 include = [
   "openmed/**",
@@ -299,6 +308,7 @@ include = [
   "openmed/core/thresholds.json",
   "openmed/core/policies/*.json",
   "openmed/core/schemas/json/*.json",
+  "eval/redteam/corpus/adversarial_phi.jsonl",
   "gates/baseline.json",
   "models.jsonl",
   "models.jsonl.sigstore.json",
@@ -307,6 +317,9 @@ include = [
   "README.md",
   "pyproject.toml"
 ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"eval/redteam/corpus/adversarial_phi.jsonl" = "openmed/eval/data/adversarial_phi.jsonl"
 
 [tool.hatch.version]
 path = "openmed/__about__.py"

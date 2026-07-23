@@ -32,7 +32,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>2,000+ models</b> &nbsp;·&nbsp; <b>21 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ models</b> &nbsp;·&nbsp; <b>24 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -504,10 +504,10 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (22 supported languages)
+## Multilingual PII (25 supported languages)
 
-Extraction and de-identification support **22 supported PII language codes**:
-`am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
+Extraction and de-identification support **25 supported PII language codes**:
+`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
 Chinese routing currently uses the documented multilingual default-model
 placeholder while dedicated Chinese model weights remain separate.
 An optional, user-configured Indic NER family accepts nine additional routes
@@ -515,7 +515,7 @@ An optional, user-configured Indic NER family accepts nine additional routes
 Hindi and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
 automatically selects those weights.
 OpenMed also includes validator-backed national-ID coverage for additional
-ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Danish.
+ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
 
 See the [per-language guide](docs/languages.md) for each code's default PII
 model, Faker locale, and a before/after de-identification example.

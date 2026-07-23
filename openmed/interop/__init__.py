@@ -69,7 +69,7 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         name="llamaindex",
         module="openmed.interop.llamaindex",
         extra="llamaindex",
-        description="LlamaIndex FunctionTool adapter",
+        description="LlamaIndex node redaction and FunctionTool adapters",
     ),
     "pandas": AdapterSpec(
         name="pandas",

@@ -2,6 +2,7 @@
   "default_pii_models": {
     "am": "OpenMed/privacy-filter-multilingual",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "da": "OpenMed/privacy-filter-multilingual",
     "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
     "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
@@ -13,8 +14,10 @@
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+    "no": "OpenMed/privacy-filter-multilingual",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
+    "sv": "OpenMed/privacy-filter-multilingual",
     "sw": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
@@ -56,6 +59,7 @@
     "mr": "mr_IN",
     "ms": "ms_MY",
     "nl": "nl_NL",
+    "no": "no_NO",
     "or": "or_IN",
     "pa": "pa_IN",
     "pl": "pl_PL",
@@ -64,6 +68,7 @@
     "rw": "rw_RW",
     "sk": "sk_SK",
     "sr": "sr_RS",
+    "sv": "sv_SE",
     "sw": "sw",
     "ta": "ta_IN",
     "te": "en_IN",
@@ -81,7 +86,6 @@
     "af",
     "bg",
     "cs",
-    "da",
     "el",
     "et",
     "fi",
@@ -197,6 +201,10 @@
       "nl_NL",
       "ssn"
     ],
+    "no": [
+      "no_NO",
+      "ssn"
+    ],
     "pl": [
       "pl_PL",
       "pesel"
@@ -220,6 +228,10 @@
     "sr": [
       "sr_RS",
       "jmbg"
+    ],
+    "sv": [
+      "sv_SE",
+      "ssn"
     ],
     "sw": [
       "sw",
@@ -349,6 +361,7 @@
   "supported_languages": [
     "am",
     "ar",
+    "da",
     "de",
     "en",
     "es",
@@ -360,8 +373,10 @@
     "ja",
     "ko",
     "nl",
+    "no",
     "pt",
     "ro",
+    "sv",
     "sw",
     "te",
     "th",

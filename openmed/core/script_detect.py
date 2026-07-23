@@ -23,9 +23,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
+
+if TYPE_CHECKING:
+    from ..processing.legacy_encoding import LegacyFontMap
 
 UNKNOWN_SCRIPT = "Unknown"
 
@@ -519,6 +522,8 @@ class DetectionNormalization:
     folded_native_digits: int = 0
     indic_changes: int = 0
     indic_scripts: tuple[str, ...] = ()
+    converted_legacy_bytes: int = 0
+    legacy_encoding: str = "unicode"
     scripts: tuple[str, ...] = ()
     mixed_script: bool = False
     chinese_variant_normalized: bool = False
@@ -534,6 +539,7 @@ class DetectionNormalization:
             or self.folded_confusables > 0
             or self.folded_native_digits > 0
             or self.indic_changes > 0
+            or self.converted_legacy_bytes > 0
             or self.chinese_variant_normalized
         )
 
@@ -565,6 +571,8 @@ class DetectionNormalization:
             "folded_native_digits": self.folded_native_digits,
             "indic_changes": self.indic_changes,
             "indic_scripts": list(self.indic_scripts),
+            "converted_legacy_bytes": self.converted_legacy_bytes,
+            "legacy_encoding": self.legacy_encoding,
             "mixed_script": self.mixed_script,
             "opencc_available": self.opencc_available,
             "removed_zero_width": self.removed_zero_width,
@@ -1146,6 +1154,93 @@ def normalize_for_pii_detection(
     *,
     width_convention: str = "cjk",
     chinese_target_script: str | None = None,
+    legacy_font_map: LegacyFontMap | None = None,
+) -> DetectionNormalization:
+    """Convert legacy Indic text, then apply offset-safe Unicode defenses.
+
+    Likely ISCII-1991 input and caller-mapped legacy-font runs are converted
+    before script routing. The resulting offsets are composed back to the
+    original source-byte coordinate system; ordinary Unicode text follows the
+    existing normalization path unchanged.
+    """
+
+    from ..processing.legacy_encoding import convert_legacy_encoding
+
+    legacy_conversion = convert_legacy_encoding(
+        text,
+        legacy_font_map=legacy_font_map,
+    )
+    normalized = _normalize_unicode_for_pii_detection(
+        legacy_conversion.text,
+        width_convention=width_convention,
+        chinese_target_script=chinese_target_script,
+    )
+    if legacy_conversion.encoding == "unicode":
+        return normalized
+
+    legacy_origins = legacy_conversion.offset_map.converted_to_original_spans
+    starts: list[int] = []
+    ends: list[int] = []
+    for start, end in zip(normalized.offset_starts, normalized.offset_ends):
+        source_start, source_end = _source_span_for_legacy_range(
+            legacy_origins,
+            start,
+            end,
+        )
+        starts.append(source_start)
+        ends.append(source_end)
+
+    converted_sources: set[int] = set()
+    converted_by_span: dict[tuple[int, int], list[str]] = {}
+    for char, span in zip(legacy_conversion.text, legacy_origins):
+        converted_by_span.setdefault(span, []).append(char)
+    for (start, end), converted_chars in converted_by_span.items():
+        if text[start:end] != "".join(converted_chars):
+            converted_sources.update(range(start, end))
+
+    return DetectionNormalization(
+        text=normalized.text,
+        original_length=len(text),
+        offset_starts=tuple(starts),
+        offset_ends=tuple(ends),
+        removed_zero_width=normalized.removed_zero_width,
+        stripped_combining_marks=normalized.stripped_combining_marks,
+        folded_confusables=normalized.folded_confusables,
+        folded_native_digits=normalized.folded_native_digits,
+        indic_changes=normalized.indic_changes,
+        indic_scripts=normalized.indic_scripts,
+        converted_legacy_bytes=len(converted_sources),
+        legacy_encoding=legacy_conversion.encoding,
+        scripts=normalized.scripts,
+        mixed_script=normalized.mixed_script,
+        chinese_variant_normalized=normalized.chinese_variant_normalized,
+        chinese_target_script=normalized.chinese_target_script,
+        opencc_available=normalized.opencc_available,
+    )
+
+
+def _source_span_for_legacy_range(
+    origins: tuple[tuple[int, int], ...],
+    start: int,
+    end: int,
+) -> tuple[int, int]:
+    spans = origins[start:end]
+    if spans:
+        return min(span[0] for span in spans), max(span[1] for span in spans)
+    if start < len(origins):
+        anchor = origins[start][0]
+    elif origins:
+        anchor = origins[-1][1]
+    else:
+        anchor = 0
+    return anchor, anchor
+
+
+def _normalize_unicode_for_pii_detection(
+    text: str,
+    *,
+    width_convention: str = "cjk",
+    chinese_target_script: str | None = None,
 ) -> DetectionNormalization:
     """Fold adversarial Unicode artifacts while preserving offset remapping.
 
@@ -1240,11 +1335,11 @@ def normalize_for_pii_detection(
             and original_start > 0
             and _script_for_char(text[original_start - 1]) == "Ethiopic"
         )
-        if (
-            category == "Mn"
-            and _script_for_char(char) not in INDIC_SCRIPTS
-            and not attached_ethiopic_mark
-        ):
+        attached_indic_mark = category == "Mn" and _is_attached_indic_mark(
+            digit_folding.text,
+            index,
+        )
+        if category == "Mn" and not attached_indic_mark and not attached_ethiopic_mark:
             stripped_combining_marks += 1
             continue
 
@@ -1517,6 +1612,35 @@ def _script_for_char(char: str) -> str | None:
         if any(start <= codepoint <= end for start, end in ranges):
             return script
     return None
+
+
+def _is_attached_indic_mark(text: str, index: int) -> bool:
+    char = text[index]
+    if not _is_indic_codepoint(char) or index == 0:
+        return False
+    previous = text[index - 1]
+    return _is_indic_codepoint(previous) and unicodedata.category(previous)[0] in {
+        "L",
+        "M",
+    }
+
+
+def _is_indic_codepoint(char: str) -> bool:
+    codepoint = ord(char)
+    return any(
+        start <= codepoint <= end
+        for start, end in (
+            (0x0900, 0x097F),
+            (0x0980, 0x09FF),
+            (0x0A00, 0x0A7F),
+            (0x0A80, 0x0AFF),
+            (0x0B00, 0x0B7F),
+            (0x0B80, 0x0BFF),
+            (0x0C00, 0x0C7F),
+            (0x0C80, 0x0CFF),
+            (0x0D00, 0x0D7F),
+        )
+    )
 
 
 def _expand_detection_window(

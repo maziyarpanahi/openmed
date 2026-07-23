@@ -34,7 +34,7 @@ mtandao wako.</p>
 </p>
 
 <p>
-  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 21 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 24 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -109,7 +109,7 @@ ufunguo wa API wala ombi la mtandao.
 | Data ya mgonjwa hutoka mtandao wako  |          **Kamwe**             | Hutumwa kwa mtoa huduma  |
 | Gharama                              | Bure na chanzo huria            | Malipo kwa kila ombi     |
 | Modeli maalumu za matibabu           |            2,000+              | Chache                    |
-| Lugha za PII zinazotumia modeli      |              21                | Hutofautiana              |
+| Lugha za PII zinazotumia modeli      |              24                | Hutofautiana              |
 | Nje ya mtandao/air-gapped            |               ✅               |            ❌            |
 | Uharakishaji wa Apple Silicon (MLX)  |               ✅               | Haitumiki                 |
 | Programu asilia za iOS/macOS         | ✅ kupitia OpenMedKit           |            ❌            |
@@ -427,11 +427,11 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 22 zinazoungwa mkono)
+## PII ya lugha nyingi (lugha 25 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 22 ya lugha za PII**:
-`am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
-`pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh` na `zu`, pamoja na checkpoint
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 25 ya lugha za PII**:
+`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`,
+`nl`, `no`, `pt`, `ro`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh` na `zu`, pamoja na checkpoint
 600+ za PII. Uelekezaji wa Kichina kwa sasa hutumia kishikilia nafasi cha
 modeli chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka, huku uzito
 maalumu wa modeli ya Kichina ukiwa tofauti. Familia ya hiari ya Indic NER
@@ -440,7 +440,7 @@ iliyosanidiwa na mtumiaji hukubali njia tisa za ziada (`as`, `bn`, `gu`, `kn`,
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,
-Slovakia, Malaysia, Ufilipino na Denmark.
+Slovakia, Malaysia, Ufilipino na Finland.
 
 Tazama [mwongozo wa kila lugha](docs/languages.md) kwa modeli chaguo-msingi,
 locale ya Faker na mfano wa kabla/baada.

@@ -207,6 +207,39 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     assert "leakage" in rows[0]["benchmark"]
 
 
+def test_explicit_ner_repo_name_wins_over_inherited_pii_tags():
+    class FakeModel:
+        modelId = "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M-mlx"
+        pipeline_tag = "token-classification"
+        tags = [
+            "pii",
+            "de-identification",
+            "mlx",
+            "base_model:OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M",
+        ]
+        siblings = []
+        sha = "abc123"
+        lastModified = None
+        createdAt = None
+
+    row = generate_manifest.model_to_manifest_row(FakeModel())
+
+    assert row["family"] == "NER"
+    assert row["canonical_labels"] == ["CHEM"]
+    assert "PERSON" not in row["canonical_labels"]
+
+
+def test_generic_pii_repo_name_remains_a_pii_family_fallback():
+    assert (
+        generate_manifest._family(
+            "OpenMed/gliner-multi-pii-v1-mlx",
+            [],
+            "token-classification",
+        )
+        == "PII"
+    )
+
+
 def test_manifest_generator_infers_korean_from_repo_name():
     assert generate_manifest._languages(
         "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1", []
@@ -223,6 +256,67 @@ def test_manifest_generator_preserves_script_coverage(tmp_path):
     rows = generate_manifest.preserve_existing_enrichment([refreshed], output)
 
     assert rows[0]["script_coverage"] == previous["script_coverage"]
+
+
+def test_manifest_generator_drops_stale_script_coverage_after_family_change(
+    tmp_path,
+):
+    output = tmp_path / "models.jsonl"
+    repo_id = "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M-mlx"
+    previous = _manifest_row_fixture(repo_id=repo_id)
+    generate_manifest.write_jsonl([previous], output)
+    refreshed = _manifest_row_fixture(
+        repo_id=repo_id,
+        family="NER",
+        canonical_labels=["CHEM"],
+    )
+    del refreshed["script_coverage"]
+
+    rows = generate_manifest.preserve_existing_enrichment([refreshed], output)
+
+    assert "script_coverage" not in rows[0]
+
+
+def test_committed_ner_rows_are_not_misclassified_as_pii():
+    offenders = []
+    for row in _rows():
+        if not row["repo_id"].startswith("OpenMed/OpenMed-NER-"):
+            continue
+        if (
+            row["family"] != "NER"
+            or "script_coverage" in row
+            or row["canonical_labels"] == generate_manifest.PII_CANONICAL_LABELS
+        ):
+            offenders.append(row["repo_id"])
+
+    assert offenders == []
+
+
+def test_committed_pharma_rows_use_the_runtime_chem_label():
+    rows = [
+        row
+        for row in _rows()
+        if row["repo_id"].startswith("OpenMed/OpenMed-NER-PharmaDetect-")
+    ]
+
+    assert rows
+    assert all(row["canonical_labels"] == ["CHEM"] for row in rows)
+
+
+def test_pharma_mlx_registry_entry_uses_ner_metadata():
+    repo_id = "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M-mlx"
+
+    info = model_registry.get_model_info(repo_id)
+
+    assert info is not None
+    assert info.family == "NER"
+    assert info.category == "Pharmaceutical"
+    assert info.recommended_confidence == 0.65
+    assert info.script_coverage == {}
+    assert repo_id not in {
+        model.model_id
+        for model in model_registry.get_pii_models_by_language("en").values()
+    }
 
 
 def test_only_manifest_generator_lists_org_models():

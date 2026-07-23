@@ -357,6 +357,9 @@ _DAY_FIRST_LANGS = frozenset(
         "cs",
         "zu",
         "xh",
+        "sv",
+        "da",
+        "no",
     }
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
