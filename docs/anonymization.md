@@ -425,8 +425,8 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **22 supported PII language codes**:
-`am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
+as its source of truth and supports **25 supported PII language codes**:
+`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
 Chinese routing currently uses the documented multilingual default-model
 placeholder; dedicated Chinese model weights are not bundled.
 The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
@@ -434,7 +434,7 @@ The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
 Telugu. It loads only an explicit path or repository from
 `OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
-Polish, Latvian, Slovak, Malay, Filipino, Danish, and Urdu without adding
+Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale
 uses Faker's installed `en_PK` backend for general surrogate data while CNIC
 generation remains provider-backed and format-valid.
@@ -445,7 +445,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 21 model-backed codes plus the documented `zh` routing placeholder | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 24 model-backed codes plus the documented `zh` routing placeholder | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

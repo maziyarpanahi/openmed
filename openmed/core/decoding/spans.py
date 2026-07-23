@@ -11,10 +11,11 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
+from ..labels import supports_name_boundary_refinement
 from ..script_detect import (
     CJK_SCRIPTS,
     INDIC_SCRIPTS,
@@ -237,11 +238,174 @@ _PRIVACY_FILTER_SPAN_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = 
 )
 
 
+@dataclass(frozen=True)
+class IndicSpanRefinement:
+    """An optional name-boundary refinement with absolute source offsets."""
+
+    original_start: int
+    original_end: int
+    start: int
+    end: int
+    applied: bool
+    reason: str
+    offset_map: tuple[tuple[int, int], ...]
+    grapheme_origins: tuple[tuple[int, int], ...]
+    rule: str | None = None
+
+    def to_source_span(self, start: int, end: int) -> tuple[int, int]:
+        """Map a span relative to the refined text back to source offsets."""
+
+        if not (0 <= start <= end <= len(self.offset_map)):
+            raise ValueError("span must fit within the refined output")
+        if start == end:
+            if start < len(self.offset_map):
+                anchor = self.offset_map[start][0]
+            elif self.offset_map:
+                anchor = self.offset_map[-1][1]
+            else:
+                anchor = self.start
+            return anchor, anchor
+        return self.offset_map[start][0], self.offset_map[end - 1][1]
+
+
+def refine_indic_name_span(
+    label: str,
+    start: int,
+    end: int,
+    text: str,
+    *,
+    enabled: bool = False,
+    language: str | None = None,
+    confidence: float = 0.0,
+    allowed_stems: Iterable[str] = (),
+    minimum_confidence: float = 0.9,
+    minimum_stem_graphemes: int = 2,
+) -> IndicSpanRefinement:
+    """Optionally tighten an Indic person-name span to an allow-listed stem.
+
+    The disabled path returns the input offsets exactly. When enabled, the
+    span changes only if its canonical label is name-like, the confidence and
+    exact allow-list gates pass, and the source and proposed boundaries are
+    whole grapheme boundaries.
+    """
+
+    if not (0 <= start <= end <= len(text)):
+        raise ValueError("span must satisfy 0 <= start <= end <= len(text)")
+
+    unchanged = _indic_refinement_result(
+        text,
+        original_start=start,
+        original_end=end,
+        start=start,
+        end=end,
+        applied=False,
+        reason="disabled" if not enabled else "guard_rejected",
+    )
+    if not enabled:
+        return unchanged
+    if language is None or not supports_name_boundary_refinement(label):
+        return unchanged
+
+    # Imported lazily to keep decoding helpers independent while the processing
+    # package initializes.
+    from openmed.processing.morphology import stem_token
+
+    source_graphemes = tuple(iter_grapheme_cluster_spans(text))
+    source_boundaries = {0, *(cluster_end for _, cluster_end in source_graphemes)}
+    if start not in source_boundaries or end not in source_boundaries:
+        return _indic_refinement_result(
+            text,
+            original_start=start,
+            original_end=end,
+            start=start,
+            end=end,
+            applied=False,
+            reason="unaligned_source_span",
+        )
+
+    analysis = stem_token(
+        text[start:end],
+        language,
+        confidence=confidence,
+        allowed_stems=allowed_stems,
+        minimum_confidence=minimum_confidence,
+        minimum_stem_graphemes=minimum_stem_graphemes,
+    )
+    if not analysis.applied:
+        return unchanged
+
+    local_start, local_end = analysis.stem_span
+    refined_start = start + local_start
+    refined_end = start + local_end
+    mapped = analysis.offset_map.to_source_span(0, len(analysis.stem))
+    if (
+        local_start != 0
+        or mapped != analysis.stem_span
+        or refined_start not in source_boundaries
+        or refined_end not in source_boundaries
+        or text[refined_start:refined_end] != analysis.stem
+    ):
+        return _indic_refinement_result(
+            text,
+            original_start=start,
+            original_end=end,
+            start=start,
+            end=end,
+            applied=False,
+            reason="offset_safety_rejected",
+        )
+
+    return _indic_refinement_result(
+        text,
+        original_start=start,
+        original_end=end,
+        start=refined_start,
+        end=refined_end,
+        applied=True,
+        reason="allowlisted_suffix",
+        rule=analysis.rule,
+    )
+
+
+def _indic_refinement_result(
+    text: str,
+    *,
+    original_start: int,
+    original_end: int,
+    start: int,
+    end: int,
+    applied: bool,
+    reason: str,
+    rule: str | None = None,
+) -> IndicSpanRefinement:
+    return IndicSpanRefinement(
+        original_start=original_start,
+        original_end=original_end,
+        start=start,
+        end=end,
+        applied=applied,
+        reason=reason,
+        offset_map=tuple((index, index + 1) for index in range(start, end)),
+        grapheme_origins=tuple(
+            (cluster_start, cluster_end)
+            for cluster_start, cluster_end in iter_grapheme_cluster_spans(text)
+            if start <= cluster_start and cluster_end <= end
+        ),
+        rule=rule,
+    )
+
+
 def refine_privacy_filter_span(
     label: str,
     start: int,
     end: int,
     text: str,
+    *,
+    indic_morphology: bool = False,
+    language: str | None = None,
+    confidence: float = 0.0,
+    morphology_allowlist: Iterable[str] = (),
+    minimum_morphology_confidence: float = 0.9,
 ) -> tuple[int, int]:
     """Tighten a PII span without crossing grapheme or script boundaries.
 
@@ -273,7 +437,21 @@ def refine_privacy_filter_span(
             if span_text.lower().endswith(suffix):
                 end -= len(suffix)
                 break
-    return trim_span_whitespace(start, end, text)
+    start, end = trim_span_whitespace(start, end, text)
+    if indic_morphology:
+        refinement = refine_indic_name_span(
+            label,
+            start,
+            end,
+            text,
+            enabled=True,
+            language=language,
+            confidence=confidence,
+            allowed_stems=morphology_allowlist,
+            minimum_confidence=minimum_morphology_confidence,
+        )
+        return refinement.start, refinement.end
+    return start, end
 
 
 def _find_structured_match(
@@ -715,11 +893,13 @@ def stable_span_key(span: Any) -> tuple[int, int, str, str]:
 
 
 __all__ = [
+    "IndicSpanRefinement",
     "TokenClassificationSpan",
     "TokenClassificationStreamEvent",
     "coerce_token_classification_spans",
     "iter_grapheme_cluster_spans",
     "reconcile_stream_spans",
+    "refine_indic_name_span",
     "remap_normalized_span",
     "refine_privacy_filter_span",
     "stable_span_id",

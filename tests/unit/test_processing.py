@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from openmed.processing.advanced_ner import AdvancedNERProcessor
 from openmed.processing.outputs import (
     EntityPrediction,
     OutputFormatter,
@@ -389,6 +390,94 @@ class TestOutputFormatter:
         assert entity.text == "fever"
         assert entity.start == 7
         assert entity.end == 12
+
+    def test_group_entities_does_not_merge_across_hard_line(self):
+        text = "Cyclopalm\nOndam"
+        predictions = [
+            {
+                "entity_group": "CHEM",
+                "score": 0.95,
+                "start": 0,
+                "end": 9,
+            },
+            {
+                "entity_group": "CHEM",
+                "score": 0.94,
+                "start": 10,
+                "end": 15,
+            },
+        ]
+
+        result = OutputFormatter(group_entities=True).format_predictions(
+            predictions,
+            text,
+            model_name="test-model",
+        )
+
+        assert [entity.text for entity in result.entities] == ["Cyclopalm", "Ondam"]
+
+    def test_group_entities_still_merges_same_line_name(self):
+        text = "John Doe"
+        predictions = [
+            {"entity": "B-NAME", "score": 0.95, "start": 0, "end": 4},
+            {"entity": "I-NAME", "score": 0.93, "start": 5, "end": 8},
+        ]
+
+        result = OutputFormatter(group_entities=True).format_predictions(
+            predictions,
+            text,
+            model_name="test-model",
+        )
+
+        assert [
+            (entity.text, entity.start, entity.end) for entity in result.entities
+        ] == [("John Doe", 0, 8)]
+
+
+class TestAdvancedNERBoundaries:
+    def test_smart_grouping_does_not_cross_hard_line(self):
+        text = "Cyclopalm\nOndam"
+        tokens = [
+            {"entity": "B-CHEM", "score": 0.95, "start": 0, "end": 9},
+            {"entity": "I-CHEM", "score": 0.94, "start": 10, "end": 15},
+        ]
+
+        entities = AdvancedNERProcessor().smart_group_entities(tokens, text)
+
+        assert [entity.text for entity in entities] == ["Cyclopalm", "Ondam"]
+
+    def test_smart_grouping_still_merges_same_line_bio_tokens(self):
+        text = "John Doe"
+        tokens = [
+            {"entity": "B-NAME", "score": 0.95, "start": 0, "end": 4},
+            {"entity": "I-NAME", "score": 0.94, "start": 5, "end": 8},
+        ]
+
+        entities = AdvancedNERProcessor().smart_group_entities(tokens, text)
+
+        assert [(entity.text, entity.start, entity.end) for entity in entities] == [
+            ("John Doe", 0, 8)
+        ]
+
+    def test_adjacent_merge_does_not_cross_hard_line(self):
+        text = "Cyclopalm\nOndam"
+        entities = [
+            AdvancedNERProcessor().smart_group_entities(
+                [{"entity": "B-CHEM", "score": 0.95, "start": 0, "end": 9}],
+                text,
+            )[0],
+            AdvancedNERProcessor().smart_group_entities(
+                [{"entity": "B-CHEM", "score": 0.94, "start": 10, "end": 15}],
+                text,
+            )[0],
+        ]
+
+        merged = AdvancedNERProcessor(max_merge_gap=2).merge_adjacent_entities(
+            entities,
+            text,
+        )
+
+        assert [entity.text for entity in merged] == ["Cyclopalm", "Ondam"]
 
 
 class TestFixEntitySpans:

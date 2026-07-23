@@ -510,10 +510,20 @@ class AdvancedNERProcessor:
 
             # Clean the label (remove B- and I- prefixes)
             clean_label = label.replace("B-", "").replace("I-", "")
+            crosses_hard_line = bool(
+                current_entity
+                and any(
+                    char in "\r\n\v\f\x85\u2028\u2029"
+                    for char in text[current_entity.end : start]
+                )
+            )
 
             # Start new entity (B- tag or different entity type)
-            if label.startswith("B-") or (
-                current_entity and current_entity.label != clean_label
+            if (
+                label.startswith("B-")
+                or current_entity is None
+                or current_entity.label != clean_label
+                or crosses_hard_line
             ):
                 if current_entity:
                     entities.append(current_entity)
@@ -625,7 +635,13 @@ class AdvancedNERProcessor:
                 gap_text = original_text[current.end : next_entity.start]
 
                 # Merge if gap contains only connecting words/punctuation
-                if re.match(r"^[\s\-,/and]*$", gap_text.lower()):
+                if not any(
+                    char in "\r\n\v\f\x85\u2028\u2029" for char in gap_text
+                ) and re.fullmatch(
+                    r"(?:[ \t]*[-,/][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*)",
+                    gap_text,
+                    re.IGNORECASE,
+                ):
                     # Extend current entity to include the next one
                     current.text = original_text[current.start : next_entity.end]
                     current.end = next_entity.end

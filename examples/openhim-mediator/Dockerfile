@@ -11,6 +11,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE /app/
 COPY openmed /app/openmed
+COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/adversarial_phi.jsonl
 COPY examples/openhim-mediator/mediator-config.json /etc/openmed/mediator-config.json
 
 RUN python -m pip install --no-cache-dir --upgrade \
