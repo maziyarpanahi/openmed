@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -104,6 +105,22 @@ def test_optional_jieba_accelerator_is_lazy_and_offset_safe(
         "张三",
     ]
     assert loaded_dictionaries == [str(tmp_path / "segmenter" / "han_words.txt")]
+
+
+def test_manifest_han_dictionary_uses_the_bounded_entry_validator(
+    tmp_path: Path,
+) -> None:
+    descriptor = package_segmenter_resources(tmp_path, "openmed-han-v1")
+    resource = descriptor["resource_files"][0]
+    resource_path = tmp_path / resource["path"]
+    payload = ("患" * 257 + "\n").encode()
+    resource_path.write_bytes(payload)
+    resource["size_bytes"] = len(payload)
+    resource["sha256"] = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    descriptor["total_size_bytes"] = len(payload)
+
+    with pytest.raises(ValueError, match="term_length"):
+        ResourceSegmenter(tmp_path, descriptor)
 
 
 def test_validator_rejects_missing_declared_resource(tmp_path: Path) -> None:
