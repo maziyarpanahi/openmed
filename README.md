@@ -504,10 +504,10 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (25 supported languages)
+## Multilingual PII (26 supported languages)
 
-Extraction and de-identification support **25 supported PII language codes**:
-`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
+Extraction and de-identification support **26 supported PII language codes**:
+`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
 Chinese routing currently uses the documented multilingual default-model
 placeholder while dedicated Chinese model weights remain separate.
 An optional, user-configured Indic NER family accepts nine additional routes

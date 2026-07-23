@@ -92,6 +92,7 @@ routing is first requested, and do not download or bundle model weights.
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
+| `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Served by the multilingual privacy filter; SNILS-aware.      |
 | `sv`   | Swedish    | `OpenMed/privacy-filter-multilingual`                       | `sv_SE`      | Personnummer Luhn validation and surrogates.                 |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `ta`   | Tamil      | `env:OPENMED_INDIC_NER_MODEL`                               | `ta_IN`      | Optional Indic NER weights.                                  |
@@ -426,6 +427,15 @@ After:  Paciente [NAME], CPF [ID]
 ```text
 Before: Pacient Ion Popescu, CNP 1960101221144
 After:  Pacient [NAME], CNP [ID]
+```
+
+### Russian — `ru`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `ru_RU`
+
+```text
+Before: Пациент Иван Петров, СНИЛС 112-233-445 95
+After:  Пациент [NAME], СНИЛС [ID]
 ```
 
 ### Swedish — `sv`

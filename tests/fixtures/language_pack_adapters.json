@@ -17,6 +17,7 @@
     "no": "OpenMed/privacy-filter-multilingual",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
+    "ru": "OpenMed/privacy-filter-multilingual",
     "sv": "OpenMed/privacy-filter-multilingual",
     "sw": "OpenMed/privacy-filter-multilingual",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
@@ -65,6 +66,7 @@
     "pl": "pl_PL",
     "pt": "pt_PT",
     "ro": "ro_RO",
+    "ru": "ru_RU",
     "rw": "rw_RW",
     "sk": "sk_SK",
     "sr": "sr_RS",
@@ -217,6 +219,10 @@
       "ro_RO",
       "romanian_cnp"
     ],
+    "ru": [
+      "ru_RU",
+      "snils"
+    ],
     "rw": [
       "rw_RW",
       "rwanda_id"
@@ -289,7 +295,7 @@
       "as"
     ],
     "Cyrillic": [
-      "en"
+      "ru"
     ],
     "Devanagari": [
       "hi",
@@ -376,6 +382,7 @@
     "no",
     "pt",
     "ro",
+    "ru",
     "sv",
     "sw",
     "te",
