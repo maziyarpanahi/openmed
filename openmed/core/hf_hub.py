@@ -37,6 +37,7 @@ __all__ = [
     "CachedModel",
     "DownloadIntegrityError",
     "DownloadProgress",
+    "get_remote_model_size_mb",
     "prefetch_model",
     "list_cached_models",
     "clear_cached_model",
@@ -710,6 +711,42 @@ def list_cached_models(
     return cached
 
 
+def get_remote_model_size_mb(repo_id: str) -> float:
+    """Return the current Hub snapshot size for one model in decimal MB.
+
+    This is the only size helper that performs a network request. Callers must
+    opt in explicitly and offline mode is honored before the optional Hub
+    dependency is imported.
+
+    Args:
+        repo_id: Fully-qualified Hugging Face model repository id.
+
+    Returns:
+        Sum of the current revision's file sizes in decimal megabytes.
+
+    Raises:
+        ImportError: If the optional ``[hf]`` extra is not installed.
+        OfflineModeError: If OpenMed offline mode is active.
+        ValueError: If the Hub response does not include file sizes.
+    """
+
+    if is_local_only():
+        raise OfflineModeError(
+            "--remote cannot be used while OpenMed offline mode is active"
+        )
+
+    api_class = _import_hf_api()
+    info = api_class().model_info(repo_id, files_metadata=True)
+    total_bytes = sum(
+        size
+        for sibling in (getattr(info, "siblings", None) or ())
+        if (size := _repo_file_size(sibling)) is not None
+    )
+    if total_bytes <= 0:
+        raise ValueError(f"Hub file-size metadata is unavailable for {repo_id}")
+    return round(total_bytes / 1_000_000, 3)
+
+
 def clear_cached_model(
     name: str,
     *,
@@ -764,6 +801,31 @@ def _import_scan_cache_dir() -> tuple[Any, type[Exception], Path]:
     except ImportError as exc:
         raise ImportError(_HF_INSTALL_HINT) from exc
     return scan_cache_dir, CacheNotFound, Path(HF_HUB_CACHE)
+
+
+def _import_hf_api() -> Any:
+    try:
+        from huggingface_hub import HfApi
+    except ImportError as exc:
+        raise ImportError(_HF_INSTALL_HINT) from exc
+    return HfApi
+
+
+def _repo_file_size(sibling: Any) -> int | None:
+    size = getattr(sibling, "size", None)
+    if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
+        return size
+
+    lfs = getattr(sibling, "lfs", None)
+    if isinstance(lfs, dict):
+        lfs_size = lfs.get("size")
+        if (
+            isinstance(lfs_size, int)
+            and not isinstance(lfs_size, bool)
+            and lfs_size >= 0
+        ):
+            return lfs_size
+    return None
 
 
 def _safe_cached_repo_path(

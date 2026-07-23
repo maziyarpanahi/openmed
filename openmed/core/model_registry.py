@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from itertools import chain
@@ -35,6 +36,8 @@ class ModelInfo:
     benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    download_mb: Optional[float] = None
+    disk_mb: Optional[float] = None
     recommended_tier: Optional[str] = None
     script_coverage: Dict[str, Dict[str, float | str]] = field(default_factory=dict)
     arxiv: Optional[str] = None
@@ -85,6 +88,18 @@ class ModelInfo:
             if token in self.model_id:
                 return value
         return None
+
+
+@dataclass(frozen=True)
+class ModelSizeEstimate:
+    """Offline-safe storage and memory estimate for a manifest model."""
+
+    repo_id: str
+    task: str
+    download_mb: Optional[float]
+    disk_mb: Optional[float]
+    peak_ram_mb: Optional[float]
+    source: str
 
 
 @dataclass(frozen=True)
@@ -549,6 +564,8 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         benchmark=_benchmark_from_row(row),
         latency_ms=_number_map_from_row(row, "latency_ms"),
         peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        download_mb=_positive_number_from_row(row, "download_mb"),
+        disk_mb=_positive_number_from_row(row, "disk_mb"),
         recommended_tier=row.get("recommended_tier")
         if isinstance(row.get("recommended_tier"), str)
         else None,
@@ -596,6 +613,105 @@ def _script_coverage_from_row(
         for script, metrics in value.items()
         if isinstance(metrics, dict)
     }
+
+
+def _positive_number_from_row(row: Dict[str, Any], field_name: str) -> Optional[float]:
+    value = row.get(field_name)
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or value <= 0
+    ):
+        return None
+    return float(value)
+
+
+def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
+    recorded = _positive_number_from_row(row, "download_mb")
+    if recorded is not None:
+        return recorded
+
+    param_count = row.get("param_count")
+    if not isinstance(param_count, int) or isinstance(param_count, bool):
+        return None
+
+    formats = set(row.get("formats") or ())
+    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+        bytes_per_parameter = 0.55
+    elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
+        bytes_per_parameter = 1.05
+    else:
+        bytes_per_parameter = 2.0
+
+    # Allow for tokenizer/config files in addition to the model weights.
+    return (param_count * bytes_per_parameter / 1_000_000) + 1.5
+
+
+def _estimated_peak_ram_mb(
+    row: Dict[str, Any], disk_mb: Optional[float]
+) -> Optional[float]:
+    recorded = _number_map_from_row(row, "peak_ram_mb")
+    if recorded:
+        return max(recorded.values())
+    if disk_mb is None:
+        return None
+    return max(256.0, disk_mb * 1.25)
+
+
+def estimate_model_sizes(
+    model_key: Optional[str] = None,
+    *,
+    manifest_path: Path = MANIFEST_PATH,
+) -> List[ModelSizeEstimate]:
+    """Return deterministic model size estimates from committed metadata.
+
+    The function is deliberately network-free. Explicit manifest measurements
+    win; otherwise the download estimate is derived from parameter count and
+    artifact format. ``model_key`` may be a registry alias or a full repo id.
+
+    Args:
+        model_key: Optional registry alias or model repository id.
+        manifest_path: Manifest snapshot to read.
+
+    Returns:
+        Estimates sorted by repository id.
+    """
+
+    rows = load_manifest_rows(manifest_path)
+    if model_key is not None:
+        resolved = get_model_info(model_key)
+        repo_id = resolved.model_id if resolved is not None else model_key
+        rows = [row for row in rows if row.get("repo_id") == repo_id]
+
+    estimates: List[ModelSizeEstimate] = []
+    for row in rows:
+        repo_id = row.get("repo_id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+        download_mb = _estimated_download_mb(row)
+        disk_mb = _positive_number_from_row(row, "disk_mb") or download_mb
+        estimates.append(
+            ModelSizeEstimate(
+                repo_id=repo_id,
+                task=str(row.get("task") or "unknown"),
+                download_mb=_rounded_mb(download_mb),
+                disk_mb=_rounded_mb(disk_mb),
+                peak_ram_mb=_rounded_mb(_estimated_peak_ram_mb(row, disk_mb)),
+                source=(
+                    "manifest"
+                    if _positive_number_from_row(row, "download_mb") is not None
+                    else "estimated"
+                ),
+            )
+        )
+    return sorted(estimates, key=lambda estimate: estimate.repo_id.lower())
+
+
+def _rounded_mb(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return round(value, 3)
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:

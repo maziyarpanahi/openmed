@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,8 @@ REQUIRED_FIELDS = frozenset(
 )
 OPTIONAL_ENRICHMENT_FIELDS = frozenset(
     {
+        "disk_mb",
+        "download_mb",
         "latency_ms",
         "peak_ram_mb",
         "recommended_tier",
@@ -341,6 +344,23 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
 
     if "peak_ram_mb" in row:
         _validate_number_map(violations, line_number, row["peak_ram_mb"], "peak_ram_mb")
+
+    for field in ("download_mb", "disk_mb"):
+        if field not in row:
+            continue
+        value = row[field]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or value <= 0
+        ):
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field} must be a positive number",
+                )
+            )
 
     if "recommended_tier" in row:
         value = row["recommended_tier"]

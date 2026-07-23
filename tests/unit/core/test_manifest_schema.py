@@ -59,6 +59,8 @@ def test_enriched_manifest_row_loads_and_validates(tmp_path):
                 "leakage": None,
             },
         ],
+        download_mb=131.794,
+        disk_mb=131.794,
         latency_ms={"iphone_15_pro": 18.4, "m2_air": 7},
         peak_ram_mb={"iphone_15_pro": 512, "m2_air": 384.5},
         recommended_tier="phone",
@@ -73,6 +75,8 @@ def test_enriched_manifest_row_loads_and_validates(tmp_path):
     registry = model_registry._build_registry(loaded)
     info = registry["pii_fixture_tiny_65m"]
     assert info.benchmark == row["benchmark"]
+    assert info.download_mb == 131.794
+    assert info.disk_mb == 131.794
     assert info.latency_ms == {"iphone_15_pro": 18.4, "m2_air": 7.0}
     assert info.peak_ram_mb == {"iphone_15_pro": 512.0, "m2_air": 384.5}
     assert info.recommended_tier == "phone"
@@ -99,6 +103,18 @@ def test_script_coverage_verdict_matches_claimed_language_threshold():
         "line 1: script_coverage.devanagari.verdict must be unsupported for the "
         "declared languages and UNK rate"
     ]
+
+
+def test_manifest_row_without_size_enrichment_loads_with_empty_defaults():
+    row = _manifest_row_fixture()
+
+    assert validate_manifest_row(row, line_number=1) == []
+    info = model_registry._build_registry([row])["pii_fixture_tiny_65m"]
+    assert info.latency_ms == {}
+    assert info.peak_ram_mb == {}
+    assert info.download_mb is None
+    assert info.disk_mb is None
+    assert info.recommended_tier is None
 
 
 def test_manifest_schema_accepts_mlx_4bit_format():

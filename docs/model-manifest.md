@@ -33,6 +33,8 @@ require audited tokenizer script coverage; other families may omit it.
 
 | Field | Shape | Description |
 |---|---|---|
+| `download_mb` | number | Recorded current-snapshot download size in decimal megabytes. |
+| `disk_mb` | number | Recorded on-disk snapshot footprint in decimal megabytes. |
 | `latency_ms` | object | Per-device latency map in milliseconds. Keys are device labels and values are non-negative numbers. |
 | `peak_ram_mb` | object | Per-device peak RAM map in megabytes. Keys are device labels and values are non-negative numbers. |
 | `recommended_tier` | string | One of `phone`, `laptop`, `workstation`, or `server`. |
@@ -107,6 +109,8 @@ by `repo_id`:
   "results": [
     {
       "repo_id": "OpenMed/OpenMed-PII-Fixture-Tiny-65M",
+      "download_mb": 131.794,
+      "disk_mb": 131.794,
       "latency_ms": {"iphone_15_pro": 18.4, "m2_air": 7.0},
       "peak_ram_mb": {"iphone_15_pro": 512, "m2_air": 384},
       "recommended_tier": "phone",

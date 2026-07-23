@@ -21,6 +21,7 @@ from openmed.core.hf_hub import (
     DownloadIntegrityError,
     DownloadProgress,
     clear_cached_model,
+    get_remote_model_size_mb,
     list_cached_models,
     prefetch_model,
     resolve_repo_id,
@@ -135,6 +136,40 @@ def test_resolve_repo_id_prefixes_bare_name() -> None:
 def test_resolve_repo_id_rejects_empty() -> None:
     with pytest.raises(ValueError):
         resolve_repo_id("   ")
+
+
+# --- get_remote_model_size_mb ---------------------------------------------
+
+
+def test_get_remote_model_size_mb_sums_hub_file_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, bool]] = []
+
+    class FakeHfApi:
+        def model_info(self, repo_id: str, *, files_metadata: bool) -> Any:
+            calls.append((repo_id, files_metadata))
+            return types.SimpleNamespace(
+                siblings=[
+                    types.SimpleNamespace(size=1_500_000),
+                    types.SimpleNamespace(size=500_000),
+                ]
+            )
+
+    _install_fake_hub(monkeypatch, HfApi=FakeHfApi)
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+
+    assert get_remote_model_size_mb(_REPO_ID) == 2.0
+    assert calls == [(_REPO_ID, True)]
+
+
+def test_get_remote_model_size_mb_stops_before_hub_import_when_offline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    with pytest.raises(OfflineModeError, match="--remote"):
+        get_remote_model_size_mb(_REPO_ID)
 
 
 # --- prefetch_model --------------------------------------------------------

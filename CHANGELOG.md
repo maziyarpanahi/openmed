@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline-first `openmed models size` command with committed download,
+  disk, and peak-RAM estimates, cache-aware remaining bytes, per-task bandwidth
+  recommendations, JSON output, and explicitly opt-in remote refinement (#1453).
 - Added an opt-in, offline FHIR R4 profile checker for locally supplied WHO
   SMART Guidelines implementation-guide packages, including cardinality,
   fixed-value, locally enumerable binding, identifier/category slice, and
