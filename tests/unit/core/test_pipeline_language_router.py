@@ -31,6 +31,11 @@ def test_language_route_preserves_existing_positional_metadata_contract():
             "hi",
             DEFAULT_PII_MODELS["hi"],
         ),
+        (
+            "रुग्ण वैशाली देशमुख स्थिर आहे.",
+            "mr",
+            DEFAULT_PII_MODELS["mr"],
+        ),
     ),
 )
 def test_pipeline_auto_route_selects_document_language_pack_and_model(

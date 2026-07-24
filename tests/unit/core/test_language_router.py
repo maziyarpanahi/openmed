@@ -52,6 +52,7 @@ def _pack(
     model: str,
     *,
     candidate_priority: dict[str, int] | None = None,
+    routing_markers: tuple[str, ...] = (),
 ) -> LanguagePack:
     return LanguagePack(
         code=code,
@@ -61,6 +62,7 @@ def _pack(
         recognizers=("builtin-patterns", "model"),
         surrogate_locale="en_US",
         candidate_priority=candidate_priority or {},
+        routing_markers=routing_markers,
     )
 
 
@@ -133,17 +135,34 @@ def test_devanagari_uses_pack_declared_candidate_priority():
     assert decision.runs[0].source == "stdlib:pack-priority"
 
 
+def test_marathi_routing_markers_disambiguate_devanagari_from_hindi():
+    router = LanguageRouter(use_optional_lid=False)
+
+    marathi = router.route("रुग्ण स्थिर आहे.")
+    hindi = router.route("रोगी को बुखार है।")
+    compound_without_marker = router.route("रुग्णालय शांत है।")
+
+    assert marathi.language == "mr"
+    assert marathi.runs[0].source == "stdlib:routing-marker"
+    assert hindi.language == "hi"
+    assert hindi.runs[0].source == "stdlib:pack-priority"
+    assert compound_without_marker.language == "hi"
+
+
 def test_language_pack_freezes_routing_configuration():
     priorities = {"Han": 10}
+    markers = ("patient",)
     pack = _pack(
         "zh",
         ("Han",),
         "OpenMed/chinese",
         candidate_priority=priorities,
+        routing_markers=markers,
     )
     priorities["Han"] = 1
 
     assert pack.candidate_priority == {"Han": 10}
+    assert pack.routing_markers == ("patient",)
     assert isinstance(pack.candidate_priority, MappingProxyType)
     with pytest.raises(TypeError):
         pack.candidate_priority["Han"] = 2

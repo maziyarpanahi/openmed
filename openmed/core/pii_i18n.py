@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,7 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_DEVANAGARI_DIGIT_TRANSLATION = str.maketrans("०१२३४५६७८९", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +518,14 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_devanagari_digits(text: str) -> str:
+    """Fold Devanagari decimal digits to ASCII without changing offsets."""
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_DEVANAGARI_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1059,6 +1070,29 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_marathi_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Devanagari decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_devanagari_digits(text))
+
+
+def validate_marathi_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Devanagari digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_devanagari_digits(text)
+    )
+
+
+def validate_maharashtra_pin(text: str) -> bool:
+    """Validate a Maharashtra PIN in the 40xxxx-44xxxx allocation range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_devanagari_digits(text)
+    return validate_indian_pin(normalized) and 400_000 <= int(normalized) <= 449_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5533,6 +5567,126 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_MARATHI_DIGIT_CLASS = r"0-9\u0966-\u096F"
+_MARATHI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u096C-\u096F"
+_MARATHI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0968-\u096F"
+_DEVANAGARI_BASE_LETTER = r"[\u0904-\u0939\u0958-\u0961\u0972-\u097F]"
+_DEVANAGARI_NON_VIRAMA_MARK = r"[\u0900-\u0903\u093A-\u094C\u094E-\u0957\u0962-\u0963]"
+_DEVANAGARI_GRAPHEME = (
+    rf"{_DEVANAGARI_BASE_LETTER}{_DEVANAGARI_NON_VIRAMA_MARK}*"
+    rf"(?:\u094D[\u200C\u200D]?{_DEVANAGARI_BASE_LETTER}"
+    rf"{_DEVANAGARI_NON_VIRAMA_MARK}*)*"
+)
+_MARATHI_NAME_WORD = rf"(?:{_DEVANAGARI_GRAPHEME}){{2,}}"
+_MARATHI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["mr"]
+)
+
+_MARATHI_NAME_CONTEXT = ["नाव", "रुग्ण", "रुग्णाचे नाव", "patient"]
+_MARATHI_DATE_CONTEXT = [
+    "जन्म",
+    "जन्मतारीख",
+    "तारीख",
+    "दाखल",
+    "date",
+    "date of birth",
+    "dob",
+]
+_MARATHI_PHONE_CONTEXT = ["फोन", "मोबाइल", "दूरध्वनी", "phone", "mobile"]
+_MARATHI_AADHAAR_CONTEXT = ["आधार", "ओळख क्रमांक", "aadhaar", "aadhar", "uidai"]
+_MARATHI_PIN_CONTEXT = ["पिन", "टपाल", "टपाल क्रमांक", "pin", "postcode"]
+
+_MARATHI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![\w\u0900-\u097F])(?:श्रीमती|श्री\.|सौ\.|कु\.)[ \t]+"
+        rf"{_MARATHI_NAME_WORD}(?:[ \t]+{_MARATHI_NAME_WORD}){{2}}"
+        rf"(?![\w\u0900-\u097F])",
+        "name",
+        priority=13,
+        base_score=0.9,
+        context_words=_MARATHI_NAME_CONTEXT,
+        context_boost=0.1,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_MARATHI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_MARATHI_MONTH_PATTERN})\s+"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_MARATHI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"(?:\+[9\u096F][1\u0967][\s-]?)?"
+        rf"[{_MARATHI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_MARATHI_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_MARATHI_DIGIT_CLASS}]"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_MARATHI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_marathi_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[{_MARATHI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{3}}"
+        rf"(?P<mr_aadhaar_sep>[ -])"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?P=mr_aadhaar_sep)"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_MARATHI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_marathi_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[4\u096A][0-4\u0966-\u096A]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_MARATHI_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_maharashtra_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -8934,6 +9088,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *AADHAAR_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
+    "mr": [
+        *_MARATHI_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "te": [
         *_TELUGU_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
@@ -9184,6 +9342,21 @@ if _NIGERIA_HEALTH_FACILITY_PII_PATTERNS[0] not in _NIGERIAN_PII_PATTERNS:
 # separate from ``LANGUAGE_FAKE_DATA`` ensures the default ``fr`` and ``pt``
 # code paths remain unchanged unless the caller explicitly passes ``locale=``.
 LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "mr_IN": {
+        "FIRST_NAME": [
+            "अनघा",
+            "मृणाल",
+            "गौरी",
+            "ईशा",
+            "अमोल",
+            "नितीन",
+            "रोहन",
+            "विवेक",
+        ],
+        "FIRST_NAME_FEMALE": ["अनघा", "मृणाल", "गौरी", "ईशा"],
+        "FIRST_NAME_MALE": ["अमोल", "नितीन", "रोहन", "विवेक"],
+        "LAST_NAME": ["कुलकर्णी", "गोखले", "जाधव", "शिंदे", "भोसले", "आपटे"],
+    },
     "fr_SN": {
         "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],
         "FIRST_NAME": ["Awa", "Mamadou", "Fatou", "Ibrahima"],
