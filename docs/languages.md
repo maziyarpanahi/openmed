@@ -101,6 +101,7 @@ routing is first requested, and do not download or bundle model weights.
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
+| `ur`   | Urdu       | `OpenMed/privacy-filter-multilingual`                       | `ur_IN`      | Urdu-script names; `en_IN` Faker backend; Aadhaar-aware.     |
 | `xh`   | isiXhosa   | `OpenMed/privacy-filter-multilingual`                      | `xh_ZA`      | Nguni patterns; `zu_ZA` Faker approximation warns once.      |
 | `zh`   | Chinese    | `OpenMed/privacy-filter-multilingual`                      | `zh_CN`      | Routing placeholder; no dedicated Chinese PII model yet.     |
 | `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
@@ -109,14 +110,14 @@ routing is first requested, and do not download or bundle model weights.
 Chinese segmentation and Han-script routing are supported, but the `zh`
 default remains an explicit multilingual placeholder rather than a claim that
 a dedicated Chinese PII model has shipped. Codes outside this list (for example
-`pl`, `lv`, `sk`, `ms`, `tl`, `fi`, and `ur`) are **not** model-backed PII
-languages.
+`pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are **not** model-backed PII languages.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
 [PII Anonymization](anonymization.md#clinical-id-checksums) for the ID providers.
-Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
-`en_PK` backend for general surrogate data, with a one-time approximation warning.
+Urdu uses the conceptual `ur_IN` locale, Faker's installed `en_IN` backend for
+general surrogate data, bundled Urdu-script name elements, and Aadhaar dispatch,
+with a one-time approximation warning.
 
 The nine optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
@@ -507,6 +508,16 @@ Before: Hasta Ayşe Yılmaz, TCKN 10000000146
 After:  Hasta [NAME], TCKN [ID]
 ```
 
+### Urdu — `ur`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `ur_IN`
+  (`en_IN` is the documented Faker approximation)
+
+```text
+Before: مریض جناب سیّد علی خان صاحب، آدھار 2467 7832 5484، فون +91 98765 43210
+After:  مریض [NAME]، آدھار [ID]، فون [PHONE]
+```
+
 ### isiXhosa — `xh`
 
 - Model: `OpenMed/privacy-filter-multilingual` · locale `xh_ZA`
@@ -537,6 +548,8 @@ offset guarantees do not imply dedicated Chinese model weights.
 ```text
 Before: Igama lesiguli: Nomcebo Dlamini. Inombolo kamazisi 8001015009087
 After:  Igama lesiguli: [NAME]. Inombolo kamazisi [ID]
+```
+
 ### Ukrainian — `uk`
 
 - Model: `OpenMed/privacy-filter-multilingual` · locale `uk_UA`

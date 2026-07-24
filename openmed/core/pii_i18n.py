@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -98,6 +100,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
+    "ur": "Urdu",
     "he": "Hebrew",
     "ja": "Japanese",
     "tr": "Turkish",
@@ -139,6 +142,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
+    "ur": "Urdu-",
     "he": "Hebrew-",
     "ja": "Japanese-",
     "tr": "Turkish-",
@@ -1043,7 +1047,9 @@ def validate_aadhaar(text: str) -> bool:
     Returns:
         True if the Aadhaar passes the Verhoeff checksum
     """
-    candidate = text.strip()
+    if not isinstance(text, str):
+        return False
+    candidate = normalize_arabic_indic_digits(text.strip())
     if (
         re.fullmatch(
             r"[2-9][0-9]{11}|[2-9][0-9]{3} [0-9]{4} [0-9]{4}",
@@ -1059,6 +1065,25 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_urdu_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with any Urdu-used digit set."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_arabic_indic_digits(text)
+    )
+
+
+def validate_urdu_belt_pin(text: str) -> bool:
+    """Validate a PIN for Jammu and Kashmir, Telangana, or Uttar Pradesh."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_arabic_indic_digits(text).strip()
+    if not validate_indian_pin(normalized):
+        return False
+    return normalized.startswith(("18", "19", "50")) or normalized.startswith("2")
 
 
 def validate_ifsc(text: str) -> bool:
@@ -3011,6 +3036,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0623\u0643\u062a\u0648\u0628\u0631",
         "\u0646\u0648\u0641\u0645\u0628\u0631",
         "\u062f\u064a\u0633\u0645\u0628\u0631",
+    ],
+    "ur": [
+        "جنوری",
+        "فروری",
+        "مارچ",
+        "اپریل",
+        "مئی",
+        "جون",
+        "جولائی",
+        "اگست",
+        "ستمبر",
+        "اکتوبر",
+        "نومبر",
+        "دسمبر",
     ],
     "he": [
         "\u05d9\u05e0\u05d5\u05d0\u05e8",
@@ -5844,7 +5883,7 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
-_URDU_PII_PATTERNS: List[PIIPattern] = [
+_URDU_PAKISTAN_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
         "date",
@@ -5914,6 +5953,156 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
+    ),
+]
+
+_URDU_DIGIT_CLASS = r"0-9\u0660-\u0669\u06F0-\u06F9"
+_URDU_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0666-\u0669\u06F6-\u06F9"
+_URDU_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0662-\u0669\u06F2-\u06F9"
+_URDU_LETTER = (
+    r"[\u0621-\u063A\u0641-\u064A\u066E-\u06D3\u06FA-\u06FF"
+    r"\u0750-\u077F\u08A0-\u08C9\uFB50-\uFDFF\uFE70-\uFEFF]"
+)
+_URDU_MARK = r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08E1]*"
+_URDU_WORD = rf"(?:{_URDU_LETTER}{_URDU_MARK}){{2,}}"
+_URDU_MONTH_PATTERN = "|".join(re.escape(month) for month in LANGUAGE_MONTH_NAMES["ur"])
+
+_URDU_NAME_CONTEXT = ["جناب", "محترمہ", "سید", "بیگم", "خان", "صاحب", "صاحبہ"]
+_URDU_DATE_CONTEXT = [
+    "تاریخ",
+    "پیدائش",
+    "تاریخ پیدائش",
+    "داخلہ",
+    "ڈسچارج",
+    "date",
+    "date of birth",
+    "dob",
+]
+_URDU_PHONE_CONTEXT = ["فون", "موبائل", "رابطہ", "phone", "mobile"]
+_URDU_AADHAAR_CONTEXT = [
+    "آدھار",
+    "آدھار نمبر",
+    "شناخت",
+    "یو آئی ڈی",
+    "یو آئی ڈی اے آئی",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_URDU_PIN_CONTEXT = ["پن", "پن کوڈ", "پِن کوڈ", "ڈاک", "پتہ", "pin", "postcode"]
+
+_URDU_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<!\w)(?:جناب|محترمہ|سید|بیگم|خان)[ \t]+"
+        rf"{_URDU_WORD}(?:[ \t]+{_URDU_WORD}){{0,3}}"
+        rf"(?:[ \t]+(?:صاحب|صاحبہ))?"
+        rf"(?=[،,؛;۔.\n]|$)",
+        "name",
+        priority=14,
+        base_score=0.85,
+        context_words=_URDU_NAME_CONTEXT,
+        context_boost=0.15,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<!\w){_URDU_WORD}(?:[ \t]+{_URDU_WORD}){{0,2}}"
+        rf"[ \t]+(?:صاحب|صاحبہ)(?=[،,؛;۔.\n]|$)",
+        "name",
+        priority=13,
+        base_score=0.8,
+        context_words=_URDU_NAME_CONTEXT,
+        context_boost=0.2,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_URDU_DIGIT_CLASS}])"
+        rf"[{_URDU_DIGIT_CLASS}]{{1,2}}[./-]"
+        rf"[{_URDU_DIGIT_CLASS}]{{1,2}}[./-]"
+        rf"[{_URDU_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_URDU_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_URDU_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_URDU_DIGIT_CLASS}])"
+        rf"[{_URDU_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_URDU_MONTH_PATTERN})\s+"
+        rf"[{_URDU_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_URDU_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_URDU_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_URDU_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0669\u06F9][1\u0661\u06F1][\s-]?)?"
+        rf"[{_URDU_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_URDU_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_URDU_DIGIT_CLASS}]"
+        rf"(?![{_URDU_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_URDU_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_urdu_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_URDU_DIGIT_CLASS}])"
+        rf"[{_URDU_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_URDU_DIGIT_CLASS}]{{3}}"
+        rf"(?P<ur_aadhaar_sep> ?)"
+        rf"[{_URDU_DIGIT_CLASS}]{{4}}"
+        rf"(?P=ur_aadhaar_sep)"
+        rf"[{_URDU_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_URDU_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_URDU_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<!\w)(?:مکان|گلی|سڑک|روڈ)[ \t]+"
+        rf"[{_URDU_DIGIT_CLASS}\u0600-\u06FF\u0750-\u077F"
+        rf"\u08A0-\u08FF A-Za-z.\-/]{{3,60}}"
+        rf"(?=[،,؛;۔.\n]|$)",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=["پتہ", "رہائش", "address"],
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_URDU_DIGIT_CLASS}])"
+        rf"[{_URDU_DIGIT_CLASS}]{{6}}"
+        rf"(?![{_URDU_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_URDU_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_urdu_belt_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
     ),
 ]
 
@@ -9105,6 +9294,7 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _EGYPT_NATIONAL_ID_PII_PATTERNS + _MOROCCO_CIN_PII_PATTERNS,
     "ar_eg": _LOCALE_DATA_PII_PATTERNS["ar_eg"],
     "ar_ma": _LOCALE_DATA_PII_PATTERNS["ar_ma"],
+    "ur_pk": _URDU_PAKISTAN_PII_PATTERNS,
     "en_za": _NGUNI_PII_PATTERNS,
     "af": _NGUNI_PII_PATTERNS,
     "en_ng": _NIGERIAN_PII_PATTERNS,
@@ -9520,42 +9710,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
     },
     "ur": {
         "NAME": [
-            "\u0627\u062d\u0645\u062f \u0639\u0644\u06cc",
-            "\u0641\u0627\u0637\u0645\u06c1 \u062e\u0627\u0646",
-            "\u0626\u0644\u0627\u0644 \u062d\u0633\u06cc\u0646",
-            "\u0633\u0627\u0631\u0627 \u0627\u062d\u0645\u062f",
+            "آمنہ خان",
+            "سید عارف",
+            "زہرہ بیگم",
+            "فاطمہ خان",
         ],
-        "FIRST_NAME": [
-            "\u0627\u062d\u0645\u062f",
-            "\u0641\u0627\u0637\u0645\u06c1",
-            "\u0626\u0644\u0627\u0644",
-            "\u0633\u0627\u0631\u0627",
-        ],
-        "LAST_NAME": [
-            "\u0639\u0644\u06cc",
-            "\u062e\u0627\u0646",
-            "\u062d\u0633\u06cc\u0646",
-            "\u0627\u062d\u0645\u062f",
-        ],
-        "EMAIL": ["patient@example.pk", "contact@example.org"],
-        "PHONE": ["+92 300 1234567", "021 34567890"],
-        "ID_NUM": ["12345-6789012-3", "42101-1234567-9"],
+        "FIRST_NAME": ["آمنہ", "عارف", "زہرہ", "فاطمہ"],
+        "LAST_NAME": ["خان", "سید", "بیگم"],
+        "EMAIL": ["mareez@example.in", "rabta@example.org"],
+        "PHONE": ["+91 98765 43210", "+91 87654 32109"],
+        "ID_NUM": ["2467 7832 5484"],
         "STREET_ADDRESS": [
-            "\u06af\u0644\u06cc \u0646\u0645\u0628\u0631 5 \u0645\u062d\u0644\u06c1 \u0627\u0633\u0644\u0627\u0645 \u0622\u0626\u0627\u062f 12"
+            "گلی 12، لکھنؤ",
+            "مکان 45، حیدرآباد",
         ],
-        "URL_PERSONAL": ["https://example.pk"],
-        "USERNAME": ["patient123", "user456"],
-        "DATE": [
-            "\u06f1\u06f6.\u06f1\u06f1.\u06f1\u06f9\u06f7\u06f5",
-            "16.11.1975",
-        ],
-        "AGE": ["\u06f4\u06f5", "62", "38"],
-        "LOCATION": [
-            "\u06a9\u0631\u0627\u0686\u06cc",
-            "\u0644\u0627\u06c1\u0648\u0631",
-            "\u0627\u0633\u0644\u0627\u0645 \u0622\u0626\u0627\u062f",
-        ],
-        "ZIPCODE": ["74200", "54000", "44000"],
+        "URL_PERSONAL": ["https://example.in"],
+        "USERNAME": ["mareez123", "user456"],
+        "DATE": ["۱۶.۱۱.۱۹۷۵", "16.11.1975"],
+        "AGE": ["۴۵", "62", "38"],
+        "LOCATION": ["لکھنؤ", "حیدرآباد", "سری نگر"],
+        "ZIPCODE": ["190001", "500001", "226001"],
     },
     "he": {
         "NAME": [

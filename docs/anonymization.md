@@ -317,9 +317,11 @@ interoperable with the conventions of Aksharamukha (AGPL-3.0) and the Indic NLP
 Library (MIT). No code, data, copyleft component, neural weights, or third-party
 mapping bundle from either project is included.
 
-Perso-Arabic Urdu is intentionally an unsupported stub. The built-in API fails
-closed with `ValueError`; deployments that need it must supply a separately
-licensed, out-of-process adapter.
+Perso-Arabic Urdu uses the built-in `ur` language pack. It normalizes both
+Arabic-Indic digit blocks for Aadhaar, Indian mobile, date, and PIN validation,
+while preserving source offsets and bidi controls. Urdu-specific letters route
+the text away from the Arabic pack, and `method="replace"` uses the conceptual
+`ur_IN` locale with bundled Urdu-script names and an `en_IN` Faker backend.
 
 ### Format preservation
 
@@ -425,10 +427,10 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **29 supported PII language codes**:
+as its source of truth and supports **30 supported PII language codes**:
 `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
 `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh`, and `zu`.
+`ur`, `xh`, `zh`, and `zu`.
 Russian and Chinese routing currently use documented multilingual
 default-model placeholders; dedicated model weights are not bundled.
 The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
@@ -436,10 +438,10 @@ The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
 Telugu. It loads only an explicit path or repository from
 `OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
-Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
-default PII models for those language codes. Urdu's conceptual `ur_PK` locale
-uses Faker's installed `en_PK` backend for general surrogate data while CNIC
-generation remains provider-backed and format-valid.
+Polish, Latvian, Slovak, Malay, Filipino, and Finnish without adding default
+PII models for those language codes. Urdu is a full `ur_IN` pack backed by the
+multilingual privacy filter. Its locale-aware replacement path uses an `en_IN`
+Faker backend, bundled Urdu-script names, and checksum-valid Aadhaar surrogates.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 
@@ -447,7 +449,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 27 model-backed codes plus the documented `ru`/`zh` routing placeholders | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 28 model-backed codes plus the documented `ru`/`zh` routing placeholders | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

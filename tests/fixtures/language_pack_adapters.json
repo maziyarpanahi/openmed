@@ -26,6 +26,7 @@
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
     "uk": "OpenMed/privacy-filter-multilingual",
+    "ur": "OpenMed/privacy-filter-multilingual",
     "xh": "OpenMed/privacy-filter-multilingual",
     "zh": "OpenMed/privacy-filter-multilingual",
     "zu": "OpenMed/privacy-filter-multilingual"
@@ -81,7 +82,7 @@
     "tl": "fil_PH",
     "tr": "tr_TR",
     "uk": "uk_UA",
-    "ur": "ur_PK",
+    "ur": "ur_IN",
     "vi": "vi_VN",
     "xh": "xh_ZA",
     "yo": "yo_NG",
@@ -104,7 +105,6 @@
     "sk",
     "sr",
     "tl",
-    "ur",
     "vi",
     "yo"
   ],
@@ -266,8 +266,8 @@
       "rnokpp"
     ],
     "ur": [
-      "ur_PK",
-      "cnic"
+      "ur_IN",
+      "aadhaar"
     ],
     "vi": [
       "vi_VN",
@@ -399,6 +399,7 @@
     "th",
     "tr",
     "uk",
+    "ur",
     "xh",
     "zh",
     "zu"

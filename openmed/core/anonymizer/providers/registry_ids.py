@@ -457,7 +457,18 @@ def _register_builtin_specs() -> None:
         faker_method="ssn",
     )
     _register_aliases(
-        ("in", "india", "en", "hi", "te", "en_IN", "hi_IN", "te_IN"),
+        (
+            "in",
+            "india",
+            "en",
+            "hi",
+            "te",
+            "ur",
+            "en_IN",
+            "hi_IN",
+            "te_IN",
+            "ur_IN",
+        ),
         id_type="aadhaar",
         validate=validate_aadhaar,
         faker_method="aadhaar",
@@ -829,7 +840,7 @@ def _register_builtin_specs() -> None:
         faker_provider=BCPHNProvider,
     )
     _register_aliases(
-        ("ur", "ur_PK"),
+        ("ur_PK",),
         id_type="cnic",
         validate=validate_pakistani_cnic,
         faker_method="cnic",

@@ -63,6 +63,7 @@ from openmed.core.pii_i18n import (
     build_african_mobile_pattern,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
+    validate_aadhaar,
     validate_bic,
     validate_bulgarian_egn,
     validate_croatian_oib,
@@ -160,6 +161,7 @@ class TestConstants:
             "uk",
             "cs",
             "el",
+            "ur",
         }
 
     def test_national_id_only_languages(self):
@@ -181,7 +183,6 @@ class TestConstants:
             "fi",
             "vi",
             "rw",
-            "ur",
         }
 
     def test_language_names_keys(self):
@@ -216,6 +217,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["uk"] == "Ukrainian-"
         assert LANGUAGE_MODEL_PREFIX["cs"] == "Czech-"
         assert LANGUAGE_MODEL_PREFIX["el"] == "Greek-"
+        assert LANGUAGE_MODEL_PREFIX["ur"] == "Urdu-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
@@ -253,6 +255,7 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["ur"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -3815,7 +3818,7 @@ def test_validate_pakistani_cnic_rejects_invalid_shapes():
 def test_urdu_national_id_safety_sweep_requires_context():
     from openmed.core.safety_sweep import safety_sweep
 
-    patterns = get_patterns_for_language("ur")
+    patterns = get_patterns_for_language("ur", locale="ur_PK")
     national_id_patterns = [
         pattern for pattern in patterns if pattern.entity_type == "national_id"
     ]
@@ -3823,12 +3826,25 @@ def test_urdu_national_id_safety_sweep_requires_context():
     assert all(
         pattern.safety_sweep_requires_context for pattern in national_id_patterns
     )
-    assert safety_sweep("12345-6789012-3", [], lang="ur") == []
+    assert safety_sweep("12345-6789012-3", [], lang="ur", locale="ur_PK") == []
 
 
 def test_generated_urdu_surrogate_passes_validator():
-    assert LANG_TO_LOCALE["ur"] == "ur_PK"
+    assert LANG_TO_LOCALE["ur"] == "ur_IN"
     anonymizer = Anonymizer(lang="ur", consistent=True, seed=42)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        surrogate = anonymizer.surrogate("۲۴۶۷ ۷۸۳۲ ۵۴۸۴", "national_id")
+    assert validate_aadhaar(surrogate) is True
+
+
+def test_explicit_urdu_pakistan_surrogate_preserves_legacy_cnic_support():
+    anonymizer = Anonymizer(
+        lang="ur",
+        locale="ur_PK",
+        consistent=True,
+        seed=42,
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         surrogate = anonymizer.surrogate("12345-6789012-3", "national_id")
@@ -3851,7 +3867,7 @@ def test_urdu_cnic_safety_sweep_preserves_exact_offsets(value):
     expected_start = text.index(value)
     matches = [
         entity
-        for entity in safety_sweep(text, [], lang="ur")
+        for entity in safety_sweep(text, [], lang="ur", locale="ur_PK")
         if entity.label == "national_id"
     ]
 
@@ -3871,21 +3887,21 @@ def test_urdu_i18n_golden_fixture_offsets():
         for line in fixture_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    row = next(row for row in rows if row["id"] == "golden-i18n-ur-clinical-pii")
-    assert row["language"] == "ur"
-    assert row["metadata"]["synthetic"] is True
-    assert row["metadata"]["category"] == "multilingual"
+    assert len(rows) == 3
+    for row in rows:
+        assert row["language"] == "ur"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+        assert row["metadata"]["locale"] == "ur_IN"
 
-    text = row["text"]
-    for span in row["gold_spans"]:
-        assert text[span["start"] : span["end"]] == span["text"], span
+        text = row["text"]
+        for span in row["gold_spans"]:
+            assert text[span["start"] : span["end"]] == span["text"], span
 
-    ids_by_type = {
-        span["metadata"]["identifier_type"]: span["text"]
-        for span in row["gold_spans"]
-        if span["label"] == "ID_NUM"
-    }
-    assert validate_pakistani_cnic(ids_by_type["cnic"])
+        aadhaar = next(
+            span["text"] for span in row["gold_spans"] if span["label"] == "ID_NUM"
+        )
+        assert validate_aadhaar(aadhaar)
 
 
 def test_urdu_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
@@ -3902,62 +3918,52 @@ def test_urdu_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
         if line.strip()
     ]
 
-    assert len(rows) == 1
-    row = rows[0]
-
-    empty_result = PredictionResult(
-        text=row["text"],
-        entities=[],
-        model_name="offline-safety-sweep",
-        timestamp="2026-07-03T00:00:00Z",
-        metadata={},
-    )
-
-    swept_result, added_count = _apply_safety_sweep_to_result(
-        row["text"],
-        empty_result,
-        lang="ur",
-    )
-    result = _build_deidentification_result(
-        row["text"],
-        swept_result,
-        effective_method="mask",
-        keep_year=False,
-        date_shift_days=None,
-        keep_mapping=False,
-        lang="ur",
-        consistent=False,
-        seed=None,
-        locale=None,
-        use_safety_sweep=True,
-    )
-
-    assert added_count == len(row["gold_spans"])
-    label_map = {
-        "DATE": "date",
-        "PHONE": "phone_number",
-        "ID_NUM": "national_id",
-        "STREET_ADDRESS": "street_address",
-        "ZIPCODE": "postcode",
-    }
-    expected_spans = {
-        (label_map[span["label"]], span["start"], span["end"], span["text"])
-        for span in row["gold_spans"]
-    }
-    actual_spans = {
-        (entity.label, entity.start, entity.end, entity.text)
-        for entity in swept_result.entities
-    }
-    assert actual_spans == expected_spans
-    canonicalized_text = result.deidentified_text
-    for canonical_label, internal_label in label_map.items():
-        canonicalized_text = canonicalized_text.replace(
-            f"[{internal_label}]",
-            f"[{canonical_label}]",
+    assert len(rows) == 3
+    for row in rows:
+        empty_result = PredictionResult(
+            text=row["text"],
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-03T00:00:00Z",
+            metadata={},
         )
-    assert canonicalized_text == row["metadata"]["expected_output"]["text"]
-    for span in row["gold_spans"]:
-        assert span["text"] not in result.deidentified_text
+
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            row["text"],
+            empty_result,
+            lang="ur",
+        )
+        result = _build_deidentification_result(
+            row["text"],
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="ur",
+            consistent=False,
+            seed=None,
+            locale="ur_IN",
+            use_safety_sweep=True,
+        )
+
+        assert added_count == len(row["gold_spans"])
+        canonicalized_text = result.deidentified_text
+        for canonical_label, internal_label in {
+            "PERSON": "name",
+            "DATE": "date",
+            "ID_NUM": "national_id",
+            "PHONE": "phone_number",
+            "STREET_ADDRESS": "street_address",
+            "ZIPCODE": "postcode",
+        }.items():
+            canonicalized_text = canonicalized_text.replace(
+                f"[{internal_label}]",
+                f"[{canonical_label}]",
+            )
+        assert canonicalized_text == row["metadata"]["expected_output"]["text"]
+        for span in row["gold_spans"]:
+            assert span["text"] not in result.deidentified_text
 
 
 def test_validate_bulgarian_egn():

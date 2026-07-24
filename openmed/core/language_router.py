@@ -22,6 +22,8 @@ from .script_detect import (
     segment_by_script,
 )
 
+_URDU_SPECIFIC_LETTERS = frozenset("ےٹڈڑںھ")
+
 
 @dataclass(frozen=True, slots=True)
 class LanguagePrediction:
@@ -285,6 +287,13 @@ class LanguageRouter:
         if not candidates:
             fallback = self._packs_by_code.get("en", self.packs[0])
             return fallback, 0.5, "stdlib:unknown-script"
+
+        if (
+            script == "Arabic"
+            and any(pack.code == "ur" for pack in candidates)
+            and _URDU_SPECIFIC_LETTERS.intersection(text)
+        ):
+            return self._packs_by_code["ur"], 0.99, "stdlib:urdu-specific-letter"
 
         context_matches = tuple(
             pack
