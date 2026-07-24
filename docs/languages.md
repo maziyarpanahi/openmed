@@ -180,13 +180,13 @@ receives the input and offset-only token spans and must return one of `hi`,
 `token_language_tags=` still take precedence. Audit metadata retains offsets,
 labels, and hashes rather than token surfaces.
 
-For `lang="hi"` or `lang="te"`, a note containing both Latin and Devanagari
-(or Latin and Telugu) automatically activates the India clinical route. OpenMed
-segments the note into offset-preserving script runs, adds bounded context to
-each run so PERSON and LOCATION spans can cross a script boundary, sends Latin
-windows to the registered English clinical model, and sends Indic windows to
-the language's registered Hindi or Telugu model. Caller-supplied model IDs or
-local model paths are used for every window instead; OpenMed does not select an
+For `lang="hi"`, `lang="ml"`, or `lang="te"`, a note containing both Latin and
+the language's Indic script automatically activates the India clinical route.
+OpenMed segments the note into offset-preserving script runs, adds bounded
+context to each run so PERSON and LOCATION spans can cross a script boundary,
+sends Latin windows to the registered English clinical model, and sends Indic
+windows to the language's registered model. Caller-supplied model IDs or local
+model paths are used for every window instead; OpenMed does not select an
 unregistered third-party model automatically.
 
 The documented first-party fallback is
