@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,7 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_KANNADA_DIGIT_TRANSLATION = str.maketrans("೦೧೨೩೪೫೬೭೮೯", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +518,21 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_kannada_digits(text: str) -> str:
+    """Fold Kannada decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain Kannada decimal digits.
+
+    Returns:
+        Length-preserving text with Kannada digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_KANNADA_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1059,6 +1077,29 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_kannada_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Kannada decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_kannada_digits(text))
+
+
+def validate_kannada_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Kannada digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_kannada_digits(text)
+    )
+
+
+def validate_karnataka_pin(text: str) -> bool:
+    """Validate Karnataka PINs in the 56xxxx-59xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_kannada_digits(text)
+    return validate_indian_pin(normalized) and 560_000 <= int(normalized) <= 599_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5533,6 +5574,165 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_KANNADA_DIGIT_CLASS = r"0-9\u0CE6-\u0CEF"
+_KANNADA_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0CEC-\u0CEF"
+_KANNADA_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0CE8-\u0CEF"
+_KANNADA_BASE_LETTER = r"[\u0C85-\u0CB9\u0CDC-\u0CDE\u0CE0-\u0CE1]"
+_KANNADA_NON_VIRAMA_MARK = (
+    r"[\u0C81-\u0C83\u0CBC\u0CBE-\u0CCC\u0CD5-\u0CD6\u0CE2-\u0CE3]"
+)
+_KANNADA_GRAPHEME = (
+    rf"{_KANNADA_BASE_LETTER}{_KANNADA_NON_VIRAMA_MARK}*"
+    rf"(?:\u0CCD[\u200C\u200D]?{_KANNADA_BASE_LETTER}"
+    rf"{_KANNADA_NON_VIRAMA_MARK}*)*\u0CCD?"
+)
+_KANNADA_INITIAL = rf"(?:{_KANNADA_GRAPHEME}){{1,2}}\."
+_KANNADA_NAME_WORD = rf"(?:{_KANNADA_GRAPHEME}){{2,}}"
+_KANNADA_INITIAL_NAME = (
+    rf"{_KANNADA_INITIAL}(?:[ \t]+{_KANNADA_INITIAL})?"
+    rf"[ \t]+{_KANNADA_NAME_WORD}"
+)
+_KANNADA_LATIN_INITIAL_NAME = (
+    r"(?:[A-Za-z]\.[ \t]+){1,2}"
+    r"[A-Za-z][A-Za-z'\N{RIGHT SINGLE QUOTATION MARK}-]{1,39}"
+)
+_KANNADA_NAME_SURFACE = rf"(?:{_KANNADA_INITIAL_NAME}|{_KANNADA_LATIN_INITIAL_NAME})"
+_KANNADA_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["kn"]
+)
+
+_KANNADA_NAME_CONTEXT = ["ಶ್ರೀ", "ಶ್ರೀಮತಿ", "ಕುಮಾರಿ", "ಡಾ."]
+_KANNADA_DATE_CONTEXT = [
+    "ಜನನ",
+    "ಜನ್ಮ ದಿನಾಂಕ",
+    "ದಿನಾಂಕ",
+    "ದಾಖಲು",
+    "date",
+    "date of birth",
+    "dob",
+]
+_KANNADA_PHONE_CONTEXT = ["ಫೋನ್", "ಮೊಬೈಲ್", "ಸಂಪರ್ಕ", "phone", "mobile"]
+_KANNADA_AADHAAR_CONTEXT = [
+    "ಆಧಾರ್",
+    "ಗುರುತಿನ ಸಂಖ್ಯೆ",
+    "aadhaar",
+    "aadhar",
+    "uidai",
+]
+_KANNADA_PIN_CONTEXT = [
+    "ಪಿನ್",
+    "ಪಿನ್ ಕೋಡ್",
+    "ಅಂಚೆ",
+    "ವಿಳಾಸ",
+    "pin",
+    "postcode",
+]
+
+_KANNADA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![A-Za-z\u0C80-\u0CFF]){_KANNADA_NAME_SURFACE}"
+        rf"(?=[ \t]*ಅವರು(?![\u0C80-\u0CFF]))",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_KANNADA_NAME_CONTEXT,
+        context_boost=0.1,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![A-Za-z\u0C80-\u0CFF]){_KANNADA_NAME_SURFACE}"
+        rf"(?![A-Za-z\u0C80-\u0CFF])",
+        "name",
+        priority=13,
+        base_score=0.9,
+        context_words=_KANNADA_NAME_CONTEXT,
+        context_boost=0.1,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_KANNADA_DIGIT_CLASS}])"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_KANNADA_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_KANNADA_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_KANNADA_DIGIT_CLASS}])"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_KANNADA_MONTH_PATTERN})\s+"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_KANNADA_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_KANNADA_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_KANNADA_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0CEF][1\u0CE7][\s-]?)?"
+        rf"[{_KANNADA_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_KANNADA_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_KANNADA_DIGIT_CLASS}]"
+        rf"(?![{_KANNADA_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_KANNADA_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_kannada_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_KANNADA_DIGIT_CLASS}])"
+        rf"[{_KANNADA_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{3}}"
+        rf"(?P<kn_aadhaar_sep> )"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{4}}"
+        rf"(?P=kn_aadhaar_sep)"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_KANNADA_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_KANNADA_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_kannada_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_KANNADA_DIGIT_CLASS}])"
+        rf"[5\u0CEB][6-9\u0CEC-\u0CEF]"
+        rf"[{_KANNADA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_KANNADA_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_KANNADA_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_karnataka_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -8932,6 +9132,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "hi": [
         *_HINDI_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "kn": [
+        *_KANNADA_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "te": [

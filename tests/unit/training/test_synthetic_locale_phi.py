@@ -20,6 +20,7 @@ from openmed.core.pii_i18n import (
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_kannada_aadhaar,
     validate_kenya_maisha_namba,
     validate_korean_rrn,
     validate_norwegian_fodselsnummer,
@@ -49,6 +50,7 @@ _ID_VALIDATORS = {
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
     "hi": validate_aadhaar,
+    "kn": validate_kannada_aadhaar,
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
@@ -75,6 +77,7 @@ _SCRIPT_RANGES = {
     "ar": ("\u0600", "\u06ff"),
     "he": ("\u0590", "\u05ff"),
     "hi": ("\u0900", "\u097f"),
+    "kn": ("\u0c80", "\u0cff"),
     "ja": ("\u3040", "\u9fff"),
     "ko": ("\uac00", "\ud7a3"),
     "te": ("\u0c00", "\u0c7f"),
@@ -135,7 +138,7 @@ def test_locale_phi_generation_is_deterministic_per_seed():
 
 @pytest.mark.parametrize(
     "language",
-    ("am", "ar", "el", "he", "hi", "ja", "te", "th", "uk", "zh"),
+    ("am", "ar", "el", "he", "hi", "ja", "kn", "te", "th", "uk", "zh"),
 )
 def test_non_latin_locale_templates_render_target_script(language):
     example = LocalePhiGenerator(seed=29).generate(language)

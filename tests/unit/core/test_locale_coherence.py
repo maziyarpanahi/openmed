@@ -37,11 +37,13 @@ from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     LANGUAGE_PII_PATTERNS,
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    validate_kannada_aadhaar,
 )
 
 # Documented set of languages whose *default* Faker locale is an intentional
@@ -142,6 +144,41 @@ class TestLocaleResolution:
         assert locale in AVAILABLE_LOCALES
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
+
+    def test_kannada_pack_warns_once_and_preserves_initial_name_shape(self):
+        assert "kn" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["kn"] == "OpenMed/privacy-filter-multilingual"
+        assert LANG_TO_LOCALE["kn"] == "kn_IN"
+        assert NATIONAL_ID_PROVIDERS["kn"] == ("kn_IN", "aadhaar")
+        assert FAKER_BACKEND_LOCALE["kn_IN"] == "en_IN"
+        assert "kn" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("kn") == "kn_IN"
+            assert resolve_locale("kn") == "kn_IN"
+            anonymizer = Anonymizer(lang="kn", consistent=True, seed=689)
+            native = anonymizer.surrogate("ಕೆ. ಎಸ್. ರವಿ", "PERSON")
+            latin = anonymizer.surrogate("K. S. Ravi", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "೨೪೬೭ ೭೮೩೨ ೫೪೮೪",
+                "national_id",
+            )
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert len(native.split()) == 3
+        assert len(latin.split()) == 3
+        assert all(part.endswith(".") for part in native.split()[:2])
+        assert all(part.endswith(".") for part in latin.split()[:2])
+        assert any("\u0c80" <= character <= "\u0cff" for character in native)
+        assert all(character.isascii() for character in latin)
+        assert native != "ಕೆ. ಎಸ್. ರವಿ"
+        assert latin != "K. S. Ravi"
+        assert validate_kannada_aadhaar(aadhaar)
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):
