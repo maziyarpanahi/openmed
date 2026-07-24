@@ -83,6 +83,7 @@ G9_RELAXED_RE_F1_FLOOR = 0.900
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "mr": 0.0,
+    "or": 0.0,
     "ta": 0.0,
 }
 
