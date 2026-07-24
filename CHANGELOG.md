@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a fail-closed, signed release-readiness gate that verifies signed model
+  gate evidence, release documentation, a machine-readable API compatibility
+  report, the public clinical disclaimer, and workflow-produced golden-suite
+  evidence before a release can proceed (#1814).
 - Added a scrubadub adapter with `to_canonical()`/`from_canonical()` span
   conversion and canonical label mapping for scrubadub's core `Filth` types
   (including the `en_US`/`en_GB` locale detectors), splitting `credential`
