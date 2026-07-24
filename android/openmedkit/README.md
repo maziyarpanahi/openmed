@@ -34,3 +34,16 @@ This module is on-device only by design. It is not a medical device and does not
 provide diagnosis, treatment decisions, or emergency clinical guidance. Any
 future clinical workflow integration must keep human review and appropriate
 regulatory evaluation outside this scaffold.
+
+## ICU Boundary Segmentation
+
+Production word and grapheme boundaries use `android.icu.text.BreakIterator`
+from the Android platform, so no dictionary or additional runtime is bundled in
+the AAR. Local JVM parity tests use `com.ibm.icu:icu4j:78.3` as a test-only
+dependency.
+
+ICU4J is distributed under the permissive
+[Unicode Data Files and Software License](https://www.unicode.org/license.txt)
+(`Unicode-3.0`, also known as the ICU/Unicode License). The dependency is used
+only to verify that JVM results match Android platform ICU; it is not a runtime
+dependency and does not process text off device.
