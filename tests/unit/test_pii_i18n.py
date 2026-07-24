@@ -139,6 +139,7 @@ class TestConstants:
             "es",
             "nl",
             "hi",
+            "or",
             "te",
             "pt",
             "ar",
@@ -230,6 +231,7 @@ class TestConstants:
         assert "Spanish" in DEFAULT_PII_MODELS["es"]
         assert "Dutch" in DEFAULT_PII_MODELS["nl"]
         assert "Hindi" in DEFAULT_PII_MODELS["hi"]
+        assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
         assert "Telugu" in DEFAULT_PII_MODELS["te"]
         assert "Portuguese" in DEFAULT_PII_MODELS["pt"]
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]

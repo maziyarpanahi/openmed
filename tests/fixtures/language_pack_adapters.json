@@ -17,6 +17,7 @@
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "no": "OpenMed/privacy-filter-multilingual",
+    "or": "OpenMed/privacy-filter-multilingual",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
     "ru": "OpenMed/privacy-filter-multilingual",
@@ -209,6 +210,10 @@
       "no_NO",
       "ssn"
     ],
+    "or": [
+      "or_IN",
+      "aadhaar"
+    ],
     "pl": [
       "pl_PL",
       "pesel"
@@ -390,6 +395,7 @@
     "ko",
     "nl",
     "no",
+    "or",
     "pt",
     "ro",
     "ru",

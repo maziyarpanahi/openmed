@@ -3,7 +3,7 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
+The optional Indic family adds eight user-configured routes and can also serve
 the built-in Hindi and Telugu codes. Every code documented here wires up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
@@ -90,7 +90,7 @@ routing is first requested, and do not download or bundle model weights.
 | `mr`   | Marathi    | `env:OPENMED_INDIC_NER_MODEL`                               | `mr_IN`      | Optional Indic NER weights; Hindi Faker backend.             |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
-| `or`   | Odia       | `env:OPENMED_INDIC_NER_MODEL`                               | `or_IN`      | Optional Indic NER weights.                                  |
+| `or`   | Odia       | `OpenMed/privacy-filter-multilingual`                       | `or_IN`      | Native Odia surrogates; Aadhaar and Odisha PIN patterns.     |
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
@@ -118,7 +118,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The eight optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -333,7 +333,7 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] गेला.
 
 ### Odia — `or`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `or_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `or_IN`
 
 ```text
 Before: ଅରୁଣ ଭୁବନେଶ୍ୱରରେ କଳିଙ୍ଗ ହସ୍ପିଟାଲକୁ ଗଲେ।

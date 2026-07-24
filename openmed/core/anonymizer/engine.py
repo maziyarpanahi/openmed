@@ -519,6 +519,7 @@ _FORMAT_PRESERVE_DAY_FIRST_LOCALES = frozenset(
         "nl_NL",
         "hi_IN",
         "en_IN",
+        "or_IN",
         "pt_PT",
         "pt_BR",
         "uk_UA",

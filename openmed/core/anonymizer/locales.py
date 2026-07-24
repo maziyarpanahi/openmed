@@ -21,6 +21,8 @@ Notes:
   warning when that backend is unavailable.
 - Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
   the surname-aware, Han-only surrogate generators rather than a Latin fallback.
+- Odia resolves to Faker's native ``or_IN`` locale without an approximation
+  warning, so name surrogates remain in Odia script.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
