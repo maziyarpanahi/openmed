@@ -309,13 +309,15 @@ class _ManifestState:
             self.transformed_paths = set()
 
     def changed(self, path: str) -> None:
-        assert self.transformed_paths is not None
+        if self.transformed_paths is None:
+            self.transformed_paths = set()
         self.transformed_paths.add(path)
 
     def to_manifest(self, config: DHIS2ExportConfig) -> dict[str, Any]:
         """Build a deterministic manifest containing metadata and counts only."""
 
-        assert self.transformed_paths is not None
+        if self.transformed_paths is None:
+            self.transformed_paths = set()
         return {
             "schema_version": 1,
             "exporter": "dhis2",

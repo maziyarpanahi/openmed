@@ -42,7 +42,8 @@ def rendered_pattern_entries() -> tuple[Mapping[str, Any], ...]:
 
     payload = load_africa_context_data()
     term_sets = payload["term_sets"]
-    assert isinstance(term_sets, Mapping)
+    if not isinstance(term_sets, Mapping):
+        raise TypeError(f"term_sets must be a Mapping, got {type(term_sets).__name__}")
 
     entries: list[Mapping[str, Any]] = []
     for index, raw_entry in enumerate(payload["patterns"]):
@@ -101,7 +102,8 @@ def profile_defaults_for(profile_name: str) -> Mapping[str, Mapping[str, str]]:
     """Return configured context-action defaults for an African profile."""
 
     defaults = load_africa_context_data()["african_profile_defaults"]
-    assert isinstance(defaults, Mapping)
+    if not isinstance(defaults, Mapping):
+        raise TypeError(f"african_profile_defaults must be a Mapping, got {type(defaults).__name__}")
     value = defaults.get(str(profile_name), {})
     if not isinstance(value, Mapping):
         raise ValueError(
