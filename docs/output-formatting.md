@@ -90,6 +90,13 @@ print(formatted.entities[0].to_dict())
 print(formatted.to_dict())
 ```
 
+`group_entities=True` deliberately performs a second merge after any model
+aggregation. It ignores BIO `B-` versus `I-` boundaries and can therefore join
+distinct same-label list items separated by a small gap, such as
+`hypertension, diabetes`. Keep it disabled when exact diagnosis or medication
+list boundaries matter; use it only when intentionally repairing fragmented
+spans.
+
 ### HTML output
 
 ```python

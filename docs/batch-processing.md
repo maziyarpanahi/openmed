@@ -31,7 +31,7 @@ processor = BatchProcessor(
     model_name="disease_detection_superclinical",
     batch_size=16,
     confidence_threshold=0.5,
-    group_entities=True,
+    group_entities=False,  # preserve separate BIO entities in diagnosis lists
     continue_on_error=True,  # Don't stop on individual failures
 )
 

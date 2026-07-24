@@ -16,7 +16,7 @@ result = analyze_text(
     output_format="dict",
     include_confidence=True,
     confidence_threshold=0.55,
-    group_entities=True,
+    group_entities=False,
     metadata={"source": "clinic-note-42"},
 )
 print(result.model)
@@ -32,10 +32,53 @@ payload = result.to_dict()
 - `aggregation_strategy`: forwarded to the HF pipeline. `simple` (default) yields grouped tokens; `None` keeps raw tokens.
 - `output_format`: `"dict"` (default, returns `AnalyzeResult`), `"json"`, `"html"`, or `"csv"`.
 - `include_confidence` & `confidence_threshold`: control the final payload; defaults keep all scores.
-- `group_entities`: merge adjacent spans of the same label after formatting.
+- `group_entities`: merge nearby spans of the same label after formatting.
+  Leave this `False` when `aggregation_strategy="simple"` should preserve the
+  model's separate BIO entities, especially for diagnosis or medication lists.
 - `formatter_kwargs`: forwarded to `openmed.processing.format_predictions`.
 - Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`) wrap pySBD so each
   prediction carries the sentence span; disable them if latency matters more than helper metadata.
+
+### Preserve diagnosis-list boundaries
+
+`aggregation_strategy="simple"` already combines the subword tokens belonging
+to each BIO entity. Enabling `group_entities` adds a second, label-only merge;
+it can join distinct same-label items separated by a small gap, including
+comma-separated diagnoses.
+
+Medical-token remapping is useful when a model splits clinical terms poorly,
+but it can also coalesce adjacent same-label spans. Disable both optional merge
+layers when the model's original BIO boundaries are the desired output:
+
+```python
+from openmed import OpenMedConfig, analyze_text
+
+text = (
+    "Diagnoses: hypertension, diabetic peripheral neuropathy, "
+    "urinary incontinence"
+)
+result = analyze_text(
+    text,
+    model_name="OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M-mlx",
+    config=OpenMedConfig(
+        backend="mlx",
+        use_medical_tokenizer=False,
+    ),
+    aggregation_strategy="simple",
+    confidence_threshold=0.7,
+    group_entities=False,
+)
+
+print([entity.text for entity in result.entities])
+# ['hypertension', 'diabetic peripheral neuropathy', 'urinary incontinence']
+```
+
+When the source is a structured problem list, retain its item boundaries and
+analyze each item separately or preserve one item per line. Do not split an
+unpunctuated clinical phrase on whitespace: valid diagnoses such as
+`diabetic peripheral neuropathy` and `urinary incontinence` are multiword
+entities. If the original list structure is unavailable, use a caller-supplied
+terminology linker or grounder to validate any attempted split.
 
 ## Chunking & truncation
 
