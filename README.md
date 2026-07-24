@@ -504,17 +504,17 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (29 supported languages)
+## Multilingual PII (30 supported languages)
 
-Extraction and de-identification support **29 supported PII language codes**:
+Extraction and de-identification support **30 supported PII language codes**:
 `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
+`ja`, `ko`, `nl`, `no`, `pa`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`,
+`uk`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
 Russian and Chinese routing currently use documented multilingual
 default-model placeholders while dedicated model weights remain separate.
-An optional, user-configured Indic NER family accepts nine additional routes
-(`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve
-Hindi and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
+An optional, user-configured Indic NER family accepts eight additional routes
+(`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, and `ta`) and can also serve Hindi,
+Punjabi, and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
 automatically selects those weights.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.

@@ -90,19 +90,19 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **29 supported PII language codes**:
+PII extraction and de-identification support **30 supported PII language codes**:
 `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh`, and `zu`.
+`ja`, `ko`, `nl`, `no`, `pa`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`,
+`uk`, `xh`, `zh`, and `zu`.
 Russian and Chinese routing currently use documented multilingual
 default-model placeholders; dedicated model weights are not bundled.
-Nine additional Indic codes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`,
-and `ta`) are opt-in routes through a user-configured
-`OPENMED_INDIC_NER_MODEL`; Hindi and Telugu can use the same adapter.
+Eight additional Indic codes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, and
+`ta`) are opt-in routes through a user-configured `OPENMED_INDIC_NER_MODEL`;
+Hindi, Punjabi, and Telugu can use the same adapter.
 Validator-backed national-ID coverage is broader for specific ID-only locales,
 including Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-29-supported-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-30-supported-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.

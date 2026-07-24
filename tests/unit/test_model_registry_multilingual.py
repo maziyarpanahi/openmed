@@ -20,8 +20,8 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
 )
 
-MULTILINGUAL_DEFAULT_LANGUAGES = {"he", "id", "th", "ro"}
-OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - {"hi", "te"}
+MULTILINGUAL_DEFAULT_LANGUAGES = {"he", "id", "pa", "th", "ro"}
+OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - {"hi", "pa", "te"}
 
 
 class TestRegistryCompleteness:
