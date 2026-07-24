@@ -1,0 +1,42 @@
+name: Nix
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/nix.yml"
+      - "flake.lock"
+      - "flake.nix"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "tests/**"
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/nix.yml"
+      - "flake.lock"
+      - "flake.nix"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flake-check:
+    name: Build package and dev shell
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.11.0
+
+      - name: Check flake outputs
+        run: nix flake check --print-build-logs
+
+      - name: Run the test suite in the dev shell
+        run: nix develop --command python -m pytest tests/ -q
