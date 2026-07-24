@@ -37,6 +37,7 @@
             build-system = [ python.pkgs.hatchling ];
             dependencies = with python.pkgs; [
               faker
+              jieba
               pysbd
               pyyaml
             ];
@@ -93,15 +94,18 @@
 
           devPythonPackages =
             (with python.pkgs; [
+              cryptography
               dask
               duckdb
               fastapi
               fsspec
+              huggingface-hub
               httpx
               hypothesis
               jsonschema
               mypy
               numpy
+              opencc
               opentelemetry-api
               opentelemetry-exporter-otlp-proto-http
               opentelemetry-sdk
@@ -111,7 +115,10 @@
               protobuf
               pytest
               pytest-cov
+              pytest-timeout
               python-dateutil
+              rich
+              typer
             ])
             ++ [
               grpcio
