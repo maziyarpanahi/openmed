@@ -66,7 +66,7 @@ def run_from_args(
             f"Dataset redaction failed: {exc}",
             code="redaction_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
 
     data = result.summary.to_dict()
     return emit(

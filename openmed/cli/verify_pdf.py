@@ -80,7 +80,7 @@ def run_from_args(
             f"Failed to read spans file: {exc}",
             code="invalid_spans",
             exit_code=EXIT_USAGE,
-        )
+        ) from None
 
     try:
         report = verify_redacted_pdf(args.original, args.redacted, spans)
@@ -89,13 +89,13 @@ def run_from_args(
             f"Input PDF not found: {exc}",
             code="input_not_found",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
     except Exception as exc:  # noqa: BLE001 - surface a clean CLI error.
         raise CliError(
             f"PDF fidelity verification failed: {exc}",
             code="verification_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
 
     data = report.to_dict()
     output = json.dumps(data, indent=2, sort_keys=True)
@@ -107,7 +107,7 @@ def run_from_args(
                 f"Failed to write report: {exc}",
                 code="write_failed",
                 exit_code=EXIT_ERROR,
-            )
+            ) from exc
     emit(args, data, human=output + "\n" + report.summary(), stream=stdout)
     return 0 if report.passed else 1
 

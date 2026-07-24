@@ -78,7 +78,7 @@ def handle_next_batch(args: argparse.Namespace) -> int:
             f"Failed to prepare active-learning queue: {exc}",
             code="ingest_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from None
 
     batch = queue.next_batch_jsonl(args.size)
     records = (

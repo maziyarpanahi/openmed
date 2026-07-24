@@ -10,7 +10,7 @@ try:
 except ImportError:
     raise ImportError(
         "MLX is required for this module. Install with: pip install openmed[mlx]"
-    )
+    ) from None
 
 
 class ProjectionMLP(nn.Module):

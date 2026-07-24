@@ -218,7 +218,8 @@ class StreamingWeightLoader:
         if ram_budget is not None and ram_budget_bytes is not None:
             raise ValueError("Pass ram_budget or ram_budget_bytes, not both")
         selected_budget = ram_budget if ram_budget is not None else ram_budget_bytes
-        assert selected_budget is not None
+        if selected_budget is None:
+            raise RuntimeError("selected_budget is None after both-None guard")
         if isinstance(layers_per_group, bool) or layers_per_group <= 0:
             raise ValueError("layers_per_group must be a positive integer")
 
@@ -251,7 +252,8 @@ class StreamingWeightLoader:
 
         if self._plan is None:
             self.layer_groups
-        assert self._plan is not None
+        if self._plan is None:
+            raise RuntimeError("streaming plan not initialized after layer_groups access")
         return self._plan.source_format
 
     def iter_layer_groups(self) -> Iterator[StreamedLayerGroup]:
@@ -310,7 +312,8 @@ class StreamingWeightLoader:
             raise TypeError("consumer must be callable")
         for group in self.iter_layer_groups():
             consumer(group)
-        assert self.last_report is not None
+        if self.last_report is None:
+            raise RuntimeError("no layer groups were consumed; last_report is unset")
         return self.last_report
 
     def load(
