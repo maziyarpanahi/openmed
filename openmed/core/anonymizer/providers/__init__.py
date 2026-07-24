@@ -219,6 +219,7 @@ __all__ = [
     "PhilippinesIdProvider",
     "PolishPeselProvider",
     "PortugueseNIFProvider",
+    "PUNJABI_LANGUAGE_PACK",
     "RomanianCNPProvider",
     "SerbianJmbgProvider",
     "SCRIPT_NAME_PACKS",

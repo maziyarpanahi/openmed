@@ -399,7 +399,12 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] ଗଲେ।
 
 ### Punjabi — `pa`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `pa_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `pa_IN` (approximated
+  with Faker's `en_IN` backend; warns once)
+- Built-in Gurmukhi patterns cover Punjabi dates, Indian mobile numbers,
+  Aadhaar, Punjab/Chandigarh PIN codes, and honorific-anchored full names.
+  Replacement names preserve `ਸਿੰਘ` and `ਕੌਰ` gender suffixes. A configured
+  Indic adapter may still be selected explicitly.
 
 ```text
 Before: ਅਰੁਣ ਅੰਮ੍ਰਿਤਸਰ ਵਿੱਚ ਜੀਵਨ ਹਸਪਤਾਲ ਗਿਆ।

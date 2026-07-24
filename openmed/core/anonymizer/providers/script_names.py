@@ -29,6 +29,7 @@ def _require_language_pack(code: str) -> LanguagePack:
 
 HAN_LANGUAGE_PACK: Final = _require_language_pack("zh")
 DEVANAGARI_LANGUAGE_PACK: Final = _require_language_pack("hi")
+PUNJABI_LANGUAGE_PACK: Final = _require_language_pack("pa")
 TELUGU_LANGUAGE_PACK: Final = _require_language_pack("te")
 GUJARATI_LANGUAGE_PACK: Final = _require_language_pack("gu")
 KANNADA_LANGUAGE_PACK: Final = _require_language_pack("kn")
@@ -256,6 +257,7 @@ def generate_kannada_name(faker, original: str, *, locale: str) -> str:
 SCRIPT_NAME_PACKS: Final = (
     (HAN_LANGUAGE_PACK, "Han", generate_han_name),
     (DEVANAGARI_LANGUAGE_PACK, "Devanagari", generate_devanagari_name),
+    (PUNJABI_LANGUAGE_PACK, "Gurmukhi", generate_gurmukhi_name),
     (TELUGU_LANGUAGE_PACK, "Telugu", generate_telugu_name),
     (GUJARATI_LANGUAGE_PACK, "Gujarati", generate_gujarati_name),
     (KANNADA_LANGUAGE_PACK, "Kannada", generate_kannada_name),

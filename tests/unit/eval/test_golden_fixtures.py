@@ -63,6 +63,8 @@ from openmed.core.pii_i18n import (
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cpf,
+    validate_punjab_chandigarh_pin,
+    validate_punjabi_indian_phone,
     validate_romanian_cnp,
     validate_spanish_dni,
     validate_tamil_aadhaar,

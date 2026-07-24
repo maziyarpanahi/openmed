@@ -1480,7 +1480,9 @@ def validate_aadhaar(text: str) -> bool:
     Returns:
         True if the Aadhaar passes the Verhoeff checksum
     """
-    candidate = text.strip()
+    if not isinstance(text, str):
+        return False
+    candidate = normalize_gurmukhi_digits(text.strip())
     if (
         re.fullmatch(
             r"[2-9][0-9]{11}|[2-9][0-9]{3} [0-9]{4} [0-9]{4}",
