@@ -483,9 +483,9 @@ def _resolve_path(repo_root: Path, path: Path) -> Path:
 
 def _display_path(path: Path, repo_root: Path) -> str:
     try:
-        return str(path.relative_to(repo_root))
+        return path.relative_to(repo_root).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
