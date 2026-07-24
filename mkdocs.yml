@@ -74,6 +74,7 @@ nav:
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
+      - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
