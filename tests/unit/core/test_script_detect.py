@@ -168,7 +168,6 @@ def test_routing_only_languages_do_not_claim_bundled_models():
     expected_languages = {
         "as",
         "bn",
-        "gu",
         "kn",
         "ml",
         "mr",
