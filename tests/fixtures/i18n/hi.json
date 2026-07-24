@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "locale": "hi-IN",
+  "language": "hi",
+  "synthetic": true,
+  "contains_real_phi": false,
+  "provenance": "Invented name and seeded checksum-valid test identifier; no patient source was used.",
+  "text": "रोगी काव्या नवल, आधार 246778325484।",
+  "expected_script": "Devanagari",
+  "expected_segments": [
+    {"start": 0, "end": 35, "script": "Devanagari"}
+  ],
+  "expected_entities": [
+    {"label": "national_id", "start": 22, "end": 34, "text": "246778325484"}
+  ],
+  "expected_tokens": [
+    {"start": 0, "end": 4, "text": "रोगी"},
+    {"start": 5, "end": 11, "text": "काव्या"},
+    {"start": 12, "end": 15, "text": "नवल"},
+    {"start": 15, "end": 16, "text": ","},
+    {"start": 17, "end": 21, "text": "आधार"},
+    {"start": 22, "end": 34, "text": "246778325484"},
+    {"start": 34, "end": 35, "text": "।"}
+  ]
+}

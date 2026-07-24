@@ -45,7 +45,10 @@ def test_zh_segment_missing_extra_raises_actionable_error(monkeypatch):
 
 
 def test_indic_segment_missing_extra_raises_actionable_error(monkeypatch):
-    monkeypatch.setitem(sys.modules, "indicnlp", None)
+    def missing_dependency(name: str):
+        raise ImportError(name)
+
+    monkeypatch.setattr(indic, "_import_module", missing_dependency)
 
     with pytest.raises(ImportError, match=r"pip install openmed\[indic\]"):
         indic.segment("रोगी रवि")
