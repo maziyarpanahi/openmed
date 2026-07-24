@@ -114,6 +114,7 @@ nav:
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
