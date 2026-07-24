@@ -308,6 +308,21 @@ jobs:
       run: |
         uv run --with build python -m build
 
+    - name: Enforce wheel size budget and record language-extra footprints
+      run: |
+        python scripts/release/check_size_budget.py \
+          --skip-build \
+          --wheel-dir dist \
+          --report size-budget-report.json
+
+    - name: Install built core wheel for import budget
+      run: |
+        uv pip install --system dist/*.whl
+
+    - name: Enforce core import budget
+      run: |
+        python scripts/release/check_import_budget.py
+
     - name: Verify PEP 561 marker in built artifacts
       run: |
         python - <<'PY'
@@ -327,4 +342,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: dist-packages
-        path: dist/
+        path: |
+          dist/
+          size-budget-report.json
+      if: always()
