@@ -189,6 +189,14 @@ def test_cda_detection_does_not_match_generic_xml(tmp_path):
     assert not cda.is_cda_document(generic)
 
 
+def test_cda_detection_rejects_unknown_declared_encoding() -> None:
+    xml = b"""<?xml version="1.0" encoding="TF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3"/>
+"""
+
+    assert not cda.is_cda_document(xml)
+
+
 def test_cda_parser_rejects_doctype_and_entities():
     xml = """
     <!DOCTYPE ClinicalDocument [

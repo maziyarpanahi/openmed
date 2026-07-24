@@ -53,7 +53,9 @@ class HL7V2Encoding:
 
         field_separator = segment_text[3]
         parts = segment_text.split(field_separator)
-        encoding_chars = parts[1] if len(parts) > 1 and parts[1] else "^~\\&"
+        encoding_chars = parts[1] if len(parts) > 1 else ""
+        if len(encoding_chars) != 4:
+            raise ValueError("HL7 MSH-2 must contain exactly four encoding characters")
         return cls(
             field=field_separator,
             component=_char_at_or_default(encoding_chars, 0, "^"),

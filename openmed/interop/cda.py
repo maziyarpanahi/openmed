@@ -155,7 +155,7 @@ def is_cda_document(document_or_path: str | bytes | Path) -> bool:
         data = _read_xml_source(document_or_path)
         _reject_unsafe_xml(data)
         root = ET.fromstring(data)
-    except (ET.ParseError, OSError, UnicodeEncodeError, ValueError):
+    except (ET.ParseError, LookupError, OSError, UnicodeEncodeError, ValueError):
         return False
 
     return _is_cda_root(root)
