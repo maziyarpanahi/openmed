@@ -59,6 +59,7 @@ nav:
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Low-resource Benchmark: benchmarks/low-resource.md
+      - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md

@@ -1,5 +1,65 @@
 {
   "entries": {
+    "i18n-throughput::hi::pattern-only": {
+      "family": "i18n-throughput",
+      "format": "pattern-only",
+      "key": "i18n-throughput::hi::pattern-only",
+      "metadata": {
+        "benchmark_artifact_sha256": "sha256:8cd85834b7e52aac920690771e070e1215011bd35920bf3b5488e2d30dccf0c1",
+        "benchmark_schema_version": 1,
+        "corpus_sha256": "sha256:9f313c5ab3ef3c4fd2fe686cd7fb8e1210b6391209f6ccfb5fe35dc25387abc9",
+        "iterations": 1,
+        "recorded_platform": "macOS arm64 Apple Silicon",
+        "regression_threshold": 0.2
+      },
+      "metrics": {
+        "deidentify_spans_per_second": 70.0,
+        "segmentation_chars_per_second": 250000.0
+      },
+      "reproducibility_hash": "sha256:8cd85834b7e52aac920690771e070e1215011bd35920bf3b5488e2d30dccf0c1",
+      "tier": "hi",
+      "updated_at": "2026-07-24T20:39:16+00:00"
+    },
+    "i18n-throughput::ta::pattern-only": {
+      "family": "i18n-throughput",
+      "format": "pattern-only",
+      "key": "i18n-throughput::ta::pattern-only",
+      "metadata": {
+        "benchmark_artifact_sha256": "sha256:8cd85834b7e52aac920690771e070e1215011bd35920bf3b5488e2d30dccf0c1",
+        "benchmark_schema_version": 1,
+        "corpus_sha256": "sha256:b20317f3979bae316a9f9238e9f090c3f83a1add1f3f25cd6cf48b5928ef94c6",
+        "iterations": 1,
+        "recorded_platform": "macOS arm64 Apple Silicon",
+        "regression_threshold": 0.2
+      },
+      "metrics": {
+        "deidentify_spans_per_second": 32.0,
+        "segmentation_chars_per_second": 250000.0
+      },
+      "reproducibility_hash": "sha256:8cd85834b7e52aac920690771e070e1215011bd35920bf3b5488e2d30dccf0c1",
+      "tier": "ta",
+      "updated_at": "2026-07-24T20:39:16+00:00"
+    },
+    "i18n-throughput::zh::pattern-only": {
+      "family": "i18n-throughput",
+      "format": "pattern-only",
+      "key": "i18n-throughput::zh::pattern-only",
+      "metadata": {
+        "benchmark_artifact_sha256": "sha256:8cd85834b7e52aac920690771e070e1215011bd35920bf3b5488e2d30dccf0c1",
+        "benchmark_schema_version": 1,
+        "corpus_sha256": "sha256:eb9a1ff6e480f9e376081cf74f23201bb5b96ca2ae57ae25b569f25b0319ab7e",
+        "iterations": 1,
+        "recorded_platform": "macOS arm64 Apple Silicon",
+        "regression_threshold": 0.2
+      },
+      "metrics": {
+        "deidentify_spans_per_second": 1500.0,
+        "segmentation_chars_per_second": 800000.0
+      },
+      "reproducibility_hash": "sha256:8cd85834b7e52aac920690771e070e1215011bd35920bf3b5488e2d30dccf0c1",
+      "tier": "zh",
+      "updated_at": "2026-07-24T20:39:16+00:00"
+    },
     "pii::small::mlx-fp": {
       "family": "PII",
       "format": "mlx-fp",
