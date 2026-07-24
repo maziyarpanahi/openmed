@@ -1,12 +1,12 @@
 package com.openmed.openmedkit.decode
 
-import java.text.BreakIterator
-import java.util.Locale
-import kotlin.math.max
-import kotlin.math.min
+import com.openmed.openmedkit.UnicodeOffsetContract
+import com.openmed.openmedkit.segmentation.IcuTextSegmenter
 
 /**
  * A single per-token prediction before entity grouping.
+ *
+ * Offsets use the shared half-open Unicode scalar contract.
  */
 data class TokenPrediction(
     val labelId: Int,
@@ -18,6 +18,8 @@ data class TokenPrediction(
 
 /**
  * A grouped entity prediction over the original text.
+ *
+ * [start] and [end] are Unicode scalar offsets, never Kotlin UTF-16 indices.
  */
 data class EntityPrediction(
     val label: String,
@@ -34,6 +36,8 @@ data class EntityPrediction(
  * Decodes BIO/BIOES token-classification predictions into grouped entity spans.
  */
 object TokenClassificationDecoder {
+    private val segmenter = IcuTextSegmenter()
+
     fun decodeEntities(
         tokens: List<TokenPrediction>,
         text: String,
@@ -143,17 +147,24 @@ object TokenClassificationDecoder {
         val textIndex = CharacterIndex(text)
 
         return entities.map { entity ->
-            var start = max(0, min(entity.start, textIndex.length))
-            var end = max(start, min(entity.end, textIndex.length))
+            val initial = segmenter.snapScalarSpan(text, entity.start, entity.end)
+            var start = initial.start
+            var end = initial.end
 
-            var extended = 0
-            while (end < textIndex.length && extended < 10) {
-                val character = textIndex.characterAt(end) ?: break
-                if (!isWordLike(character)) {
-                    break
+            if (
+                !IcuTextSegmenter.requiresFallback(
+                    textIndex.substring(start, end),
+                )
+            ) {
+                var extended = 0
+                while (end < textIndex.length && extended < 10) {
+                    val character = textIndex.characterAt(end) ?: break
+                    if (!isWordLike(character)) {
+                        break
+                    }
+                    end += 1
+                    extended += 1
                 }
-                end += 1
-                extended += 1
             }
 
             while (start < end && textIndex.characterAt(start)?.isWhitespaceCharacter() == true) {
@@ -168,6 +179,9 @@ object TokenClassificationDecoder {
                 return@map entity
             }
 
+            val snapped = segmenter.snapScalarSpan(text, start, end)
+            start = snapped.start
+            end = snapped.end
             val span = textIndex.substring(start, end)
             if (span.trim { it.isWhitespace() }.isEmpty()) {
                 entity
@@ -191,12 +205,17 @@ object TokenClassificationDecoder {
             AggregationStrategy.AVERAGE -> scores.averageOrZero()
         }
 
+        val snapped = segmenter.snapScalarSpan(
+            textIndex.source,
+            start,
+            end,
+        )
         return EntityPrediction(
             label = label,
-            text = textIndex.substring(start, end),
+            text = textIndex.substring(snapped.start, snapped.end),
             confidence = confidence,
-            start = start,
-            end = end,
+            start = snapped.start,
+            end = snapped.end,
         )
     }
 
@@ -267,41 +286,22 @@ object TokenClassificationDecoder {
     }
 
     private class CharacterIndex(text: String) {
-        private val source = text
-        private val boundaries: IntArray = buildBoundaries(text)
+        val source = text
 
-        val length: Int = boundaries.size - 1
+        val length: Int = UnicodeOffsetContract.scalarLength(text)
 
         fun substring(start: Int, end: Int): String {
             if (start < 0 || end < start || end > length) {
                 return ""
             }
-            return source.substring(boundaries[start], boundaries[end])
+            return UnicodeOffsetContract.substring(source, start, end)
         }
 
         fun characterAt(offset: Int): String? {
             if (offset < 0 || offset >= length) {
                 return null
             }
-            return source.substring(boundaries[offset], boundaries[offset + 1])
-        }
-
-        private fun buildBoundaries(text: String): IntArray {
-            val iterator = BreakIterator.getCharacterInstance(Locale.ROOT)
-            iterator.setText(text)
-
-            val result = mutableListOf<Int>()
-            var boundary = iterator.first()
-            while (boundary != BreakIterator.DONE) {
-                result.add(boundary)
-                boundary = iterator.next()
-            }
-
-            if (result.isEmpty() || result.last() != text.length) {
-                result.add(text.length)
-            }
-
-            return result.toIntArray()
+            return UnicodeOffsetContract.substring(source, offset, offset + 1)
         }
     }
 }
