@@ -166,7 +166,6 @@ def test_indic_and_arabic_script_language_hints_are_exact():
 
 def test_routing_only_languages_do_not_claim_bundled_models():
     expected_languages = {
-        "as",
         "bn",
         "gu",
         "kn",

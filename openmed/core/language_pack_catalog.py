@@ -109,6 +109,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("hi_IN", "aadhaar"),
     ),
     _pack(
+        "as",
+        "OpenMed/privacy-filter-multilingual",
+        "as_IN",
+        ("Bengali",),
+        national_id_provider=("as_IN", "aadhaar"),
+    ),
+    _pack(
         "te",
         "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
         "en_IN",
@@ -296,7 +303,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
 }
 
 SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
-    "as": "as_IN",
     "bn": "bn_BD",
     "gu": "gu_IN",
     "kn": "kn_IN",
@@ -312,7 +318,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # these codes; keeping them separate from ``SUPPORTED_LANGUAGES`` avoids
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
-    "as",
     "bn",
     "gu",
     "kn",
@@ -391,6 +396,7 @@ _LOCALE_ORDER = (
     "es",
     "nl",
     "hi",
+    "as",
     "te",
     "am",
     "pt",
@@ -437,6 +443,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "es",
     "nl",
     "hi",
+    "as",
     "te",
     "am",
     "pt",

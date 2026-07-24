@@ -48,6 +48,7 @@ _ID_VALIDATORS = {
     "it": validate_italian_codice_fiscale,
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
+    "as": validate_aadhaar,
     "hi": validate_aadhaar,
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
@@ -74,6 +75,7 @@ _SCRIPT_RANGES = {
     "am": ("\u1200", "\u137f"),
     "ar": ("\u0600", "\u06ff"),
     "he": ("\u0590", "\u05ff"),
+    "as": ("\u0980", "\u09ff"),
     "hi": ("\u0900", "\u097f"),
     "ja": ("\u3040", "\u9fff"),
     "ko": ("\uac00", "\ud7a3"),
@@ -135,7 +137,7 @@ def test_locale_phi_generation_is_deterministic_per_seed():
 
 @pytest.mark.parametrize(
     "language",
-    ("am", "ar", "el", "he", "hi", "ja", "te", "th", "uk", "zh"),
+    ("am", "ar", "as", "el", "he", "hi", "ja", "te", "th", "uk", "zh"),
 )
 def test_non_latin_locale_templates_render_target_script(language):
     example = LocalePhiGenerator(seed=29).generate(language)

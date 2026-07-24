@@ -37,7 +37,7 @@ from .locales import ZH_CN_ADDRESS_LOCALE
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
-_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+_INDIA_LOCALES = frozenset({"as_IN", "en_IN", "hi_IN"})
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -187,24 +187,36 @@ def _gen_middle_name(faker, original, *, locale):
 
 
 def _gen_india_person(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_name"):
         return _draw_distinct(faker, original, "indian_name")
     return _gen_person(faker, original, locale=locale)
 
 
 def _gen_india_first_name(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "FIRST_NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
         return _draw_distinct(faker, original, "indian_first_name")
     return _gen_first_name(faker, original, locale=locale)
 
 
 def _gen_india_last_name(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "LAST_NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_last_name"):
         return _draw_distinct(faker, original, "indian_last_name")
     return _gen_last_name(faker, original, locale=locale)
 
 
 def _gen_india_middle_name(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "FIRST_NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
         return _draw_distinct(faker, original, "indian_first_name")
     return _gen_middle_name(faker, original, locale=locale)
@@ -418,6 +430,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "it_IT",
         "es_ES",
         "nl_NL",
+        "as_IN",
         "hi_IN",
         "en_IN",
         "pt_PT",
@@ -489,6 +502,7 @@ _LOCALE_ID_METHODS = {
     "it_IT": "ssn",
     "es_ES": "nie",
     "nl_NL": "ssn",
+    "as_IN": "aadhaar",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
@@ -730,7 +744,7 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
-    if locale in {"en_IN", "hi_IN", "te_IN"}:
+    if locale in {"as_IN", "en_IN", "hi_IN", "te_IN"}:
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id

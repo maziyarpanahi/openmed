@@ -3,8 +3,8 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
-the built-in Hindi and Telugu codes. Every code documented here wires up:
+The optional Indic family adds eight user-configured routes and can also serve
+the built-in Assamese, Hindi, and Telugu codes. Every code documented here wires up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -69,7 +69,7 @@ routing is first requested, and do not download or bundle model weights.
 | ------ | ---------- | ---------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
 | `am`   | Amharic    | `OpenMed/privacy-filter-multilingual`                      | `am_ET`      | Ethiopic patterns; `en_KE` Faker approximation warns once.   |
 | `ar`   | Arabic     | `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1`    | `ar_EG`      | Egypt is the most-populous Arabic locale; override per call. |
-| `as`   | Assamese   | `env:OPENMED_INDIC_NER_MODEL`                               | `as_IN`      | Optional Indic NER weights; Bengali Faker backend.           |
+| `as`   | Assamese   | `OpenMed/privacy-filter-multilingual`                       | `as_IN`      | Bengali Faker backend; curated Assamese names; Aadhaar.      |
 | `bn`   | Bengali    | `env:OPENMED_INDIC_NER_MODEL`                               | `bn_BD`      | Optional Indic NER weights.                                  |
 | `da`   | Danish     | `OpenMed/privacy-filter-multilingual`                       | `da_DK`      | CPR-aware Nordic language pack.                              |
 | `cs`   | Czech      | `OpenMed/privacy-filter-multilingual`                       | `cs_CZ`      | Rodné číslo checksum-aware surrogates.                       |
@@ -118,7 +118,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The eight optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -218,7 +218,7 @@ After:  المريضة [NAME]، الهاتف [PHONE]
 
 ### Assamese — `as`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `as_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `as_IN`
 
 ```text
 Before: অৰুণ গুৱাহাটীত জীৱন চিকিৎসালয়লৈ গ'ল।

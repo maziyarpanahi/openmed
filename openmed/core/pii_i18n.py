@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,10 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_BENGALI_ASSAMESE_DIGIT_TRANSLATION = str.maketrans(
+    "০১২৩৪৫৬৭৮৯",
+    "0123456789",
+)
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +521,21 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_bengali_assamese_digits(text: str) -> str:
+    """Fold Bengali-Assamese decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain decimal digits from U+09E6-U+09EF.
+
+    Returns:
+        Length-preserving text with Bengali-Assamese digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_BENGALI_ASSAMESE_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1059,6 +1080,31 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_assamese_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Bengali-Assamese digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(
+        normalize_bengali_assamese_digits(text)
+    )
+
+
+def validate_assamese_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Assamese digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_bengali_assamese_digits(text)
+    )
+
+
+def validate_assam_pin(text: str) -> bool:
+    """Validate an Assam PIN in the 78xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    return validate_indian_pin(normalized) and 780_000 <= int(normalized) <= 789_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5533,6 +5579,152 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_BENGALI_ASSAMESE_DIGIT_CLASS = r"0-9\u09E6-\u09EF"
+_ASSAMESE_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u09EC-\u09EF"
+_ASSAMESE_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u09E8-\u09EF"
+_BENGALI_ASSAMESE_BASE_LETTER = (
+    r"[\u0985-\u098C\u098F-\u0990\u0993-\u09A8\u09AA-\u09B0"
+    r"\u09B2\u09B6-\u09B9\u09CE\u09DC-\u09E1\u09F0-\u09F1]"
+)
+_BENGALI_ASSAMESE_NON_VIRAMA_MARK = (
+    r"[\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7-\u09C8"
+    r"\u09CB-\u09CC\u09D7]"
+)
+_BENGALI_ASSAMESE_GRAPHEME = (
+    rf"{_BENGALI_ASSAMESE_BASE_LETTER}"
+    rf"{_BENGALI_ASSAMESE_NON_VIRAMA_MARK}*"
+    rf"(?:\u09CD[\u200C\u200D]?{_BENGALI_ASSAMESE_BASE_LETTER}"
+    rf"{_BENGALI_ASSAMESE_NON_VIRAMA_MARK}*)*"
+)
+_ASSAMESE_NAME_WORD = rf"(?:{_BENGALI_ASSAMESE_GRAPHEME}){{2,}}"
+_ASSAMESE_SURNAME = r"(?:গগৈ|বৰুৱা|শইকীয়া|বৰদলৈ|বৰা)"
+_ASSAMESE_FULL_NAME = (
+    rf"{_ASSAMESE_NAME_WORD}"
+    rf"(?:[ \t]+{_ASSAMESE_NAME_WORD})?"
+    rf"[ \t]+{_ASSAMESE_SURNAME}"
+)
+_ASSAMESE_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["as"]
+)
+
+_ASSAMESE_NAME_CONTEXT = ["শ্ৰী", "শ্ৰীমতী", "ডা.", "নাম", "ৰোগী", "patient"]
+_ASSAMESE_DATE_CONTEXT = [
+    "জন্ম",
+    "জন্ম তাৰিখ",
+    "তাৰিখ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_ASSAMESE_PHONE_CONTEXT = ["ফোন", "মোবাইল", "যোগাযোগ", "phone", "mobile"]
+_ASSAMESE_AADHAAR_CONTEXT = [
+    "আধাৰ",
+    "পৰিচয়",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_ASSAMESE_PIN_CONTEXT = [
+    "পিন",
+    "পিন কোড",
+    "ডাক",
+    "ঠিকনা",
+    "pin",
+    "postcode",
+]
+
+_ASSAMESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?:(?<=শ্ৰী )|(?<=শ্ৰীমতী )|(?<=ডা\. ))"
+        rf"{_ASSAMESE_FULL_NAME}"
+        rf"(?![\u0980-\u09FF])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_ASSAMESE_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_ASSAMESE_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_ASSAMESE_MONTH_PATTERN})\s+"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_ASSAMESE_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?:\+[9\u09EF][1\u09E7][\s-]?)?"
+        rf"[{_ASSAMESE_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_ASSAMESE_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_assamese_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_ASSAMESE_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}} "
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}} "
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_ASSAMESE_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_assamese_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[7\u09ED][8\u09EE]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_ASSAMESE_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_assam_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -8934,6 +9126,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *AADHAAR_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
+    "as": [
+        *_ASSAMESE_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "te": [
         *_TELUGU_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
@@ -9184,6 +9380,17 @@ if _NIGERIA_HEALTH_FACILITY_PII_PATTERNS[0] not in _NIGERIAN_PII_PATTERNS:
 # separate from ``LANGUAGE_FAKE_DATA`` ensures the default ``fr`` and ``pt``
 # code paths remain unchanged unless the caller explicitly passes ``locale=``.
 LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "as_IN": {
+        "NAME": [
+            "দীপালী গগৈ",
+            "অৰুণ বৰুৱা",
+            "প্ৰিয়া শইকীয়া",
+            "মণিকা শইকীয়া",
+            "ৰঞ্জিত বৰা",
+        ],
+        "FIRST_NAME": ["দীপালী", "অৰুণ", "প্ৰিয়া", "মণিকা", "ৰঞ্জিত"],
+        "LAST_NAME": ["গগৈ", "বৰুৱা", "শইকীয়া", "বৰা"],
+    },
     "fr_SN": {
         "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],
         "FIRST_NAME": ["Awa", "Mamadou", "Fatou", "Ibrahima"],
@@ -10182,7 +10389,15 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 LANGUAGE_FAKE_DATA.update(
     {
         "as": {
-            "NAME": ["অৰুণ দাস"],
+            "NAME": [
+                "দীপালী গগৈ",
+                "অৰুণ বৰুৱা",
+                "প্ৰিয়া শইকীয়া",
+                "মণিকা শইকীয়া",
+                "ৰঞ্জিত বৰা",
+            ],
+            "FIRST_NAME": ["দীপালী", "অৰুণ", "প্ৰিয়া", "মণিকা", "ৰঞ্জিত"],
+            "LAST_NAME": ["গগৈ", "বৰুৱা", "শইকীয়া", "বৰা"],
             "EMAIL": ["rogi@example.in"],
             "PHONE": ["+91 9876543210"],
             "DATE": ["01/01/2000"],
