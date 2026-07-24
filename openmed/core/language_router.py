@@ -19,6 +19,7 @@ from .language_pack_catalog import LANGUAGE_PACK_ADAPTERS
 from .script_detect import (
     UNKNOWN_SCRIPT,
     candidate_languages_for_script,
+    candidate_languages_for_text,
     segment_by_script,
 )
 
@@ -293,6 +294,14 @@ class LanguageRouter:
         )
         if context_matches:
             return context_matches[0], 0.99, "stdlib:context-script"
+
+        text_hints = candidate_languages_for_text(text, script)
+        if text_hints != candidate_languages_for_script(script):
+            candidates_by_code = {pack.code: pack for pack in candidates}
+            for code in text_hints:
+                selected = candidates_by_code.get(code)
+                if selected is not None:
+                    return selected, 0.99, "stdlib:assamese-cues"
 
         if len(candidates) == 1:
             return candidates[0], 0.99, "stdlib:script"
