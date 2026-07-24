@@ -15,7 +15,7 @@ import math
 from dataclasses import dataclass
 from typing import Final, Sequence
 
-from .spans import is_indic_text, snap_span_to_graphemes
+from .spans import snap_span_to_graphemes
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -468,7 +468,7 @@ def token_spans_to_char_spans(
     token_offsets: Sequence[Sequence[int]],
     text: str,
 ) -> list[tuple[int, int, int]]:
-    """Map token spans to character spans and snap Indic runs to graphemes.
+    """Map token spans to grapheme-safe Unicode scalar spans.
 
     Args:
         token_spans: ``(span_label, token_start, token_end)`` triples.
@@ -476,10 +476,10 @@ def token_spans_to_char_spans(
         text: Exact source text referenced by ``token_offsets``.
 
     Returns:
-        ``(span_label, start, end)`` triples with character offsets. Invalid
-        token ranges are omitted. A span touching an Indic run is expanded to
+        ``(span_label, start, end)`` triples with Unicode scalar offsets.
+        Invalid token ranges are omitted. Every non-empty span is expanded to
         enclosing grapheme boundaries so Viterbi output cannot split an
-        akshara.
+        aksara, combining sequence, or joiner sequence.
     """
 
     char_spans: list[tuple[int, int, int]] = []
@@ -492,10 +492,7 @@ def token_spans_to_char_spans(
             continue
         start = max(0, min(int(start_offset[0]), len(text)))
         end = max(start, min(int(end_offset[1]), len(text)))
-        context_start = max(0, start - 1)
-        context_end = min(len(text), end + 1)
-        if is_indic_text(text[context_start:context_end]):
-            start, end = snap_span_to_graphemes(start, end, text)
+        start, end = snap_span_to_graphemes(start, end, text)
         char_spans.append((span_label, start, end))
     return char_spans
 
