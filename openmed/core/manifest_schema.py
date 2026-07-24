@@ -33,11 +33,13 @@ REQUIRED_FIELDS = frozenset(
 OPTIONAL_ENRICHMENT_FIELDS = frozenset(
     {
         "disk_mb",
+        "download_sizes",
         "download_mb",
         "latency_ms",
         "peak_ram_mb",
         "recommended_tier",
         "script_coverage",
+        "script_eval",
         "training_provenance",
     }
 )
@@ -109,6 +111,8 @@ SCRIPT_COVERAGE_FIELDS = frozenset(
 )
 SCRIPT_COVERAGE_VERDICTS = ("supported", "unsupported", "unclaimed")
 SCRIPT_COVERAGE_UNK_THRESHOLD = 0.01
+DOWNLOAD_SIZE_FORMATS = ("safetensors", "mlx", "coreml", "onnx")
+SCRIPT_EVAL_FIELDS = frozenset({"dataset", "recall", "leakage_floor"})
 LANGUAGE_SCRIPT_TARGETS: Mapping[str, tuple[str, ...]] = {
     "zh": ("han_simplified", "han_traditional"),
     "zh-cn": ("han_simplified",),
@@ -388,6 +392,21 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
             row.get("languages"),
         )
 
+    if "script_eval" in row:
+        _validate_script_eval(
+            violations,
+            line_number,
+            row["script_eval"],
+            row.get("languages"),
+        )
+
+    if "download_sizes" in row:
+        _validate_download_sizes(
+            violations,
+            line_number,
+            row["download_sizes"],
+        )
+
     if "training_provenance" in row:
         _validate_training_provenance(
             violations,
@@ -565,6 +584,124 @@ def _claimed_scripts(languages: Any) -> set[str]:
         normalized = language.lower().replace("_", "-")
         claimed.update(LANGUAGE_SCRIPT_TARGETS.get(normalized, ()))
     return claimed
+
+
+def _validate_script_eval(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    languages: Any,
+) -> None:
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(line_number, "script_eval must be an object")
+        )
+        return
+
+    scripts = set(value)
+    expected_scripts = set(SCRIPT_COVERAGE_TARGETS)
+    claimed_scripts = _claimed_scripts(languages)
+    for script in sorted(claimed_scripts - scripts):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"script_eval missing claimed script: {script}",
+            )
+        )
+    for script in sorted(scripts - expected_scripts):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"script_eval has unexpected script: {script}",
+            )
+        )
+
+    for script in SCRIPT_COVERAGE_TARGETS:
+        if script not in value:
+            continue
+        metrics = value[script]
+        field = f"script_eval.{script}"
+        if not isinstance(metrics, Mapping):
+            violations.append(
+                ManifestViolation(line_number, f"{field} must be an object")
+            )
+            continue
+
+        metric_fields = set(metrics)
+        for key in sorted(SCRIPT_EVAL_FIELDS - metric_fields):
+            violations.append(
+                ManifestViolation(line_number, f"{field} missing required key: {key}")
+            )
+        for key in sorted(metric_fields - SCRIPT_EVAL_FIELDS):
+            violations.append(
+                ManifestViolation(line_number, f"{field} has unexpected key: {key}")
+            )
+
+        dataset = metrics.get("dataset")
+        if dataset is not None and (not isinstance(dataset, str) or not dataset):
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field}.dataset must be a non-empty string or null",
+                )
+            )
+        for metric_name in ("recall", "leakage_floor"):
+            metric = metrics.get(metric_name)
+            if metric is None:
+                continue
+            if (
+                not _is_number(metric)
+                or not math.isfinite(float(metric))
+                or not 0.0 <= float(metric) <= 1.0
+            ):
+                violations.append(
+                    ManifestViolation(
+                        line_number,
+                        f"{field}.{metric_name} must be a number between 0 and 1 "
+                        "or null",
+                    )
+                )
+
+
+def _validate_download_sizes(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+) -> None:
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(line_number, "download_sizes must be an object")
+        )
+        return
+
+    formats = set(value)
+    expected_formats = set(DOWNLOAD_SIZE_FORMATS)
+    for format_name in sorted(expected_formats - formats):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"download_sizes missing required format: {format_name}",
+            )
+        )
+    for format_name in sorted(formats - expected_formats):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"download_sizes has unexpected format: {format_name}",
+            )
+        )
+
+    for format_name in DOWNLOAD_SIZE_FORMATS:
+        if format_name not in value or value[format_name] is None:
+            continue
+        size = value[format_name]
+        if not _is_number(size) or not math.isfinite(float(size)) or float(size) <= 0.0:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"download_sizes.{format_name} must be a positive number or null",
+                )
+            )
 
 
 def _coverage_number(

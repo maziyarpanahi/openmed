@@ -34,7 +34,7 @@ mtandao wako.</p>
 </p>
 
 <p>
-  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 27 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 30 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -427,17 +427,17 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 29 zinazoungwa mkono)
+## PII ya lugha nyingi (lugha 31 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 29 ya lugha za PII**:
-`am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh` na `zu`, pamoja na checkpoint
-600+ za PII. Uelekezaji wa Kirusi na Kichina kwa sasa hutumia vishikilia nafasi
-vya modeli chaguo-msingi ya lugha nyingi vilivyoelezwa kwenye nyaraka, huku
-uzito maalumu wa modeli ukiwa tofauti. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia tisa za ziada (`as`, `bn`, `gu`, `kn`,
-`ml`, `mr`, `or`, `pa` na `ta`) na inaweza pia kuhudumia Kihindi na Kitelugu.
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 31 ya lugha za PII**:
+`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
+`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`,
+`uk`, `xh`, `zh` na `zu`, pamoja na checkpoint
+600+ za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
+chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
+na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
+iliyosanidiwa na mtumiaji hukubali njia saba za ziada (`as`, `gu`, `kn`, `ml`,
+`mr`, `or` na `pa`) na inaweza pia kuhudumia Kibengali, Kihindi, Kitamil na Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,

@@ -425,15 +425,15 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **29 supported PII language codes**:
-`am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh`, and `zu`.
-Russian and Chinese routing currently use documented multilingual
-default-model placeholders; dedicated model weights are not bundled.
-The optional Indic NER adapter adds nine user-configured routes (`as`, `bn`,
-`gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve Hindi and
-Telugu. It loads only an explicit path or repository from
+as its source of truth and supports **31 supported PII language codes**:
+`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+`it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`,
+`tr`, `uk`, `xh`, `zh`, and `zu`.
+Russian routing currently uses a documented multilingual default-model
+placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
+The optional Indic NER adapter adds seven user-configured routes (`as`, `gu`,
+`kn`, `ml`, `mr`, `or`, and `pa`) and can also serve Bengali, Hindi, Tamil,
+and Telugu. It loads only an explicit path or repository from
 `OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
 Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
@@ -447,7 +447,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 27 model-backed codes plus the documented `ru`/`zh` routing placeholders | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; shared fallback for multilingual routes, including the documented `ru` placeholder | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

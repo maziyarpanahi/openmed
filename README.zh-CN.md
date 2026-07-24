@@ -28,7 +28,7 @@ OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除
 </p>
 
 <p>
-  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>27 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>30 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -493,14 +493,14 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（支持 29 种语言）
+## 多语言 PII（支持 31 种语言）
 
-实体抽取和去标识化支持 **29 个 PII 语言代码**：
-`am`、`ar`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`ru`、`sv`、`sw`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
-俄语和中文路由目前使用文档中说明的多语言默认模型占位符，专用模型权重仍单独提供。
-一个由用户选择并配置的印度语言 NER 系列还支持九条额外路由
-（`as`、`bn`、`gu`、`kn`、`ml`、`mr`、`or`、`pa` 和 `ta`），
-并且也可服务于印地语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
+实体抽取和去标识化支持 **31 个 PII 语言代码**：
+`am`、`ar`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
+俄语路由目前使用文档中说明的多语言默认模型占位符。孟加拉语、中文和泰米尔语拥有专用注册表条目。
+一个由用户选择并配置的印度语言 NER 系列还支持七条额外路由
+（`as`、`gu`、`kn`、`ml`、`mr`、`or` 和 `pa`），
+并且也可服务于孟加拉语、印地语、泰米尔语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
 OpenMed 不会捆绑或自动选择这些权重。
 OpenMed 还为其他仅含证件号的语言区域提供基于 validator 的国家证件号覆盖，
 例如波兰、拉脱维亚、斯洛伐克、马来西亚、菲律宾和芬兰。

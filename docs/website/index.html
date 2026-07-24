@@ -75,13 +75,13 @@
         "@type": "FAQPage",
         "mainEntity": [
             { "@type": "Question", "name": "What is OpenMed, exactly?",
-              "acceptedAnswer": { "@type": "Answer", "text": "An open-source medical LLM toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 29 supported PII language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu. Russian and Chinese routing use documented multilingual default-model placeholders. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure." } },
+              "acceptedAnswer": { "@type": "Answer", "text": "An open-source medical LLM toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 31 supported PII language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu. Russian routing uses a documented multilingual default-model placeholder. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure." } },
             { "@type": "Question", "name": "Are these generative LLMs or something else?",
               "acceptedAnswer": { "@type": "Answer", "text": "Encoder transformers (BERT, ELECTRA, DeBERTa families), not generative chat models. They do extraction and classification, pulling structured entities out of unstructured clinical text, and stay small enough to run on a laptop or a phone. The reference paper reports new state-of-the-art on 10 of 12 biomedical NER benchmarks. Complementary to the larger generative medical LLM category, not a replacement." } },
             { "@type": "Question", "name": "Where does my data go when I use OpenMed?",
               "acceptedAnswer": { "@type": "Answer", "text": "Nowhere you don't send it. You download the models once (Hugging Face or a private mirror) and inference runs wherever you run the Python process, the Docker container, or the Swift app: your laptop, your VPC, an on-prem server, or air-gapped hardware. No telemetry, no license check-in, no outbound calls at runtime. PHI stays on your side of the fence by default." } },
             { "@type": "Question", "name": "Does OpenMed support HIPAA-aligned workflows?",
-              "acceptedAnswer": { "@type": "Answer", "text": "The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 29 supported PII language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu, with Russian and Chinese using documented multilingual default-model placeholders, locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, CNP, Nordic personal numbers, South African ID numbers, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls; the legal compliance boundary lives in your deployment." } },
+              "acceptedAnswer": { "@type": "Answer", "text": "The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 31 supported PII language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu, with Russian using a documented multilingual default-model placeholder, locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, CNP, Nordic personal numbers, South African ID numbers, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls; the legal compliance boundary lives in your deployment." } },
             { "@type": "Question", "name": "Can I fine-tune OpenMed models for my own vocabulary?",
               "acceptedAnswer": { "@type": "Answer", "text": "Yes. Models are published on Hugging Face under permissive licensing with full training recipes. The reference approach combines lightweight domain-adaptive pre-training on a 350k-passage biomedical corpus with parameter-efficient LoRA fine-tuning, updating less than 1.5% of model parameters and completing in under 12 hours on a single GPU (<1.2 kg CO2e). Tokenizer assets and starter notebooks are in the openmed-starter repo." } },
             { "@type": "Question", "name": "Do I need OpenMed Agent to use OpenMed?",
@@ -240,7 +240,7 @@
                     </div>
                 </div>
                 <div class="hero-caption">
-                    <span>Live PHI detection · 27 model-backed languages</span>
+                    <span>Live PHI detection · 30 model-backed languages</span>
                     <span class="play">▶ watch</span>
                 </div>
             </div>
@@ -326,7 +326,7 @@
                             </span>
                             <div>
                                 <code class="code-inline">extract_pii / deidentify</code>
-                                <div class="body-sm" style="margin-top:4px">Language-aware across 29 supported PII languages</div>
+                                <div class="body-sm" style="margin-top:4px">Language-aware across 31 supported PII languages</div>
                             </div>
                         </li>
                         <li>
@@ -455,7 +455,7 @@
                     Clinical text de-identification, built for <span class="serif-italic">HIPAA &amp; GDPR</span>.
                 </h2>
                 <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Language-aware PII routing across 29 supported PII language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu, plus validator-backed national-ID coverage for additional ID-only locales. Russian and Chinese use documented multilingual default-model placeholders. A user-configured Indic NER adapter adds nine optional routes and can also serve Hindi and Telugu. Process data locally, so your PHI never leaves your environment.
+                    Language-aware PII routing across 31 supported PII language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu, plus validator-backed national-ID coverage for additional ID-only locales. Russian uses a documented multilingual default-model placeholder. A user-configured Indic NER adapter adds seven optional routes and can also serve Bengali, Hindi, Tamil, and Telugu. Process data locally, so your PHI never leaves your environment.
                 </p>
             </div>
 
@@ -545,11 +545,11 @@
                         </svg>
                     </div>
                     <h3 class="heading-sm">HIPAA Safe Harbor ready</h3>
-                    <p class="body-sm">Detects all 18 HIPAA Safe Harbor identifiers, part of a wider 55+ PII entity catalog, across 29 supported PII language codes, with additional validator-backed national-ID coverage for ID-only locales.</p>
+                    <p class="body-sm">Detects all 18 HIPAA Safe Harbor identifiers, part of a wider 55+ PII entity catalog, across 31 supported PII language codes, with additional validator-backed national-ID coverage for ID-only locales.</p>
                     <div class="tag-row">
                         <span class="tag">18 Safe Harbor</span>
                         <span class="tag">55+ entity types</span>
-                        <span class="tag">27 model-backed languages</span>
+                        <span class="tag">30 model-backed languages</span>
                     </div>
                 </div>
             </div>
@@ -866,7 +866,7 @@
                         <div class="faq-plus" aria-hidden="true">+</div>
                     </div>
                     <div class="faq-body">
-                        <p>An open-source medical NLP toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 29 supported PII language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu. Russian and Chinese routing use documented multilingual default-model placeholders. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure.</p>
+                        <p>An open-source medical NLP toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 31 supported PII language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu. Russian routing uses a documented multilingual default-model placeholder. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure.</p>
                     </div>
                 </div>
                 <div class="faq-item">
@@ -893,7 +893,7 @@
                         <div class="faq-plus" aria-hidden="true">+</div>
                     </div>
                     <div class="faq-body">
-                        <p>The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 29 supported PII language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu, with Russian and Chinese using documented multilingual default-model placeholders, locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, CNP, Nordic personal numbers, South African ID numbers, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls (on-device processing, configurable thresholds, multiple redaction methods); the legal compliance boundary lives in your deployment.</p>
+                        <p>The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 31 supported PII language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu, with Russian using a documented multilingual default-model placeholder, locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, CNP, Nordic personal numbers, South African ID numbers, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls (on-device processing, configurable thresholds, multiple redaction methods); the legal compliance boundary lives in your deployment.</p>
                     </div>
                 </div>
                 <div class="faq-item">

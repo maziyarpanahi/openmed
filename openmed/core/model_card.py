@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from openmed.__about__ import __version__
+from openmed.core.manifest_schema import (
+    DOWNLOAD_SIZE_FORMATS,
+    SCRIPT_COVERAGE_TARGETS,
+)
 
 DEFAULT_ARXIV = "2508.01630"
 
@@ -200,6 +204,25 @@ def render_model_card(row: dict[str, Any]) -> str:
             "| Dataset | Micro F1 | Recall |",
             "|---|---:|---:|",
             f"| {_string(benchmark.get('dataset'), 'Not reported')} | {_metric(benchmark.get('micro_f1'))} | {_metric(benchmark.get('recall'))} |",
+        ]
+    )
+    script_eval_lines = _script_eval_block(row)
+    if script_eval_lines:
+        lines.extend(["", "## Per-Script Evaluation", "", *script_eval_lines])
+    download_size_lines = _download_sizes_block(row)
+    if download_size_lines:
+        lines.extend(["", "## Download Size by Format", "", *download_size_lines])
+    tokenizer_coverage_lines = _tokenizer_coverage_block(row)
+    if tokenizer_coverage_lines:
+        lines.extend(
+            ["", "## Tokenizer Script Coverage", "", *tokenizer_coverage_lines]
+        )
+    lines.extend(
+        [
+            "",
+            "## License",
+            "",
+            f"Declared license: `{license_name}`.",
             "",
             "## Canonical Labels",
             "",
@@ -602,6 +625,89 @@ def _format_param_count(value: Any) -> str:
 def _metric(value: Any) -> str:
     if isinstance(value, (int, float)):
         return f"{float(value):.4f}"
+    return "Not reported"
+
+
+def _script_eval_block(row: dict[str, Any]) -> list[str]:
+    payload = row.get("script_eval")
+    if not isinstance(payload, dict):
+        return []
+
+    lines = [
+        "| Script | Dataset | Recall | Leakage floor |",
+        "|---|---|---:|---:|",
+    ]
+    for script in SCRIPT_COVERAGE_TARGETS:
+        metrics = payload.get(script)
+        if not isinstance(metrics, dict):
+            continue
+        lines.append(
+            f"| {_script_name(script)} | "
+            f"{_string(metrics.get('dataset'), 'Not reported')} | "
+            f"{_metric(metrics.get('recall'))} | "
+            f"{_metric(metrics.get('leakage_floor'))} |"
+        )
+    return lines if len(lines) > 2 else []
+
+
+def _download_sizes_block(row: dict[str, Any]) -> list[str]:
+    payload = row.get("download_sizes")
+    if not isinstance(payload, dict):
+        return []
+
+    labels = {
+        "safetensors": "Safetensors",
+        "mlx": "MLX",
+        "coreml": "Core ML",
+        "onnx": "ONNX",
+    }
+    lines = [
+        "| Format | Download size |",
+        "|---|---:|",
+    ]
+    for format_name in DOWNLOAD_SIZE_FORMATS:
+        lines.append(
+            f"| {labels[format_name]} | {_download_size(payload.get(format_name))} |"
+        )
+    return lines
+
+
+def _tokenizer_coverage_block(row: dict[str, Any]) -> list[str]:
+    payload = row.get("script_coverage")
+    if not isinstance(payload, dict):
+        return []
+
+    lines = [
+        "| Script | UNK rate | Byte fallback rate | Tokens / grapheme | Verdict |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for script in SCRIPT_COVERAGE_TARGETS:
+        metrics = payload.get(script)
+        if not isinstance(metrics, dict):
+            continue
+        lines.append(
+            f"| {_script_name(script)} | "
+            f"{_percentage(metrics.get('unk_rate'))} | "
+            f"{_percentage(metrics.get('byte_fallback_rate'))} | "
+            f"{_metric(metrics.get('tokens_per_grapheme'))} | "
+            f"{_string(metrics.get('verdict'), 'Not reported')} |"
+        )
+    return lines if len(lines) > 2 else []
+
+
+def _script_name(value: str) -> str:
+    return value.replace("_", " ").title()
+
+
+def _download_size(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{float(value):,.3f} MB"
+    return "Not published"
+
+
+def _percentage(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{float(value) * 100:.2f}%"
     return "Not reported"
 
 

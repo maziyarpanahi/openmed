@@ -20,16 +20,22 @@ except ImportError:  # pragma: no cover - exercised in minimal test envs
 DEFAULT_ORG = "OpenMed"
 DEFAULT_OUTPUT = Path("models.jsonl")
 PRESERVED_ENRICHMENT_FIELDS = (
+    "disk_mb",
+    "download_mb",
+    "download_sizes",
     "latency_ms",
     "peak_ram_mb",
     "recommended_tier",
     "script_coverage",
+    "script_eval",
     "training_provenance",
 )
 
 LANGUAGE_TAGS = {
     "ar": "ar",
     "arabic": "ar",
+    "bn": "bn",
+    "bengali": "bn",
     "de": "de",
     "german": "de",
     "en": "en",
@@ -50,13 +56,19 @@ LANGUAGE_TAGS = {
     "dutch": "nl",
     "pt": "pt",
     "portuguese": "pt",
+    "ta": "ta",
+    "tamil": "ta",
     "te": "te",
     "telugu": "te",
     "tr": "tr",
     "turkish": "tr",
+    "zh": "zh",
+    "chinese": "zh",
 }
 LANGUAGE_NAMES = {
     "arabic": "ar",
+    "bengali": "bn",
+    "chinese": "zh",
     "dutch": "nl",
     "french": "fr",
     "german": "de",
@@ -66,6 +78,7 @@ LANGUAGE_NAMES = {
     "korean": "ko",
     "portuguese": "pt",
     "spanish": "es",
+    "tamil": "ta",
     "telugu": "te",
     "turkish": "tr",
 }

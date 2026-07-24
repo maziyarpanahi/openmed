@@ -395,14 +395,15 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **29 supported PII
-language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko,
-nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu**. Russian and
-Chinese currently use documented multilingual default-model placeholders.
+**Cause.** PII extraction and de-identification support **31 supported PII
+language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja,
+ko, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu**. Russian
+currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.
-The accepted API set also includes nine optional Indic routes: `as`, `bn`,
-`gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`. Those codes require an explicit
-model or `OPENMED_INDIC_NER_MODEL`; Hindi and Telugu can use the adapter too.
+The accepted API set also includes seven optional Indic routes: `as`, `gu`,
+`kn`, `ml`, `mr`, `or`, and `pa`. Those codes require an explicit model or
+`OPENMED_INDIC_NER_MODEL`; Bengali, Hindi, Tamil, and Telugu can use the
+adapter too.
 
 **Fix.** Use a built-in code or a configured optional Indic route with
 `extract_pii(..., lang="<code>")`. Clinical NER coverage depends
