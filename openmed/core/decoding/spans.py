@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
@@ -75,6 +75,15 @@ _PREPEND_RANGES: Final = (
     (0x11D46, 0x11D46),
     (0x11F02, 0x11F02),
 )
+_IDS_BINARY_OPERATORS: Final = frozenset(
+    {
+        *range(0x2FF0, 0x2FF2),
+        *range(0x2FF4, 0x2FFE),
+        0x31EF,
+    }
+)
+_IDS_TRINARY_OPERATORS: Final = frozenset({0x2FF2, 0x2FF3})
+_IDS_UNARY_OPERATORS: Final = frozenset({0x2FFE, 0x2FFF})
 
 
 @dataclass(frozen=True, init=False)
@@ -257,6 +266,73 @@ def snap_char_span_to_word_boundaries(
     )
 
 
+def is_han_dominant(text: str) -> bool:
+    """Return whether Han is the majority of detected script code points.
+
+    Neutral punctuation, whitespace, combining marks, and variation selectors
+    do not dilute the ratio. At least one Han code point is required.
+
+    Args:
+        text: Source text to inspect without normalization.
+
+    Returns:
+        ``True`` when Han accounts for at least half of detected script text.
+    """
+
+    han_count = 0
+    scripted_count = 0
+    for start, end, script in segment_by_script(text):
+        if script == UNKNOWN_SCRIPT:
+            continue
+        run_length = end - start
+        scripted_count += run_length
+        if script == "Han":
+            han_count += run_length
+    return han_count > 0 and han_count * 2 >= scripted_count
+
+
+def assert_cjk_span_boundaries(
+    start: int,
+    end: int,
+    text: str,
+    offset_map: CjkOffsetMap | None = None,
+) -> None:
+    """Assert that a CJK span is safe for source slicing and segmentation.
+
+    Python string indices are code-point offsets. This assertion additionally
+    requires whole grapheme boundaries and, when ``offset_map`` is supplied,
+    exact Chinese segmenter word boundaries.
+
+    Args:
+        start: Inclusive source code-point offset.
+        end: Exclusive source code-point offset.
+        text: Exact source string referenced by the offsets.
+        offset_map: Optional validated Chinese word-offset map.
+
+    Raises:
+        AssertionError: If an offset is invalid, bisects a grapheme, or does
+            not coincide with a supplied segmenter word boundary.
+    """
+
+    assert isinstance(start, int) and not isinstance(start, bool)
+    assert isinstance(end, int) and not isinstance(end, bool)
+    assert 0 <= start <= end <= len(text), "span must index the source text"
+    assert is_grapheme_boundary(start, text), "span start bisects a grapheme"
+    assert is_grapheme_boundary(end, text), "span end bisects a grapheme"
+
+    if offset_map is None:
+        return
+    assert offset_map.text == text, "segmenter offsets reference different text"
+    word_boundaries = {
+        0,
+        len(text),
+        *(start for start, _ in offset_map.word_to_char),
+        *(end for _, end in offset_map.word_to_char),
+    }
+    assert start in word_boundaries, "span start is not a segmenter word boundary"
+    assert end in word_boundaries, "span end is not a segmenter word boundary"
+
+
 def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
     """Yield UAX #29-style extended grapheme-cluster offsets for ``text``.
 
@@ -273,9 +349,10 @@ def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
     if not text:
         return
 
+    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
     cluster_start = 0
     for index in range(1, len(text)):
-        if _has_grapheme_break(text, index):
+        if _has_grapheme_break_at(text, index, ids_internal_boundaries):
             yield cluster_start, index
             cluster_start = index
     yield cluster_start, len(text)
@@ -684,7 +761,92 @@ def _cluster_is_whitespace(cluster: str) -> bool:
     return saw_whitespace
 
 
+def _inside_ideographic_description_sequence(text: str, index: int) -> bool:
+    for sequence_start in range(index - 1, -1, -1):
+        if _ids_operator_arity(text[sequence_start]) is None:
+            continue
+        sequence_end = _consume_ideographic_description_component(
+            text,
+            sequence_start,
+        )
+        if sequence_end is not None and sequence_start < index < sequence_end:
+            return True
+    return False
+
+
+def _ideographic_description_internal_boundaries(text: str) -> frozenset[int]:
+    boundaries: set[int] = set()
+    for sequence_start, character in enumerate(text):
+        if _ids_operator_arity(character) is None:
+            continue
+        sequence_end = _consume_ideographic_description_component(
+            text,
+            sequence_start,
+        )
+        if sequence_end is not None:
+            boundaries.update(range(sequence_start + 1, sequence_end))
+    return frozenset(boundaries)
+
+
+def _consume_ideographic_description_component(
+    text: str,
+    start: int,
+) -> int | None:
+    if not 0 <= start < len(text):
+        return None
+
+    character = text[start]
+    arity = _ids_operator_arity(character)
+    if arity is not None:
+        cursor = start + 1
+        for _ in range(arity):
+            next_cursor = _consume_ideographic_description_component(text, cursor)
+            if next_cursor is None:
+                return None
+            cursor = next_cursor
+        return cursor
+
+    break_class = _grapheme_break_class(character)
+    if character.isspace() or break_class in {
+        "CONTROL",
+        "CR",
+        "LF",
+        "EXTEND",
+        "ZWJ",
+        "SPACING_MARK",
+    }:
+        return None
+
+    cursor = start + 1
+    while cursor < len(text) and _grapheme_break_class(text[cursor]) in {
+        "EXTEND",
+        "ZWJ",
+        "SPACING_MARK",
+    }:
+        cursor += 1
+    return cursor
+
+
+def _ids_operator_arity(character: str) -> int | None:
+    codepoint = ord(character)
+    if codepoint in _IDS_UNARY_OPERATORS:
+        return 1
+    if codepoint in _IDS_BINARY_OPERATORS:
+        return 2
+    if codepoint in _IDS_TRINARY_OPERATORS:
+        return 3
+    return None
+
+
 def _has_grapheme_break(text: str, index: int) -> bool:
+    return _has_grapheme_break_at(text, index, None)
+
+
+def _has_grapheme_break_at(
+    text: str,
+    index: int,
+    ids_internal_boundaries: Collection[int] | None,
+) -> bool:
     previous = text[index - 1]
     current = text[index]
     previous_class = _grapheme_break_class(previous)
@@ -696,6 +858,12 @@ def _has_grapheme_break(text: str, index: int) -> bool:
         return True
     if current_class in {"CR", "LF", "CONTROL"}:
         return True
+    if (
+        index in ids_internal_boundaries
+        if ids_internal_boundaries is not None
+        else _inside_ideographic_description_sequence(text, index)
+    ):
+        return False
     if previous_class == "L" and current_class in {"L", "V", "LV", "LVT"}:
         return False
     if previous_class in {"LV", "V"} and current_class in {"V", "T"}:
@@ -1082,7 +1250,9 @@ __all__ = [
     "IndicSpanRefinement",
     "TokenClassificationSpan",
     "TokenClassificationStreamEvent",
+    "assert_cjk_span_boundaries",
     "coerce_token_classification_spans",
+    "is_han_dominant",
     "iter_grapheme_cluster_spans",
     "project_word_spans_to_char_spans",
     "reconcile_stream_spans",
