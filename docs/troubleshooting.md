@@ -392,12 +392,14 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 **Symptom.** A PII call with an unrecognized `lang` raises:
 
 ```text
-ValueError: Unsupported language 'xx'. Supported: ['am', 'ar', 'as', 'bn', 'da', 'de', 'en', 'es', 'fr', 'gu', 'he', 'hi', 'id', 'it', 'ja', 'kn', 'ko', 'ml', 'mr', 'nl', 'no', 'or', 'pa', 'pt', 'ro', 'ru', 'sv', 'sw', 'ta', 'te', 'th', 'tr', 'xh', 'zh', 'zu']
+ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **26 supported PII language codes: am, ar, da, de, en,
-es, fr, he, hi, id, it, ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, xh, zh, and zu**. Russian and Chinese currently use
-documented multilingual default-model placeholders. Passing anything outside that set (or a mistyped code) raises this error.
+**Cause.** PII extraction and de-identification support **29 supported PII
+language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko,
+nl, no, pt, ro, ru, sv, sw, te, th, tr, uk, xh, zh, and zu**. Russian and
+Chinese currently use documented multilingual default-model placeholders.
+Passing anything outside that set (or a mistyped code) raises this error.
 The accepted API set also includes nine optional Indic routes: `as`, `bn`,
 `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`. Those codes require an explicit
 model or `OPENMED_INDIC_NER_MODEL`; Hindi and Telugu can use the adapter too.

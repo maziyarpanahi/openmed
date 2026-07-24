@@ -72,7 +72,9 @@ routing is first requested, and do not download or bundle model weights.
 | `as`   | Assamese   | `env:OPENMED_INDIC_NER_MODEL`                               | `as_IN`      | Optional Indic NER weights; Bengali Faker backend.           |
 | `bn`   | Bengali    | `env:OPENMED_INDIC_NER_MODEL`                               | `bn_BD`      | Optional Indic NER weights.                                  |
 | `da`   | Danish     | `OpenMed/privacy-filter-multilingual`                       | `da_DK`      | CPR-aware Nordic language pack.                              |
+| `cs`   | Czech      | `OpenMed/privacy-filter-multilingual`                       | `cs_CZ`      | Rodné číslo checksum-aware surrogates.                       |
 | `de`   | German     | `OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1`    | `de_DE`      | Steuer-ID surrogates via `GermanSteuerIdProvider`.           |
+| `el`   | Greek      | `OpenMed/privacy-filter-multilingual`                       | `el_GR`      | AMKA Luhn-aware surrogates.                                  |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
 | `es`   | Spanish    | `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1`   | `es_ES`      | DNI/NIE checksum-aware surrogates.                           |
 | `fr`   | French     | `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1`    | `fr_FR`      | NIR / INSEE; `fr_SN`, `fr_CI`, and `fr_CM` locale overlays.  |
@@ -102,11 +104,13 @@ routing is first requested, and do not download or bundle model weights.
 | `xh`   | isiXhosa   | `OpenMed/privacy-filter-multilingual`                      | `xh_ZA`      | Nguni patterns; `zu_ZA` Faker approximation warns once.      |
 | `zh`   | Chinese    | `OpenMed/privacy-filter-multilingual`                      | `zh_CN`      | Routing placeholder; no dedicated Chinese PII model yet.     |
 | `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
+| `uk`   | Ukrainian  | `OpenMed/privacy-filter-multilingual`                       | `uk_UA`      | RNOKPP checksum-aware surrogates.                            |
 
 Chinese segmentation and Han-script routing are supported, but the `zh`
 default remains an explicit multilingual placeholder rather than a claim that
 a dedicated Chinese PII model has shipped. Codes outside this list (for example
-`pl`, `lv`, `sk`, `ms`, `tl`, `fi`, and `ur`) are **not** model-backed PII languages.
+`pl`, `lv`, `sk`, `ms`, `tl`, `fi`, and `ur`) are **not** model-backed PII
+languages.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
@@ -237,6 +241,13 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] গেলেন।
 ```text
 Before: Patient Anna Nielsen, CPR 170885-1234
 After:  Patient [NAME], CPR [ID]
+### Czech — `cs`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `cs_CZ`
+
+```text
+Before: Pacient Jan Novák, rodné číslo 751116/0008
+After:  Pacient [NAME], rodné číslo [ID]
 ```
 
 ### German — `de`
@@ -246,6 +257,15 @@ After:  Patient [NAME], CPR [ID]
 ```text
 Before: Patientin Anna Müller, Steuer-ID 86095742719
 After:  Patientin [NAME], Steuer-ID [ID]
+```
+
+### Greek — `el`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `el_GR`
+
+```text
+Before: Ασθενής Γιώργος Παπαδόπουλος, ΑΜΚΑ 16117508024
+After:  Ασθενής [NAME], ΑΜΚΑ [ID]
 ```
 
 ### English — `en`
@@ -517,4 +537,11 @@ offset guarantees do not imply dedicated Chinese model weights.
 ```text
 Before: Igama lesiguli: Nomcebo Dlamini. Inombolo kamazisi 8001015009087
 After:  Igama lesiguli: [NAME]. Inombolo kamazisi [ID]
+### Ukrainian — `uk`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `uk_UA`
+
+```text
+Before: Пацієнтка Олена Коваль, РНОКПП 2974281300
+After:  Пацієнтка [NAME], РНОКПП [ID]
 ```

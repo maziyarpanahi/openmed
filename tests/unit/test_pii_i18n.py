@@ -116,6 +116,7 @@ from openmed.core.pii_i18n import (
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_uganda_nin,
+    validate_ukrainian_rnokpp,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
 )
@@ -156,6 +157,9 @@ class TestConstants:
             "zu",
             "xh",
             "zh",
+            "uk",
+            "cs",
+            "el",
         }
 
     def test_national_id_only_languages(self):
@@ -175,8 +179,6 @@ class TestConstants:
             "hr",
             "bg",
             "fi",
-            "cs",
-            "el",
             "vi",
             "rw",
             "ur",
@@ -211,6 +213,9 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["zu"] == "isiZulu-"
         assert LANGUAGE_MODEL_PREFIX["xh"] == "isiXhosa-"
         assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
+        assert LANGUAGE_MODEL_PREFIX["uk"] == "Ukrainian-"
+        assert LANGUAGE_MODEL_PREFIX["cs"] == "Czech-"
+        assert LANGUAGE_MODEL_PREFIX["el"] == "Greek-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
@@ -245,6 +250,9 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["zu"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["xh"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -4420,6 +4428,139 @@ def test_finnish_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
         date_shift_days=None,
         keep_mapping=False,
         lang="fi",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
+def test_validate_ukrainian_rnokpp():
+    assert validate_ukrainian_rnokpp("2974281300")
+    assert validate_ukrainian_rnokpp("3695007088")
+
+    assert validate_ukrainian_rnokpp("2974281301") is False
+    assert validate_ukrainian_rnokpp("297428130") is False
+    assert validate_ukrainian_rnokpp("29742 81300") is False
+    assert validate_ukrainian_rnokpp("abcdefghij") is False
+
+
+def test_generated_ukrainian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["uk"] == "uk_UA"
+
+    anonymizer = Anonymizer(lang="uk", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("2974281300", "national_id")
+
+    assert validate_ukrainian_rnokpp(surrogate) is True
+    assert surrogate != "2974281300"
+
+
+def test_ukrainian_clinical_sample_expected_spans():
+    text = (
+        "Пацієнт: Олена Коваль. Дата народження 16.11.1975, "
+        "телефон +380 67 123 45 67, РНОКПП 2974281300, "
+        "адреса вулиця Хрещатик 22, поштовий індекс 01001."
+    )
+    expected = {
+        ("date", 39, 49, "16.11.1975"),
+        ("phone_number", 59, 76, "+380 67 123 45 67"),
+        ("national_id", 85, 95, "2974281300"),
+        ("street_address", 104, 122, "вулиця Хрещатик 22"),
+        ("postcode", 140, 145, "01001"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("uk"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_ukrainian_textual_date_and_street_patterns():
+    text = "Дата народження 16 листопада 1975, адреса проспект Свободи 15."
+    observed = {
+        (pattern.entity_type, match.group(0))
+        for pattern in get_patterns_for_language("uk")
+        for match in re.finditer(pattern.pattern, text, pattern.flags)
+    }
+
+    assert ("date", "16 листопада 1975") in observed
+    assert ("street_address", "проспект Свободи 15") in observed
+
+
+def test_ukrainian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/uk.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "uk"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 39, 49, "16.11.1975"),
+        ("PHONE", 59, 76, "+380 67 123 45 67"),
+        ("ID_NUM", 85, 95, "2974281300"),
+        ("STREET_ADDRESS", 104, 122, "вулиця Хрещатик 22"),
+        ("ZIPCODE", 140, 145, "01001"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    identifier = next(
+        span["text"] for span in row["gold_spans"] if span["label"] == "ID_NUM"
+    )
+    assert validate_ukrainian_rnokpp(identifier)
+
+
+def test_ukrainian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/uk.jsonl")
+    row = json.loads(fixture_path.read_text(encoding="utf-8").strip())
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-19T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="uk",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="uk",
         consistent=False,
         seed=None,
         locale=None,

@@ -105,6 +105,9 @@ const (
 	LangZU PIILanguage = "zu"
 	LangXH PIILanguage = "xh"
 	LangZH PIILanguage = "zh"
+	LangUK PIILanguage = "uk"
+	LangCS PIILanguage = "cs"
+	LangEL PIILanguage = "el"
 )
 
 // DeidentificationMethod selects how detected PII spans are transformed by the

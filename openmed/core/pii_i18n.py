@@ -113,6 +113,9 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "sv": "Swedish",
     "da": "Danish",
     "no": "Norwegian",
+    "uk": "Ukrainian",
+    "cs": "Czech",
+    "el": "Greek",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -151,6 +154,9 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "sv": "Swedish-",
     "da": "Danish-",
     "no": "Norwegian-",
+    "uk": "Ukrainian-",
+    "cs": "Czech-",
+    "el": "Greek-",
 }
 
 # ---------------------------------------------------------------------------
@@ -295,7 +301,6 @@ TOKENIZER_SCRIPT_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "ID_NUM": ["ରୋଗୀ ନମ୍ବର ୧୨୩୪୫୬", "ପରିଚୟ ୯୮୭୬୫୪୩୨୧୦"],
     },
 }
-
 
 INDIA_CLINICAL_MULTILINGUAL_FALLBACK = "OpenMed/privacy-filter-multilingual"
 
@@ -2084,6 +2089,34 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     )
 
 
+def validate_ukrainian_rnokpp(text: str) -> bool:
+    """Validate a Ukrainian RNOKPP taxpayer registration number.
+
+    RNOKPP values contain ten digits. The last digit is the modulo-11,
+    modulo-10 checksum of the first nine digits weighted by
+    ``(-1, 5, 7, 9, 4, 6, 10, 5, 7)``.
+
+    Args:
+        text: Candidate ten-digit RNOKPP value.
+
+    Returns:
+        ``True`` when the value has the required shape and checksum.
+    """
+    if not isinstance(text, str):
+        return False
+
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{10}", digits) is None:
+        return False
+
+    weights = (-1, 5, 7, 9, 4, 6, 10, 5, 7)
+    numbers = [int(digit) for digit in digits]
+    check_digit = (
+        sum(weight * digit for weight, digit in zip(weights, numbers[:9])) % 11 % 10
+    )
+    return numbers[9] == check_digit
+
+
 def validate_greek_amka(text: str) -> bool:
     """Validate a Greek AMKA social-security number.
 
@@ -3202,6 +3235,48 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "十月",
         "十一月",
         "十二月",
+    ],
+    "uk": [
+        "січень",
+        "лютий",
+        "березень",
+        "квітень",
+        "травень",
+        "червень",
+        "липень",
+        "серпень",
+        "вересень",
+        "жовтень",
+        "листопад",
+        "грудень",
+    ],
+    "cs": [
+        "leden",
+        "únor",
+        "březen",
+        "duben",
+        "květen",
+        "červen",
+        "červenec",
+        "srpen",
+        "září",
+        "říjen",
+        "listopad",
+        "prosinec",
+    ],
+    "el": [
+        "Ιανουάριος",
+        "Φεβρουάριος",
+        "Μάρτιος",
+        "Απρίλιος",
+        "Μάιος",
+        "Ιούνιος",
+        "Ιούλιος",
+        "Αύγουστος",
+        "Σεπτέμβριος",
+        "Οκτώβριος",
+        "Νοέμβριος",
+        "Δεκέμβριος",
     ],
 }
 
@@ -8373,6 +8448,102 @@ _HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Ukrainian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_UKRAINIAN_MONTH_PATTERN = (
+    r"січня|січень|лютого|лютий|березня|березень|квітня|квітень|"
+    r"травня|травень|червня|червень|липня|липень|серпня|серпень|"
+    r"вересня|вересень|жовтня|жовтень|листопада|листопад|грудня|грудень"
+)
+
+_UKRAINIAN_STREET_MARKER = (
+    r"вулиця|вул\.|проспект|просп\.|провулок|пров\.|бульвар|бул\.|площа|шосе"
+)
+
+_UKRAINIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "народження",
+            "народився",
+            "народилася",
+            "прийом",
+            "виписка",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_UKRAINIAN_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "дата",
+            "народження",
+            "народився",
+            "народилася",
+            "прийом",
+            "виписка",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+380[\s.-]?\d{2}|0\d{2})"
+        r"[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "мобільний", "контакт", "номер"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{10}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "рнокпп",
+            "іпн",
+            "податковий номер",
+            "ідентифікаційний номер",
+            "реєстраційний номер облікової картки платника податків",
+        ],
+        context_boost=0.45,
+        validator=validate_ukrainian_rnokpp,
+    ),
+    PIIPattern(
+        rf"\b(?:{_UKRAINIAN_STREET_MARKER})\s+"
+        r"[А-ЯІЇЄҐ][А-Яа-яІіЇїЄєҐґ0-9’ʼ.'-]*"
+        r"(?:\s+[А-Яа-яІіЇїЄєҐґ0-9’ʼ.'-]+){0,5}\s+"
+        r"\d{1,5}[А-Яа-я]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адреса", "місце проживання", "вулиця", "проспект"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["поштовий індекс", "індекс", "адреса"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # Greek PII patterns (Greek script)
 # ---------------------------------------------------------------------------
 
@@ -8801,6 +8972,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sr": _SERBIAN_PII_PATTERNS,
     "hu": _HUNGARIAN_PII_PATTERNS,
     "et": _ESTONIAN_PII_PATTERNS,
+    "uk": _UKRAINIAN_PII_PATTERNS,
     "el": _GREEK_PII_PATTERNS,
     "cs": _CZECH_PII_PATTERNS,
     "vi": _VIETNAMESE_PII_PATTERNS,
@@ -9878,6 +10050,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Tallinn", "Tartu", "Parnu"],
         "ZIPCODE": ["10115", "50090", "80010"],
+    },
+    "uk": {
+        "NAME": ["Олена Коваль", "Андрій Шевченко", "Ірина Бондар", "Тарас Мельник"],
+        "FIRST_NAME": ["Олена", "Андрій", "Ірина", "Тарас"],
+        "LAST_NAME": ["Коваль", "Шевченко", "Бондар", "Мельник"],
+        "EMAIL": ["patsiient@example.ua", "kontakt@example.org"],
+        "PHONE": ["+380 67 123 45 67", "044 123 45 67"],
+        "ID_NUM": ["2974281300", "3695007088"],
+        "STREET_ADDRESS": ["вулиця Хрещатик 22", "проспект Свободи 15"],
+        "URL_PERSONAL": ["https://example.ua"],
+        "USERNAME": ["patsiient123", "korystuvach456"],
+        "DATE": ["16.11.1975", "16 листопада 1975"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Київ", "Львів", "Одеса"],
+        "ZIPCODE": ["01001", "79000", "65000"],
     },
     "cs": {
         "NAME": ["Jana Nováková", "Petr Novák", "Marie Svobodová", "Tomáš Král"],
