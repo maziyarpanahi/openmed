@@ -32,6 +32,25 @@ ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families ar
 
 iOS Simulator is **not** a Swift MLX validation target.
 
+## Local-First And Safety Posture
+
+OpenMedKit inference is local-first. After model and tokenizer assets are loaded
+from a bundled directory or local cache, `analyzeText(...)`, `extractPII(...)`,
+and `extractPIIChunked(...)` run on-device without network I/O. The package has
+no telemetry path by default and does not send clinical text, entity spans,
+identifiers, prompts, or usage data to OpenMed or third parties.
+
+Model download helpers such as `OpenMedModelStore.downloadMLXModel(...)` are
+explicit preparation APIs. Production apps that require strict offline behavior
+should bundle model/tokenizer assets or pre-seed the cache and run inference
+from those local assets.
+
+Internal diagnostics route through a structured safe logging shim. Entity
+descriptions and span summaries include labels, offsets, confidence, and
+SHA-256 span hashes rather than raw identifier text. OpenMedKit is not a medical
+device and does not make autonomous clinical decisions; validation, review
+workflow, and regulatory classification remain application responsibilities.
+
 ## Apple Platform Matrix
 
 | Use case | Recommended path |
