@@ -103,6 +103,8 @@ MEDICATION: Final = "MEDICATION"
 LAB_TEST: Final = "LAB_TEST"
 PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
+#: Procedure-record device concepts (issue #313)
+DEVICE: Final = "DEVICE"
 
 #: Anesthesia-record concepts (issue #952)
 ANESTHESIA_TYPE: Final = "ANESTHESIA_TYPE"
@@ -286,6 +288,7 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         LAB_TEST,
         PROCEDURE,
         BODY_SITE,
+        DEVICE,
         ANESTHESIA_TYPE,
         ANESTHETIC_AGENT,
         AIRWAY_MANAGEMENT,
@@ -486,6 +489,7 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             LAB_TEST,
             PROCEDURE,
             BODY_SITE,
+            DEVICE,
             ANESTHESIA_TYPE,
             ANESTHETIC_AGENT,
             AIRWAY_MANAGEMENT,
@@ -624,6 +628,7 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Anesthesia-record concepts (issue #952)
     ANESTHESIA_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     ANESTHETIC_AGENT: _label_metadata(
@@ -780,6 +785,7 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE: HIPAA_UNIQUE_IDENTIFIER,
     # Anesthesia-record concepts
     ANESTHESIA_TYPE: HIPAA_UNIQUE_IDENTIFIER,
     ANESTHETIC_AGENT: HIPAA_UNIQUE_IDENTIFIER,
@@ -899,6 +905,7 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     LAB_TEST: POPIA_HEALTH_INFORMATION,
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
+    DEVICE: POPIA_HEALTH_INFORMATION,
     ANESTHESIA_TYPE: POPIA_HEALTH_INFORMATION,
     ANESTHETIC_AGENT: POPIA_HEALTH_INFORMATION,
     AIRWAY_MANAGEMENT: POPIA_HEALTH_INFORMATION,
@@ -1230,11 +1237,22 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "surgery": PROCEDURE,
     "operation": PROCEDURE,
     "intervention": PROCEDURE,
+    "diagnosticprocedure": PROCEDURE,
+    "resection": PROCEDURE,
+    "biopsy": PROCEDURE,
+    "endoscopicprocedure": PROCEDURE,
+    "laparoscopic": PROCEDURE,
+    "approach": OTHER,
     "bodysite": BODY_SITE,
     "bodypart": BODY_SITE,
     "anatomy": BODY_SITE,
     "anatomical": BODY_SITE,
     "organ": BODY_SITE,
+    # Procedure-record device concepts (issue #313)
+    "device": DEVICE,
+    "medicaldevice": DEVICE,
+    "implant": DEVICE,
+    "catheter": DEVICE,
     # Anesthesia-record concepts
     "anesthesiatype": ANESTHESIA_TYPE,
     "anesthesia": ANESTHESIA_TYPE,
@@ -1709,6 +1727,7 @@ __all__ = [
     "LAB_TEST",
     "PROCEDURE",
     "BODY_SITE",
+    "DEVICE",
     "ANESTHESIA_TYPE",
     "ANESTHETIC_AGENT",
     "AIRWAY_MANAGEMENT",
