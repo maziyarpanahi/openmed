@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,7 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_GUJARATI_DIGIT_TRANSLATION = str.maketrans("૦૧૨૩૪૫૬૭૮૯", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +518,21 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_gujarati_digits(text: str) -> str:
+    """Fold Gujarati decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain Gujarati decimal digits.
+
+    Returns:
+        Length-preserving text with Gujarati digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_GUJARATI_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1059,6 +1077,29 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_gujarati_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Gujarati decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_gujarati_digits(text))
+
+
+def validate_gujarati_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Gujarati digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_gujarati_digits(text)
+    )
+
+
+def validate_gujarat_daman_diu_pin(text: str) -> bool:
+    """Validate Gujarat and Daman and Diu PINs in the 36xxxx-39xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_gujarati_digits(text)
+    return validate_indian_pin(normalized) and 360_000 <= int(normalized) <= 399_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5533,6 +5574,153 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_GUJARATI_DIGIT_CLASS = r"0-9\u0AE6-\u0AEF"
+_GUJARATI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0AEC-\u0AEF"
+_GUJARATI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0AE8-\u0AEF"
+_GUJARATI_BASE_LETTER = r"[\u0A85-\u0AB9\u0AE0-\u0AE1]"
+_GUJARATI_NON_VIRAMA_MARK = r"[\u0A81-\u0A83\u0ABC\u0ABE-\u0ACC\u0AE2-\u0AE3]"
+_GUJARATI_GRAPHEME = (
+    rf"{_GUJARATI_BASE_LETTER}{_GUJARATI_NON_VIRAMA_MARK}*"
+    rf"(?:\u0ACD[\u200C\u200D]?{_GUJARATI_BASE_LETTER}"
+    rf"{_GUJARATI_NON_VIRAMA_MARK}*)*"
+)
+_GUJARATI_NAME_WORD = rf"(?:{_GUJARATI_GRAPHEME}){{2,}}"
+_GUJARATI_SUFFIXED_NAME_WORD = rf"(?:{_GUJARATI_GRAPHEME}){{2,}}(?:ભાઈ|બેન)"
+_GUJARATI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["gu"]
+)
+
+_GUJARATI_NAME_CONTEXT = ["શ્રી", "શ્રીમતી", "નામ", "દર્દી", "patient"]
+_GUJARATI_DATE_CONTEXT = [
+    "જન્મ",
+    "જન્મ તારીખ",
+    "તારીખ",
+    "દાખલ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_GUJARATI_PHONE_CONTEXT = ["ફોન", "મોબાઇલ", "સંપર્ક", "phone", "mobile"]
+_GUJARATI_AADHAAR_CONTEXT = [
+    "આધાર",
+    "ઓળખ નંબર",
+    "aadhaar",
+    "aadhar",
+    "uidai",
+]
+_GUJARATI_PIN_CONTEXT = [
+    "પિન",
+    "પિન કોડ",
+    "ટપાલ",
+    "પોસ્ટલ કોડ",
+    "સરનામું",
+    "pin",
+    "postcode",
+]
+
+_GUJARATI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<=શ્રી ){_GUJARATI_SUFFIXED_NAME_WORD}"
+        rf"(?:[ \t]+{_GUJARATI_NAME_WORD})?"
+        rf"(?![\w\u0A80-\u0AFF])",
+        "name",
+        priority=13,
+        base_score=0.9,
+        context_words=_GUJARATI_NAME_CONTEXT,
+        context_boost=0.1,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<=શ્રીમતી ){_GUJARATI_SUFFIXED_NAME_WORD}"
+        rf"(?:[ \t]+{_GUJARATI_NAME_WORD})?"
+        rf"(?![\w\u0A80-\u0AFF])",
+        "name",
+        priority=13,
+        base_score=0.9,
+        context_words=_GUJARATI_NAME_CONTEXT,
+        context_boost=0.1,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_GUJARATI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_GUJARATI_MONTH_PATTERN})\s+"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_GUJARATI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0AEF][1\u0AE7][\s-]?)?"
+        rf"[{_GUJARATI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_GUJARATI_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_GUJARATI_DIGIT_CLASS}]"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_GUJARATI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_gujarati_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[{_GUJARATI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{3}}"
+        rf"(?P<gu_aadhaar_sep> )"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?P=gu_aadhaar_sep)"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_GUJARATI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_gujarati_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GUJARATI_DIGIT_CLASS}])"
+        rf"[3\u0AE9][6-9\u0AEC-\u0AEF]"
+        rf"[{_GUJARATI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GUJARATI_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_GUJARATI_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_gujarat_daman_diu_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -8932,6 +9120,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "hi": [
         *_HINDI_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "gu": [
+        *_GUJARATI_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "te": [

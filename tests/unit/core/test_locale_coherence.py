@@ -21,6 +21,7 @@ import warnings
 
 import pytest
 from faker.config import AVAILABLE_LOCALES
+from faker.providers.person.gu_IN import Provider as GujaratiPersonProvider
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer import locales as L
@@ -37,11 +38,13 @@ from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     LANGUAGE_PII_PATTERNS,
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    validate_gujarati_aadhaar,
 )
 
 # Documented set of languages whose *default* Faker locale is an intentional
@@ -142,6 +145,41 @@ class TestLocaleResolution:
         assert locale in AVAILABLE_LOCALES
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
+
+    def test_gujarati_pack_uses_native_locale_and_gender_aligned_suffixes(self):
+        assert "gu" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["gu"] == "OpenMed/privacy-filter-multilingual"
+        assert LANG_TO_LOCALE["gu"] == "gu_IN"
+        assert NATIONAL_ID_PROVIDERS["gu"] == ("gu_IN", "aadhaar")
+        assert "gu_IN" in AVAILABLE_LOCALES
+        assert "gu" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("gu") == "gu_IN"
+            anonymizer = Anonymizer(lang="gu", consistent=True, seed=688)
+            male = anonymizer.surrogate("નરેશભાઈ પટેલ", "PERSON")
+            female = anonymizer.surrogate("રમીલાબેન શાહ", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "૨૪૬૭ ૭૮૩૨ ૫૪૮૪",
+                "national_id",
+            )
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        male_first, male_last = male.split()
+        female_first, female_last = female.split()
+        assert male_first.endswith("ભાઈ")
+        assert female_first.endswith("બેન")
+        assert male_first.removesuffix("ભાઈ") in GujaratiPersonProvider.first_names_male
+        assert (
+            female_first.removesuffix("બેન") in GujaratiPersonProvider.first_names_female
+        )
+        assert male_last in GujaratiPersonProvider.last_names
+        assert female_last in GujaratiPersonProvider.last_names
+        assert validate_gujarati_aadhaar(aadhaar)
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):

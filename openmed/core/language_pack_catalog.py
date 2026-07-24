@@ -109,6 +109,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("hi_IN", "aadhaar"),
     ),
     _pack(
+        "gu",
+        "OpenMed/privacy-filter-multilingual",
+        "gu_IN",
+        ("Gujarati",),
+        national_id_provider=("gu_IN", "aadhaar"),
+    ),
+    _pack(
         "te",
         "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
         "en_IN",
@@ -298,7 +305,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
 SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "as": "as_IN",
     "bn": "bn_BD",
-    "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
     "mr": "mr_IN",
@@ -314,7 +320,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "as",
     "bn",
-    "gu",
     "kn",
     "ml",
     "mr",
@@ -391,6 +396,7 @@ _LOCALE_ORDER = (
     "es",
     "nl",
     "hi",
+    "gu",
     "te",
     "am",
     "pt",
@@ -437,6 +443,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "es",
     "nl",
     "hi",
+    "gu",
     "te",
     "am",
     "pt",

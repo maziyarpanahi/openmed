@@ -37,7 +37,7 @@ from .locales import ZH_CN_ADDRESS_LOCALE
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
-_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+_INDIA_LOCALES = frozenset({"en_IN", "gu_IN", "hi_IN"})
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -184,6 +184,66 @@ def _gen_last_name(faker, original, *, locale):
 
 def _gen_middle_name(faker, original, *, locale):
     return faker.first_name()
+
+
+_GUJARATI_HONORIFIC_RE = re.compile(r"^(શ્રીમતી|શ્રી)\s*")
+_GUJARATI_FEMALE_SUFFIX = "બેન"
+_GUJARATI_MALE_SUFFIX = "ભાઈ"
+
+
+def _draw_gujarati_name_part(faker, original: str, method: str) -> str:
+    """Draw a native gu_IN name part that does not repeat the source."""
+
+    candidate = ""
+    source = original.casefold()
+    for _ in range(20):
+        candidate = str(getattr(faker, method)())
+        if candidate and candidate.casefold() not in source:
+            return candidate
+    return candidate
+
+
+def _gujarati_name_gender(original: str) -> tuple[str | None, str]:
+    """Return the gender-specific Faker method and fused suffix."""
+
+    if _GUJARATI_FEMALE_SUFFIX in original:
+        return "first_name_female", _GUJARATI_FEMALE_SUFFIX
+    if _GUJARATI_MALE_SUFFIX in original:
+        return "first_name_male", _GUJARATI_MALE_SUFFIX
+    return None, ""
+
+
+def _gen_gujarati_person(faker, original, *, locale):
+    """Preserve Gujarati honorifics and gender-aligned bhai/ben suffixes."""
+
+    stripped = original.strip()
+    honorific_match = _GUJARATI_HONORIFIC_RE.match(stripped)
+    honorific = honorific_match.group(1) if honorific_match else ""
+    core = stripped[honorific_match.end() :] if honorific_match else stripped
+    source_parts = core.split()
+    method, suffix = _gujarati_name_gender(core)
+    first_method = method or "first_name"
+    first = _draw_gujarati_name_part(faker, core, first_method)
+    first = f"{first.removesuffix(_GUJARATI_MALE_SUFFIX).removesuffix(_GUJARATI_FEMALE_SUFFIX)}{suffix}"
+    parts = [first]
+    if len(source_parts) > 1:
+        parts.append(_draw_gujarati_name_part(faker, core, "last_name"))
+    prefix = f"{honorific} " if honorific else ""
+    return f"{prefix}{' '.join(parts)}"
+
+
+def _gen_gujarati_first_name(faker, original, *, locale):
+    method, suffix = _gujarati_name_gender(original)
+    first = _draw_gujarati_name_part(faker, original, method or "first_name")
+    return f"{first.removesuffix(_GUJARATI_MALE_SUFFIX).removesuffix(_GUJARATI_FEMALE_SUFFIX)}{suffix}"
+
+
+def _gen_gujarati_middle_name(faker, original, *, locale):
+    return _draw_gujarati_name_part(faker, original, "first_name")
+
+
+def _gen_gujarati_last_name(faker, original, *, locale):
+    return _draw_gujarati_name_part(faker, original, "last_name")
 
 
 def _gen_india_person(faker, original, *, locale):
@@ -418,6 +478,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "it_IT",
         "es_ES",
         "nl_NL",
+        "gu_IN",
         "hi_IN",
         "en_IN",
         "pt_PT",
@@ -490,6 +551,7 @@ _LOCALE_ID_METHODS = {
     "es_ES": "nie",
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
+    "gu_IN": "aadhaar",
     "hi_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
@@ -730,7 +792,7 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
-    if locale in {"en_IN", "hi_IN", "te_IN"}:
+    if locale in {"en_IN", "gu_IN", "hi_IN", "te_IN"}:
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id
@@ -1252,6 +1314,30 @@ def _register_builtin_script_name_generators() -> None:
 
 
 _register_builtin_script_name_generators()
+
+
+def _register_gujarati_name_generators() -> None:
+    """Install Gujarati bhai/ben-aware native name generators."""
+
+    language_pack = get_language_pack("gu")
+    if language_pack is None:  # pragma: no cover - catalog import is mandatory
+        raise RuntimeError("language pack 'gu' is not registered")
+    generators = {
+        L.PERSON: _gen_gujarati_person,
+        L.FIRST_NAME: _gen_gujarati_first_name,
+        L.MIDDLE_NAME: _gen_gujarati_middle_name,
+        L.LAST_NAME: _gen_gujarati_last_name,
+    }
+    for canonical_label, generator in generators.items():
+        register_label_generator(
+            canonical_label,
+            generator,
+            language_pack=language_pack,
+            script="Gujarati",
+        )
+
+
+_register_gujarati_name_generators()
 
 
 def register_india_label_generators() -> None:
