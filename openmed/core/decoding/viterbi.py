@@ -15,7 +15,14 @@ import math
 from dataclasses import dataclass
 from typing import Final, Sequence
 
-from .spans import is_indic_text, snap_span_to_graphemes
+from .spans import (
+    CjkOffsetMap,
+    assert_cjk_span_boundaries,
+    is_han_dominant,
+    is_indic_text,
+    snap_char_span_to_word_boundaries,
+    snap_span_to_graphemes,
+)
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -366,6 +373,11 @@ def viterbi_decode_incremental(
 def labels_to_token_spans(
     labels_by_index: dict[int, int],
     label_info: TokenLabelInfo,
+    *,
+    token_offsets: Sequence[Sequence[int]] | None = None,
+    text: str | None = None,
+    language_hint: str | None = None,
+    segmenter_word_tokens: Sequence[object] | None = None,
 ) -> list[tuple[int, int, int]]:
     """Convert per-token class indices into ``(span_label, start, end)`` triples.
 
@@ -378,6 +390,12 @@ def labels_to_token_spans(
     Gaps in ``labels_by_index`` (non-contiguous keys) are treated as a hard
     span break — they typically indicate the caller is filtering tokens
     pre-decoding (e.g. dropping special-token positions).
+
+    Supplying a ``zh`` language hint plus Han-dominant source text activates
+    CJK assembly. In that mode adjacent same-label spans merge only when their
+    source code points are contiguous, and optional Chinese segmenter tokens
+    expand partial subword spans outward to whole word boundaries. The default
+    path and return values are unchanged when no Chinese hint is supplied.
     """
     spans: list[tuple[int, int, int]] = []
     current_label: int | None = None
@@ -460,28 +478,213 @@ def labels_to_token_spans(
 
     if current_label is not None and start_idx is not None and previous_idx is not None:
         spans.append((current_label, start_idx, previous_idx + 1))
-    return spans
+    if not _is_chinese_language_hint(language_hint):
+        return spans
+    if token_offsets is None or text is None:
+        raise ValueError(
+            "Chinese decoding requires source text and token code-point offsets"
+        )
+    if not is_han_dominant(text):
+        return spans
+    return _assemble_cjk_token_spans(
+        spans,
+        token_offsets,
+        text,
+        segmenter_word_tokens,
+    )
+
+
+def _is_chinese_language_hint(language_hint: str | None) -> bool:
+    normalized = str(language_hint or "").strip().casefold().replace("_", "-")
+    return normalized == "zh" or normalized.startswith("zh-")
+
+
+def _assemble_cjk_token_spans(
+    spans: Sequence[tuple[int, int, int]],
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+    segmenter_word_tokens: Sequence[object] | None,
+) -> list[tuple[int, int, int]]:
+    offset_map = (
+        CjkOffsetMap(text, segmenter_word_tokens)
+        if segmenter_word_tokens is not None
+        else None
+    )
+    assembled: list[tuple[int, int, int, int, int]] = []
+
+    for span_label, token_start, token_end in spans:
+        for run_start, run_end in _contiguous_token_runs(
+            token_start,
+            token_end,
+            token_offsets,
+            text,
+        ):
+            char_start, _ = _validated_token_offset(
+                token_offsets[run_start],
+                text,
+            )
+            _, char_end = _validated_token_offset(
+                token_offsets[run_end - 1],
+                text,
+            )
+            char_start, char_end = snap_span_to_graphemes(
+                char_start,
+                char_end,
+                text,
+            )
+            if offset_map is not None:
+                char_start, char_end = snap_char_span_to_word_boundaries(
+                    char_start,
+                    char_end,
+                    offset_map,
+                )
+            assert_cjk_span_boundaries(
+                char_start,
+                char_end,
+                text,
+                offset_map,
+            )
+            expanded_start, expanded_end = _token_range_for_char_span(
+                char_start,
+                char_end,
+                token_offsets,
+                text,
+            )
+
+            if (
+                assembled
+                and assembled[-1][0] == span_label
+                and char_start <= assembled[-1][4]
+            ):
+                previous = assembled[-1]
+                assembled[-1] = (
+                    span_label,
+                    min(previous[1], expanded_start),
+                    max(previous[2], expanded_end),
+                    min(previous[3], char_start),
+                    max(previous[4], char_end),
+                )
+            else:
+                assembled.append(
+                    (
+                        span_label,
+                        expanded_start,
+                        expanded_end,
+                        char_start,
+                        char_end,
+                    )
+                )
+
+    return [
+        (span_label, token_start, token_end)
+        for span_label, token_start, token_end, _, _ in assembled
+    ]
+
+
+def _contiguous_token_runs(
+    token_start: int,
+    token_end: int,
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+) -> list[tuple[int, int]]:
+    if not 0 <= token_start < token_end <= len(token_offsets):
+        raise ValueError("token span falls outside token offsets")
+
+    runs: list[tuple[int, int]] = []
+    run_start = token_start
+    _, previous_end = _validated_token_offset(token_offsets[token_start], text)
+    for token_index in range(token_start + 1, token_end):
+        current_start, current_end = _validated_token_offset(
+            token_offsets[token_index],
+            text,
+        )
+        if current_start > previous_end:
+            runs.append((run_start, token_index))
+            run_start = token_index
+        previous_end = max(previous_end, current_end)
+    runs.append((run_start, token_end))
+    return runs
+
+
+def _validated_token_offset(
+    offset: Sequence[int],
+    text: str,
+) -> tuple[int, int]:
+    if len(offset) < 2:
+        raise ValueError("token offsets must contain start and end")
+    start = offset[0]
+    end = offset[1]
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or not 0 <= start < end <= len(text)
+    ):
+        raise ValueError("token offsets must be non-empty source code-point spans")
+    return start, end
+
+
+def _token_range_for_char_span(
+    char_start: int,
+    char_end: int,
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+) -> tuple[int, int]:
+    intersecting: list[int] = []
+    for token_index, offset in enumerate(token_offsets):
+        if len(offset) < 2:
+            continue
+        start, end = offset[0], offset[1]
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, int)
+            or not isinstance(end, int)
+            or not 0 <= start <= end <= len(text)
+            or start == end
+        ):
+            continue
+        if end > char_start and start < char_end:
+            intersecting.append(token_index)
+    if not intersecting:
+        raise AssertionError("CJK span does not intersect any source token")
+    return intersecting[0], intersecting[-1] + 1
 
 
 def token_spans_to_char_spans(
     token_spans: Sequence[tuple[int, int, int]],
     token_offsets: Sequence[Sequence[int]],
     text: str,
+    *,
+    language_hint: str | None = None,
+    segmenter_word_tokens: Sequence[object] | None = None,
 ) -> list[tuple[int, int, int]]:
-    """Map token spans to character spans and snap Indic runs to graphemes.
+    """Map token spans to safe source character spans.
 
     Args:
         token_spans: ``(span_label, token_start, token_end)`` triples.
         token_offsets: Half-open character offsets for every source token.
         text: Exact source text referenced by ``token_offsets``.
+        language_hint: Optional BCP-47-style language hint. ``zh`` activates
+            CJK assembly when ``text`` is Han-dominant.
+        segmenter_word_tokens: Optional Chinese word tokens whose offsets index
+            the exact same ``text``.
 
     Returns:
         ``(span_label, start, end)`` triples with character offsets. Invalid
         token ranges are omitted. A span touching an Indic run is expanded to
-        enclosing grapheme boundaries so Viterbi output cannot split an
-        akshara.
+        enclosing grapheme boundaries. Chinese spans are snapped to complete
+        graphemes and optional segmenter words, then adjacent same-label spans
+        merge only across contiguous source code points.
     """
 
+    cjk_enabled = _is_chinese_language_hint(language_hint) and is_han_dominant(text)
+    offset_map = (
+        CjkOffsetMap(text, segmenter_word_tokens)
+        if cjk_enabled and segmenter_word_tokens is not None
+        else None
+    )
     char_spans: list[tuple[int, int, int]] = []
     for span_label, token_start, token_end in token_spans:
         if not (0 <= token_start < token_end <= len(token_offsets)):
@@ -494,9 +697,31 @@ def token_spans_to_char_spans(
         end = max(start, min(int(end_offset[1]), len(text)))
         context_start = max(0, start - 1)
         context_end = min(len(text), end + 1)
-        if is_indic_text(text[context_start:context_end]):
+        if cjk_enabled:
             start, end = snap_span_to_graphemes(start, end, text)
-        char_spans.append((span_label, start, end))
+            if offset_map is not None:
+                start, end = snap_char_span_to_word_boundaries(
+                    start,
+                    end,
+                    offset_map,
+                )
+            assert_cjk_span_boundaries(start, end, text, offset_map)
+        elif is_indic_text(text[context_start:context_end]):
+            start, end = snap_span_to_graphemes(start, end, text)
+        if (
+            cjk_enabled
+            and char_spans
+            and char_spans[-1][0] == span_label
+            and start <= char_spans[-1][2]
+        ):
+            previous_label, previous_start, previous_end = char_spans[-1]
+            char_spans[-1] = (
+                previous_label,
+                min(previous_start, start),
+                max(previous_end, end),
+            )
+        else:
+            char_spans.append((span_label, start, end))
     return char_spans
 
 
@@ -505,6 +730,9 @@ def labels_to_char_spans(
     label_info: TokenLabelInfo,
     token_offsets: Sequence[Sequence[int]],
     text: str,
+    *,
+    language_hint: str | None = None,
+    segmenter_word_tokens: Sequence[object] | None = None,
 ) -> list[tuple[int, int, int]]:
     """Decode labels directly to grapheme-safe character span triples.
 
@@ -513,13 +741,25 @@ def labels_to_char_spans(
         label_info: Parsed label scheme and span-label lookup.
         token_offsets: Half-open source character offsets for each token.
         text: Exact source text referenced by ``token_offsets``.
+        language_hint: Optional BCP-47-style language hint.
+        segmenter_word_tokens: Optional Chinese word segmentation over
+            ``text``.
 
     Returns:
         ``(span_label, start, end)`` triples with safe character offsets.
     """
 
     return token_spans_to_char_spans(
-        labels_to_token_spans(labels_by_index, label_info),
+        labels_to_token_spans(
+            labels_by_index,
+            label_info,
+            token_offsets=token_offsets,
+            text=text,
+            language_hint=language_hint,
+            segmenter_word_tokens=segmenter_word_tokens,
+        ),
         token_offsets,
         text,
+        language_hint=language_hint,
+        segmenter_word_tokens=segmenter_word_tokens,
     )
