@@ -156,6 +156,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
   locale-aware synthetic surrogates, and an offline synthetic golden fixture
   ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
+- Added a release run-ledger builder that records, per family, which candidate
+  artifact was published under which gate decision, binding the artifact digest
+  to a recomputed `GateReport` hash so a published artifact provably passed the
+  gate it claims. Non-`RELEASABLE` families are quarantined with no publish
+  target, the run outcome is reconstructable offline from
+  `gates/release_runs.jsonl`, and the ledger carries only identifiers and
+  hashes. Adds `compute_canonical_payload_hash()` to `openmed.core.repro_hash`
+  as the generic counterpart to the training-shaped
+  `compute_reproducibility_hash()` (#1805).
 
 ## [1.9.1] - 2026-07-14
 
