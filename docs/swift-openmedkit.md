@@ -1,11 +1,13 @@
 # OpenMedKit (Swift Package)
 
-OpenMedKit is the Swift package for running OpenMed models in **macOS**, **iOS**, and **iPadOS** apps.
+OpenMedKit is the Swift package for running OpenMed models in **macOS**,
+**iOS**, **iPadOS**, **watchOS**, and **visionOS** apps.
 
 OpenMedKit currently supports two Apple backends:
 
 - **MLX** for Apple Silicon Macs and real iPhone/iPad devices
-- **CoreML** for bundled Apple model packages
+- **CoreML** for bundled Apple model packages, including constrained watchOS
+  and visionOS Nano artifacts
 
 Swift MLX supports the first OpenMed artifact families used by the public Apple demos:
 
@@ -22,7 +24,7 @@ ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families ar
 
 ## Requirements
 
-- iOS 17+ / macOS 14+
+- iOS 17+ / macOS 14+ / watchOS 10+ / visionOS 1+
 - Xcode 15+
 - For MLX:
   - Apple Silicon Mac, or
@@ -31,6 +33,9 @@ ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families ar
   - a compatible `.mlpackage` or `.mlmodelc` bundle plus `id2label.json`
 
 iOS Simulator is **not** a Swift MLX validation target.
+watchOS and visionOS use the CoreML-only `PlatformModel` surface and require an
+INT8 Nano-tier artifact. See [Apple Platform Support](./runtimes/apple-platforms.md)
+for selection limits and simulator validation.
 
 ## Apple Platform Matrix
 
@@ -40,6 +45,8 @@ iOS Simulator is **not** a Swift MLX validation target.
 | Swift app on Apple Silicon macOS | `OpenMedKit` + MLX or CoreML |
 | Swift app on real iPhone/iPad | `OpenMedKit` + MLX or CoreML |
 | Swift app on iOS Simulator | CoreML only |
+| Swift app on Apple Watch | `PlatformModel` + Nano INT8 CoreML |
+| Swift app on Apple Vision Pro | `PlatformModel` + Nano INT8 CoreML |
 | Older Apple OS support | CoreML |
 
 ## Install OpenMedKit
