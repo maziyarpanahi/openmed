@@ -26,6 +26,7 @@ from typing import (
 )
 
 from openmed.core.decoding.spans import (
+    CjkOffsetMap,
     is_grapheme_boundary,
     is_indic_text,
     iter_grapheme_clusters,
@@ -648,6 +649,8 @@ def _reject_dictionary(
 
 @dataclass(frozen=True)
 class SpanToken:
+    """A token whose half-open offsets index Python source code points."""
+
     text: str
     start: int
     end: int
@@ -1366,6 +1369,51 @@ def remap_predictions_to_tokens(
         i = j
 
     return remapped
+
+
+def remap_predictions_to_chinese_words(
+    predictions: List[Dict[str, Any]],
+    text: str,
+    word_tokens: List[SpanToken],
+) -> List[Dict[str, Any]]:
+    """Remap subword predictions onto whole segmented Chinese words.
+
+    ``text`` must be the original NFC-normalized string used by the segmenter,
+    and every prediction offset must be a Python code-point offset into that
+    same string. Partial overlaps expand to whole words. Adjacent words with
+    the same label may merge, but Unicode whitespace (including U+3000) is
+    never bridged into the resulting redaction span.
+
+    Args:
+        predictions: Token-classifier predictions with ``start`` and ``end``.
+        text: Original NFC-normalized source text.
+        word_tokens: Chinese segmentation tokens over ``text``.
+
+    Returns:
+        OutputFormatter-compatible prediction dictionaries on word boundaries.
+    """
+    CjkOffsetMap(text, word_tokens)
+    for prediction in predictions:
+        start = prediction.get("start")
+        end = prediction.get("end")
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, int)
+            or not isinstance(end, int)
+        ):
+            continue
+        if not 0 <= start <= end <= len(text):
+            raise ValueError(
+                "prediction offsets must index the NFC-normalized source text"
+            )
+
+    return remap_predictions_to_tokens(
+        predictions,
+        text,
+        word_tokens,
+        gap=0,
+    )
 
 
 def _is_reasonable_length(

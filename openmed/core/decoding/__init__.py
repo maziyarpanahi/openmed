@@ -17,6 +17,7 @@ from .graph import (
     edge_f1,
 )
 from .spans import (
+    CjkOffsetMap,
     IndicSpanRefinement,
     TokenClassificationSpan,
     TokenClassificationStreamEvent,
@@ -25,10 +26,12 @@ from .spans import (
     is_indic_text,
     iter_grapheme_cluster_spans,
     iter_grapheme_clusters,
+    project_word_spans_to_char_spans,
     reconcile_stream_spans,
     refine_indic_name_span,
     refine_privacy_filter_span,
     remap_normalized_span,
+    snap_char_span_to_word_boundaries,
     snap_span_to_grapheme_boundaries,
     snap_span_to_graphemes,
     stable_span_id,
@@ -50,6 +53,7 @@ from .viterbi import (
 )
 
 __all__ = [
+    "CjkOffsetMap",
     "EdgeCardinality",
     "EdgeDecisionTrace",
     "GraphExplainReport",
@@ -73,11 +77,13 @@ __all__ = [
     "iter_grapheme_clusters",
     "labels_to_char_spans",
     "labels_to_token_spans",
+    "project_word_spans_to_char_spans",
     "reconcile_stream_spans",
     "refine_indic_name_span",
     "remap_normalized_span",
     "refine_privacy_filter_span",
     "resolve_viterbi_biases",
+    "snap_char_span_to_word_boundaries",
     "snap_span_to_grapheme_boundaries",
     "snap_span_to_graphemes",
     "stable_span_key",
