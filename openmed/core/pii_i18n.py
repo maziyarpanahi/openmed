@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,7 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_TAMIL_DIGIT_TRANSLATION = str.maketrans("௦௧௨௩௪௫௬௭௮௯", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +518,24 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_tamil_digits(text: str) -> str:
+    """Fold Tamil decimal digits to ASCII without changing offsets.
+
+    Tamil decimal digits U+0BE6-U+0BEF are mapped one code point at a time.
+    The traditional non-positional Tamil number signs U+0BF0-U+0BF2 and all
+    non-digit characters are preserved.
+
+    Args:
+        text: Text that may contain Tamil decimal digits.
+
+    Returns:
+        Length-preserving text with Tamil decimal digits rendered as ASCII.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_TAMIL_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1059,6 +1080,27 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_tamil_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Tamil decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_tamil_digits(text))
+
+
+def validate_tamil_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile after folding Tamil decimal digits."""
+
+    return isinstance(text, str) and validate_indian_phone(normalize_tamil_digits(text))
+
+
+def validate_tamil_nadu_puducherry_pin(text: str) -> bool:
+    """Validate a Tamil Nadu or Puducherry PIN in either decimal digit set."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_tamil_digits(text)
+    return validate_indian_pin(normalized) and 600_000 <= int(normalized) <= 649_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5601,6 +5643,150 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_TAMIL_DIGIT_CLASS = r"0-9\u0BE6-\u0BEF"
+_TAMIL_LEADING_MOBILE_DIGIT_CLASS = r"6-9\u0BEC-\u0BEF"
+_TAMIL_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0BE8-\u0BEF"
+_TAMIL_BASE_LETTER = (
+    r"[\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A"
+    r"\u0B9C\u0B9E\u0B9F\u0BA3-\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9]"
+)
+_TAMIL_GRAPHEME = rf"(?:ஸ்ரீ|{_TAMIL_BASE_LETTER}[\u0BBE-\u0BCD\u0BD7]*)"
+_TAMIL_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["ta"]
+)
+
+_TAMIL_NAME_CONTEXT = ["திரு", "திருமதி", "செல்வி", "டாக்டர்"]
+_TAMIL_DATE_CONTEXT = [
+    "பிறந்த தேதி",
+    "பிறப்பு",
+    "தேதி",
+    "சேர்க்கை",
+    "date",
+    "date of birth",
+    "dob",
+]
+_TAMIL_PHONE_CONTEXT = ["தொலைபேசி", "மொபைல்", "பேசி", "phone", "mobile"]
+_TAMIL_AADHAAR_CONTEXT = [
+    "ஆதார்",
+    "அடையாள எண்",
+    "aadhaar",
+    "aadhar",
+    "uidai",
+]
+_TAMIL_ADDRESS_CONTEXT = ["முகவரி", "வசிப்பிடம்", "address"]
+_TAMIL_PIN_CONTEXT = [
+    "பின்",
+    "பின் குறியீடு",
+    "அஞ்சல்",
+    "அஞ்சல் குறியீடு",
+    "pin",
+    "postcode",
+]
+
+_TAMIL_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![\w\u0B80-\u0BFF])(?:[A-Za-z]|{_TAMIL_GRAPHEME})\."
+        rf"[ \t]*(?:(?:{_TAMIL_GRAPHEME}){{2,}}|"
+        r"[A-Za-z][A-Za-z'’-]{1,39})(?![\w\u0B80-\u0BFF])",
+        "name",
+        priority=13,
+        base_score=0.7,
+        context_words=_TAMIL_NAME_CONTEXT,
+        context_boost=0.3,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_TAMIL_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,2}}\s+(?:{_TAMIL_MONTH_PATTERN})\s+"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_TAMIL_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"(?:\+[9௯][1௧][\s-]?)?"
+        rf"[{_TAMIL_LEADING_MOBILE_DIGIT_CLASS}]"
+        rf"(?:[{_TAMIL_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_TAMIL_DIGIT_CLASS}]"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.6,
+        context_words=_TAMIL_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_tamil_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[{_TAMIL_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{3}}"
+        rf"(?P<ta_aadhaar_sep>[ -]?)"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?P=ta_aadhaar_sep)"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_TAMIL_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_tamil_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?:(?<=முகவரி )|(?<=வசிப்பிடம் )|(?<=address ))"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,5}}\s+"
+        rf"(?:{_TAMIL_GRAPHEME}){{2,}}"
+        rf"(?:\s+(?:{_TAMIL_GRAPHEME}){{2,}}){{1,5}}"
+        r"(?=[,.;]|$)",
+        "street_address",
+        priority=9,
+        base_score=0.7,
+        context_words=_TAMIL_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[6௬][0-4௦-௪][{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "postcode",
+        priority=8,
+        base_score=0.4,
+        context_words=_TAMIL_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_tamil_nadu_puducherry_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
 _ETHIOPIC_SCRIPT_RANGES = (
     r"\u1200-\u135F\u1380-\u139F\u2D80-\u2DDF\uAB00-\uAB2F"
     r"\U0001E7E0-\U0001E7FF"
@@ -8937,6 +9123,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "te": [
         *_TELUGU_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "ta": [
+        *_TAMIL_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "ar": _ARABIC_PII_PATTERNS,

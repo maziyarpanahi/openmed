@@ -17,6 +17,7 @@ The contract these tests gate lives in
 """
 
 import json
+import re
 import warnings
 
 import pytest
@@ -37,11 +38,13 @@ from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     LANGUAGE_PII_PATTERNS,
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    validate_aadhaar,
 )
 
 # Documented set of languages whose *default* Faker locale is an intentional
@@ -142,6 +145,37 @@ class TestLocaleResolution:
         assert locale in AVAILABLE_LOCALES
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
+
+    def test_tamil_pack_uses_native_locale_model_and_aadhaar_provider(self):
+        assert "ta" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
+        assert LANG_TO_LOCALE["ta"] == "ta_IN"
+        assert NATIONAL_ID_PROVIDERS["ta"] == ("ta_IN", "aadhaar")
+        assert "ta_IN" in AVAILABLE_LOCALES
+        assert "ta" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("ta") == "ta_IN"
+            anonymizer = Anonymizer(lang="ta", consistent=True, seed=686)
+            surrogates = [
+                anonymizer.surrogate(source, "PERSON")
+                for source in ("மு. கார்த்திக்", "R. Sudha")
+            ]
+            aadhaar = anonymizer.surrogate("2467 7832 5484", "national_id")
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert validate_aadhaar(aadhaar)
+        assert all(
+            re.fullmatch(
+                r"(?:[A-Za-z]|[\u0B80-\u0BFF]+)\.[ \t]*[\u0B80-\u0BFF]+",
+                surrogate,
+            )
+            for surrogate in surrogates
+        )
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):

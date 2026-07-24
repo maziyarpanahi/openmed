@@ -37,7 +37,7 @@ from .locales import ZH_CN_ADDRESS_LOCALE
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
-_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+_INDIA_LOCALES = frozenset({"en_IN", "hi_IN", "ta_IN"})
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -81,6 +81,18 @@ def _locale_fake_value(faker, locale: str, key: str, original: str):
 
 _HAN_NAME_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _ZH_GIVEN_NAME_FALLBACK = tuple("清宁安和嘉悦晨星岚澄涵瑞瑶璟")
+_TAMIL_BASE_LETTER = (
+    r"[\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A"
+    r"\u0B9C\u0B9E\u0B9F\u0BA3-\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9]"
+)
+_TAMIL_GRAPHEME = rf"(?:ஸ்ரீ|{_TAMIL_BASE_LETTER}[\u0BBE-\u0BCD\u0BD7]*)"
+_TAMIL_GIVEN_NAME_RE = re.compile(rf"(?:{_TAMIL_GRAPHEME}){{2,}}")
+_TAMIL_PATRONYMIC_NAME_RE = re.compile(
+    rf"(?P<initial>[A-Za-z]|{_TAMIL_GRAPHEME})"
+    rf"(?P<separator>\.[ \t]*)"
+    rf"(?P<given>(?:{_TAMIL_GRAPHEME}){{2,}}|"
+    r"[A-Za-z][A-Za-z'’-]{1,39})"
+)
 
 
 def _is_zh_cn(locale: str) -> bool:
@@ -186,7 +198,49 @@ def _gen_middle_name(faker, original, *, locale):
     return faker.first_name()
 
 
+def _draw_tamil_patronymic_initial(faker, source_initial: str) -> str:
+    if source_initial.isascii():
+        candidates = [
+            letter
+            for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            if letter.casefold() != source_initial.casefold()
+        ]
+        selected = faker.random_element(candidates)
+        return selected if source_initial.isupper() else selected.lower()
+
+    for _ in range(20):
+        candidate = str(faker.first_name())
+        match = re.match(_TAMIL_GRAPHEME, candidate)
+        if match is not None and match.group(0) != source_initial:
+            return match.group(0)
+    raise RuntimeError("could not generate a distinct Tamil patronymic initial")
+
+
+def _gen_tamil_patronymic_person(faker, original: str) -> str | None:
+    match = _TAMIL_PATRONYMIC_NAME_RE.fullmatch(original.strip())
+    if match is None:
+        return None
+
+    source_given = match.group("given")
+    for _ in range(20):
+        given_name = str(faker.first_name())
+        if (
+            _TAMIL_GIVEN_NAME_RE.fullmatch(given_name) is None
+            or given_name == source_given
+        ):
+            continue
+        initial = _draw_tamil_patronymic_initial(faker, match.group("initial"))
+        candidate = f"{initial}{match.group('separator')}{given_name}"
+        if candidate != original:
+            return candidate
+    raise RuntimeError("could not generate a distinct Tamil patronymic name")
+
+
 def _gen_india_person(faker, original, *, locale):
+    if locale == "ta_IN":
+        patronymic = _gen_tamil_patronymic_person(faker, original)
+        if patronymic is not None:
+            return patronymic
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_name"):
         return _draw_distinct(faker, original, "indian_name")
     return _gen_person(faker, original, locale=locale)
@@ -420,6 +474,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "nl_NL",
         "hi_IN",
         "en_IN",
+        "ta_IN",
         "pt_PT",
         "pt_BR",
         "he_IL",
@@ -491,6 +546,7 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "ta_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
