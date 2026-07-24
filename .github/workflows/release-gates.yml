@@ -51,7 +51,33 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pytest
+          pip install -e ".[zh,indic]" pytest
+
+      - name: Run Chinese and Indic throughput benchmark
+        id: i18n_benchmark
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.i18n_throughput \
+            --output i18n-throughput-report.json
+
+      - name: Enforce Chinese and Indic throughput gates
+        if: steps.i18n_benchmark.outcome == 'success'
+        id: i18n_throughput
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_gates \
+            --throughput-candidate i18n-throughput-report.json \
+            --baseline-store gates/baseline.json \
+            --output i18n-throughput-gate.json
+
+      - name: Upload Chinese and Indic throughput evidence
+        if: always() && hashFiles('i18n-throughput-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: i18n-throughput
+          path: |
+            i18n-throughput-report.json
+            i18n-throughput-gate.json
 
       - name: Check API migration guide completeness
         if: startsWith(github.ref, 'refs/tags/v1.9.')
@@ -143,6 +169,8 @@ jobs:
 
       - name: Publish candidate
         if: >-
+          steps.i18n_benchmark.outcome == 'success' &&
+          steps.i18n_throughput.outcome == 'success' &&
           steps.check-candidate.outputs.exists == 'true' &&
           steps.gates.outcome == 'success' &&
           steps.api_compat.outcome == 'success' &&
@@ -154,12 +182,18 @@ jobs:
       - name: Fail closed
         if: >-
           always() &&
-          steps.check-candidate.outputs.exists == 'true' &&
           (
-            steps.gates.outcome != 'success' ||
-            steps.api_compat.outcome != 'success' ||
-            steps.e2e_golden.outcome != 'success' ||
-            steps.readiness.outcome != 'success'
+            steps.i18n_benchmark.outcome != 'success' ||
+            steps.i18n_throughput.outcome != 'success' ||
+            (
+              steps.check-candidate.outputs.exists == 'true' &&
+              (
+                steps.gates.outcome != 'success' ||
+                steps.api_compat.outcome != 'success' ||
+                steps.e2e_golden.outcome != 'success' ||
+                steps.readiness.outcome != 'success'
+              )
+            )
           )
         run: |
           exit 1
