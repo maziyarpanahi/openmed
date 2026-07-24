@@ -83,6 +83,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="presidio",
         description="Presidio RecognizerResult adapter",
     ),
+    "quickumls": AdapterSpec(
+        name="quickumls",
+        module="openmed.interop.quickumls",
+        extra="quickumls",
+        description="QuickUMLS licensed-resource linker adapter",
+    ),
+    "scispacy_linker": AdapterSpec(
+        name="scispacy_linker",
+        module="openmed.interop.scispacy_linker",
+        extra="scispacy",
+        description="scispaCy UMLS entity-linker adapter",
+    ),
     "philter": AdapterSpec(
         name="philter",
         module="openmed.interop.philter",
