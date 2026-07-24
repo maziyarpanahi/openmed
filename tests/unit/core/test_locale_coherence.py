@@ -17,6 +17,7 @@ The contract these tests gate lives in
 """
 
 import json
+import re
 import warnings
 
 import pytest
@@ -35,13 +36,19 @@ from openmed.core.anonymizer.locales import (
 )
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
+from openmed.core.language_pack import get_language_pack
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
+    LANGUAGE_MODEL_PREFIX,
+    LANGUAGE_MONTH_NAMES,
+    LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    validate_aadhaar,
 )
 
 # Documented set of languages whose *default* Faker locale is an intentional
@@ -142,6 +149,52 @@ class TestLocaleResolution:
         assert locale in AVAILABLE_LOCALES
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
+
+    def test_odia_pack_uses_native_locale_model_and_aadhaar_provider(self):
+        pack = get_language_pack("or")
+
+        assert pack is not None
+        assert pack.scripts == ("Odia",)
+        assert "or" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["or"] == "Odia"
+        assert LANGUAGE_MODEL_PREFIX["or"] == "Odia-"
+        assert LANGUAGE_MONTH_NAMES["or"] == [
+            "ଜାନୁଆରୀ",
+            "ଫେବୃଆରୀ",
+            "ମାର୍ଚ୍ଚ",
+            "ଏପ୍ରିଲ",
+            "ମେ",
+            "ଜୁନ",
+            "ଜୁଲାଇ",
+            "ଅଗଷ୍ଟ",
+            "ସେପ୍ଟେମ୍ବର",
+            "ଅକ୍ଟୋବର",
+            "ନଭେମ୍ବର",
+            "ଡିସେମ୍ବର",
+        ]
+        assert LANG_TO_LOCALE["or"] == "or_IN"
+        assert NATIONAL_ID_PROVIDERS["or"] == ("or_IN", "aadhaar")
+        assert "or_IN" in AVAILABLE_LOCALES
+        assert "or" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("or") == "or_IN"
+            anonymizer = Anonymizer(lang="or", consistent=True, seed=692)
+            person = anonymizer.surrogate("ଅରୁଣ ଦାସ", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "୨୪୬୭ ୭୮୩୨ ୫୪୮୪",
+                "national_id",
+            )
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert re.fullmatch(r"[\u0B00-\u0B7F ]+", person)
+        assert person != "ଅରୁଣ ଦାସ"
+        assert validate_aadhaar(aadhaar)
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):

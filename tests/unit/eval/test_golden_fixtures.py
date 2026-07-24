@@ -6,12 +6,16 @@ import json
 from datetime import date
 from pathlib import Path
 
-from openmed.core.labels import CANONICAL_LABELS
-from openmed.core.pii_entity_merger import validate_luhn
+from openmed.core.decoding.spans import is_grapheme_boundary
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
+from openmed.core.language_router import LanguageRouter
+from openmed.core.pii_entity_merger import find_semantic_units, validate_luhn
 from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
+    LANGUAGE_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    normalize_odia_digits,
     validate_aadhaar,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
@@ -19,6 +23,9 @@ from openmed.core.pii_i18n import (
     validate_israeli_teudat_zehut,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_odia_aadhaar,
+    validate_odia_indian_phone,
+    validate_odisha_pin,
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cpf,
@@ -209,6 +216,172 @@ def test_hard_negative_fixtures_are_synthetic_zero_span_non_phi():
                 fixture.text[candidate["start"] : candidate["end"]]
                 == (candidate["text"])
             )
+
+
+def test_odia_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/or.jsonl")
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(fixtures) == 2
+    assert {fixture.metadata["digit_set"] for fixture in fixtures} == {
+        "ascii",
+        "odia",
+    }
+
+    names = []
+    aadhaar_values = []
+    phone_values = []
+    pin_values = []
+    for fixture in fixtures:
+        person_spans = [span for span in fixture.gold_spans if span.label == "PERSON"]
+        assert len(person_spans) == 1
+        names.append(person_spans[0].text)
+
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert fixture.text[span.start : span.end] == span.text
+            if span.label == "ID_NUM":
+                aadhaar_values.append(span.text)
+            elif span.label == "PHONE":
+                phone_values.append(span.text)
+            elif span.label == "ZIPCODE":
+                pin_values.append(span.text)
+
+    fixture_marks = set("".join(names))
+    assert {"ା", "ୀ", "ୁ", "୍"}.issubset(fixture_marks)
+    assert all(validate_odia_aadhaar(value) for value in aadhaar_values)
+    assert all(validate_odia_indian_phone(value) for value in phone_values)
+    assert all(validate_odisha_pin(value) for value in pin_values)
+    assert all(
+        validate_aadhaar(normalize_odia_digits(value)) for value in aadhaar_values
+    )
+    assert len({normalize_odia_digits(value) for value in aadhaar_values}) == 1
+    assert len({normalize_odia_digits(value) for value in phone_values}) == 1
+    assert len({normalize_odia_digits(value) for value in pin_values}) == 1
+
+
+def test_odia_name_patterns_require_honorific_and_common_surname():
+    examples = (
+        ("ଶ୍ରୀ", "ଅରୁଣ ଦାସ"),
+        ("ଶ୍ରୀମତୀ", "ସୁନୀତା ମହାନ୍ତି"),
+        ("ଡା.", "ବିକାଶ ପଟ୍ଟନାୟକ"),
+        ("ଶ୍ରୀ", "ରବି ସାହୁ"),
+    )
+
+    for honorific, name in examples:
+        text = f"ରୋଗୀ {honorific} {name}."
+        units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["or"])
+        detected_names = [
+            text[start:end]
+            for start, end, entity_type, *_rest in units
+            if entity_type == "name"
+        ]
+        assert detected_names == [name]
+
+    bare_text = "ଦାସ ଓ ସାହୁ ସାଧାରଣ ଉପନାମ।"
+    bare_units = find_semantic_units(bare_text, LANGUAGE_PII_PATTERNS["or"])
+    assert all(entity_type != "name" for _, _, entity_type, *_rest in bare_units)
+
+
+def test_odia_and_bengali_script_blocks_never_cross_route():
+    router = LanguageRouter(use_optional_lid=False)
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/or.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+
+    for fixture in fixtures:
+        odia_runs = [
+            run for run in router.route_runs(fixture.text) if run.script == "Odia"
+        ]
+        assert odia_runs
+        assert {run.language for run in odia_runs} == {"or"}
+
+    bengali_runs = [
+        run for run in router.route_runs("রোগী শ্রী অরুণ দাস।") if run.script == "Bengali"
+    ]
+    assert bengali_runs
+    assert all(run.language != "or" for run in bengali_runs)
+
+
+def test_odia_fixtures_pass_zero_leakage_release_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/or.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    predictions = {}
+
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-25T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="or",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "or"))
+            for entity in swept_result.entities
+        }
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="or",
+            consistent=False,
+            seed=None,
+            locale="or_IN",
+            use_safety_sweep=True,
+        )
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-odia",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-07-25T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["overall"] == 0.0
+    assert report.metrics["leakage"]["by_language"]["or"] == 0.0
+
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"or": 0.0}
 
 
 def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():

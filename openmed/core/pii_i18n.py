@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,7 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_ODIA_DIGIT_TRANSLATION = str.maketrans("୦୧୨୩୪୫୬୭୮୯", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +518,21 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_odia_digits(text: str) -> str:
+    """Fold Odia decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain Odia decimal digits.
+
+    Returns:
+        Length-preserving text with Odia digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_ODIA_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1059,6 +1077,27 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_odia_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Odia decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_odia_digits(text))
+
+
+def validate_odia_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Odia digits."""
+
+    return isinstance(text, str) and validate_indian_phone(normalize_odia_digits(text))
+
+
+def validate_odisha_pin(text: str) -> bool:
+    """Validate an Odisha PIN in the 75xxxx-77xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_odia_digits(text).strip()
+    return validate_indian_pin(normalized) and 750_000 <= int(normalized) <= 779_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5533,6 +5572,149 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_ODIA_DIGIT_CLASS = r"0-9\u0B66-\u0B6F"
+_ODIA_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0B6C-\u0B6F"
+_ODIA_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0B68-\u0B6F"
+_ODIA_BASE_LETTER = (
+    r"[\u0B05-\u0B0C\u0B0F-\u0B10\u0B13-\u0B28\u0B2A-\u0B30"
+    r"\u0B32-\u0B33\u0B35-\u0B39\u0B5C-\u0B61\u0B71]"
+)
+_ODIA_NON_VIRAMA_MARK = (
+    r"[\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47-\u0B48"
+    r"\u0B4B-\u0B4C\u0B55-\u0B57]"
+)
+_ODIA_GRAPHEME = (
+    rf"{_ODIA_BASE_LETTER}{_ODIA_NON_VIRAMA_MARK}*"
+    rf"(?:\u0B4D[\u200C\u200D]?{_ODIA_BASE_LETTER}"
+    rf"{_ODIA_NON_VIRAMA_MARK}*)*"
+)
+_ODIA_NAME_WORD = rf"(?:{_ODIA_GRAPHEME}){{2,}}"
+_ODIA_SURNAME = r"(?:ମହାନ୍ତି|ପଟ୍ଟନାୟକ|ସାହୁ|ଦାସ)"
+_ODIA_FULL_NAME = (
+    rf"{_ODIA_NAME_WORD}"
+    rf"(?:[ \t]+{_ODIA_NAME_WORD})?"
+    rf"[ \t]+{_ODIA_SURNAME}"
+)
+_ODIA_MONTH_PATTERN = "|".join(re.escape(month) for month in LANGUAGE_MONTH_NAMES["or"])
+
+_ODIA_NAME_CONTEXT = ["ଶ୍ରୀ", "ଶ୍ରୀମତୀ", "ଡା.", "ନାମ", "ରୋଗୀ", "patient"]
+_ODIA_DATE_CONTEXT = [
+    "ଜନ୍ମ",
+    "ଜନ୍ମ ତାରିଖ",
+    "ତାରିଖ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_ODIA_PHONE_CONTEXT = ["ଫୋନ୍", "ମୋବାଇଲ୍", "ଯୋଗାଯୋଗ", "phone", "mobile"]
+_ODIA_AADHAAR_CONTEXT = [
+    "ଆଧାର",
+    "ପରିଚୟ",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_ODIA_PIN_CONTEXT = [
+    "ପିନ୍",
+    "ପିନ୍ କୋଡ୍",
+    "ଡାକ",
+    "ଠିକଣା",
+    "pin",
+    "postcode",
+]
+
+_ODIA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?:(?<=ଶ୍ରୀ )|(?<=ଶ୍ରୀମତୀ )|(?<=ଡା\. ))"
+        rf"{_ODIA_FULL_NAME}"
+        rf"(?![\u0B00-\u0B7F])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_ODIA_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[{_ODIA_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_ODIA_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[{_ODIA_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_ODIA_MONTH_PATTERN})\s+"
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_ODIA_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0B6F][1\u0B67][\s-]?)?"
+        rf"[{_ODIA_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_ODIA_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_ODIA_DIGIT_CLASS}]"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_ODIA_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_odia_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[{_ODIA_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{3}} "
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}} "
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_ODIA_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_odia_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[7\u0B6D][5-7\u0B6B-\u0B6D]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_ODIA_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_odisha_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -8932,6 +9114,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "hi": [
         *_HINDI_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "or": [
+        *_ODIA_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "te": [
