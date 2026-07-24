@@ -155,7 +155,7 @@ def run_family_extraction(
                     text,
                     model_name=model.model_id,
                     confidence_threshold=model.recommended_confidence,
-                    group_entities=True,
+                    group_entities=False,
                 )
         except Exception as exc:
             print(f"{selection.family}: model unavailable offline ({exc})")

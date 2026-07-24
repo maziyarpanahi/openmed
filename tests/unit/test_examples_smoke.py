@@ -85,7 +85,7 @@ def test_clinical_ner_families_uses_mocked_analyzer_without_network(
     clinical_ner_families.run_family_extraction(analyzer=fake_analyzer)
 
     assert len(calls) == 3
-    assert all(call["group_entities"] is True for call in calls)
+    assert all(call["group_entities"] is False for call in calls)
     assert all(call["model_name"].startswith("OpenMed/") for call in calls)
     assert "HF_HUB_OFFLINE" not in os.environ
     assert "TRANSFORMERS_OFFLINE" not in os.environ
