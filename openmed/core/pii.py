@@ -682,7 +682,7 @@ def _prepare_pii_text(
         ),
     )
     language_code = lang.strip().replace("-", "_").split("_", 1)[0].casefold()
-    if language_code in {"ar", "fa"}:
+    if language_code in {"ar", "fa", "ur"}:
         from .pii_i18n import normalize_arabic_indic_digits
 
         normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)

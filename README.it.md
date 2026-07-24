@@ -24,7 +24,7 @@ Il runtime locale principale di OpenMed esegue estrazione e de-identificazione d
 </p>
 
 <p>
-  <b>2,266 voci del manifesto</b> &nbsp;·&nbsp; <b>35 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 voci del manifesto</b> &nbsp;·&nbsp; <b>36 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Sugli host non Apple Silicon, i nomi dei modelli MLX vengono sostituiti automati
 
 ---
 
-## PII multilingue (38 route supportate; 35 supportate da modelli)
+## PII multilingue (39 route supportate; 36 supportate da modelli)
 
 Estrazione e de-identificazione in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` e `tr`: **il catalogo registrato dei modelli PII** in totale.
 

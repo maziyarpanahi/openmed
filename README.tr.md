@@ -24,7 +24,7 @@ OpenMed’in temel yerel çalışma zamanı, gerekli model yapıtları hazır ol
 </p>
 
 <p>
-  <b>2,266 manifest kaydı</b> &nbsp;·&nbsp; <b>Model destekli 35 PII dili</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifest kaydı</b> &nbsp;·&nbsp; <b>Model destekli 36 PII dili</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Apple Silicon olmayan ana makinelerde MLX model adları otomatik olarak ilgili P
 
 ---
 
-## Çok dilli PII (38 desteklenen yol; 35 model destekli)
+## Çok dilli PII (39 desteklenen yol; 36 model destekli)
 
 `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` ve `tr` dillerinde çıkarım ve kimliksizleştirme: toplam **kayıtlı PII model kataloğu**.
 

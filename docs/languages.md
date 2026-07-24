@@ -110,7 +110,7 @@ routing is first requested, and do not download or bundle model weights.
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
-| `ur`   | Urdu       | `user-supplied`                                             | `ur_PK`      | CNIC validator; `en_PK` Faker backend warns once.            |
+| `ur`   | Urdu       | `OpenMed/privacy-filter-multilingual`                      | `ur_IN`      | Indian ID patterns and Aadhaar surrogates; `en_IN` Faker backend warns once. |
 | `xh`   | isiXhosa   | `OpenMed/privacy-filter-multilingual`                      | `xh_ZA`      | Nguni patterns; `zu_ZA` Faker approximation warns once.      |
 | `zh`   | Chinese    | `OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1`         | `zh_CN`      | Dedicated Chinese PII registry entry.                        |
 | `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
@@ -120,7 +120,7 @@ routing is first requested, and do not download or bundle model weights.
 Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
-`user-supplied` (`ml`, `pa`, `ne`, and `ur`) ship no bundled
+`user-supplied` (`ml`, `pa`, and `ne`) ship no bundled
 weights and require a caller-supplied model. Russian and Tamil retain explicit
 public placeholder routes for compatibility, but neither placeholder is a
 claim of dedicated trained weights. Codes absent from the table entirely (for
@@ -129,15 +129,16 @@ Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
 [PII Anonymization](anonymization.md#clinical-id-checksums) for the ID providers.
-Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
-`en_PK` backend for general surrogate data, with a one-time approximation warning.
+Urdu defaults to `ur_IN` and Faker's installed `en_IN` backend for general
+surrogate data, with a one-time approximation warning. Callers can still select
+`ur_PK` explicitly for CNIC validation.
 
 The two optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
 
-`openmed.core.pii_i18n.USER_SUPPLIED_MODEL_LANGUAGES` holds the four codes that
+`openmed.core.pii_i18n.USER_SUPPLIED_MODEL_LANGUAGES` holds the three codes that
 are registered for script routing, surrogate locales, deterministic patterns,
 and the public REST/MCP enums while claiming no bundled default model. It splits
 into two groups with different model columns and different errors:
@@ -146,15 +147,15 @@ into two groups with different model columns and different errors:
   through the optional Indic NER adapter, so omitting `model_name` raises
   `ValueError: Language '<code>' uses optional Indic NER weights; pass an
   explicit model_name or set OPENMED_INDIC_NER_MODEL`.
-- `ne` and `ur` read `user-supplied`. They have no adapter and no env-var path,
+- `ne` reads `user-supplied`. It has no adapter and no env-var path,
   so omitting `model_name` raises `ValueError: Language '<code>' has no bundled
   OpenMed PII model; pass an explicit model_name (user-supplied-model
-  languages: ne, ur)`.
+  languages: ne)`.
 
 Both column values are registry placeholders rather than loadable repositories.
 Passing one back as `model_name` raises the same error as omitting it, so a
 value copied from `openmed_list_pii_languages` never becomes a download attempt.
-`SUPPORTED_LANGUAGES` deliberately stays model-backed-only, so none of these four
+`SUPPORTED_LANGUAGES` deliberately stays model-backed-only, so none of these three
 codes appear in model-backed language counts.
 
 ## Indian-English and code-mixed clinical notes
@@ -421,11 +422,11 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] சென்றார்.
 
 ### Urdu — `ur`
 
-- Model: `user-supplied` · locale `ur_PK`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `ur_IN`
 
 ```text
-Before: فاطمہ خان لاہور میں حیات ہسپتال گئیں۔
-After:  [PERSON] [LOCATION] میں [ORGANIZATION] گئیں۔
+Before: محترمہ فاطمہ خان دہلی میں حیات ہسپتال گئیں۔
+After:  محترمہ [PERSON] [LOCATION] میں [ORGANIZATION] گئیں۔
 ```
 
 ### Hebrew — `he`

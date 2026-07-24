@@ -202,12 +202,11 @@ def test_routing_only_languages_do_not_claim_bundled_models():
         "ml",
         "ne",
         "pa",
-        "ur",
     }
 
     assert USER_SUPPLIED_MODEL_LANGUAGES == expected_languages
     assert USER_SUPPLIED_MODEL_LANGUAGES.isdisjoint(BUILTIN_DEFAULT_PII_MODELS)
-    for language in expected_languages - {"ne", "ur"}:
+    for language in expected_languages - {"ne"}:
         assert DEFAULT_PII_MODELS[language] == OPTIONAL_PII_MODEL
     assert candidate_languages_for_script("Latin") == (
         "en",

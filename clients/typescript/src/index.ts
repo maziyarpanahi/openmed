@@ -69,6 +69,7 @@ export type PIILanguage =
   | "xh"
   | "zh"
   | "uk"
+  | "ur"
   | "cs"
   | "el"
   | "vi";

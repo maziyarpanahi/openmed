@@ -121,6 +121,7 @@ PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "mr": 0.0,
     "or": 0.0,
     "ta": 0.0,
+    "ur": 0.0,
     "vi": 0.0,
 }
 

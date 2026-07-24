@@ -24,7 +24,7 @@ OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和
 </p>
 
 <p>
-  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>35 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>36 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -509,10 +509,10 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（38 条支持的路由；35 条由模型支持）
+## 多语言 PII（39 条支持的路由；36 条由模型支持）
 
-实体抽取和去标识化支持 **38 个 PII 语言代码**：
-`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fa`、`fr`、`gu`、`he`、`hi`、`id`、`it`、`ja`、`kn`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
+实体抽取和去标识化支持 **39 个 PII 语言代码**：
+`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fa`、`fr`、`gu`、`he`、`hi`、`id`、`it`、`ja`、`kn`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`ur`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
 俄语路由目前使用文档中说明的多语言默认模型占位符。孟加拉语、中文和泰米尔语拥有专用注册表条目。
 一个由用户选择并配置的印度语言 NER 系列还支持两条额外路由
 （`ml` 和 `pa`），
