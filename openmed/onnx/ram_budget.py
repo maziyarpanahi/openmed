@@ -322,8 +322,20 @@ def _windows_current_rss_bytes() -> int | None:
         counters = _ProcessMemoryCounters()
         counters.cb = ctypes.sizeof(counters)
         windll = getattr(ctypes, "windll")
-        process = windll.kernel32.GetCurrentProcess()
-        ok = windll.psapi.GetProcessMemoryInfo(
+        get_current_process = windll.kernel32.GetCurrentProcess
+        get_current_process.argtypes = ()
+        get_current_process.restype = ctypes.c_void_p
+        get_process_memory_info = windll.psapi.GetProcessMemoryInfo
+        get_process_memory_info.argtypes = (
+            ctypes.c_void_p,
+            ctypes.POINTER(_ProcessMemoryCounters),
+            ctypes.c_ulong,
+        )
+        get_process_memory_info.restype = ctypes.c_int
+        process = get_current_process()
+        if not process:
+            return None
+        ok = get_process_memory_info(
             process,
             ctypes.byref(counters),
             counters.cb,

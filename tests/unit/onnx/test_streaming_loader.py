@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import struct
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Mapping
 
 import numpy as np
 import pytest
 
+from openmed.onnx import ram_budget as ram_budget_module
 from openmed.onnx.ram_budget import (
     PeakRamProbe,
     RamBudget,
@@ -169,6 +172,46 @@ def test_peak_ram_probe_uses_current_process_rss() -> None:
     assert probe.report.baseline_rss_bytes > 0
     assert probe.report.peak_rss_bytes >= probe.report.baseline_rss_bytes
     assert probe.report.within_budget is True
+
+
+def test_windows_rss_probe_configures_64_bit_process_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeWindowsFunction:
+        def __init__(self, callback):
+            self.callback = callback
+            self.argtypes = None
+            self.restype = None
+
+        def __call__(self, *args):
+            return self.callback(*args)
+
+    get_current_process = FakeWindowsFunction(lambda: 12_345)
+
+    def fill_memory_counters(_process, counters_pointer, _size):
+        counters = ctypes.cast(
+            counters_pointer,
+            ctypes.POINTER(ram_budget_module._ProcessMemoryCounters),
+        ).contents
+        counters.working_set_size = 987_654
+        return 1
+
+    get_process_memory_info = FakeWindowsFunction(fill_memory_counters)
+    windll = SimpleNamespace(
+        kernel32=SimpleNamespace(GetCurrentProcess=get_current_process),
+        psapi=SimpleNamespace(GetProcessMemoryInfo=get_process_memory_info),
+    )
+    monkeypatch.setattr(ram_budget_module.ctypes, "windll", windll, raising=False)
+
+    assert ram_budget_module._windows_current_rss_bytes() == 987_654
+    assert get_current_process.argtypes == ()
+    assert get_current_process.restype is ctypes.c_void_p
+    assert get_process_memory_info.argtypes == (
+        ctypes.c_void_p,
+        ctypes.POINTER(ram_budget_module._ProcessMemoryCounters),
+        ctypes.c_ulong,
+    )
+    assert get_process_memory_info.restype is ctypes.c_int
 
 
 def test_peak_ram_probe_rejects_a_transient_sampled_spike() -> None:
