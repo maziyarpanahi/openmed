@@ -124,6 +124,12 @@ from .experiencer import (
     refine_experiencer,
     resolve_experiencer,
 )
+from .genomics import (
+    COORDINATE_TYPES,
+    GENOMICS_ADVISORY,
+    HgvsMention,
+    parse_hgvs,
+)
 from .lab_values import (
     LAB_FLAG_ADVISORY,
     AbnormalFlag,
@@ -298,6 +304,10 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "COORDINATE_TYPES",
+    "GENOMICS_ADVISORY",
+    "HgvsMention",
+    "parse_hgvs",
     "ABBREVIATION_DISAMBIGUATION_ADVISORY",
     "DEFAULT_SENSE_INVENTORY_RESOURCE",
     "AbbreviationAnnotation",

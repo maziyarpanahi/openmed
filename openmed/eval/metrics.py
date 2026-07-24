@@ -2357,6 +2357,47 @@ def radiology_finding_tuple_f1(
     )
 
 
+HGVS_FIELDS: tuple[str, ...] = (
+    "reference_sequence",
+    "coordinate_type",
+    "position",
+    "edit",
+    "status",
+)
+
+
+def hgvs_field_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+    *,
+    fields: Sequence[str] = HGVS_FIELDS,
+) -> dict[str, RateMetric]:
+    """Per-field accuracy for parsed HGVS mentions against gold.
+
+    ``predicted`` and ``gold`` are parallel iterables of mention mappings, each
+    carrying ``reference_sequence``/``coordinate_type``/``position``/``edit`` and
+    a ``status``. For every field the accuracy is the fraction of mentions whose
+    predicted value equals the gold value; ``None == None`` counts as correct so
+    a genuinely absent field is not penalized. Parser-agnostic: callers pass
+    already-parsed mention mappings, aligned one-to-one with gold.
+    """
+    correct = {field: 0 for field in fields}
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        for field in fields:
+            if predicted_row.get(field) == gold_row.get(field):
+                correct[field] += 1
+    return {
+        field: RateMetric(
+            rate=_safe_rate(correct[field], total, zero_denominator=1.0),
+            numerator=correct[field],
+            denominator=total,
+        )
+        for field in fields
+    }
+
+
 def _bounded_unit_interval(value: Any, field_name: str) -> float:
     result = float(value)
     if not isfinite(result) or not 0.0 <= result <= 1.0:
@@ -3060,6 +3101,8 @@ __all__ = [
     "section_boundary_accuracy",
     "stated_category_accuracy",
     "radiology_finding_tuple_f1",
+    "HGVS_FIELDS",
+    "hgvs_field_accuracy",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
