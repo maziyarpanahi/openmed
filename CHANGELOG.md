@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a procedures zero-shot domain for surgical and diagnostic procedures,
+  devices, and surgical approach, with a new `DEVICE` canonical label,
+  keyword routing metadata, and canonical label normalization (#313).
 - Added a fail-closed, signed release-readiness gate that verifies signed model
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite
