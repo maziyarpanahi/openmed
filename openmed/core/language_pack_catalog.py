@@ -116,6 +116,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("en_IN", "aadhaar"),
     ),
     _pack(
+        "ta",
+        "OpenMed/privacy-filter-multilingual",
+        "ta_IN",
+        ("Tamil",),
+        national_id_provider=("ta_IN", "aadhaar"),
+    ),
+    _pack(
         "am",
         "OpenMed/privacy-filter-multilingual",
         "am_ET",
@@ -304,7 +311,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "mr": "mr_IN",
     "or": "or_IN",
     "pa": "pa_IN",
-    "ta": "ta_IN",
 }
 
 # Languages surfaced by script routing before a bundled default PII model or
@@ -321,7 +327,6 @@ USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "ne",
     "or",
     "pa",
-    "ta",
     "ur",
 }
 
@@ -392,6 +397,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "te",
+    "ta",
     "am",
     "pt",
     "ar",
@@ -438,6 +444,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "nl",
     "hi",
     "te",
+    "ta",
     "am",
     "pt",
     "tr",

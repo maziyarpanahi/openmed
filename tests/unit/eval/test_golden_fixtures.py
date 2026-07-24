@@ -6,7 +6,11 @@ import json
 from datetime import date
 from pathlib import Path
 
-from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.decoding.spans import (
+    is_grapheme_boundary,
+    iter_grapheme_clusters,
+)
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.pii_entity_merger import validate_luhn
 from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
@@ -23,6 +27,8 @@ from openmed.core.pii_i18n import (
     validate_philsys_psn,
     validate_portuguese_cpf,
     validate_romanian_cnp,
+    validate_tamil_aadhaar,
+    validate_tamil_nadu_puducherry_pin,
 )
 from openmed.eval import harness
 from openmed.eval.golden import (
@@ -209,6 +215,115 @@ def test_hard_negative_fixtures_are_synthetic_zero_span_non_phi():
                 fixture.text[candidate["start"] : candidate["end"]]
                 == (candidate["text"])
             )
+
+
+def test_tamil_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ta.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    fixtures = [GoldenFixture.from_mapping(row) for row in rows]
+
+    assert len(fixtures) == 3
+    assert {fixture.metadata["fixture_kind"] for fixture in fixtures} == {
+        "Tamil-script native digits",
+        "Tamil-English code-mixed",
+        "Tamil Sri grapheme",
+    }
+    assert list(iter_grapheme_clusters("ஸ்ரீ")) == [(0, len("ஸ்ரீ"))]
+
+    aadhaar_values = []
+    pin_values = []
+    for fixture in fixtures:
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert fixture.text[span.start : span.end] == span.text
+            if span.label == "ID_NUM":
+                aadhaar_values.append(span.text)
+            if span.label == "ZIPCODE":
+                pin_values.append(span.text)
+
+    assert all(validate_tamil_aadhaar(value) for value in aadhaar_values)
+    assert all(validate_tamil_nadu_puducherry_pin(value) for value in pin_values)
+    assert validate_tamil_aadhaar("௨௪௬௭ ௭௮௩௨ ௫௪௮௪")
+    assert validate_tamil_aadhaar("2467 7832 5484")
+    assert validate_tamil_nadu_puducherry_pin("௬௦௫௦௦௧")
+    assert validate_tamil_nadu_puducherry_pin("605001")
+
+
+def test_tamil_fixtures_pass_zero_leakage_release_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/ta.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    predictions = {}
+
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-24T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="ta",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "ta"))
+            for entity in swept_result.entities
+        }
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="ta",
+            consistent=False,
+            seed=None,
+            locale="ta_IN",
+            use_safety_sweep=True,
+        )
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-tamil",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-07-24T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["overall"] == 0.0
+    assert report.metrics["leakage"]["by_language"]["ta"] == 0.0
+
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"ta": 0.0}
 
 
 def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():

@@ -21,6 +21,8 @@ Notes:
   warning when that backend is unavailable.
 - Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
   the surname-aware, Han-only surrogate generators rather than a Latin fallback.
+- Tamil resolves to the native ``ta_IN`` Faker locale; patronymic-initial
+  PERSON surrogates preserve the source's initial-plus-given-name shape.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
