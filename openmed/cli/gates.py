@@ -143,7 +143,7 @@ def handle_gates_preview(args: argparse.Namespace) -> int:
             f"Release gate preview failed: {exc}",
             code="preview_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
 
     emit(args, report.to_dict(), human=format_preview(report))
     if args.strict and report.decision != RELEASABLE:
@@ -173,7 +173,7 @@ def _handle_bundle(args: argparse.Namespace) -> int:
             f"Failed to bundle gate evidence: {exc}",
             code="bundle_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
 
     payload = {
         "output_dir": str(result.output_dir),

@@ -8,7 +8,7 @@ from typing import Any
 
 from openmed.mlx.artifact import load_artifact_config, resolve_weight_candidates
 
-_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = {
+_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES=***
     "bert": "bert",
     "distilbert": "bert",
     "electra": "bert",
@@ -384,7 +384,7 @@ def load_model(model_path: str | Path):
     except ImportError:
         raise ImportError(
             "MLX is required for this module. Install with: pip install openmed[mlx]"
-        )
+        ) from None
 
     model_path = Path(model_path)
 

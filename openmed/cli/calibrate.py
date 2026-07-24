@@ -115,7 +115,7 @@ def handle_calibrate(args: argparse.Namespace) -> int:
             f"Calibration failed: {exc}",
             code="calibration_failed",
             exit_code=EXIT_ERROR,
-        )
+        ) from exc
 
     data = {
         "artifact_dir": str(paths.artifact_dir),

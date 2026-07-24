@@ -171,7 +171,7 @@ class MLXTokenClassificationPipeline:
             raise ImportError(
                 "HuggingFace tokenizers is required for MLX inference. "
                 "Install with: pip install tokenizers transformers"
-            )
+            ) from None
 
     @staticmethod
     def _is_special_offset(offset: Any) -> bool:
@@ -718,7 +718,7 @@ class _BaseExperimentalMLXPipeline:
             raise ImportError(
                 "HuggingFace tokenizers is required for MLX inference. "
                 "Install with: pip install tokenizers transformers"
-            )
+            ) from None
         self.max_length = _resolve_model_max_length(self.tokenizer, self.config)
         self.prompt_spec = (
             (self.manifest or {}).get("prompt_spec")

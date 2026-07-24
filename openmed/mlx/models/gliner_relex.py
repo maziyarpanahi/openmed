@@ -8,7 +8,7 @@ try:
 except ImportError:
     raise ImportError(
         "MLX is required for this module. Install with: pip install openmed[mlx]"
-    )
+    ) from None
 
 from openmed.mlx.models.deberta_v2_tc import DebertaV2Model
 from openmed.mlx.models.gliner_common import (
