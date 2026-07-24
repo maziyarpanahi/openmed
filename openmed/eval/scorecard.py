@@ -215,10 +215,11 @@ class ModelScorecard:
             (
                 "| Device Tier | Targeted | Reports | Fixtures | Recall | "
                 "Critical Finding Recall | Leakage Rate | Strict RE-F1 | "
-                "Relaxed RE-F1 | Per-Type RE-F1 | Latency p50/p95 ms | "
+                "Relaxed RE-F1 | Per-Type RE-F1 | Per-Language RE-F1 | "
+                "Latency p50/p95 ms | "
                 "Peak RSS MB | Model Size MB |"
             ),
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|",
+            ("|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|"),
         ]
         for row in payload["device_tiers"]:
             lines.append(
@@ -233,6 +234,7 @@ class ModelScorecard:
                 f"{_format_percent_or_placeholder(row['relation_strict_f1'], self.placeholder)} | "
                 f"{_format_percent_or_placeholder(row['relation_relaxed_f1'], self.placeholder)} | "
                 f"{_format_relation_type_f1(row['relation_per_type_f1'], self.placeholder)} | "
+                f"{_format_relation_type_f1(row['relation_per_language_f1'], self.placeholder)} | "
                 f"{_format_latency(row, self.placeholder)} | "
                 f"{_format_number_or_placeholder(row['peak_rss_mb'], self.placeholder)} | "
                 f"{_format_number_or_placeholder(row['model_size_mb'], self.placeholder)} |"
@@ -297,6 +299,7 @@ class ModelScorecard:
             "peak_rss_mb": _aggregate_peak_rss_mb(reports, self.manifest_row, device),
             "per_script": _aggregate_per_script(reports),
             "recall": _aggregate_recall(reports),
+            "relation_per_language_f1": _aggregate_relation_per_language_f1(reports),
             "relation_per_type_f1": _aggregate_relation_per_type_f1(reports),
             "relation_relaxed_f1": _aggregate_relation_f1(reports, "relaxed"),
             "relation_strict_f1": _aggregate_relation_f1(reports, "strict"),
@@ -534,6 +537,40 @@ def _aggregate_relation_per_type_f1(
             "strict": _aggregate_f1_metrics(metrics["strict"]),
         }
         for relation_type, metrics in sorted(by_type.items())
+    }
+
+
+def _aggregate_relation_per_language_f1(
+    reports: Sequence[BenchmarkReport],
+) -> dict[str, dict[str, float | None]]:
+    by_language: dict[str, dict[str, list[Mapping[str, Any]]]] = {}
+    for report in reports:
+        metrics = _plain(report.metrics)
+        per_language = _nested_get(metrics, "relation_extraction.per_language")
+        if per_language is None:
+            per_language = _nested_get(metrics, "per_language_relation_f1")
+        if not isinstance(per_language, Mapping):
+            continue
+        for language, payload in per_language.items():
+            if not isinstance(payload, Mapping):
+                continue
+            bucket = by_language.setdefault(
+                str(language),
+                {"relaxed": [], "strict": []},
+            )
+            strict = payload.get("strict")
+            relaxed = payload.get("relaxed")
+            if isinstance(strict, Mapping):
+                bucket["strict"].append(strict)
+            if isinstance(relaxed, Mapping):
+                bucket["relaxed"].append(relaxed)
+
+    return {
+        language: {
+            "relaxed": _aggregate_f1_metrics(metrics["relaxed"]),
+            "strict": _aggregate_f1_metrics(metrics["strict"]),
+        }
+        for language, metrics in sorted(by_language.items())
     }
 
 

@@ -138,3 +138,10 @@ Required fields:
 The relation loader validates schema version, unique fixture/entity/relation
 ids, argument references, offsets, canonical entity labels, relation scopes,
 and trap metadata.
+
+`fixtures/i18n/relations_zh.jsonl` and
+`fixtures/i18n/relations_indic.jsonl` extend that schema with synthetic Chinese
+and Hindi relation examples. They reuse canonical NER labels, carry registry
+version `1`, and are scored separately through the relation metric's
+`by_language`/`per_language` payloads. No CMeIE or other external corpus text is
+bundled.

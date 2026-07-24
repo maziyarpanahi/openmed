@@ -48,6 +48,7 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
+      - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
