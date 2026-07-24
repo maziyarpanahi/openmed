@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -497,6 +499,7 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_GURMUKHI_DIGIT_TRANSLATION = str.maketrans("੦੧੨੩੪੫੬੭੮੯", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -515,6 +518,21 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_gurmukhi_digits(text: str) -> str:
+    """Fold Gurmukhi decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain Gurmukhi decimal digits.
+
+    Returns:
+        Length-preserving text with Gurmukhi digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_GURMUKHI_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1043,7 +1061,9 @@ def validate_aadhaar(text: str) -> bool:
     Returns:
         True if the Aadhaar passes the Verhoeff checksum
     """
-    candidate = text.strip()
+    if not isinstance(text, str):
+        return False
+    candidate = normalize_gurmukhi_digits(text.strip())
     if (
         re.fullmatch(
             r"[2-9][0-9]{11}|[2-9][0-9]{3} [0-9]{4} [0-9]{4}",
@@ -1059,6 +1079,26 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_punjabi_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Gurmukhi digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_gurmukhi_digits(text)
+    )
+
+
+def validate_punjab_chandigarh_pin(text: str) -> bool:
+    """Validate a Punjab or Chandigarh PIN in ASCII or Gurmukhi digits."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_gurmukhi_digits(text).strip()
+    if not validate_indian_pin(normalized):
+        return False
+    value = int(normalized)
+    return 140_000 <= value <= 159_999 or 160_000 <= value <= 160_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -5533,6 +5573,137 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_GURMUKHI_DIGIT_CLASS = r"0-9\u0A66-\u0A6F"
+_GURMUKHI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0A6C-\u0A6F"
+_GURMUKHI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0A68-\u0A6F"
+_GURMUKHI_BASE_LETTER = r"[\u0A05-\u0A39\u0A59-\u0A5E]"
+_GURMUKHI_MARK = (
+    r"[\u0A01-\u0A03\u0A3C\u0A3E-\u0A42\u0A47-\u0A48"
+    r"\u0A4B-\u0A4D\u0A51\u0A70-\u0A71\u0A75]"
+)
+_GURMUKHI_GRAPHEME = rf"{_GURMUKHI_BASE_LETTER}{_GURMUKHI_MARK}*"
+_GURMUKHI_NAME_WORD = rf"(?:{_GURMUKHI_GRAPHEME}){{2,}}"
+_PUNJABI_FULL_NAME = (
+    rf"{_GURMUKHI_NAME_WORD}"
+    rf"(?:[ \t]+{_GURMUKHI_NAME_WORD})?"
+    rf"[ \t]+(?:ਸਿੰਘ|ਕੌਰ)"
+)
+_PUNJABI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["pa"]
+)
+
+_PUNJABI_NAME_CONTEXT = ["ਸ.", "ਸਰਦਾਰਨੀ", "ਬੀਬੀ", "ਡਾ."]
+_PUNJABI_DATE_CONTEXT = [
+    "ਜਨਮ",
+    "ਜਨਮ ਮਿਤੀ",
+    "ਮਿਤੀ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_PUNJABI_PHONE_CONTEXT = ["ਫੋਨ", "ਮੋਬਾਈਲ", "ਸੰਪਰਕ", "phone", "mobile"]
+_PUNJABI_AADHAAR_CONTEXT = [
+    "ਆਧਾਰ",
+    "ਪਛਾਣ",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_PUNJABI_PIN_CONTEXT = ["ਪਿੰਨ", "ਪਿੰਨ ਕੋਡ", "ਡਾਕ", "ਪਤਾ", "pin", "postcode"]
+
+_PUNJABI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?:(?<=ਸ\. )|(?<=ਸਰਦਾਰਨੀ )|(?<=ਬੀਬੀ )|(?<=ਡਾ\. ))"
+        rf"{_PUNJABI_FULL_NAME}"
+        rf"(?![\u0A00-\u0A7F])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_PUNJABI_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GURMUKHI_DIGIT_CLASS}])"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_GURMUKHI_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_PUNJABI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GURMUKHI_DIGIT_CLASS}])"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_PUNJABI_MONTH_PATTERN})\s+"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GURMUKHI_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_PUNJABI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GURMUKHI_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0A6F][1\u0A67][\s-]?)?"
+        rf"[{_GURMUKHI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_GURMUKHI_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]"
+        rf"(?![{_GURMUKHI_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_PUNJABI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_punjabi_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GURMUKHI_DIGIT_CLASS}])"
+        rf"[{_GURMUKHI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{3}}"
+        rf"(?P<pa_aadhaar_sep> ?)"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{4}}"
+        rf"(?P=pa_aadhaar_sep)"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_GURMUKHI_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_PUNJABI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_GURMUKHI_DIGIT_CLASS}])"
+        rf"[{_GURMUKHI_DIGIT_CLASS}]{{6}}"
+        rf"(?![{_GURMUKHI_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_PUNJABI_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_punjab_chandigarh_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -8934,6 +9105,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *AADHAAR_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
+    "pa": _PUNJABI_PII_PATTERNS,
     "te": [
         *_TELUGU_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,

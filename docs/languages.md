@@ -3,8 +3,9 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
-the built-in Hindi and Telugu codes. Every code documented here wires up:
+The optional Indic family adds eight user-configured routes and can also serve
+the built-in Hindi, Punjabi, and Telugu codes. Every code documented here wires
+up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -91,7 +92,7 @@ routing is first requested, and do not download or bundle model weights.
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
 | `or`   | Odia       | `env:OPENMED_INDIC_NER_MODEL`                               | `or_IN`      | Optional Indic NER weights.                                  |
-| `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `pa`   | Punjabi    | `OpenMed/privacy-filter-multilingual`                       | `pa_IN`      | Gurmukhi patterns; Singh/Kaur-aware names; Aadhaar.           |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
@@ -118,7 +119,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The eight optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -342,7 +343,12 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] ଗଲେ।
 
 ### Punjabi — `pa`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `pa_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `pa_IN` (approximated
+  with Faker's `en_IN` backend; warns once)
+- Built-in Gurmukhi patterns cover Punjabi dates, Indian mobile numbers,
+  Aadhaar, Punjab/Chandigarh PIN codes, and honorific-anchored full names.
+  Replacement names preserve `ਸਿੰਘ` and `ਕੌਰ` gender suffixes. A configured
+  Indic adapter may still be selected explicitly.
 
 ```text
 Before: ਅਰੁਣ ਅੰਮ੍ਰਿਤਸਰ ਵਿੱਚ ਜੀਵਨ ਹਸਪਤਾਲ ਗਿਆ।
