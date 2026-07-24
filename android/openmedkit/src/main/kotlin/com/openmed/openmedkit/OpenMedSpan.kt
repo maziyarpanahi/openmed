@@ -6,12 +6,12 @@ package com.openmed.openmedkit
  * Carries the span fields relevant to Android detection, decoding, merging,
  * and de-identification while omitting the server-only fields (doc id, text
  * hash, regulatory tags, provenance, ...). [start] and [end] are half-open
- * character offsets into the original text (`start` inclusive, `end`
- * exclusive), identical to the Swift `EntityPrediction` and Python
- * `OpenMedSpan` conventions, so `end >= start`.
+ * Unicode scalar (code point) offsets into the original text, identical to the
+ * Swift `EntityPrediction` and Python `OpenMedSpan` conventions. They are not
+ * Kotlin UTF-16 indices.
  *
- * @property start Inclusive character offset of the span start.
- * @property end Exclusive character offset of the span end.
+ * @property start Inclusive Unicode scalar offset of the span start.
+ * @property end Exclusive Unicode scalar offset of the span end.
  * @property text The exact substring covered by the span.
  * @property rawLabel The label emitted by the model (mirrors the Python
  *   `entity_type`).

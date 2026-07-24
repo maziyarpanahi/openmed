@@ -2,6 +2,7 @@ package com.openmed.openmedkit
 
 import com.openmed.openmedkit.policy.PolicyAction
 import com.openmed.openmedkit.policy.PolicyProfile
+import com.openmed.openmedkit.segmentation.IcuTextSegmenter
 import java.security.MessageDigest
 
 /**
@@ -28,8 +29,13 @@ data class PolicyDeidentificationResult(
 
 /**
  * De-identification engine driven by bundled policy profile actions.
+ *
+ * Input and action offsets follow the shared Unicode scalar contract. Native
+ * UTF-16 ranges are derived only while slicing or replacing the source text.
  */
-class DeidentifyEngine {
+class DeidentifyEngine(
+    private val segmenter: IcuTextSegmenter = IcuTextSegmenter(),
+) {
     fun deidentify(
         text: String,
         entities: List<EntityPrediction>,
@@ -39,7 +45,11 @@ class DeidentifyEngine {
         val actions = candidates.map { entity ->
             val canonicalLabel = policy.canonicalLabel(entity.label)
             val action = policy.actionFor(entity.label)
-            val original = text.substring(entity.start, entity.end)
+            val original = UnicodeOffsetContract.substring(
+                text,
+                entity.start,
+                entity.end,
+            )
             DeidentifiedSpanAction(
                 label = entity.label,
                 canonicalLabel = canonicalLabel,
@@ -52,9 +62,16 @@ class DeidentifyEngine {
         }
 
         var redacted = text
-        for (record in actions.asReversed()) {
-            val replacement = record.replacement ?: continue
-            redacted = redacted.replaceRange(record.start, record.end, replacement)
+        val replacements = actions.mapNotNull { record ->
+            val replacement = record.replacement ?: return@mapNotNull null
+            UnicodeOffsetContract.utf16Span(
+                text,
+                record.start,
+                record.end,
+            ) to replacement
+        }
+        for ((range, replacement) in replacements.asReversed()) {
+            redacted = redacted.replaceRange(range.start, range.end, replacement)
         }
 
         return PolicyDeidentificationResult(
@@ -69,7 +86,8 @@ class DeidentifyEngine {
         text: String,
     ): List<EntityPrediction> {
         val sorted = entities
-            .filter { it.start >= 0 && it.end > it.start && it.end <= text.length }
+            .map { it.snappedToGraphemeBoundaries(text, segmenter) }
+            .filter { it.end > it.start }
             .sortedWith(
                 compareBy<EntityPrediction> { it.start }
                     .thenByDescending { it.end - it.start }
