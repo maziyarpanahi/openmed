@@ -50,6 +50,7 @@ _ID_VALIDATORS = {
     "it": validate_italian_codice_fiscale,
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
+    "as": validate_aadhaar,
     "hi": validate_aadhaar,
     "mr": validate_marathi_aadhaar,
     "or": validate_aadhaar,
@@ -79,6 +80,7 @@ _SCRIPT_RANGES = {
     "am": ("\u1200", "\u137f"),
     "ar": ("\u0600", "\u06ff"),
     "he": ("\u0590", "\u05ff"),
+    "as": ("\u0980", "\u09ff"),
     "hi": ("\u0900", "\u097f"),
     "mr": ("\u0900", "\u097f"),
     "or": ("\u0b00", "\u0b7f"),
@@ -146,6 +148,7 @@ def test_locale_phi_generation_is_deterministic_per_seed():
     (
         "am",
         "ar",
+        "as",
         "el",
         "he",
         "hi",

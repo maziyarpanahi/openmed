@@ -32,7 +32,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>2,000+ models</b> &nbsp;·&nbsp; <b>31 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ models</b> &nbsp;·&nbsp; <b>32 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -116,7 +116,7 @@ cross-tool procedures live in the [repository skills catalog](skills/README.md).
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          2,000+          |        Limited         |
-| Model-backed PII languages            |            28            |         Varies         |
+| Model-backed PII languages            |            29            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
@@ -515,17 +515,17 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (33 supported languages)
+## Multilingual PII (34 supported languages)
 
-Extraction and de-identification support **33 supported PII language codes**:
-`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+Extraction and de-identification support **34 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
 `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
-An optional, user-configured Indic NER family accepts five additional routes
-(`as`, `gu`, `kn`, `ml`, and `pa`) and can also serve Bengali, Hindi,
-Marathi, Tamil, and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never
+An optional, user-configured Indic NER family accepts four additional routes
+(`gu`, `kn`, `ml`, and `pa`) and can also serve Assamese, Bengali, Hindi,
+Marathi, Odia, Tamil, and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never
 bundles or automatically selects those optional weights.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.

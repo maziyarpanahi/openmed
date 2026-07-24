@@ -32,7 +32,7 @@ Apple Silicon, NVIDIA GPU, ब्राउज़र और REST/gRPC सेव�
 </p>
 
 <p>
-  <b>2,000+ मॉडल</b> &nbsp;·&nbsp; <b>31 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>600+ PII चेकपॉइंट</b> &nbsp;·&nbsp; <b>100% डिवाइस पर</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ मॉडल</b> &nbsp;·&nbsp; <b>32 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>600+ PII चेकपॉइंट</b> &nbsp;·&nbsp; <b>100% डिवाइस पर</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -116,7 +116,7 @@ for entity in result.entities:
 | रोगी डेटा आपके नेटवर्क से बाहर जाता है |       **कभी नहीं**       |       वेंडर को भेजा जाता है  |
 | लागत                                  |     मुफ़्त और ओपन-सोर्स   |        प्रति-कॉल शुल्क       |
 | विशेष चिकित्सा मॉडल                    |          2,000+          |            सीमित            |
-| मॉडल-समर्थित PII भाषाएँ               |            28            |            भिन्न            |
+| मॉडल-समर्थित PII भाषाएँ               |            29            |            भिन्न            |
 | ऑफ़लाइन / एयर-गैप्ड                   |            ✅            |             ❌              |
 | Apple Silicon (MLX) त्वरण             |            ✅            |          लागू नहीं          |
 | नेटिव iOS / macOS ऐप्स                | ✅ OpenMedKit के माध्यम से |             ❌              |
@@ -528,14 +528,14 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (33 समर्थित भाषाएँ)
+## बहुभाषी PII (34 समर्थित भाषाएँ)
 
-निष्कर्षण और डी-आइडेंटिफिकेशन **33 समर्थित PII भाषा codes** में उपलब्ध हैं:
-`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **600+ PII checkpoints** के साथ।
+निष्कर्षण और डी-आइडेंटिफिकेशन **34 समर्थित PII भाषा codes** में उपलब्ध हैं:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **600+ PII checkpoints** के साथ।
 Russian routing अभी दस्तावेज़ित multilingual default-model placeholder का उपयोग
 करती है। Bengali, Chinese और Tamil के dedicated registry entries हैं।
-एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family पाँच अतिरिक्त routes
-(`as`, `gu`, `kn`, `ml` और `pa`) स्वीकार करती है और Bengali, Hindi,
+एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family चार अतिरिक्त routes
+(`gu`, `kn`, `ml` और `pa`) स्वीकार करती है और Assamese, Bengali, Hindi,
 Marathi, Tamil तथा Telugu को भी सेवा दे सकती है। `OPENMED_INDIC_NER_MODEL` सेट करें; OpenMed इन
 weights को न तो bundle करता है और न अपने आप चुनता है।
 OpenMed में Polish, Latvian, Slovak, Malay, Filipino और Finnish जैसे अतिरिक्त ID-only locales के लिए validator-समर्थित national-ID coverage भी शामिल है।
