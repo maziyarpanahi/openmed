@@ -204,7 +204,8 @@ class PeakRamProbe:
         return False
 
     def _poll(self) -> None:
-        assert self._poll_interval_seconds is not None
+        if self._poll_interval_seconds is None:
+            raise RuntimeError("poll_interval_seconds not set before polling thread started")
         while not self._stop_event.wait(self._poll_interval_seconds):
             try:
                 self._record(self._sample())

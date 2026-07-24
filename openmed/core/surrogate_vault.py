@@ -1009,7 +1009,8 @@ class SurrogateVault:
                 source,
                 renderer=render_surrogate,
             )
-            assert rendered is not None
+            if rendered is None:
+                raise RuntimeError("render_for_source returned None for existing surrogate")
             if not _matches_required_script(rendered, required_script):
                 raise ValueError("existing surrogate does not satisfy required_script")
             return rendered
@@ -1031,7 +1032,8 @@ class SurrogateVault:
                     source,
                     renderer=render_surrogate,
                 )
-                assert rendered is not None
+                if rendered is None:
+                    raise RuntimeError("render_for_source returned None for legacy surrogate")
                 if not _matches_required_script(rendered, required_script):
                     raise ValueError(
                         "existing legacy surrogate does not satisfy required_script"
@@ -1047,7 +1049,8 @@ class SurrogateVault:
                         source,
                         renderer=render_surrogate,
                     )
-                    assert normalized_rendered is not None
+                    if normalized_rendered is None:
+                        raise RuntimeError("render_for_source returned None for normalized surrogate")
                     if not _matches_required_script(
                         normalized_rendered, required_script
                     ):
@@ -1073,7 +1076,8 @@ class SurrogateVault:
                     continue
                 leaks_source = _contains_indian_name(candidate, identity.key_text)
                 render_script = identity.render_script
-                assert render_script is not None
+                if render_script is None:
+                    continue
                 rendered_candidate = render_indian_name(
                     candidate,
                     render_script,
@@ -1088,7 +1092,8 @@ class SurrogateVault:
                     source,
                     renderer=render_surrogate,
                 )
-                assert rendered_value is not None
+                if rendered_value is None:
+                    continue
                 rendered_candidate = rendered_value
                 leaks_source = leaks_source or _contains_source_surface(
                     rendered_candidate,
@@ -1124,7 +1129,8 @@ class SurrogateVault:
                 source,
                 renderer=render_surrogate,
             )
-            assert rendered_surrogate is not None
+            if rendered_surrogate is None:
+                raise RuntimeError("render_for_source returned None for new surrogate")
             if not _matches_required_script(rendered_surrogate, required_script):
                 raise ValueError("unable to create a surrogate in required_script")
 
@@ -1134,7 +1140,8 @@ class SurrogateVault:
             source,
             renderer=render_surrogate,
         )
-        assert rendered is not None
+        if rendered is None:
+            raise RuntimeError("render_for_source returned None")
         return rendered
 
     def entries(self) -> tuple[SurrogateEntry, ...]:
@@ -1411,7 +1418,6 @@ class SurrogateVault:
         script = identity.render_script
         if script is None:
             return stored_surrogate
-        assert script is not None
         return render_indian_name(stored_surrogate, script)
 
     def _indic_candidate_leaks_source(
