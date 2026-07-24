@@ -247,6 +247,23 @@ PII findings, and de-identified text without sending data to a cloud API.
 
 ---
 
+## Agent Skills — build with OpenMed from your coding agent
+
+[`skills/`](skills/) ships **68 portable [Agent Skills](https://agentskills.io)** so your coding agent writes correct OpenMed code for you — on-device de-identification, clinical NER, FHIR export, evaluation, and the healthcare workflows around them. The same `SKILL.md` folders work in **Claude Code**, **OpenAI Codex**, **OpenCode**, and any agent that follows the open standard.
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # installs into Claude Code, Codex, OpenCode, and ~/.agents/skills
+```
+
+Then just ask your agent in plain language:
+
+> De-identify this discharge note and extract the medications with OpenMed.
+
+It loads the right skills and produces an on-device pipeline (`openmed.deidentify(...)` → `openmed.analyze_text(...)`) — no cloud call, no PHI leaves the machine. See the **[skills catalog and 30-second example](skills/README.md)**.
+
+---
+
 ## Quick start
 
 ```bash
