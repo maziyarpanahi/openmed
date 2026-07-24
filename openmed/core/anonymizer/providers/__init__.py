@@ -109,9 +109,11 @@ from .script_names import (
     HAN_LANGUAGE_PACK,
     SCRIPT_NAME_PACKS,
     TELUGU_LANGUAGE_PACK,
+    URDU_LANGUAGE_PACK,
     generate_devanagari_name,
     generate_han_name,
     generate_telugu_name,
+    generate_urdu_name,
 )
 
 __all__ = [
@@ -155,6 +157,7 @@ __all__ = [
     "SCRIPT_NAME_PACKS",
     "SpanishDNIProvider",
     "TELUGU_LANGUAGE_PACK",
+    "URDU_LANGUAGE_PACK",
     "UkrainianRnokppProvider",
     "VietnameseIdProvider",
     "clinical_faker_provider_classes",
@@ -188,6 +191,7 @@ __all__ = [
     "generate_teudat_zehut",
     "generate_taiwan_compatriot_permit",
     "generate_telugu_name",
+    "generate_urdu_name",
     "generate_uganda_nin",
     "generate_upi_id",
     "generate_vehicle_registration",

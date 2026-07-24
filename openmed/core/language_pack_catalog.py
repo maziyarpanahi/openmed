@@ -136,6 +136,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Arabic",),
     ),
     _pack(
+        "ur",
+        "OpenMed/privacy-filter-multilingual",
+        "ur_IN",
+        ("Arabic",),
+        national_id_provider=("ur_IN", "aadhaar"),
+    ),
+    _pack(
         "he",
         "OpenMed/privacy-filter-multilingual",
         "he_IL",
@@ -291,7 +298,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "bg": NationalIdOnlyCapability("bg_BG", ("bg_BG", "egn")),
     "fi": NationalIdOnlyCapability("fi_FI", ("fi_FI", "ssn")),
     "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
-    "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
     "rw": NationalIdOnlyCapability("rw_RW", ("rw_RW", "rwanda_id")),
 }
 
@@ -322,7 +328,6 @@ USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "or",
     "pa",
     "ta",
-    "ur",
 }
 
 _SCRIPT_ORDER = (
@@ -395,6 +400,7 @@ _LOCALE_ORDER = (
     "am",
     "pt",
     "ar",
+    "ur",
     "he",
     "ja",
     "zh",
@@ -426,7 +432,6 @@ _LOCALE_ORDER = (
     "et",
     "el",
     "vi",
-    "ur",
 )
 
 _NATIONAL_ID_PROVIDER_ORDER = (
@@ -441,6 +446,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "am",
     "pt",
     "tr",
+    "ur",
     "he",
     "id",
     "th",
@@ -469,7 +475,6 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "et",
     "el",
     "vi",
-    "ur",
 )
 
 
