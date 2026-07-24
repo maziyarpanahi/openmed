@@ -223,7 +223,8 @@ def test_registry_can_opt_an_additional_family_language_in(monkeypatch):
 
     models = model_registry.get_pii_models_by_language("bn")
 
-    assert list(models) == ["pii_bn_indicbert_encoder"]
+    assert "pii_bn_msuperclinical_large" in models
+    assert "pii_bn_indicbert_encoder" in models
     assert models["pii_bn_indicbert_encoder"].license == "MIT"
 
 

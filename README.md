@@ -32,7 +32,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>2,000+ models</b> &nbsp;·&nbsp; <b>27 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ models</b> &nbsp;·&nbsp; <b>30 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -504,18 +504,18 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (29 supported languages)
+## Multilingual PII (31 supported languages)
 
-Extraction and de-identification support **29 supported PII language codes**:
-`am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
-Russian and Chinese routing currently use documented multilingual
-default-model placeholders while dedicated model weights remain separate.
-An optional, user-configured Indic NER family accepts nine additional routes
-(`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve
-Hindi and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
-automatically selects those weights.
+Extraction and de-identification support **31 supported PII language codes**:
+`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+`it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`,
+`tr`, `uk`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
+Russian routing currently uses a documented multilingual default-model
+placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
+An optional, user-configured Indic NER family accepts seven additional routes
+(`as`, `gu`, `kn`, `ml`, `mr`, `or`, and `pa`) and can also serve Bengali,
+Hindi, Tamil, and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles
+or automatically selects those optional weights.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
 

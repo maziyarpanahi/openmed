@@ -2,6 +2,7 @@
   "default_pii_models": {
     "am": "OpenMed/privacy-filter-multilingual",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "bn": "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
     "cs": "OpenMed/privacy-filter-multilingual",
     "da": "OpenMed/privacy-filter-multilingual",
     "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
@@ -22,12 +23,13 @@
     "ru": "OpenMed/privacy-filter-multilingual",
     "sv": "OpenMed/privacy-filter-multilingual",
     "sw": "OpenMed/privacy-filter-multilingual",
+    "ta": "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
     "uk": "OpenMed/privacy-filter-multilingual",
     "xh": "OpenMed/privacy-filter-multilingual",
-    "zh": "OpenMed/privacy-filter-multilingual",
+    "zh": "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
     "zu": "OpenMed/privacy-filter-multilingual"
   },
   "lang_to_locale": {
@@ -375,6 +377,7 @@
   "supported_languages": [
     "am",
     "ar",
+    "bn",
     "cs",
     "da",
     "de",
@@ -395,6 +398,7 @@
     "ru",
     "sv",
     "sw",
+    "ta",
     "te",
     "th",
     "tr",

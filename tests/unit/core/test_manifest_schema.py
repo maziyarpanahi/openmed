@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.core import model_registry
 from openmed.core.manifest_schema import (
+    LANGUAGE_SCRIPT_TARGETS,
     MANIFEST_FIELDS,
     REQUIRED_FIELDS,
     SCRIPT_COVERAGE_TARGETS,
@@ -115,6 +118,51 @@ def test_manifest_row_without_size_enrichment_loads_with_empty_defaults():
     assert info.download_mb is None
     assert info.disk_mb is None
     assert info.recommended_tier is None
+
+
+def test_model_card_release_metadata_validates_for_claimed_scripts():
+    row = _manifest_row_fixture(
+        languages=["zh"],
+        download_mb=2252.843,
+        disk_mb=2252.843,
+        download_sizes={
+            "safetensors": 2235.723,
+            "mlx": 2235.717,
+            "coreml": None,
+            "onnx": 1330.432,
+        },
+        script_eval={
+            "han_simplified": {
+                "dataset": "synthetic-zh-pii",
+                "recall": 0.7517,
+                "leakage_floor": None,
+            },
+            "han_traditional": {
+                "dataset": None,
+                "recall": None,
+                "leakage_floor": None,
+            },
+        },
+    )
+    row["script_coverage"] = _script_coverage_fixture(["zh"])
+
+    assert validate_manifest_row(row, line_number=1) == []
+
+
+def test_model_card_release_metadata_requires_all_formats_and_claimed_scripts():
+    row = _manifest_row_fixture(
+        languages=["bn"],
+        download_sizes={"safetensors": 100.0},
+        script_eval={},
+    )
+    row["script_coverage"] = _script_coverage_fixture(["bn"])
+
+    violations = {str(item) for item in validate_manifest_row(row, line_number=1)}
+
+    assert "line 1: script_eval missing claimed script: bengali" in violations
+    assert "line 1: download_sizes missing required format: coreml" in violations
+    assert "line 1: download_sizes missing required format: mlx" in violations
+    assert "line 1: download_sizes missing required format: onnx" in violations
 
 
 def test_manifest_schema_accepts_mlx_4bit_format():
@@ -246,6 +294,20 @@ def test_manifest_generator_infers_korean_from_repo_name():
     ) == ["ko"]
 
 
+@pytest.mark.parametrize(
+    ("language_name", "language_code"),
+    (("Bengali", "bn"), ("Chinese", "zh"), ("Tamil", "ta")),
+)
+def test_manifest_generator_infers_v2_languages_from_repo_name(
+    language_name,
+    language_code,
+):
+    assert generate_manifest._languages(
+        f"OpenMed/OpenMed-PII-{language_name}-Fixture-Large-279M-v1",
+        [],
+    ) == [language_code]
+
+
 def test_manifest_generator_preserves_script_coverage(tmp_path):
     output = tmp_path / "models.jsonl"
     previous = _manifest_row_fixture()
@@ -256,6 +318,37 @@ def test_manifest_generator_preserves_script_coverage(tmp_path):
     rows = generate_manifest.preserve_existing_enrichment([refreshed], output)
 
     assert rows[0]["script_coverage"] == previous["script_coverage"]
+
+
+def test_manifest_generator_preserves_model_card_release_metadata(tmp_path):
+    output = tmp_path / "models.jsonl"
+    previous = _manifest_row_fixture(
+        download_mb=131.794,
+        disk_mb=131.794,
+        download_sizes={
+            "safetensors": 130.0,
+            "mlx": 128.0,
+            "coreml": None,
+            "onnx": 65.0,
+        },
+        script_eval={},
+    )
+    generate_manifest.write_jsonl([previous], output)
+    refreshed = _manifest_row_fixture()
+    for field in (
+        "download_mb",
+        "disk_mb",
+        "download_sizes",
+        "script_eval",
+    ):
+        refreshed.pop(field, None)
+
+    rows = generate_manifest.preserve_existing_enrichment([refreshed], output)
+
+    assert rows[0]["download_mb"] == 131.794
+    assert rows[0]["disk_mb"] == 131.794
+    assert rows[0]["download_sizes"] == previous["download_sizes"]
+    assert rows[0]["script_eval"] == {}
 
 
 def test_manifest_generator_drops_stale_script_coverage_after_family_change(
@@ -379,7 +472,11 @@ def _manifest_row_fixture(**overrides):
 
 
 def _script_coverage_fixture(languages):
-    claimed = {"devanagari" for language in languages if language == "hi"}
+    claimed = {
+        script
+        for language in languages
+        for script in LANGUAGE_SCRIPT_TARGETS.get(language, ())
+    }
     return {
         script: {
             "unk_rate": 0.0,

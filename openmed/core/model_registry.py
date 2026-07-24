@@ -253,6 +253,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "arabic": "ar",
     "assamese": "as",
     "bengali": "bn",
+    "chinese": "zh",
     "dutch": "nl",
     "english": "en",
     "french": "fr",
