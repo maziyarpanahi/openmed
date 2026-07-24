@@ -396,13 +396,13 @@ ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
 **Cause.** PII extraction and de-identification support **31 supported PII
-language codes: am, ar, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko,
-mr, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu**. Russian and
-Chinese currently use documented multilingual default-model placeholders.
+language codes: am, ar, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja,
+ko, mr, nl, no, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu**.
+Russian currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.
-The accepted API set also includes seven optional Indic routes: `as`, `bn`,
-`gu`, `kn`, `ml`, `or`, and `pa`. Those codes require an explicit model
-or `OPENMED_INDIC_NER_MODEL`; Hindi, Marathi, Tamil, and Telugu can use the
+The accepted API set also includes six optional Indic routes: `as`, `gu`,
+`kn`, `ml`, `or`, and `pa`. Those codes require an explicit model or
+`OPENMED_INDIC_NER_MODEL`; Bengali, Hindi, Marathi, Tamil, and Telugu can use the
 adapter too.
 
 **Fix.** Use a built-in code or a configured optional Indic route with
