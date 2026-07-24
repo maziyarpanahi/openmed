@@ -14,6 +14,7 @@
     "id": "OpenMed/privacy-filter-multilingual",
     "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
+    "kn": "OpenMed/privacy-filter-multilingual",
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "no": "OpenMed/privacy-filter-multilingual",
@@ -188,6 +189,10 @@
     "it": [
       "it_IT",
       "ssn"
+    ],
+    "kn": [
+      "kn_IN",
+      "aadhaar"
     ],
     "ko": [
       "ko_KR",
@@ -387,6 +392,7 @@
     "id",
     "it",
     "ja",
+    "kn",
     "ko",
     "nl",
     "no",

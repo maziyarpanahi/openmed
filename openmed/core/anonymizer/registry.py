@@ -37,7 +37,7 @@ from .locales import ZH_CN_ADDRESS_LOCALE
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
-_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+_INDIA_LOCALES = frozenset({"en_IN", "hi_IN", "kn_IN"})
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -186,25 +186,105 @@ def _gen_middle_name(faker, original, *, locale):
     return faker.first_name()
 
 
+_KANNADA_NATIVE_INITIALS = ("ಕೆ.", "ಎಂ.", "ಎನ್.", "ಪಿ.", "ಆರ್.", "ಎಸ್.", "ವಿ.", "ಡಿ.")
+_KANNADA_LATIN_INITIALS = ("A.", "D.", "K.", "M.", "N.", "P.", "R.", "S.", "V.")
+_KANNADA_NATIVE_GIVEN_NAMES = (
+    "ಅನನ್ಯಾ",
+    "ಕಿರಣ್",
+    "ಮೀರಾ",
+    "ನವೀನ್",
+    "ಪವನ್",
+    "ಸೌಮ್ಯಾ",
+    "ದೀಪಕ್",
+    "ಲತಾ",
+)
+_KANNADA_LATIN_GIVEN_NAMES = (
+    "Ananya",
+    "Deepak",
+    "Kiran",
+    "Latha",
+    "Meera",
+    "Naveen",
+    "Pavan",
+    "Soumya",
+)
+
+
+def _is_kannada_surface(value: str) -> bool:
+    return any("\u0c80" <= character <= "\u0cff" for character in value)
+
+
+def _draw_kannada_name_part(faker, original: str, values: tuple[str, ...]) -> str:
+    source = original.casefold()
+    eligible = tuple(value for value in values if value.casefold() not in source)
+    return str(faker.random.choice(eligible or values))
+
+
+def _kannada_initial_count(original: str) -> int:
+    count = 0
+    for token in original.strip().split():
+        if count == 2 or not token.endswith("."):
+            break
+        count += 1
+    return count
+
+
+def _gen_kannada_person(faker, original, *, locale):
+    """Preserve Kannada one/two-initial name shape in native or Latin script."""
+
+    native = _is_kannada_surface(original)
+    initial_pool = _KANNADA_NATIVE_INITIALS if native else _KANNADA_LATIN_INITIALS
+    given_pool = _KANNADA_NATIVE_GIVEN_NAMES if native else _KANNADA_LATIN_GIVEN_NAMES
+    initial_count = _kannada_initial_count(original)
+    eligible_initials = tuple(
+        initial
+        for initial in initial_pool
+        if initial.casefold() not in original.casefold()
+    )
+    initials = faker.random.sample(
+        eligible_initials or initial_pool,
+        initial_count,
+    )
+    given_name = _draw_kannada_name_part(faker, original, given_pool)
+    return " ".join((*initials, given_name))
+
+
+def _gen_kannada_name_part(faker, original, *, locale):
+    values = (
+        _KANNADA_NATIVE_GIVEN_NAMES
+        if _is_kannada_surface(original)
+        else _KANNADA_LATIN_GIVEN_NAMES
+    )
+    return _draw_kannada_name_part(faker, original, values)
+
+
 def _gen_india_person(faker, original, *, locale):
+    if locale == "kn_IN":
+        return _gen_kannada_person(faker, original, locale=locale)
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_name"):
         return _draw_distinct(faker, original, "indian_name")
     return _gen_person(faker, original, locale=locale)
 
 
 def _gen_india_first_name(faker, original, *, locale):
+    if locale == "kn_IN":
+        return _gen_kannada_name_part(faker, original, locale=locale)
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
         return _draw_distinct(faker, original, "indian_first_name")
     return _gen_first_name(faker, original, locale=locale)
 
 
 def _gen_india_last_name(faker, original, *, locale):
+    if locale == "kn_IN":
+        return _gen_kannada_name_part(faker, original, locale=locale)
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_last_name"):
         return _draw_distinct(faker, original, "indian_last_name")
     return _gen_last_name(faker, original, locale=locale)
 
 
 def _gen_india_middle_name(faker, original, *, locale):
+    if locale == "kn_IN":
+        return _gen_kannada_name_part(faker, original, locale=locale)
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
         return _draw_distinct(faker, original, "indian_first_name")
     return _gen_middle_name(faker, original, locale=locale)
@@ -419,6 +499,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "es_ES",
         "nl_NL",
         "hi_IN",
+        "kn_IN",
         "en_IN",
         "pt_PT",
         "pt_BR",
@@ -491,6 +572,7 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "kn_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
@@ -730,7 +812,7 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
-    if locale in {"en_IN", "hi_IN", "te_IN"}:
+    if locale in {"en_IN", "hi_IN", "kn_IN", "te_IN"}:
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id

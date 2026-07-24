@@ -72,6 +72,7 @@ G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
+PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {"kn": 0.0}
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_SIGNING_KEY = "openmed-release-gate-local-key"
@@ -628,6 +629,7 @@ class ReleaseGate:
                 target_leakage=target_leakage,
             )
         )
+        checks.append(_per_language_residual_leakage_check(metrics, metadata))
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
@@ -2290,6 +2292,60 @@ def _g7_check(
                 baseline_entry.get("key") if baseline_entry is not None else None
             ),
             "target_leakage": target_leakage,
+            "violations": violations,
+        },
+    )
+
+
+def _per_language_residual_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Enforce language-pack-specific leakage ceilings when evidence is present."""
+
+    observed: dict[str, float] = {}
+    denominators: dict[str, int] = {}
+    denominator_languages: set[str] = set()
+    for payload in _leakage_payloads(metrics, metadata):
+        for language, raw_rate in _mapping(payload.get("by_language")).items():
+            rate = _optional_float(raw_rate)
+            if rate is not None:
+                key = str(language)
+                observed[key] = max(observed.get(key, 0.0), rate)
+        totals = _mapping(payload.get("total_chars_by_language"))
+        denominator_languages.update(str(language) for language in totals)
+        for language, raw_total in totals.items():
+            total = _optional_int(raw_total)
+            if total is not None:
+                key = str(language)
+                denominators[key] = max(denominators.get(key, 0), total)
+
+    evaluated = {
+        language: observed[language]
+        for language in PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS
+        if language in observed
+        and (language not in denominator_languages or denominators.get(language, 0) > 0)
+    }
+    violations = {
+        language: {
+            "observed": rate,
+            "limit": PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS[language],
+            "total_chars": denominators.get(language),
+        }
+        for language, rate in sorted(evaluated.items())
+        if rate > PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS[language]
+    }
+    return GateCheck(
+        "per_language_residual_leakage",
+        not violations,
+        reason=(
+            "not applicable"
+            if not evaluated
+            else ("ok" if not violations else "per-language leakage ceiling exceeded")
+        ),
+        details={
+            "ceilings": dict(PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS),
+            "evaluated": evaluated,
             "violations": violations,
         },
     )

@@ -3,8 +3,8 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
-the built-in Hindi and Telugu codes. Every code documented here wires up:
+The optional Indic family adds eight user-configured routes and can also serve
+the built-in Hindi, Kannada, and Telugu codes. Every code documented here wires up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -84,7 +84,7 @@ routing is first requested, and do not download or bundle model weights.
 | `id`   | Indonesian | `OpenMed/privacy-filter-multilingual`                      | `id_ID`      | Served by the multilingual privacy filter; NIK-aware.        |
 | `it`   | Italian    | `OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1`   | `it_IT`      | Codice Fiscale surrogates via `it_IT.ssn`.                   |
 | `ja`   | Japanese   | `OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1`        | `ja_JP`      | Family-name-first `PERSON` spans.                            |
-| `kn`   | Kannada    | `env:OPENMED_INDIC_NER_MODEL`                               | `kn_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `kn`   | Kannada    | `OpenMed/privacy-filter-multilingual`                       | `kn_IN`      | Kannada patterns; `en_IN` Faker approximation warns once.    |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
 | `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `mr`   | Marathi    | `env:OPENMED_INDIC_NER_MODEL`                               | `mr_IN`      | Optional Indic NER weights; Hindi Faker backend.             |
@@ -118,7 +118,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The eight optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -306,7 +306,7 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] ગયા.
 
 ### Kannada — `kn`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `kn_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `kn_IN`
 
 ```text
 Before: ಅರುಣ್ ಬೆಂಗಳೂರಿನಲ್ಲಿ ಕಾವೇರಿ ಆಸ್ಪತ್ರೆಗೆ ಹೋದರು.

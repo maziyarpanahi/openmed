@@ -174,14 +174,14 @@ hardware):
 ## Extract PII — `POST /pii/extract`
 
 Detect personally identifiable information. Unless `model_name` is set, OpenMed
-selects the recommended PII model for `lang`. The 29 supported PII language
+selects the recommended PII model for `lang`. The 30 supported PII language
 codes: `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`,
-`id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`,
-`tr`, `uk`, `xh`, `zh`, and `zu`. Russian and Chinese currently use
-documented multilingual default-model placeholders. The API also accepts nine optional
-Indic routes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) when
-`OPENMED_INDIC_NER_MODEL` or an explicit model is configured; Hindi and Telugu
-can use that adapter too. `confidence_threshold` defaults to `0.5`.
+`id`, `it`, `ja`, `kn`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`,
+`th`, `tr`, `uk`, `xh`, `zh`, and `zu`. Russian and Chinese currently use
+documented multilingual default-model placeholders. The API also accepts eight
+optional Indic routes (`as`, `bn`, `gu`, `ml`, `mr`, `or`, `pa`, and `ta`) when
+`OPENMED_INDIC_NER_MODEL` or an explicit model is configured; Hindi, Kannada,
+and Telugu can use that adapter too. `confidence_threshold` defaults to `0.5`.
 
 ```bash
 curl -sS --max-time 310 -X POST "$OPENMED_URL/pii/extract" \
