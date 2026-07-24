@@ -4,6 +4,11 @@ When token classifiers emit slightly-too-greedy spans (e.g. "alice@hospital.org 
 absorbs the trailing "and"), these helpers tighten the boundaries before the
 span reaches downstream redaction logic. Pure-Python; no array-framework
 dependencies.
+
+Cross-runtime offsets are half-open Unicode scalar (code point) coordinates.
+They never use UTF-8 byte or UTF-16 code-unit positions, and every non-empty
+entity span is snapped outward so neither boundary bisects an extended
+grapheme cluster. See ``OFFSET_CONTRACT.md`` beside this module.
 """
 
 from __future__ import annotations
@@ -956,8 +961,11 @@ def coerce_token_classification_spans(
         raw_end = getter("end")
         if raw_start is None or raw_end is None:
             continue
-        start = int(raw_start)
-        end = int(raw_end)
+        start, end = snap_span_to_grapheme_boundaries(
+            int(raw_start),
+            int(raw_end),
+            text,
+        )
         if end <= start:
             continue
         score = float(
@@ -982,7 +990,6 @@ def coerce_token_classification_spans(
             .removeprefix("E-")
             .removeprefix("S-")
         )
-        local_text = str(getter("word", getter("text", text[start:end])) or "")
         absolute_start = base_offset + start
         absolute_end = base_offset + end
         byte_start = base_byte_offset + _byte_offset(text, start)
@@ -996,7 +1003,7 @@ def coerce_token_classification_spans(
                 byte_start=byte_start,
                 byte_end=byte_end,
                 score=score,
-                text=local_text or text[start:end],
+                text=text[start:end],
             )
         )
 
