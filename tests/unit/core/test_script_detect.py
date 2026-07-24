@@ -170,7 +170,6 @@ def test_routing_only_languages_do_not_claim_bundled_models():
         "bn",
         "gu",
         "kn",
-        "ml",
         "mr",
         "ne",
         "or",

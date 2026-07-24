@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "d6a9cdab4bc11292fa2b976b5a35b95db4107ed90f49ece57904c5511fc76b52",
+          "source_sha256": "0b23102c4cf2dcf96bbd374e1d3d6af48bcf5b4156cbca620e66d3dd8a5fbbe4",
           "translation_heading": "__preamble__",
-          "translation_sha256": "0b0c8bc11f5c40396f5cd2af321dc430928610a6f2f9943424c00c33fbec56d3"
+          "translation_sha256": "5d4029e4afd2a2f09c6116f92bef37bfe68d72908b5cb78dd9798cb12476e9dc"
         },
         {
           "source_heading": "See it in action",
@@ -24,9 +24,9 @@
         },
         {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "326f84dbfd75baae1747f9c66beaf41e2f300f10763f777f58d49b3b0a45a4cb",
+          "source_sha256": "02be60d4cc63fef975211a2818d53d4751c9bddf8fea19f1bc377597e4a8f513",
           "translation_heading": "OpenMed क्यों?",
-          "translation_sha256": "a7780e60df080c88727e90695b634ac30a7abaa396d2ddbc65c106389c617531"
+          "translation_sha256": "0c059c45a94a60b2850854c902db2675f060171168c4ecf9e59d415fbdbe9074"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
@@ -65,10 +65,10 @@
           "translation_sha256": "00e205789902417f3c79eed3b01585d55f674be3ad0be2cacbd5b5a2b65de995"
         },
         {
-          "source_heading": "Multilingual PII (29 supported languages)",
-          "source_sha256": "da4a3971e25c7fada0db14cc4f23ae2408d34d0014aafe89697e38f7b995c977",
-          "translation_heading": "बहुभाषी PII (29 समर्थित भाषाएँ)",
-          "translation_sha256": "0f8e45d878038859374dfdb74d1e25ee42c0ae4523d95f65093e68bc06925818"
+          "source_heading": "Multilingual PII (30 supported languages)",
+          "source_sha256": "c32984e967ba087ebeb16ff5b097ef403ca637613bfe09cff3006fd37b33b381",
+          "translation_heading": "बहुभाषी PII (30 समर्थित भाषाएँ)",
+          "translation_sha256": "8b8fda36048c25e2853ee39dede27332d4840b8036233977986dd21ac9c07f42"
         },
         {
           "source_heading": "REST API",
@@ -130,9 +130,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "d6a9cdab4bc11292fa2b976b5a35b95db4107ed90f49ece57904c5511fc76b52",
+          "source_sha256": "0b23102c4cf2dcf96bbd374e1d3d6af48bcf5b4156cbca620e66d3dd8a5fbbe4",
           "translation_heading": "__preamble__",
-          "translation_sha256": "1d2741b2d9fff89aa9b4d5ccbe2e1e3d2a1523e9caeed89dd93a965811c01c29"
+          "translation_sha256": "06abdf7f9a221aaa40cd434197814e0a009dd31f7f483d7811c32b908ff5b88b"
         },
         {
           "source_heading": "See it in action",
@@ -148,9 +148,9 @@
         },
         {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "326f84dbfd75baae1747f9c66beaf41e2f300f10763f777f58d49b3b0a45a4cb",
+          "source_sha256": "02be60d4cc63fef975211a2818d53d4751c9bddf8fea19f1bc377597e4a8f513",
           "translation_heading": "Kwa nini OpenMed?",
-          "translation_sha256": "f28b5b6aa48d3ad92a83a2af7cca0930983b6c428f3a966ae37410ce9cafef0f"
+          "translation_sha256": "fc7b7eae995ca10566b863f51d100b39bc2442baca9e6ae9b85e2899adc074e3"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
@@ -189,10 +189,10 @@
           "translation_sha256": "4b094ecf156d3d6876220596014d02cb45a6633ffd3af9ed90a641c966c0cdcc"
         },
         {
-          "source_heading": "Multilingual PII (29 supported languages)",
-          "source_sha256": "da4a3971e25c7fada0db14cc4f23ae2408d34d0014aafe89697e38f7b995c977",
-          "translation_heading": "PII ya lugha nyingi (lugha 29 zinazoungwa mkono)",
-          "translation_sha256": "312a6e8cd6596ed73792167f3eb04d4bb14a3179bd07da97e2f4300b9239ea42"
+          "source_heading": "Multilingual PII (30 supported languages)",
+          "source_sha256": "c32984e967ba087ebeb16ff5b097ef403ca637613bfe09cff3006fd37b33b381",
+          "translation_heading": "PII ya lugha nyingi (lugha 30 zinazoungwa mkono)",
+          "translation_sha256": "371abec56c366da1984333dbc4567f62c44ef11da4c1297439d5bdefa67b02b1"
         },
         {
           "source_heading": "REST API",
@@ -254,9 +254,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "d6a9cdab4bc11292fa2b976b5a35b95db4107ed90f49ece57904c5511fc76b52",
+          "source_sha256": "0b23102c4cf2dcf96bbd374e1d3d6af48bcf5b4156cbca620e66d3dd8a5fbbe4",
           "translation_heading": "__preamble__",
-          "translation_sha256": "b563255f61c1327931c60c56891f748c23265192adc6954cc63f3cf494abdb24"
+          "translation_sha256": "37a40d97211bb7a7bbd53fd64c02cf34ec38cf360ec6abf4789c14a997c15451"
         },
         {
           "source_heading": "See it in action",
@@ -272,9 +272,9 @@
         },
         {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "326f84dbfd75baae1747f9c66beaf41e2f300f10763f777f58d49b3b0a45a4cb",
+          "source_sha256": "02be60d4cc63fef975211a2818d53d4751c9bddf8fea19f1bc377597e4a8f513",
           "translation_heading": "为什么选择 OpenMed？",
-          "translation_sha256": "358c59ee92f0c08b4438f5bc95e2bbd80b6d8375e06b2bbb34fce77713fb31bf"
+          "translation_sha256": "da787dc1c262d5a03b2d53891816d84321067560c8d4fd2973240eef470cce19"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
@@ -313,10 +313,10 @@
           "translation_sha256": "14930157351c1bbc966431ecf21fd47e0b2d9ddef645e5dfcfb0ec13a95a5302"
         },
         {
-          "source_heading": "Multilingual PII (29 supported languages)",
-          "source_sha256": "da4a3971e25c7fada0db14cc4f23ae2408d34d0014aafe89697e38f7b995c977",
-          "translation_heading": "多语言 PII（支持 29 种语言）",
-          "translation_sha256": "49974fefa51d11495947e7f9d4b228a06c77e9db2c34bc29214f263c1cceba6e"
+          "source_heading": "Multilingual PII (30 supported languages)",
+          "source_sha256": "c32984e967ba087ebeb16ff5b097ef403ca637613bfe09cff3006fd37b33b381",
+          "translation_heading": "多语言 PII（支持 30 种语言）",
+          "translation_sha256": "5a9e12c117ad58c5360578e8ec15ce0696e6cdcfca0082bf078a5cbad5455e28"
         },
         {
           "source_heading": "REST API",

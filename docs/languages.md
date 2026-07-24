@@ -3,8 +3,9 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
-the built-in Hindi and Telugu codes. Every code documented here wires up:
+The optional Indic family adds eight user-configured routes and can also serve
+the built-in Hindi, Malayalam, and Telugu codes. Every code documented here
+wires up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -86,7 +87,7 @@ routing is first requested, and do not download or bundle model weights.
 | `ja`   | Japanese   | `OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1`        | `ja_JP`      | Family-name-first `PERSON` spans.                            |
 | `kn`   | Kannada    | `env:OPENMED_INDIC_NER_MODEL`                               | `kn_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
-| `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `ml`   | Malayalam  | `OpenMed/privacy-filter-multilingual`                        | `ml_IN`      | Malayalam patterns; `en_IN` Faker approximation warns once.  |
 | `mr`   | Marathi    | `env:OPENMED_INDIC_NER_MODEL`                               | `mr_IN`      | Optional Indic NER weights; Hindi Faker backend.             |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
@@ -118,7 +119,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The eight optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -146,13 +147,13 @@ receives the input and offset-only token spans and must return one of `hi`,
 `token_language_tags=` still take precedence. Audit metadata retains offsets,
 labels, and hashes rather than token surfaces.
 
-For `lang="hi"` or `lang="te"`, a note containing both Latin and Devanagari
-(or Latin and Telugu) automatically activates the India clinical route. OpenMed
-segments the note into offset-preserving script runs, adds bounded context to
-each run so PERSON and LOCATION spans can cross a script boundary, sends Latin
-windows to the registered English clinical model, and sends Indic windows to
-the language's registered Hindi or Telugu model. Caller-supplied model IDs or
-local model paths are used for every window instead; OpenMed does not select an
+For `lang="hi"`, `lang="ml"`, or `lang="te"`, a note containing both Latin and
+the language's Indic script automatically activates the India clinical route.
+OpenMed segments the note into offset-preserving script runs, adds bounded
+context to each run so PERSON and LOCATION spans can cross a script boundary,
+sends Latin windows to the registered English clinical model, and sends Indic
+windows to the language's registered model. Caller-supplied model IDs or local
+model paths are used for every window instead; OpenMed does not select an
 unregistered third-party model automatically.
 
 The documented first-party fallback is

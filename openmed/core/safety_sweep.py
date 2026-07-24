@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from ..processing.outputs import EntityPrediction
 from .anonymizer.providers.clinical_ids import id_subtype_for_entity_type
-from .pii_entity_merger import PII_PATTERNS, PIIPattern, find_context_words
+from .pii_entity_merger import (
+    PII_PATTERNS,
+    PIIPattern,
+    find_context_words,
+    iter_pattern_spans,
+)
 from .quality_gates import resolve_overlapping_entities
 
 SAFETY_SWEEP_SOURCE = "safety_sweep"
@@ -116,11 +120,7 @@ def _candidate_metadata(candidate: _Candidate) -> dict[str, Any]:
 def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Candidate]:
     candidates: list[_Candidate] = []
     for pattern in patterns:
-        for match in re.finditer(pattern.pattern, text, pattern.flags):
-            start, end = match.span()
-            if start >= end:
-                continue
-
+        for start, end in iter_pattern_spans(text, pattern):
             matched_text = text[start:end]
             if not _validated(pattern, matched_text):
                 continue
