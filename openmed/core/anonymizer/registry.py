@@ -37,7 +37,7 @@ from .locales import ZH_CN_ADDRESS_LOCALE
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
-_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+_INDIA_LOCALES = frozenset({"en_IN", "hi_IN", "pa_IN"})
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -419,6 +419,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "es_ES",
         "nl_NL",
         "hi_IN",
+        "pa_IN",
         "en_IN",
         "pt_PT",
         "pt_BR",
@@ -491,6 +492,7 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "pa_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
@@ -730,7 +732,7 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
-    if locale in {"en_IN", "hi_IN", "te_IN"}:
+    if locale in {"en_IN", "hi_IN", "pa_IN", "te_IN"}:
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id

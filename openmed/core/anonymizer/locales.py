@@ -11,6 +11,9 @@ Notes:
 - Amharic (``am``) has no Faker locale; the conceptual ``am_ET`` locale uses
   ``en_KE`` as its runtime backend while curated Ethiopic surrogate data stays
   available through the language pack.
+- Punjabi (``pa``) has no Faker locale in Faker 40.x; the conceptual ``pa_IN``
+  locale uses ``en_IN`` for generic fields while the language pack supplies
+  gender-aware Gurmukhi name surrogates.
 - Portuguese defaults to ``pt_PT``; pass ``locale="pt_BR"`` explicitly to
   generate Brazilian-Portuguese surrogates (matters for CPF/CNPJ context).
 - African French and Portuguese conceptual locales (``fr_SN``, ``fr_CI``,
