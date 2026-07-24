@@ -47,6 +47,13 @@ from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 ZH_CN_ADDRESS_LOCALE: Final = "zh_CN"
 """Faker locale used by Chinese hierarchical address surrogates."""
 
+ZH_NAME_LOCALES: Final = frozenset({"zh", "zh_CN", "zh_HK", "zh_TW"})
+"""Chinese locale identifiers routed to deterministic Han name providers."""
+
+_ZH_NAME_LOCALES_FOLDED: Final = frozenset(
+    locale.casefold() for locale in ZH_NAME_LOCALES
+)
+
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
 _APPROXIMATE_LOCALES: Final = frozenset(
@@ -236,6 +243,13 @@ def resolve_faker_backend_locale(locale: str) -> str:
     return FAKER_BACKEND_LOCALE.get(locale, locale)
 
 
+def is_chinese_name_locale(locale: str) -> bool:
+    """Return whether ``locale`` should use the Han name-surrogate provider."""
+
+    normalized = str(locale).replace("-", "_").casefold()
+    return normalized in _ZH_NAME_LOCALES_FOLDED
+
+
 def locale_coherence_report() -> list[dict[str, object]]:
     """Return locale-coherence rows for defaults and conceptual overrides.
 
@@ -306,6 +320,8 @@ __all__ = [
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
     "ZH_CN_ADDRESS_LOCALE",
+    "ZH_NAME_LOCALES",
+    "is_chinese_name_locale",
     "list_regional_locales",
     "locale_coherence_report",
     "resolve_faker_backend_locale",

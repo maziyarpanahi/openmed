@@ -32,7 +32,7 @@ from .format_preserve import (
     preserve_id_pattern,
     preserve_phone_format,
 )
-from .locales import ZH_CN_ADDRESS_LOCALE
+from .locales import ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
@@ -84,7 +84,7 @@ _ZH_GIVEN_NAME_FALLBACK = tuple("清宁安和嘉悦晨星岚澄涵瑞瑶璟")
 
 
 def _is_zh_cn(locale: str) -> bool:
-    return locale.replace("-", "_").casefold() == "zh_cn"
+    return is_chinese_name_locale(locale)
 
 
 def _han_characters(value: str) -> str:
@@ -128,6 +128,9 @@ def _draw_zh_given_name(faker, *, length: int, forbidden: set[str]) -> str:
 
 
 def _gen_zh_person(faker, original: str) -> str:
+    if hasattr(faker, "chinese_name"):
+        return str(faker.chinese_name(original))
+
     source = _han_characters(original)
     source_characters = set(source)
     _single_surnames, compound_surnames = _zh_surname_pools()
@@ -161,6 +164,13 @@ def _gen_person(faker, original, *, locale):
 def _gen_first_name(faker, original, *, locale):
     if _is_zh_cn(locale):
         source = _han_characters(original)
+        if hasattr(faker, "chinese_given_name"):
+            return str(
+                faker.chinese_given_name(
+                    original,
+                    length=max(1, min(len(source) or 1, 2)),
+                )
+            )
         return _draw_zh_given_name(
             faker,
             length=max(1, min(len(source) or 1, 2)),
@@ -174,6 +184,13 @@ def _gen_first_name(faker, original, *, locale):
 def _gen_last_name(faker, original, *, locale):
     if _is_zh_cn(locale):
         source = _han_characters(original)
+        if hasattr(faker, "chinese_surname"):
+            return str(
+                faker.chinese_surname(
+                    original,
+                    compound=len(source) >= 2,
+                )
+            )
         return _draw_zh_surname(
             faker,
             compound=len(source) >= 2,

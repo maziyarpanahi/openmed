@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added word-aware Chinese Pinyin romanization with tone-mark, numeric-tone,
+  and heteronym output, plus deterministic Han name surrogates and
+  tone-insensitive Pinyin vault keys for consistent Chinese name matching.
 - Added a fail-closed, signed release-readiness gate that verifies signed model
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite
