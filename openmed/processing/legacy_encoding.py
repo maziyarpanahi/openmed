@@ -565,7 +565,8 @@ def convert_legacy_encoding(
     if raw is None:
         if encoding in {"iscii", "legacy-font"}:
             raise ValueError("legacy conversion requires bytes or Latin-1 text")
-        assert isinstance(data, str)
+        if not isinstance(data, str):
+            raise TypeError(f"expected str, got {type(data).__name__}")
         return _unicode_identity(data)
 
     detected: LegacyEncoding

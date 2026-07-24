@@ -34,7 +34,8 @@ def to_canonical(linked: Any) -> list[dict[str, Any]]:
         candidates = _candidate_records(span)
         if candidates is _MISSING:
             raise ScispaCyLinkerResourceError(_resource_message())
-        assert isinstance(candidates, list)
+        if not isinstance(candidates, list):
+            raise TypeError(f"candidates must be a list, got {type(candidates).__name__}")
 
         output: dict[str, Any] = {}
         text = _value(span, ("text", "ngram"))
