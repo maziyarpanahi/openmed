@@ -28,7 +28,7 @@ OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除
 </p>
 
 <p>
-  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>24 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>27 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -101,7 +101,7 @@ for entity in result.entities:
 | 患者数据离开你的网络                   |        **从不**          |    发送给供应商     |
 | 成本                                   |       免费且开源         |    按调用计费       |
 | 专业医疗模型                           |          2,000+          |        有限         |
-| 由模型支持的 PII 语言                  |            24            |        不一         |
+| 由模型支持的 PII 语言                  |            27            |        不一         |
 | 离线 / 隔离网络（air-gapped）          |            ✅            |         ❌         |
 | Apple Silicon (MLX) 加速               |            ✅            |       不适用        |
 | 原生 iOS / macOS 应用                  |   ✅ 通过 OpenMedKit     |         ❌         |
@@ -493,10 +493,10 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（支持 26 种语言）
+## 多语言 PII（支持 29 种语言）
 
-实体抽取和去标识化支持 **26 个 PII 语言代码**：
-`am`、`ar`、`da`、`de`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`ru`、`sv`、`sw`、`te`、`th`、`tr`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
+实体抽取和去标识化支持 **29 个 PII 语言代码**：
+`am`、`ar`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`ru`、`sv`、`sw`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
 俄语和中文路由目前使用文档中说明的多语言默认模型占位符，专用模型权重仍单独提供。
 一个由用户选择并配置的印度语言 NER 系列还支持九条额外路由
 （`as`、`bn`、`gu`、`kn`、`ml`、`mr`、`or`、`pa` 和 `ta`），

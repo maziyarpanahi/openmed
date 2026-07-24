@@ -192,6 +192,7 @@ def test_routing_only_languages_do_not_claim_bundled_models():
         "nl",
         "pt",
         "tr",
+        "cs",
         "sw",
         "ig",
         "yo",
@@ -253,6 +254,12 @@ def test_han_dominance_detection_supports_language_routing():
     assert is_han_dominant("患者A")
     assert not is_han_dominant("患者AB")
     assert not is_han_dominant("Patient John Smith")
+
+
+def test_cee_script_language_hints_route_to_native_packs():
+    assert "cs" in candidate_languages_for_script("Latin")
+    assert candidate_languages_for_script("Cyrillic") == ("ru", "uk")
+    assert candidate_languages_for_script("Greek") == ("el",)
 
 
 def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():

@@ -409,7 +409,7 @@ def _render_android_onnx_model_card(
             "clinical AI stack:",
             "",
             "- **2,000+ medical models** for clinical NER, biomedical extraction, and privacy.",
-            "- **PII detection and de-identification** across 55+ identifier types and 17 languages.",
+            "- **PII detection and de-identification** across 55+ identifier types and 20 languages.",
             "- **Python, MLX, Swift, Android, React Native, Web, REST, and gRPC** runtimes.",
             "- **Structured and multimodal intake** for OCR, documents, DICOM, FHIR, and HL7.",
             "- **Offline and air-gapped deployment** with no telemetry by default.",
