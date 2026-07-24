@@ -110,6 +110,20 @@ def test_han_uses_kana_context_for_japanese_and_priority_for_chinese():
     assert any(run.source == "stdlib:context-script" for run in japanese.runs)
 
 
+def test_urdu_specific_letters_override_arabic_pack_priority():
+    router = LanguageRouter(use_optional_lid=False)
+
+    urdu = router.route("مریض کا فون نمبر درج ہے۔")
+    arabic = router.route("المريض مستقر اليوم.")
+
+    assert urdu.language == "ur"
+    assert {run.language for run in urdu.runs} == {"ur"}
+    assert urdu.runs[0].source == "stdlib:urdu-specific-letter"
+    assert arabic.language == "ar"
+    assert {run.language for run in arabic.runs} == {"ar"}
+    assert arabic.runs[0].source == "stdlib:pack-priority"
+
+
 def test_devanagari_uses_pack_declared_candidate_priority():
     lower = _pack(
         "hi",

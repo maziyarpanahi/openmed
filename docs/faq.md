@@ -90,10 +90,10 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **29 supported PII language codes**:
+PII extraction and de-identification support **30 supported PII language codes**:
 `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
 `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh`, and `zu`.
+`ur`, `xh`, `zh`, and `zu`.
 Russian and Chinese routing currently use documented multilingual
 default-model placeholders; dedicated model weights are not bundled.
 Nine additional Indic codes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`,

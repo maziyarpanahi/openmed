@@ -427,12 +427,12 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 29 zinazoungwa mkono)
+## PII ya lugha nyingi (lugha 30 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 29 ya lugha za PII**:
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 30 ya lugha za PII**:
 `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
 `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh` na `zu`, pamoja na checkpoint
+`ur`, `xh`, `zh` na `zu`, pamoja na checkpoint
 600+ za PII. Uelekezaji wa Kirusi na Kichina kwa sasa hutumia vishikilia nafasi
 vya modeli chaguo-msingi ya lugha nyingi vilivyoelezwa kwenye nyaraka, huku
 uzito maalumu wa modeli ukiwa tofauti. Familia ya hiari ya Indic NER

@@ -647,7 +647,7 @@ def _prepare_pii_text(
             config.chinese_target_script if config is not None else None
         ),
     )
-    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() == "ar":
+    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() in {"ar", "ur"}:
         from .pii_i18n import normalize_arabic_indic_digits
 
         normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)

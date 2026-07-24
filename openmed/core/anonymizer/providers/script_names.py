@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from typing import Final
 
 from ...language_pack import LanguagePack, get_language_pack
+from ..locales import generate_urdu_name
 
 
 def _require_language_pack(code: str) -> LanguagePack:
@@ -27,6 +28,7 @@ def _require_language_pack(code: str) -> LanguagePack:
 HAN_LANGUAGE_PACK: Final = _require_language_pack("zh")
 DEVANAGARI_LANGUAGE_PACK: Final = _require_language_pack("hi")
 TELUGU_LANGUAGE_PACK: Final = _require_language_pack("te")
+URDU_LANGUAGE_PACK: Final = _require_language_pack("ur")
 
 
 def _unicode_letters(start: int, end: int, name_prefix: str) -> tuple[str, ...]:
@@ -131,6 +133,7 @@ SCRIPT_NAME_PACKS: Final = (
     (HAN_LANGUAGE_PACK, "Han", generate_han_name),
     (DEVANAGARI_LANGUAGE_PACK, "Devanagari", generate_devanagari_name),
     (TELUGU_LANGUAGE_PACK, "Telugu", generate_telugu_name),
+    (URDU_LANGUAGE_PACK, "Arabic", generate_urdu_name),
 )
 
 
@@ -139,7 +142,9 @@ __all__ = [
     "HAN_LANGUAGE_PACK",
     "SCRIPT_NAME_PACKS",
     "TELUGU_LANGUAGE_PACK",
+    "URDU_LANGUAGE_PACK",
     "generate_devanagari_name",
     "generate_han_name",
     "generate_telugu_name",
+    "generate_urdu_name",
 ]
