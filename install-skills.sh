@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Install OpenMed Agent Skills into Claude Code and/or OpenAI Codex.
+# Install OpenMed Agent Skills into your coding agent(s).
 #
-# Skills are symlinked (not copied) so a later `git pull` updates every
-# installed skill in place. Each skill is a self-contained folder following the
-# open Agent Skills standard (https://agentskills.io), so the same folder works
-# in both agents unchanged.
+# The same SKILL.md folders follow the open Agent Skills standard
+# (https://agentskills.io), so one install works across agents. Skills are
+# symlinked (not copied), so a later `git pull` updates every installed skill.
 #
 # Usage:
-#   ./install-skills.sh            # install into both agents (default)
-#   ./install-skills.sh claude     # Claude Code only  (~/.claude/skills)
-#   ./install-skills.sh codex      # Codex only        (~/.codex/skills)
-#   ./install-skills.sh all        # both
+#   ./install-skills.sh              # install into every supported agent (default)
+#   ./install-skills.sh claude       # Claude Code    ~/.claude/skills
+#   ./install-skills.sh codex        # OpenAI Codex   ~/.codex/skills
+#   ./install-skills.sh opencode     # OpenCode       ~/.config/opencode/skills
+#   ./install-skills.sh agents       # any other agent on the standard  ~/.agents/skills
+#   ./install-skills.sh all          # all of the above
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/skills" && pwd)"
@@ -29,17 +30,30 @@ link_into() {
   echo "  $n skills -> $dest"
 }
 
+install_target() {
+  case "$1" in
+    claude)   echo "Claude Code:";  link_into "$HOME/.claude/skills" ;;
+    codex)    echo "OpenAI Codex:"; link_into "$HOME/.codex/skills" ;;
+    opencode) echo "OpenCode:";     link_into "$HOME/.config/opencode/skills" ;;
+    agents)   echo "Generic (~/.agents/skills — any agent on the standard):"; link_into "$HOME/.agents/skills" ;;
+  esac
+}
+
 case "$TARGET" in
-  claude) echo "Installing OpenMed skills into Claude Code:"; link_into "$HOME/.claude/skills" ;;
-  codex)  echo "Installing OpenMed skills into Codex:";       link_into "$HOME/.codex/skills" ;;
-  all)
-    echo "Installing OpenMed skills into Claude Code and Codex:"
-    link_into "$HOME/.claude/skills"
-    link_into "$HOME/.codex/skills"
+  claude|codex|opencode|agents)
+    echo "Installing OpenMed skills:"
+    install_target "$TARGET"
     ;;
-  *) echo "usage: $0 [claude|codex|all]" >&2; exit 1 ;;
+  all)
+    echo "Installing OpenMed skills into every supported agent:"
+    for t in claude codex opencode agents; do install_target "$t"; done
+    ;;
+  *)
+    echo "usage: $0 [claude|codex|opencode|agents|all]" >&2
+    exit 1
+    ;;
 esac
 
-echo "Done. Claude Code detects new skills live; restart Codex to pick them up."
+echo "Done. Claude Code detects new skills live; restart Codex/OpenCode to pick them up."
 echo "On Windows, symlinks need Developer Mode or admin — otherwise copy:"
-echo "    cp -r skills/*/ ~/.claude/skills/"
+echo "    cp -r skills/*/ ~/.claude/skills/    # (swap the path for your agent)"
