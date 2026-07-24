@@ -350,6 +350,7 @@ _DAY_FIRST_LANGS = frozenset(
         "es",
         "nl",
         "hi",
+        "mr",
         "te",
         "pt",
         "ar",

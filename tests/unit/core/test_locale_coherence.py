@@ -17,6 +17,7 @@ The contract these tests gate lives in
 """
 
 import json
+import re
 import warnings
 
 import pytest
@@ -37,11 +38,13 @@ from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     LANGUAGE_PII_PATTERNS,
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    validate_marathi_aadhaar,
 )
 
 # Documented set of languages whose *default* Faker locale is an intentional
@@ -142,6 +145,56 @@ class TestLocaleResolution:
         assert locale in AVAILABLE_LOCALES
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
+
+    def test_marathi_pack_uses_approximate_locale_and_three_part_names(self):
+        assert "mr" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["mr"] == "OpenMed/privacy-filter-multilingual"
+        assert LANG_TO_LOCALE["mr"] == "mr_IN"
+        assert FAKER_BACKEND_LOCALE["mr_IN"] == "hi_IN"
+        assert NATIONAL_ID_PROVIDERS["mr"] == ("mr_IN", "aadhaar")
+        assert "mr" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("mr") == "mr_IN"
+            assert resolve_locale("mr") == "mr_IN"
+            anonymizer = Anonymizer(lang="mr", consistent=True, seed=687)
+            female = anonymizer.surrogate(
+                "सौ. वैशाली सुरेश देशमुख",
+                "PERSON",
+            )
+            male = anonymizer.surrogate(
+                "श्री. अनिकेत माधव पाटील",
+                "PERSON",
+            )
+            aadhaar = anonymizer.surrogate(
+                "२४६७ ७८३२ ५४८४",
+                "national_id",
+            )
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "mr_IN" in str(user_warnings[0].message)
+        assert "hi_IN" in str(user_warnings[0].message)
+        assert validate_marathi_aadhaar(aadhaar)
+
+        female_match = re.fullmatch(
+            r"सौ\.\s+(\S+)\s+(\S+)\s+(\S+)",
+            female,
+        )
+        male_match = re.fullmatch(
+            r"श्री\.\s+(\S+)\s+(\S+)\s+(\S+)",
+            male,
+        )
+        assert female_match
+        assert male_match
+        assert female_match.group(1) in LOCALE_FAKE_DATA["mr_IN"]["FIRST_NAME_FEMALE"]
+        assert male_match.group(1) in LOCALE_FAKE_DATA["mr_IN"]["FIRST_NAME_MALE"]
+        assert female_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
+        assert male_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):

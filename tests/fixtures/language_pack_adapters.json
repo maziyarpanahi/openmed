@@ -15,6 +15,7 @@
     "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "mr": "OpenMed/privacy-filter-multilingual",
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "no": "OpenMed/privacy-filter-multilingual",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
@@ -196,6 +197,10 @@
     "lv": [
       "lv_LV",
       "personas_kods"
+    ],
+    "mr": [
+      "mr_IN",
+      "aadhaar"
     ],
     "ms": [
       "ms_MY",
@@ -388,6 +393,7 @@
     "it",
     "ja",
     "ko",
+    "mr",
     "nl",
     "no",
     "pt",

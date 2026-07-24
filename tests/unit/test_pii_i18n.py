@@ -139,6 +139,7 @@ class TestConstants:
             "es",
             "nl",
             "hi",
+            "mr",
             "te",
             "pt",
             "ar",
