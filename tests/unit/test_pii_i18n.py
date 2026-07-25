@@ -5996,9 +5996,9 @@ class TestSouthAfricanIdentifiers:
             )
             assert surrogate_national[:3] == source_national[:3]
 
-    def test_locale_aliases_match_fixture_phones_and_not_id_runs(self):
-        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["af"]
-        assert LOCALE_PII_PATTERNS["af"] is LOCALE_PII_PATTERNS["zu"]
+    def test_sa_locale_patterns_match_fixture_phones_and_not_id_runs(self):
+        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["zu"]
+        assert LOCALE_PII_PATTERNS["af"] is not LOCALE_PII_PATTERNS["zu"]
 
         rows = [
             json.loads(line)
@@ -6007,28 +6007,28 @@ class TestSouthAfricanIdentifiers:
             .splitlines()
             if line.strip()
         ]
-        phone_patterns = [
-            pattern
-            for pattern in LOCALE_PII_PATTERNS["en_za"]
-            if pattern.entity_type == "phone_number"
-        ]
-
         assert [row["entities"][1]["text"] for row in rows] == [
             "+27 82 123 4567",
             "0827654321",
             "27829999999",
         ]
-        for row in rows:
-            id_value, phone = (entity["text"] for entity in row["entities"])
-            assert validate_south_african_id(id_value)
-            assert any(
-                re.fullmatch(pattern.pattern, phone, pattern.flags)
-                for pattern in phone_patterns
-            )
-            assert not any(
-                re.search(pattern.pattern, id_value, pattern.flags)
-                for pattern in phone_patterns
-            )
+        for locale in ("en_za", "af"):
+            phone_patterns = [
+                pattern
+                for pattern in LOCALE_PII_PATTERNS[locale]
+                if pattern.entity_type == "phone_number"
+            ]
+            for row in rows:
+                id_value, phone = (entity["text"] for entity in row["entities"])
+                assert validate_south_african_id(id_value)
+                assert any(
+                    re.fullmatch(pattern.pattern, phone, pattern.flags)
+                    for pattern in phone_patterns
+                )
+                assert not any(
+                    re.search(pattern.pattern, id_value, pattern.flags)
+                    for pattern in phone_patterns
+                )
 
     def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
         from openmed.core.pii import (

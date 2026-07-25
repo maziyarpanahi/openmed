@@ -226,6 +226,22 @@ class TestApproximateLocaleWarnings:
         assert "xh_ZA" in str(user_warnings[0].message)
         assert "zu_ZA" in str(user_warnings[0].message)
 
+    def test_afrikaans_approximation_warns_once_and_uses_dutch_backend(self):
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            first = resolve_locale("af")
+            second = resolve_locale("af")
+
+        assert first == second == "af_ZA"
+        assert FAKER_BACKEND_LOCALE[first] == "nl_NL"
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "af_ZA" in str(user_warnings[0].message)
+        assert "nl_NL" in str(user_warnings[0].message)
+
     def test_amharic_approximation_warns_once_and_uses_documented_backend(self):
         L._warned.clear()
         with warnings.catch_warnings(record=True) as caught:

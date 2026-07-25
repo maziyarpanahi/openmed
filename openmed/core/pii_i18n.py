@@ -2730,6 +2730,20 @@ def validate_russian_oms(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
+    "af": [
+        "Januarie",
+        "Februarie",
+        "Maart",
+        "April",
+        "Mei",
+        "Junie",
+        "Julie",
+        "Augustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+    ],
     "as": [
         "জানুৱাৰী",
         "ফেব্ৰুৱাৰী",
@@ -7603,6 +7617,7 @@ _NGUNI_AGE_CONTEXT = ["iminyaka", "ubudala", "age", "aged", "years old"]
 
 _NGUNI_ID_CONTEXT = [
     "identiteitsnommer",
+    "id-nommer",
     "inombolo kamazisi",
     "umazisi",
     "inombolo yesazisi",
@@ -7626,6 +7641,8 @@ _NGUNI_MEDICAL_AID_CONTEXT = [
 
 _NGUNI_PHONE_CONTEXT = [
     "selfoon",
+    "telefoon",
+    "kontaknommer",
     "ucingo",
     "umakhalekhukhwini",
     "ifowuni",
@@ -7635,6 +7652,26 @@ _NGUNI_PHONE_CONTEXT = [
     "call",
     "contact",
 ]
+
+_SA_ID_PII_PATTERN = PIIPattern(
+    r"(?<![0-9])[0-9]{13}(?![0-9])",
+    "national_id",
+    priority=15,
+    base_score=0.75,
+    context_words=_NGUNI_ID_CONTEXT,
+    context_boost=0.2,
+    validator=validate_za_id_number,
+)
+
+_SA_PHONE_PII_PATTERN = PIIPattern(
+    r"(?<![0-9])(?:\+?27[\s.-]?[678][0-9]|0[678][0-9])"
+    r"[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+    "phone_number",
+    priority=12,
+    base_score=0.7,
+    context_words=_NGUNI_PHONE_CONTEXT,
+    context_boost=0.25,
+)
 
 _NGUNI_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
@@ -7669,15 +7706,7 @@ _NGUNI_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
-    PIIPattern(
-        r"(?<![0-9])[0-9]{13}(?![0-9])",
-        "national_id",
-        priority=15,
-        base_score=0.75,
-        context_words=_NGUNI_ID_CONTEXT,
-        context_boost=0.2,
-        validator=validate_za_id_number,
-    ),
+    _SA_ID_PII_PATTERN,
     PIIPattern(
         r"(?<![A-Z0-9])(?:[A-Z]{2,5}[- ]?)?[0-9]{6,12}(?![A-Z0-9])",
         "national_id",
@@ -7715,15 +7744,127 @@ _NGUNI_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
+    _SA_PHONE_PII_PATTERN,
+]
+
+# Related-language transfer template (Dutch -> Afrikaans):
+# - transfer structural rules only when spelling and clinical usage align
+#   (numeric/textual dates and suffix-based street addresses);
+# - replace cue words with the target language's vocabulary and add a
+#   context-gated target-language age/name rule;
+# - never inherit source-country identifiers or numbering plans. Dutch BSN,
+#   +31 phone, and alphanumeric postcode patterns are deliberately absent;
+# - overlay the target country's validated identifiers, phones, and postcodes.
+# The separate list makes those decisions auditable and prevents future Dutch
+# changes from silently altering Afrikaans behavior.
+_AFRIKAANS_NAME_CONTEXT = [
+    "naam",
+    "pasiëntnaam",
+    "pasientnaam",
+    "naam van pasiënt",
+    "naam van pasient",
+    "patient name",
+]
+
+_AFRIKAANS_DATE_CONTEXT = [
+    "geboortedatum",
+    "gebore",
+    "opnamedatum",
+    "ontslagdatum",
+    "datum",
+]
+
+_AFRIKAANS_AGE_CONTEXT = ["ouderdom", "jaar oud", "age", "aged", "years old"]
+
+_AFRIKAANS_ADDRESS_CONTEXT = [
+    "adres",
+    "woonadres",
+    "verblyfadres",
+    "woonagtig",
+    "address",
+]
+
+_AFRIKAANS_POSTCODE_CONTEXT = ["poskode", "adres", "postal code", "postcode"]
+
+_AFRIKAANS_MONTH_PATTERN = (
+    r"januarie|februarie|maart|april|mei|junie|julie|augustus|"
+    r"september|oktober|november|desember"
+)
+
+_AFRIKAANS_STREET_NAME_PATTERN = (
+    r"(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}\s+){0,3}"
+    r"[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}(?:straat|laan|weg|plein|rylaan)"
+)
+
+_AFRIKAANS_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        r"(?<![0-9])(?:\+?27[\s.-]?[678][0-9]|0[678][0-9])"
-        r"[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
-        "phone_number",
+        r"(?:(?<=Naam: )|(?<=Pasiëntnaam: )|(?<=Pasientnaam: )|"
+        r"(?<=Naam van pasiënt: )|(?<=Naam van pasient: )|"
+        r"(?<=Patient name: ))[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}"
+        r"(?:\s+(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}|van|der|de|du|le)){1,5}\b",
+        "name",
         priority=12,
-        base_score=0.7,
-        context_words=_NGUNI_PHONE_CONTEXT,
-        context_boost=0.25,
+        base_score=0.65,
+        context_words=_AFRIKAANS_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
     ),
+    PIIPattern(
+        r"\b(?:0?[1-9]|[12][0-9]|3[01])[./-]"
+        r"(?:0?[1-9]|1[0-2])[./-](?:19|20)[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_AFRIKAANS_DATE_CONTEXT,
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b(?:0?[1-9]|[12][0-9]|3[01])\s+"
+        rf"(?:{_AFRIKAANS_MONTH_PATTERN})\s+(?:19|20)[0-9]{{2}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=_AFRIKAANS_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?:(?<=Ouderdom: )|(?<=Ouderdom )|(?<=Age: )|(?<=Aged ))"
+        r"(?:1[01][0-9]|120|[1-9]?[0-9])\b|"
+        r"(?<![0-9])(?:1[01][0-9]|120|[1-9]?[0-9])(?=\s+jaar oud\b))",
+        "age",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRIKAANS_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    _SA_ID_PII_PATTERN,
+    PIIPattern(
+        rf"(?:(?<=Adres: )|(?<=Woonadres: )|(?<=Verblyfadres: )|"
+        rf"(?<=Address: ))(?:[0-9]{{1,5}}\s+{_AFRIKAANS_STREET_NAME_PATTERN}|"
+        rf"{_AFRIKAANS_STREET_NAME_PATTERN}\s+[0-9]{{1,5}}[A-Za-z]?)\b",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=_AFRIKAANS_ADDRESS_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Za-z0-9])[0-9]{4}(?![A-Za-z0-9]|\s?[A-Z]{2}\b)",
+        "postcode",
+        priority=7,
+        base_score=0.25,
+        context_words=_AFRIKAANS_POSTCODE_CONTEXT,
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    _SA_PHONE_PII_PATTERN,
 ]
 
 
@@ -8916,7 +9057,7 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
 ]
 
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
-    "af": _NGUNI_PII_PATTERNS,
+    "af": _AFRIKAANS_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
     "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
     "ig": [*_NIGERIAN_PII_PATTERNS, *_IGBO_PII_PATTERNS],
@@ -9106,7 +9247,7 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar_eg": _LOCALE_DATA_PII_PATTERNS["ar_eg"],
     "ar_ma": _LOCALE_DATA_PII_PATTERNS["ar_ma"],
     "en_za": _NGUNI_PII_PATTERNS,
-    "af": _NGUNI_PII_PATTERNS,
+    "af": _AFRIKAANS_PII_PATTERNS,
     "en_ng": _NIGERIAN_PII_PATTERNS,
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,
@@ -9277,6 +9418,26 @@ LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 }
 
 LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "af": {
+        "NAME": [
+            "Johan van der Merwe",
+            "Annelie Botha",
+            "Pieter du Plessis",
+            "Marli Jacobs",
+        ],
+        "FIRST_NAME": ["Johan", "Annelie", "Pieter", "Marli"],
+        "LAST_NAME": ["van der Merwe", "Botha", "du Plessis", "Jacobs"],
+        "EMAIL": ["pasiënt@example.co.za", "kontak@example.org"],
+        "PHONE": ["+27 82 123 4567", "071 987 6543"],
+        "ID_NUM": ["8001015009087", "9003030123082"],
+        "STREET_ADDRESS": ["Kerkstraat 12", "45 Pretoriuslaan"],
+        "URL_PERSONAL": ["https://example.co.za"],
+        "USERNAME": ["pasiënt123", "johan88"],
+        "DATE": ["14/05/1988", "3 Januarie 1990"],
+        "AGE": ["38", "47", "29"],
+        "LOCATION": ["Kaapstad", "Pretoria", "Bloemfontein", "Stellenbosch"],
+        "ZIPCODE": ["8001", "0002", "9301", "7600"],
+    },
     "en": {
         "NAME": ["Jane Smith", "John Doe", "Alex Johnson", "Sam Taylor"],
         "FIRST_NAME": ["Jane", "John", "Alex", "Sam"],
