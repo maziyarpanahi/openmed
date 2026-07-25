@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a PySpark `pandas_udf` adapter (`openmed.interop.spark_udf`) for
+  redacting free-text Spark DataFrame columns at warehouse scale via
+  `make_deidentify_udf()` and the `deidentify_columns()` convenience helper,
+  with the OpenMed model loaded lazily and cached per executor worker
+  process. `pyspark` is imported lazily and stays behind the existing `spark`
+  extra; the adapter is registered as `spark` in `openmed.interop` (#1892).
 - Added a fail-closed, signed release-readiness gate that verifies signed model
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite
