@@ -23,6 +23,12 @@
           "translation_sha256": "6fe10194c6f655474703a2f3976c05588f9c48b2e83bb33fc49b78eda4ba3062"
         },
         {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "एजेंट के साथ बना रहे हैं?",
+          "translation_sha256": "a54a1a7c82c542346fc63658f2f100594b2c5f53d816636c272e71f445381e58"
+        },
+        {
           "source_heading": "Why OpenMed?",
           "source_sha256": "326f84dbfd75baae1747f9c66beaf41e2f300f10763f777f58d49b3b0a45a4cb",
           "translation_heading": "OpenMed क्यों?",
@@ -147,6 +153,12 @@
           "translation_sha256": "22966c690f9cd5b3cb59a2729d15ee176dcc99c082f9b7d4129b21d08e8ce19e"
         },
         {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "Unajenga kwa wakala?",
+          "translation_sha256": "d2017c10380102dd2e94646d3833afc0958068499d5ab0818dec0fcd2b3b90a7"
+        },
+        {
           "source_heading": "Why OpenMed?",
           "source_sha256": "326f84dbfd75baae1747f9c66beaf41e2f300f10763f777f58d49b3b0a45a4cb",
           "translation_heading": "Kwa nini OpenMed?",
@@ -269,6 +281,12 @@
           "source_sha256": "e18a0cf23b36ccc26c24ea967dc447c1fcdc0911ab1f3a017d0d8aa6f6cf1320",
           "translation_heading": "30 秒上手示例",
           "translation_sha256": "a08369e3824d8faa09eaf15195a7689c85781ad5b08287d50b4eaa3297911d66"
+        },
+        {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "使用智能体构建？",
+          "translation_sha256": "94d33c923ba1f13ae959dd894fddd80e3d1b3e6abf2139221ce1c0b8655068af"
         },
         {
           "source_heading": "Why OpenMed?",

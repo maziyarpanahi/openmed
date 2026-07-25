@@ -93,6 +93,17 @@ for entity in result.entities:
 
 ---
 
+## 使用智能体构建？
+
+请从[面向使用者的智能体指南](docs/agent-usage.md)开始，或加载精选的
+[llms.txt](https://openmed.life/docs/llms.txt) 文档索引。对于可调用的本地接口，
+请使用 [MCP 服务器](docs/mcp-clients.md)、带类型的
+[工具注册表](openmed/mcp/tool_registry.py)或
+[命令行接口](docs/agent-usage.md#command-line-interface)。可直接使用的跨工具流程位于
+[仓库技能目录](skills/README.md)。
+
+---
+
 ## 为什么选择 OpenMed？
 
 |                                       |       **OpenMed**        |    云端医疗 API    |
