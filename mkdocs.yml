@@ -114,6 +114,7 @@ nav:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
+      - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
