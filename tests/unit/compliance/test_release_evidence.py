@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import replace
 
 import pytest
@@ -12,6 +13,7 @@ from openmed.compliance import (
     ReleaseAssumptions,
     build_release_expert_review_evidence,
 )
+from openmed.compliance import release_evidence as release_evidence_module
 from openmed.core.audit import stable_hash
 from openmed.risk import (
     AnonymityPolicy,
@@ -197,6 +199,80 @@ def test_release_evidence_is_deterministic_and_rejects_tampering() -> None:
         assert "integrity" in str(exc) or "match" in str(exc)
     else:  # pragma: no cover - defensive
         raise AssertionError("tampered expert-review evidence was accepted")
+
+
+def test_release_evidence_cannot_erase_mandatory_caveats() -> None:
+    result = _result()
+    validation = validate_released_output(result.records, result)
+
+    report = build_release_expert_review_evidence(
+        result,
+        validation=validation,
+        assumptions=_assumptions(),
+        limitations=(),
+        unsupported_modalities=(),
+    )
+
+    assert report.limitations == (
+        "not_compliance_certificate",
+        "population_risk_not_estimated",
+        "qualified_expert_review_required",
+    )
+    assert report.unsupported_modalities == (
+        "free_text",
+        "images",
+        "genomic_data",
+    )
+
+    extended = build_release_expert_review_evidence(
+        result,
+        validation=validation,
+        assumptions=_assumptions(),
+        limitations=("recipient_linkage_not_assessed",),
+        unsupported_modalities=("audio",),
+    )
+    assert extended.limitations == (
+        *report.limitations,
+        "recipient_linkage_not_assessed",
+    )
+    assert extended.unsupported_modalities == (
+        *report.unsupported_modalities,
+        "audio",
+    )
+
+
+def test_software_digest_covers_transitive_modules_and_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    expected_digest = "sha256:" + ("a" * 64)
+
+    def capture_payload(payload: dict[str, object]) -> str:
+        captured.update(payload)
+        return expected_digest
+
+    monkeypatch.setattr(release_evidence_module, "stable_hash", capture_payload)
+
+    assert release_evidence_module._software_digest() == expected_digest
+    assert set(captured) == {"kind", "package", "runtime", "modules"}
+    assert captured["kind"] == "openmed-software-content"
+    assert captured["package"] == {
+        "name": "openmed",
+        "version": __version__,
+    }
+    assert captured["runtime"] == {
+        "python_implementation": sys.implementation.name,
+        "python_version": ".".join(str(part) for part in sys.version_info[:3]),
+        "python_cache_tag": sys.implementation.cache_tag or "unknown",
+    }
+    modules = captured["modules"]
+    assert isinstance(modules, dict)
+    assert set(modules) == set(release_evidence_module._SOFTWARE_EVIDENCE_MODULES)
+    assert "openmed.risk.reid" in modules
+    assert all(
+        isinstance(value, str) and value.startswith("sha256:")
+        for value in modules.values()
+    )
 
 
 def test_release_evidence_records_reviewed_coarsening_and_nonzero_loss() -> None:
