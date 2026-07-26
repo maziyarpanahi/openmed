@@ -45,19 +45,20 @@ TREND_ABS_EPSILON = 1e-12
 class SerialMeasurementPoint(TypedDict):
     """One measurement occurrence within a serial group.
 
-    ``entity``/``value``/``unit``/``timepoint`` echo the caller's input. The
-    remaining fields are derived: ``canonical_magnitude``/``canonical_unit`` are
-    the value expressed in the dimension's canonical unit (``None`` when the
-    unit could not be parsed), ``normalized_timepoint`` is the timeline-resolved
-    ISO value (``None`` when the timepoint could not be resolved), and
-    ``comparable`` records whether the point joined its entity's primary
-    comparable series.
+    ``entity``/``value``/``unit``/``timepoint``/``span`` echo the caller's
+    input. The remaining fields are derived:
+    ``canonical_magnitude``/``canonical_unit`` are the value expressed in the
+    dimension's canonical unit (``None`` when the unit could not be parsed),
+    ``normalized_timepoint`` is the timeline-resolved ISO value (``None`` when
+    the timepoint could not be resolved), and ``comparable`` records whether the
+    point joined its entity's primary comparable series.
     """
 
     entity: str
     value: Any
     unit: Optional[str]
     timepoint: Optional[str]
+    span: Any
     canonical_magnitude: Optional[float]
     canonical_unit: Optional[str]
     normalized_timepoint: Optional[str]
@@ -69,19 +70,21 @@ class MeasurementTrend(TypedDict):
 
     ``points`` are the comparable points in chronological order when the series
     is orderable (``ordered`` is ``True``); when it is not orderable they are
-    returned in input order and ``direction`` is ``unknown``. Points of the same
-    entity that could not be compared (unparseable unit, or a unit whose
-    dimension differs from the group's) are listed separately in
-    ``incomparable_points`` rather than silently dropped. ``direction`` is
-    ``unknown`` whenever the series cannot be totally ordered by timepoint or has
-    fewer than two comparable points; in that case ``first_value``,
-    ``last_value`` and ``delta`` are all ``None``. Otherwise ``delta`` is
-    ``last_value - first_value`` in the canonical unit.
+    returned in input order and ``trend_direction`` is ``unknown``. Points of
+    the same entity that could not be compared (unparseable unit, or a unit
+    whose dimension differs from the group's) are listed separately in
+    ``incomparable_points`` rather than silently dropped. ``trend_direction`` is
+    ``unknown`` whenever the series cannot be totally ordered by timepoint, has
+    conflicting values at one timepoint, or has fewer than two comparable
+    points; in that case ``first_value``, ``last_value`` and ``delta`` are all
+    ``None``. Otherwise ``delta`` is ``last_value - first_value`` in the
+    canonical unit. ``direction`` is retained as an equivalent concise alias.
     """
 
     entity: str
     canonical_unit: Optional[str]
     points: list[SerialMeasurementPoint]
+    trend_direction: TrendDirection
     direction: TrendDirection
     delta: Optional[float]
     first_value: Optional[float]
@@ -102,6 +105,7 @@ class _PreparedPoint:
     value: Any
     unit: Optional[str]
     timepoint: Optional[str]
+    span: Any
     canonical_magnitude: Optional[float]
     canonical_unit: Optional[str]
     normalized_timepoint: Optional[str]
@@ -125,7 +129,7 @@ def _resolve_timepoint(
     ``"absolute"`` when the resolver produces an ISO date, ``"relative"`` when
     only a signed day offset is known, and ``None`` when the timepoint cannot be
     resolved. Each timepoint is expected to be a single temporal expression; if
-    the resolver detects more than one, the chronologically earliest is used.
+    the resolver detects more than one, the first resolved event is used.
     Reuses :func:`resolve_timeline`; never consults the wall clock.
     """
     text = "" if timepoint is None else str(timepoint).strip()
@@ -152,6 +156,7 @@ def _prepare_point(
     value = point.get("value")
     unit = point.get("unit")
     timepoint = point.get("timepoint")
+    span = point.get("span")
 
     parsed = parse_measurement(value, unit)
     canonical_magnitude = parsed.get("canonical_magnitude")
@@ -170,6 +175,7 @@ def _prepare_point(
         value=value,
         unit=unit,
         timepoint=timepoint,
+        span=span,
         canonical_magnitude=canonical_magnitude,
         canonical_unit=canonical_unit,
         normalized_timepoint=normalized_tp,
@@ -188,6 +194,7 @@ def _point_view(
         value=prepared.value,
         unit=prepared.unit,
         timepoint=prepared.timepoint,
+        span=prepared.span,
         canonical_magnitude=prepared.canonical_magnitude,
         canonical_unit=prepared.canonical_unit,
         normalized_timepoint=prepared.normalized_timepoint,
@@ -233,6 +240,21 @@ def _primary_unit(ok_members: list[_PreparedPoint]) -> Optional[str]:
     return min(counts, key=lambda unit: (-counts[unit], str(unit)))
 
 
+def _has_conflicting_timepoint_values(members: list[_PreparedPoint]) -> bool:
+    """Return whether one resolved timepoint has unequal normalized values."""
+    by_timepoint: dict[int, list[float]] = {}
+    for member in members:
+        if member.order_value is None or member.canonical_magnitude is None:
+            continue
+        by_timepoint.setdefault(member.order_value, []).append(
+            member.canonical_magnitude
+        )
+    return any(
+        any(_changed(values[0], value) for value in values[1:])
+        for values in by_timepoint.values()
+    )
+
+
 def _build_trend(members: list[_PreparedPoint]) -> MeasurementTrend:
     """Build one trend for a single normalized-entity group."""
     ok_members = [member for member in members if member.parse_ok]
@@ -255,6 +277,8 @@ def _build_trend(members: list[_PreparedPoint]) -> MeasurementTrend:
     )
     if orderable:
         orderable = len({member.order_kind for member in comparable}) == 1
+    if orderable:
+        orderable = not _has_conflicting_timepoint_values(comparable)
 
     if orderable:
         ordered = sorted(
@@ -281,6 +305,7 @@ def _build_trend(members: list[_PreparedPoint]) -> MeasurementTrend:
         entity=members[0].entity,
         canonical_unit=primary_unit,
         points=[_point_view(member, comparable=True) for member in ordered],
+        trend_direction=direction,
         direction=direction,
         delta=delta,
         first_value=first_value,
@@ -307,9 +332,11 @@ def extract_measurement_trends(
             ``"12 mm"``), an optional ``unit`` string, and an optional
             ``timepoint`` temporal expression (an ISO date such as
             ``"2026-01-05"`` or a relative phrase such as ``"3 weeks ago"``).
-        reference_date: Optional document reference date used to resolve relative
-            timepoints. Absent, relative expressions remain unresolved and their
-            series are labeled ``unknown``; the wall clock is never substituted.
+        reference_date: Optional document reference date used to resolve
+            relative timepoints to absolute dates. Without it, relative
+            expressions may still be ordered by signed offsets, but their
+            ``normalized_timepoint`` remains ``None``; the wall clock is never
+            substituted.
 
     Returns:
         One :class:`MeasurementTrend` per distinct entity (grouped case- and
@@ -333,6 +360,26 @@ def extract_measurement_trends(
     return [_build_trend(groups[key]) for key in order]
 
 
+def build_measurement_trends(
+    points: Iterable[Mapping[str, Any]],
+    *,
+    reference_date: str | date | datetime | None = None,
+) -> list[MeasurementTrend]:
+    """Build serial measurement trends using the issue-defined public API.
+
+    Args:
+        points: Measurement mappings accepted by
+            :func:`extract_measurement_trends`.
+        reference_date: Optional document reference date for resolving relative
+            timepoints.
+
+    Returns:
+        The same deterministic grouped trends as
+        :func:`extract_measurement_trends`.
+    """
+    return extract_measurement_trends(points, reference_date=reference_date)
+
+
 __all__ = [
     "TREND_ADVISORY",
     "TREND_ABS_EPSILON",
@@ -340,5 +387,6 @@ __all__ = [
     "TrendDirection",
     "SerialMeasurementPoint",
     "MeasurementTrend",
+    "build_measurement_trends",
     "extract_measurement_trends",
 ]

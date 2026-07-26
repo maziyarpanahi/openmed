@@ -9,6 +9,7 @@ import pytest
 
 from openmed.clinical import (
     TREND_ADVISORY,
+    build_measurement_trends,
     extract_measurement_trends,
 )
 
@@ -141,6 +142,61 @@ def test_points_are_ordered_by_resolved_timepoint_not_input_order():
     (trend,) = trends
     assert [point["value"] for point in trend["points"]] == [12, 15, 19]
     assert trend["direction"] == "increasing"
+
+
+def test_issue_defined_builder_preserves_span_and_direction_name():
+    span = {"start": 12, "end": 18}
+    (trend,) = build_measurement_trends(
+        [
+            {
+                "entity": "mass",
+                "value": 12,
+                "unit": "mm",
+                "timepoint": "2026-01-05",
+                "span": span,
+            },
+            {
+                "entity": "mass",
+                "value": 15,
+                "unit": "mm",
+                "timepoint": "2026-02-05",
+                "span": {"start": 30, "end": 36},
+            },
+        ]
+    )
+
+    assert trend["trend_direction"] == "increasing"
+    assert trend["direction"] == trend["trend_direction"]
+    assert trend["points"][0]["span"] == span
+
+
+def test_conflicting_values_at_same_timepoint_are_unknown():
+    (trend,) = build_measurement_trends(
+        [
+            {
+                "entity": "mass",
+                "value": 12,
+                "unit": "mm",
+                "timepoint": "2026-01-05",
+            },
+            {
+                "entity": "mass",
+                "value": 15,
+                "unit": "mm",
+                "timepoint": "2026-01-05",
+            },
+            {
+                "entity": "mass",
+                "value": 18,
+                "unit": "mm",
+                "timepoint": "2026-02-05",
+            },
+        ]
+    )
+
+    assert trend["trend_direction"] == "unknown"
+    assert trend["ordered"] is False
+    assert trend["delta"] is None
 
 
 def test_relative_timepoints_order_by_offset_and_reference_date_adds_iso():
