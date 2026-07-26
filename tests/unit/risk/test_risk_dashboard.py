@@ -308,24 +308,73 @@ def test_release_assessment_dashboard_rejects_detailed_risk_mappings():
         render_release_assessment_dashboard(_sample_risk())
 
 
-def test_release_dashboard_drops_untrusted_metadata_and_hierarchy_names():
-    result = anonymize_release(_release_rows(), _release_policy())
-    payload = result.to_safe_dict()
-    payload["before"]["quasi_identifiers"].append("Alice Canary")
-    payload["before"]["attribute_disclosure"].append(
+def test_release_dashboard_preserves_valid_literal_schema_labels_with_escaping():
+    rows = [
         {
-            "attribute": "Sensitive Canary Name",
+            "患者 ID": "patient-a",
+            "Patient Age": 40,
+            "Région, cohort | `v1`": "north",
+            "Diagnostic <group>": "alpha",
+        },
+        {
+            "患者 ID": "patient-b",
+            "Patient Age": 40,
+            "Région, cohort | `v1`": "north",
+            "Diagnostic <group>": "beta",
+        },
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("Patient Age", "Région, cohort | `v1`"),
+        sensitive_attributes=("Diagnostic <group>",),
+        privacy_unit="患者 ID",
+        target_k=2,
+    )
+
+    assessment = assess_release(rows, policy).to_dict()
+    payload = {
+        "artifact": "deidentification_anonymization_summary",
+        "before": assessment,
+        "after": assessment,
+        "generalization": {
+            "information_loss": 0.0,
+            "levels": [
+                {"attribute": attribute, "level": 0, "loss": 0.0}
+                for attribute in policy.quasi_identifiers
+            ],
+        },
+        "utility": {
+            "row_suppression_rate": 0.0,
+            "privacy_unit_suppression_rate": 0.0,
+            "quasi_identifier_cell_change_rate": 0.0,
+            "released_rows": 2,
+        },
+    }
+
+    html = render_release_assessment_dashboard(payload)
+
+    assert "Patient Age" in html
+    assert "Région, cohort | `v1`" in html
+    assert "Diagnostic &lt;group&gt;" in html
+    assert "Diagnostic <group>" not in html
+    assert "<script" not in html
+    _assert_balanced_html(html)
+
+
+def test_release_dashboard_drops_unsafe_control_and_bidi_labels():
+    payload = assess_release(_release_rows(), _release_policy()).to_dict()
+    payload["quasi_identifiers"].append("Alice Canary\u202e")
+    payload["attribute_disclosure"].append(
+        {
+            "attribute": "Sensitive\u0000Canary Name",
             "l_diversity": {"achieved": 1, "violating_classes": 0},
             "t_closeness": {"achieved": 0, "violating_classes": 0},
         }
     )
-    payload["generalization"]["levels"][0]["name"] = "Hierarchy Canary Name"
 
     html = render_release_assessment_dashboard(payload)
 
     assert "Alice Canary" not in html
-    assert "Sensitive Canary Name" not in html
-    assert "Hierarchy Canary Name" not in html
+    assert "Canary Name" not in html
 
 
 @pytest.mark.parametrize(
