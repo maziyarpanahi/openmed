@@ -146,7 +146,7 @@ def test_repeated_encounters_do_not_inflate_patient_level_k() -> None:
     assert report.meets_policy is True
 
 
-def test_multivalued_patient_qis_are_set_profiled_and_disclosed_as_a_warning() -> None:
+def test_multivalued_patient_qis_use_joint_profiles_and_disclose_a_warning() -> None:
     rows = [
         {"patient_id": "a", "facility": "north", "disease": "x"},
         {"patient_id": "a", "facility": "south", "disease": "x"},
@@ -163,10 +163,58 @@ def test_multivalued_patient_qis_are_set_profiled_and_disclosed_as_a_warning() -
     report = assess_release(rows, policy)
 
     assert report.achieved_k == 2
-    assert any("value-set fingerprints: facility" in item for item in report.warnings)
+    assert any(
+        "joint ordered-multiset fingerprints: facility" in item
+        for item in report.warnings
+    )
     serialized = report.to_json()
     assert "north" not in serialized
     assert "south" not in serialized
+
+
+def test_crossed_longitudinal_qi_pairings_remain_distinct() -> None:
+    rows = [
+        {"patient_id": "a", "age": 30, "facility": "north"},
+        {"patient_id": "a", "age": 40, "facility": "south"},
+        {"patient_id": "b", "age": 30, "facility": "south"},
+        {"patient_id": "b", "age": 40, "facility": "north"},
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("age", "facility"),
+        privacy_unit="patient_id",
+        target_k=2,
+    )
+
+    report = assess_release(rows, policy)
+
+    assert report.privacy_unit_count == 2
+    assert report.class_count == 2
+    assert report.achieved_k == 1
+    assert report.meets_policy is False
+
+
+def test_longitudinal_qi_profiles_preserve_repeated_row_multiplicity() -> None:
+    rows = [
+        {"patient_id": "a", "facility": "north"},
+        {"patient_id": "a", "facility": "north"},
+        {"patient_id": "b", "facility": "north"},
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("facility",),
+        privacy_unit="patient_id",
+        target_k=2,
+    )
+
+    report = assess_release(rows, policy)
+
+    assert report.privacy_unit_count == 2
+    assert report.class_count == 2
+    assert report.achieved_k == 1
+    assert report.meets_policy is False
+    assert any(
+        "row multiplicity can distinguish privacy units" in item
+        for item in report.warnings
+    )
 
 
 def test_multivalued_patient_qis_cannot_collapse_to_their_first_value() -> None:
@@ -187,6 +235,57 @@ def test_multivalued_patient_qis_cannot_collapse_to_their_first_value() -> None:
     assert report.privacy_unit_count == 2
     assert report.achieved_k == 1
     assert report.meets_policy is False
+
+
+def test_longitudinal_profiles_recanonicalize_after_qi_coarsening() -> None:
+    rows = [
+        {"patient_id": "a", "age": 30, "facility": "north"},
+        {"patient_id": "a", "age": 40, "facility": "south"},
+        {"patient_id": "b", "age": 30, "facility": "south"},
+        {"patient_id": "b", "age": 40, "facility": "north"},
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("age", "facility"),
+        privacy_unit="patient_id",
+        target_k=2,
+    )
+
+    result = anonymize_release(
+        rows,
+        policy,
+        hierarchies={
+            "age": [
+                {"name": "exact", "loss": 0.0},
+                {
+                    "name": "all-ages",
+                    "loss": 0.5,
+                    "values": {"30": "all", "40": "all"},
+                },
+            ],
+            "facility": [{"name": "exact", "loss": 0.0}],
+        },
+    )
+
+    assert result.after.meets_policy is True
+    assert result.after.achieved_k == 2
+    assert {row["age"] for row in result.records} == {"all"}
+    assert {row["facility"] for row in result.records} == {"north", "south"}
+
+
+def test_full_qi_suppression_preserves_longitudinal_row_multiplicity() -> None:
+    rows = [
+        {"patient_id": "a", "facility": "north"},
+        {"patient_id": "a", "facility": "north"},
+        {"patient_id": "b", "facility": "north"},
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("facility",),
+        privacy_unit="patient_id",
+        target_k=2,
+    )
+
+    with pytest.raises(ValueError, match="No generalization satisfies"):
+        anonymize_release(rows, policy)
 
 
 def test_missing_null_and_empty_patient_qis_remain_distinct() -> None:
@@ -243,6 +342,25 @@ def test_anonymization_revalidates_and_separates_sensitive_records() -> None:
     assert validation.passed is True
     assert validation.digest_matches is True
     assert validation.direct_identifier_columns == ()
+
+
+def test_anonymization_result_repr_excludes_sensitive_records() -> None:
+    rows = [
+        {
+            **row,
+            "disease": f"repr-sensitive-canary-{index}",
+        }
+        for index, row in enumerate(_balanced_rows())
+    ]
+    result = anonymize_release(
+        rows,
+        _policy(target_l=1),
+    )
+
+    rendered = repr(result)
+
+    assert "records=" not in rendered
+    assert "repr-sensitive-canary" not in rendered
 
 
 def test_hierarchy_digest_binds_supplied_hierarchy_configuration() -> None:
@@ -1108,8 +1226,8 @@ def test_nonfinite_qi_and_privacy_unit_values_fail_closed() -> None:
         ({"l_metric": "recursive"}, "l_metric"),
         ({"max_lattice_nodes": 0}, "max_lattice_nodes"),
         ({"max_suppression_subsets": 0}, "max_suppression_subsets"),
-        ({"quasi_identifiers": ("Alice Canary",)}, "column name"),
-        ({"privacy_unit": "../patient"}, "column name"),
+        ({"quasi_identifiers": (" Alice Canary",)}, "column names"),
+        ({"privacy_unit": "patient\nidentifier"}, "column names"),
     ],
 )
 def test_policy_rejects_ambiguous_or_unsafe_configuration(
