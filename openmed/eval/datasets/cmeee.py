@@ -17,11 +17,11 @@ from typing import Any, Mapping
 from openmed.core.labels import (
     BODY_SITE,
     CONDITION,
+    DEVICE,
     JOB_DEPARTMENT,
     LAB_TEST,
     MEDICATION,
     MICROORGANISM,
-    OTHER,
     PROCEDURE,
 )
 from openmed.eval.datasets.licenses import license_for
@@ -43,7 +43,7 @@ CMEEE_ENTITY_TYPES: Mapping[str, str] = {
     "dep": JOB_DEPARTMENT,
     "dis": CONDITION,
     "dru": MEDICATION,
-    "equ": OTHER,
+    "equ": DEVICE,
     "ite": LAB_TEST,
     "mic": MICROORGANISM,
     "pro": PROCEDURE,
