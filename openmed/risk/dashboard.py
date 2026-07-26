@@ -5,13 +5,16 @@ from __future__ import annotations
 import html as html_mod
 import json
 import math
-import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .release import AnonymizationResult, ReleaseAssessment
+from .release import (
+    AnonymizationResult,
+    ReleaseAssessment,
+    _validated_column_name,
+)
 
 __all__ = [
     "render_release_assessment_dashboard",
@@ -22,7 +25,6 @@ __all__ = [
 
 _DEFAULT_TITLE = "OpenMed Risk Dashboard"
 _DEFAULT_RELEASE_TITLE = "OpenMed Release Assessment Dashboard"
-_SAFE_METADATA_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 
 _CSS = """
 :root {
@@ -516,10 +518,8 @@ def _render_safe_generalization_levels(value: Any) -> list[str]:
     for item in _as_sequence(value):
         if not isinstance(item, Mapping):
             continue
-        attribute = item.get("attribute")
-        if not isinstance(attribute, str) or not _SAFE_METADATA_IDENTIFIER_RE.fullmatch(
-            attribute
-        ):
+        attribute = _safe_schema_label(item.get("attribute"))
+        if attribute is None:
             continue
         rows.append(
             [
@@ -538,11 +538,17 @@ def _render_safe_generalization_levels(value: Any) -> list[str]:
 
 
 def _safe_metadata_strings(value: Any) -> list[str]:
-    return sorted(
-        item
-        for item in _as_sequence(value)
-        if isinstance(item, str) and _SAFE_METADATA_IDENTIFIER_RE.fullmatch(item)
-    )
+    labels = (_safe_schema_label(item) for item in _as_sequence(value))
+    return sorted(label for label in labels if label is not None)
+
+
+def _safe_schema_label(value: Any) -> str | None:
+    """Return a validated source-schema label for escaped text rendering."""
+
+    try:
+        return _validated_column_name(value, name="dashboard schema labels")
+    except (TypeError, ValueError):
+        return None
 
 
 def _safe_distribution_rows(value: Any) -> list[tuple[int, int]]:
@@ -572,10 +578,8 @@ def _safe_attribute_rows(value: Any) -> list[list[str]]:
     for item in _as_sequence(value):
         if not isinstance(item, Mapping):
             continue
-        attribute = item.get("attribute")
-        if not isinstance(attribute, str) or not _SAFE_METADATA_IDENTIFIER_RE.fullmatch(
-            attribute
-        ):
+        attribute = _safe_schema_label(item.get("attribute"))
+        if attribute is None:
             continue
         l_diversity = _mapping(item.get("l_diversity"))
         t_closeness = _mapping(item.get("t_closeness"))
