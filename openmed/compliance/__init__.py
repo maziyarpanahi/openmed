@@ -36,6 +36,17 @@ from .dsar import (
     plan_erasure,
     render_dsar_summary,
 )
+from .expert_attestation import (
+    EXPERT_ATTESTATION_CANONICALIZATION,
+    EXPERT_ATTESTATION_CONCLUSIONS,
+    EXPERT_ATTESTATION_DISCLAIMER,
+    EXPERT_ATTESTATION_REPORT_TYPE,
+    EXPERT_ATTESTATION_SCHEMA_VERSION,
+    ExpertAttestationBindings,
+    ExpertAttestationEnvelope,
+    ExpertAttestationVerification,
+    create_expert_attestation,
+)
 from .expert_review import (
     EXPERT_REVIEW_EVIDENCE_DISCLAIMER,
     EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION,
@@ -105,6 +116,15 @@ __all__ = [
     "assemble_dsar_package",
     "render_dsar_summary",
     "plan_erasure",
+    "EXPERT_ATTESTATION_CANONICALIZATION",
+    "EXPERT_ATTESTATION_CONCLUSIONS",
+    "EXPERT_ATTESTATION_DISCLAIMER",
+    "EXPERT_ATTESTATION_REPORT_TYPE",
+    "EXPERT_ATTESTATION_SCHEMA_VERSION",
+    "ExpertAttestationBindings",
+    "ExpertAttestationEnvelope",
+    "ExpertAttestationVerification",
+    "create_expert_attestation",
     "EXPERT_REVIEW_EVIDENCE_DISCLAIMER",
     "EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION",
     "EXPERT_REVIEW_EVIDENCE_TITLE",
