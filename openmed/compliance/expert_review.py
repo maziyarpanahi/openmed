@@ -12,12 +12,14 @@ from __future__ import annotations
 import json
 import math
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 from typing import Any, Final, Mapping
 
 from openmed.core.audit import stable_hash
 
-EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION: Final = 2
+EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION: Final = 3
+_SUPPORTED_EVIDENCE_SCHEMA_VERSIONS: Final = frozenset({2, 3})
 EXPERT_REVIEW_EVIDENCE_TITLE: Final = (
     "De-identification Risk Analysis Evidence Bundle — Not an Expert Determination"
 )
@@ -257,7 +259,7 @@ class AttributeRoleReview:
     override_reason: str | None = None
 
     def __post_init__(self) -> None:
-        _require_identifier(self.attribute, "attribute")
+        _require_attribute_name(self.attribute, "attribute")
         _require_string_tuple(self.roles, "attribute roles")
         if not self.roles:
             raise ValueError("attribute roles must not be empty")
@@ -544,7 +546,7 @@ class TransformationAggregate:
     hierarchy_level_after: int | None = None
 
     def __post_init__(self) -> None:
-        _require_identifier(self.attribute, "transformation attribute")
+        _require_attribute_name(self.attribute, "transformation attribute")
         _require_choice(self.method, _TRANSFORMATION_METHODS, "transformation method")
         _require_int(
             self.affected_privacy_unit_count,
@@ -660,7 +662,7 @@ class UtilityAggregate:
 
 @dataclass(frozen=True)
 class SearchEvidence:
-    """Search completeness, limits, and deterministic termination metadata."""
+    """Search coverage, optimality proof, limits, and termination metadata."""
 
     strategy: str
     complete: bool
@@ -673,6 +675,7 @@ class SearchEvidence:
     suppression_subset_limit: int | None
     time_limit_seconds: float | None
     termination_reason: str
+    optimality_proven: bool | None = None
 
     def __post_init__(self) -> None:
         _require_choice(self.strategy, _SEARCH_STRATEGIES, "search strategy")
@@ -722,7 +725,17 @@ class SearchEvidence:
         _require_choice(
             self.termination_reason, _TERMINATION_REASONS, "termination reason"
         )
+        if self.optimality_proven is None:
+            object.__setattr__(
+                self,
+                "optimality_proven",
+                self.complete or self.termination_reason == "optimal_candidate_found",
+            )
+        elif not isinstance(self.optimality_proven, bool):
+            raise TypeError("search optimality_proven must be a boolean")
         if self.complete:
+            if not self.optimality_proven:
+                raise ValueError("complete search must prove optimality")
             if self.total_candidates is None:
                 raise ValueError("complete search requires total_candidates")
             if self.evaluated_candidates != self.total_candidates:
@@ -742,13 +755,33 @@ class SearchEvidence:
                 raise ValueError("complete search has an incomplete termination reason")
         if self.strategy == "exhaustive_lattice" and not self.complete:
             raise ValueError("exhaustive_lattice search must be complete")
+        if self.optimality_proven and not self.complete:
+            if (
+                self.strategy != "bounded_lattice"
+                or self.termination_reason != "optimal_candidate_found"
+                or self.evaluated_candidates < 1
+                or self.suppression_subsets_evaluated < 1
+            ):
+                raise ValueError(
+                    "pruned optimality proof requires a bounded lattice and an "
+                    "evaluated optimal candidate"
+                )
+        if (
+            self.termination_reason == "optimal_candidate_found"
+            and not self.optimality_proven
+        ):
+            raise ValueError(
+                "optimal_candidate_found termination requires proven optimality"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Return search proof and explicitly configured limits."""
 
+        assert self.optimality_proven is not None
         return {
             "strategy": self.strategy,
             "complete": self.complete,
+            "optimality_proven": self.optimality_proven,
             "evaluated_candidates": self.evaluated_candidates,
             "total_candidates": self.total_candidates,
             "maximum_quasi_identifiers": self.maximum_quasi_identifiers,
@@ -824,7 +857,10 @@ class ExpertReviewEvidenceReport:
     disclaimer: str = EXPERT_REVIEW_EVIDENCE_DISCLAIMER
 
     def __post_init__(self) -> None:
-        if self.schema_version != EXPERT_REVIEW_EVIDENCE_SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version not in _SUPPORTED_EVIDENCE_SCHEMA_VERSIONS
+        ):
             raise ValueError("unsupported expert-review evidence schema version")
         if self.report_type != _REPORT_TYPE:
             raise ValueError("unsupported expert-review evidence report type")
@@ -851,9 +887,19 @@ class ExpertReviewEvidenceReport:
             self.transformations, TransformationAggregate, "transformations"
         )
         _require_typed_tuple(self.utility, UtilityAggregate, "utility")
+        utility_metrics = [item.metric for item in self.utility]
+        if len(set(utility_metrics)) != len(utility_metrics):
+            raise ValueError("utility metric entries must be unique")
         for values, name in (
             (self.selected_quasi_identifiers, "selected quasi-identifiers"),
             (self.sensitive_attributes, "sensitive attributes"),
+        ):
+            _require_string_tuple(values, name)
+            if len(set(values)) != len(values):
+                raise ValueError(f"{name} must be unique")
+            for attribute_name in values:
+                _require_attribute_name(attribute_name, name)
+        for values, name in (
             (self.limitations, "limitations"),
             (self.unsupported_modalities, "unsupported modalities"),
         ):
@@ -930,6 +976,56 @@ class ExpertReviewEvidenceReport:
             raise ValueError("achieved k does not match post-transform class metrics")
         if self.search.maximum_quasi_identifiers < len(self.selected_quasi_identifiers):
             raise ValueError("selected quasi-identifiers exceed the search limit")
+        if (
+            self.schema_version >= 3
+            and self.search.optimality_proven
+            and not self.search.complete
+        ):
+            utility_by_metric = {item.metric: item for item in self.utility}
+            expected_zero_change_utility = {
+                "information_loss": (0.0, 0.0, "score", False),
+                "mean_qi_distribution_shift": (0.0, 0.0, "ratio", False),
+                "privacy_unit_retention": (1.0, 1.0, "ratio", True),
+                "quasi_identifier_cell_retention": (1.0, 1.0, "ratio", True),
+                "row_retention": (1.0, 1.0, "ratio", True),
+            }
+            utility_matches = all(
+                (
+                    metric in utility_by_metric
+                    and utility_by_metric[metric].before == before
+                    and utility_by_metric[metric].after == after
+                    and utility_by_metric[metric].unit == unit
+                    and utility_by_metric[metric].higher_is_better is higher_is_better
+                )
+                for metric, (
+                    before,
+                    after,
+                    unit,
+                    higher_is_better,
+                ) in expected_zero_change_utility.items()
+            )
+            privacy_models_unchanged = (
+                self.privacy_models.pre_achieved_k == self.privacy_models.achieved_k
+                and self.privacy_models.pre_achieved_l == self.privacy_models.achieved_l
+                and self.privacy_models.pre_achieved_t == self.privacy_models.achieved_t
+            )
+            if (
+                not utility_matches
+                or self.pre_metrics != self.post_metrics
+                or not privacy_models_unchanged
+                or self.transformations
+                or self.suppression.privacy_units_suppressed != 0
+                or self.suppression.rows_suppressed != 0
+                or self.suppression.cells_suppressed != 0
+                or self.suppression.suppression_rate != 0.0
+                or self.search.evaluated_candidates != 1
+                or self.search.suppression_subsets_evaluated != 1
+                or self.search.suppression_subsets_total is not None
+            ):
+                raise ValueError(
+                    "incomplete search optimality requires an exact zero-loss "
+                    "lower-bound proof"
+                )
 
     def _payload(self) -> dict[str, Any]:
         reviews = sorted(
@@ -950,6 +1046,9 @@ class ExpertReviewEvidenceReport:
             ),
         )
         utility = sorted(self.utility, key=lambda item: item.metric)
+        search_payload = self.search.to_dict()
+        if self.schema_version == 2:
+            search_payload.pop("optimality_proven")
         return {
             "schema_version": self.schema_version,
             "report_type": self.report_type,
@@ -968,7 +1067,7 @@ class ExpertReviewEvidenceReport:
             "transformations": [item.to_dict() for item in transformations],
             "suppression": self.suppression.to_dict(),
             "utility": [item.to_dict() for item in utility],
-            "search": self.search.to_dict(),
+            "search": search_payload,
             "composition": self.composition.to_dict(),
             "limitations": sorted(self.limitations),
             "unsupported_modalities": sorted(self.unsupported_modalities),
@@ -1042,7 +1141,7 @@ class ExpertReviewEvidenceReport:
         for item in sorted(self.attribute_reviews, key=lambda review: review.attribute):
             reason = item.override_reason or "none"
             lines.append(
-                f"| `{item.attribute}` | "
+                f"| {_markdown_code(item.attribute)} | "
                 f"{', '.join(f'`{role}`' for role in sorted(item.roles))} | "
                 f"`{str(item.override_applied).lower()}` | `{reason}` |"
             )
@@ -1053,11 +1152,15 @@ class ExpertReviewEvidenceReport:
                 "",
                 "- Quasi-identifiers: "
                 + ", ".join(
-                    f"`{item}`" for item in sorted(self.selected_quasi_identifiers)
+                    _markdown_code(item)
+                    for item in sorted(self.selected_quasi_identifiers)
                 ),
                 "- Sensitive attributes: "
                 + (
-                    ", ".join(f"`{item}`" for item in sorted(self.sensitive_attributes))
+                    ", ".join(
+                        _markdown_code(item)
+                        for item in sorted(self.sensitive_attributes)
+                    )
                     or "none"
                 ),
                 "",
@@ -1115,7 +1218,8 @@ class ExpertReviewEvidenceReport:
             key=lambda value: (value.attribute, value.method),
         ):
             lines.append(
-                f"| `{transformation.attribute}` | `{transformation.method}` | "
+                f"| {_markdown_code(transformation.attribute)} | "
+                f"`{transformation.method}` | "
                 f"`{transformation.affected_privacy_unit_count}` | "
                 f"`{_optional_number(transformation.hierarchy_level_before)}` | "
                 f"`{_optional_number(transformation.hierarchy_level_after)}` |"
@@ -1152,6 +1256,7 @@ class ExpertReviewEvidenceReport:
                 "",
                 f"- Strategy: `{self.search.strategy}`",
                 f"- Complete: `{str(self.search.complete).lower()}`",
+                f"- Optimality proven: `{str(self.search.optimality_proven).lower()}`",
                 f"- Evaluated candidates: `{self.search.evaluated_candidates}`",
                 "- Total candidates: "
                 f"`{_optional_number(self.search.total_candidates)}`",
@@ -1374,7 +1479,10 @@ def _report_from_mapping(data: Mapping[str, Any]) -> ExpertReviewEvidenceReport:
         utility=tuple(
             _parse_utility(item) for item in _array(payload["utility"], "utility")
         ),
-        search=_parse_search(payload["search"]),
+        search=_parse_search(
+            payload["search"],
+            schema_version=payload["schema_version"],
+        ),
         composition=_parse_composition(payload["composition"]),
         limitations=_string_array(payload["limitations"], "limitations"),
         unsupported_modalities=_string_array(
@@ -1597,24 +1705,33 @@ def _parse_utility(value: Any) -> UtilityAggregate:
     return utility
 
 
-def _parse_search(value: Any) -> SearchEvidence:
+def _parse_search(value: Any, *, schema_version: int) -> SearchEvidence:
+    if schema_version not in _SUPPORTED_EVIDENCE_SCHEMA_VERSIONS:
+        raise ValueError("unsupported expert-review evidence schema version")
+    expected_fields = {
+        "strategy",
+        "complete",
+        "evaluated_candidates",
+        "total_candidates",
+        "maximum_quasi_identifiers",
+        "candidate_limit",
+        "suppression_subsets_evaluated",
+        "suppression_subsets_total",
+        "suppression_subset_limit",
+        "time_limit_seconds",
+        "termination_reason",
+    }
+    if schema_version >= 3:
+        expected_fields.add("optimality_proven")
     item = _object(
         value,
-        {
-            "strategy",
-            "complete",
-            "evaluated_candidates",
-            "total_candidates",
-            "maximum_quasi_identifiers",
-            "candidate_limit",
-            "suppression_subsets_evaluated",
-            "suppression_subsets_total",
-            "suppression_subset_limit",
-            "time_limit_seconds",
-            "termination_reason",
-        },
+        expected_fields,
         "search",
     )
+    if schema_version == 2:
+        item["optimality_proven"] = (
+            item["complete"] or item["termination_reason"] == "optimal_candidate_found"
+        )
     return SearchEvidence(**item)
 
 
@@ -1694,6 +1811,37 @@ def _require_digest(value: Any) -> None:
 def _require_identifier(value: Any, name: str) -> None:
     if not isinstance(value, str) or _IDENTIFIER_RE.fullmatch(value) is None:
         raise ValueError(f"{name} must use a safe metadata identifier")
+
+
+def _require_attribute_name(value: Any, name: str) -> None:
+    """Validate a source-schema label without imposing programming syntax."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value) > 256
+        or any(
+            unicodedata.category(character).startswith("C")
+            or unicodedata.category(character) in {"Zl", "Zp"}
+            for character in value
+        )
+    ):
+        raise ValueError(
+            f"{name} must be a non-empty source column name without surrounding "
+            "whitespace or control characters"
+        )
+
+
+def _markdown_code(value: str) -> str:
+    """Render one metadata value as a table-safe Markdown code span."""
+
+    text = value.replace("|", r"\|")
+    runs = re.findall(r"`+", text)
+    fence = "`" * (max((len(run) for run in runs), default=0) + 1)
+    if text.startswith("`") or text.endswith("`"):
+        text = f" {text} "
+    return f"{fence}{text}{fence}"
 
 
 def _require_choice(value: Any, choices: frozenset[str], name: str) -> None:
