@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
+try:
+    import tomllib as _toml
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10
+    import tomli as _toml  # type: ignore[no-redef]
+
 from openmed.interop import adapter_spec, available_adapters, get_adapter, spark_udf
 from openmed.interop.spark_udf import _deidentify_series
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def fake_deidentifier(text: str, **kwargs):
@@ -124,6 +132,15 @@ def test_registry_loads_spark_adapter_lazily():
     assert "spark" in available_adapters()
     assert adapter_spec("spark").extra == "spark"
     assert hasattr(adapter, "make_deidentify_udf")
+
+
+def test_spark_extra_installs_all_pandas_udf_runtime_dependencies():
+    with (ROOT / "pyproject.toml").open("rb") as handle:
+        dependencies = _toml.load(handle)["project"]["optional-dependencies"]["spark"]
+
+    assert any(requirement.startswith("pyspark") for requirement in dependencies)
+    assert any(requirement.startswith("pandas") for requirement in dependencies)
+    assert any(requirement.startswith("pyarrow") for requirement in dependencies)
 
 
 def test_make_deidentify_udf_raises_clear_error_without_pyspark(monkeypatch):

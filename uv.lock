@@ -5386,6 +5386,8 @@ spacy = [
     { name = "spacy" },
 ]
 spark = [
+    { name = "pandas" },
+    { name = "pyarrow" },
     { name = "pyspark" },
 ]
 zh = [
@@ -5479,6 +5481,7 @@ requires-dist = [
     { name = "paddleocr", marker = "extra == 'ocr-paddle'", specifier = ">=2.7" },
     { name = "pandas", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.0" },
+    { name = "pandas", marker = "extra == 'spark'", specifier = ">=2.0" },
     { name = "pdfplumber", marker = "extra == 'multimodal'", specifier = ">=0.11" },
     { name = "philter-ucsf", marker = "extra == 'philter'", specifier = ">=1.0.3,<2" },
     { name = "piexif", marker = "extra == 'multimodal'", specifier = ">=1.1" },
@@ -5493,6 +5496,7 @@ requires-dist = [
     { name = "protobuf", marker = "extra == 'dev'", specifier = ">=5.26,<7" },
     { name = "protobuf", marker = "extra == 'service'", specifier = ">=5.26,<7" },
     { name = "pyarrow", marker = "extra == 'columnar'", specifier = ">=16" },
+    { name = "pyarrow", marker = "extra == 'spark'", specifier = ">=16" },
     { name = "pycld2", marker = "extra == 'lid'", specifier = ">=0.41,<1" },
     { name = "pydeid", marker = "extra == 'pydeid'", specifier = ">=0.0.1" },
     { name = "pydicom", marker = "extra == 'multimodal'", specifier = ">=3.0" },
