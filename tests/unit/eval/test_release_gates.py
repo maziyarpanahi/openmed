@@ -1005,7 +1005,8 @@ def test_structured_release_risk_gate_verifies_aggregate_evidence(
     assert result.verify(SIGNING_KEY)
     assert check.passed is True
     assert check.details["integrity_verified"] is True
-    assert check.details["search_complete"] is True
+    assert check.details["search_complete"] is False
+    assert check.details["search_optimality_proven"] is True
     assert check.details["qualified_expert_review_required"] is True
     serialized = json.dumps(check.to_dict(), sort_keys=True)
     assert "patient-0" not in serialized
@@ -1050,6 +1051,82 @@ def test_structured_release_risk_gate_rejects_missing_sensitive_models() -> None
 
     assert check.passed is False
     assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_rejects_nonzero_pruned_proof() -> None:
+    payload = _structured_release_evidence().to_dict()
+    information_loss = next(
+        item for item in payload["utility"] if item["metric"] == "information_loss"
+    )
+    information_loss["after"] = 0.14
+    information_loss["absolute_delta"] = 0.14
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_rejects_changed_pre_metrics_in_pruned_proof() -> (
+    None
+):
+    payload = _structured_release_evidence().to_dict()
+    payload["metrics"]["pre_transform"] = {
+        "privacy_unit_count": 4,
+        "equivalence_class_count": 4,
+        "class_sizes": {
+            "smallest": 1,
+            "largest": 1,
+            "mean": 1.0,
+            "histogram": [
+                {
+                    "lower_bound": 1,
+                    "upper_bound": 1,
+                    "class_count": 4,
+                    "privacy_unit_count": 4,
+                }
+            ],
+        },
+        "violations": {
+            "k_class_count": 4,
+            "l_class_count": 4,
+            "t_class_count": 4,
+            "any_class_count": 4,
+            "privacy_unit_count": 4,
+        },
+    }
+    payload["privacy_models"]["k_anonymity"]["pre_achieved_k"] = 1
+    payload["privacy_models"]["l_diversity"]["pre_achieved_l"] = 1
+    payload["privacy_models"]["t_closeness"]["pre_achieved_t"] = 1.0
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_requires_v3_for_pruned_proof() -> None:
+    payload = _structured_release_evidence().to_dict()
+    assert payload["search"]["complete"] is False
+    payload["schema_version"] = 2
+    payload["search"].pop("optimality_proven")
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details["integrity_verified"] is True
+    assert check.details["violations"]["search_optimality_proof"] == (
+        "schema_version_3_required_for_pruned_proof"
+    )
 
 
 def test_standalone_release_risk_verifier_requires_evidence() -> None:
