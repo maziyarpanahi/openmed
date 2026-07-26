@@ -11,6 +11,9 @@ Install the optional extra:
 pip install "openmed[spark]"
 ```
 
+The extra installs PySpark together with the pandas and PyArrow runtimes
+required by `pandas_udf`.
+
 Redact one or more columns on a static DataFrame:
 
 ```python
