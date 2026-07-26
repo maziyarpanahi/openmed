@@ -170,6 +170,7 @@ def _report(*, reverse: bool = False) -> ExpertReviewEvidenceReport:
         search=SearchEvidence(
             strategy="exhaustive_lattice",
             complete=True,
+            optimality_proven=True,
             evaluated_candidates=25,
             total_candidates=25,
             maximum_quasi_identifiers=8,
@@ -253,7 +254,9 @@ def test_bundle_contains_required_aggregate_evidence_and_placeholders() -> None:
 
     assert payload["title"] == EXPERT_REVIEW_EVIDENCE_TITLE
     assert payload["disclaimer"] == EXPERT_REVIEW_EVIDENCE_DISCLAIMER
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
+    assert payload["search"]["optimality_proven"] is True
+    assert "- Optimality proven: `true`" in report.to_markdown()
     assert set(payload["digests"]) == {
         "source_dataset",
         "dataset",
@@ -294,6 +297,95 @@ def test_serialization_is_deterministic_for_semantically_equal_inputs() -> None:
     assert ExpertReviewEvidenceReport.from_json(first.to_json()).to_dict() == (
         first.to_dict()
     )
+
+
+def test_schema_two_evidence_remains_verifiable_without_optimality_field() -> None:
+    legacy = _report().to_dict()
+    legacy["schema_version"] = 2
+    legacy["search"].pop("optimality_proven")
+    legacy["integrity_hash"] = stable_hash(
+        {key: value for key, value in legacy.items() if key != "integrity_hash"}
+    )
+
+    restored = ExpertReviewEvidenceReport.from_dict(legacy)
+
+    assert restored.schema_version == 2
+    assert restored.search.optimality_proven is True
+    assert restored.verify() is True
+    assert "optimality_proven" not in restored.to_dict()["search"]
+
+
+def test_schema_two_bounded_optimal_termination_remains_parseable() -> None:
+    legacy = _report().to_dict()
+    legacy["schema_version"] = 2
+    legacy["search"].update(
+        {
+            "strategy": "bounded_lattice",
+            "complete": False,
+            "evaluated_candidates": 4,
+            "suppression_subsets_evaluated": 4,
+            "termination_reason": "optimal_candidate_found",
+        }
+    )
+    legacy["search"].pop("optimality_proven")
+    legacy["integrity_hash"] = stable_hash(
+        {key: value for key, value in legacy.items() if key != "integrity_hash"}
+    )
+
+    restored = ExpertReviewEvidenceReport.from_dict(legacy)
+
+    assert restored.schema_version == 2
+    assert restored.search.complete is False
+    assert restored.search.optimality_proven is True
+    assert restored.verify() is True
+
+
+def test_schema_three_rejects_inconsistent_pruned_optimality_claim() -> None:
+    payload = _report().to_dict()
+    payload["search"].update(
+        {
+            "strategy": "bounded_lattice",
+            "complete": False,
+            "optimality_proven": True,
+            "evaluated_candidates": 1,
+            "suppression_subsets_evaluated": 1,
+            "suppression_subsets_total": None,
+            "termination_reason": "optimal_candidate_found",
+        }
+    )
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    with pytest.raises(ValueError, match="exact zero-loss lower-bound proof"):
+        ExpertReviewEvidenceReport.from_dict(payload)
+
+
+def test_schema_version_requires_an_exact_integer() -> None:
+    payload = _report().to_dict()
+    payload["schema_version"] = 3.0
+
+    with pytest.raises(ValueError, match="schema version"):
+        ExpertReviewEvidenceReport.from_dict(payload, verify=False)
+
+
+def test_search_evidence_preserves_schema_two_positional_constructor() -> None:
+    search = SearchEvidence(
+        "bounded_lattice",
+        False,
+        4,
+        10,
+        4,
+        4,
+        4,
+        10,
+        4,
+        None,
+        "candidate_limit_reached",
+    )
+
+    assert search.complete is False
+    assert search.optimality_proven is False
 
 
 @pytest.mark.parametrize(
@@ -339,7 +431,7 @@ def test_json_parser_rejects_nested_duplicate_keys() -> None:
 def test_json_parser_rejects_non_finite_numbers(constant: str) -> None:
     rendered = _report().to_json(indent=None)
     malformed = rendered.replace(
-        '"schema_version":2',
+        '"schema_version":3',
         f'"schema_version":{constant}',
         1,
     )
@@ -449,6 +541,7 @@ def test_markdown_has_required_review_and_method_sections() -> None:
             lambda: SearchEvidence(
                 strategy="exhaustive_lattice",
                 complete=False,
+                optimality_proven=False,
                 evaluated_candidates=4,
                 total_candidates=10,
                 maximum_quasi_identifiers=4,
