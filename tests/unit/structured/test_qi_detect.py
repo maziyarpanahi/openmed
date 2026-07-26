@@ -254,7 +254,40 @@ def test_privacy_unit_uses_subjects_not_repeated_encounters(
     ]
     assert pair["sampled_rows"] == 3
     assert pair["analysis_unit_count"] == 2
-    assert pair["min_equivalence_class_size"] == 2
+    assert pair["equivalence_class_count"] == 2
+    assert pair["singleton_count"] == 2
+    assert pair["min_equivalence_class_size"] == 1
+
+
+def test_broad_candidate_scan_finds_combination_only_qis(tmp_path: Path) -> None:
+    rows = [
+        {
+            "factor_a": f"a-{index // 10}",
+            "factor_b": f"b-{index % 10}",
+        }
+        for index in range(100)
+    ]
+    csv_path = _write_csv(tmp_path / "factor-design.csv", rows)
+
+    default = scan_table(csv_path, full_scan=True, max_set_size=2)
+    broad = scan_table(
+        csv_path,
+        full_scan=True,
+        max_set_size=2,
+        max_candidate_columns=2,
+        include_safe_candidates=True,
+    )
+
+    assert default["search"]["eligible_column_count"] == 0
+    assert broad["search"]["candidate_scope"] == "all_reviewed_scalar_columns"
+    pair = next(
+        candidate
+        for candidate in broad["quasi_identifier_sets"]
+        if candidate["columns"] == ["factor_a", "factor_b"]
+    )
+    assert pair["analysis_unit_count"] == 100
+    assert pair["singleton_count"] == 100
+    assert pair["min_equivalence_class_size"] == 1
 
 
 def test_explicit_overrides_win_over_heuristics(tmp_path: Path) -> None:
