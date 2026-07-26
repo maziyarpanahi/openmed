@@ -10,23 +10,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added an offline structured-data release-risk workflow with advisory
-  quasi-identifier discovery, overlap-preserving candidate roles and explicit
-  reviewer overrides,
-  patient-level k-anonymity, distinct or entropy l-diversity, variational
-  t-closeness, bounded exhaustive hierarchy and equivalence-class suppression
-  search, whole-privacy-unit suppression,
-  type- and schema-bound materialized-output revalidation, rollback-safe CLI
-  publication, and deterministic aggregate-only evidence for qualified expert
-  review. Release policy construction requires an explicit disposition for
+  quasi-identifier discovery, overlap-preserving candidate roles, explicit
+  reviewer overrides, and an opt-in bounded search across otherwise-safe scalar
+  columns. Repeatable literal CLI flags support reviewed column names with
+  commas, spaces, or Unicode. Patient-level k-anonymity now represents
+  longitudinal QIs as joint ordered multisets, preserving within-row
+  correlation and repeated-event multiplicity through hierarchy transforms.
+  Distinct or entropy l-diversity, variational t-closeness, bounded exhaustive
+  hierarchy and equivalence-class suppression search, whole-privacy-unit
+  suppression, and hierarchy-consistency validation remain fail closed. An
+  exact zero-loss release is accepted without exploring irrelevant
+  suppression subsets. Expert-review evidence schema version 3 distinguishes
+  exhaustive completion from a proven zero-loss lower bound; version 2 remains
+  readable, while CI requires version 3 for an incomplete pruned proof.
+- Added exact offline reference-population assessment over row-level or keyed
+  longitudinal profiles, with k-map, exact-linkage risk, delta-presence,
+  explicit model assumptions, conservative unmatched-profile handling, and
+  separate data, schema, policy, and integrity digests. The aggregate-only
+  Python and CLI results never serialize raw profiles or privacy-unit values.
+  Both population-risk thresholds must be set explicitly; no permissive
+  default, population extrapolation, or uncertainty estimate is implied.
+- Added aggregate-only HTML dashboards for structured assessment and
+  anonymization, a strict `openmed risk gate` CI command, and deterministic
+  expert-review evidence with mandatory baseline limitations and broader
+  software/runtime bindings. A separate expert-authored Ed25519 envelope binds
+  the verified release evidence and optional named supporting-evidence digests
+  to the expert's identity, qualifications, methodology, conclusion, and
+  reassessment time. Signature, key, evidence, binding, conclusion, and
+  freshness checks remain independent; none of these artifacts constitutes an
+  automated Expert Determination or release authorization.
+- Structured release policy construction requires an explicit disposition for
   every source column and fails closed for unsupported multi-valued sensitive
   analysis. Exact typed QI and privacy-unit representations remain distinct,
   while l-diversity conservatively collapses semantic aliases and t-closeness
-  measures published sensitive representations. Evidence separately reports
-  suppressed privacy units, rows, and QI cells. Pandas and Polars adapters
-  expose the same policy workflow, and the release gate verifies evidence
-  integrity and configured thresholds. The CLI, Python guide, and synthetic
-  walkthrough explicitly state that the output supports but does not
-  constitute an Expert Determination.
+  measures published sensitive representations. Type- and schema-bound output
+  revalidation, rollback-safe CLI publication, separately reported suppressed
+  privacy units, rows, and QI cells, and the Pandas and Polars adapters continue
+  to use the same policy workflow.
 - Added a fail-closed, signed release-readiness gate that verifies signed model
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite
