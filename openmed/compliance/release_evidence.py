@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import sys
 from pathlib import Path
 from statistics import mean
 from typing import TYPE_CHECKING, Any, Final, Mapping, Sequence
@@ -36,11 +37,22 @@ if TYPE_CHECKING:
 
 __all__ = ["build_release_expert_review_evidence"]
 
+_MANDATORY_RELEASE_LIMITATIONS: Final = (
+    "not_compliance_certificate",
+    "population_risk_not_estimated",
+    "qualified_expert_review_required",
+)
+_MANDATORY_UNSUPPORTED_MODALITIES: Final = (
+    "free_text",
+    "images",
+    "genomic_data",
+)
 _SOFTWARE_EVIDENCE_MODULES: Final = (
     "openmed.compliance.expert_review",
     "openmed.compliance.release_evidence",
     "openmed.core.audit",
     "openmed.risk.kanon",
+    "openmed.risk.reid",
     "openmed.risk.release",
     "openmed.structured.table_io",
 )
@@ -52,22 +64,17 @@ def build_release_expert_review_evidence(
     validation: ReleasedOutputValidation,
     assumptions: ReleaseAssumptions,
     composition: CompositionEvidence | None = None,
-    limitations: tuple[str, ...] = (
-        "not_compliance_certificate",
-        "population_risk_not_estimated",
-        "qualified_expert_review_required",
-    ),
-    unsupported_modalities: tuple[str, ...] = (
-        "free_text",
-        "images",
-        "genomic_data",
-    ),
+    limitations: tuple[str, ...] = _MANDATORY_RELEASE_LIMITATIONS,
+    unsupported_modalities: tuple[str, ...] = _MANDATORY_UNSUPPORTED_MODALITIES,
 ) -> ExpertReviewEvidenceReport:
     """Build a strict aggregate evidence bundle from an anonymization result.
 
     The transformed rows are deliberately inaccessible to the lower-level
     evidence builder. Only allow-listed aggregate fields from
     ``AnonymizationResult`` cross this boundary.
+
+    Caller-supplied limitation and unsupported-modality codes extend the
+    mandatory baseline caveats; they cannot remove them.
     """
 
     from openmed.risk.release import AnonymizationResult, ReleasedOutputValidation
@@ -79,6 +86,16 @@ def build_release_expert_review_evidence(
     if not isinstance(assumptions, ReleaseAssumptions):
         raise TypeError("assumptions must be a ReleaseAssumptions")
     _require_validated_release_binding(result, validation)
+    resolved_limitations = _with_mandatory_codes(
+        limitations,
+        mandatory=_MANDATORY_RELEASE_LIMITATIONS,
+        name="limitations",
+    )
+    resolved_unsupported_modalities = _with_mandatory_codes(
+        unsupported_modalities,
+        mandatory=_MANDATORY_UNSUPPORTED_MODALITIES,
+        name="unsupported_modalities",
+    )
 
     policy = result.policy
     if policy.privacy_unit is None and assumptions.privacy_unit != "row":
@@ -174,8 +191,13 @@ def build_release_expert_review_evidence(
         ),
     )
     search = SearchEvidence(
-        strategy="exhaustive_lattice",
-        complete=result.generalization.optimum_proven,
+        strategy=(
+            "exhaustive_lattice"
+            if result.generalization.search_complete
+            else "bounded_lattice"
+        ),
+        complete=result.generalization.search_complete,
+        optimality_proven=result.generalization.optimum_proven,
         evaluated_candidates=result.generalization.nodes_evaluated,
         total_candidates=result.generalization.search_space_size,
         maximum_quasi_identifiers=max(1, len(policy.quasi_identifiers)),
@@ -234,9 +256,23 @@ def build_release_expert_review_evidence(
         utility=utility,
         search=search,
         composition=resolved_composition,
-        limitations=limitations,
-        unsupported_modalities=unsupported_modalities,
+        limitations=resolved_limitations,
+        unsupported_modalities=resolved_unsupported_modalities,
     )
+
+
+def _with_mandatory_codes(
+    supplied: tuple[str, ...],
+    *,
+    mandatory: tuple[str, ...],
+    name: str,
+) -> tuple[str, ...]:
+    """Add non-removable baseline caveats while preserving strict extra codes."""
+
+    if not isinstance(supplied, tuple):
+        raise TypeError(f"{name} must be a tuple of coded values")
+    extras = tuple(value for value in supplied if value not in mandatory)
+    return (*mandatory, *extras)
 
 
 def _attribute_reviews(
@@ -460,8 +496,21 @@ def _software_digest() -> str:
     return stable_hash(
         {
             "kind": "openmed-software-content",
-            "package": "openmed",
-            "version": __version__,
+            "package": {
+                "name": "openmed",
+                "version": __version__,
+            },
+            "runtime": _runtime_metadata(),
             "modules": module_digests,
         }
     )
+
+
+def _runtime_metadata() -> dict[str, str]:
+    """Return deterministic, non-sensitive runtime provenance."""
+
+    return {
+        "python_implementation": sys.implementation.name,
+        "python_version": ".".join(str(part) for part in sys.version_info[:3]),
+        "python_cache_tag": sys.implementation.cache_tag or "unknown",
+    }
