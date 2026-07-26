@@ -37,6 +37,7 @@ from .k_anonymity import (
     propose_suppression,
 )
 from .kanon import build_generalization_hierarchies, enforce_kanon, kanon_report
+from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
     LongitudinalEvidence,
@@ -99,11 +100,13 @@ __all__ = [
     "LongitudinalEvidence",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "PopulationRiskAssessment",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
     "analyze_k_anonymity",
     "apply_suppression",
+    "assess_population_risk",
     "budget_for_policy",
     "build_longitudinal_corpus",
     "evaluate_budget",
