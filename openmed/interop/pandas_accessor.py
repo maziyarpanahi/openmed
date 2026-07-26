@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any
+from collections.abc import Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from openmed.risk import (
+        AnonymityPolicy,
+        AnonymizationResult,
+        ReleaseAssessment,
+    )
 
 try:
     import pandas as pd
@@ -91,6 +98,39 @@ class OpenMedDataFrameAccessor:
             _records_for_risk(self._obj, selected_columns),
             original=_records_for_risk(original, selected_columns),
             aux=_records_for_risk(aux, selected_columns),
+        )
+
+    def assess_release(self, policy: AnonymityPolicy) -> ReleaseAssessment:
+        """Return a PHI-safe aggregate release assessment.
+
+        Unlike :meth:`risk_report`, this method accepts an explicit
+        patient/privacy-unit policy and returns only the allow-listed aggregate
+        schema from :class:`openmed.risk.ReleaseAssessment`.
+        """
+
+        from openmed.risk import assess_release
+
+        return assess_release(_records_for_release(self._obj), policy)
+
+    def anonymize_release(
+        self,
+        policy: AnonymityPolicy,
+        *,
+        hierarchies: (Mapping[str, Sequence[Mapping[str, Any]]] | None) = None,
+    ) -> AnonymizationResult:
+        """Generalize and suppress a release under an explicit policy.
+
+        The returned :class:`openmed.risk.AnonymizationResult` keeps transformed
+        rows only in ``records``. Its ``to_safe_dict`` and ``to_safe_json``
+        methods remain aggregate-only.
+        """
+
+        from openmed.risk import anonymize_release
+
+        return anonymize_release(
+            _records_for_release(self._obj),
+            policy,
+            hierarchies=hierarchies,
         )
 
     def extract(
@@ -188,6 +228,7 @@ def _validate_columns(frame: Any, columns: Sequence[str] | str) -> tuple[str, ..
 
 
 def _normalize_columns(columns: Sequence[str] | str) -> tuple[str, ...]:
+    normalized: tuple[str, ...]
     if isinstance(columns, str):
         normalized = (columns,)
     else:
@@ -246,6 +287,47 @@ def _records_for_risk(
     if isinstance(value, pd.DataFrame):
         frame = value.loc[:, list(columns)] if columns is not None else value
         return frame.to_dict("records")
+    return value
+
+
+def _records_for_release(frame: Any) -> list[dict[Any, Any]]:
+    columns = list(frame.columns)
+    if any(type(field) is not str for field in columns):
+        raise TypeError("DataFrame column names must be strings")
+    if len(columns) != len(set(columns)):
+        raise ValueError("DataFrame column names must be unique")
+    records = frame.to_dict("records")
+    return [
+        {field: _release_scalar(value) for field, value in record.items()}
+        for record in records
+    ]
+
+
+def _release_scalar(value: Any) -> Any:
+    if value is None or value is pd.NA or value is pd.NaT:
+        return None
+    if isinstance(value, pd.Timestamp):
+        if value.nanosecond:
+            raise ValueError(
+                "Pandas timestamps with sub-microsecond precision are unsupported"
+            )
+        return value.to_pydatetime()
+    value_type = type(value)
+    if value_type.__module__.split(".", 1)[0] == "numpy":
+        if value_type.__name__ == "datetime64":
+            timestamp = pd.Timestamp(value)
+            if timestamp is pd.NaT:
+                return None
+            if timestamp.nanosecond:
+                raise ValueError(
+                    "NumPy timestamps with sub-microsecond precision are unsupported"
+                )
+            return timestamp.to_pydatetime()
+        if value_type.__name__ == "timedelta64":
+            raise TypeError("NumPy time durations are unsupported release scalars")
+        item = getattr(value, "item", None)
+        if callable(item):
+            return item()
     return value
 
 

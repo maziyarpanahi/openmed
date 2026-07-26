@@ -21,7 +21,12 @@ from .budget import (
     budget_for_policy,
     evaluate_budget,
 )
-from .dashboard import render_risk_dashboard, write_risk_dashboard
+from .dashboard import (
+    render_release_assessment_dashboard,
+    render_risk_dashboard,
+    write_release_assessment_dashboard,
+    write_risk_dashboard,
+)
 from .k_anonymity import (
     EquivalenceClass,
     KAnonymityEngine,
@@ -42,6 +47,21 @@ from .reid import (
     longitudinal_risk_report,
     quasi_identifier_key,
     risk_report,
+)
+from .release import (
+    AnonymityPolicy,
+    AnonymizationResult,
+    AttributeDisclosureSummary,
+    GeneralizationSummary,
+    ReleaseAssessment,
+    ReleasedOutputValidation,
+    UtilitySummary,
+    anonymize_release,
+    assess_release,
+    release_dataset_digest,
+    release_schema_digest,
+    safe_risk_summary,
+    validate_released_output,
 )
 from .synthetic_tabular import (
     DEFAULT_CORRELATION_TOLERANCE,
@@ -100,6 +120,21 @@ __all__ = [
     "propose_suppression",
     "diff_audit_reports",
     "AuditDiff",
+    "AnonymityPolicy",
+    "AnonymizationResult",
+    "AttributeDisclosureSummary",
+    "GeneralizationSummary",
+    "ReleaseAssessment",
+    "ReleasedOutputValidation",
+    "UtilitySummary",
+    "anonymize_release",
+    "assess_release",
+    "release_dataset_digest",
+    "release_schema_digest",
+    "render_release_assessment_dashboard",
     "render_risk_dashboard",
+    "safe_risk_summary",
+    "validate_released_output",
+    "write_release_assessment_dashboard",
     "write_risk_dashboard",
 ]
