@@ -4,6 +4,11 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
+OPENMED_CLINICAL_DISCLAIMER = (
+    "OpenMed clinical outputs are assistive software outputs, not a medical "
+    "device, diagnosis, or substitute for qualified clinical judgment."
+)
+
 from .abbreviation import (
     ABBREVIATION_DISAMBIGUATION_ADVISORY,
     DEFAULT_SENSE_INVENTORY_RESOURCE,
@@ -205,15 +210,30 @@ from .radiology_report import (
     parse_radiology_report,
 )
 from .relations import (
+    CMEIE_ENTITY_TYPES,
+    CMEIE_RELATION_MAPPING,
+    INDIC_RELATION_MAPPING,
     MEDICATION_LINK_ADVISORY,
+    MULTILINGUAL_RELATION_ADVISORY,
+    MULTILINGUAL_RELATION_REGISTRY_VERSION,
+    RELATION_TYPE_REGISTRY,
     MedicationAttributeType,
     MedicationRelation,
     MedicationRelationGroup,
     MedicationRelationScorer,
     MedicationRelationType,
+    MultilingualRelation,
     RelationCandidate,
+    RelationCandidateBatch,
+    RelationCandidateRule,
     SpanReference,
+    available_multilingual_relation_languages,
+    build_relation_candidates,
+    extract_relations,
     link_medication_attributes,
+    map_relation_type,
+    multilingual_relation_rules,
+    relation_type_mapping,
 )
 from .severity_laterality import (
     LATERALITY_BILATERAL,
@@ -305,6 +325,7 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "OPENMED_CLINICAL_DISCLAIMER",
     "ABBREVIATION_DISAMBIGUATION_ADVISORY",
     "DEFAULT_SENSE_INVENTORY_RESOURCE",
     "AbbreviationAnnotation",
@@ -494,9 +515,24 @@ __all__ = [
     "MedicationRelationScorer",
     "MedicationRelationType",
     "RelationCandidate",
+    "RelationCandidateBatch",
+    "RelationCandidateRule",
     "SpanReference",
     "MEDICATION_LINK_ADVISORY",
+    "MULTILINGUAL_RELATION_ADVISORY",
+    "MULTILINGUAL_RELATION_REGISTRY_VERSION",
+    "RELATION_TYPE_REGISTRY",
+    "CMEIE_ENTITY_TYPES",
+    "CMEIE_RELATION_MAPPING",
+    "INDIC_RELATION_MAPPING",
+    "MultilingualRelation",
+    "available_multilingual_relation_languages",
+    "build_relation_candidates",
+    "extract_relations",
     "link_medication_attributes",
+    "map_relation_type",
+    "multilingual_relation_rules",
+    "relation_type_mapping",
     "CURRENT",
     "FORMER",
     "NEVER",

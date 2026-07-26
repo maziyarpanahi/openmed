@@ -17,11 +17,13 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "prefect",
     "pyDeid",
     "pydeid",
-    "scrubadub",
     "gliner",
     "llama_index",
     "opencc",
     "pypinyin",
+    "quickumls",
+    "scispacy",
+    "scrubadub",
     "spacy",
 )
 
@@ -72,6 +74,8 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "prefect",
         "presidio",
         "pydeid",
+        "quickumls",
+        "scispacy_linker",
         "scrubadub",
         "spacy",
         "zh",
@@ -93,6 +97,8 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("polars").extra == "polars"
     assert adapter_spec("prefect").extra == "prefect"
     assert adapter_spec("pydeid").extra == "pydeid"
+    assert adapter_spec("quickumls").extra == "quickumls"
+    assert adapter_spec("scispacy_linker").extra == "scispacy"
     assert adapter_spec("scrubadub").extra == "scrubadub"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"

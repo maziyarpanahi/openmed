@@ -430,12 +430,14 @@ _DAY_FIRST_LOCALES = frozenset(
         "da_DK",
         "no_NO",
         "th_TH",
+        "uk_UA",
         "cs_CZ",
         "sk_SK",
         "af_ZA",
         "en_ZA",
         "zu_ZA",
         "xh_ZA",
+        "el_GR",
     }
 )
 
@@ -508,6 +510,7 @@ _LOCALE_ID_METHODS = {
     "sv_SE": "ssn",
     "no_NO": "ssn",
     "th_TH": "thai_national_id",
+    "uk_UA": "rnokpp",
     "sk_SK": "rodne_cislo",
     "cs_CZ": "rodne_cislo",
     "ro_RO": "romanian_cnp",

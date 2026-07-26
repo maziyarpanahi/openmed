@@ -340,6 +340,18 @@ from openmed.eval.quant_delta import (
     QuantRecallDeltaResult,
     evaluate_quant_recall_delta,
 )
+from openmed.eval.regression_tracker import (
+    ESCAPED,
+    GATED,
+    RECOVERED,
+    REGRESSION_TRACKER_SCHEMA_VERSION,
+    RegressionEvent,
+    RegressionHotspot,
+    RegressionTrackerSummary,
+    render_regression_dashboard,
+    track_regression_escapes,
+    write_regression_dashboard,
+)
 from openmed.eval.relation_metrics import (
     EvalRelation,
     compute_relation_confidence_intervals,
@@ -365,6 +377,12 @@ from openmed.eval.release_gates import (
     apply_flakiness_quarantine,
     evaluate_federated_boundary_gate,
     evaluate_surrogate_quality_gate,
+)
+from openmed.eval.release_readiness import (
+    NOT_READY,
+    READY,
+    ReadinessReport,
+    evaluate_readiness,
 )
 from openmed.eval.report import BenchmarkReport
 from openmed.eval.robustness import (
@@ -591,11 +609,17 @@ __all__ = [
     "PROVENANCE_MANIFEST_SCHEMA_VERSION",
     "QUARANTINED",
     "QuantRecallDeltaResult",
+    "READY",
+    "NOT_READY",
+    "ReadinessReport",
     "ReidAttackResult",
     "ResidualLabelSummary",
     "ReliabilityBin",
     "EvalRelation",
     "RelationFixtureResult",
+    "RegressionEvent",
+    "RegressionHotspot",
+    "RegressionTrackerSummary",
     "RELEASABLE",
     "RunLedgerConflict",
     "SURROGATE_QUALITY_DIMENSIONS",
@@ -704,6 +728,7 @@ __all__ = [
     "eval_code_hash",
     "evaluate_federated_boundary_gate",
     "evaluate_quant_recall_delta",
+    "evaluate_readiness",
     "evaluate_surrogate_quality",
     "evaluate_surrogate_quality_gate",
     "evaluate_surrogate_record",
@@ -750,6 +775,7 @@ __all__ = [
     "profile_memory",
     "radiology_finding_tuple_f1",
     "render_reid_leaderboard",
+    "render_regression_dashboard",
     "render_dataset_card_markdown",
     "render_eval_model_card_markdown",
     "render_eval_model_datasheet_json",
@@ -780,6 +806,7 @@ __all__ = [
     "stratified_hard_negative_sample",
     "sweep_confidence_thresholds",
     "threshold_sweep_report",
+    "track_regression_escapes",
     "store",
     "synthetic_memprofile_loader",
     "synthetic_perf_runner",
@@ -800,6 +827,11 @@ __all__ = [
     "write_leakage_dashboard_artifacts",
     "write_model_scorecard",
     "write_model_scorecard_json",
+    "write_regression_dashboard",
     "write_run_ledger",
     "write_training_data_manifest",
+    "ESCAPED",
+    "GATED",
+    "RECOVERED",
+    "REGRESSION_TRACKER_SCHEMA_VERSION",
 ]

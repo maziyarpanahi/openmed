@@ -137,6 +137,14 @@ indic = [
   "indic-nlp-library>=0.92",
 ]
 
+scispacy = [
+  "scispacy>=0.5.4,<1",
+]
+
+quickumls = [
+  "quickumls>=1.4,<2",
+]
+
 multimodal = [
   "numpy>=1.26",
   "pdfplumber>=0.11",
