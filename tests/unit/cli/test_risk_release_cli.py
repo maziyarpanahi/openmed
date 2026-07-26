@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 import openmed.compliance as compliance_module
 from openmed.cli import main_module
-from openmed.compliance import ExpertReviewEvidenceReport
+from openmed.compliance import (
+    ExpertReviewEvidenceReport,
+    create_expert_attestation,
+)
+from openmed.core.audit import stable_hash
 from openmed.structured import read_table
 
 ROWS = [
@@ -163,6 +168,47 @@ def test_risk_discover_writes_aggregate_manifest_without_path_or_values(
     assert "key_fingerprints" not in serialized
 
 
+def test_risk_discover_can_scan_safe_combination_candidates(
+    tmp_path: Path,
+) -> None:
+    source = _write_csv(
+        tmp_path / "factor-design.csv",
+        [
+            {
+                "factor_a": f"a-{index // 10}",
+                "factor_b": f"b-{index % 10}",
+            }
+            for index in range(100)
+        ],
+    )
+    output = tmp_path / "discovery.json"
+
+    code = main_module.main(
+        [
+            "risk",
+            "discover",
+            str(source),
+            "--output",
+            str(output),
+            "--full-scan",
+            "--max-set-size",
+            "2",
+            "--max-candidate-columns",
+            "2",
+            "--include-safe-candidates",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["search"]["candidate_scope"] == "all_reviewed_scalar_columns"
+    assert any(
+        candidate["columns"] == ["factor_a", "factor_b"]
+        and candidate["min_equivalence_class_size"] == 1
+        for candidate in payload["quasi_identifier_sets"]
+    )
+
+
 @pytest.mark.parametrize(
     ("option", "value"),
     [
@@ -297,6 +343,214 @@ def test_risk_assess_writes_safe_patient_level_report(
     assert "equivalence_classes" not in serialized
 
 
+def test_risk_assess_can_publish_safe_html_dashboard(tmp_path: Path) -> None:
+    source = _write_csv(tmp_path / "source.csv")
+    output = tmp_path / "assessment.json"
+    dashboard = tmp_path / "assessment.html"
+
+    code = main_module.main(
+        [
+            "risk",
+            "assess",
+            str(source),
+            "--output",
+            str(output),
+            "--dashboard",
+            str(dashboard),
+            *_policy_args(),
+        ]
+    )
+
+    assert code == 0
+    rendered = dashboard.read_text(encoding="utf-8")
+    assert "<!doctype html>" in rendered.casefold()
+    assert "patient-alpha" not in rendered
+    assert "Alice Canary" not in rendered
+    assert "10001" not in rendered
+
+
+def test_risk_assess_repeatable_flags_support_literal_schema_names(
+    tmp_path: Path,
+) -> None:
+    source = _write_csv(
+        tmp_path / "literal-columns.csv",
+        [
+            {
+                "患者 ID": "patient-a",
+                "Patient Age": "40",
+                "Région, cohort | `v1`": "Île-de-France",
+                "study arm": "A",
+            },
+            {
+                "患者 ID": "patient-b",
+                "Patient Age": "40",
+                "Région, cohort | `v1`": "Île-de-France",
+                "study arm": "B",
+            },
+        ],
+    )
+    output = tmp_path / "assessment.json"
+    dashboard = tmp_path / "assessment.html"
+
+    code = main_module.main(
+        [
+            "risk",
+            "assess",
+            str(source),
+            "--output",
+            str(output),
+            "--dashboard",
+            str(dashboard),
+            "--qi-column",
+            "Patient Age",
+            "--qi-column",
+            "Région, cohort | `v1`",
+            "--non-sensitive-column",
+            "study arm",
+            "--privacy-unit",
+            "患者 ID",
+            "--k",
+            "2",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["meets_policy"] is True
+    assert payload["quasi_identifiers"] == [
+        "Patient Age",
+        "Région, cohort | `v1`",
+    ]
+    assert "patient-a" not in json.dumps(payload, sort_keys=True)
+    rendered = dashboard.read_text(encoding="utf-8")
+    assert "Patient Age" in rendered
+    assert "Région, cohort | `v1`" in rendered
+    assert "patient-a" not in rendered
+    assert "Île-de-France" not in rendered
+
+
+def test_risk_population_assess_writes_aggregate_safe_evidence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sample = _write_csv(
+        tmp_path / "sample.csv",
+        [{"sample_id": "sample-canary", "age": "40", "region": "north"}],
+    )
+    reference = _write_csv(
+        tmp_path / "reference.csv",
+        [
+            {"population_id": "population-a", "age": "40", "region": "north"},
+            {"population_id": "population-b", "age": "40", "region": "north"},
+        ],
+    )
+    output = tmp_path / "population-risk.json"
+
+    code = main_module.main(
+        [
+            "risk",
+            "population-assess",
+            str(sample),
+            str(reference),
+            "--output",
+            str(output),
+            "--qi",
+            "age,region",
+            "--sample-privacy-unit",
+            "sample_id",
+            "--population-privacy-unit",
+            "population_id",
+            "--k-map",
+            "2",
+            "--max-delta-presence",
+            "0.5",
+        ]
+    )
+
+    assert code == 0
+    assert "Achieved k-map: 2" in capsys.readouterr().out
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["meets_policy"] is True
+    assert payload["achieved_k_map"] == 2
+    serialized = json.dumps(payload, sort_keys=True)
+    for canary in (
+        "sample-canary",
+        "population-a",
+        "north",
+        "sample_id",
+        "population_id",
+    ):
+        assert canary not in serialized
+
+
+def test_risk_population_assess_fails_closed_but_preserves_safe_evidence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sample = _write_csv(tmp_path / "sample.csv", [{"age": "canary-sample"}])
+    reference = _write_csv(
+        tmp_path / "reference.csv",
+        [{"age": "canary-reference"}],
+    )
+    output = tmp_path / "population-risk.json"
+
+    code = main_module.main(
+        [
+            "risk",
+            "population-assess",
+            str(sample),
+            str(reference),
+            "--output",
+            str(output),
+            "--qi",
+            "age",
+            "--k-map",
+            "2",
+            "--max-delta-presence",
+            "0.5",
+        ]
+    )
+
+    assert code == 1
+    assert output.exists()
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["meets_policy"] is False
+    assert payload["achieved_k_map"] == 0
+    error = capsys.readouterr().err
+    assert "does not meet" in error
+    assert "canary-sample" not in error
+    assert "canary-reference" not in error
+
+
+def test_risk_population_assess_requires_explicit_policy_thresholds(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sample = _write_csv(tmp_path / "sample.csv", [{"age": "40"}])
+    reference = _write_csv(tmp_path / "reference.csv", [{"age": "40"}])
+    output = tmp_path / "population-risk.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main(
+            [
+                "risk",
+                "population-assess",
+                str(sample),
+                str(reference),
+                "--output",
+                str(output),
+                "--qi",
+                "age",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    error = capsys.readouterr().err
+    assert "--k-map" in error
+    assert "--max-delta-presence" in error
+    assert not output.exists()
+
+
 def test_risk_assess_writes_evidence_but_returns_nonzero_when_policy_fails(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -332,6 +586,7 @@ def test_risk_anonymize_writes_validated_release_and_expert_evidence(
     source = _write_csv(tmp_path / "source.csv")
     release = tmp_path / "release.jsonl"
     evidence = tmp_path / "evidence.json"
+    dashboard = tmp_path / "release-dashboard.html"
 
     code = main_module.main(
         [
@@ -342,6 +597,8 @@ def test_risk_anonymize_writes_validated_release_and_expert_evidence(
             str(release),
             "--evidence",
             str(evidence),
+            "--dashboard",
+            str(dashboard),
             *_policy_args(),
             "--privacy-unit-kind",
             "patient",
@@ -365,6 +622,11 @@ def test_risk_anonymize_writes_validated_release_and_expert_evidence(
     assert report.verify() is True
     assert report.privacy_models.achieved_k == 2
     assert evidence.with_suffix(".md").exists()
+    rendered_dashboard = dashboard.read_text(encoding="utf-8")
+    assert "<!doctype html>" in rendered_dashboard.casefold()
+    assert "patient-alpha" not in rendered_dashboard
+    assert "Alice Canary" not in rendered_dashboard
+    assert "10001" not in rendered_dashboard
     serialized = evidence.read_text(encoding="utf-8")
     assert "patient-alpha" not in serialized
     assert "Alice Canary" not in serialized
@@ -455,14 +717,119 @@ def test_expert_review_verify_rejects_duplicate_json_keys_without_echo(
     assert canary not in error
 
 
-@pytest.mark.parametrize(
-    "budget_flag",
-    ["--max-lattice-nodes", "--max-suppression-subsets"],
-)
-def test_risk_anonymize_fails_closed_on_search_exhaustion_without_echoing_data(
+def test_risk_gate_returns_ci_friendly_pass_and_policy_failure(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    budget_flag: str,
+) -> None:
+    source = _write_csv(tmp_path / "source.csv")
+    release = tmp_path / "release.jsonl"
+    evidence = tmp_path / "evidence.json"
+
+    assert main_module.main(_anonymize_args(source, release, evidence)) == 0
+    capsys.readouterr()
+
+    assert main_module.main(["risk", "gate", str(evidence)]) == 0
+    passed_output = capsys.readouterr().out
+    assert "Technical policy: PASS" in passed_output
+    assert "not an Expert Determination" in passed_output
+
+    payload = json.loads(evidence.read_text(encoding="utf-8"))
+    payload["privacy_models"]["k_anonymity"]["configured_k"] = 3
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+    evidence.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert main_module.main(["risk", "gate", str(evidence)]) == 1
+    failed_output = capsys.readouterr().out
+    assert "Technical policy: FAIL" in failed_output
+    assert "violates its configured technical policy" in failed_output
+
+
+def test_expert_attestation_verify_reports_independent_facts_and_fails_mismatch(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pytest.importorskip("cryptography")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+    )
+
+    source = _write_csv(tmp_path / "source.csv")
+    release = tmp_path / "release.jsonl"
+    evidence_path = tmp_path / "evidence.json"
+    assert main_module.main(_anonymize_args(source, release, evidence_path)) == 0
+    capsys.readouterr()
+
+    evidence = ExpertReviewEvidenceReport.from_json(
+        evidence_path.read_text(encoding="utf-8")
+    )
+    private_key = Ed25519PrivateKey.generate()
+    public_key_path = tmp_path / "expert-public.pem"
+    public_key_path.write_bytes(
+        private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    )
+    now = datetime.now(timezone.utc)
+    supporting_digest = stable_hash({"kind": "population-risk-test"})
+    attestation = create_expert_attestation(
+        evidence,
+        expert_identity="Dr. Taylor Example",
+        qualifications="Independent statistical disclosure-control expert",
+        scope_and_methodology=(
+            "Reviewed the declared release context, technical evidence, "
+            "reference-population evidence, and residual risk."
+        ),
+        conclusion="very_small_risk",
+        issued_at=now - timedelta(hours=1),
+        reassessment_at=now + timedelta(days=365),
+        private_key=private_key,
+        key_id="expert-key-2026",
+        supporting_evidence_digests={"population_risk": supporting_digest},
+    )
+    attestation_path = tmp_path / "attestation.json"
+    attestation_path.write_text(attestation.to_json() + "\n", encoding="utf-8")
+    common_args = [
+        "compliance",
+        "expert-attestation-verify",
+        str(attestation_path),
+        "--evidence",
+        str(evidence_path),
+        "--public-key",
+        str(public_key_path),
+        "--key-id",
+        "expert-key-2026",
+        "--supporting-evidence",
+        f"population_risk={supporting_digest}",
+    ]
+
+    assert main_module.main([*common_args, "--json"]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["data"] == {
+        "bindings_match": True,
+        "conclusion": "very_small_risk",
+        "cryptographically_valid": True,
+        "evidence_integrity_valid": True,
+        "fresh": True,
+        "freshness_status": "current",
+        "key_id_matches": True,
+    }
+    assert "approved" not in json.dumps(output, sort_keys=True)
+
+    mismatched_args = list(common_args)
+    mismatched_args[-1] = f"population_risk={stable_hash({'kind': 'wrong'})}"
+    assert main_module.main(mismatched_args) == 1
+    mismatched_output = capsys.readouterr().out
+    assert "Evidence bindings: FAIL" in mismatched_output
+    assert "not an automated Expert Determination" in mismatched_output
+
+
+def test_risk_anonymize_fails_closed_on_lattice_exhaustion_without_echoing_data(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = _write_csv(tmp_path / "source.csv")
     release = tmp_path / "release.jsonl"
@@ -480,7 +847,7 @@ def test_risk_anonymize_fails_closed_on_search_exhaustion_without_echoing_data(
             *_policy_args(),
             "--privacy-unit-kind",
             "patient",
-            budget_flag,
+            "--max-lattice-nodes",
             "1",
             "--release-model",
             "restricted",
@@ -1238,6 +1605,50 @@ def test_cli_rejects_reserved_hierarchy_outputs_as_usage_error(
                 "age": [
                     {"name": "exact", "loss": 0.0},
                     coarsening,
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    code = main_module.main(
+        _anonymize_args(
+            source,
+            release,
+            evidence,
+            hierarchies=hierarchies,
+        )
+    )
+
+    assert code == 2
+    assert "hierarchy configuration is invalid" in capsys.readouterr().err
+    assert not release.exists()
+    assert not evidence.exists()
+
+
+def test_cli_rejects_hierarchy_split_after_merge_as_usage_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = _write_csv(tmp_path / "source.csv")
+    release = tmp_path / "release.jsonl"
+    evidence = tmp_path / "evidence.json"
+    hierarchies = tmp_path / "hierarchies.json"
+    hierarchies.write_text(
+        json.dumps(
+            {
+                "age": [
+                    {"name": "exact", "loss": 0.0},
+                    {
+                        "name": "merged",
+                        "loss": 0.5,
+                        "values": {"30": "all", "40": "all"},
+                    },
+                    {
+                        "name": "invalid-split",
+                        "loss": 0.75,
+                        "values": {"30": "young", "40": "older"},
+                    },
                 ]
             }
         ),
