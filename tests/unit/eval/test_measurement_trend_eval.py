@@ -160,6 +160,12 @@ def test_metrics_penalize_wrong_direction_and_missing_or_misgrouped_trends():
     assert trend_grouping_accuracy(wrong_partition, gold).rate == 0.0
 
 
+def test_direction_metric_accepts_issue_defined_field_name():
+    predicted = [[{"entity": "mass", "trend_direction": "decreasing"}]]
+    gold = [[{"entity": "mass", "trend_direction": "decreasing"}]]
+    assert trend_direction_accuracy(predicted, gold).rate == 1.0
+
+
 def test_advisory_emitted_on_every_predicted_trend():
     rows = _load_gold()
     predicted = _predict(rows)

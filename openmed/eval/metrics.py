@@ -2367,6 +2367,10 @@ def _index_trends_by_entity(
     return {_normalize_trend_entity(trend.get("entity")): trend for trend in trends}
 
 
+def _trend_direction(trend: Mapping[str, Any]) -> Any:
+    return trend.get("trend_direction", trend.get("direction"))
+
+
 def trend_direction_accuracy(
     predicted: Iterable[Iterable[Mapping[str, Any]]],
     gold: Iterable[Iterable[Mapping[str, Any]]],
@@ -2388,8 +2392,8 @@ def trend_direction_accuracy(
             match = predicted_by_entity.get(
                 _normalize_trend_entity(gold_trend.get("entity"))
             )
-            if match is not None and match.get("direction") == gold_trend.get(
-                "direction"
+            if match is not None and _trend_direction(match) == _trend_direction(
+                gold_trend
             ):
                 correct += 1
     return RateMetric(
