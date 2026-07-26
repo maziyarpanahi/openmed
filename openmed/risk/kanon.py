@@ -82,13 +82,14 @@ class _Candidate:
 @dataclass(frozen=True)
 class _InternalQIState:
     kind: str
-    values: tuple[str, ...] = ()
+    values: tuple[Any, ...] = ()
 
 
 @dataclass
 class _SuppressionSearchState:
     evaluated: int
     maximum: int
+    total_known: bool = True
 
     def consume(self) -> None:
         self.evaluated += 1
@@ -99,6 +100,9 @@ class _SuppressionSearchState:
                 "suppression cap, provide coarser hierarchies, or raise "
                 "max_suppression_subsets deliberately."
             )
+
+    def mark_total_unknown(self) -> None:
+        self.total_known = False
 
 
 _MISSING_QI = _InternalQIState("missing")
@@ -325,7 +329,11 @@ def _canonical_scalar_payload(value: Any) -> dict[str, Any]:
     if isinstance(value, _InternalQIState):
         return {
             "type": value.kind,
-            "value": list(value.values) if value.values else None,
+            "value": (
+                [_exact_qi_scalar_payload(item) for item in value.values]
+                if value.values
+                else None
+            ),
         }
     if value is None:
         return {"type": "null", "value": None}
@@ -726,6 +734,7 @@ def enforce_kanon(
                 "suppression_subsets_possible": 0,
                 "max_suppression_subsets": int(max_suppression_subsets),
                 "search_complete": True,
+                "optimum_proven": True,
             },
             "bounds": _bound_report(
                 [],
@@ -758,7 +767,7 @@ def enforce_kanon(
         evaluated=0,
         maximum=max_suppression_subsets,
     )
-    candidate = _search_lattice(
+    candidate, nodes_evaluated = _search_lattice(
         coerced,
         qis,
         sensitive,
@@ -776,6 +785,24 @@ def enforce_kanon(
             "No generalization satisfies the requested k/l/t targets within "
             f"the suppression cap ({budget} of {len(coerced)} records)."
         )
+    suppression_subsets_possible = (
+        suppression_search.evaluated if suppression_search.total_known else None
+    )
+    search_complete = (
+        nodes_evaluated == search_space_size
+        and suppression_subsets_possible == suppression_search.evaluated
+    )
+    optimum_proven = search_complete or candidate.information_loss == 0.0
+    search_strategy = (
+        "full-domain exhaustive lattice"
+        if search_complete
+        else "zero-loss lower-bound lattice"
+    )
+    suppression_strategy = (
+        "exhaustive equivalence-class subsets"
+        if suppression_subsets_possible == suppression_search.evaluated
+        else "zero-loss lower-bound subset pruning"
+    )
 
     field_order = tuple(qis)
     node_by_field = {
@@ -824,15 +851,16 @@ def enforce_kanon(
             "generalization_loss": candidate.generalization_loss,
             "suppression_loss": candidate.suppression_loss,
             "optimality_tolerance": 0.0,
-            "search": "full-domain exhaustive lattice",
+            "search": search_strategy,
             "search_space_size": int(search_space_size),
-            "nodes_evaluated": int(search_space_size),
+            "nodes_evaluated": int(nodes_evaluated),
             "max_lattice_nodes": int(max_lattice_nodes),
-            "suppression_search": "exhaustive equivalence-class subsets",
+            "suppression_search": suppression_strategy,
             "suppression_subsets_evaluated": suppression_search.evaluated,
-            "suppression_subsets_possible": suppression_search.evaluated,
+            "suppression_subsets_possible": suppression_subsets_possible,
             "max_suppression_subsets": int(max_suppression_subsets),
-            "search_complete": True,
+            "search_complete": search_complete,
+            "optimum_proven": optimum_proven,
         },
         "bounds": bounds,
     }
@@ -869,14 +897,17 @@ def _explicit_qi_value(fields: Mapping[str, Any], field: str) -> str:
 
 
 def _exact_qi_value(field: str, value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return value
     if _is_internal_qi_token(value):
         suffix = (
             ""
             if not value.values
             else ":"
             + json.dumps(
-                value.values,
+                [_exact_qi_scalar_payload(item) for item in value.values],
                 ensure_ascii=False,
+                sort_keys=True,
                 separators=(",", ":"),
             )
         )
@@ -889,6 +920,19 @@ def _exact_qi_value(field: str, value: Any) -> Any:
 
 def _is_internal_qi_token(value: Any) -> bool:
     return isinstance(value, _InternalQIState)
+
+
+def _is_ordered_multiset(value: Any) -> bool:
+    return isinstance(value, _InternalQIState) and value.kind == "ordered-multiset"
+
+
+def _suppress_qi_value(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_SUPPRESSED_VALUE for _item in value.values),
+        )
+    return _SUPPRESSED_VALUE
 
 
 def _distribution(values: Any) -> dict[str, float]:
@@ -1042,6 +1086,7 @@ def _user_hierarchy(
         raise ValueError(f"Hierarchy for {field!r} must contain at least one level")
 
     built: list[_GeneralizationLevel] = []
+    partition_levels: list[tuple[dict[str, str], str | None]] = []
     max_index = max(1, len(levels) - 1)
     for index, level in enumerate(levels):
         unknown = set(level) - _SUPPORTED_USER_LEVEL_KEYS
@@ -1057,12 +1102,22 @@ def _user_hierarchy(
                 f"Hierarchy level {field!r}[0] must be a canonical identity "
                 "level without values or a default"
             )
-        value_map = {str(key): str(value) for key, value in dict(values or {}).items()}
+        value_map: dict[str, str] = {}
+        for key, mapped_value in (values or {}).items():
+            coerced_key = str(key)
+            if coerced_key in value_map:
+                raise ValueError(
+                    f"Hierarchy level {field!r}[{index}] keys collide after "
+                    "string coercion"
+                )
+            value_map[coerced_key] = str(mapped_value)
         default = level.get("default")
+        default_text = str(default) if default is not None else None
         if any(
             value.startswith(_INTERNAL_QI_TOKEN_PREFIX) for value in value_map.values()
         ) or (
-            default is not None and str(default).startswith(_INTERNAL_QI_TOKEN_PREFIX)
+            default_text is not None
+            and default_text.startswith(_INTERNAL_QI_TOKEN_PREFIX)
         ):
             raise ValueError(
                 f"Hierarchy level {field!r}[{index}] outputs cannot use the "
@@ -1096,6 +1151,19 @@ def _user_hierarchy(
         ) -> Any:
             if level_index == 0:
                 return _exact_qi_value(field, value)
+            if _is_ordered_multiset(value):
+                return _InternalQIState(
+                    "ordered-multiset",
+                    tuple(
+                        transform(
+                            item,
+                            mapping=mapping,
+                            default_value=default_value,
+                            level_index=level_index,
+                        )
+                        for item in value.values
+                    ),
+                )
             if _is_internal_qi_token(value):
                 return (
                     str(default_value)
@@ -1119,7 +1187,65 @@ def _user_hierarchy(
                 transform=transform,
             )
         )
+        partition_levels.append((value_map, default_text))
+    _validate_user_hierarchy_partitions(field, partition_levels)
     return tuple(built)
+
+
+def _validate_user_hierarchy_partitions(
+    field: str,
+    levels: Sequence[tuple[Mapping[str, str], str | None]],
+) -> None:
+    representative_values = {
+        source for mapping, _default in levels for source in mapping
+    }
+    representative_values.update(
+        output_value
+        for mapping, default in levels
+        for output_value in (
+            *mapping.values(),
+            *((default,) if default is not None else ()),
+        )
+    )
+    # Defaults describe every source value not named in a mapping. Include two
+    # explicit representatives for that open domain so a later exception
+    # cannot split a class that an earlier default merged.
+    sentinel_index = 0
+    while len(representative_values) < 2 or sentinel_index < 2:
+        sentinel = f"__openmed_hierarchy_unmapped_{sentinel_index}__"
+        sentinel_index += 1
+        if sentinel not in representative_values:
+            representative_values.add(sentinel)
+    known_values = sorted(representative_values)
+
+    def output(
+        source: str,
+        level: tuple[Mapping[str, str], str | None],
+    ) -> str:
+        mapping, default = level
+        normalized = _normalize_qi_value(field, source)
+        if source in mapping:
+            return mapping[source]
+        if normalized in mapping:
+            return mapping[normalized]
+        if default is not None:
+            return default
+        return _escaped_literal_string(normalized)
+
+    for index in range(1, len(levels) - 1):
+        current = levels[index]
+        following = levels[index + 1]
+        merged: defaultdict[str, list[str]] = defaultdict(list)
+        for source in known_values:
+            merged[output(source, current)].append(source)
+        for sources in merged.values():
+            if len(sources) < 2:
+                continue
+            if len({output(source, following) for source in sources}) > 1:
+                raise ValueError(
+                    f"Hierarchy level {field!r}[{index + 1}] splits values "
+                    f"merged at level {index}"
+                )
 
 
 def _default_hierarchy(
@@ -1133,7 +1259,7 @@ def _default_hierarchy(
             _level("age_5_year_band", 0.25, lambda value: _age_band(value, 5)),
             _level("age_10_year_band", 0.5, lambda value: _age_band(value, 10)),
             _level("age_20_year_band", 0.75, lambda value: _age_band(value, 20)),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+            _level("suppressed", 1.0, _suppress_qi_value),
         )
     if category == "date":
         return (
@@ -1141,7 +1267,7 @@ def _default_hierarchy(
             _level("month", 0.25, _date_month),
             _level("year", 0.5, _date_year),
             _level("decade", 0.75, _date_decade),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+            _level("suppressed", 1.0, _suppress_qi_value),
         )
     if category == "geography":
         return (
@@ -1152,7 +1278,7 @@ def _default_hierarchy(
             ),
             _level("regional", 0.4, _geography_region),
             _level("broad_region", 0.7, _geography_broad_region),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+            _level("suppressed", 1.0, _suppress_qi_value),
         )
 
     # Arbitrary categories, facilities, and clinical codes do not have a
@@ -1162,7 +1288,7 @@ def _default_hierarchy(
     # hierarchy; the safe fallback is exact-or-suppressed.
     return (
         _level("exact", 0.0, lambda value: _exact_qi_value(field, value)),
-        _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+        _level("suppressed", 1.0, _suppress_qi_value),
     )
 
 
@@ -1174,7 +1300,12 @@ def _level(
     return _GeneralizationLevel(name=name, loss=loss, transform=transform)
 
 
-def _age_band(value: Any, width: int) -> str:
+def _age_band(value: Any, width: int) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_age_band(item, width) for item in value.values),
+        )
     if _is_internal_qi_token(value):
         return _SUPPRESSED_VALUE
     normalized = _normalize_qi_value("age", value)
@@ -1202,7 +1333,12 @@ def _date_parts(value: Any) -> tuple[int, int | None] | None:
     return year, month
 
 
-def _date_month(value: Any) -> str:
+def _date_month(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_date_month(item) for item in value.values),
+        )
     parts = _date_parts(value)
     if parts is None:
         return _SUPPRESSED_VALUE
@@ -1212,14 +1348,24 @@ def _date_month(value: Any) -> str:
     return f"{year:04d}-{month:02d}"
 
 
-def _date_year(value: Any) -> str:
+def _date_year(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_date_year(item) for item in value.values),
+        )
     parts = _date_parts(value)
     if parts is None:
         return _SUPPRESSED_VALUE
     return f"{parts[0]:04d}"
 
 
-def _date_decade(value: Any) -> str:
+def _date_decade(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_date_decade(item) for item in value.values),
+        )
     parts = _date_parts(value)
     if parts is None:
         return _SUPPRESSED_VALUE
@@ -1227,7 +1373,12 @@ def _date_decade(value: Any) -> str:
     return f"{decade:04d}s"
 
 
-def _geography_region(value: Any) -> str:
+def _geography_region(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_geography_region(item) for item in value.values),
+        )
     if _is_internal_qi_token(value):
         return _SUPPRESSED_VALUE
     text = _normalize_qi_value("geography", value)
@@ -1242,7 +1393,12 @@ def _geography_region(value: Any) -> str:
     return text[:3] + "*" if len(text) > 3 else text or _SUPPRESSED_VALUE
 
 
-def _geography_broad_region(value: Any) -> str:
+def _geography_broad_region(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_geography_broad_region(item) for item in value.values),
+        )
     if _is_internal_qi_token(value):
         return _SUPPRESSED_VALUE
     text = _normalize_qi_value("geography", value)
@@ -1284,11 +1440,13 @@ def _search_lattice(
     remove_direct_identifiers: bool,
     l_metric: str = "distinct",
     suppression_search: _SuppressionSearchState,
-) -> _Candidate | None:
+) -> tuple[_Candidate | None, int]:
     field_order = tuple(quasi_identifiers)
     best: _Candidate | None = None
+    nodes_evaluated = 0
     ranges = [range(len(levels[field])) for field in field_order]
     for node in product(*ranges):
+        nodes_evaluated += 1
         candidate = _evaluate_lattice_node(
             records,
             field_order,
@@ -1307,7 +1465,9 @@ def _search_lattice(
             continue
         if best is None or _candidate_sort_key(candidate) < _candidate_sort_key(best):
             best = candidate
-    return best
+            if candidate.information_loss == 0.0:
+                return candidate, nodes_evaluated
+    return best, nodes_evaluated
 
 
 def _candidate_sort_key(candidate: _Candidate) -> tuple[Any, ...]:
@@ -1395,6 +1555,29 @@ def _evaluate_lattice_node(
         if index not in mandatory_indices
     )
     remaining_budget = suppression_budget - len(mandatory_positions)
+    if (
+        not mandatory_positions
+        and generalization_loss == 0.0
+        and _report_satisfies(
+            initial_report,
+            target_k=target_k,
+            target_l=target_l,
+            target_t=target_t,
+            sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
+        )
+    ):
+        suppression_search.mark_total_unknown()
+        suppression_search.consume()
+        return _Candidate(
+            node=node,
+            records=transformed,
+            report=initial_report,
+            suppressed_positions=(),
+            information_loss=0.0,
+            generalization_loss=0.0,
+            suppression_loss=0.0,
+        )
     best: _Candidate | None = None
     for optional_positions in _class_subset_positions(
         optional_classes,
@@ -1503,7 +1686,39 @@ def _transform_record(
             continue
         level = levels[field][node[index]]
         fields[field] = level.transform(_hierarchy_input(record.fields, field))
+    _canonicalize_ordered_multiset_fields(fields, quasi_identifiers)
     return fields
+
+
+def _canonicalize_ordered_multiset_fields(
+    fields: dict[str, Any],
+    quasi_identifiers: Sequence[str],
+) -> None:
+    profiles = [
+        (field, fields[field])
+        for field in quasi_identifiers
+        if field in fields and _is_ordered_multiset(fields[field])
+    ]
+    if not profiles:
+        return
+    lengths = {len(profile.values) for _field, profile in profiles}
+    if len(lengths) != 1:
+        raise ValueError("Longitudinal QI profiles must have aligned row counts")
+    row_count = lengths.pop()
+    ordered_rows = []
+    for index in range(row_count):
+        values = tuple(profile.values[index] for _field, profile in profiles)
+        tokens = tuple(
+            _typed_qi_value(field, value)
+            for (field, _profile), value in zip(profiles, values, strict=True)
+        )
+        ordered_rows.append((tokens, values))
+    ordered_rows.sort(key=lambda item: item[0])
+    for field_index, (field, _profile) in enumerate(profiles):
+        fields[field] = _InternalQIState(
+            "ordered-multiset",
+            tuple(values[field_index] for _tokens, values in ordered_rows),
+        )
 
 
 def _hierarchy_input(fields: Mapping[str, Any], field: str) -> Any:
