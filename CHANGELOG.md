@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline structured-data release-risk workflow with advisory
+  quasi-identifier discovery, overlap-preserving candidate roles and explicit
+  reviewer overrides,
+  patient-level k-anonymity, distinct or entropy l-diversity, variational
+  t-closeness, bounded exhaustive hierarchy and equivalence-class suppression
+  search, whole-privacy-unit suppression,
+  type- and schema-bound materialized-output revalidation, rollback-safe CLI
+  publication, and deterministic aggregate-only evidence for qualified expert
+  review. Release policy construction requires an explicit disposition for
+  every source column and fails closed for unsupported multi-valued sensitive
+  analysis. Exact typed QI and privacy-unit representations remain distinct,
+  while l-diversity conservatively collapses semantic aliases and t-closeness
+  measures published sensitive representations. Evidence separately reports
+  suppressed privacy units, rows, and QI cells. Pandas and Polars adapters
+  expose the same policy workflow, and the release gate verifies evidence
+  integrity and configured thresholds. The CLI, Python guide, and synthetic
+  walkthrough explicitly state that the output supports but does not
+  constitute an Expert Determination.
 - Added a fail-closed, signed release-readiness gate that verifies signed model
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite

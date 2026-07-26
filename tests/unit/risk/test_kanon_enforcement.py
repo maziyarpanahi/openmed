@@ -222,3 +222,259 @@ def test_enforcement_is_exported_from_risk_package() -> None:
 
     assert hasattr(risk, "enforce_kanon")
     assert "enforce_kanon" in risk.__all__
+
+
+def test_enforcement_reports_and_honors_lattice_search_budget() -> None:
+    records = _balanced_records()
+
+    with pytest.raises(ValueError, match="search budget"):
+        enforce_kanon(
+            records,
+            quasi_identifiers=QIS,
+            target_k=2,
+            max_lattice_nodes=10,
+        )
+
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=QIS,
+        target_k=2,
+        max_lattice_nodes=1_000,
+    )
+
+    search = enforced["generalization"]
+    assert search["search_space_size"] == search["nodes_evaluated"]
+    assert search["nodes_evaluated"] <= search["max_lattice_nodes"]
+    assert search["max_lattice_nodes"] == 1_000
+
+
+def test_enforcement_supports_entropy_l_diversity_as_an_explicit_variant() -> None:
+    records = [
+        {"age": 30, "zip": "10001", "disease": "flu"},
+        {"age": 30, "zip": "10001", "disease": "cold"},
+        {"age": 40, "zip": "20001", "disease": "flu"},
+        {"age": 40, "zip": "20001", "disease": "cold"},
+    ]
+
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=["age", "zip"],
+        sensitive_attributes=["disease"],
+        target_k=2,
+        target_l=2,
+        l_metric="entropy",
+        target_t=1.0,
+    )
+
+    assert enforced["l_metric"] == "entropy"
+    assert enforced["kanon"]["l_metric"] == "entropy"
+    assert enforced["bounds"]["l_metric"] == "entropy"
+    assert enforced["bounds"]["numeric_self_check"]["l_diversity_satisfied"] is True
+
+
+def test_enforcement_rejects_unknown_l_diversity_variant() -> None:
+    with pytest.raises(ValueError, match="Unsupported l_metric"):
+        enforce_kanon(
+            _balanced_records(),
+            quasi_identifiers=QIS,
+            target_k=2,
+            l_metric="recursive",
+        )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"target_k": True},
+        {"target_l": 1.5},
+        {"target_t": float("nan")},
+        {"suppression_rate": float("inf")},
+    ],
+)
+def test_enforcement_rejects_ambiguous_or_nonfinite_policy_values(kwargs) -> None:
+    with pytest.raises(ValueError):
+        enforce_kanon(
+            _balanced_records(),
+            quasi_identifiers=QIS,
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize(
+    "levels",
+    [
+        [
+            {"name": "exact", "loss": 0.0},
+            {"name": "bad", "loss": float("nan")},
+        ],
+        [
+            {"name": "exact", "loss": 0.5},
+            {"name": "less-general", "loss": 0.25},
+        ],
+        [
+            {"name": "exact", "loss": 0.0},
+            {"name": "bad", "loss": 1.5},
+        ],
+    ],
+)
+def test_user_hierarchy_losses_must_be_finite_bounded_and_monotonic(
+    levels,
+) -> None:
+    with pytest.raises(ValueError, match="loss"):
+        enforce_kanon(
+            _balanced_records(),
+            quasi_identifiers=["age"],
+            hierarchies={"age": levels},
+        )
+
+
+@pytest.mark.parametrize(
+    "levels",
+    [
+        [{"name": "collapsed", "loss": 0.0, "default": "*"}],
+        [
+            {"name": "exact", "loss": 0.0},
+            {"name": "collapsed", "loss": 0.0, "default": "*"},
+        ],
+    ],
+)
+def test_user_hierarchy_requires_zero_loss_identity_then_positive_coarsening(
+    levels,
+) -> None:
+    with pytest.raises(ValueError, match="identity|greater than 0"):
+        enforce_kanon(
+            _balanced_records(),
+            quasi_identifiers=["age"],
+            hierarchies={"age": levels},
+        )
+
+
+@pytest.mark.parametrize(
+    "coarsening",
+    [
+        {
+            "name": "mapped",
+            "loss": 0.5,
+            "values": {"30": "__OPENMED_INTERNAL_QI__:state:null"},
+        },
+        {
+            "name": "defaulted",
+            "loss": 0.5,
+            "default": "__OPENMED_INTERNAL_QI__:state:missing",
+        },
+    ],
+)
+def test_user_hierarchy_cannot_emit_reserved_internal_values(coarsening) -> None:
+    with pytest.raises(ValueError, match="reserved internal namespace"):
+        enforce_kanon(
+            _balanced_records(),
+            quasi_identifiers=["age"],
+            hierarchies={
+                "age": [
+                    {"name": "exact", "loss": 0.0},
+                    coarsening,
+                ]
+            },
+        )
+
+
+def test_hierarchies_for_undeclared_qis_are_rejected() -> None:
+    with pytest.raises(ValueError, match="undeclared quasi-identifiers"):
+        enforce_kanon(
+            _balanced_records(),
+            quasi_identifiers=["age"],
+            hierarchies={
+                "zip": [
+                    {"name": "exact", "loss": 0.0},
+                    {"name": "suppressed", "loss": 1.0, "default": "*"},
+                ]
+            },
+        )
+
+
+def test_unknown_categories_require_explicit_semantic_hierarchies() -> None:
+    records = [
+        {"facility": "North Clinic", "disease": "a"},
+        {"facility": "North Campus", "disease": "b"},
+    ]
+
+    levels = kanon_module.build_generalization_hierarchies(
+        records,
+        quasi_identifiers=["facility"],
+    )
+
+    assert [level["name"] for level in levels["facility"]] == [
+        "exact",
+        "suppressed",
+    ]
+
+
+def test_t_closeness_suppression_search_finds_the_global_optimum() -> None:
+    records = [
+        {"group": "a", "disease": 0},
+        {"group": "b", "disease": 1},
+        {"group": "c", "disease": 0},
+        {"group": "c", "disease": 1},
+    ]
+
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=["group"],
+        sensitive_attributes=["disease"],
+        target_k=1,
+        target_l=1,
+        target_t=0.35,
+        suppression_limit=1,
+    )
+
+    assert enforced["generalization"]["node"] == {"group": 0}
+    assert enforced["suppressed_count"] == 1
+    assert enforced["generalization"]["information_loss"] == pytest.approx(0.25)
+    assert [record["group"] for record in enforced["records"]] == ["b", "c", "c"]
+    search = enforced["generalization"]
+    assert search["suppression_subsets_evaluated"] == 4
+    assert search["suppression_subsets_possible"] == 4
+    assert search["search_complete"] is True
+
+
+def test_t_closeness_suppression_search_fails_closed_at_its_bound() -> None:
+    records = [
+        {"group": "a", "disease": 0},
+        {"group": "b", "disease": 1},
+        {"group": "c", "disease": 0},
+        {"group": "c", "disease": 1},
+    ]
+
+    with pytest.raises(ValueError, match="Suppression subset search exceeds"):
+        enforce_kanon(
+            records,
+            quasi_identifiers=["group"],
+            sensitive_attributes=["disease"],
+            target_k=1,
+            target_l=1,
+            target_t=0.35,
+            suppression_limit=1,
+            max_suppression_subsets=3,
+        )
+
+
+def test_enforcement_preserves_supported_typed_qi_values() -> None:
+    from datetime import date
+    from decimal import Decimal
+
+    records = [
+        {
+            "visit_date": date(2026, 7, 26),
+            "amount": Decimal("1.20"),
+            "payload": b"\x01",
+        }
+    ]
+
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=["visit_date", "amount", "payload"],
+        target_k=1,
+        remove_direct_identifiers=False,
+    )
+
+    assert enforced["records"] == records

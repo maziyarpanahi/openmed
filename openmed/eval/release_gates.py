@@ -643,6 +643,7 @@ class ReleaseGate:
         if federated_check is not None:
             checks.append(federated_check)
         checks.append(_k_floor_check(metrics, metadata))
+        checks.append(_structured_release_risk_check(metrics, metadata))
 
         blocked_formats = tuple(
             sorted(
@@ -864,25 +865,30 @@ def evaluate_surrogate_quality_gate(
             ),
         )
     elif report is not None:
+        configured_fixture = (
+            report.get("fixture_path") if isinstance(report, Mapping) else None
+        )
+        resolved_fixture = (
+            fixture_path
+            if fixture_path is not None
+            else (
+                configured_fixture
+                if isinstance(configured_fixture, (str, Path))
+                else DEFAULT_SURROGATE_QUALITY_FIXTURE
+            )
+        )
         quality_report = evaluate_surrogate_quality(
             report.get("records") if isinstance(report, Mapping) else report,
-            fixture_path=(
-                fixture_path
-                if fixture_path is not None
-                else (
-                    report.get("fixture_path")
-                    if isinstance(report, Mapping)
-                    else DEFAULT_SURROGATE_QUALITY_FIXTURE
-                )
-            ),
+            fixture_path=resolved_fixture,
             min_pass_rate=(
                 min_pass_rate
                 if min_pass_rate is not None
                 else (
-                    float(report.get("min_pass_rate"))
-                    if isinstance(report, Mapping) and report.get("min_pass_rate")
-                    else DEFAULT_SURROGATE_QUALITY_PASS_RATE
+                    _optional_float(report.get("min_pass_rate"))
+                    if isinstance(report, Mapping)
+                    else None
                 )
+                or DEFAULT_SURROGATE_QUALITY_PASS_RATE
             ),
         )
     else:
@@ -1226,10 +1232,10 @@ def _is_android_onnx_source_row(row: Mapping[str, Any]) -> bool:
     repo_id = str(row.get("repo_id") or "").strip()
     if not repo_id or repo_id.startswith("OpenMed/privacy-filter-"):
         return False
-    if _normalise_dimension(row.get("task")) != "token-classification":
+    if _normalise_dimension(str(row.get("task") or "")) != "token-classification":
         return False
     if (
-        _normalise_dimension(row.get("architecture"))
+        _normalise_dimension(str(row.get("architecture") or ""))
         in _ANDROID_UNSUPPORTED_ARCHITECTURES
     ):
         return False
@@ -1602,17 +1608,9 @@ def _abstention_advisory_check(
                 "critical": _optional_float(residual_risk.get("critical")) or 0.0,
                 "by_label": _float_map(residual_risk.get("by_label")),
                 "by_language": _numeric_map(residual_risk.get("by_language")),
-                "bootstrap": dict(
-                    residual_risk.get("bootstrap")
-                    if isinstance(residual_risk.get("bootstrap"), Mapping)
-                    else {}
-                ),
+                "bootstrap": _mapping(residual_risk.get("bootstrap")),
             },
-            "route_counts": dict(
-                abstention.get("route_counts")
-                if isinstance(abstention.get("route_counts"), Mapping)
-                else {}
-            ),
+            "route_counts": _mapping(abstention.get("route_counts")),
         },
     )
 
@@ -2210,7 +2208,12 @@ def _g5_check(
             details={"missing": missing, "budget": budget},
         )
 
-    observed = {"p50_ms": p50_ms, "p95_ms": p95_ms, "ram_mb": ram_mb}
+    assert p50_ms is not None and p95_ms is not None and ram_mb is not None
+    observed = {
+        "p50_ms": float(p50_ms),
+        "p95_ms": float(p95_ms),
+        "ram_mb": float(ram_mb),
+    }
     violations = {
         key: {"observed": observed[key], "limit": budget[key]}
         for key in budget
@@ -2933,6 +2936,167 @@ def evaluate_federated_boundary_gate(
         "federated_boundary",
         False,
         reason="federated boundary metrics are required",
+    )
+
+
+def evaluate_release_risk_evidence(
+    evidence: Any,
+) -> GateCheck:
+    """Verify one aggregate expert-review evidence bundle.
+
+    This is a technical integrity and configured-threshold check. Passing it
+    does not constitute an Expert Determination or authorize a data release.
+    """
+
+    if evidence is None:
+        return GateCheck(
+            "structured_release_risk",
+            False,
+            reason="release-risk evidence is required",
+            details={"integrity_verified": False},
+        )
+    return _structured_release_risk_check(
+        {"structured_release_risk_evidence": evidence},
+        {},
+    )
+
+
+def _structured_release_risk_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    raw_evidence = _first_value(
+        metadata.get("structured_release_risk_evidence"),
+        metrics.get("structured_release_risk_evidence"),
+        metadata.get("expert_review_evidence"),
+        metrics.get("expert_review_evidence"),
+    )
+    if raw_evidence is None:
+        return GateCheck(
+            "structured_release_risk",
+            True,
+            reason="not applicable",
+        )
+
+    if hasattr(raw_evidence, "to_dict") and callable(raw_evidence.to_dict):
+        raw_evidence = raw_evidence.to_dict()
+    if not isinstance(raw_evidence, Mapping):
+        return GateCheck(
+            "structured_release_risk",
+            False,
+            reason="release-risk evidence is malformed or fails integrity checks",
+            details={"integrity_verified": False},
+        )
+
+    try:
+        from openmed.compliance import ExpertReviewEvidenceReport
+
+        evidence = ExpertReviewEvidenceReport.from_dict(raw_evidence)
+    except (KeyError, TypeError, ValueError):
+        # Do not echo parser errors: an invalid payload may contain raw data.
+        return GateCheck(
+            "structured_release_risk",
+            False,
+            reason="release-risk evidence is malformed or fails integrity checks",
+            details={"integrity_verified": False},
+        )
+
+    model = evidence.privacy_models
+    post = evidence.post_metrics
+    violations: dict[str, Any] = {}
+    if not evidence.search.complete:
+        violations["search_complete"] = False
+    if model.achieved_k < model.configured_k:
+        violations["k_anonymity"] = {
+            "configured": model.configured_k,
+            "achieved": model.achieved_k,
+        }
+    if evidence.sensitive_attributes and (
+        model.l_variant is None or model.t_variant is None
+    ):
+        violations["sensitive_attribute_models"] = {
+            "l_diversity_present": model.l_variant is not None,
+            "t_closeness_present": model.t_variant is not None,
+        }
+    if (
+        model.configured_l is not None
+        and model.achieved_l is not None
+        and model.achieved_l < model.configured_l
+    ):
+        violations["l_diversity"] = {
+            "variant": model.l_variant,
+            "configured": model.configured_l,
+            "achieved": model.achieved_l,
+        }
+    if (
+        model.configured_t is not None
+        and model.achieved_t is not None
+        and model.achieved_t > model.configured_t + 1e-12
+    ):
+        violations["t_closeness"] = {
+            "variant": model.t_variant,
+            "configured": model.configured_t,
+            "achieved": model.achieved_t,
+        }
+    post_violation_counts = {
+        "k_class_count": post.k_violating_class_count,
+        "l_class_count": post.l_violating_class_count,
+        "t_class_count": post.t_violating_class_count,
+        "any_class_count": post.any_violating_class_count,
+        "privacy_unit_count": post.violating_privacy_unit_count,
+    }
+    if any(post_violation_counts.values()):
+        violations["post_transform_violations"] = post_violation_counts
+    if evidence.composition.risk_status in {"increase_observed", "inconclusive"}:
+        violations["composition_risk_status"] = "no_material_increase_observed_required"
+    if evidence.composition.release_count == 1 and (
+        evidence.composition.longitudinal_linkage_assessed
+        or evidence.composition.prior_release_overlap_assessed
+        or evidence.composition.risk_status != "not_assessed"
+    ):
+        violations["composition_review"] = {
+            "single_release_requires_unassessed_status": True
+        }
+    elif evidence.composition.release_count > 1:
+        composition_violations: dict[str, Any] = {}
+        if not evidence.composition.longitudinal_linkage_assessed:
+            composition_violations["longitudinal_linkage_assessed"] = False
+        if not evidence.composition.prior_release_overlap_assessed:
+            composition_violations["prior_release_overlap_assessed"] = False
+        if evidence.composition.risk_status != "no_material_increase_observed":
+            composition_violations["risk_status"] = (
+                "no_material_increase_observed_required"
+            )
+        if composition_violations:
+            violations["composition_review"] = composition_violations
+
+    return GateCheck(
+        "structured_release_risk",
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "release-risk evidence violates its configured technical policy"
+        ),
+        details={
+            "integrity_verified": True,
+            "search_complete": evidence.search.complete,
+            "configured_k": model.configured_k,
+            "achieved_k": model.achieved_k,
+            "l_variant": model.l_variant,
+            "configured_l": model.configured_l,
+            "achieved_l": model.achieved_l,
+            "t_variant": model.t_variant,
+            "configured_t": model.configured_t,
+            "achieved_t": model.achieved_t,
+            "privacy_unit": evidence.assumptions.privacy_unit,
+            "released_dataset_digest": evidence.digests.dataset,
+            "policy_digest": evidence.digests.policy,
+            "evidence_integrity_hash": evidence.integrity_hash,
+            "composition_status": evidence.composition.risk_status,
+            "qualified_expert_review_required": True,
+            "violations": violations,
+        },
     )
 
 

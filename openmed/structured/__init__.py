@@ -30,11 +30,15 @@ from .lab_panels import (
 )
 from .qi_detect import (
     ROLE_DIRECT_ID,
+    ROLE_FREE_TEXT,
+    ROLE_INTERNAL_LINKAGE,
     ROLE_QUASI_ID,
     ROLE_SAFE,
     ROLE_SENSITIVE,
+    DiscoveryConfigurationError,
     scan_table,
 )
+from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
 
 __all__ = [
     "FLOWSHEET_ADVISORY",
@@ -45,19 +49,25 @@ __all__ = [
     "DischargeSlotName",
     "DischargeSummary",
     "DischargeSummarySection",
+    "DiscoveryConfigurationError",
     "Flowsheet",
     "LabPanel",
     "ParameterSeries",
     "ROLE_DIRECT_ID",
+    "ROLE_FREE_TEXT",
+    "ROLE_INTERNAL_LINKAGE",
     "ROLE_QUASI_ID",
     "ROLE_SAFE",
     "ROLE_SENSITIVE",
+    "SUPPORTED_TABLE_SUFFIXES",
     "TimeSeriesPoint",
     "canonical_analyte",
     "canonical_discharge_slot",
     "parse_lab_report",
+    "read_table",
     "scan_table",
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
+    "write_table",
 ]
