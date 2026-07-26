@@ -64,7 +64,6 @@ __all__ = [
 _SCHEMA_VERSION = 1
 _SUPPORTED_L_METRICS = frozenset({"distinct", "entropy"})
 _SUPPORTED_T_DISTANCES = frozenset({"variational"})
-_COLUMN_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SAFE_RISK_CATEGORIES = frozenset(
     {
@@ -391,7 +390,7 @@ class GeneralizationSummary:
     max_lattice_nodes: int
     suppression_search_strategy: str
     suppression_subsets_evaluated: int
-    suppression_subsets_possible: int
+    suppression_subsets_possible: int | None
     max_suppression_subsets: int
     search_complete: bool
     optimum_proven: bool
@@ -479,7 +478,7 @@ class AnonymizationResult:
     """Sensitive transformed rows plus a separately safe release summary."""
 
     policy: AnonymityPolicy
-    records: tuple[Mapping[str, Any], ...]
+    records: tuple[Mapping[str, Any], ...] = field(repr=False)
     before: ReleaseAssessment
     after: ReleaseAssessment
     generalization: GeneralizationSummary
@@ -1132,14 +1131,11 @@ def _project_privacy_units(
     projections: list[_SubjectProjection] = []
     for token, row_indices in grouped.items():
         unit_rows = [rows[index] for index in row_indices]
-        record: dict[str, Any] = {}
-        multi_valued_qis: list[str] = []
+        record, multi_valued_qis = _projected_joint_qi_values(
+            unit_rows,
+            policy.quasi_identifiers,
+        )
         multi_valued_sensitive: list[str] = []
-        for field in policy.quasi_identifiers:
-            value, is_multi = _projected_value(unit_rows, field, quasi_identifier=True)
-            record[field] = value
-            if is_multi:
-                multi_valued_qis.append(field)
         for field in policy.sensitive_attributes:
             value, is_multi = _projected_value(
                 unit_rows,
@@ -1159,6 +1155,51 @@ def _project_privacy_units(
             )
         )
     return projections
+
+
+def _projected_joint_qi_values(
+    rows: Sequence[Mapping[str, Any]],
+    fields: Sequence[str],
+) -> tuple[dict[str, Any], list[str]]:
+    joint_rows: list[tuple[tuple[str, ...], tuple[Any, ...]]] = []
+    for row in rows:
+        values = tuple(_projected_qi_cell(row, field) for field in fields)
+        joint_rows.append(
+            (
+                tuple(
+                    _typed_qi_value(field, value)
+                    for field, value in zip(fields, values, strict=True)
+                ),
+                values,
+            )
+        )
+    joint_rows.sort(key=lambda item: item[0])
+
+    projected: dict[str, Any] = {}
+    multi_valued: list[str] = []
+    for index, field in enumerate(fields):
+        ordered_values = tuple(values[index] for _tokens, values in joint_rows)
+        if len(ordered_values) == 1:
+            projected[field] = ordered_values[0]
+        else:
+            projected[field] = _InternalQIState(
+                "ordered-multiset",
+                ordered_values,
+            )
+        if len({tokens[index] for tokens, _values in joint_rows}) > 1:
+            multi_valued.append(field)
+    return projected, multi_valued
+
+
+def _projected_qi_cell(row: Mapping[str, Any], field: str) -> Any:
+    if field not in row:
+        return _MISSING_QI
+    value = row[field]
+    if value is None:
+        return _NULL_QI
+    if isinstance(value, str) and not value:
+        return _EMPTY_QI
+    return value
 
 
 def _validate_multi_valued_sensitive_attributes(
@@ -1365,6 +1406,18 @@ def _generalization_summary(
                     float(value.get("loss", 0.0)),
                 )
             )
+    suppression_subsets_possible = generalization.get("suppression_subsets_possible")
+    if suppression_subsets_possible is not None:
+        suppression_subsets_possible = int(suppression_subsets_possible)
+    legacy_optimum = (
+        bool(generalization.get("search_complete", False))
+        and int(generalization.get("nodes_evaluated", 0))
+        == int(generalization.get("search_space_size", 0))
+        and suppression_subsets_possible is not None
+        and int(generalization.get("suppression_subsets_evaluated", 0))
+        == suppression_subsets_possible
+        and float(generalization.get("optimality_tolerance", 1.0)) == 0.0
+    )
     return GeneralizationSummary(
         levels=tuple(levels),
         affected_privacy_units=affected_privacy_units,
@@ -1380,18 +1433,14 @@ def _generalization_summary(
         suppression_subsets_evaluated=int(
             generalization.get("suppression_subsets_evaluated", 0)
         ),
-        suppression_subsets_possible=int(
-            generalization.get("suppression_subsets_possible", 0)
-        ),
+        suppression_subsets_possible=suppression_subsets_possible,
         max_suppression_subsets=int(generalization.get("max_suppression_subsets", 0)),
         search_complete=bool(generalization.get("search_complete", False)),
-        optimum_proven=(
-            bool(generalization.get("search_complete", False))
-            and int(generalization.get("nodes_evaluated", 0))
-            == int(generalization.get("search_space_size", 0))
-            and int(generalization.get("suppression_subsets_evaluated", 0))
-            == int(generalization.get("suppression_subsets_possible", 0))
-            and float(generalization.get("optimality_tolerance", 1.0)) == 0.0
+        optimum_proven=bool(
+            generalization.get(
+                "optimum_proven",
+                legacy_optimum,
+            )
         ),
         information_loss=float(generalization.get("information_loss", 0.0)),
         generalization_loss=float(generalization.get("generalization_loss", 0.0)),
@@ -1440,7 +1489,9 @@ def _affected_privacy_unit_counts(
             selected_node,
             remove_direct_identifiers=False,
         )
-        for field in policy.quasi_identifiers:
+        for index, field in enumerate(policy.quasi_identifiers):
+            if selected_node[index] == 0:
+                continue
             counts[field] += int(
                 _exact_typed_token(exact[field]) != _exact_typed_token(selected[field])
             )
@@ -1767,7 +1818,6 @@ def _validate_generalization_summary(
         summary.nodes_evaluated,
         summary.max_lattice_nodes,
         summary.suppression_subsets_evaluated,
-        summary.suppression_subsets_possible,
         summary.max_suppression_subsets,
     )
     if any(type(value) is not int or value < 1 for value in search_counts):
@@ -1778,16 +1828,35 @@ def _validate_generalization_summary(
         raise ValueError("evaluated lattice nodes exceed the search space")
     if summary.suppression_subsets_evaluated > summary.max_suppression_subsets:
         raise ValueError("suppression search exceeded its configured limit")
-    if summary.suppression_subsets_evaluated > summary.suppression_subsets_possible:
+    if summary.suppression_subsets_possible is not None and (
+        type(summary.suppression_subsets_possible) is not int
+        or summary.suppression_subsets_possible < 1
+        or summary.suppression_subsets_evaluated > summary.suppression_subsets_possible
+    ):
         raise ValueError("evaluated suppression subsets exceed the search space")
     if not isinstance(summary.search_complete, bool):
         raise TypeError("search_complete must be a boolean")
-    complete = (
+    exhaustive_complete = (
         summary.nodes_evaluated == summary.search_space_size
+        and summary.suppression_subsets_possible is not None
         and summary.suppression_subsets_evaluated
         == summary.suppression_subsets_possible
     )
-    if summary.search_complete != complete or summary.optimum_proven != complete:
+    zero_loss_proof = (
+        summary.search_strategy == "zero-loss lower-bound lattice"
+        and summary.suppression_search_strategy
+        == "zero-loss lower-bound subset pruning"
+        and summary.suppression_subsets_possible is None
+        and summary.nodes_evaluated >= 1
+        and summary.suppression_subsets_evaluated == 1
+        and summary.information_loss == 0.0
+        and summary.generalization_loss == 0.0
+        and summary.suppression_loss == 0.0
+        and all(level == 0 for _field, level, _name, _loss in summary.levels)
+    )
+    if summary.search_complete != exhaustive_complete or summary.optimum_proven != (
+        exhaustive_complete or zero_loss_proof
+    ):
         raise ValueError("generalization optimality claim is inconsistent")
     losses = (
         summary.information_loss,
@@ -2012,13 +2081,20 @@ def _assessment_warnings(
     ]
     if policy.privacy_unit is None:
         warnings.append("Each input row is treated as one privacy unit.")
+    elif any(len(projection.row_indices) > 1 for projection in projections):
+        warnings.append(
+            "Repeated rows within keyed privacy units are assessed as part of "
+            "deterministic joint ordered-multiset fingerprints; row multiplicity "
+            "can distinguish privacy units."
+        )
     multi_fields = sorted(
         {field for projection in projections for field in projection.multi_valued_qis}
     )
     if multi_fields:
         warnings.append(
             "Some quasi-identifiers vary within a privacy unit and are assessed "
-            f"as deterministic value-set fingerprints: {', '.join(multi_fields)}."
+            "as deterministic joint ordered-multiset fingerprints: "
+            f"{', '.join(multi_fields)}."
         )
     multi_sensitive_fields = sorted(
         {
@@ -2151,6 +2227,8 @@ def _materialize_rows(records: Any) -> list[dict[str, Any]]:
             raise TypeError("DataFrame column names must be strings")
         if len(columns) != len(set(columns)):
             raise ValueError("DataFrame column names must be unique")
+        for field in columns:
+            _validated_column_name(field, name="DataFrame column")
     to_dicts = getattr(records, "to_dicts", None)
     if callable(to_dicts):
         records = to_dicts()
@@ -2175,6 +2253,7 @@ def _materialize_rows(records: Any) -> list[dict[str, Any]]:
                     "Structured column names must be strings; unsupported name "
                     f"at row offset {row_index}, column offset {column_index}"
                 )
+            _validated_column_name(field, name="Structured column")
             output[field] = _normalized_dataframe_scalar(value)
         materialized.append(output)
     return materialized
@@ -2229,12 +2308,7 @@ def _column_tuple(
         raise TypeError(f"{name} must be a sequence of column names")
     columns = []
     for item in value:
-        if not isinstance(item, str) or not item.strip():
-            raise ValueError(f"{name} must contain non-empty column names")
-        column = item.strip()
-        if not _COLUMN_NAME_RE.fullmatch(column):
-            raise ValueError(f"{name} contains an unsafe or unsupported column name")
-        columns.append(column)
+        columns.append(_validated_column_name(item, name=name))
     result = tuple(sorted(dict.fromkeys(columns)))
     if not result and not allow_empty:
         raise ValueError(f"{name} must contain at least one column")
@@ -2244,12 +2318,29 @@ def _column_tuple(
 def _optional_column(value: str | None, *, name: str) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty column name")
-    column = value.strip()
-    if not _COLUMN_NAME_RE.fullmatch(column):
-        raise ValueError(f"{name} contains an unsafe or unsupported column name")
-    return column
+    return _validated_column_name(value, name=name)
+
+
+def _validated_column_name(value: Any, *, name: str) -> str:
+    """Validate a real source-schema label without imposing ASCII syntax."""
+
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must contain string column names")
+    if (
+        not value
+        or value != value.strip()
+        or len(value) > 256
+        or any(
+            unicodedata.category(character).startswith("C")
+            or unicodedata.category(character) in {"Zl", "Zp"}
+            for character in value
+        )
+    ):
+        raise ValueError(
+            f"{name} must use non-empty column names without surrounding "
+            "whitespace or control characters"
+        )
+    return value
 
 
 def _typed_token(value: Any) -> str:
@@ -2354,6 +2445,15 @@ def _canonical_scalar_type(value: Any) -> str:
 
 
 def _canonical_digest_scalar(value: Any) -> dict[str, Any]:
+    if isinstance(value, _InternalQIState):
+        return {
+            "type": value.kind,
+            "value": (
+                [_canonical_digest_scalar(item) for item in value.values]
+                if value.values
+                else None
+            ),
+        }
     if value is None:
         return {"type": "null", "value": None}
     if type(value) is bool:
