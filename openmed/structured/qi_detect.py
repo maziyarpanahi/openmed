@@ -268,6 +268,7 @@ def scan_table(
     quasi_identifier_columns: Sequence[str] | None = None,
     sensitive_columns: Sequence[str] | None = None,
     privacy_unit: str | None = None,
+    include_safe_candidates: bool = False,
 ) -> dict[str, Any]:
     """Profile a table and emit an aggregate-only quasi-identifier manifest.
 
@@ -292,6 +293,10 @@ def scan_table(
         privacy_unit: Column identifying the person or other privacy unit.
             Candidate equivalence classes are then measured across distinct
             units rather than repeated rows.
+        include_safe_candidates: Include otherwise-safe scalar columns in the
+            bounded combination search. This can find QIs that become
+            identifying only in combination, but increases the search space
+            and remains advisory until the resulting roles are reviewed.
 
     Returns:
         A manifest containing only schema names and aggregate statistics. It
@@ -309,6 +314,8 @@ def scan_table(
         raise ValueError("max_candidate_columns must be positive")
     if search_budget <= 0:
         raise ValueError("search_budget must be positive")
+    if type(include_safe_candidates) is not bool:
+        raise TypeError("include_safe_candidates must be a boolean")
 
     sample = _read_table_sample(
         Path(path),
@@ -344,6 +351,7 @@ def scan_table(
         max_candidate_columns=max_candidate_columns,
         search_budget=search_budget,
         privacy_unit=privacy_unit,
+        include_safe_candidates=include_safe_candidates,
     )
     confidence = max(
         (entry["confidence"] for entry in qi_sets),
@@ -960,11 +968,13 @@ def _rank_quasi_identifier_sets(
     max_candidate_columns: int,
     search_budget: int,
     privacy_unit: str | None,
+    include_safe_candidates: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     all_candidate_columns = _candidate_columns(
         profiles,
         limit=len(profiles),
         excluded={privacy_unit} if privacy_unit is not None else set(),
+        include_safe_candidates=include_safe_candidates,
     )
     eligible_count = len(all_candidate_columns)
     candidate_columns = all_candidate_columns[:max_candidate_columns]
@@ -975,6 +985,11 @@ def _rank_quasi_identifier_sets(
     all_set_size_combinations = (2 ** len(candidate_columns)) - 1
     set_size_truncated = max_size < len(candidate_columns)
     search_metadata: dict[str, Any] = {
+        "candidate_scope": (
+            "all_reviewed_scalar_columns"
+            if include_safe_candidates
+            else "role_eligible_columns"
+        ),
         "eligible_column_count": eligible_count,
         "candidate_column_count": len(candidate_columns),
         "max_candidate_columns": max_candidate_columns,
@@ -1050,12 +1065,16 @@ def _candidate_columns(
     *,
     limit: int,
     excluded: set[str],
+    include_safe_candidates: bool,
 ) -> tuple[str, ...]:
     candidates = [
         profile
         for profile in profiles
         if (profile.non_null_count or profile.explicit_roles)
         and profile.name not in excluded
+        and ROLE_DIRECT_ID not in profile.roles
+        and ROLE_INTERNAL_LINKAGE not in profile.roles
+        and ROLE_FREE_TEXT not in profile.roles
         and (
             ROLE_QUASI_ID in profile.roles
             or (
@@ -1064,11 +1083,13 @@ def _candidate_columns(
                 and profile.singleton_value_count > 0
                 and profile.uniqueness_ratio >= 0.05
             )
+            or include_safe_candidates
         )
     ]
     candidates.sort(
         key=lambda profile: (
             ROLE_QUASI_ID in profile.roles,
+            ROLE_SENSITIVE in profile.roles,
             profile.confidence,
             profile.uniqueness_ratio,
             profile.cardinality,
@@ -1090,13 +1111,13 @@ def _set_stats(
         counts: Counter[Hashable] = Counter(non_empty_keys)
         analysis_unit_count = len(non_empty_keys)
     else:
-        profiles_by_unit: dict[Hashable, set[bytes]] = {}
+        profiles_by_unit: dict[Hashable, list[bytes]] = {}
         for index, row in enumerate(rows):
             key = _risk_key_bytes(row, columns)
             if key == b"[]":
                 continue
             unit, _missing = _privacy_unit_token(row, privacy_unit, index=index)
-            profiles_by_unit.setdefault(unit, set()).add(key)
+            profiles_by_unit.setdefault(unit, []).append(key)
         longitudinal_profiles = tuple(
             tuple(sorted(profile)) for profile in profiles_by_unit.values()
         )
