@@ -378,6 +378,70 @@ def test_user_hierarchy_cannot_emit_reserved_internal_values(coarsening) -> None
         )
 
 
+def test_user_hierarchy_rejects_keys_that_collide_after_string_coercion() -> None:
+    with pytest.raises(ValueError, match="collide after string coercion"):
+        enforce_kanon(
+            [{"age": 1}],
+            quasi_identifiers=["age"],
+            target_k=1,
+            hierarchies={
+                "age": [
+                    {"name": "exact", "loss": 0.0},
+                    {
+                        "name": "mapped",
+                        "loss": 0.5,
+                        "values": {1: "one", "1": "string-one"},
+                    },
+                ]
+            },
+        )
+
+
+def test_user_hierarchy_rejects_split_after_merge() -> None:
+    with pytest.raises(ValueError, match="splits values merged"):
+        enforce_kanon(
+            [{"facility": "north"}, {"facility": "south"}],
+            quasi_identifiers=["facility"],
+            target_k=1,
+            hierarchies={
+                "facility": [
+                    {"name": "exact", "loss": 0.0},
+                    {
+                        "name": "campus",
+                        "loss": 0.5,
+                        "values": {"north": "all", "south": "all"},
+                    },
+                    {
+                        "name": "invalid-split",
+                        "loss": 0.75,
+                        "values": {"north": "n", "south": "s"},
+                    },
+                ]
+            },
+        )
+
+
+def test_user_hierarchy_rejects_default_merge_followed_by_exception_split() -> None:
+    with pytest.raises(ValueError, match="splits values merged"):
+        enforce_kanon(
+            [{"facility": "A"}, {"facility": "B"}],
+            quasi_identifiers=["facility"],
+            target_k=1,
+            hierarchies={
+                "facility": [
+                    {"name": "exact", "loss": 0.0},
+                    {"name": "all", "loss": 0.5, "default": "all"},
+                    {
+                        "name": "invalid-split",
+                        "loss": 0.75,
+                        "values": {"A": "exception"},
+                        "default": "other",
+                    },
+                ]
+            },
+        )
+
+
 def test_hierarchies_for_undeclared_qis_are_rejected() -> None:
     with pytest.raises(ValueError, match="undeclared quasi-identifiers"):
         enforce_kanon(
@@ -456,6 +520,32 @@ def test_t_closeness_suppression_search_fails_closed_at_its_bound() -> None:
             suppression_limit=1,
             max_suppression_subsets=3,
         )
+
+
+def test_zero_loss_exact_release_prunes_optional_suppression_search() -> None:
+    records = [{"group": f"group-{index}", "disease": index % 2} for index in range(18)]
+
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=["group"],
+        sensitive_attributes=["disease"],
+        target_k=1,
+        target_l=1,
+        target_t=0.5,
+        suppression_limit=9,
+    )
+
+    generalization = enforced["generalization"]
+    assert enforced["released_count"] == len(records)
+    assert enforced["suppressed_count"] == 0
+    assert generalization["information_loss"] == 0.0
+    assert generalization["suppression_subsets_evaluated"] == 1
+    assert generalization["suppression_subsets_possible"] is None
+    assert generalization["nodes_evaluated"] == 1
+    assert generalization["nodes_evaluated"] < generalization["search_space_size"]
+    assert generalization["search_complete"] is False
+    assert generalization["optimum_proven"] is True
+    assert generalization["search"] == "zero-loss lower-bound lattice"
 
 
 def test_enforcement_preserves_supported_typed_qi_values() -> None:
