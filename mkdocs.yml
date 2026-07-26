@@ -48,6 +48,7 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
+      - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
@@ -73,6 +74,7 @@ nav:
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
+      - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
@@ -114,6 +116,7 @@ nav:
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
       - Android Quickstart: android-quickstart.md
       - Android ONNX Export: export-onnx-android.md
       - Android Tokenization: android-tokenization.md
@@ -121,6 +124,7 @@ nav:
       - On-device Segmenters: on-device-segmenters.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
+      - OpenMedKit Apple Platforms: runtimes/apple-platforms.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
@@ -128,6 +132,7 @@ nav:
       - Onboarding: onboarding.md
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
+      - Nix Development: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md

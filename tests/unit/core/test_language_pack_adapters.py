@@ -123,5 +123,5 @@ def test_language_packs_keep_placeholder_models_explicit() -> None:
     assert DEFAULT_MODEL_PLACEHOLDER_LANGUAGES == {"ru", "zh"}
     assert DEFAULT_PII_MODELS["ru"] == "OpenMed/privacy-filter-multilingual"
     assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
-    assert SCRIPT_LANGUAGE_HINTS["Cyrillic"] == ("ru",)
+    assert SCRIPT_LANGUAGE_HINTS["Cyrillic"] == ("ru", "uk")
     assert SCRIPT_LANGUAGE_HINTS["Han"] == ("zh", "ja")

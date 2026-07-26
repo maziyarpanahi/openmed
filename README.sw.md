@@ -34,7 +34,7 @@ mtandao wako.</p>
 </p>
 
 <p>
-  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 24 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 27 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -109,7 +109,7 @@ ufunguo wa API wala ombi la mtandao.
 | Data ya mgonjwa hutoka mtandao wako  |          **Kamwe**             | Hutumwa kwa mtoa huduma  |
 | Gharama                              | Bure na chanzo huria            | Malipo kwa kila ombi     |
 | Modeli maalumu za matibabu           |            2,000+              | Chache                    |
-| Lugha za PII zinazotumia modeli      |              24                | Hutofautiana              |
+| Lugha za PII zinazotumia modeli      |              27                | Hutofautiana              |
 | Nje ya mtandao/air-gapped            |               ✅               |            ❌            |
 | Uharakishaji wa Apple Silicon (MLX)  |               ✅               | Haitumiki                 |
 | Programu asilia za iOS/macOS         | ✅ kupitia OpenMedKit           |            ❌            |
@@ -427,11 +427,12 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 26 zinazoungwa mkono)
+## PII ya lugha nyingi (lugha 29 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 26 ya lugha za PII**:
-`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`,
-`nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh` na `zu`, pamoja na checkpoint
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 29 ya lugha za PII**:
+`am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
+`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
+`xh`, `zh` na `zu`, pamoja na checkpoint
 600+ za PII. Uelekezaji wa Kirusi na Kichina kwa sasa hutumia vishikilia nafasi
 vya modeli chaguo-msingi ya lugha nyingi vilivyoelezwa kwenye nyaraka, huku
 uzito maalumu wa modeli ukiwa tofauti. Familia ya hiari ya Indic NER

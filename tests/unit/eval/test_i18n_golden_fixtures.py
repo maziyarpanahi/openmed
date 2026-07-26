@@ -1,8 +1,10 @@
 """Per-language i18n golden fixture recovery tests (OM-100).
 
-Every JSONL fixture under ``openmed/eval/golden/fixtures/i18n/`` is a synthetic,
-no-DUA clinical note that exercises its language pack's own date / phone /
-national-ID / address / postcode patterns. This suite runs
+Every language-named JSONL fixture under ``openmed/eval/golden/fixtures/i18n/``
+is a synthetic, no-DUA clinical note that exercises its language pack's own
+date / phone / national-ID / address / postcode patterns. Relation fixture
+packs are co-located under ``i18n`` but have their own schema and test suite.
+This suite runs
 :func:`get_patterns_for_language` over each fixture and asserts that every gold
 span is recovered at its exact offset with the correct canonical label, and that
 each national-ID span whose language has a checksum validator passes it. A new
@@ -51,6 +53,7 @@ _MAX_NOTES_PER_LANGUAGE = 5
 # not yet carry a postcode span. They are still covered by the offset-recovery
 # and checksum tests; backfilling a ZIPCODE span for each is a separate task.
 _LEGACY_INCOMPLETE_LANGUAGES = frozenset({"ko", "ms", "tl"})
+_NON_PII_FIXTURE_PREFIXES = ("relations_",)
 
 
 def _fixture_paths() -> list[Path]:
@@ -58,6 +61,7 @@ def _fixture_paths() -> list[Path]:
         path
         for path in _I18N_DIR.glob("*.jsonl")
         if path.name not in _SPECIALIZED_CORPUS_FIXTURES
+        and not path.stem.startswith(_NON_PII_FIXTURE_PREFIXES)
     )
 
 
