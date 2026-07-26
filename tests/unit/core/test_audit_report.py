@@ -409,7 +409,8 @@ def test_anonymization_result_is_serialized_through_its_safe_summary():
     assert payload["policy"]["non_sensitive_attributes"] == ["site_code"]
     assert payload["policy"]["excluded_attributes"] == ["source_batch"]
     assert payload["released_schema_digest"] == result.released_schema_digest
-    assert payload["generalization"]["search"]["complete"] is True
+    assert payload["generalization"]["search"]["complete"] is False
+    assert payload["generalization"]["search"]["optimum_proven"] is True
     assert (
         payload["generalization"]["search"]["suppression_subsets_evaluated"]
         == result.generalization.suppression_subsets_evaluated
