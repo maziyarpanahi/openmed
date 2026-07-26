@@ -1396,8 +1396,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 # CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
-# clinical NER. Equipment remains an explicit ``OTHER`` mapping because the
-# current canonical taxonomy has no medical-device concept label.
+# clinical NER. Equipment maps to the canonical clinical device concept.
 CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "bod": BODY_SITE,
     "body": BODY_SITE,
@@ -1409,8 +1408,8 @@ CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "disease": CONDITION,
     "dru": MEDICATION,
     "drug": MEDICATION,
-    "equ": OTHER,
-    "equipment": OTHER,
+    "equ": DEVICE,
+    "equipment": DEVICE,
     "ite": LAB_TEST,
     "item": LAB_TEST,
     "lab_test": LAB_TEST,
