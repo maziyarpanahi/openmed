@@ -3004,8 +3004,12 @@ def _structured_release_risk_check(
     model = evidence.privacy_models
     post = evidence.post_metrics
     violations: dict[str, Any] = {}
-    if not evidence.search.complete:
-        violations["search_complete"] = False
+    if not evidence.search.optimality_proven:
+        violations["search_optimality_proven"] = False
+    elif not evidence.search.complete and evidence.schema_version < 3:
+        violations["search_optimality_proof"] = (
+            "schema_version_3_required_for_pruned_proof"
+        )
     if model.achieved_k < model.configured_k:
         violations["k_anonymity"] = {
             "configured": model.configured_k,
@@ -3081,6 +3085,7 @@ def _structured_release_risk_check(
         details={
             "integrity_verified": True,
             "search_complete": evidence.search.complete,
+            "search_optimality_proven": evidence.search.optimality_proven,
             "configured_k": model.configured_k,
             "achieved_k": model.achieved_k,
             "l_variant": model.l_variant,
