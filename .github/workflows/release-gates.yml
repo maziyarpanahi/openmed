@@ -13,7 +13,7 @@ on:
       api_base_ref:
         description: Git ref used as the public API compatibility baseline.
         required: false
-        default: v1.9.0
+        default: v1.9.1
       migration_guide:
         description: Migration guide required for the release.
         required: false
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CANDIDATE_REPORT: ${{ github.event.inputs.candidate || 'artifacts/release-candidate.json' }}
-      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v1.9.0' }}
+      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v1.9.1' }}
       MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/1.9-to-2.0.md' }}
       RELEASE_VERSION: ${{ github.event.inputs.release_version || github.ref_name }}
 
