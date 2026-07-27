@@ -376,6 +376,7 @@ from openmed.eval.release_gates import (
     ReleaseGate,
     apply_flakiness_quarantine,
     evaluate_federated_boundary_gate,
+    evaluate_release_risk_evidence,
     evaluate_surrogate_quality_gate,
 )
 from openmed.eval.release_readiness import (
@@ -727,6 +728,7 @@ __all__ = [
     "diff_against_baseline",
     "eval_code_hash",
     "evaluate_federated_boundary_gate",
+    "evaluate_release_risk_evidence",
     "evaluate_quant_recall_delta",
     "evaluate_readiness",
     "evaluate_surrogate_quality",
