@@ -42,7 +42,7 @@ ALLOWED_SYSTEM_HINTS = set(CLINICAL_SYSTEM_HINTS) | {
 
 
 def test_metadata_tables_cover_canonical_labels_exactly():
-    assert len(CANONICAL_LABELS) == 96
+    assert len(CANONICAL_LABELS) == 97
     assert set(LABEL_METADATA) == CANONICAL_LABELS
     assert set(LABEL_TO_HIPAA) == CANONICAL_LABELS
 

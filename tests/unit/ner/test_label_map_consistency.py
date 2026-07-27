@@ -760,6 +760,77 @@ class TestGastroenterologyRouting:
         assert all(info.category != "Gastroenterology" for _k, info, _r in suggestions)
 
 
+# ---------------------------------------------------------------------------
+# Procedures domain (issue #313)
+# ---------------------------------------------------------------------------
+
+
+class TestProceduresDomain:
+    EXPECTED_LABELS = [
+        "Procedure",
+        "Surgery",
+        "DiagnosticProcedure",
+        "Device",
+        "Approach",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "Procedure": "PROCEDURE",
+        "Surgery": "PROCEDURE",
+        "DiagnosticProcedure": "PROCEDURE",
+        "Device": "DEVICE",
+        "Approach": "OTHER",
+    }
+
+    def test_procedures_in_available_domains(self):
+        assert "procedures" in available_domains()
+
+    def test_get_default_labels_returns_procedures_set(self):
+        labels = get_default_labels("procedures")
+        assert labels  # non-empty
+        assert labels == self.EXPECTED_LABELS
+
+    def test_procedures_labels_have_no_duplicates(self):
+        labels = get_default_labels("procedures")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_procedures_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+
+        if expected != "OTHER":
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert system_hints_for(expected)
+
+
+# ---------------------------------------------------------------------------
+# Procedures routing in model_registry (issue #313)
+# ---------------------------------------------------------------------------
+
+
+class TestProceduresRouting:
+    PROCEDURES_TEXT = "Patient underwent laparoscopic cholecystectomy"
+
+    def test_match_categories_routes_procedures(self):
+        categories = [c for c, _ in _match_categories(self.PROCEDURES_TEXT)]
+        assert "Procedures" in categories
+
+    def test_procedures_is_registry_metadata_not_a_live_category(self):
+        assert "Procedures" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Procedures" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_procedures(self):
+        suggestions = get_model_suggestions(self.PROCEDURES_TEXT)
+        assert suggestions
+        assert all(info.category != "Procedures" for _k, info, _r in suggestions)
+
+
 class TestNormalizeLabelIdempotency:
     @pytest.mark.parametrize(
         "label",
