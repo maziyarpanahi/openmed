@@ -3,6 +3,7 @@
 This page inventories the main surfaced capabilities in OpenMed and maps them
 back to source modules, docs, and runnable examples. For release-specific
 coverage, see
+[OpenMed v2.0.0 Release Notes](./release/v2.0.0.md), the
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
 [OpenMed v1.8.0 Release Notes](./release/v1.8.0.md), and the historical
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
@@ -88,7 +89,7 @@ coverage, see
 ## Suggested Reading Order
 
 1. [Quick Start](./getting-started.md) - install plus first inference.
-2. [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) - review the latest patch fixes, release coverage, and migration notes.
+2. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) - review the current major-version contract, release coverage, and migration notes.
 3. [Examples](./examples.md) - runnable notebooks and scripts.
 4. [PII Anonymization](./anonymization.md) - de-identification methods and policy workflows.
 5. [REST Service](./rest-service.md), [Swift Package](./swift-openmedkit.md), and [Transformers.js Export](./export-transformersjs.md) - deployment surfaces.
