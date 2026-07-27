@@ -5,6 +5,9 @@ resolves OpenMed's ISO 639-1 codes (used everywhere else in the library) to
 the most appropriate Faker locale.
 
 Notes:
+- Afrikaans (``af``) has no Faker locale; the conceptual ``af_ZA`` locale uses
+  ``nl_NL`` as its runtime backend for generic fields while curated Afrikaans
+  compatibility values remain available through ``LANGUAGE_FAKE_DATA``.
 - Telugu (``te``) has no Faker locale; non-script-specific values fall back to
   ``en_IN`` and surface a one-time ``UserWarning``. Native Telugu name
   surrogates bypass that approximate path and therefore do not warn.
@@ -84,7 +87,7 @@ CONCEPTUAL_LOCALE_LANGUAGES: Final[Mapping[str, str]] = {
 # keyed by the target country while allowing generic names/addresses to use a
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
-    "af_ZA": "zu_ZA",
+    "af_ZA": "nl_NL",
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
     "as_IN": "bn_BD",
