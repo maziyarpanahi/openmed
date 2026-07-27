@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the OpenMed model loaded lazily and cached per executor worker
   process. `pyspark` is imported lazily and stays behind the existing `spark`
   extra; the adapter is registered as `spark` in `openmed.interop` (#1816).
+- Added a procedures zero-shot domain for surgical and diagnostic procedures,
+  devices, and surgical approach, with a new `DEVICE` canonical label,
+  keyword routing metadata, and canonical label normalization (#313).
 - Added deterministic serial measurement trends that group repeated entities,
   normalize compatible units, order points through the clinical timeline,
   preserve source spans and incomparable readings, and emit a clinician-review
