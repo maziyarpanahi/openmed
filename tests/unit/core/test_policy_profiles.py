@@ -307,6 +307,38 @@ def test_north_africa_profiles_mask_statutory_sensitive_classes(
     assert compiled.proof.coverage_percent == 100.0
 
 
+def test_africa_malabo_baseline_loads_with_conservative_defaults():
+    profile = load_policy("africa_malabo_baseline")
+
+    assert PolicyName.AFRICA_MALABO_BASELINE.value == "africa_malabo_baseline"
+    assert profile.name == "africa_malabo_baseline"
+    assert "africa_malabo_baseline" in list_policies()
+    assert profile.default_action == "mask"
+    assert profile.default_action_bias == "mask_sensitive_personal_data"
+    assert profile.policy_label_actions == {
+        "DIRECT_IDENTIFIER": "mask",
+        "QUASI_IDENTIFIER": "mask",
+        "SENSITIVE_ATTRIBUTE": "mask",
+        "CLINICAL_CONCEPT": "mask",
+    }
+    assert profile.strict_no_leak is True
+    assert profile.safety_sweep_mandatory is True
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+    assert set(profile.actions.values()) == {"mask"}
+    assert lint_policy("africa_malabo_baseline") == ()
+
+    lint_report = lint_policy_report("africa_malabo_baseline")
+    assert lint_report["valid"] is True
+    assert lint_report["error_count"] == 0
+    assert lint_report["warning_count"] == 0
+
+    compiled = compile_policy("africa_malabo_baseline")
+    assert compiled.proof.verified is True
+    assert compiled.proof.coverage_percent == 100.0
+
+
 @pytest.mark.parametrize(
     ("policy_name", "locale", "text", "identifiers"),
     [
