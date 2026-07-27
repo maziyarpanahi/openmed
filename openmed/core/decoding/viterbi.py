@@ -704,8 +704,6 @@ def token_spans_to_char_spans(
                     offset_map,
                 )
             assert_cjk_span_boundaries(start, end, text, offset_map)
-        elif is_indic_text(text[context_start:context_end]):
-            start, end = snap_span_to_graphemes(start, end, text)
         if (
             cjk_enabled
             and char_spans
