@@ -191,8 +191,8 @@ public final class PlatformModel {
     /// Run CoreML token classification with caller-provided tokenization.
     ///
     /// watchOS and visionOS deliberately do not link the full tokenizer/MLX
-    /// dependency graph. Callers provide bounded token IDs and character offsets
-    /// from their app's bundled Nano model tokenizer.
+    /// dependency graph. Callers provide bounded token IDs and Unicode scalar
+    /// offsets from their app's bundled Nano model tokenizer.
     public func predict(
         inputIDs: [Int],
         attentionMask: [Int],
@@ -228,8 +228,9 @@ public final class PlatformModel {
         var redacted = text
 
         for entity in selected.reversed() {
-            let lower = redacted.index(redacted.startIndex, offsetBy: entity.start)
-            let upper = redacted.index(lower, offsetBy: entity.end - entity.start)
+            guard let range = entity.range(in: redacted) else {
+                continue
+            }
             let replacement: String
             switch method {
             case .mask:
@@ -237,7 +238,7 @@ public final class PlatformModel {
             case .remove:
                 replacement = ""
             }
-            redacted.replaceSubrange(lower..<upper, with: replacement)
+            redacted.replaceSubrange(range, with: replacement)
         }
 
         return DeidentificationResult(
@@ -270,7 +271,11 @@ public final class PlatformModel {
     ) -> [EntityPrediction] {
         let valid =
             entities
-            .filter { $0.start >= 0 && $0.end > $0.start && $0.end <= text.count }
+            .compactMap { $0.snappedToGraphemeBoundaries(in: text) }
+            .filter {
+                $0.start >= 0 && $0.end > $0.start
+                    && $0.end <= PostProcessing.unicodeScalarCount(in: text)
+            }
             .sorted {
                 if $0.start == $1.start {
                     if $0.end == $1.end {

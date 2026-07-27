@@ -2,7 +2,7 @@
 
 Portable [Agent Skills](https://agentskills.io) for building with **OpenMed** — the on-device, Apache-2.0 clinical & biomedical NLP library. Each skill is a folder with a `SKILL.md` that works unchanged in **Claude Code**, **OpenAI Codex**, **OpenCode**, and any agent on the open standard. Drop them in and your coding agent learns to wire up OpenMed pipelines — de-identification, NER, FHIR export, evaluation — plus the upstream/downstream healthcare tasks around them.
 
-**68 skills** across 13 categories.
+**72 skills** across 14 categories.
 
 ## Get running in one command
 
@@ -185,6 +185,15 @@ Legend: `→ before` runs upstream of OpenMed, `after →` consumes its output, 
 | [`enforcing-nophi-logging`](enforcing-nophi-logging/SKILL.md) | Add a logging and telemetry guard that scrubs or blocks PHI from logs, traces, and error reports around an OpenMed deployment. | ↔ adjacent |
 | [`running-openmed-ondevice`](running-openmed-ondevice/SKILL.md) | Run OpenMed models fully on-device with the MLX (Apple Silicon), CoreML (iOS/macOS), or ONNX/WebGPU (cross-platform/browser) backends, in…. | ↔ adjacent |
 | [`serving-openmed-rest-api`](serving-openmed-rest-api/SKILL.md) | Stand up OpenMed's FastAPI REST service for clinical NER, PII extraction, and de-identification, with health checks, model keep-alive/unl…. | ↔ adjacent |
+
+### uncategorized
+
+| Skill | What it does | Pairs |
+| --- | --- | --- |
+| [`benchmark-pii-recall`](benchmark-pii-recall/SKILL.md) | Benchmark an OpenMed PII model with synthetic gold spans and report label-aware exact-span and grapheme recall without emitting identifie…. |  |
+| [`deidentify-a-dataset`](deidentify-a-dataset/SKILL.md) | De-identify selected free-text columns in a local CSV, JSONL, or Parquet dataset with OpenMed and produce a separate redacted dataset plu…. |  |
+| [`extract-clinical-entities-to-fhir`](extract-clinical-entities-to-fhir/SKILL.md) | Extract clinical entities from synthetic or already de-identified text with OpenMed and map them into deterministic FHIR R4 resources and…. |  |
+| [`pick-a-pii-model`](pick-a-pii-model/SKILL.md) | Select an on-device OpenMed PII model from the committed registry by language, runtime format, and size budget, then require recall valid…. |  |
 
 ## Authoring & validation
 

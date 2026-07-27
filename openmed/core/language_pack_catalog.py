@@ -24,7 +24,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until a dedicated
 # PII model is published. They must not be represented as trained/model-backed
 # languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru", "zh"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -41,6 +41,7 @@ def _pack(
     *,
     national_id_provider: tuple[str, str] | None = None,
     context_scripts: Sequence[str] = (),
+    routing_markers: Sequence[str] = (),
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -55,6 +56,7 @@ def _pack(
         surrogate_locale=locale,
         national_id_providers=providers,
         context_scripts=tuple(context_scripts),
+        routing_markers=tuple(routing_markers),
     )
 
 
@@ -109,11 +111,54 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("hi_IN", "aadhaar"),
     ),
     _pack(
+        "mr",
+        "OpenMed/privacy-filter-multilingual",
+        "mr_IN",
+        ("Devanagari",),
+        national_id_provider=("mr_IN", "aadhaar"),
+        routing_markers=(
+            "आहे",
+            "आहेत",
+            "रुग्ण",
+            "रुग्णाचे",
+            "नोंद",
+            "फेब्रुवारी",
+            "ऑक्टोबर",
+        ),
+    ),
+    _pack(
+        "or",
+        "OpenMed/privacy-filter-multilingual",
+        "or_IN",
+        ("Odia",),
+        national_id_provider=("or_IN", "aadhaar"),
+    ),
+    _pack(
+        "as",
+        "OpenMed/privacy-filter-multilingual",
+        "as_IN",
+        ("Bengali",),
+        national_id_provider=("as_IN", "aadhaar"),
+    ),
+    _pack(
+        "bn",
+        "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
+        "bn_BD",
+        ("Bengali",),
+    ),
+    _pack(
         "te",
         "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
         "en_IN",
         ("Telugu",),
         national_id_provider=("en_IN", "aadhaar"),
+    ),
+    _pack(
+        "ta",
+        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+        "ta_IN",
+        ("Tamil",),
+        national_id_provider=("ta_IN", "aadhaar"),
     ),
     _pack(
         "am",
@@ -152,7 +197,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
     LanguagePack(
         code="zh",
         scripts=("Han",),
-        default_model="OpenMed/privacy-filter-multilingual",
+        default_model="OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
         segmenter_id="jieba",
         recognizers=("builtin-patterns", "model"),
         surrogate_locale="zh_CN",
@@ -296,15 +341,11 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
 }
 
 SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
-    "as": "as_IN",
     "bn": "bn_BD",
     "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
-    "mr": "mr_IN",
-    "or": "or_IN",
     "pa": "pa_IN",
-    "ta": "ta_IN",
 }
 
 # Languages surfaced by script routing before a bundled default PII model or
@@ -312,16 +353,11 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # these codes; keeping them separate from ``SUPPORTED_LANGUAGES`` avoids
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
-    "as",
-    "bn",
     "gu",
     "kn",
     "ml",
-    "mr",
     "ne",
-    "or",
     "pa",
-    "ta",
     "ur",
 }
 
@@ -391,7 +427,12 @@ _LOCALE_ORDER = (
     "es",
     "nl",
     "hi",
+    "mr",
+    "or",
+    "as",
+    "bn",
     "te",
+    "ta",
     "am",
     "pt",
     "ar",
@@ -437,7 +478,11 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "es",
     "nl",
     "hi",
+    "mr",
+    "or",
+    "as",
     "te",
+    "ta",
     "am",
     "pt",
     "tr",

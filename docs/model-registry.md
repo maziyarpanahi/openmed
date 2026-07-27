@@ -83,6 +83,8 @@ include:
 2. Representative canonical entity labels.
 3. Required 11-script tokenizer coverage for PII-family entries, plus optional benchmark, latency, RAM, and
    recommended-tier enrichment.
+4. Per-format download sizes and per-script recall/leakage-floor evidence when
+   the release model card advertises those decision fields.
 
 CI will enforce type safety through the unit tests, and the docs automatically pick up the new entry via the examples
 above.

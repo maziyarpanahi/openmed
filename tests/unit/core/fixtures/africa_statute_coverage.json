@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "malabo_article_14_1": {
+    "source_title": "African Union Convention on Cyber Security and Personal Data Protection",
+    "source_url": "https://au.int/sites/default/files/treaties/29560-treaty-0048_-_african_union_convention_on_cyber_security_and_personal_data_protection_e.pdf",
+    "citation": "Article 14(1)",
+    "categories_verbatim": [
+      "racial, ethnic and regional origin",
+      "parental filiation",
+      "political opinions",
+      "religious or philosophical beliefs",
+      "trade union membership",
+      "sex life",
+      "genetic information",
+      "data on the state of health of the data subject"
+    ]
+  },
+  "profiles": {
+    "za_popia": {
+      "statute": "Protection of Personal Information Act 4 of 2013",
+      "source_url": "https://www.justice.gov.za/legislation/acts/2013-004.pdf",
+      "classes": [
+        {
+          "statute_class": "NAME",
+          "citation": "section 1(h)",
+          "canonical_labels": [
+            "PERSON",
+            "FIRST_NAME",
+            "LAST_NAME",
+            "MIDDLE_NAME",
+            "PREFIX"
+          ]
+        },
+        {
+          "statute_class": "CONTACT_DETAILS",
+          "citation": "section 1(c)",
+          "canonical_labels": [
+            "EMAIL",
+            "PHONE"
+          ]
+        },
+        {
+          "statute_class": "LOCATION_INFORMATION",
+          "citation": "section 1(c)",
+          "canonical_labels": [
+            "LOCATION",
+            "STREET_ADDRESS",
+            "BUILDING_NUMBER",
+            "ZIPCODE",
+            "GPS_COORDINATES",
+            "ORDINAL_DIRECTION"
+          ]
+        },
+        {
+          "statute_class": "IDENTIFYING_NUMBER",
+          "citation": "section 1(c)",
+          "canonical_labels": [
+            "ID_NUM",
+            "SSN",
+            "ACCOUNT_NUMBER",
+            "PIN",
+            "CREDIT_CARD",
+            "CVV",
+            "IBAN",
+            "BIC",
+            "MASKED_NUMBER",
+            "VIN",
+            "VEHICLE_REGISTRATION"
+          ]
+        },
+        {
+          "statute_class": "BIOMETRIC_INFORMATION",
+          "citation": "sections 1(d), 26, and 33",
+          "canonical_labels": [
+            "EYE_COLOR",
+            "HEIGHT"
+          ]
+        },
+        {
+          "statute_class": "ONLINE_IDENTIFIER",
+          "citation": "section 1(c)",
+          "canonical_labels": [
+            "USERNAME",
+            "URL",
+            "PASSWORD",
+            "API_KEY",
+            "IP_ADDRESS",
+            "MAC_ADDRESS",
+            "USER_AGENT",
+            "IMEI"
+          ]
+        },
+        {
+          "statute_class": "DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES",
+          "citation": "sections 1(a)-(b) and 26",
+          "canonical_labels": [
+            "DATE",
+            "DATE_OF_BIRTH",
+            "TIME",
+            "AGE",
+            "GENDER",
+            "ETHNICITY",
+            "ORGANIZATION",
+            "JOB_TITLE",
+            "JOB_DEPARTMENT",
+            "OCCUPATION"
+          ]
+        },
+        {
+          "statute_class": "HEALTH_INFORMATION",
+          "citation": "sections 1(a)-(b), 26-27, and 32",
+          "canonical_labels": [
+            "CONDITION",
+            "MEDICATION",
+            "LAB_TEST",
+            "PROCEDURE",
+            "BODY_SITE",
+            "GENE_SYMBOL",
+            "VARIANT_DESCRIPTOR",
+            "PROTEIN_CHANGE",
+            "ZYGOSITY",
+            "CLINICAL_SIGNIFICANCE"
+          ]
+        },
+        {
+          "statute_class": "OTHER_SPECIAL_INFORMATION",
+          "citation": "sections 1(e)-(g) and 26-27",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        }
+      ]
+    },
+    "ng_ndpa": {
+      "statute": "Nigeria Data Protection Act 2023",
+      "source_url": "https://ndpc.gov.ng/wp-content/uploads/2024/03/Nigeria_Data_Protection_Act_2023.pdf",
+      "classes": [
+        {
+          "statute_class": "GENETIC_AND_BIOMETRIC_DATA",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "ID_NUM",
+            "EYE_COLOR",
+            "HEIGHT",
+            "GENE_SYMBOL",
+            "VARIANT_DESCRIPTOR",
+            "PROTEIN_CHANGE",
+            "ZYGOSITY",
+            "CLINICAL_SIGNIFICANCE"
+          ]
+        },
+        {
+          "statute_class": "RACE_OR_ETHNIC_ORIGIN",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "ETHNICITY",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "RELIGIOUS_OR_SIMILAR_BELIEFS",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "HEALTH_STATUS",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "CONDITION",
+            "MEDICATION",
+            "LAB_TEST",
+            "PROCEDURE",
+            "BODY_SITE",
+            "GENE_SYMBOL"
+          ]
+        },
+        {
+          "statute_class": "SEX_LIFE",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "GENDER",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "POLITICAL_OPINIONS_OR_AFFILIATIONS",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "ORGANIZATION",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "TRADE_UNION_MEMBERSHIPS",
+          "citation": "sections 30 and 65",
+          "canonical_labels": [
+            "ORGANIZATION",
+            "JOB_DEPARTMENT",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "OTHER_COMMISSION_PRESCRIBED_DATA",
+          "citation": "sections 30(2) and 65",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        }
+      ]
+    },
+    "ke_dpa": {
+      "statute": "Data Protection Act No. 24 of 2019",
+      "source_url": "https://new.kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31",
+      "classes": [
+        {
+          "statute_class": "Race",
+          "citation": "section 2",
+          "canonical_labels": [
+            "ETHNICITY",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "Health status",
+          "citation": "section 2",
+          "canonical_labels": [
+            "CONDITION",
+            "MEDICATION",
+            "LAB_TEST",
+            "PROCEDURE",
+            "BODY_SITE"
+          ]
+        },
+        {
+          "statute_class": "Ethnic social origin",
+          "citation": "section 2",
+          "canonical_labels": [
+            "ETHNICITY",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "Conscience",
+          "citation": "section 2",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "Belief",
+          "citation": "section 2",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "Genetic data",
+          "citation": "section 2",
+          "canonical_labels": [
+            "GENE_SYMBOL",
+            "VARIANT_DESCRIPTOR",
+            "PROTEIN_CHANGE",
+            "ZYGOSITY",
+            "CLINICAL_SIGNIFICANCE"
+          ]
+        },
+        {
+          "statute_class": "Biometric data",
+          "citation": "section 2",
+          "canonical_labels": [
+            "ID_NUM",
+            "EYE_COLOR",
+            "HEIGHT"
+          ]
+        },
+        {
+          "statute_class": "Property details",
+          "citation": "section 2",
+          "canonical_labels": [
+            "STREET_ADDRESS",
+            "LOCATION",
+            "ACCOUNT_NUMBER"
+          ]
+        },
+        {
+          "statute_class": "Marital status",
+          "citation": "section 2",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "Family details",
+          "citation": "section 2",
+          "canonical_labels": [
+            "PERSON",
+            "FIRST_NAME",
+            "LAST_NAME"
+          ]
+        },
+        {
+          "statute_class": "Sex",
+          "citation": "section 2",
+          "canonical_labels": [
+            "GENDER"
+          ]
+        },
+        {
+          "statute_class": "Sexual orientation",
+          "citation": "section 2",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        }
+      ]
+    },
+    "eg_pdpl": {
+      "statute": "Personal Data Protection Law No. 151 of 2020",
+      "source_url": "https://sis.gov.eg/en/media-center/news/sisi-endorses-law-on-personal-data-protection/",
+      "classes": [
+        {
+          "statute_class": "identity",
+          "citation": "articles 1 and 12",
+          "canonical_labels": [
+            "ID_NUM"
+          ]
+        },
+        {
+          "statute_class": "person name",
+          "citation": "articles 1 and 12",
+          "canonical_labels": [
+            "PERSON"
+          ]
+        },
+        {
+          "statute_class": "health",
+          "citation": "articles 1 and 12",
+          "canonical_labels": [
+            "CONDITION",
+            "MEDICATION",
+            "LAB_TEST",
+            "PROCEDURE"
+          ]
+        },
+        {
+          "statute_class": "genetic",
+          "citation": "articles 1 and 12",
+          "canonical_labels": [
+            "GENE_SYMBOL",
+            "VARIANT_DESCRIPTOR",
+            "ZYGOSITY"
+          ]
+        },
+        {
+          "statute_class": "biometric or other sensitive data",
+          "citation": "articles 1 and 12",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "financial",
+          "citation": "articles 1 and 12",
+          "canonical_labels": [
+            "ACCOUNT_NUMBER",
+            "CREDIT_CARD",
+            "IBAN"
+          ]
+        }
+      ]
+    },
+    "ma_law_09_08": {
+      "statute": "Law No. 09-08",
+      "source_url": "https://adala.justice.gov.ma/api/uploads/2024/04/30/Protection%20des%20personnes%20physiques-1714464099884.pdf",
+      "classes": [
+        {
+          "statute_class": "identity",
+          "citation": "article 1",
+          "canonical_labels": [
+            "ID_NUM"
+          ]
+        },
+        {
+          "statute_class": "person name",
+          "citation": "article 1",
+          "canonical_labels": [
+            "PERSON"
+          ]
+        },
+        {
+          "statute_class": "health",
+          "citation": "articles 1, 21, and 22",
+          "canonical_labels": [
+            "CONDITION",
+            "MEDICATION",
+            "LAB_TEST",
+            "PROCEDURE"
+          ]
+        },
+        {
+          "statute_class": "genetic",
+          "citation": "articles 1 and 21",
+          "canonical_labels": [
+            "GENE_SYMBOL",
+            "VARIANT_DESCRIPTOR",
+            "ZYGOSITY"
+          ]
+        },
+        {
+          "statute_class": "physical or psychological identity",
+          "citation": "article 1",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "financial identity",
+          "citation": "article 1",
+          "canonical_labels": [
+            "ACCOUNT_NUMBER",
+            "CREDIT_CARD",
+            "IBAN"
+          ]
+        }
+      ]
+    },
+    "africa_malabo_baseline": {
+      "statute": "African Union Convention on Cyber Security and Personal Data Protection",
+      "source_url": "https://au.int/sites/default/files/treaties/29560-treaty-0048_-_african_union_convention_on_cyber_security_and_personal_data_protection_e.pdf",
+      "classes": [
+        {
+          "statute_class": "racial, ethnic and regional origin",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "ETHNICITY",
+            "LOCATION",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "parental filiation",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "PERSON",
+            "FIRST_NAME",
+            "LAST_NAME",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "political opinions",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "ORGANIZATION",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "religious or philosophical beliefs",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "trade union membership",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "ORGANIZATION",
+            "JOB_DEPARTMENT",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "sex life",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "GENDER",
+            "OTHER"
+          ]
+        },
+        {
+          "statute_class": "genetic information",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "GENE_SYMBOL",
+            "VARIANT_DESCRIPTOR",
+            "PROTEIN_CHANGE",
+            "ZYGOSITY",
+            "CLINICAL_SIGNIFICANCE"
+          ]
+        },
+        {
+          "statute_class": "data on the state of health of the data subject",
+          "citation": "Article 14(1)",
+          "canonical_labels": [
+            "CONDITION",
+            "MEDICATION",
+            "LAB_TEST",
+            "PROCEDURE",
+            "BODY_SITE",
+            "GENE_SYMBOL",
+            "CLINICAL_SIGNIFICANCE"
+          ]
+        }
+      ]
+    }
+  },
+  "leakage_cases": [
+    {
+      "id": "south-africa",
+      "text": "South African ID 5311136842099 and mobile +27 82 123 4567.",
+      "entities": [
+        {
+          "surface": "5311136842099",
+          "label": "ID_NUM"
+        },
+        {
+          "surface": "+27 82 123 4567",
+          "label": "PHONE"
+        }
+      ]
+    },
+    {
+      "id": "nigeria",
+      "text": "Chiamaka Okafor uses NIN 12345678901 and phone +234 803 000 0101.",
+      "entities": [
+        {
+          "surface": "Chiamaka Okafor",
+          "label": "PERSON"
+        },
+        {
+          "surface": "12345678901",
+          "label": "ID_NUM"
+        },
+        {
+          "surface": "+234 803 000 0101",
+          "label": "PHONE"
+        }
+      ]
+    },
+    {
+      "id": "kenya",
+      "text": "Amina Wanjiku uses Huduma Namba 87654321 and phone +254 733 654 321.",
+      "entities": [
+        {
+          "surface": "Amina Wanjiku",
+          "label": "PERSON"
+        },
+        {
+          "surface": "87654321",
+          "label": "ID_NUM"
+        },
+        {
+          "surface": "+254 733 654 321",
+          "label": "PHONE"
+        }
+      ]
+    },
+    {
+      "id": "egypt",
+      "text": "Ahmed Hassan uses national ID 29801011234567 and phone +20 10 1234 5678.",
+      "entities": [
+        {
+          "surface": "Ahmed Hassan",
+          "label": "PERSON"
+        },
+        {
+          "surface": "29801011234567",
+          "label": "ID_NUM"
+        },
+        {
+          "surface": "+20 10 1234 5678",
+          "label": "PHONE"
+        }
+      ]
+    },
+    {
+      "id": "morocco",
+      "text": "Fatima Zahra uses CIN BK123456 and phone +212 6 12 34 56 78.",
+      "entities": [
+        {
+          "surface": "Fatima Zahra",
+          "label": "PERSON"
+        },
+        {
+          "surface": "BK123456",
+          "label": "ID_NUM"
+        },
+        {
+          "surface": "+212 6 12 34 56 78",
+          "label": "PHONE"
+        }
+      ]
+    }
+  ]
+}

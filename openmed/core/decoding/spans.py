@@ -4,6 +4,11 @@ When token classifiers emit slightly-too-greedy spans (e.g. "alice@hospital.org 
 absorbs the trailing "and"), these helpers tighten the boundaries before the
 span reaches downstream redaction logic. Pure-Python; no array-framework
 dependencies.
+
+Cross-runtime offsets are half-open Unicode scalar (code point) coordinates.
+They never use UTF-8 byte or UTF-16 code-unit positions, and every non-empty
+entity span is snapped outward so neither boundary bisects an extended
+grapheme cluster. See ``OFFSET_CONTRACT.md`` beside this module.
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
@@ -75,6 +80,263 @@ _PREPEND_RANGES: Final = (
     (0x11D46, 0x11D46),
     (0x11F02, 0x11F02),
 )
+_IDS_BINARY_OPERATORS: Final = frozenset(
+    {
+        *range(0x2FF0, 0x2FF2),
+        *range(0x2FF4, 0x2FFE),
+        0x31EF,
+    }
+)
+_IDS_TRINARY_OPERATORS: Final = frozenset({0x2FF2, 0x2FF3})
+_IDS_UNARY_OPERATORS: Final = frozenset({0x2FFE, 0x2FFF})
+_IDS_OPERATOR_PATTERN: Final = re.compile(r"[\u2ff0-\u2fff\u31ef]")
+
+
+@dataclass(frozen=True, init=False)
+class CjkOffsetMap:
+    """Bidirectional word and source code-point offsets for segmented CJK text.
+
+    ``char_to_word[i]`` contains the word-token index covering source code
+    point ``text[i]``, or ``None`` for inter-token Unicode whitespace.
+    ``word_to_char[j]`` contains the exact source ``[start, end)`` span for
+    word token ``j``. The source must already be NFC-normalized; no hidden
+    normalization or UTF-8 byte conversion is performed.
+
+    Args:
+        text: Original NFC-normalized source text.
+        word_tokens: Monotonic span tokens whose offsets index ``text``.
+    """
+
+    text: str
+    word_tokens: tuple[Any, ...]
+    char_to_word: tuple[int | None, ...]
+    word_to_char: tuple[tuple[int, int], ...]
+
+    def __init__(self, text: str, word_tokens: Sequence[Any]) -> None:
+        """Build and validate lookup tables over Python string offsets."""
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+        if not unicodedata.is_normalized("NFC", text):
+            raise ValueError("text must be NFC-normalized before offset mapping")
+
+        tokens = tuple(word_tokens)
+        char_to_word: list[int | None] = [None] * len(text)
+        word_to_char: list[tuple[int, int]] = []
+        cursor = 0
+
+        for word_index, token in enumerate(tokens):
+            start = getattr(token, "start", None)
+            end = getattr(token, "end", None)
+            token_text = getattr(token, "text", None)
+            if (
+                isinstance(start, bool)
+                or isinstance(end, bool)
+                or not isinstance(start, int)
+                or not isinstance(end, int)
+            ):
+                raise TypeError("word-token offsets must be integers")
+            if start < cursor:
+                raise ValueError("word tokens must be monotonic and non-overlapping")
+            if not 0 <= start < end <= len(text):
+                raise ValueError("word-token span falls outside the source text")
+            if any(not character.isspace() for character in text[cursor:start]):
+                raise ValueError(
+                    "word tokens leave non-whitespace source text uncovered"
+                )
+            if not isinstance(token_text, str) or text[start:end] != token_text:
+                raise ValueError("word-token text does not match its source span")
+
+            word_to_char.append((start, end))
+            for char_index in range(start, end):
+                char_to_word[char_index] = word_index
+            cursor = end
+
+        if any(not character.isspace() for character in text[cursor:]):
+            raise ValueError("word tokens leave trailing non-whitespace text uncovered")
+
+        object.__setattr__(self, "text", text)
+        object.__setattr__(self, "word_tokens", tokens)
+        object.__setattr__(self, "char_to_word", tuple(char_to_word))
+        object.__setattr__(self, "word_to_char", tuple(word_to_char))
+
+    def word_index_for_char(self, index: int) -> int | None:
+        """Return the word covering one source code point, if any."""
+        if not 0 <= index < len(self.text):
+            raise IndexError("character index falls outside the source text")
+        return self.char_to_word[index]
+
+    def char_span_for_word(self, index: int) -> tuple[int, int]:
+        """Return the exact source span for one word-token index."""
+        if not 0 <= index < len(self.word_to_char):
+            raise IndexError("word index falls outside the token sequence")
+        return self.word_to_char[index]
+
+    def word_position_for_char(self, index: int) -> tuple[int, int] | None:
+        """Return ``(word_index, code_point_in_word)`` for a source index.
+
+        The within-word coordinate retains enough information for an exact
+        char-to-word-to-char round trip instead of collapsing every character
+        in a multi-code-point word onto its first boundary.
+        """
+        word_index = self.word_index_for_char(index)
+        if word_index is None:
+            return None
+        return word_index, index - self.word_to_char[word_index][0]
+
+    def char_for_word_position(self, word_index: int, position: int) -> int:
+        """Map a within-word code-point coordinate back to source text."""
+        start, end = self.char_span_for_word(word_index)
+        if not 0 <= position < end - start:
+            raise IndexError("within-word position falls outside the word token")
+        return start + position
+
+
+def project_word_spans_to_char_spans(
+    word_spans: Iterable[tuple[int, int]],
+    offset_map: CjkOffsetMap,
+) -> list[tuple[int, int]]:
+    """Project half-open word-index spans onto exact source code points.
+
+    Empty word spans stay empty at the corresponding word boundary. Non-empty
+    spans include the complete first and last word and therefore cannot emit a
+    partial Han word.
+    """
+    projected: list[tuple[int, int]] = []
+    word_count = len(offset_map.word_to_char)
+
+    for word_start, word_end in word_spans:
+        if (
+            isinstance(word_start, bool)
+            or isinstance(word_end, bool)
+            or not isinstance(word_start, int)
+            or not isinstance(word_end, int)
+        ):
+            raise TypeError("word-span offsets must be integers")
+        if not 0 <= word_start <= word_end <= word_count:
+            raise ValueError("word span must satisfy 0 <= start <= end <= word count")
+        if word_start == word_end:
+            if word_start < word_count:
+                anchor = offset_map.word_to_char[word_start][0]
+            elif word_count:
+                anchor = offset_map.word_to_char[-1][1]
+            else:
+                anchor = 0
+            projected.append((anchor, anchor))
+            continue
+
+        projected.append(
+            (
+                offset_map.word_to_char[word_start][0],
+                offset_map.word_to_char[word_end - 1][1],
+            )
+        )
+    return projected
+
+
+def snap_char_span_to_word_boundaries(
+    start: int,
+    end: int,
+    offset_map: CjkOffsetMap,
+) -> tuple[int, int]:
+    """Snap a source span outward to every segmented word it intersects.
+
+    A span that intersects no word (for example, a standalone U+3000
+    full-width space) is returned unchanged so whitespace is never promoted
+    into a redactable word.
+    """
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+    ):
+        raise TypeError("character-span offsets must be integers")
+    if not 0 <= start <= end <= len(offset_map.text):
+        raise ValueError("span must satisfy 0 <= start <= end <= len(text)")
+    if start == end:
+        return start, end
+
+    intersecting_words = {
+        word_index
+        for word_index in offset_map.char_to_word[start:end]
+        if word_index is not None
+    }
+    if not intersecting_words:
+        return start, end
+
+    first_word = min(intersecting_words)
+    last_word = max(intersecting_words)
+    return (
+        offset_map.word_to_char[first_word][0],
+        offset_map.word_to_char[last_word][1],
+    )
+
+
+def is_han_dominant(text: str) -> bool:
+    """Return whether Han is the majority of detected script code points.
+
+    Neutral punctuation, whitespace, combining marks, and variation selectors
+    do not dilute the ratio. At least one Han code point is required.
+
+    Args:
+        text: Source text to inspect without normalization.
+
+    Returns:
+        ``True`` when Han accounts for at least half of detected script text.
+    """
+
+    han_count = 0
+    scripted_count = 0
+    for start, end, script in segment_by_script(text):
+        if script == UNKNOWN_SCRIPT:
+            continue
+        run_length = end - start
+        scripted_count += run_length
+        if script == "Han":
+            han_count += run_length
+    return han_count > 0 and han_count * 2 >= scripted_count
+
+
+def assert_cjk_span_boundaries(
+    start: int,
+    end: int,
+    text: str,
+    offset_map: CjkOffsetMap | None = None,
+) -> None:
+    """Assert that a CJK span is safe for source slicing and segmentation.
+
+    Python string indices are code-point offsets. This assertion additionally
+    requires whole grapheme boundaries and, when ``offset_map`` is supplied,
+    exact Chinese segmenter word boundaries.
+
+    Args:
+        start: Inclusive source code-point offset.
+        end: Exclusive source code-point offset.
+        text: Exact source string referenced by the offsets.
+        offset_map: Optional validated Chinese word-offset map.
+
+    Raises:
+        AssertionError: If an offset is invalid, bisects a grapheme, or does
+            not coincide with a supplied segmenter word boundary.
+    """
+
+    assert isinstance(start, int) and not isinstance(start, bool)
+    assert isinstance(end, int) and not isinstance(end, bool)
+    assert 0 <= start <= end <= len(text), "span must index the source text"
+    assert is_grapheme_boundary(start, text), "span start bisects a grapheme"
+    assert is_grapheme_boundary(end, text), "span end bisects a grapheme"
+
+    if offset_map is None:
+        return
+    assert offset_map.text == text, "segmenter offsets reference different text"
+    word_boundaries = {
+        0,
+        len(text),
+        *(start for start, _ in offset_map.word_to_char),
+        *(end for _, end in offset_map.word_to_char),
+    }
+    assert start in word_boundaries, "span start is not a segmenter word boundary"
+    assert end in word_boundaries, "span end is not a segmenter word boundary"
 
 
 def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
@@ -93,9 +355,14 @@ def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
     if not text:
         return
 
+    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
     cluster_start = 0
     for index in range(1, len(text)):
-        if _has_grapheme_break(text, index):
+        if (
+            _has_grapheme_break_at(text, index, ids_internal_boundaries)
+            if ids_internal_boundaries
+            else _has_grapheme_break(text, index)
+        ):
             yield cluster_start, index
             cluster_start = index
     yield cluster_start, len(text)
@@ -115,16 +382,33 @@ def snap_span_to_grapheme_boundaries(
     safe_start = max(0, min(int(start), text_length))
     safe_end = max(safe_start, min(int(end), text_length))
     snapped_start = safe_start
-    while 0 < snapped_start < text_length and not _has_grapheme_break(
-        text, snapped_start
-    ):
-        snapped_start -= 1
+    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
+    if ids_internal_boundaries:
+        while 0 < snapped_start < text_length and not _has_grapheme_break_at(
+            text,
+            snapped_start,
+            ids_internal_boundaries,
+        ):
+            snapped_start -= 1
+    else:
+        while 0 < snapped_start < text_length and not _has_grapheme_break(
+            text, snapped_start
+        ):
+            snapped_start -= 1
     if safe_start == safe_end:
         return snapped_start, snapped_start
 
     snapped_end = safe_end
-    while snapped_end < text_length and not _has_grapheme_break(text, snapped_end):
-        snapped_end += 1
+    if ids_internal_boundaries:
+        while snapped_end < text_length and not _has_grapheme_break_at(
+            text,
+            snapped_end,
+            ids_internal_boundaries,
+        ):
+            snapped_end += 1
+    else:
+        while snapped_end < text_length and not _has_grapheme_break(text, snapped_end):
+            snapped_end += 1
     return snapped_start, snapped_end
 
 
@@ -189,10 +473,13 @@ def snap_span_to_graphemes(start: int, end: int, text: str) -> tuple[int, int]:
 
 
 def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
-    """Strip whole whitespace clusters from ``text[start:end]``.
+    """Strip whole Unicode whitespace clusters from ``text[start:end]``.
 
     Input boundaries are first snapped outward, so the returned ``[start, end)``
     offsets never bisect a combining sequence, Indic aksara, or emoji sequence.
+    Full-width U+3000 spaces are trimmed only at the edges; interior spaces and
+    Han characters remain untouched. A zero-width joiner is never considered
+    whitespace by itself.
     """
     start, end = snap_span_to_grapheme_boundaries(start, end, text)
     if start == end:
@@ -413,6 +700,8 @@ def refine_privacy_filter_span(
     Latin or neutral script runs and shrink to it. The Latin-only trailing
     ``" and"`` / ``" or"`` heuristic is disabled for spans containing CJK
     or other scripts. Every returned boundary is snapped to a whole grapheme.
+    All inputs and outputs are Python code-point offsets into the same source
+    string; this function never performs byte-based offset arithmetic.
     """
     start, end = trim_span_whitespace(start, end, text)
     span_text = text[start:end]
@@ -499,6 +788,73 @@ def _cluster_is_whitespace(cluster: str) -> bool:
     return saw_whitespace
 
 
+def _ideographic_description_internal_boundaries(text: str) -> frozenset[int]:
+    if _IDS_OPERATOR_PATTERN.search(text) is None:
+        return frozenset()
+
+    boundaries: set[int] = set()
+    for sequence_start, character in enumerate(text):
+        if _ids_operator_arity(character) is None:
+            continue
+        sequence_end = _consume_ideographic_description_component(
+            text,
+            sequence_start,
+        )
+        if sequence_end is not None:
+            boundaries.update(range(sequence_start + 1, sequence_end))
+    return frozenset(boundaries)
+
+
+def _consume_ideographic_description_component(
+    text: str,
+    start: int,
+) -> int | None:
+    if not 0 <= start < len(text):
+        return None
+
+    character = text[start]
+    arity = _ids_operator_arity(character)
+    if arity is not None:
+        cursor = start + 1
+        for _ in range(arity):
+            next_cursor = _consume_ideographic_description_component(text, cursor)
+            if next_cursor is None:
+                return None
+            cursor = next_cursor
+        return cursor
+
+    break_class = _grapheme_break_class(character)
+    if character.isspace() or break_class in {
+        "CONTROL",
+        "CR",
+        "LF",
+        "EXTEND",
+        "ZWJ",
+        "SPACING_MARK",
+    }:
+        return None
+
+    cursor = start + 1
+    while cursor < len(text) and _grapheme_break_class(text[cursor]) in {
+        "EXTEND",
+        "ZWJ",
+        "SPACING_MARK",
+    }:
+        cursor += 1
+    return cursor
+
+
+def _ids_operator_arity(character: str) -> int | None:
+    codepoint = ord(character)
+    if codepoint in _IDS_UNARY_OPERATORS:
+        return 1
+    if codepoint in _IDS_BINARY_OPERATORS:
+        return 2
+    if codepoint in _IDS_TRINARY_OPERATORS:
+        return 3
+    return None
+
+
 def _has_grapheme_break(text: str, index: int) -> bool:
     previous = text[index - 1]
     current = text[index]
@@ -539,6 +895,16 @@ def _has_grapheme_break(text: str, index: int) -> bool:
             cursor -= 1
         return preceding_indicators % 2 == 0
     return True
+
+
+def _has_grapheme_break_at(
+    text: str,
+    index: int,
+    ids_internal_boundaries: Collection[int],
+) -> bool:
+    if index in ids_internal_boundaries:
+        return False
+    return _has_grapheme_break(text, index)
 
 
 def _grapheme_break_class(char: str) -> str:
@@ -771,8 +1137,11 @@ def coerce_token_classification_spans(
         raw_end = getter("end")
         if raw_start is None or raw_end is None:
             continue
-        start = int(raw_start)
-        end = int(raw_end)
+        start, end = snap_span_to_grapheme_boundaries(
+            int(raw_start),
+            int(raw_end),
+            text,
+        )
         if end <= start:
             continue
         score = float(
@@ -797,7 +1166,6 @@ def coerce_token_classification_spans(
             .removeprefix("E-")
             .removeprefix("S-")
         )
-        local_text = str(getter("word", getter("text", text[start:end])) or "")
         absolute_start = base_offset + start
         absolute_end = base_offset + end
         byte_start = base_byte_offset + _byte_offset(text, start)
@@ -811,7 +1179,7 @@ def coerce_token_classification_spans(
                 byte_start=byte_start,
                 byte_end=byte_end,
                 score=score,
-                text=local_text or text[start:end],
+                text=text[start:end],
             )
         )
 
@@ -893,15 +1261,20 @@ def stable_span_key(span: Any) -> tuple[int, int, str, str]:
 
 
 __all__ = [
+    "CjkOffsetMap",
     "IndicSpanRefinement",
     "TokenClassificationSpan",
     "TokenClassificationStreamEvent",
+    "assert_cjk_span_boundaries",
     "coerce_token_classification_spans",
+    "is_han_dominant",
     "iter_grapheme_cluster_spans",
+    "project_word_spans_to_char_spans",
     "reconcile_stream_spans",
     "refine_indic_name_span",
     "remap_normalized_span",
     "refine_privacy_filter_span",
+    "snap_char_span_to_word_boundaries",
     "stable_span_id",
     "stable_span_key",
     "snap_span_to_grapheme_boundaries",
