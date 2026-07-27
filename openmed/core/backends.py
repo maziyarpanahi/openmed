@@ -7,11 +7,13 @@ current platform.
 
 from __future__ import annotations
 
+import json
 import logging
 import platform
 import sys
 import warnings
 from importlib.util import find_spec
+from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -320,6 +322,29 @@ def _torch_fallback_for(model_name: str) -> str:
     return PRIVACY_FILTER_TORCH_FALLBACK
 
 
+def _local_artifact_uses_mlx(model_name: str) -> bool:
+    """Return whether an existing local artifact declares the MLX format."""
+    path = Path(model_name).expanduser()
+    if path.is_file():
+        path = path.parent
+    if not path.is_dir():
+        return False
+
+    if (path / "openmed-mlx.json").is_file():
+        return True
+
+    config_path = path / "config.json"
+    if not config_path.is_file():
+        return False
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return bool(config.get("_mlx_model_type")) and bool(
+        config.get("_mlx_weights_format")
+    )
+
+
 def select_privacy_filter_backend(
     model_name: str,
 ) -> Literal["mlx", "torch"]:
@@ -333,17 +358,11 @@ def select_privacy_filter_backend(
     should substitute :data:`PRIVACY_FILTER_TORCH_FALLBACK` for the
     actual download.
     """
-    name_lc = (model_name or "").lower()
-    is_mlx_artifact = "mlx" in name_lc
-
-    if not is_mlx_artifact:
-        # Some artifacts identify as MLX only via their on-disk metadata.
-        try:
-            from .pii import _is_privacy_filter_artifact_path
-
-            is_mlx_artifact = _is_privacy_filter_artifact_path(model_name)
-        except ImportError:  # pragma: no cover
-            is_mlx_artifact = False
+    path = Path(model_name).expanduser()
+    if path.exists():
+        is_mlx_artifact = _local_artifact_uses_mlx(model_name)
+    else:
+        is_mlx_artifact = "mlx" in (model_name or "").lower()
 
     if is_mlx_artifact and MLXBackend().is_available():
         return "mlx"
