@@ -233,6 +233,8 @@ agent-tool, and release-evidence contracts for the v2 line.
   across stale caches and low-memory environments.
 - Allowed explicitly selected models to run with deterministic pattern-only
   language packs while keeping the no-default-model path fail closed.
+- Restored direct Hub-ID loading for pre-manifest MLX artifacts that carry
+  trusted converter markers while continuing to reject unmarked bundles.
 - Root-anchored Hatch build patterns so wheel and source distributions cannot
   absorb nested local worktrees or workspace-control files.
 - Kept the optional spaCy 3.7 integration on a NumPy 1.x ABI and resolved
