@@ -135,22 +135,26 @@ def test_manifest_shortcut_cannot_be_combined_with_explicit_ids() -> None:
         main_module._parse_model_args(["@manifest", "explicit-model"])
 
 
-def test_clinical_command_parses_documented_flags(
+def test_clinical_command_rejects_unavailable_task_values(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    result = main_module.main(
-        [
-            "benchmark",
-            "clinical",
-            "--suite",
-            "drugprot",
-            "--task",
-            "linking",
-        ]
-    )
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main(
+            [
+                "benchmark",
+                "clinical",
+                "--suite",
+                "drugprot",
+                "--task",
+                "assertion",
+            ]
+        )
 
-    assert result == 1
-    assert "not implemented yet" in capsys.readouterr().err
+    assert exc_info.value.code == 2
+    error = capsys.readouterr().err
+    assert "invalid choice" in error
+    assert "ner" in error
+    assert "relation" in error
 
 
 def test_mobile_command_parses_documented_flags(
