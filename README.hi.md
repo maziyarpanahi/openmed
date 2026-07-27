@@ -97,6 +97,17 @@ for entity in result.entities:
 
 ---
 
+## एजेंट के साथ बना रहे हैं?
+
+[उपभोक्ता एजेंट-उपयोग गाइड](docs/agent-usage.md) से शुरू करें या चुनी हुई
+[llms.txt](https://openmed.life/docs/llms.txt) दस्तावेज़ सूची लोड करें।
+कॉल किए जा सकने वाले स्थानीय इंटरफ़ेस के लिए [MCP सर्वर](docs/mcp-clients.md),
+टाइप की गई [टूल रजिस्ट्री](openmed/mcp/tool_registry.py) या
+[कमांड-लाइन इंटरफ़ेस](docs/agent-usage.md#command-line-interface) का उपयोग करें।
+तैयार क्रॉस-टूल प्रक्रियाएँ [रिपॉज़िटरी स्किल्स सूची](skills/README.md) में हैं।
+
+---
+
 ## OpenMed क्यों?
 
 |                                       |       **OpenMed**        |     क्लाउड चिकित्सा API     |

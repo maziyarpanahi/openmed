@@ -23,6 +23,7 @@ nav:
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
+      - Building with an Agent: agent-usage.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
@@ -260,6 +261,7 @@ plugins:
           - api/deidentification.md: De-identification API reference
           - output-formatting.md: Output formats and agent-facing tool schemas
         Agents and tool surfaces:
+          - agent-usage.md: Consumer API map, privacy invariants, and repository skills
           - mcp-clients.md: MCP client setup and transport guidance
           - rest-service.md: REST service endpoints and deployment
           - rest-recipes.md: Copy-ready REST API recipes
