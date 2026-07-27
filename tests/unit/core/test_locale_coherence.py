@@ -151,6 +151,62 @@ class TestLocaleResolution:
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
 
+    def test_assamese_pack_locale_surrogates_and_aadhaar_are_coherent(self):
+        pack = get_language_pack("as")
+
+        assert pack is not None
+        assert pack.scripts == ("Bengali",)
+        assert "as" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["as"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["as"] == "Assamese"
+        assert LANGUAGE_MODEL_PREFIX["as"] == "Assamese-"
+        assert LANGUAGE_MONTH_NAMES["as"] == [
+            "জানুৱাৰী",
+            "ফেব্ৰুৱাৰী",
+            "মাৰ্চ",
+            "এপ্ৰিল",
+            "মে",
+            "জুন",
+            "জুলাই",
+            "আগষ্ট",
+            "ছেপ্টেম্বৰ",
+            "অক্টোবৰ",
+            "নৱেম্বৰ",
+            "ডিচেম্বৰ",
+        ]
+        assert LANG_TO_LOCALE["as"] == "as_IN"
+        assert FAKER_BACKEND_LOCALE["as_IN"] == "bn_BD"
+        assert NATIONAL_ID_PROVIDERS["as"] == ("as_IN", "aadhaar")
+        assert "as" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("as") == "as_IN"
+            anonymizer = Anonymizer(lang="as", consistent=True, seed=693)
+            person = anonymizer.surrogate("অৰুণ বৰুৱা", "PERSON")
+            first_name = anonymizer.surrogate("অৰুণ", "FIRST_NAME")
+            last_name = anonymizer.surrogate("বৰুৱা", "LAST_NAME")
+            aadhaar = anonymizer.surrogate(
+                "২৪৬৭ ৭৮৩২ ৫৪৮৪",
+                "national_id",
+            )
+            assert resolve_locale("as") == "as_IN"
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "as_IN" in str(user_warnings[0].message)
+        assert "bn_BD" in str(user_warnings[0].message)
+        assert person in LOCALE_FAKE_DATA["as_IN"]["NAME"]
+        assert first_name in LOCALE_FAKE_DATA["as_IN"]["FIRST_NAME"]
+        assert last_name in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
+        assert any(
+            surname in person for surname in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
+        )
+        assert validate_aadhaar(aadhaar)
+
     def test_odia_pack_uses_native_locale_model_and_aadhaar_provider(self):
         pack = get_language_pack("or")
 

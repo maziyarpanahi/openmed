@@ -425,15 +425,15 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **33 supported PII language codes**:
-`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+as its source of truth and supports **34 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
 `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
-The optional Indic NER adapter adds five user-configured routes (`as`, `gu`,
-`kn`, `ml`, and `pa`) and can also serve Bengali, Hindi, Marathi, Tamil,
-and Telugu. It loads only an explicit path or repository from
+The optional Indic NER adapter adds four user-configured routes (`gu`, `kn`,
+`ml`, and `pa`) and can also serve Assamese, Bengali, Hindi, Marathi, Odia,
+Tamil, and Telugu. It loads only an explicit path or repository from
 `OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
 Additional validator-backed national-ID providers cover ID-only locales such as
 Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding

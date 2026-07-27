@@ -2,6 +2,7 @@
   "default_pii_models": {
     "am": "OpenMed/privacy-filter-multilingual",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "as": "OpenMed/privacy-filter-multilingual",
     "bn": "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
     "cs": "OpenMed/privacy-filter-multilingual",
     "da": "OpenMed/privacy-filter-multilingual",
@@ -120,6 +121,10 @@
     "am": [
       "am_ET",
       "ethiopia_fayda"
+    ],
+    "as": [
+      "as_IN",
+      "aadhaar"
     ],
     "bg": [
       "bg_BG",
@@ -391,6 +396,7 @@
   "supported_languages": [
     "am",
     "ar",
+    "as",
     "bn",
     "cs",
     "da",
