@@ -1,32 +1,57 @@
 # OpenMed Skills
 
-Portable [Agent Skills](https://agentskills.io) for building with **OpenMed** — the on-device, Apache-2.0 clinical & biomedical NLP library. Each skill is a folder with a `SKILL.md` that works unchanged in **Claude Code** and **OpenAI Codex** (and any agent that follows the open standard). Drop them in and your coding agent learns to wire up OpenMed pipelines — de-identification, NER, FHIR export, evaluation — plus the upstream/downstream healthcare tasks around them.
+Portable [Agent Skills](https://agentskills.io) for building with **OpenMed** — the on-device, Apache-2.0 clinical & biomedical NLP library. Each skill is a folder with a `SKILL.md` that works unchanged in **Claude Code**, **OpenAI Codex**, **OpenCode**, and compatible agents. Drop them in and your coding agent learns to wire up OpenMed pipelines — de-identification, NER, FHIR export, evaluation — plus the upstream/downstream healthcare tasks around them.
 
 **72 skills** across 14 categories.
 
-## Install
+## Get running in one command
 
-**Copy (works in any agent):**
-
-```bash
-cp -r skills/*/ ~/.claude/skills/      # Claude Code
-cp -r skills/*/ ~/.codex/skills/       # OpenAI Codex
-```
-
-**Symlink into both agents (auto-updates on `git pull`):**
+The same `SKILL.md` folders work unchanged in **Claude Code**, **OpenAI Codex**, **OpenCode**, and compatible clients of the [open standard](https://agentskills.io). The installer uses each client's documented skills directory plus the cross-client `~/.agents/skills` convention:
 
 ```bash
-./install-skills.sh all        # or: claude | codex
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # -> Claude Code, Codex, OpenCode, and ~/.agents/skills
 ```
 
-**Claude Code plugin (one command):**
+Or target one agent:
+
+| Agent | Command | Skills directory |
+| --- | --- | --- |
+| **Claude Code** | `./install-skills.sh claude` | `~/.claude/skills/` |
+| **OpenAI Codex** | `./install-skills.sh codex` | `~/.codex/skills/` |
+| **OpenCode** | `./install-skills.sh opencode` | `~/.config/opencode/skills/` |
+| **Cross-client convention** | `./install-skills.sh agents` | `~/.agents/skills/` |
+
+No clone? Copy the folders directly with `cp -r skills/*/ ~/.claude/skills/` (swap the path per agent). Claude Code users can also install as a plugin, no clone needed:
 
 ```text
 /plugin marketplace add maziyarpanahi/openmed
 /plugin install openmed-skills@openmed-skills
 ```
 
-New to these? Start with **[building-with-openmed](building-with-openmed/SKILL.md)** — it maps every task to the right skill and the real OpenMed API.
+## Try it in 30 seconds
+
+After installing, just ask your agent in plain language — it finds the right skill and writes correct, on-device OpenMed code for you:
+
+> **You:** Build a local OpenMed pipeline that de-identifies a synthetic discharge note and extracts medication entities. Keep the example synthetic.
+
+> **Your agent** loads `deidentifying-clinical-text` + `extracting-clinical-entities` and produces:
+
+```python
+import openmed
+note = "Synthetic patient Jane Example (MRN 12345), seen 2024-03-02, started on metformin 500mg BID."
+deid = openmed.deidentify(
+    note, method="mask", policy="hipaa_safe_harbor"
+)
+meds = openmed.analyze_text(
+    deid.deidentified_text,
+    model_name="pharma_detection_superclinical",
+)
+```
+
+→ The sample is synthetic. After the one-time model download, inference runs locally. Keep real PHI out of cloud-agent prompts, logs, and copied examples.
+
+New here? Start with **[building-with-openmed](building-with-openmed/SKILL.md)** — it maps every task to the right skill and the real OpenMed API.
 
 ## Catalog
 

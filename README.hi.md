@@ -253,6 +253,23 @@ PII निष्कर्ष और डी-आइडेंटिफाइड ट
 
 ---
 
+## Agent Skills — अपने coding agent से OpenMed बनाएं
+
+[`skills/`](skills/) catalog डिवाइस पर डी-आइडेंटिफिकेशन, क्लिनिकल NER, FHIR export, evaluation और उनसे जुड़े healthcare workflows के लिए portable [Agent Skills](https://agentskills.io) देता है। वही `SKILL.md` folders **Claude Code**, **OpenAI Codex**, **OpenCode** और compatible agents में काम करते हैं; installer हर client की skills directory के साथ cross-client `~/.agents/skills` convention का उपयोग करता है।
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # Claude Code, Codex, OpenCode और ~/.agents/skills के लिए
+```
+
+फिर synthetic placeholders का उपयोग करते हुए अपने agent से pipeline बनाने के लिए कहें:
+
+> एक local OpenMed pipeline बनाएं जो synthetic discharge note को डी-आइडेंटिफाई करे और medication entities निकाले।
+
+यह सही skills load करके डिवाइस पर चलने वाली pipeline (`openmed.deidentify(...)` → `openmed.analyze_text(...)`) बनाता है। एक बार model download होने के बाद वास्तविक notes पर pipeline को locally चलाएं; वास्तविक PHI को cloud-hosted agent prompt में paste न करें। **[skills catalog और 30-second example](skills/README.md)** देखें।
+
+---
+
 ## त्वरित शुरुआत
 
 ```bash

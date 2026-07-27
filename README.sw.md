@@ -271,6 +271,23 @@ matini isiyotambulisha mtu bila kutuma data kwa API ya wingu.
 
 ---
 
+## Agent Skills — jenga OpenMed kupitia wakala wako wa coding
+
+Katalogi ya [`skills/`](skills/) inatoa [Agent Skills](https://agentskills.io) zinazobebeka kwa uondoaji utambulisho kwenye kifaa, NER ya kliniki, usafirishaji wa FHIR, tathmini na mitiririko ya kazi ya afya inayohusiana. Folda zilezile za `SKILL.md` zinafanya kazi katika **Claude Code**, **OpenAI Codex**, **OpenCode** na mawakala wanaooana; kisakinishi hutumia saraka ya skills ya kila mteja pamoja na utaratibu wa pamoja wa `~/.agents/skills`.
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # kwa Claude Code, Codex, OpenCode na ~/.agents/skills
+```
+
+Kisha mwombe wakala wako atengeneze mchakato kwa kutumia nafasi za mfano:
+
+> Tengeneza mchakato wa OpenMed wa ndani unaoondoa utambulisho kwenye dokezo sintetiki la kutoka hospitalini na kutoa huluki za dawa.
+
+Hupakia skills zinazofaa na kutengeneza mchakato wa kwenye kifaa (`openmed.deidentify(...)` → `openmed.analyze_text(...)`). Baada ya kupakua modeli mara moja, endesha mchakato huo ndani ya kifaa kwa madokezo halisi; usibandike PHI halisi kwenye prompt ya wakala wa wingu. Tazama **[katalogi ya skills na mfano wa sekunde 30](skills/README.md)**.
+
+---
+
 ## Anza haraka
 
 ```bash

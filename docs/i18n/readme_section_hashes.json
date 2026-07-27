@@ -53,6 +53,12 @@
           "translation_sha256": "76aa43499272ee065acbfcc9c7f30d96f6ff28f7b84db1bfca08c3e485cf70b7"
         },
         {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — अपने coding agent से OpenMed बनाएं",
+          "translation_sha256": "c4fee3c918be55eaeb309f90805c8e2e37d7a428b486ca3883fdecf72ab1ff43"
+        },
+        {
           "source_heading": "Quick start",
           "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
           "translation_heading": "त्वरित शुरुआत",
@@ -183,6 +189,12 @@
           "translation_sha256": "620c0e87cd7f3b36f413dbce932dbb5def89cf632593452c40431c81223531b9"
         },
         {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — jenga OpenMed kupitia wakala wako wa coding",
+          "translation_sha256": "88881391ba28f7acc29e7044090a20d06130c9dadbb298cad5902dbd62cc2cfa"
+        },
+        {
           "source_heading": "Quick start",
           "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
           "translation_heading": "Anza haraka",
@@ -311,6 +323,12 @@
           "source_sha256": "f2d8b6e4c8775df6a2f41cc448c0ad9c214f629355c22d2e2fb8d766d742e5ef",
           "translation_heading": "工作原理",
           "translation_sha256": "aef4d998035e76fb2a69ea9657600ff40cefb9e79fb4b4e96414122006e517ba"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — 使用编码智能体构建 OpenMed",
+          "translation_sha256": "3931ef0664eaebd1336154cf881a496d1dc757cc97e5fb00ec8d7cbef283f459"
         },
         {
           "source_heading": "Quick start",
