@@ -199,7 +199,10 @@ class TestLocaleResolution:
 
     def test_tamil_pack_uses_native_locale_model_and_aadhaar_provider(self):
         assert "ta" in SUPPORTED_LANGUAGES
-        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
+        assert (
+            DEFAULT_PII_MODELS["ta"]
+            == "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1"
+        )
         assert LANG_TO_LOCALE["ta"] == "ta_IN"
         assert NATIONAL_ID_PROVIDERS["ta"] == ("ta_IN", "aadhaar")
         assert "ta_IN" in AVAILABLE_LOCALES

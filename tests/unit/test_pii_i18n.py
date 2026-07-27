@@ -132,6 +132,7 @@ class TestConstants:
     def test_supported_languages(self):
         assert SUPPORTED_LANGUAGES == {
             "am",
+            "bn",
             "en",
             "fr",
             "de",
@@ -141,6 +142,7 @@ class TestConstants:
             "hi",
             "mr",
             "te",
+            "ta",
             "pt",
             "ar",
             "he",
@@ -198,6 +200,8 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["es"] == "Spanish-"
         assert LANGUAGE_MODEL_PREFIX["nl"] == "Dutch-"
         assert LANGUAGE_MODEL_PREFIX["hi"] == "Hindi-"
+        assert LANGUAGE_MODEL_PREFIX["bn"] == "Bengali-"
+        assert LANGUAGE_MODEL_PREFIX["ta"] == "Tamil-"
         assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
         assert LANGUAGE_MODEL_PREFIX["pt"] == "Portuguese-"
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
@@ -221,7 +225,7 @@ class TestConstants:
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
-            INDIC_NER_LANGUAGES - {"hi", "te"}
+            INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}
         )
 
     def test_default_pii_models_naming(self):
@@ -232,6 +236,8 @@ class TestConstants:
         assert "Spanish" in DEFAULT_PII_MODELS["es"]
         assert "Dutch" in DEFAULT_PII_MODELS["nl"]
         assert "Hindi" in DEFAULT_PII_MODELS["hi"]
+        assert "Bengali" in DEFAULT_PII_MODELS["bn"]
+        assert "Tamil" in DEFAULT_PII_MODELS["ta"]
         assert "Telugu" in DEFAULT_PII_MODELS["te"]
         assert "Portuguese" in DEFAULT_PII_MODELS["pt"]
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
@@ -251,7 +257,7 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["sw"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["zu"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["xh"] == "OpenMed/privacy-filter-multilingual"
-        assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
+        assert "Chinese" in DEFAULT_PII_MODELS["zh"]
         assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
@@ -2702,6 +2708,13 @@ class TestGetPatternsForLanguage:
         with pytest.raises(ValueError, match="Unsupported language"):
             get_patterns_for_language("xx")
 
+    @pytest.mark.parametrize("lang", ("bn", "ta", "zh"))
+    def test_v2_language_patterns_are_discoverable(self, lang):
+        patterns = get_patterns_for_language(lang)
+
+        assert patterns
+        assert all(isinstance(pattern, PIIPattern) for pattern in patterns)
+
     def test_all_returned_patterns_are_pii_pattern(self):
         for lang in SUPPORTED_LANGUAGES:
             patterns = get_patterns_for_language(lang)
@@ -2727,6 +2740,16 @@ class TestLanguageFakeData:
             data = LANGUAGE_FAKE_DATA[lang]
             for key in required_keys:
                 assert key in data, f"Missing '{key}' in LANGUAGE_FAKE_DATA['{lang}']"
+
+    @pytest.mark.parametrize("lang", ("bn", "ta", "zh"))
+    def test_v2_language_fake_data_is_synthetic_and_script_specific(self, lang):
+        data = LANGUAGE_FAKE_DATA[lang]
+
+        assert data["NAME"]
+        assert data["PHONE"]
+        assert data["DATE"]
+        assert data["LOCATION"]
+        assert all("example" in value for value in data["EMAIL"])
 
     def test_french_names_are_french(self):
         names = LANGUAGE_FAKE_DATA["fr"]["NAME"]
