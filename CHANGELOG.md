@@ -7,8 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-27
+
+OpenMed 2.0 expands the local-first privacy, clinical extraction, evaluation,
+and deployment stack across Python, Swift, Kotlin/Android, JavaScript, MCP, and
+container environments. The release preserves the documented v1 Python entry
+points and REST paths while establishing explicit multilingual, structured,
+agent-tool, and release-evidence contracts for the v2 line.
+
 ### Added
 
+- Expanded built-in PII routing to 34 language codes and added deterministic
+  identifier, date, phone, address, and surrogate support across Chinese,
+  Indic, African, Nordic, Central and Eastern European, Russian, Urdu,
+  Vietnamese, and regional Arabic workflows.
+- Added offset-preserving normalization and segmentation for full-width and
+  half-width text, native digits, Simplified and Traditional Chinese,
+  Chinese numerals and word boundaries, Indic graphemes and legacy encodings,
+  cross-script transliteration, code-mixed Hinglish, and confusable text.
+- Added China PIPL, India DPDP and ABDM, South Africa POPIA, Nigeria NDPA,
+  Kenya DPA, Egypt PDPL, Morocco Law 09-08, pan-African Malabo, GDPR, EU AI
+  Act, ISO 27701/27001, consent-tag, and data-residency evidence workflows.
+- Added script-correct multilingual surrogates, Chinese address and Pinyin name
+  handling, India identifier and transliterated-name consistency, African
+  locale providers, and checksum-valid national-identifier replacements.
+- Added deterministic SMS, low-resource CPU, air-gapped installation, model
+  integrity verification, crash-safe batch resume, tamper-evident audit,
+  Safe Harbor attestation, k-anonymity, adversarial-PHI, and leakage-dashboard
+  paths.
+- Added radiology section and finding extraction, serial measurement trends,
+  longitudinal document linking, clinical coreference, temporal normalization,
+  abbreviation disambiguation, multilingual relations, flowsheets, lab panels,
+  discharge summaries, procedures, pulmonology, and pediatrics coverage.
+- Added local adapters and packaging for OpenMRS, DHIS2, OpenHIM, community
+  health forms, WHO SMART profiles, PySpark, Prefect, scrubadub, LlamaIndex,
+  scispaCy, QuickUMLS, and offline ICD-11 grounding.
+- Added a typed MCP tool registry with annotations and structured output,
+  an `openmed-mcp` entry point, an MCP-enabled container and Compose service,
+  and portable repository skills plus agent-oriented documentation feeds.
+- Added Chinese and Indic throughput gates, multilingual golden fixtures,
+  annotation-agreement and corpus-quality evidence, parser fuzzing, regression
+  tracking, model-size and ARM latency budgets, and a fail-closed signed
+  release-readiness decision.
+- Added watchOS and visionOS OpenMedKit targets, grapheme-safe Swift span
+  parity, compact on-device segmenters, Android `EntityPrediction` metadata and
+  `OpenMedSpan`, GGUF and WebGPU export guidance, and reproducible Nix
+  development environments.
 - Added deterministic, fully local longitudinal document linking with
   MinHash-based near-duplicate clustering, directional amendment edges,
   retained superseded documents, and non-text source/target provenance on
@@ -156,6 +200,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
   locale-aware synthetic surrogates, and an offline synthetic golden fixture
   ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
+
+### Changed
+
+- Made the language-pack catalog the shared source of truth for runtime,
+  service, registry, fixture, documentation, and CLI capability reporting.
+- Added uniform CLI JSON output and error envelopes and strengthened
+  model-download, manifest-signature, provenance, SBOM, secret-scan, and
+  dependency-policy enforcement.
+- Added the `DEVICE` canonical clinical label. Consumers that treat canonical
+  labels as a closed enum must add the new value before adopting v2.
+- Added optional extras for Chinese, Indic, language identification, integrity
+  verification, OpenMRS, scrubadub, Prefect, scispaCy, and QuickUMLS; raised
+  the optional MCP runtime floor to the v1.27 API line.
+
+### Compatibility
+
+- Preserved all public Python symbols from `v1.9.1`; the static API comparison
+  records 5,312 additions, no removals or narrowed signatures, and no newly
+  deprecated symbols.
+- Preserved the existing REST/OpenAPI path and schema set. Swift, Android, npm,
+  service, configuration, and serialized evidence changes are additive except
+  for closed-enum consumers that must recognize `DEVICE`.
+- Preserved the documented root imports, including `OpenMedConfig`,
+  `analyze_text`, `deidentify`, and `extract_pii`.
+
+### Fixed
+
+- Corrected PharmaDetect medication boundaries and optional precision
+  filtering, contrastive-clause experiencer scope, radiology span and
+  laterality binding, cross-platform path handling, and model-loader behavior
+  across stale caches and low-memory environments.
+- Allowed explicitly selected models to run with deterministic pattern-only
+  language packs while keeping the no-default-model path fail closed.
+- Root-anchored Hatch build patterns so wheel and source distributions cannot
+  absorb nested local worktrees or workspace-control files.
+- Kept the optional spaCy 3.7 integration on a NumPy 1.x ABI and resolved
+  factory type annotations before spaCy's Pydantic-backed config validation.
+
+### Security
+
+- Added telemetry-off-by-default enforcement, mixed-script and confusable PII
+  defenses, no-raw-PHI evidence formats, integrity-checked model downloads,
+  tamper-evident audit chains, consent and data-use enforcement, and
+  reproducible release evidence.
+- Updated vulnerable locked dependencies and kept release images, Python and
+  npm artifacts, Android coordinates, and signed evidence on independent,
+  fail-closed validation paths.
 
 ## [1.9.1] - 2026-07-14
 
