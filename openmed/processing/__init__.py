@@ -120,6 +120,14 @@ from .zh_normalize import (
     normalize_chinese_variants,
     parse_chinese_numeral,
 )
+from .zh_pinyin import (
+    PINYIN_KEY_VERSION,
+    PinyinStyle,
+    PinyinUnavailableError,
+    PinyinUnavailableWarning,
+    pinyin_fuzzy_key,
+    to_pinyin,
+)
 from .zh_segmentation import (
     ChineseSegmentationConfig,
     ChineseSegmenter,
@@ -251,4 +259,10 @@ __all__ = [
     "parse_chinese_numeral",
     "find_chinese_numbers",
     "normalize_chinese_dates",
+    "PINYIN_KEY_VERSION",
+    "PinyinStyle",
+    "PinyinUnavailableError",
+    "PinyinUnavailableWarning",
+    "pinyin_fuzzy_key",
+    "to_pinyin",
 ]
