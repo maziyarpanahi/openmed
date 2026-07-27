@@ -10,6 +10,7 @@ from openmed.core.labels import (
     BODY_SITE,
     CANONICAL_LABELS,
     CONDITION,
+    DEVICE,
     JOB_DEPARTMENT,
     LAB_TEST,
     MEDICATION,
@@ -34,7 +35,7 @@ CMEEE_EXPECTED = {
     "dep": JOB_DEPARTMENT,
     "dis": CONDITION,
     "dru": MEDICATION,
-    "equ": OTHER,
+    "equ": DEVICE,
     "ite": LAB_TEST,
     "mic": MICROORGANISM,
     "pro": PROCEDURE,
@@ -50,7 +51,7 @@ def test_cmeee_labels_normalize_through_chinese_core_mapping() -> None:
         assert mapping.mapped is True
         assert mapping.canonical_label in CANONICAL_LABELS
 
-    core_clinical = {"bod", "dis", "dru", "ite", "mic", "pro", "sym"}
+    core_clinical = {"bod", "dis", "dru", "equ", "ite", "mic", "pro", "sym"}
     assert all(CMEEE_EXPECTED[label] != OTHER for label in core_clinical)
 
 

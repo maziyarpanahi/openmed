@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a procedures zero-shot domain for surgical and diagnostic procedures,
+  devices, and surgical approach, with a new `DEVICE` canonical label,
+  keyword routing metadata, and canonical label normalization (#313).
 - Added deterministic serial measurement trends that group repeated entities,
   normalize compatible units, order points through the clinical timeline,
   preserve source spans and incomparable readings, and emit a clinician-review
