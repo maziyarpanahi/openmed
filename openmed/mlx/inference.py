@@ -1146,6 +1146,17 @@ def _download_preconverted_mlx_model(
     )
 
 
+def _is_legacy_mlx_artifact_config(config: dict[str, Any]) -> bool:
+    """Return whether *config* carries the pre-manifest converter markers."""
+    model_type = config.get("_mlx_model_type")
+    weights_format = config.get("_mlx_weights_format")
+    return (
+        isinstance(model_type, str)
+        and bool(model_type.strip())
+        and weights_format in {"safetensors", "npz"}
+    )
+
+
 def _resolve_mlx_model(
     model_name: str,
     config: Any = None,
@@ -1240,10 +1251,10 @@ def _resolve_mlx_model(
             ) from exc
 
         manifest, artifact_config = load_artifact_config(mlx_path)
-        if manifest is None:
+        if manifest is None and not _is_legacy_mlx_artifact_config(artifact_config):
             raise ValueError(
                 f"Pre-converted MLX repository {full_model_id} is missing "
-                f"{MANIFEST_FILENAME}"
+                f"{MANIFEST_FILENAME} and legacy MLX converter markers"
             )
         if not any(
             path.is_file()
