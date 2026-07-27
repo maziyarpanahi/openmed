@@ -86,6 +86,78 @@
     "Outcome",
     "Population"
   ],
+  "disease": [
+    "Disease",
+    "Condition",
+    "Pathology"
+  ],
+  "pharmaceutical": [
+    "Chemical",
+    "Drug",
+    "Medication"
+  ],
+  "oncology": [
+    "SimpleChemical",
+    "Chemical",
+    "AminoAcid",
+    "AnatomicalSystem",
+    "Cancer",
+    "Cell",
+    "GeneOrGeneProduct",
+    "CellularComponent",
+    "DevelopingAnatomicalStructure",
+    "ImmaterialAnatomicalEntity",
+    "MultiTissueStructure",
+    "Organism",
+    "Species",
+    "Organ",
+    "OrganismSubdivision",
+    "OrganismSubstance",
+    "Tissue",
+    "PathologicalFormation"
+  ],
+  "anatomy": [
+    "Organ",
+    "Tissue",
+    "Anatomy"
+  ],
+  "genomics": [
+    "GeneOrGeneProduct",
+    "Gene",
+    "Protein",
+    "DNA",
+    "RNA",
+    "CellLine",
+    "CellType"
+  ],
+  "chemical": [
+    "SimpleChemical",
+    "Chemical",
+    "Drug",
+    "Medication"
+  ],
+  "species": [
+    "Organism",
+    "Species"
+  ],
+  "protein": [
+    "GeneOrGeneProduct",
+    "Protein",
+    "ProteinComplex",
+    "ProteinEnumeration",
+    "ProteinFamilyOrGroup",
+    "ProteinVariant"
+  ],
+  "pathology": [
+    "Disease",
+    "Condition",
+    "Pathology"
+  ],
+  "hematology": [
+    "Cancer",
+    "Disease",
+    "CellLine"
+  ],
   "cardiology": [
     "CardiacFinding",
     "ECGFinding",
