@@ -22,6 +22,7 @@ from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.pii import (
     _apply_safety_sweep_to_result,
     _build_deidentification_result,
+    _resolve_effective_pii_model,
 )
 from openmed.core.pii_i18n import (
     LANGUAGE_FAKE_DATA,
@@ -81,6 +82,12 @@ def test_afrikaans_deterministic_pack_and_surrogate_data_are_registered():
         "Bloemfontein",
         "Stellenbosch",
     } <= set(fake_data["LOCATION"])
+
+
+def test_afrikaans_accepts_an_explicit_benchmark_model():
+    model_name = "OpenMed/privacy-filter-multilingual"
+
+    assert _resolve_effective_pii_model(model_name, "af") == model_name
 
 
 def test_afrikaans_generic_surrogates_use_dutch_backend():
