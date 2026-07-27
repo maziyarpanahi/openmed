@@ -44,6 +44,8 @@ def _prediction_result(text: str, surface: str) -> PredictionResult:
 
 
 def test_provider_is_seeded_by_pinyin_key_and_source_disjoint():
+    pytest.importorskip("pypinyin", reason="requires the optional openmed[zh] extra")
+
     first = Faker("zh_CN")
     second = Faker("zh_CN")
     first.add_provider(ChineseNameProvider)
@@ -60,6 +62,8 @@ def test_provider_is_seeded_by_pinyin_key_and_source_disjoint():
 
 
 def test_pinyin_surface_variants_share_one_vault_key():
+    pytest.importorskip("pypinyin", reason="requires the optional openmed[zh] extra")
+
     vault = SurrogateVault.in_memory("synthetic-chinese-name-secret")
     surfaces = ("王芳", "Wáng Fāng", "wang2 fang1")
 

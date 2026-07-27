@@ -18,12 +18,16 @@ from openmed.processing.zh_pinyin import (
 
 
 def test_tone_styles_match_synthetic_name_readings():
+    pytest.importorskip("pypinyin", reason="requires the optional openmed[zh] extra")
+
     assert to_pinyin("王芳", style=PinyinStyle.NORMAL) == ("wang", "fang")
     assert to_pinyin("王芳", style=PinyinStyle.TONE_MARK) == ("wáng", "fāng")
     assert to_pinyin("王芳", style=PinyinStyle.TONE3) == ("wang2", "fang1")
 
 
 def test_polyphone_uses_whole_segmented_word_context():
+    pytest.importorskip("pypinyin", reason="requires the optional openmed[zh] extra")
+
     class Segmenter:
         def segment(self, text: str) -> list[SpanToken]:
             assert text == "重庆"
@@ -33,6 +37,8 @@ def test_polyphone_uses_whole_segmented_word_context():
 
 
 def test_heteronym_output_keeps_all_reported_readings():
+    pytest.importorskip("pypinyin", reason="requires the optional openmed[zh] extra")
+
     readings = to_pinyin("重", heteronym=True)
 
     assert "zhong" in readings[0]
@@ -75,6 +81,8 @@ def test_missing_optional_dependency_is_actionable_and_key_falls_back(monkeypatc
 
 
 def test_fuzzy_key_normalizes_han_marks_numbers_case_and_spacing():
+    pytest.importorskip("pypinyin", reason="requires the optional openmed[zh] extra")
+
     expected = pinyin_fuzzy_key("王芳")
 
     assert expected == pinyin_fuzzy_key("Wáng Fāng")
