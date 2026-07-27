@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, fully local longitudinal document linking with
+  MinHash-based near-duplicate clustering, directional amendment edges,
+  retained superseded documents, and non-text source/target provenance on
+  every relationship (#1835).
 - Added a PySpark `pandas_udf` adapter (`openmed.interop.spark_udf`) for
   redacting free-text Spark DataFrame columns at warehouse scale via
   `make_deidentify_udf()` and the `deidentify_columns()` convenience helper,
