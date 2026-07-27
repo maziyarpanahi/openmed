@@ -17,6 +17,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "prefect",
     "pyDeid",
     "pydeid",
+    "pyspark",
     "gliner",
     "llama_index",
     "opencc",
@@ -78,6 +79,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "scispacy_linker",
         "scrubadub",
         "spacy",
+        "spark",
         "zh",
     )
     assert adapter_spec("cda").extra == "core"
@@ -102,6 +104,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("scrubadub").extra == "scrubadub"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"
+    assert adapter_spec("spark").extra == "spark"
     assert adapter_spec("zh").extra == "zh"
     assert "openmed.interop.icd11_api" not in sys.modules
     assert not any(_is_optional_adapter_module(name) for name in sys.modules)
