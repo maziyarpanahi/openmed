@@ -194,7 +194,7 @@ def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
     assert "if-no-files-found: error" in workflow
 
 
-def test_docker_context_excludes_generated_security_evidence():
+def test_docker_context_excludes_generated_and_dependency_artifacts():
     ignored = {
         line.strip()
         for line in DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
@@ -207,6 +207,8 @@ def test_docker_context_excludes_generated_security_evidence():
         "image-sbom.cdx.json.sha256",
         "pip-audit-report.json",
         "vulnerability-reports/",
+        "node_modules/",
+        "**/node_modules/",
     } <= ignored
 
 
