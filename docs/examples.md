@@ -77,6 +77,8 @@ content-security policy blocks the optional inline styling.
 | `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
 | `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
 | `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
+| `examples/structured_release_risk.py` | Runs a synthetic structured release through advisory quasi-identifier discovery, explicit patient-level k/l/t policy review, anonymization, materialized-output validation, and aggregate expert-review evidence. |
+| `examples/structured_population_risk.py` | Measures exact offline k-map, exact-linkage risk, and delta-presence for a fabricated sample against a fabricated reference population using patient-level joint QI profiles. |
 | `examples/v17_multimodal_browser_interop.py` | Demonstrates v1.7 multimodal and interop surfaces: AsciiDoc offset projection, OCR contracts, chat JSONL, CSV manifests, FHIR, HL7 v2, and Transformers.js browser bundle checks. |
 | `examples/chw_form_deid.py` | De-identifies local ODK, CommCare, or KoBoToolbox JSON/CSV form exports and emits a value-free field-policy manifest. |
 | `examples/privacy_gateway_quickstart.py` | Shows redaction before an external model call and safe re-identification after the protected boundary. |
@@ -93,6 +95,18 @@ Run the v1.6 and v1.7 release examples:
 uv run python examples/v16_policy_audit_release_gates.py
 uv run python examples/v17_multimodal_browser_interop.py
 ```
+
+Run the structured release-risk and reference-population examples with
+synthetic data:
+
+```bash
+uv run python examples/structured_release_risk.py
+uv run python examples/structured_population_risk.py
+```
+
+See [Structured Release Risk and Expert-Review Evidence](./reidentification-risk.md)
+for the corresponding CLI and Python workflows, exact longitudinal-profile
+semantics, signed expert handoff, artifact handling, and limitations.
 
 Run the Chinese and Hindi/Hinglish de-identification walkthroughs:
 

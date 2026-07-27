@@ -10,6 +10,7 @@ import math
 import os
 import sys
 import tempfile
+import unicodedata
 from collections import Counter
 from collections.abc import Mapping as MappingABC
 from pathlib import Path
@@ -64,6 +65,11 @@ _LIST_MODELS = None
 _BATCH_PROCESSOR = None
 
 _AUDIT_KEY_ENV = "OPENMED_AUDIT_KEY"
+
+
+class _ReleasePublicationCleanupError(OSError):
+    """Raised after publication when stale backup cleanup did not finish."""
+
 
 # Exposed for unit tests to patch without importing heavy modules eagerly.
 analyze_text = None
@@ -175,6 +181,101 @@ def _non_negative_float(value: str) -> float:
             "value must be a finite number greater than or equal to 0"
         )
     return parsed
+
+
+def _unit_interval_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        raise argparse.ArgumentTypeError(
+            "value must be a finite number between 0 and 1"
+        )
+    return parsed
+
+
+def _column_list_arg(value: str) -> tuple[str, ...]:
+    columns = tuple(
+        dict.fromkeys(item.strip() for item in value.split(",") if item.strip())
+    )
+    if not columns:
+        raise argparse.ArgumentTypeError(
+            "expected one or more comma-separated column names"
+        )
+    return columns
+
+
+def _literal_column_arg(value: str) -> str:
+    if (
+        not value
+        or value != value.strip()
+        or any(
+            unicodedata.category(character).startswith("C")
+            or unicodedata.category(character) in {"Zl", "Zp"}
+            for character in value
+        )
+    ):
+        raise argparse.ArgumentTypeError(
+            "literal column names must be non-empty and cannot have surrounding "
+            "whitespace or control characters"
+        )
+    return value
+
+
+def _merged_column_args(
+    comma_separated: Sequence[str],
+    literal_columns: Sequence[str],
+) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*comma_separated, *literal_columns)))
+
+
+def _role_override_arg(value: str) -> tuple[str, tuple[str, ...]]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError(
+            "role overrides must use COLUMN=ROLE[,ROLE] syntax"
+        )
+    column, raw_roles = value.split("=", 1)
+    column = column.strip()
+    roles = tuple(
+        dict.fromkeys(item.strip() for item in raw_roles.split(",") if item.strip())
+    )
+    valid = {
+        "direct-id",
+        "quasi-id",
+        "sensitive",
+        "safe",
+        "internal-linkage",
+        "free-text",
+    }
+    if not column or not roles or any(role not in valid for role in roles):
+        raise argparse.ArgumentTypeError(
+            "role overrides require a column and roles from: "
+            + ", ".join(sorted(valid))
+        )
+    _literal_column_arg(column)
+    return column, roles
+
+
+def _named_digest_arg(value: str) -> tuple[str, str]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError(
+            "named digests must use NAME=sha256:<64 lowercase hex digits>"
+        )
+    name, digest = value.split("=", 1)
+    name_characters = frozenset(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.:-"
+    )
+    if (
+        not name
+        or len(name) > 128
+        or not name[0].isalpha()
+        or any(character not in name_characters for character in name)
+        or len(digest) != 71
+        or not digest.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in digest[7:])
+    ):
+        raise argparse.ArgumentTypeError(
+            "named digests must use NAME=sha256:<64 lowercase hex digits>"
+        )
+    return name, digest
 
 
 def _policy_name_arg(value: str) -> str:
@@ -797,6 +898,58 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     safe_harbor_parser.set_defaults(handler=_handle_compliance_safe_harbor)
 
+    expert_verify_parser = compliance_sub.add_parser(
+        "expert-review-verify",
+        help="Verify a PHI-safe de-identification expert-review evidence bundle.",
+    )
+    expert_verify_parser.add_argument(
+        "report",
+        type=Path,
+        help="Path to an expert-review evidence JSON file.",
+    )
+    expert_verify_parser.set_defaults(handler=_handle_expert_review_verify)
+
+    attestation_verify_parser = compliance_sub.add_parser(
+        "expert-attestation-verify",
+        help=(
+            "Verify an expert-authored signature against its evidence and trusted key."
+        ),
+    )
+    attestation_verify_parser.add_argument(
+        "attestation",
+        type=Path,
+        help="Path to an expert-attestation JSON envelope.",
+    )
+    attestation_verify_parser.add_argument(
+        "--evidence",
+        type=Path,
+        required=True,
+        help="Expert-review evidence JSON bound by the attestation.",
+    )
+    attestation_verify_parser.add_argument(
+        "--public-key",
+        type=Path,
+        required=True,
+        help="Trusted Ed25519 public key in PEM or raw 32-byte form.",
+    )
+    attestation_verify_parser.add_argument(
+        "--key-id",
+        required=True,
+        help="Expected trusted key identifier.",
+    )
+    attestation_verify_parser.add_argument(
+        "--supporting-evidence",
+        action="append",
+        type=_named_digest_arg,
+        default=[],
+        metavar="NAME=SHA256_DIGEST",
+        help=(
+            "Expected named supporting-evidence digest; repeat for every digest "
+            "bound by the attestation."
+        ),
+    )
+    attestation_verify_parser.set_defaults(handler=_handle_expert_attestation_verify)
+
 
 def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     risk_parser = subparsers.add_parser(
@@ -825,6 +978,373 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
         help="Path to a CSV file with a header row.",
     )
     table_parser.set_defaults(handler=_handle_risk_table)
+
+    discover_parser = risk_sub.add_parser(
+        "discover",
+        help="Discover candidate quasi-identifiers in a structured table.",
+    )
+    discover_parser.add_argument("input", type=Path)
+    discover_parser.add_argument("--output", "-o", type=Path, required=True)
+    discover_parser.add_argument(
+        "--sample-rows",
+        type=_positive_int,
+        default=10_000,
+        help="Maximum rows for advisory discovery.",
+    )
+    discover_parser.add_argument(
+        "--full-scan",
+        action="store_true",
+        help="Read the complete table and mark dataset coverage complete.",
+    )
+    discover_parser.add_argument("--privacy-unit", default=None)
+    discover_parser.add_argument("--qi", type=_column_list_arg, default=())
+    discover_parser.add_argument(
+        "--qi-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal QI column name, including names with commas.",
+    )
+    discover_parser.add_argument(
+        "--sensitive",
+        type=_column_list_arg,
+        default=(),
+    )
+    discover_parser.add_argument(
+        "--sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help=(
+            "Repeat for a literal sensitive column name, including names with commas."
+        ),
+    )
+    discover_parser.add_argument(
+        "--role",
+        action="append",
+        type=_role_override_arg,
+        default=[],
+        metavar="COLUMN=ROLE[,ROLE]",
+    )
+    discover_parser.add_argument("--max-set-size", type=_positive_int, default=4)
+    discover_parser.add_argument(
+        "--max-candidate-columns",
+        type=_positive_int,
+        default=8,
+    )
+    discover_parser.add_argument(
+        "--search-budget",
+        type=_positive_int,
+        default=1_000,
+    )
+    discover_parser.add_argument(
+        "--include-safe-candidates",
+        action="store_true",
+        help=(
+            "Include reviewed scalar columns currently classified as safe in "
+            "the bounded combination search."
+        ),
+    )
+    discover_parser.add_argument("--overwrite", action="store_true")
+    discover_parser.set_defaults(handler=_handle_risk_discover)
+
+    assess_parser = risk_sub.add_parser(
+        "assess",
+        help="Measure patient-level k/l/t release risk with safe output.",
+    )
+    assess_parser.add_argument("input", type=Path)
+    assess_parser.add_argument("--output", "-o", type=Path, required=True)
+    assess_parser.add_argument(
+        "--dashboard",
+        type=Path,
+        default=None,
+        help="Optional self-contained aggregate-only HTML dashboard.",
+    )
+    _add_release_policy_arguments(assess_parser, include_transformation=False)
+    assess_parser.add_argument("--overwrite", action="store_true")
+    assess_parser.set_defaults(handler=_handle_risk_assess)
+
+    population_parser = risk_sub.add_parser(
+        "population-assess",
+        help="Measure exact risk against a supplied reference population.",
+    )
+    population_parser.add_argument("input", type=Path, help="Sample table.")
+    population_parser.add_argument(
+        "reference_population",
+        type=Path,
+        help="Caller-supplied reference-population table.",
+    )
+    population_parser.add_argument("--output", "-o", type=Path, required=True)
+    population_parser.add_argument(
+        "--qi",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated quasi-identifier columns.",
+    )
+    population_parser.add_argument(
+        "--qi-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal QI column name, including names with commas.",
+    )
+    population_parser.add_argument(
+        "--sample-privacy-unit",
+        default=None,
+        help=(
+            "Sample analysis-unit column; must be supplied together with "
+            "--population-privacy-unit."
+        ),
+    )
+    population_parser.add_argument(
+        "--population-privacy-unit",
+        default=None,
+        help=(
+            "Reference analysis-unit column; must be supplied together with "
+            "--sample-privacy-unit."
+        ),
+    )
+    population_parser.add_argument(
+        "--k-map",
+        type=_positive_int,
+        required=True,
+        help="Minimum reference frequency for every sample profile.",
+    )
+    population_parser.add_argument(
+        "--max-delta-presence",
+        type=_unit_interval_float,
+        required=True,
+        help="Maximum sample/reference profile-frequency ratio in [0, 1].",
+    )
+    population_parser.add_argument("--overwrite", action="store_true")
+    population_parser.set_defaults(handler=_handle_risk_population_assess)
+
+    gate_parser = risk_sub.add_parser(
+        "gate",
+        help="Verify and gate aggregate structured-release evidence for CI.",
+    )
+    gate_parser.add_argument(
+        "evidence",
+        type=Path,
+        help="Expert-review evidence JSON produced by risk anonymize.",
+    )
+    gate_parser.set_defaults(handler=_handle_risk_gate)
+
+    anonymize_parser = risk_sub.add_parser(
+        "anonymize",
+        help="Generalize and suppress a structured release, then revalidate it.",
+    )
+    anonymize_parser.add_argument("input", type=Path)
+    anonymize_parser.add_argument("--output", "-o", type=Path, required=True)
+    anonymize_parser.add_argument(
+        "--evidence",
+        type=Path,
+        required=True,
+        help="Path for PHI-safe expert-review evidence JSON.",
+    )
+    anonymize_parser.add_argument(
+        "--evidence-markdown",
+        type=Path,
+        default=None,
+        help="Optional Markdown path; defaults beside --evidence.",
+    )
+    anonymize_parser.add_argument(
+        "--dashboard",
+        type=Path,
+        default=None,
+        help="Optional self-contained aggregate-only HTML dashboard.",
+    )
+    _add_release_policy_arguments(anonymize_parser, include_transformation=True)
+    anonymize_parser.add_argument(
+        "--privacy-unit-kind",
+        choices=(
+            "row",
+            "patient",
+            "person",
+            "encounter",
+            "document",
+            "event",
+            "household",
+            "other",
+        ),
+        default=None,
+    )
+    anonymize_parser.add_argument(
+        "--population-scope",
+        choices=(
+            "source_population",
+            "eligible_cohort",
+            "sampled_cohort",
+            "release_cohort",
+            "external_reference_population",
+            "other_documented",
+        ),
+        default="release_cohort",
+    )
+    anonymize_parser.add_argument(
+        "--release-model",
+        choices=("public", "restricted", "controlled", "internal", "other_documented"),
+        required=True,
+    )
+    anonymize_parser.add_argument(
+        "--recipient-model",
+        choices=(
+            "general_public",
+            "named_researchers",
+            "covered_entity",
+            "authorized_internal",
+            "contracted_recipient",
+            "other_documented",
+        ),
+        required=True,
+    )
+    anonymize_parser.add_argument(
+        "--auxiliary-data-model",
+        choices=(
+            "publicly_available",
+            "recipient_supplied",
+            "reasonably_available",
+            "expert_defined",
+            "none_assumed",
+            "other_documented",
+        ),
+        required=True,
+    )
+    anonymize_parser.add_argument(
+        "--assumptions-notes",
+        type=Path,
+        default=None,
+        help=(
+            "Optional local UTF-8 .md or .txt notes whose content is bound by "
+            "digest but never copied into evidence; required for any 'other' "
+            "release-context choice."
+        ),
+    )
+    anonymize_parser.add_argument("--overwrite", action="store_true")
+    anonymize_parser.set_defaults(handler=_handle_risk_anonymize)
+
+
+def _add_release_policy_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    include_transformation: bool,
+) -> None:
+    parser.add_argument(
+        "--qi",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated quasi-identifier columns.",
+    )
+    parser.add_argument(
+        "--qi-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal QI column name, including names with commas.",
+    )
+    parser.add_argument(
+        "--sensitive",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated sensitive-attribute columns.",
+    )
+    parser.add_argument(
+        "--sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help=(
+            "Repeat for a literal sensitive column name, including names with commas."
+        ),
+    )
+    parser.add_argument(
+        "--direct-id",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated direct-identifier columns to remove.",
+    )
+    parser.add_argument(
+        "--direct-id-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help=(
+            "Repeat for a literal direct-identifier column name, including "
+            "names with commas."
+        ),
+    )
+    parser.add_argument(
+        "--non-sensitive",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated reviewed non-sensitive columns.",
+    )
+    parser.add_argument(
+        "--non-sensitive-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help=(
+            "Repeat for a literal non-sensitive column name, including names "
+            "with commas."
+        ),
+    )
+    parser.add_argument(
+        "--exclude",
+        type=_column_list_arg,
+        default=(),
+        help="Comma-separated columns excluded from release.",
+    )
+    parser.add_argument(
+        "--exclude-column",
+        action="append",
+        type=_literal_column_arg,
+        default=[],
+        help="Repeat for a literal excluded column name, including names with commas.",
+    )
+    parser.add_argument(
+        "--privacy-unit",
+        default=None,
+        help="Patient/person key used only for analysis and removed from output.",
+    )
+    parser.add_argument(
+        "--k",
+        type=_positive_int,
+        required=True,
+        help="Explicit target k; OpenMed does not choose a regulatory default.",
+    )
+    parser.add_argument("--l", type=_positive_int, default=1)
+    parser.add_argument(
+        "--l-metric",
+        choices=("distinct", "entropy"),
+        default="distinct",
+    )
+    parser.add_argument("--t", type=_unit_interval_float, default=1.0)
+    if not include_transformation:
+        return
+    parser.add_argument("--max-suppressed-units", type=_non_negative_int, default=None)
+    parser.add_argument(
+        "--max-suppression-rate",
+        type=_unit_interval_float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--max-lattice-nodes",
+        type=_positive_int,
+        default=100_000,
+    )
+    parser.add_argument(
+        "--max-suppression-subsets",
+        type=_positive_int,
+        default=100_000,
+        help="Maximum equivalence-class suppression subsets evaluated.",
+    )
+    parser.add_argument(
+        "--hierarchies",
+        type=Path,
+        default=None,
+        help="Optional reviewed hierarchy JSON.",
+    )
 
 
 def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1977,6 +2497,94 @@ def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
     )
 
 
+def _handle_expert_review_verify(args: argparse.Namespace) -> int:
+    from ..compliance import ExpertReviewEvidenceReport
+
+    try:
+        report = ExpertReviewEvidenceReport.from_json(
+            args.report.read_text(encoding="utf-8")
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Expert-review evidence verification failed.",
+            code="evidence_verification_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    payload = {
+        "verified": report.verify(),
+        "integrity_hash": report.integrity_hash,
+        "schema_version": report.schema_version,
+        "qualified_expert_review": "pending",
+    }
+    return emit(
+        args,
+        payload,
+        human=(
+            "Expert-review evidence verification: PASS\n"
+            f"Integrity hash: {report.integrity_hash}\n"
+            "Qualified expert review: pending\n"
+        ),
+    )
+
+
+def _handle_expert_attestation_verify(args: argparse.Namespace) -> int:
+    from ..compliance import (
+        ExpertAttestationEnvelope,
+        ExpertReviewEvidenceReport,
+    )
+
+    try:
+        attestation = ExpertAttestationEnvelope.from_json(
+            args.attestation.read_text(encoding="utf-8")
+        )
+        evidence = ExpertReviewEvidenceReport.from_json(
+            args.evidence.read_text(encoding="utf-8")
+        )
+        public_key = args.public_key.read_bytes()
+        verification = attestation.verify(
+            evidence=evidence,
+            public_key=public_key,
+            expected_key_id=args.key_id,
+            expected_supporting_evidence_digests=tuple(args.supporting_evidence),
+        )
+    except ImportError as exc:
+        raise CliError(
+            "Expert-attestation verification requires the 'integrity' extra.",
+            code="expert_attestation_dependency_missing",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Expert-attestation verification failed because an input is "
+            "unreadable, malformed, or unsupported.",
+            code="expert_attestation_verification_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = verification.to_dict()
+    human = (
+        "Expert-authored attestation verification\n"
+        f"Cryptographic signature: "
+        f"{_pass_fail(verification.cryptographically_valid)}\n"
+        f"Trusted key identifier: {_pass_fail(verification.key_id_matches)}\n"
+        f"Evidence integrity: "
+        f"{_pass_fail(verification.evidence_integrity_valid)}\n"
+        f"Evidence bindings: {_pass_fail(verification.bindings_match)}\n"
+        f"Expert-stated conclusion: {verification.conclusion}\n"
+        f"Freshness: {verification.freshness_status}\n"
+        "These are independent verification facts, not an automated Expert "
+        "Determination or release authorization.\n"
+    )
+    emitted = emit(args, payload, human=human)
+    authenticity_valid = (
+        verification.cryptographically_valid
+        and verification.key_id_matches
+        and verification.evidence_integrity_valid
+        and verification.bindings_match
+    )
+    return emitted if authenticity_valid else EXIT_ERROR
+
+
 def _load_audit_report(path: Path):
     from ..core.audit import AuditReport
 
@@ -2040,7 +2648,7 @@ def _format_residual_risk_lines(residual_risk: Mapping[str, Any]) -> list[str]:
 
 
 def _handle_risk_text(args: argparse.Namespace) -> int:
-    from ..risk import risk_report
+    from ..risk import risk_report, safe_risk_summary
 
     try:
         text = _read_text_input(args.input)
@@ -2054,13 +2662,13 @@ def _handle_risk_text(args: argparse.Namespace) -> int:
     report = risk_report(text)
     return emit(
         args,
-        dict(report),
+        safe_risk_summary(report),
         human=_format_risk_summary("Text risk summary", report),
     )
 
 
 def _handle_risk_table(args: argparse.Namespace) -> int:
-    from ..risk import risk_report
+    from ..risk import risk_report, safe_risk_summary
 
     try:
         records = _read_csv_records(args.csv)
@@ -2074,9 +2682,889 @@ def _handle_risk_table(args: argparse.Namespace) -> int:
     report = risk_report(records)
     return emit(
         args,
-        dict(report),
+        safe_risk_summary(report),
         human=_format_risk_summary("Table risk summary", report),
     )
+
+
+def _handle_risk_discover(args: argparse.Namespace) -> int:
+    from ..structured import (
+        SUPPORTED_TABLE_SUFFIXES,
+        DiscoveryConfigurationError,
+        scan_table,
+    )
+
+    role_overrides = dict(args.role)
+    if len(role_overrides) != len(args.role):
+        raise CliError(
+            "Each structured discovery column may have only one role override.",
+            code="invalid_discovery_config",
+            exit_code=EXIT_USAGE,
+        )
+    _preflight_structured_paths(
+        inputs=((args.input, "Discovery input", SUPPORTED_TABLE_SUFFIXES),),
+        outputs=((args.output, "Discovery output", frozenset({".json"})),),
+        overwrite=args.overwrite,
+    )
+    try:
+        manifest = scan_table(
+            args.input,
+            max_rows=args.sample_rows,
+            max_set_size=args.max_set_size,
+            max_candidate_columns=args.max_candidate_columns,
+            search_budget=args.search_budget,
+            full_scan=args.full_scan,
+            role_overrides=role_overrides,
+            quasi_identifier_columns=_merged_column_args(
+                args.qi,
+                args.qi_column,
+            ),
+            sensitive_columns=_merged_column_args(
+                args.sensitive,
+                args.sensitive_column,
+            ),
+            privacy_unit=args.privacy_unit,
+            include_safe_candidates=args.include_safe_candidates,
+        )
+        _write_safe_text(
+            args.output,
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            overwrite=args.overwrite,
+        )
+    except DiscoveryConfigurationError as exc:
+        raise CliError(
+            "The structured discovery configuration does not match the input schema.",
+            code="invalid_discovery_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to discover structured quasi-identifiers.",
+            code="qi_discovery_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    discovery = manifest["discovery"]
+    payload = {
+        "output": str(args.output),
+        "status": discovery["status"],
+        "advisory": discovery["advisory"],
+        "candidate_set_count": len(manifest["quasi_identifier_sets"]),
+        "search": manifest["search"],
+    }
+    human = (
+        "Quasi-identifier discovery complete\n"
+        f"Status: {discovery['status']}\n"
+        f"Advisory: {str(discovery['advisory']).lower()}\n"
+        f"Candidate sets: {len(manifest['quasi_identifier_sets'])}\n"
+        f"Manifest: {args.output}\n"
+    )
+    return emit(args, payload, human=human)
+
+
+def _handle_risk_assess(args: argparse.Namespace) -> int:
+    from ..risk import assess_release, render_release_assessment_dashboard
+    from ..structured import SUPPORTED_TABLE_SUFFIXES, read_table
+
+    policy = _validated_release_policy(args)
+    outputs = [(args.output, "Assessment output", frozenset({".json"}))]
+    if args.dashboard is not None:
+        outputs.append((args.dashboard, "Assessment dashboard", frozenset({".html"})))
+    _preflight_structured_paths(
+        inputs=((args.input, "Assessment input", SUPPORTED_TABLE_SUFFIXES),),
+        outputs=tuple(outputs),
+        overwrite=args.overwrite,
+    )
+    try:
+        records = read_table(args.input)
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to read the structured assessment input.",
+            code="release_input_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    try:
+        assessment = assess_release(records, policy)
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The structured release policy does not match the input schema.",
+            code="invalid_release_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+    staged_paths: list[Path] = []
+    try:
+        staged_assessment = _temporary_sibling_path(args.output)
+        staged_paths.append(staged_assessment)
+        publications = [(staged_assessment, args.output)]
+        _write_safe_text(
+            staged_assessment,
+            assessment.to_json() + "\n",
+            overwrite=False,
+        )
+        if args.dashboard is not None:
+            staged_dashboard = _temporary_sibling_path(args.dashboard)
+            staged_paths.append(staged_dashboard)
+            _write_safe_text(
+                staged_dashboard,
+                render_release_assessment_dashboard(assessment),
+                overwrite=False,
+            )
+            publications.append((staged_dashboard, args.dashboard))
+        _publish_release_outputs(publications, overwrite=args.overwrite)
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to assess structured release risk.",
+            code="release_assessment_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    finally:
+        for staged_path in staged_paths:
+            _unlink_path(staged_path, missing_ok=True)
+    if not assessment.meets_policy:
+        raise CliError(
+            "Structured release does not meet the configured privacy policy; "
+            f"the aggregate assessment was written to {args.output}.",
+            code="release_policy_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    payload = {
+        "output": str(args.output),
+        "meets_policy": assessment.meets_policy,
+        "achieved_k": assessment.achieved_k,
+        "privacy_unit_count": assessment.privacy_unit_count,
+        "policy_digest": assessment.policy_digest,
+        "dataset_digest": assessment.dataset_digest,
+        "dashboard": str(args.dashboard) if args.dashboard is not None else None,
+    }
+    human = (
+        "Structured release risk assessment\n"
+        f"Meets configured policy: {_pass_fail(assessment.meets_policy)}\n"
+        f"Achieved k: {assessment.achieved_k}\n"
+        f"Privacy units: {assessment.privacy_unit_count}\n"
+        f"Assessment: {args.output}\n"
+        + (f"Dashboard: {args.dashboard}\n" if args.dashboard is not None else "")
+        + "This is not an Expert Determination; qualified expert review is required.\n"
+    )
+    return emit(args, payload, human=human)
+
+
+def _handle_risk_population_assess(args: argparse.Namespace) -> int:
+    from ..risk import assess_population_risk
+    from ..structured import SUPPORTED_TABLE_SUFFIXES, read_table
+
+    quasi_identifiers = _merged_column_args(args.qi, args.qi_column)
+    if not quasi_identifiers:
+        raise CliError(
+            "Population-risk assessment requires at least one --qi or --qi-column.",
+            code="invalid_population_risk_config",
+            exit_code=EXIT_USAGE,
+        )
+    _preflight_structured_paths(
+        inputs=(
+            (args.input, "Sample input", SUPPORTED_TABLE_SUFFIXES),
+            (
+                args.reference_population,
+                "Reference-population input",
+                SUPPORTED_TABLE_SUFFIXES,
+            ),
+        ),
+        outputs=((args.output, "Population-risk output", frozenset({".json"})),),
+        overwrite=args.overwrite,
+    )
+    try:
+        sample = read_table(args.input)
+        reference_population = read_table(args.reference_population)
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to read a population-risk input table.",
+            code="population_risk_input_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    try:
+        assessment = assess_population_risk(
+            sample,
+            reference_population,
+            quasi_identifiers,
+            sample_privacy_unit=args.sample_privacy_unit,
+            population_privacy_unit=args.population_privacy_unit,
+            target_k_map=args.k_map,
+            max_delta_presence=args.max_delta_presence,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The population-risk configuration or reference model is invalid.",
+            code="invalid_population_risk_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+    try:
+        _write_safe_text(
+            args.output,
+            assessment.to_json() + "\n",
+            overwrite=args.overwrite,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to write the aggregate population-risk assessment.",
+            code="population_risk_output_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    if not assessment.meets_policy:
+        raise CliError(
+            "The sample does not meet the configured reference-population risk "
+            f"policy; aggregate evidence was written to {args.output}.",
+            code="population_risk_policy_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    payload = {
+        "output": str(args.output),
+        "meets_policy": assessment.meets_policy,
+        "achieved_k_map": assessment.achieved_k_map,
+        "max_delta_presence": assessment.max_delta_presence,
+        "matched_sample_unit_count": assessment.matched_sample_unit_count,
+        "unmatched_sample_unit_count": assessment.unmatched_sample_unit_count,
+        "reference_model_consistent": assessment.reference_model_consistent,
+        "assessment_digest": assessment.digest,
+    }
+    human = (
+        "Reference-population risk assessment\n"
+        f"Meets configured policy: {_pass_fail(assessment.meets_policy)}\n"
+        f"Achieved k-map: {assessment.achieved_k_map}\n"
+        f"Maximum delta-presence: {assessment.max_delta_presence:.6g}\n"
+        f"Assessment: {args.output}\n"
+        "The supplied reference model and assumptions require qualified expert "
+        "review.\n"
+    )
+    return emit(args, payload, human=human)
+
+
+def _handle_risk_gate(args: argparse.Namespace) -> int:
+    from ..compliance import ExpertReviewEvidenceReport
+    from ..eval import evaluate_release_risk_evidence
+
+    try:
+        evidence_text = args.evidence.read_text(encoding="utf-8")
+        evidence = ExpertReviewEvidenceReport.from_json(evidence_text)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Release-risk evidence is unreadable, malformed, or fails its "
+            "structural integrity check.",
+            code="invalid_release_risk_evidence",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    check = evaluate_release_risk_evidence(evidence)
+    payload = check.to_dict()
+    human = (
+        "Structured release evidence gate\n"
+        f"Technical policy: {_pass_fail(check.passed)}\n"
+        f"Reason: {check.reason}\n"
+        "A passing technical gate is not an Expert Determination or release "
+        "authorization.\n"
+    )
+    emitted = emit(args, payload, human=human)
+    return emitted if check.passed else EXIT_ERROR
+
+
+def _handle_risk_anonymize(args: argparse.Namespace) -> int:
+    from ..compliance import (
+        ReleaseAssumptions,
+        build_release_expert_review_evidence,
+    )
+    from ..core.audit import stable_hash
+    from ..risk import (
+        anonymize_release,
+        assess_release,
+        render_release_assessment_dashboard,
+        validate_released_output,
+    )
+    from ..structured import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
+
+    markdown_path = args.evidence_markdown or args.evidence.with_suffix(".md")
+    policy = _validated_release_policy(args)
+    other_context_selected = (
+        args.privacy_unit_kind == "other"
+        or args.population_scope == "other_documented"
+        or args.release_model == "other_documented"
+        or args.recipient_model == "other_documented"
+        or args.auxiliary_data_model == "other_documented"
+    )
+    if other_context_selected and args.assumptions_notes is None:
+        raise CliError(
+            "Documented release-context choices require --assumptions-notes.",
+            code="invalid_release_assumptions",
+            exit_code=EXIT_USAGE,
+        )
+    input_paths = [
+        (args.input, "Release input", SUPPORTED_TABLE_SUFFIXES),
+    ]
+    if args.hierarchies is not None:
+        input_paths.append(
+            (args.hierarchies, "Hierarchy configuration", frozenset({".json"}))
+        )
+    if args.assumptions_notes is not None:
+        input_paths.append(
+            (
+                args.assumptions_notes,
+                "Assumptions notes",
+                frozenset({".md", ".txt"}),
+            )
+        )
+    output_paths = [
+        (args.output, "Release output", SUPPORTED_TABLE_SUFFIXES),
+        (args.evidence, "Evidence output", frozenset({".json"})),
+        (markdown_path, "Evidence Markdown output", frozenset({".md"})),
+    ]
+    if args.dashboard is not None:
+        output_paths.append((args.dashboard, "Release dashboard", frozenset({".html"})))
+    _preflight_structured_paths(
+        inputs=tuple(input_paths),
+        outputs=tuple(output_paths),
+        overwrite=args.overwrite,
+    )
+    hierarchies = _validated_hierarchy_config(
+        args.hierarchies,
+        quasi_identifiers=policy.quasi_identifiers,
+    )
+    privacy_unit_kind = _validated_privacy_unit_kind(args)
+    assumptions_values = {
+        "privacy_unit": privacy_unit_kind,
+        "population_scope": args.population_scope,
+        "release_model": args.release_model,
+        "recipient_model": args.recipient_model,
+        "auxiliary_data_model": args.auxiliary_data_model,
+    }
+    assumptions_notes: str | None = None
+    if args.assumptions_notes is not None:
+        try:
+            assumptions_notes = args.assumptions_notes.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise CliError(
+                "Failed to read the reviewed assumptions notes.",
+                code="assumptions_notes_read_failed",
+                exit_code=EXIT_ERROR,
+            ) from exc
+        if not assumptions_notes.strip():
+            raise CliError(
+                "Reviewed assumptions notes must not be empty.",
+                code="invalid_release_assumptions",
+                exit_code=EXIT_USAGE,
+            )
+    staged_paths: list[Path] = []
+    try:
+        records = read_table(args.input)
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to read the structured release input.",
+            code="release_input_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    try:
+        assess_release(records, policy)
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The structured release policy does not match the input schema.",
+            code="invalid_release_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+    try:
+        result = anonymize_release(records, policy, hierarchies=hierarchies)
+        staged_output = _temporary_sibling_path(args.output)
+        staged_evidence = _temporary_sibling_path(args.evidence)
+        staged_markdown = _temporary_sibling_path(markdown_path)
+        staged_paths.extend((staged_output, staged_evidence, staged_markdown))
+        write_table(staged_output, result.records)
+        reread = read_table(staged_output)
+        preserves_types = args.output.suffix.lower() not in {".csv", ".tsv"}
+        validation = validate_released_output(
+            reread,
+            result,
+            preserve_scalar_types=preserves_types,
+        )
+        if not validation.passed:
+            raise ValueError("materialized release failed residual validation")
+
+        assumptions = ReleaseAssumptions(
+            **assumptions_values,
+            notes_digest=stable_hash(
+                {
+                    "kind": "openmed-release-assumptions-binding",
+                    "coded_assumptions": assumptions_values,
+                    "detailed_notes": assumptions_notes,
+                }
+            ),
+        )
+        evidence = build_release_expert_review_evidence(
+            result,
+            validation=validation,
+            assumptions=assumptions,
+        )
+        _write_safe_text(
+            staged_evidence,
+            evidence.to_json() + "\n",
+            overwrite=False,
+        )
+        _write_safe_text(
+            staged_markdown,
+            evidence.to_markdown(),
+            overwrite=False,
+        )
+        publications = [
+            (staged_evidence, args.evidence),
+            (staged_markdown, markdown_path),
+        ]
+        if args.dashboard is not None:
+            staged_dashboard = _temporary_sibling_path(args.dashboard)
+            staged_paths.append(staged_dashboard)
+            _write_safe_text(
+                staged_dashboard,
+                render_release_assessment_dashboard(result),
+                overwrite=False,
+            )
+            publications.append((staged_dashboard, args.dashboard))
+        # The sensitive release is published only after materialized
+        # validation and every safe evidence artifact has been staged.
+        publications.append((staged_output, args.output))
+        _publish_release_outputs(
+            publications,
+            overwrite=args.overwrite,
+        )
+    except _ReleasePublicationCleanupError as exc:
+        raise CliError(
+            "Structured release outputs were published, but secure backup "
+            "cleanup failed.",
+            code="release_backup_cleanup_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (ImportError, OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "Failed to anonymize and validate the structured release.",
+            code="release_anonymization_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    finally:
+        for staged_path in staged_paths:
+            _unlink_path(staged_path, missing_ok=True)
+
+    payload = {
+        "output": str(args.output),
+        "evidence": str(args.evidence),
+        "evidence_markdown": str(markdown_path),
+        "dashboard": str(args.dashboard) if args.dashboard is not None else None,
+        "achieved_k": result.after.achieved_k,
+        "meets_policy": result.after.meets_policy,
+        "released_rows": result.utility.released_rows,
+        "released_privacy_units": result.utility.released_privacy_units,
+        "released_dataset_digest": validation.dataset_digest,
+        "evidence_integrity_hash": evidence.integrity_hash,
+        "output_validation": validation.to_dict(),
+    }
+    human = (
+        "Structured release anonymization complete\n"
+        f"Meets configured policy: {_pass_fail(result.after.meets_policy)}\n"
+        f"Achieved k: {result.after.achieved_k}\n"
+        f"Released rows: {result.utility.released_rows}\n"
+        f"Release: {args.output}\n"
+        f"Expert-review evidence: {args.evidence}\n"
+        f"Evidence Markdown: {markdown_path}\n"
+        + (f"Dashboard: {args.dashboard}\n" if args.dashboard is not None else "")
+        + "The evidence is not an Expert Determination; qualified expert review "
+        + "is required.\n"
+    )
+    return emit(args, payload, human=human)
+
+
+def _release_policy_from_args(args: argparse.Namespace):
+    from ..risk import AnonymityPolicy
+
+    return AnonymityPolicy(
+        quasi_identifiers=_merged_column_args(args.qi, args.qi_column),
+        sensitive_attributes=_merged_column_args(
+            args.sensitive,
+            args.sensitive_column,
+        ),
+        direct_identifiers=_merged_column_args(
+            args.direct_id,
+            args.direct_id_column,
+        ),
+        non_sensitive_attributes=_merged_column_args(
+            args.non_sensitive,
+            args.non_sensitive_column,
+        ),
+        excluded_attributes=_merged_column_args(
+            args.exclude,
+            args.exclude_column,
+        ),
+        privacy_unit=args.privacy_unit,
+        target_k=args.k,
+        target_l=args.l,
+        l_metric=args.l_metric,
+        target_t=args.t,
+        suppression_limit=getattr(args, "max_suppressed_units", None),
+        suppression_rate=getattr(args, "max_suppression_rate", 0.0),
+        max_lattice_nodes=getattr(args, "max_lattice_nodes", 100_000),
+        max_suppression_subsets=getattr(
+            args,
+            "max_suppression_subsets",
+            100_000,
+        ),
+    )
+
+
+def _validated_release_policy(args: argparse.Namespace):
+    try:
+        return _release_policy_from_args(args)
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            "The structured release policy is invalid.",
+            code="invalid_release_policy",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+
+def _validated_privacy_unit_kind(args: argparse.Namespace) -> str:
+    privacy_unit = args.privacy_unit
+    kind = args.privacy_unit_kind
+    if privacy_unit is None:
+        if kind in (None, "row"):
+            return "row"
+        raise CliError(
+            "A non-row privacy-unit kind requires --privacy-unit.",
+            code="invalid_privacy_unit_kind",
+            exit_code=EXIT_USAGE,
+        )
+    if kind is None or kind == "row":
+        raise CliError(
+            "A named --privacy-unit requires an explicit non-row --privacy-unit-kind.",
+            code="invalid_privacy_unit_kind",
+            exit_code=EXIT_USAGE,
+        )
+    return str(kind)
+
+
+def _load_hierarchies(
+    path: Path | None,
+) -> Mapping[str, Sequence[Mapping[str, Any]]] | None:
+    if path is None:
+        return None
+    from ..structured.table_io import _strict_json_loads
+
+    payload = _strict_json_loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, MappingABC):
+        raise ValueError("Hierarchy JSON must contain an object")
+    return payload
+
+
+def _validated_hierarchy_config(
+    path: Path | None,
+    *,
+    quasi_identifiers: Sequence[str],
+) -> Mapping[str, Sequence[Mapping[str, Any]]] | None:
+    if path is None:
+        return None
+    try:
+        payload = _load_hierarchies(path)
+        if payload is None:
+            return None
+        _validate_hierarchy_shape(payload, quasi_identifiers=quasi_identifiers)
+        return payload
+    except (OSError, TypeError, ValueError) as exc:
+        raise CliError(
+            "The hierarchy configuration is invalid.",
+            code="invalid_hierarchy_config",
+            exit_code=EXIT_USAGE,
+        ) from exc
+
+
+def _validate_hierarchy_shape(
+    payload: Mapping[str, Any],
+    *,
+    quasi_identifiers: Sequence[str],
+) -> None:
+    from ..risk.kanon import _INTERNAL_QI_TOKEN_PREFIX, _user_hierarchy
+
+    declared = set(quasi_identifiers)
+    unknown = [field for field in payload if not isinstance(field, str)]
+    unknown.extend(
+        field for field in payload if isinstance(field, str) and field not in declared
+    )
+    if unknown:
+        raise ValueError("hierarchy fields must be declared quasi-identifiers")
+
+    allowed_keys = {"name", "values", "default", "loss"}
+    for field, raw_levels in payload.items():
+        if (
+            not isinstance(raw_levels, Sequence)
+            or isinstance(raw_levels, (str, bytes, bytearray))
+            or not raw_levels
+        ):
+            raise ValueError(f"hierarchy {field!r} must contain levels")
+        previous_loss = -1.0
+        max_index = max(1, len(raw_levels) - 1)
+        for index, level in enumerate(raw_levels):
+            if not isinstance(level, MappingABC):
+                raise TypeError("hierarchy levels must be objects")
+            if set(level) - allowed_keys:
+                raise ValueError("hierarchy level contains unsupported keys")
+            values = level.get("values")
+            if values is not None and not isinstance(values, MappingABC):
+                raise TypeError("hierarchy level values must be an object")
+            if (
+                isinstance(values, MappingABC)
+                and any(
+                    str(value).startswith(_INTERNAL_QI_TOKEN_PREFIX)
+                    for value in values.values()
+                )
+            ) or (
+                level.get("default") is not None
+                and str(level["default"]).startswith(_INTERNAL_QI_TOKEN_PREFIX)
+            ):
+                raise ValueError(
+                    "hierarchy outputs cannot use the reserved internal namespace"
+                )
+            if index == 0 and (values is not None or "default" in level):
+                raise ValueError(
+                    "hierarchy level zero must be a canonical identity level"
+                )
+            loss = level.get("loss", index / max_index)
+            if (
+                not isinstance(loss, (int, float))
+                or isinstance(loss, bool)
+                or not math.isfinite(float(loss))
+                or not 0.0 <= float(loss) <= 1.0
+                or float(loss) < previous_loss
+            ):
+                raise ValueError(
+                    "hierarchy losses must be finite, bounded, and non-decreasing"
+                )
+            if index == 0 and float(loss) != 0.0:
+                raise ValueError("hierarchy identity loss must be zero")
+            if index > 0 and float(loss) <= 0.0:
+                raise ValueError("hierarchy coarsening loss must be positive")
+            previous_loss = float(loss)
+        _user_hierarchy(field, raw_levels)
+
+
+def _preflight_structured_paths(
+    *,
+    inputs: Sequence[tuple[Path, str, frozenset[str]]],
+    outputs: Sequence[tuple[Path, str, frozenset[str]]],
+    overwrite: bool,
+) -> None:
+    all_paths = [path for path, _label, _suffixes in (*inputs, *outputs)]
+    _ensure_resolved_paths_distinct(all_paths)
+    for path, label, suffixes in inputs:
+        _validate_structured_input(path, label=label, suffixes=suffixes)
+    for path, label, suffixes in outputs:
+        _validate_structured_output(
+            path,
+            label=label,
+            suffixes=suffixes,
+            overwrite=overwrite,
+        )
+
+
+def _ensure_resolved_paths_distinct(paths: Sequence[Path]) -> None:
+    try:
+        resolved = [path.resolve(strict=False) for path in paths]
+    except (OSError, RuntimeError) as exc:
+        raise CliError(
+            "An input or output path could not be resolved.",
+            code="invalid_path",
+            exit_code=EXIT_USAGE,
+        ) from exc
+    if len(set(resolved)) != len(resolved):
+        raise CliError(
+            "All input and output paths must be distinct after resolving symlinks.",
+            code="path_alias",
+            exit_code=EXIT_USAGE,
+        )
+    for index, path in enumerate(paths):
+        if not _path_entry_exists(path):
+            continue
+        for other in paths[index + 1 :]:
+            if not _path_entry_exists(other):
+                continue
+            try:
+                aliases = os.path.samefile(path, other)
+            except OSError:
+                aliases = False
+            if aliases:
+                raise CliError(
+                    "All input and output paths must be distinct after resolving "
+                    "symlinks.",
+                    code="path_alias",
+                    exit_code=EXIT_USAGE,
+                )
+
+
+def _validate_structured_input(
+    path: Path,
+    *,
+    label: str,
+    suffixes: frozenset[str],
+) -> None:
+    _validate_structured_suffix(path, label=label, suffixes=suffixes)
+    if not path.exists() or not path.is_file():
+        raise CliError(
+            f"{label} must be an existing file.",
+            code="input_path_invalid",
+            exit_code=EXIT_USAGE,
+        )
+
+
+def _validate_structured_output(
+    path: Path,
+    *,
+    label: str,
+    suffixes: frozenset[str],
+    overwrite: bool,
+) -> None:
+    _validate_structured_suffix(path, label=label, suffixes=suffixes)
+    if not path.parent.exists() or not path.parent.is_dir():
+        raise CliError(
+            f"{label} directory must already exist.",
+            code="output_directory_invalid",
+            exit_code=EXIT_USAGE,
+        )
+    if path.exists() and path.is_dir():
+        raise CliError(
+            f"{label} must be a file path.",
+            code="output_path_invalid",
+            exit_code=EXIT_USAGE,
+        )
+    if _path_entry_exists(path) and not overwrite:
+        raise CliError(
+            f"{label} already exists; use --overwrite to replace it.",
+            code="output_exists",
+            exit_code=EXIT_USAGE,
+        )
+
+
+def _validate_structured_suffix(
+    path: Path,
+    *,
+    label: str,
+    suffixes: frozenset[str],
+) -> None:
+    if path.suffix.lower() not in suffixes:
+        raise CliError(
+            f"{label} has an unsupported file suffix.",
+            code="unsupported_suffix",
+            exit_code=EXIT_USAGE,
+        )
+
+
+def _path_entry_exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+
+def _publish_release_outputs(
+    publications: Sequence[tuple[Path, Path]],
+    *,
+    overwrite: bool,
+) -> None:
+    targets = [target for _staged, target in publications]
+    had_original = {target for target in targets if _path_entry_exists(target)}
+    if had_original and not overwrite:
+        raise FileExistsError("Release output appeared during publication")
+    backups = {
+        target: _temporary_sibling_path(target)
+        for target in targets
+        if target in had_original
+    }
+
+    try:
+        for target, backup in backups.items():
+            os.replace(target, backup)
+        for staged, target in publications:
+            os.replace(staged, target)
+    except Exception as exc:
+        rollback_errors = _rollback_release_outputs(
+            targets,
+            had_original=had_original,
+            backups=backups,
+        )
+        if rollback_errors:
+            raise OSError("Release output rollback failed") from exc
+        raise
+    else:
+        cleanup_errors: list[OSError] = []
+        for backup in backups.values():
+            try:
+                _unlink_path(backup, missing_ok=True)
+            except OSError as exc:
+                cleanup_errors.append(exc)
+        if cleanup_errors:
+            raise _ReleasePublicationCleanupError(
+                "published release backup cleanup failed"
+            )
+
+
+def _rollback_release_outputs(
+    targets: Sequence[Path],
+    *,
+    had_original: set[Path],
+    backups: Mapping[Path, Path],
+) -> list[OSError]:
+    errors: list[OSError] = []
+    for target in reversed(targets):
+        backup = backups.get(target)
+        try:
+            if backup is not None and _path_entry_exists(backup):
+                if _path_entry_exists(target):
+                    _unlink_path(target, missing_ok=False)
+                os.rename(backup, target)
+            elif target not in had_original and _path_entry_exists(target):
+                _unlink_path(target, missing_ok=False)
+        except OSError as exc:
+            errors.append(exc)
+    return errors
+
+
+def _temporary_sibling_path(path: Path) -> Path:
+    with tempfile.NamedTemporaryFile(
+        dir=path.parent,
+        prefix=f".{path.stem}.",
+        suffix=path.suffix,
+        delete=False,
+    ) as handle:
+        temporary = Path(handle.name)
+    _unlink_path(temporary, missing_ok=False)
+    return temporary
+
+
+def _unlink_path(path: Path, *, missing_ok: bool) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        if not missing_ok:
+            raise
+
+
+def _write_safe_text(path: Path, text: str, *, overwrite: bool) -> None:
+    if path.exists() and not overwrite:
+        raise FileExistsError(f"Output already exists: {path}")
+    if not path.parent.exists():
+        raise FileNotFoundError(f"Output directory does not exist: {path.parent}")
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(text)
+        os.chmod(temporary_path, 0o600)
+        os.replace(temporary_path, path)
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def _read_text_input(value: str) -> str:
