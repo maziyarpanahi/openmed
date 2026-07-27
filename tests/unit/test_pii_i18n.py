@@ -155,6 +155,7 @@ class TestConstants:
             "da",
             "no",
             "sw",
+            "ta",
             "zu",
             "xh",
             "zh",
