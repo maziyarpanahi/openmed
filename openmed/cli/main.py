@@ -1856,7 +1856,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     clinical_parser.add_argument(
         "--task",
-        choices=["ner", "linking", "assertion", "relation"],
+        choices=["ner", "relation"],
         default="ner",
         help="Clinical benchmark task view to load.",
     )
@@ -3954,12 +3954,6 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
     try:
         suite = str(args.suite)
         task = str(args.task)
-        if task in {"linking", "assertion"}:
-            raise CliError(
-                f"Clinical benchmark task '{task}' is not implemented yet.",
-                code="not_implemented",
-                exit_code=EXIT_ERROR,
-            )
         load_kwargs: dict[str, Any] = {
             "task": task,
             "path": args.input,
