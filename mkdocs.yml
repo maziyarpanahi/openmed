@@ -92,6 +92,7 @@ nav:
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
@@ -114,6 +115,7 @@ nav:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
+      - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md

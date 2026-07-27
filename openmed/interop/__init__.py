@@ -125,6 +125,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="scrubadub",
         description="scrubadub Filth span adapter",
     ),
+    "spark": AdapterSpec(
+        name="spark",
+        module="openmed.interop.spark_udf",
+        extra="spark",
+        description="PySpark pandas_udf for batch column de-identification",
+    ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",
         module="openmed.interop.gliner_biomed",
