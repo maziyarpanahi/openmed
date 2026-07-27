@@ -98,6 +98,14 @@ from .coreference import (
     SpanChainKey,
     resolve_coreference,
 )
+from .document_linking import (
+    DOCUMENT_LINKING_ADVISORY,
+    DocumentCluster,
+    DocumentEdge,
+    DocumentProvenance,
+    EdgeKind,
+    link_documents,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -405,6 +413,12 @@ __all__ = [
     "CoreferenceChain",
     "SpanChainKey",
     "resolve_coreference",
+    "DOCUMENT_LINKING_ADVISORY",
+    "DocumentCluster",
+    "DocumentEdge",
+    "DocumentProvenance",
+    "EdgeKind",
+    "link_documents",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",

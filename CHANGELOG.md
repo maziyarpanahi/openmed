@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, fully local longitudinal document linking with
+  MinHash-based near-duplicate clustering, directional amendment edges,
+  retained superseded documents, and non-text source/target provenance on
+  every relationship (#1835).
 - Added a fail-closed, signed release-readiness gate that verifies signed model
   gate evidence, release documentation, a machine-readable API compatibility
   report, the public clinical disclaimer, and workflow-produced golden-suite
