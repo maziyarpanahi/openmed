@@ -34,7 +34,7 @@ mtandao wako.</p>
 </p>
 
 <p>
-  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 27 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 32 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -101,6 +101,18 @@ ufunguo wa API wala ombi la mtandao.
 
 ---
 
+## Unajenga kwa wakala?
+
+Anza na [mwongozo wa matumizi ya wakala](docs/agent-usage.md), au pakia
+faharasa ya nyaraka ya [llms.txt](https://openmed.life/docs/llms.txt). Kwa
+miingiliano ya ndani inayoweza kuitwa, tumia [seva ya MCP](docs/mcp-clients.md),
+[sajili ya zana](openmed/mcp/tool_registry.py), au
+[kiolesura cha mstari wa amri](docs/agent-usage.md#command-line-interface).
+Taratibu tayari za zana mbalimbali zipo kwenye
+[orodha ya ujuzi ya hazina](skills/README.md).
+
+---
+
 ## Kwa nini OpenMed?
 
 |                                      |          **OpenMed**           | API za matibabu za wingu |
@@ -109,7 +121,7 @@ ufunguo wa API wala ombi la mtandao.
 | Data ya mgonjwa hutoka mtandao wako  |          **Kamwe**             | Hutumwa kwa mtoa huduma  |
 | Gharama                              | Bure na chanzo huria            | Malipo kwa kila ombi     |
 | Modeli maalumu za matibabu           |            2,000+              | Chache                    |
-| Lugha za PII zinazotumia modeli      |              27                | Hutofautiana              |
+| Lugha za PII zinazotumia modeli      |              29                | Hutofautiana              |
 | Nje ya mtandao/air-gapped            |               ✅               |            ❌            |
 | Uharakishaji wa Apple Silicon (MLX)  |               ✅               | Haitumiki                 |
 | Programu asilia za iOS/macOS         | ✅ kupitia OpenMedKit           |            ❌            |
@@ -427,17 +439,17 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 29 zinazoungwa mkono)
+## PII ya lugha nyingi (lugha 34 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 29 ya lugha za PII**:
-`am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh` na `zu`, pamoja na checkpoint
-600+ za PII. Uelekezaji wa Kirusi na Kichina kwa sasa hutumia vishikilia nafasi
-vya modeli chaguo-msingi ya lugha nyingi vilivyoelezwa kwenye nyaraka, huku
-uzito maalumu wa modeli ukiwa tofauti. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia tisa za ziada (`as`, `bn`, `gu`, `kn`,
-`ml`, `mr`, `or`, `pa` na `ta`) na inaweza pia kuhudumia Kihindi na Kitelugu.
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 34 ya lugha za PII**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
+`ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
+`th`, `tr`, `uk`, `xh`, `zh` na `zu`, pamoja na checkpoint
+600+ za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
+chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
+na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
+iliyosanidiwa na mtumiaji hukubali njia nne za ziada (`gu`, `kn`, `ml`
+na `pa`) na inaweza pia kuhudumia Kiassam, Kibengali, Kihindi, Kimarathi, Kiodia, Kitamil na Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,

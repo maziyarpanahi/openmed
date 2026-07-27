@@ -98,6 +98,14 @@ from .coreference import (
     SpanChainKey,
     resolve_coreference,
 )
+from .document_linking import (
+    DOCUMENT_LINKING_ADVISORY,
+    DocumentCluster,
+    DocumentEdge,
+    DocumentProvenance,
+    EdgeKind,
+    link_documents,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -291,6 +299,14 @@ from .timeline import (
     evaluate_timeline_gold,
     resolve_timeline,
 )
+from .trend import (
+    TREND_ADVISORY,
+    MeasurementTrend,
+    SerialMeasurementPoint,
+    TrendDirection,
+    build_measurement_trends,
+    extract_measurement_trends,
+)
 from .units import (
     MEASUREMENT_NORMALIZATION_ADVISORY,
     ROUND_TRIP_ABS_TOLERANCE,
@@ -405,6 +421,12 @@ __all__ = [
     "CoreferenceChain",
     "SpanChainKey",
     "resolve_coreference",
+    "DOCUMENT_LINKING_ADVISORY",
+    "DocumentCluster",
+    "DocumentEdge",
+    "DocumentProvenance",
+    "EdgeKind",
+    "link_documents",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",
@@ -444,6 +466,12 @@ __all__ = [
     "TimelineEvaluationResult",
     "evaluate_timeline_gold",
     "resolve_timeline",
+    "TREND_ADVISORY",
+    "TrendDirection",
+    "SerialMeasurementPoint",
+    "MeasurementTrend",
+    "build_measurement_trends",
+    "extract_measurement_trends",
     "ConversionStatus",
     "MeasurementNormalization",
     "MEASUREMENT_NORMALIZATION_ADVISORY",

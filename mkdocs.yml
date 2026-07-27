@@ -23,6 +23,7 @@ nav:
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
+      - Building with an Agent: agent-usage.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
@@ -36,6 +37,7 @@ nav:
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
+      - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
@@ -59,6 +61,7 @@ nav:
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Low-resource Benchmark: benchmarks/low-resource.md
+      - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
@@ -92,10 +95,12 @@ nav:
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
+      - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
       - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
       - Africa Attestation Review Template: compliance/templates/africa-data-residency-attestation.md
@@ -114,6 +119,7 @@ nav:
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
+      - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
@@ -258,6 +264,7 @@ plugins:
           - api/deidentification.md: De-identification API reference
           - output-formatting.md: Output formats and agent-facing tool schemas
         Agents and tool surfaces:
+          - agent-usage.md: Consumer API map, privacy invariants, and repository skills
           - mcp-clients.md: MCP client setup and transport guidance
           - rest-service.md: REST service endpoints and deployment
           - rest-recipes.md: Copy-ready REST API recipes

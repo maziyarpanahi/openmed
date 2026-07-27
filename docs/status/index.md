@@ -15,7 +15,7 @@ baseline store, and latest BenchmarkReport inputs.
 | `PII` | `Base` | `mlx-fp` | `mlx-fp` | 90 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `PII` | `Base` | `pytorch` | `pytorch` | 218 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `PII` | `Large` | `mlx-fp` | `mlx-fp` | 132 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
-| `PII` | `Large` | `pytorch` | `pytorch` | 307 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
+| `PII` | `Large` | `pytorch` | `pytorch` | 308 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `PII` | `n/a` | `mlx-8bit` | `mlx-8bit` | 3 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `PII` | `n/a` | `mlx-fp` | `mlx-fp` | 4 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `PII` | `n/a` | `pytorch` | `pytorch` | 16 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |

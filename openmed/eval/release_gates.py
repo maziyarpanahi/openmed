@@ -59,6 +59,15 @@ QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
 CROSS_SCRIPT_GATE = "cross_script"
+I18N_THROUGHPUT_GATE = "i18n_throughput"
+I18N_THROUGHPUT_REGRESSION_THRESHOLD = 0.20
+I18N_THROUGHPUT_BASELINE_FAMILY = "i18n-throughput"
+I18N_THROUGHPUT_BASELINE_FORMAT = "pattern-only"
+I18N_THROUGHPUT_LANGUAGES = ("zh", "hi", "ta")
+I18N_THROUGHPUT_METRICS = (
+    "segmentation_chars_per_second",
+    "deidentify_spans_per_second",
+)
 
 G1A_V16_RECALL_FLOOR = 0.990
 G1A_V20_RECALL_FLOOR = 0.995
@@ -72,6 +81,12 @@ G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
+PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
+    "as": 0.0,
+    "mr": 0.0,
+    "or": 0.0,
+    "ta": 0.0,
+}
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_SIGNING_KEY = "openmed-release-gate-local-key"
@@ -270,6 +285,122 @@ class GateCheck:
                 else None
             ),
         )
+
+
+def evaluate_i18n_throughput_gate(
+    report: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+) -> GateCheck:
+    """Compare zh/hi/ta steady-state throughput with committed baselines.
+
+    Cold-start metrics remain visible in the benchmark report but are not gated
+    because process and filesystem cache state makes them unsuitable for a
+    stable release threshold.
+    """
+
+    failures: list[str] = []
+    violations: dict[str, Any] = {}
+    try:
+        baseline_store.validate_baseline_store(baseline)
+    except Exception as exc:
+        return GateCheck(
+            I18N_THROUGHPUT_GATE,
+            False,
+            reason=f"invalid throughput baseline store: {exc}",
+        )
+
+    if report.get("artifact_type") != "openmed.eval.i18n_throughput":
+        return GateCheck(
+            I18N_THROUGHPUT_GATE,
+            False,
+            reason="candidate is not an i18n throughput report",
+        )
+    languages = report.get("languages")
+    if not isinstance(languages, Mapping):
+        return GateCheck(
+            I18N_THROUGHPUT_GATE,
+            False,
+            reason="candidate throughput report has no languages object",
+        )
+
+    for language in I18N_THROUGHPUT_LANGUAGES:
+        observed_metrics = languages.get(language)
+        if not isinstance(observed_metrics, Mapping):
+            failures.append(f"{language}.languages (missing)")
+            continue
+        key = baseline_store.baseline_key(
+            I18N_THROUGHPUT_BASELINE_FAMILY,
+            language,
+            I18N_THROUGHPUT_BASELINE_FORMAT,
+        )
+        entry = baseline["entries"].get(key)
+        if not isinstance(entry, Mapping):
+            failures.append(f"{language}.baseline (missing)")
+            continue
+        entry_metadata = entry.get("metadata")
+        threshold = (
+            entry_metadata.get("regression_threshold")
+            if isinstance(entry_metadata, Mapping)
+            else None
+        )
+        if (
+            not isinstance(threshold, (int, float))
+            or isinstance(threshold, bool)
+            or not math.isclose(
+                float(threshold),
+                I18N_THROUGHPUT_REGRESSION_THRESHOLD,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+        ):
+            failures.append(
+                f"{language}.regression_threshold "
+                f"(expected {I18N_THROUGHPUT_REGRESSION_THRESHOLD:.2f})"
+            )
+            continue
+
+        baseline_metrics = entry.get("metrics")
+        if not isinstance(baseline_metrics, Mapping):
+            failures.append(f"{language}.baseline.metrics (missing)")
+            continue
+        for metric in I18N_THROUGHPUT_METRICS:
+            baseline_value = _positive_finite_number(baseline_metrics.get(metric))
+            observed_value = _positive_finite_number(observed_metrics.get(metric))
+            metric_key = f"{language}.{metric}"
+            if baseline_value is None:
+                failures.append(f"{metric_key} (invalid baseline)")
+                continue
+            if observed_value is None:
+                failures.append(f"{metric_key} (invalid candidate)")
+                continue
+
+            minimum = baseline_value * (1.0 - I18N_THROUGHPUT_REGRESSION_THRESHOLD)
+            if observed_value < minimum:
+                drop = (baseline_value - observed_value) / baseline_value
+                failures.append(
+                    f"{metric_key} observed {observed_value:.3f}, minimum {minimum:.3f}"
+                )
+                violations[metric_key] = {
+                    "baseline": baseline_value,
+                    "observed": observed_value,
+                    "minimum": minimum,
+                    "drop_fraction": drop,
+                    "regression_threshold": I18N_THROUGHPUT_REGRESSION_THRESHOLD,
+                }
+
+    return GateCheck(
+        I18N_THROUGHPUT_GATE,
+        not failures,
+        reason="ok"
+        if not failures
+        else "throughput regression: " + "; ".join(failures),
+        details={
+            "languages": list(I18N_THROUGHPUT_LANGUAGES),
+            "metrics": list(I18N_THROUGHPUT_METRICS),
+            "regression_threshold": I18N_THROUGHPUT_REGRESSION_THRESHOLD,
+            "violations": violations,
+        },
+    )
 
 
 @dataclass
@@ -628,6 +759,7 @@ class ReleaseGate:
                 target_leakage=target_leakage,
             )
         )
+        checks.append(_per_language_residual_leakage_check(metrics, metadata))
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
@@ -2295,6 +2427,60 @@ def _g7_check(
     )
 
 
+def _per_language_residual_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Enforce language-pack-specific leakage ceilings when evidence is present."""
+
+    observed: dict[str, float] = {}
+    denominators: dict[str, int] = {}
+    denominator_languages: set[str] = set()
+    for payload in _leakage_payloads(metrics, metadata):
+        for language, raw_rate in _mapping(payload.get("by_language")).items():
+            rate = _optional_float(raw_rate)
+            if rate is not None:
+                key = str(language)
+                observed[key] = max(observed.get(key, 0.0), rate)
+        totals = _mapping(payload.get("total_chars_by_language"))
+        denominator_languages.update(str(language) for language in totals)
+        for language, raw_total in totals.items():
+            total = _optional_int(raw_total)
+            if total is not None:
+                key = str(language)
+                denominators[key] = max(denominators.get(key, 0), total)
+
+    evaluated = {
+        language: observed[language]
+        for language in PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS
+        if language in observed
+        and (language not in denominator_languages or denominators.get(language, 0) > 0)
+    }
+    violations = {
+        language: {
+            "observed": rate,
+            "limit": PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS[language],
+            "total_chars": denominators.get(language),
+        }
+        for language, rate in sorted(evaluated.items())
+        if rate > PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS[language]
+    }
+    return GateCheck(
+        "per_language_residual_leakage",
+        not violations,
+        reason=(
+            "not applicable"
+            if not evaluated
+            else ("ok" if not violations else "per-language leakage ceiling exceeded")
+        ),
+        details={
+            "ceilings": dict(PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS),
+            "evaluated": evaluated,
+            "violations": violations,
+        },
+    )
+
+
 def _membership_leakage_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -3525,10 +3711,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "benchmark report and fail closed on any gate failure."
         )
     )
-    parser.add_argument(
+    candidate_group = parser.add_mutually_exclusive_group(required=True)
+    candidate_group.add_argument(
         "--candidate",
-        required=True,
         help="Path to a candidate BenchmarkReport JSON payload.",
+    )
+    candidate_group.add_argument(
+        "--throughput-candidate",
+        help="Path to a zh/hi/ta throughput benchmark JSON payload.",
     )
     parser.add_argument(
         "--baseline",
@@ -3588,6 +3778,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
+    if args.throughput_candidate:
+        return _run_i18n_throughput_gate_cli(args)
+
     candidate_path = Path(args.candidate)
     if not candidate_path.is_file():
         print(
@@ -3636,12 +3829,54 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _run_i18n_throughput_gate_cli(args: argparse.Namespace) -> int:
+    candidate_path = Path(args.throughput_candidate)
+    if not candidate_path.is_file():
+        print(
+            f"Throughput candidate report not found: {candidate_path}.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        candidate = _read_json_file(candidate_path)
+        baseline = baseline_store.load_baseline_store(args.baseline_store)
+        check = evaluate_i18n_throughput_gate(candidate, baseline)
+    except Exception as exc:
+        print(f"throughput gate evaluation failed: {exc}", file=sys.stderr)
+        return 2
+
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "openmed.eval.i18n_throughput_gate",
+        "decision": RELEASABLE if check.passed else QUARANTINED,
+        "gate_result": check.to_dict(),
+    }
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(payload, sort_keys=True))
+    return 0 if check.passed else 1
+
+
 def _read_json_file(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     if not isinstance(payload, Mapping):
         raise ValueError(f"{path} must contain a JSON object")
     return dict(payload)
+
+
+def _positive_finite_number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if not math.isfinite(number) or number <= 0.0:
+        return None
+    return number
 
 
 def _open_or_update_tracking_issue(

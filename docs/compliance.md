@@ -33,6 +33,9 @@ issue, and without including real patient data.
 - [Policy profiles](https://github.com/maziyarpanahi/openmed/tree/master/openmed/core/policies)
   capture the canonical policy literals and default action posture used by the
   runtime.
+- [Pan-African Malabo Convention baseline](compliance/africa-malabo-baseline.md)
+  maps Article 14(1) sensitive-data categories to conservative, non-`keep`
+  canonical-label actions while preserving national-law precedence.
 
 ## Deployment Templates
 
@@ -59,4 +62,5 @@ Use these exact literals in docs, examples, and deployment configuration:
 | `hipaa_safe_harbor` | Redact all 18 HIPAA identifiers, no exceptions. | `remove`/`mask` | High-recall union; safety sweep mandatory; residual-risk ~0. |
 | `hipaa_expert_review_assist` | Flag + surrogate, leave clinical content; produce expert-review audit. | `replace` surrogates | Balanced, with reviewer escalation on low confidence. |
 | `gdpr_pseudonymization` | Reversible pseudonyms, mapping retained under key. | `replace` + `reversible_id` | Balanced; `keep_mapping=True`; HMAC reversible IDs. |
+| `africa_malabo_baseline` | Conservative Article 14(1) sensitive-data baseline; national law prevails where stricter. | `mask` | High-recall union; safety sweep mandatory; no replacement mapping. |
 | `india_health_id` | Fully redact ABHA, ABHA Address, context-confirmed UPI, and ration-card identifiers in clinical records. | `mask` | High-recall union; safety sweep mandatory; raw identifier logging forbidden. |
