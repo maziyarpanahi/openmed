@@ -268,12 +268,13 @@ agent-tool, and release-evidence contracts for the v2 line.
   fail-closed validation paths.
 - Required ONNX 1.21+ for ONNX-producing optional routes, refreshed the
   universal dependency lock to the fixed ONNX line, and excluded generated
-  SBOM, audit, and vulnerability reports from Docker build contexts so local
-  evidence cannot contaminate service images or image scans.
+  SBOM, audit, vulnerability, and JavaScript dependency artifacts from Docker
+  build contexts so local evidence and development dependencies cannot
+  contaminate service images or image scans.
 
 ### Complete commit and pull-request inventory
 
-The audited `1ab2eca4cc89..063dee8df7fa` range contains 516 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
+The audited `1ab2eca4cc89..7c4e407a9548` range contains 519 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
 
 The final changelog-only commit that records this ledger is represented by this inventory section itself; a commit cannot contain its own content-derived SHA.
 
@@ -999,6 +1000,9 @@ The final changelog-only commit that records this ledger is represented by this 
 - `4359141365d3` docs: record secure optional dependency routes
 - `59b18a4b63b3` fix: exclude generated evidence from images
 - `063dee8df7fa` test: protect image build contexts
+- `f091ef635687` docs: complete the v2 release inventory
+- `cd38b4647215` fix: exclude JavaScript dependencies from images
+- `7c4e407a9548` test: keep JavaScript dependencies out of images
 
 </details>
 
