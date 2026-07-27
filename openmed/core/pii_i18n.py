@@ -62,8 +62,8 @@ from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 # ---------------------------------------------------------------------------
 
 # Naamapadam languages supported by the optional Indic NER adapter. Existing
-# Hindi and Telugu defaults remain available; the shared CoNLL adapter is an
-# additional opt-in model family for all 11 languages.
+# Bengali, Hindi, Tamil, and Telugu defaults remain available; the shared CoNLL
+# adapter is an additional opt-in model family for all 11 languages.
 INDIC_NER_LANGUAGES = frozenset(
     {"as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
 )
@@ -76,7 +76,7 @@ OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 # resolve explicitly configured weights without advertising them as built-in
 # language packs.
 DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
-for _language in INDIC_NER_LANGUAGES - {"hi", "te"}:
+for _language in INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}:
     DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -9417,6 +9417,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *_MARATHI_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
+    "bn": [],
     "te": [
         *_TELUGU_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,

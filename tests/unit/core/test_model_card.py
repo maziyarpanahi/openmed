@@ -5,15 +5,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.__about__ import __version__
 from openmed.core.hf_publish import (
     DEFAULT_MODEL_CARD_COMMIT_MESSAGE,
     publish_model_card,
 )
+from openmed.core.manifest_schema import SCRIPT_COVERAGE_TARGETS
 from openmed.core.model_card import render_model_card, write_model_card
+from openmed.core.model_registry import load_manifest_rows
 
 ROOT = Path(__file__).resolve().parents[3]
 GOLDEN = ROOT / "tests" / "fixtures" / "model_card_expected.md"
+V2_GOLDEN = ROOT / "tests" / "fixtures" / "model_card_v2_expected.md"
 CONTRIBUTOR_FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -43,8 +48,97 @@ def _fixture_row():
     }
 
 
+def _v2_fixture_row():
+    script_coverage = {
+        script: {
+            "unk_rate": 0.0,
+            "byte_fallback_rate": 0.0,
+            "tokens_per_grapheme": 0.75,
+            "verdict": (
+                "supported"
+                if script in {"han_simplified", "han_traditional"}
+                else "unclaimed"
+            ),
+        }
+        for script in SCRIPT_COVERAGE_TARGETS
+    }
+    return {
+        **_fixture_row(),
+        "repo_id": "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
+        "languages": ["zh"],
+        "tier": "Large",
+        "param_count": 560_000_000,
+        "architecture": "xlm-roberta",
+        "base_model": "FacebookAI/xlm-roberta-large",
+        "formats": ["pytorch"],
+        "benchmark": {
+            "dataset": "AI4Privacy + Synthetic Chinese PII",
+            "micro_f1": 0.7589,
+            "recall": 0.7517,
+        },
+        "download_mb": 2252.843,
+        "download_sizes": {
+            "safetensors": 2235.723,
+            "mlx": 2235.717,
+            "coreml": None,
+            "onnx": 1330.432,
+        },
+        "script_eval": {
+            "han_simplified": {
+                "dataset": "AI4Privacy + Synthetic Chinese PII",
+                "recall": 0.7517,
+                "leakage_floor": None,
+            },
+            "han_traditional": {
+                "dataset": None,
+                "recall": None,
+                "leakage_floor": None,
+            },
+        },
+        "script_coverage": script_coverage,
+    }
+
+
 def test_render_model_card_matches_golden_fixture():
     assert render_model_card(_fixture_row()) == GOLDEN.read_text(encoding="utf-8")
+
+
+def test_render_v2_model_card_matches_golden_fixture():
+    assert render_model_card(_v2_fixture_row()) == V2_GOLDEN.read_text(encoding="utf-8")
+
+
+def test_render_v2_model_card_contains_release_decision_sections():
+    card = render_model_card(_v2_fixture_row())
+
+    assert "## Per-Script Evaluation" in card
+    assert "| Han Simplified | AI4Privacy + Synthetic Chinese PII | 0.7517 |" in card
+    assert "## Download Size by Format" in card
+    assert "| Safetensors | 2,235.723 MB |" in card
+    assert "| Core ML | Not published |" in card
+    assert "## Tokenizer Script Coverage" in card
+    assert "| Han Traditional | 0.00% | 0.00% | 0.7500 | supported |" in card
+    assert "## License" in card
+    assert "Declared license: `apache-2.0`." in card
+
+
+@pytest.mark.parametrize(
+    "repo_id",
+    (
+        "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
+        "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
+        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+    ),
+)
+def test_committed_v2_entries_render_release_decision_sections(repo_id):
+    row = next(row for row in load_manifest_rows() if row["repo_id"] == repo_id)
+
+    card = render_model_card(row)
+
+    assert "## Per-Script Evaluation" in card
+    assert "## Download Size by Format" in card
+    assert "## Tokenizer Script Coverage" in card
+    assert "## License" in card
+    assert "Declared license: `apache-2.0`." in card
 
 
 def test_render_model_card_contains_manifest_release_fields():

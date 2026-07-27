@@ -24,7 +24,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until a dedicated
 # PII model is published. They must not be represented as trained/model-backed
 # languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru", "zh"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -127,6 +127,12 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ),
     ),
     _pack(
+        "bn",
+        "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
+        "bn_BD",
+        ("Bengali",),
+    ),
+    _pack(
         "te",
         "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
         "en_IN",
@@ -135,7 +141,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
     ),
     _pack(
         "ta",
-        "OpenMed/privacy-filter-multilingual",
+        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
         "ta_IN",
         ("Tamil",),
         national_id_provider=("ta_IN", "aadhaar"),
@@ -177,7 +183,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
     LanguagePack(
         code="zh",
         scripts=("Han",),
-        default_model="OpenMed/privacy-filter-multilingual",
+        default_model="OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
         segmenter_id="jieba",
         recognizers=("builtin-patterns", "model"),
         surrogate_locale="zh_CN",
@@ -336,7 +342,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "as",
-    "bn",
     "gu",
     "kn",
     "ml",
@@ -413,6 +418,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "mr",
+    "bn",
     "te",
     "ta",
     "am",
