@@ -256,6 +256,10 @@ agent-tool, and release-evidence contracts for the v2 line.
 - Raised the optional spaCy integration to 3.8.9+, isolated its NumPy 1.x ABI
   route from incompatible ONNX combinations, and resolved factory type
   annotations before spaCy's Pydantic-backed config validation.
+- Stabilized the long-input and arbitrary-text de-identification fuzz
+  properties across slower CI platforms by keeping their deterministic example
+  budgets and safety assertions while leaving performance enforcement to the
+  dedicated latency and throughput gates.
 
 ### Security
 
@@ -274,7 +278,7 @@ agent-tool, and release-evidence contracts for the v2 line.
 
 ### Complete commit and pull-request inventory
 
-The audited `1ab2eca4cc89..7c4e407a9548` range contains 519 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
+The audited `1ab2eca4cc89..fa4c4ad2a190` range contains 521 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
 
 The final changelog-only commit that records this ledger is represented by this inventory section itself; a commit cannot contain its own content-derived SHA.
 
@@ -1003,6 +1007,8 @@ The final changelog-only commit that records this ledger is represented by this 
 - `f091ef635687` docs: complete the v2 release inventory
 - `cd38b4647215` fix: exclude JavaScript dependencies from images
 - `7c4e407a9548` test: keep JavaScript dependencies out of images
+- `0402798c8713` docs: finalize the v2 release inventory
+- `fa4c4ad2a190` test: remove flaky fuzz timing assertions
 
 </details>
 
