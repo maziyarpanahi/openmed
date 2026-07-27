@@ -528,14 +528,14 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (32 समर्थित भाषाएँ)
+## बहुभाषी PII (33 समर्थित भाषाएँ)
 
-निष्कर्षण और डी-आइडेंटिफिकेशन **32 समर्थित PII भाषा codes** में उपलब्ध हैं:
-`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **600+ PII checkpoints** के साथ।
+निष्कर्षण और डी-आइडेंटिफिकेशन **33 समर्थित PII भाषा codes** में उपलब्ध हैं:
+`am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **600+ PII checkpoints** के साथ।
 Russian routing अभी दस्तावेज़ित multilingual default-model placeholder का उपयोग
 करती है। Bengali, Chinese और Tamil के dedicated registry entries हैं।
-एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family छह अतिरिक्त routes
-(`as`, `gu`, `kn`, `ml`, `or` और `pa`) स्वीकार करती है और Bengali, Hindi,
+एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family पाँच अतिरिक्त routes
+(`as`, `gu`, `kn`, `ml` और `pa`) स्वीकार करती है और Bengali, Hindi,
 Marathi, Tamil तथा Telugu को भी सेवा दे सकती है। `OPENMED_INDIC_NER_MODEL` सेट करें; OpenMed इन
 weights को न तो bundle करता है और न अपने आप चुनता है।
 OpenMed में Polish, Latvian, Slovak, Malay, Filipino और Finnish जैसे अतिरिक्त ID-only locales के लिए validator-समर्थित national-ID coverage भी शामिल है।
