@@ -22,6 +22,11 @@ dist/
 build/
 site/
 docs/site/
+sbom.cdx.json
+image-sbom.cdx.json
+image-sbom.cdx.json.sha256
+pip-audit-report.json
+vulnerability-reports/
 
 tests/
 tmp/
