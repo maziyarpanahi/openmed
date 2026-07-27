@@ -101,6 +101,18 @@ ufunguo wa API wala ombi la mtandao.
 
 ---
 
+## Unajenga kwa wakala?
+
+Anza na [mwongozo wa matumizi ya wakala](docs/agent-usage.md), au pakia
+faharasa ya nyaraka ya [llms.txt](https://openmed.life/docs/llms.txt). Kwa
+miingiliano ya ndani inayoweza kuitwa, tumia [seva ya MCP](docs/mcp-clients.md),
+[sajili ya zana](openmed/mcp/tool_registry.py), au
+[kiolesura cha mstari wa amri](docs/agent-usage.md#command-line-interface).
+Taratibu tayari za zana mbalimbali zipo kwenye
+[orodha ya ujuzi ya hazina](skills/README.md).
+
+---
+
 ## Kwa nini OpenMed?
 
 |                                      |          **OpenMed**           | API za matibabu za wingu |

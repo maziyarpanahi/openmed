@@ -97,6 +97,17 @@ A state-of-the-art clinical NER model running locally: no API key, no network ca
 
 ---
 
+## Building with an agent?
+
+Start with the [consumer agent-usage guide](docs/agent-usage.md), or load the
+curated [llms.txt](https://openmed.life/docs/llms.txt) documentation index.
+For callable local interfaces, use the [MCP server](docs/mcp-clients.md), the
+typed [tool registry](openmed/mcp/tool_registry.py), or the
+[command-line interface](docs/agent-usage.md#command-line-interface). Ready-made
+cross-tool procedures live in the [repository skills catalog](skills/README.md).
+
+---
+
 ## Why OpenMed?
 
 |                                       |       **OpenMed**        |   Cloud medical APIs   |
