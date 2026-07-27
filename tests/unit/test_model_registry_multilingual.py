@@ -20,7 +20,7 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
 )
 
-MULTILINGUAL_DEFAULT_LANGUAGES = {"he", "id", "mr", "or", "ro", "th"}
+MULTILINGUAL_DEFAULT_LANGUAGES = {"as", "he", "id", "mr", "or", "ro", "th"}
 V2_REGISTRY_LANGUAGES = {"bn", "ta", "zh"}
 OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - SUPPORTED_LANGUAGES
 

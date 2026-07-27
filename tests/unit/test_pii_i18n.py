@@ -132,6 +132,7 @@ class TestConstants:
     def test_supported_languages(self):
         assert SUPPORTED_LANGUAGES == {
             "am",
+            "as",
             "bn",
             "en",
             "fr",
@@ -231,6 +232,7 @@ class TestConstants:
 
     def test_default_pii_models_naming(self):
         assert DEFAULT_PII_MODELS["am"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["as"] == "OpenMed/privacy-filter-multilingual"
         assert "French" in DEFAULT_PII_MODELS["fr"]
         assert "German" in DEFAULT_PII_MODELS["de"]
         assert "Italian" in DEFAULT_PII_MODELS["it"]

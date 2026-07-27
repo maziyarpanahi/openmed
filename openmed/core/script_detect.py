@@ -1020,6 +1020,59 @@ def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
 
 
+_ASSAMESE_EXCLUSIVE_LETTERS = frozenset({"\u09f0", "\u09f1"})
+_ASSAMESE_MONTH_CUES = (
+    "জানুৱাৰী",
+    "ফেব্ৰুৱাৰী",
+    "মাৰ্চ",
+    "এপ্ৰিল",
+    "আগষ্ট",
+    "ছেপ্টেম্বৰ",
+    "অক্টোবৰ",
+    "নৱেম্বৰ",
+    "ডিচেম্বৰ",
+)
+
+
+def assamese_language_evidence(text: str) -> int:
+    """Return deterministic Assamese evidence in Bengali-script text.
+
+    The score counts the Assamese ra/wa letters (U+09F0/U+09F1) and gives
+    additional weight to Assamese month spellings. It intentionally does not
+    treat shared Bengali-Assamese block membership as language evidence.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    ra_wa_count = sum(char in _ASSAMESE_EXCLUSIVE_LETTERS for char in text)
+    month_count = sum(text.count(month) for month in _ASSAMESE_MONTH_CUES)
+    return ra_wa_count + (2 * month_count)
+
+
+def candidate_languages_for_text(
+    text: str,
+    script: str | None = None,
+) -> tuple[str, ...]:
+    """Return script candidates reordered by deterministic lexical evidence.
+
+    Bengali and Assamese share a Unicode block. Assamese-exclusive ra/wa
+    letters and Assamese month spellings move ``"as"`` ahead of ``"bn"``;
+    without that evidence the catalog's established Bengali-first order is
+    preserved.
+    """
+
+    detected_script = detect_script(text) if script is None else script
+    candidates = candidate_languages_for_script(detected_script)
+    if (
+        detected_script != "Bengali"
+        or "as" not in candidates
+        or "bn" not in candidates
+        or assamese_language_evidence(text) == 0
+    ):
+        return candidates
+    return ("as", *(code for code in candidates if code != "as"))
+
+
 def confusable_skeleton(text: str) -> str:
     """Return a curated UTS #39-style skeleton for PII matching.
 
@@ -1717,8 +1770,10 @@ __all__ = [
     "UNKNOWN_SCRIPT",
     "UnsupportedIngestionEncodingError",
     "ZERO_WIDTH_CHARS",
+    "assamese_language_evidence",
     "canonical_indian_name",
     "candidate_languages_for_script",
+    "candidate_languages_for_text",
     "confusable_skeleton",
     "detect_chinese_script",
     "detect_mixed_script",
