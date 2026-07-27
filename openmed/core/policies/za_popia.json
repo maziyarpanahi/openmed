@@ -79,6 +79,7 @@
     "LAB_TEST": "mask",
     "PROCEDURE": "mask",
     "BODY_SITE": "mask",
+    "DEVICE": "mask",
     "ANESTHESIA_TYPE": "mask",
     "ANESTHETIC_AGENT": "mask",
     "AIRWAY_MANAGEMENT": "mask",
