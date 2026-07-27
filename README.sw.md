@@ -439,17 +439,19 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 30 zinazoungwa mkono)
+## PII ya lugha nyingi (lugha 31 zinazoungwa mkono)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 30 ya lugha za PII**:
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 31 ya lugha za PII**:
 `am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `mr`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`,
+`ja`, `ko`, `mr`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`,
+`tr`,
 `uk`, `xh`, `zh` na `zu`, pamoja na checkpoint
 600+ za PII. Uelekezaji wa Kirusi na Kichina kwa sasa hutumia vishikilia nafasi
 vya modeli chaguo-msingi ya lugha nyingi vilivyoelezwa kwenye nyaraka, huku
 uzito maalumu wa modeli ukiwa tofauti. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia nane za ziada (`as`, `bn`, `gu`, `kn`,
-`ml`, `or`, `pa` na `ta`) na inaweza pia kuhudumia Kihindi, Kimarathi na Kitelugu.
+iliyosanidiwa na mtumiaji hukubali njia saba za ziada (`as`, `bn`, `gu`, `kn`,
+`ml`, `or` na `pa`) na inaweza pia kuhudumia Kihindi, Kimarathi, Kitamil na
+Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,
