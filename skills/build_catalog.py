@@ -3,13 +3,13 @@
 
 A "skill" is a directory under ``skills/`` containing a ``SKILL.md`` file with
 YAML frontmatter (``name``, ``description``, optional ``license`` / ``metadata``)
-following the open Agent Skills standard (https://agentskills.io) used by both
-Claude Code and OpenAI Codex.
+following the open Agent Skills standard (https://agentskills.io) used by
+Claude Code, OpenAI Codex, OpenCode, and compatible clients.
 
 Usage:
     python skills/build_catalog.py            # validate + (re)write README + marketplace
     python skills/build_catalog.py --check    # validate only; non-zero exit on any error
-    python skills/build_catalog.py --install [claude|codex|all]   # symlink into agent dirs
+    python skills/build_catalog.py --install [claude|codex|opencode|agents|all]
 
 No third-party dependencies: a tiny frontmatter parser is included so this runs
 anywhere, including CI, with the standard library only.
@@ -170,38 +170,70 @@ def render_readme(skills: list[dict]) -> str:
         "Portable [Agent Skills](https://agentskills.io) for building with "
         "**OpenMed** — the on-device, Apache-2.0 clinical & biomedical NLP "
         "library. Each skill is a folder with a `SKILL.md` that works unchanged "
-        "in **Claude Code** and **OpenAI Codex** (and any agent that follows the "
-        "open standard). Drop them in and your coding agent learns to wire up "
+        "in **Claude Code**, **OpenAI Codex**, **OpenCode**, and compatible "
+        "agents. Drop them in and your coding agent learns to wire up "
         "OpenMed pipelines — de-identification, NER, FHIR export, evaluation — "
         "plus the upstream/downstream healthcare tasks around them."
     )
     out.append("")
     out.append(f"**{len(skills)} skills** across {len(cats)} categories.")
     out.append("")
-    out.append("## Install")
-    out.append("")
-    out.append("**Copy (works in any agent):**")
-    out.append("")
-    out.append("```bash")
-    out.append("cp -r skills/*/ ~/.claude/skills/      # Claude Code")
-    out.append("cp -r skills/*/ ~/.codex/skills/       # OpenAI Codex")
-    out.append("```")
-    out.append("")
-    out.append("**Symlink into both agents (auto-updates on `git pull`):**")
-    out.append("")
-    out.append("```bash")
-    out.append("./install-skills.sh all        # or: claude | codex")
-    out.append("```")
-    out.append("")
-    out.append("**Claude Code plugin (one command):**")
-    out.append("")
-    out.append("```text")
-    out.append("/plugin marketplace add maziyarpanahi/openmed")
-    out.append("/plugin install openmed-skills@openmed-skills")
-    out.append("```")
+    out.append(
+        "## Get running in one command\n\n"
+        "The same `SKILL.md` folders work unchanged in **Claude Code**, "
+        "**OpenAI Codex**, **OpenCode**, and compatible clients of the "
+        "[open standard](https://agentskills.io). The installer uses each "
+        "client's documented skills directory plus the cross-client "
+        "`~/.agents/skills` convention:\n\n"
+        "```bash\n"
+        "git clone https://github.com/maziyarpanahi/openmed && cd openmed\n"
+        "./install-skills.sh          # -> Claude Code, Codex, OpenCode, and ~/.agents/skills\n"
+        "```\n\n"
+        "Or target one agent:\n\n"
+        "| Agent | Command | Skills directory |\n"
+        "| --- | --- | --- |\n"
+        "| **Claude Code** | `./install-skills.sh claude` | `~/.claude/skills/` |\n"
+        "| **OpenAI Codex** | `./install-skills.sh codex` | `~/.codex/skills/` |\n"
+        "| **OpenCode** | `./install-skills.sh opencode` | `~/.config/opencode/skills/` |\n"
+        "| **Cross-client convention** | `./install-skills.sh agents` | "
+        "`~/.agents/skills/` |\n\n"
+        "No clone? Copy the folders directly with `cp -r skills/*/ "
+        "~/.claude/skills/` (swap the path per agent). Claude Code users can also "
+        "install as a plugin, no clone needed:\n\n"
+        "```text\n"
+        "/plugin marketplace add maziyarpanahi/openmed\n"
+        "/plugin install openmed-skills@openmed-skills\n"
+        "```"
+    )
     out.append("")
     out.append(
-        "New to these? Start with **[building-with-openmed]"
+        "## Try it in 30 seconds\n\n"
+        "After installing, just ask your agent in plain language — it finds the "
+        "right skill and writes correct, on-device OpenMed code for you:\n\n"
+        "> **You:** Build a local OpenMed pipeline that de-identifies a synthetic "
+        "discharge note and extracts medication entities. Keep the example "
+        "synthetic.\n\n"
+        "> **Your agent** loads `deidentifying-clinical-text` + "
+        "`extracting-clinical-entities` and produces:\n\n"
+        "```python\n"
+        "import openmed\n"
+        'note = "Synthetic patient Jane Example (MRN 12345), seen 2024-03-02, '
+        'started on metformin 500mg BID."\n'
+        "deid = openmed.deidentify(\n"
+        '    note, method="mask", policy="hipaa_safe_harbor"\n'
+        ")\n"
+        "meds = openmed.analyze_text(\n"
+        "    deid.deidentified_text,\n"
+        '    model_name="pharma_detection_superclinical",\n'
+        ")\n"
+        "```\n\n"
+        "→ The sample is synthetic. After the one-time model download, inference "
+        "runs locally. Keep real PHI out of cloud-agent prompts, logs, and copied "
+        "examples."
+    )
+    out.append("")
+    out.append(
+        "New here? Start with **[building-with-openmed]"
         "(building-with-openmed/SKILL.md)** — it maps every task to the right "
         "skill and the real OpenMed API."
     )
@@ -273,21 +305,25 @@ def render_marketplace(skills: list[dict]) -> str:
 
 def do_install(target: str, skills: list[dict]) -> None:
     home = Path.home()
-    dests = []
-    if target in ("claude", "all"):
-        dests.append(home / ".claude" / "skills")
-    if target in ("codex", "all"):
-        dests.append(home / ".codex" / "skills")
+    destinations = {
+        "claude": home / ".claude" / "skills",
+        "codex": home / ".codex" / "skills",
+        "opencode": home / ".config" / "opencode" / "skills",
+        "agents": home / ".agents" / "skills",
+    }
+    dests = list(destinations.values()) if target == "all" else [destinations[target]]
     for dest in dests:
         dest.mkdir(parents=True, exist_ok=True)
         for s in skills:
             link = dest / s["name"]
-            if link.is_symlink() or link.exists():
-                if link.is_symlink():
-                    link.unlink()
-                else:
-                    print(f"  skip {link} (exists, not a symlink)")
+            if link.is_symlink():
+                if link.resolve(strict=False) == s["path"].resolve():
                     continue
+                print(f"  skip {link} (an unrelated symlink already exists)")
+                continue
+            if link.exists():
+                print(f"  skip {link} (a file or directory already exists)")
+                continue
             os.symlink(s["path"], link)
             print(f"  linked {s['name']} -> {link}")
 
@@ -296,7 +332,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="validate only; no writes")
     ap.add_argument(
-        "--install", nargs="?", const="all", choices=["claude", "codex", "all"]
+        "--install",
+        nargs="?",
+        const="all",
+        choices=["claude", "codex", "opencode", "agents", "all"],
     )
     args = ap.parse_args()
 

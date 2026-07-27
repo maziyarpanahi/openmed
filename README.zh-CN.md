@@ -249,6 +249,23 @@ flowchart LR
 
 ---
 
+## Agent Skills — 使用编码智能体构建 OpenMed
+
+[`skills/`](skills/) 目录提供可移植的 [Agent Skills](https://agentskills.io)，覆盖设备本地去标识化、临床 NER、FHIR 导出、评估以及相关医疗工作流。同一套 `SKILL.md` 文件夹可用于 **Claude Code**、**OpenAI Codex**、**OpenCode** 和兼容的智能体；安装脚本会使用各客户端的 skills 目录，并同时支持跨客户端约定 `~/.agents/skills`。
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # 安装到 Claude Code、Codex、OpenCode 和 ~/.agents/skills
+```
+
+然后使用合成占位符让智能体生成流水线：
+
+> 构建一个本地 OpenMed 流水线，对合成出院记录进行去标识化并抽取药物实体。
+
+它会加载相应 skills，并生成设备本地流水线（`openmed.deidentify(...)` → `openmed.analyze_text(...)`）。完成一次性模型下载后，请在本地使用该流水线处理真实病历；不要把真实 PHI 粘贴到云端智能体提示词中。参阅 **[skills 目录与 30 秒示例](skills/README.md)**。
+
+---
+
 ## 快速开始
 
 ```bash

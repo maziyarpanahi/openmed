@@ -10,11 +10,16 @@ only) and additionally enforces strict-YAML parseability when PyYAML is present.
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / "skills"
 BUILDER = SKILLS_DIR / "build_catalog.py"
+INSTALLER = REPO_ROOT / "install-skills.sh"
 
 
 def _load_builder():
@@ -52,8 +57,6 @@ def test_frontmatter_is_strict_yaml():
     """Real agents use strict YAML; an unquoted colon in a description breaks them."""
     yaml = __import__("importlib").import_module("yaml") if _has_yaml() else None
     if yaml is None:  # pragma: no cover - environment without PyYAML
-        import pytest
-
         pytest.skip("PyYAML not installed")
     for skill_md in sorted(SKILLS_DIR.glob("*/SKILL.md")):
         text = skill_md.read_text(encoding="utf-8")
@@ -66,3 +69,95 @@ def test_frontmatter_is_strict_yaml():
 
 def _has_yaml() -> bool:
     return importlib.util.find_spec("yaml") is not None
+
+
+def _run_installer(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    return subprocess.run(
+        ["bash", str(INSTALLER), *args],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+
+def _skill_names() -> set[str]:
+    return {path.parent.name for path in SKILLS_DIR.glob("*/SKILL.md")}
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="The Bash symlink installer requires Git Bash and Windows Developer Mode.",
+)
+def test_installer_default_links_every_supported_target(tmp_path: Path) -> None:
+    result = _run_installer(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    expected = _skill_names()
+    for relative in (
+        ".claude/skills",
+        ".codex/skills",
+        ".config/opencode/skills",
+        ".agents/skills",
+    ):
+        destination = tmp_path / relative
+        assert {path.name for path in destination.iterdir()} == expected
+        for name in expected:
+            link = destination / name
+            assert link.is_symlink()
+            assert link.resolve() == (SKILLS_DIR / name).resolve()
+
+    repeated = _run_installer(tmp_path)
+    assert repeated.returncode == 0, repeated.stderr
+    assert "skip " not in repeated.stderr
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="The Bash symlink installer requires Git Bash and Windows Developer Mode.",
+)
+def test_installer_preserves_existing_entries(tmp_path: Path) -> None:
+    blocked_name = min(_skill_names())
+    blocked = tmp_path / ".codex" / "skills" / blocked_name
+    blocked.parent.mkdir(parents=True)
+    blocked.write_text("user-owned\n", encoding="utf-8")
+
+    result = _run_installer(tmp_path, "codex")
+
+    assert result.returncode == 0, result.stderr
+    assert blocked.read_text(encoding="utf-8") == "user-owned\n"
+    assert not blocked.is_symlink()
+    assert f"skip {blocked}" in result.stderr
+    assert "1 existing entries preserved" in result.stderr
+
+
+def test_catalog_installer_supports_the_same_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    builder = _load_builder()
+    skills, errors = builder.load_skills()
+    linked: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        builder.os,
+        "symlink",
+        lambda source, destination: linked.append((Path(source), Path(destination))),
+    )
+
+    assert not errors
+    builder.do_install("all", skills)
+
+    expected = _skill_names()
+    for relative in (
+        ".claude/skills",
+        ".codex/skills",
+        ".config/opencode/skills",
+        ".agents/skills",
+    ):
+        destination = tmp_path / relative
+        assert {
+            link.name for _, link in linked if link.parent == destination
+        } == expected
