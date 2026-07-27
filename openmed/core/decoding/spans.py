@@ -89,6 +89,7 @@ _IDS_BINARY_OPERATORS: Final = frozenset(
 )
 _IDS_TRINARY_OPERATORS: Final = frozenset({0x2FF2, 0x2FF3})
 _IDS_UNARY_OPERATORS: Final = frozenset({0x2FFE, 0x2FFF})
+_IDS_OPERATOR_PATTERN: Final = re.compile(r"[\u2ff0-\u2fff\u31ef]")
 
 
 @dataclass(frozen=True, init=False)
@@ -357,7 +358,11 @@ def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
     ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
     cluster_start = 0
     for index in range(1, len(text)):
-        if _has_grapheme_break_at(text, index, ids_internal_boundaries):
+        if (
+            _has_grapheme_break_at(text, index, ids_internal_boundaries)
+            if ids_internal_boundaries
+            else _has_grapheme_break(text, index)
+        ):
             yield cluster_start, index
             cluster_start = index
     yield cluster_start, len(text)
@@ -377,16 +382,33 @@ def snap_span_to_grapheme_boundaries(
     safe_start = max(0, min(int(start), text_length))
     safe_end = max(safe_start, min(int(end), text_length))
     snapped_start = safe_start
-    while 0 < snapped_start < text_length and not _has_grapheme_break(
-        text, snapped_start
-    ):
-        snapped_start -= 1
+    ids_internal_boundaries = _ideographic_description_internal_boundaries(text)
+    if ids_internal_boundaries:
+        while 0 < snapped_start < text_length and not _has_grapheme_break_at(
+            text,
+            snapped_start,
+            ids_internal_boundaries,
+        ):
+            snapped_start -= 1
+    else:
+        while 0 < snapped_start < text_length and not _has_grapheme_break(
+            text, snapped_start
+        ):
+            snapped_start -= 1
     if safe_start == safe_end:
         return snapped_start, snapped_start
 
     snapped_end = safe_end
-    while snapped_end < text_length and not _has_grapheme_break(text, snapped_end):
-        snapped_end += 1
+    if ids_internal_boundaries:
+        while snapped_end < text_length and not _has_grapheme_break_at(
+            text,
+            snapped_end,
+            ids_internal_boundaries,
+        ):
+            snapped_end += 1
+    else:
+        while snapped_end < text_length and not _has_grapheme_break(text, snapped_end):
+            snapped_end += 1
     return snapped_start, snapped_end
 
 
@@ -766,20 +788,10 @@ def _cluster_is_whitespace(cluster: str) -> bool:
     return saw_whitespace
 
 
-def _inside_ideographic_description_sequence(text: str, index: int) -> bool:
-    for sequence_start in range(index - 1, -1, -1):
-        if _ids_operator_arity(text[sequence_start]) is None:
-            continue
-        sequence_end = _consume_ideographic_description_component(
-            text,
-            sequence_start,
-        )
-        if sequence_end is not None and sequence_start < index < sequence_end:
-            return True
-    return False
-
-
 def _ideographic_description_internal_boundaries(text: str) -> frozenset[int]:
+    if _IDS_OPERATOR_PATTERN.search(text) is None:
+        return frozenset()
+
     boundaries: set[int] = set()
     for sequence_start, character in enumerate(text):
         if _ids_operator_arity(character) is None:
@@ -844,14 +856,6 @@ def _ids_operator_arity(character: str) -> int | None:
 
 
 def _has_grapheme_break(text: str, index: int) -> bool:
-    return _has_grapheme_break_at(text, index, None)
-
-
-def _has_grapheme_break_at(
-    text: str,
-    index: int,
-    ids_internal_boundaries: Collection[int] | None,
-) -> bool:
     previous = text[index - 1]
     current = text[index]
     previous_class = _grapheme_break_class(previous)
@@ -863,12 +867,6 @@ def _has_grapheme_break_at(
         return True
     if current_class in {"CR", "LF", "CONTROL"}:
         return True
-    if (
-        index in ids_internal_boundaries
-        if ids_internal_boundaries is not None
-        else _inside_ideographic_description_sequence(text, index)
-    ):
-        return False
     if previous_class == "L" and current_class in {"L", "V", "LV", "LVT"}:
         return False
     if previous_class in {"LV", "V"} and current_class in {"V", "T"}:
@@ -897,6 +895,16 @@ def _has_grapheme_break_at(
             cursor -= 1
         return preceding_indicators % 2 == 0
     return True
+
+
+def _has_grapheme_break_at(
+    text: str,
+    index: int,
+    ids_internal_boundaries: Collection[int],
+) -> bool:
+    if index in ids_internal_boundaries:
+        return False
+    return _has_grapheme_break(text, index)
 
 
 def _grapheme_break_class(char: str) -> str:
