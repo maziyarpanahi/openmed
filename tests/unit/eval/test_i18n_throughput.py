@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,30 @@ def test_benchmark_emits_cold_start_and_steady_state_metrics() -> None:
     assert result["deidentify_cold_start_ms"] >= 0
     assert result["deidentify_spans_per_second"] > 0
     assert result["iterations"] == 2
+
+
+def test_synthetic_records_use_a_calendar_independent_visit_window() -> None:
+    class StubFaker:
+        def name(self) -> str:
+            return "林星河"
+
+        def address(self) -> str:
+            return "合成测试地址"
+
+        def date_between(self, *, start_date: date, end_date: date) -> date:
+            assert start_date == date(2021, 7, 23)
+            assert end_date == date(2026, 7, 23)
+            return start_date
+
+        def chinese_mobile_number(self) -> str:
+            return "13800138000"
+
+        def chinese_resident_id(self) -> str:
+            return "11010519491231002X"
+
+    record = i18n_throughput._synthetic_record("zh", StubFaker(), 0)
+
+    assert "2021-07-23" in record
 
 
 def test_throughput_gate_allows_exactly_twenty_percent_drop() -> None:

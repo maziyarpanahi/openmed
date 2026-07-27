@@ -16,6 +16,7 @@ from openmed.core.decoding import (
     labels_to_token_spans,
     snap_span_to_graphemes,
 )
+from openmed.core.decoding import spans as decoding_spans
 from openmed.processing.tokenization import SpanToken
 
 
@@ -157,6 +158,21 @@ def test_ideographic_description_sequences_are_atomic_boundaries(
     )
     for index in range(1, description_end):
         assert not is_grapheme_boundary(index, text)
+
+
+def test_non_ids_text_skips_ideographic_component_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(character: str) -> int | None:
+        raise AssertionError(f"unexpected IDS parsing for {character!r}")
+
+    monkeypatch.setattr(decoding_spans, "_ids_operator_arity", fail_if_called)
+
+    text = "患者林星河，手机号13800138000。"
+    spans = list(iter_grapheme_cluster_spans(text))
+
+    assert spans[0] == (0, 1)
+    assert spans[-1] == (len(text) - 1, len(text))
 
 
 def test_segmenter_boundary_invariant_rejects_partial_words() -> None:

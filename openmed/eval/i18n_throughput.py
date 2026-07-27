@@ -14,7 +14,7 @@ import platform
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -35,6 +35,8 @@ _FIXTURE_NAMES = {
 }
 _FAKER_LOCALES = {"zh": "zh_CN", "hi": "hi_IN", "ta": "ta_IN"}
 _FAKER_SEEDS = {"zh": 698_001, "hi": 698_002, "ta": 698_003}
+_VISIT_DATE_START = date(2021, 7, 23)
+_VISIT_DATE_END = date(2026, 7, 23)
 
 Segmenter = Callable[[str], Any]
 SegmenterFactory = Callable[[], Segmenter]
@@ -409,8 +411,8 @@ def _synthetic_record(language: str, faker: Any, index: int) -> str:
     name = str(faker.name()).replace("\n", " ")
     address = str(faker.address()).replace("\n", ", ")
     visit_date = faker.date_between(
-        start_date="-5y",
-        end_date="-1d",
+        start_date=_VISIT_DATE_START,
+        end_date=_VISIT_DATE_END,
     ).isoformat()
     if language == "zh":
         phone = faker.chinese_mobile_number()

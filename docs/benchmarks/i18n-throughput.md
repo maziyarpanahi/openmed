@@ -7,9 +7,11 @@ fully synthetic Chinese (`zh`), Hindi (`hi`), and Tamil (`ta`) corpora:
 - end-to-end `deidentify()` throughput in redacted spans per second.
 
 Each corpus contains at least 100,000 characters generated deterministically
-with Faker. The JSON report also records first-call latency on the first
-newline-aligned chunk for each operation, including Chinese dictionary
-initialization, separately from steady-state full-corpus throughput.
+with Faker, seeded per language and using the fixed synthetic visit-date window
+from 2021-07-23 through 2026-07-23. The JSON report also records first-call
+latency on the first newline-aligned chunk for each operation, including
+Chinese dictionary initialization, separately from steady-state full-corpus
+throughput.
 De-identification processes every record in bounded chunks to avoid making
 sentence segmentation quadratic in corpus size. It uses deterministic regex
 and pattern detectors with an empty local model adapter, so no model weights or
