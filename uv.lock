@@ -5448,7 +5448,7 @@ requires-dist = [
     { name = "llama-index-core", marker = "extra == 'agents'", specifier = ">=0.10,<1" },
     { name = "llama-index-core", marker = "extra == 'llamaindex'", specifier = ">=0.10,<1" },
     { name = "markdown-it-py", marker = "extra == 'multimodal'", specifier = ">=3.0,<5" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.9" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.27,<2" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
     { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.2.6" },
     { name = "mkdocs-llmstxt", marker = "extra == 'docs'", specifier = ">=0.5.0,<1" },
