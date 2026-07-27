@@ -23,11 +23,13 @@ from openmed.mcp.tool_registry import (
 class FakeFastMCP:
     def __init__(self) -> None:
         self.tools: dict[str, Any] = {}
+        self.tool_metadata: dict[str, dict[str, Any]] = {}
         self.resources: dict[str, Any] = {}
 
-    def tool(self, *, name: str):
+    def tool(self, *, name: str, **metadata: Any):
         def _decorator(func):
             self.tools[name] = func
+            self.tool_metadata[name] = metadata
             return func
 
         return _decorator
