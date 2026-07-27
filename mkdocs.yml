@@ -37,6 +37,7 @@ nav:
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
+      - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
