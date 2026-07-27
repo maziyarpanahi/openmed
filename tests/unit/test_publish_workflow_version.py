@@ -13,6 +13,7 @@ WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PROVENANCE_WORKFLOW = ROOT / ".github" / "workflows" / "provenance.yml"
 IMAGE_SBOM_WORKFLOW = ROOT / ".github" / "workflows" / "sbom-image.yml"
+DOCKERIGNORE = ROOT / ".dockerignore"
 ANDROID_PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "android-publish.yml"
 ANDROID_BUILD = ROOT / "android" / "openmedkit" / "build.gradle.kts"
 ANDROID_README = ROOT / "android" / "README.md"
@@ -191,6 +192,22 @@ def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
     assert "pkg:deb/" in workflow
     assert "pkg:pypi/" in workflow
     assert "if-no-files-found: error" in workflow
+
+
+def test_docker_context_excludes_generated_security_evidence():
+    ignored = {
+        line.strip()
+        for line in DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+    assert {
+        "sbom.cdx.json",
+        "image-sbom.cdx.json",
+        "image-sbom.cdx.json.sha256",
+        "pip-audit-report.json",
+        "vulnerability-reports/",
+    } <= ignored
 
 
 def test_image_sbom_release_path_attaches_artifact_without_publishing_image():
