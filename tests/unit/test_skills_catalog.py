@@ -87,6 +87,10 @@ def _skill_names() -> set[str]:
     return {path.parent.name for path in SKILLS_DIR.glob("*/SKILL.md")}
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="The Bash symlink installer requires Git Bash and Windows Developer Mode.",
+)
 def test_installer_default_links_every_supported_target(tmp_path: Path) -> None:
     result = _run_installer(tmp_path)
 
@@ -110,6 +114,10 @@ def test_installer_default_links_every_supported_target(tmp_path: Path) -> None:
     assert "skip " not in repeated.stderr
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="The Bash symlink installer requires Git Bash and Windows Developer Mode.",
+)
 def test_installer_preserves_existing_entries(tmp_path: Path) -> None:
     blocked_name = min(_skill_names())
     blocked = tmp_path / ".codex" / "skills" / blocked_name
@@ -129,8 +137,15 @@ def test_catalog_installer_supports_the_same_targets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     builder = _load_builder()
     skills, errors = builder.load_skills()
+    linked: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        builder.os,
+        "symlink",
+        lambda source, destination: linked.append((Path(source), Path(destination))),
+    )
 
     assert not errors
     builder.do_install("all", skills)
@@ -143,4 +158,6 @@ def test_catalog_installer_supports_the_same_targets(
         ".agents/skills",
     ):
         destination = tmp_path / relative
-        assert {path.name for path in destination.iterdir()} == expected
+        assert {
+            link.name for _, link in linked if link.parent == destination
+        } == expected
