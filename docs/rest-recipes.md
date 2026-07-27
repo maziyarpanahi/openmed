@@ -174,7 +174,7 @@ hardware):
 ## Extract PII — `POST /pii/extract`
 
 Detect personally identifiable information. Unless `model_name` is set, OpenMed
-selects the recommended PII model for `lang`. The 31 supported PII language
+selects the recommended PII model for `lang`. The 32 supported PII language
 codes: `am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`,
 `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`. Russian currently uses a

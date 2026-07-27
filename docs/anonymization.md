@@ -425,7 +425,7 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **31 supported PII language codes**:
+as its source of truth and supports **32 supported PII language codes**:
 `am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
 `it`, `ja`, `ko`, `mr`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
 `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.

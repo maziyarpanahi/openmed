@@ -90,7 +90,7 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **31 supported PII language codes**:
+PII extraction and de-identification support **32 supported PII language codes**:
 `am`, `ar`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
 `it`, `ja`, `ko`, `mr`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
 `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.
