@@ -22,6 +22,8 @@ dist/
 build/
 site/
 docs/site/
+node_modules/
+**/node_modules/
 sbom.cdx.json
 image-sbom.cdx.json
 image-sbom.cdx.json.sha256
