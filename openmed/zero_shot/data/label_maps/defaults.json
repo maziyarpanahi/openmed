@@ -187,5 +187,12 @@
     "DevelopmentalMilestone",
     "FeedingHistory",
     "PediatricFinding"
+  ],
+  "procedures": [
+    "Procedure",
+    "Surgery",
+    "DiagnosticProcedure",
+    "Device",
+    "Approach"
   ]
 }
