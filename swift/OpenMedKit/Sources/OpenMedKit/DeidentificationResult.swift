@@ -9,6 +9,8 @@ public enum DeidentificationMethod: String, Codable, Equatable, Sendable {
 /// De-identification output encoded with the Python `DeidentificationResult.to_dict()`
 /// schema: snake_case top-level keys and `pii_entities` records containing
 /// `text`, `label`, `entity_type`, `start`, `end`, `confidence`, and `action`.
+/// Entity offsets use half-open Unicode scalar coordinates and are normalized
+/// to extended-grapheme boundaries when the result is initialized.
 public struct DeidentificationResult: Codable, Equatable, Sendable {
     /// A single PII entity record in the Python-compatible export schema.
     public struct PIIEntityRecord: Codable, Equatable, Sendable {
@@ -50,6 +52,29 @@ public struct DeidentificationResult: Codable, Equatable, Sendable {
             )
         }
 
+        fileprivate func snappedToGraphemeBoundaries(
+            in source: String
+        ) -> PIIEntityRecord {
+            let snapped = PostProcessing.snapScalarSpanToGraphemeBoundaries(
+                start: start,
+                end: end,
+                in: source
+            )
+            return PIIEntityRecord(
+                text: PostProcessing.scalarSubstring(
+                    source,
+                    start: snapped.start,
+                    end: snapped.end
+                ),
+                label: label,
+                entityType: entityType,
+                start: snapped.start,
+                end: snapped.end,
+                confidence: confidence,
+                action: action
+            )
+        }
+
         private enum CodingKeys: String, CodingKey {
             case text
             case label
@@ -79,10 +104,13 @@ public struct DeidentificationResult: Codable, Equatable, Sendable {
     ) {
         self.originalText = originalText
         self.deidentifiedText = deidentifiedText
-        self.piiEntities = piiEntities
+        let normalizedEntities = piiEntities.map {
+            $0.snappedToGraphemeBoundaries(in: originalText)
+        }
+        self.piiEntities = normalizedEntities
         self.method = method
         self.timestamp = timestamp
-        self.numEntitiesRedacted = piiEntities.count
+        self.numEntitiesRedacted = normalizedEntities.count
         self.metadata = metadata
     }
 
