@@ -71,6 +71,7 @@ def test_optional_language_adapters_match_fixture_token_spans(path: Path) -> Non
     fixture = _load_fixture(path)
     text = str(fixture["text"])
     language = str(fixture["language"])
+    pytest.importorskip("jieba" if language == "zh" else "indicnlp")
     tokens = (
         zh.segment(text)
         if language == "zh"
@@ -84,6 +85,7 @@ def test_optional_language_adapters_match_fixture_token_spans(path: Path) -> Non
 
 
 def test_opencc_round_trips_simplified_and_traditional_fixtures() -> None:
+    pytest.importorskip("opencc")
     simplified = _load_fixture(_FIXTURE_DIR / "zh-Hans.json")
     traditional = _load_fixture(_FIXTURE_DIR / "zh-Hant.json")
 
