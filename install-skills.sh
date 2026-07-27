@@ -2,15 +2,17 @@
 # Install OpenMed Agent Skills into your coding agent(s).
 #
 # The same SKILL.md folders follow the open Agent Skills standard
-# (https://agentskills.io), so one install works across agents. Skills are
-# symlinked (not copied), so a later `git pull` updates every installed skill.
+# (https://agentskills.io), so one install works across compatible agents.
+# Skills are symlinked (not copied), so a later `git pull` updates every
+# installed skill. Existing files, directories, and unrelated symlinks are
+# preserved.
 #
 # Usage:
 #   ./install-skills.sh              # install into every supported agent (default)
 #   ./install-skills.sh claude       # Claude Code    ~/.claude/skills
 #   ./install-skills.sh codex        # OpenAI Codex   ~/.codex/skills
 #   ./install-skills.sh opencode     # OpenCode       ~/.config/opencode/skills
-#   ./install-skills.sh agents       # any other agent on the standard  ~/.agents/skills
+#   ./install-skills.sh agents       # cross-client convention  ~/.agents/skills
 #   ./install-skills.sh all          # all of the above
 set -euo pipefail
 
@@ -19,15 +21,41 @@ TARGET="${1:-all}"
 
 link_into() {
   local dest="$1"
+  local existing
+  local link_path
+  local name
+  local skill
+  local skill_path
   mkdir -p "$dest"
   local n=0
+  local skipped=0
   for skill in "$SRC"/*/; do
-    name="$(basename "$skill")"
+    skill_path="${skill%/}"
+    name="$(basename "$skill_path")"
     [ -f "$skill/SKILL.md" ] || continue   # only real skills, skip helpers/_template
-    ln -sfn "$skill" "$dest/$name"
+    link_path="$dest/$name"
+    if [ -L "$link_path" ]; then
+      existing="$(readlink "$link_path")"
+      if [ "$existing" = "$skill" ] || [ "$existing" = "$skill_path" ]; then
+        n=$((n + 1))
+        continue
+      fi
+      echo "  skip $link_path (an unrelated symlink already exists)" >&2
+      skipped=$((skipped + 1))
+      continue
+    fi
+    if [ -e "$link_path" ]; then
+      echo "  skip $link_path (a file or directory already exists)" >&2
+      skipped=$((skipped + 1))
+      continue
+    fi
+    ln -s "$skill_path" "$link_path"
     n=$((n + 1))
   done
   echo "  $n skills -> $dest"
+  if [ "$skipped" -gt 0 ]; then
+    echo "  $skipped existing entries preserved" >&2
+  fi
 }
 
 install_target() {
@@ -35,7 +63,7 @@ install_target() {
     claude)   echo "Claude Code:";  link_into "$HOME/.claude/skills" ;;
     codex)    echo "OpenAI Codex:"; link_into "$HOME/.codex/skills" ;;
     opencode) echo "OpenCode:";     link_into "$HOME/.config/opencode/skills" ;;
-    agents)   echo "Generic (~/.agents/skills — any agent on the standard):"; link_into "$HOME/.agents/skills" ;;
+    agents)   echo "Cross-client convention (~/.agents/skills):"; link_into "$HOME/.agents/skills" ;;
   esac
 }
 
@@ -54,6 +82,6 @@ case "$TARGET" in
     ;;
 esac
 
-echo "Done. Claude Code detects new skills live; restart Codex/OpenCode to pick them up."
+echo "Done. Restart your agent if newly installed skills do not appear."
 echo "On Windows, symlinks need Developer Mode or admin — otherwise copy:"
 echo "    cp -r skills/*/ ~/.claude/skills/    # (swap the path for your agent)"
