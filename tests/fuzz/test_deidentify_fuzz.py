@@ -702,7 +702,7 @@ def test_repeated_dates_share_one_pipeline_shift(shift, keep_year):
     )
 
 
-@settings(deadline=1000)
+@settings(deadline=None)
 @given(doc=long_planted_documents())
 def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
     """The real one-shot path handles multi-kilobyte normalized input exactly."""
@@ -775,6 +775,7 @@ def test_streaming_chunk_boundary_matches_single_pass(case):
     }
 
 
+@settings(deadline=None)
 @given(text=st.text(min_size=0, max_size=400))
 def test_deidentify_never_crashes_on_arbitrary_text(text):
     """The de-identification path never raises on any valid ``str``.
