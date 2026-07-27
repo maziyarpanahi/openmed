@@ -124,6 +124,7 @@ dask = [
 
 spacy = [
   "click>=8.0",
+  "numpy>=1.26,<2",
   "spacy>=3.5",
 ]
 
@@ -313,19 +314,19 @@ conflicts = [
 
 [tool.hatch.build]
 include = [
-  "openmed/**",
-  "openmed/py.typed",
-  "openmed/core/thresholds.json",
-  "openmed/core/policies/*.json",
-  "openmed/core/schemas/json/*.json",
-  "eval/redteam/corpus/adversarial_phi.jsonl",
-  "gates/baseline.json",
-  "models.jsonl",
-  "models.jsonl.sigstore.json",
-  "LICENSE",
-  "NOTICE",
-  "README.md",
-  "pyproject.toml"
+  "/openmed/**",
+  "/openmed/py.typed",
+  "/openmed/core/thresholds.json",
+  "/openmed/core/policies/*.json",
+  "/openmed/core/schemas/json/*.json",
+  "/eval/redteam/corpus/adversarial_phi.jsonl",
+  "/gates/baseline.json",
+  "/models.jsonl",
+  "/models.jsonl.sigstore.json",
+  "/LICENSE",
+  "/NOTICE",
+  "/README.md",
+  "/pyproject.toml"
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
