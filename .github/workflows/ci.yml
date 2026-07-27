@@ -9,13 +9,42 @@ on:
 jobs:
   repo-policy:
     runs-on: ubuntu-latest
+    outputs:
+      run-i18n-cjk-indic: ${{ steps.i18n_changes.outputs.should_run }}
     steps:
     - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
         python-version: "3.11"
+
+    - name: Detect CJK and Indic test changes
+      id: i18n_changes
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" HEAD -- \
+          openmed/core/pii_i18n.py \
+          openmed/core/script_detect.py \
+          openmed/core/decoding \
+          openmed/interop/zh.py \
+          openmed/interop/indic.py \
+          tests/unit/core/test_script_detect.py \
+          tests/unit/test_pii_i18n.py \
+          tests/unit/interop/test_language_adapters.py \
+          tests/unit/interop/test_i18n_cjk_indic_fixtures.py \
+          tests/fixtures/i18n; then
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "No CJK or Indic test paths changed."
+        else
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Enforce repo file policy
       run: |
@@ -285,8 +314,59 @@ jobs:
       run: |
         pytest tests/unit/interop/test_spacy_component.py -q
 
+  i18n-cjk-indic:
+    needs: [repo-policy, lint]
+    if: needs.repo-policy.outputs.run-i18n-cjk-indic == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-i18n-cjk-indic-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-i18n-cjk-indic-
+          ${{ runner.os }}-pip-
+
+    - name: Install CJK and Indic test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,zh,indic]"
+
+    - name: Run CJK and Indic fixture tests
+      run: |
+        pytest tests/unit -q -k "i18n or script_detect or cjk or indic"
+
+    - name: Trust-CI no-raw-PHI logging guard
+      run: |
+        pytest tests/unit/test_no_raw_text_logging.py -q
+
   build:
-    needs: [repo-policy, lint, test, security, spacy-integration]
+    needs:
+    - repo-policy
+    - lint
+    - test
+    - security
+    - spacy-integration
+    - i18n-cjk-indic
+    if: >-
+      always() &&
+      needs.repo-policy.result == 'success' &&
+      needs.lint.result == 'success' &&
+      needs.test.result == 'success' &&
+      needs.security.result == 'success' &&
+      needs.spacy-integration.result == 'success' &&
+      (
+        needs.i18n-cjk-indic.result == 'success' ||
+        needs.i18n-cjk-indic.result == 'skipped'
+      )
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
