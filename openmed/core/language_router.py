@@ -10,6 +10,7 @@ non-commercial language-ID assets must not be added.
 from __future__ import annotations
 
 import importlib
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -297,6 +298,25 @@ class LanguageRouter:
         if len(candidates) == 1:
             return candidates[0], 0.99, "stdlib:script"
 
+        marker_matches = [
+            (
+                sum(
+                    self._routing_marker_count(text, marker)
+                    for marker in pack.routing_markers
+                ),
+                pack,
+            )
+            for pack in candidates
+        ]
+        strongest_marker_count = max(count for count, _pack in marker_matches)
+        strongest_marker_packs = [
+            pack
+            for count, pack in marker_matches
+            if count == strongest_marker_count and count > 0
+        ]
+        if len(strongest_marker_packs) == 1:
+            return strongest_marker_packs[0], 0.99, "stdlib:routing-marker"
+
         backend = self.language_identifier
         if backend is not None:
             prediction = backend.identify(text, [pack.code for pack in candidates])
@@ -306,6 +326,36 @@ class LanguageRouter:
                     return selected, prediction.confidence, backend.name
 
         return candidates[0], 0.8, "stdlib:pack-priority"
+
+    @staticmethod
+    def _routing_marker_count(text: str, marker: str) -> int:
+        """Count whole-token lexical markers without assuming a Latin script."""
+
+        folded_text = text.casefold()
+        folded_marker = marker.casefold()
+        count = 0
+        cursor = 0
+        while (start := folded_text.find(folded_marker, cursor)) >= 0:
+            end = start + len(folded_marker)
+            before_is_token = start > 0 and LanguageRouter._is_token_character(
+                folded_text[start - 1]
+            )
+            has_after = end < len(folded_text)
+            after_is_token = has_after and LanguageRouter._is_token_character(
+                folded_text[end]
+            )
+            if not before_is_token and not after_is_token:
+                count += 1
+            cursor = end
+        return count
+
+    @staticmethod
+    def _is_token_character(character: str) -> bool:
+        return (
+            character == "_"
+            or character.isalnum()
+            or unicodedata.category(character).startswith("M")
+        )
 
     @staticmethod
     def _validate_tiling(runs: Sequence[LanguageRun], text_length: int) -> None:

@@ -3,8 +3,9 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
-the built-in Hindi and Telugu codes. Every code documented here wires up:
+The optional Indic family adds eight user-configured routes and can also serve
+the built-in Hindi, Marathi, and Telugu codes. Every code documented here wires
+up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -44,7 +45,8 @@ print(route.metadata["runs"])
 The core fallback is deterministic and dependency-free. It combines Unicode
 script runs with each `LanguagePack`'s candidate priority and context hints;
 for example, adjacent kana selects Japanese for Han runs, while standalone Han
-prefers Chinese and Devanagari currently prefers Hindi. Install
+prefers Chinese and Marathi lexical markers disambiguate Marathi from the
+otherwise Hindi-first Devanagari route. Install
 `openmed[lid]` to enable the lazy, on-device `pycld2` adapter for ambiguous
 runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
 routing is first requested, and do not download or bundle model weights.
@@ -87,7 +89,7 @@ routing is first requested, and do not download or bundle model weights.
 | `kn`   | Kannada    | `env:OPENMED_INDIC_NER_MODEL`                               | `kn_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
 | `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
-| `mr`   | Marathi    | `env:OPENMED_INDIC_NER_MODEL`                               | `mr_IN`      | Optional Indic NER weights; Hindi Faker backend.             |
+| `mr`   | Marathi    | `OpenMed/privacy-filter-multilingual`                       | `mr_IN`      | Three-part names; `hi_IN` Faker approximation warns once.    |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
 | `or`   | Odia       | `env:OPENMED_INDIC_NER_MODEL`                               | `or_IN`      | Optional Indic NER weights.                                  |
@@ -118,7 +120,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The eight optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -324,11 +326,11 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] പോയി.
 
 ### Marathi — `mr`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `mr_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `mr_IN`
 
 ```text
-Before: आरव पुण्यात सह्याद्री रुग्णालयात गेला.
-After:  [PERSON] [LOCATION] [ORGANIZATION] गेला.
+Before: रुग्णाचे नाव सौ. वैशाली सुरेश देशमुख. जन्मतारीख १४ फेब्रुवारी १९८५.
+After:  रुग्णाचे नाव [PERSON]. जन्मतारीख [DATE].
 ```
 
 ### Odia — `or`

@@ -41,6 +41,7 @@ def _pack(
     *,
     national_id_provider: tuple[str, str] | None = None,
     context_scripts: Sequence[str] = (),
+    routing_markers: Sequence[str] = (),
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -55,6 +56,7 @@ def _pack(
         surrogate_locale=locale,
         national_id_providers=providers,
         context_scripts=tuple(context_scripts),
+        routing_markers=tuple(routing_markers),
     )
 
 
@@ -107,6 +109,22 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "hi_IN",
         ("Devanagari",),
         national_id_provider=("hi_IN", "aadhaar"),
+    ),
+    _pack(
+        "mr",
+        "OpenMed/privacy-filter-multilingual",
+        "mr_IN",
+        ("Devanagari",),
+        national_id_provider=("mr_IN", "aadhaar"),
+        routing_markers=(
+            "आहे",
+            "आहेत",
+            "रुग्ण",
+            "रुग्णाचे",
+            "नोंद",
+            "फेब्रुवारी",
+            "ऑक्टोबर",
+        ),
     ),
     _pack(
         "te",
@@ -301,7 +319,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
-    "mr": "mr_IN",
     "or": "or_IN",
     "pa": "pa_IN",
     "ta": "ta_IN",
@@ -317,7 +334,6 @@ USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "gu",
     "kn",
     "ml",
-    "mr",
     "ne",
     "or",
     "pa",
@@ -391,6 +407,7 @@ _LOCALE_ORDER = (
     "es",
     "nl",
     "hi",
+    "mr",
     "te",
     "am",
     "pt",
@@ -437,6 +454,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "es",
     "nl",
     "hi",
+    "mr",
     "te",
     "am",
     "pt",
