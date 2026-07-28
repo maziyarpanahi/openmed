@@ -106,7 +106,8 @@ def test_export_packages_and_validates_optional_segmenter(
     bundle_manifest = json.loads(
         (result.output_dir / "openmed-onnx.json").read_text(encoding="utf-8")
     )
-    assert bundle_manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+    assert bundle_manifest["segmenter"]["license"] == "MIT AND ICU"
+    assert (result.output_dir / "segmenter" / "ICU.txt").is_file()
     assert module.validate_transformersjs_bundle(result.output_dir)
     source_manifest = json.loads(
         (source_dir / "openmed-onnx.json").read_text(encoding="utf-8")
