@@ -35,7 +35,8 @@ final class SegmenterParityTests: XCTestCase {
         let sourceDirectory = root.appending(path: "openmed/processing/resources/segmenter")
         let resources = [
             ("han_words.txt", "han_dictionary", "MIT"),
-            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+            ("indic_rules.json", "indic_break_rules", "ICU"),
+            ("ICU.txt", "license_notice", "ICU"),
         ]
         var resourceDescriptors: [[String: Any]] = []
         var totalSize = 0
@@ -57,7 +58,7 @@ final class SegmenterParityTests: XCTestCase {
                 "id": "openmed-cjk-indic-v1",
                 "format_version": 1,
                 "scripts": ["Han", "Devanagari"],
-                "license": "MIT AND ICU-1.8.1",
+                "license": "MIT AND ICU",
                 "resource_files": resourceDescriptors,
                 "total_size_bytes": totalSize,
                 "size_budget_bytes": 65_536,
