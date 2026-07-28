@@ -62,6 +62,14 @@ def _write_csv(path: Path, rows=ROWS) -> Path:
     return path
 
 
+def _write_bom_csv(path: Path, rows=ROWS) -> Path:
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
 def _policy_args() -> list[str]:
     return [
         "--qi",
@@ -429,6 +437,65 @@ def test_risk_assess_repeatable_flags_support_literal_schema_names(
     assert "Île-de-France" not in rendered
 
 
+def test_risk_assess_accepts_bom_prefixed_seven_column_csv(tmp_path: Path) -> None:
+    rows = [
+        {**row, "encounter_id": f"encounter-{index}"}
+        for index, row in enumerate(ROWS, start=1)
+    ]
+    source = _write_bom_csv(tmp_path / "bom-source.csv", rows)
+    output = tmp_path / "assessment.json"
+
+    code = main_module.main(
+        [
+            "risk",
+            "assess",
+            str(source),
+            "--output",
+            str(output),
+            "--qi",
+            "age,zip,visit_date",
+            "--sensitive",
+            "disease",
+            "--direct-id",
+            "full_name,encounter_id",
+            "--privacy-unit",
+            "patient_id",
+            "--k",
+            "2",
+            "--l",
+            "2",
+            "--t",
+            "0",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["meets_policy"] is True
+    assert payload["privacy_unit_count"] == len(ROWS)
+
+
+def test_risk_discover_strips_bom_from_csv_schema(tmp_path: Path) -> None:
+    source = _write_bom_csv(tmp_path / "bom-source.csv")
+    output = tmp_path / "discovery.json"
+
+    code = main_module.main(
+        [
+            "risk",
+            "discover",
+            str(source),
+            "--output",
+            str(output),
+            "--full-scan",
+        ]
+    )
+
+    assert code == 0
+    serialized = output.read_text(encoding="utf-8")
+    assert '"patient_id"' in serialized
+    assert "\\ufeffpatient_id" not in serialized
+
+
 def test_risk_population_assess_writes_aggregate_safe_evidence(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -637,6 +704,56 @@ def test_risk_anonymize_writes_validated_release_and_expert_evidence(
     )
     assert verify_code == 0
     assert "verification: PASS" in capsys.readouterr().out
+
+
+def test_risk_anonymize_accepts_bom_with_repeatable_policy_columns(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        {**row, "encounter_id": f"encounter-{index}"}
+        for index, row in enumerate(ROWS, start=1)
+    ]
+    source = _write_bom_csv(tmp_path / "bom-source.csv", rows)
+    release = tmp_path / "release.jsonl"
+    evidence = tmp_path / "evidence.json"
+    policy_args = [
+        "--qi-column",
+        "age",
+        "--qi-column",
+        "zip",
+        "--qi-column",
+        "visit_date",
+        "--sensitive-column",
+        "disease",
+        "--direct-id-column",
+        "full_name",
+        "--direct-id-column",
+        "encounter_id",
+        "--privacy-unit",
+        "patient_id",
+        "--k",
+        "2",
+        "--l",
+        "2",
+        "--t",
+        "0",
+    ]
+
+    code = main_module.main(
+        _anonymize_args(
+            source,
+            release,
+            evidence,
+            policy_args=policy_args,
+        )
+    )
+
+    assert code == 0
+    released = read_table(release)
+    assert len(released) == len(ROWS)
+    assert all("patient_id" not in row for row in released)
+    assert all("encounter_id" not in row for row in released)
+    assert all("full_name" not in row for row in released)
 
 
 def test_other_release_context_requires_reviewed_assumptions_notes(
@@ -1415,7 +1532,72 @@ def test_invalid_release_policy_is_usage_error(
     )
 
     assert code == 2
-    assert "policy is invalid" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "policy is invalid" in error
+    assert "Cause (ValueError):" in error
+    assert "quasi_identifiers cannot overlap non_sensitive_attributes" in error
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("command", ["assess", "anonymize"])
+def test_release_config_error_surfaces_safe_value_error_cause(
+    command: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rows = [
+        {**row, "encounter_id": f"encounter-{index}"}
+        for index, row in enumerate(ROWS, start=1)
+    ]
+    source = _write_csv(tmp_path / "source.csv", rows)
+    output = tmp_path / "output.json"
+    policy_args = [
+        "--qi-column",
+        "age,zip,visit_date",
+        "--sensitive-column",
+        "disease",
+        "--direct-id-column",
+        "full_name,encounter_id",
+        "--privacy-unit",
+        "patient_id",
+        "--k",
+        "2",
+        "--l",
+        "2",
+        "--t",
+        "0",
+    ]
+    if command == "assess":
+        args = [
+            "risk",
+            "assess",
+            str(source),
+            "--output",
+            str(output),
+            *policy_args,
+        ]
+    else:
+        args = _anonymize_args(
+            source,
+            tmp_path / "release.jsonl",
+            tmp_path / "evidence.json",
+            policy_args=policy_args,
+        )
+    args.append("--json")
+
+    code = main_module.main(args)
+
+    assert code == 2
+    payload = json.loads(capsys.readouterr().out)
+    message = payload["error"]["message"]
+    assert payload["error"]["code"] == "invalid_release_config"
+    assert "Cause (ValueError):" in message
+    assert "Declared policy columns are absent from the table" in message
+    assert "age,zip,visit_date" in message
+    assert "full_name,encounter_id" in message
+    for row in rows:
+        for value in row.values():
+            assert value not in message
     assert not output.exists()
 
 
