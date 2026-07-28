@@ -113,6 +113,20 @@ def test_scan_table_surfaces_planted_singleton_qi_set(tmp_path: Path) -> None:
     )
 
 
+def test_scan_table_strips_utf8_byte_order_mark(tmp_path: Path) -> None:
+    csv_path = _write_csv(tmp_path / "bom.csv", ROWS)
+    csv_path.write_text(
+        "\ufeff" + csv_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    manifest = scan_table(csv_path)
+
+    assert "record_id" in manifest["columns"]
+    assert "\ufeffrecord_id" not in manifest["columns"]
+    assert "\ufeff" not in json.dumps(manifest, ensure_ascii=False)
+
+
 def test_detected_qi_class_sizes_match_explicit_kanon_report(
     tmp_path: Path,
 ) -> None:
