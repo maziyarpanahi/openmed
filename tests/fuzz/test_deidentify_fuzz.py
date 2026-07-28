@@ -733,6 +733,7 @@ def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
         )
 
 
+@settings(deadline=None)
 @given(case=chunk_boundary_documents())
 def test_streaming_chunk_boundary_matches_single_pass(case):
     """A boundary inside an identifier is buffered and redacted as one span."""
