@@ -283,3 +283,15 @@
 | DiagnosticProcedure | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 | Device | DEVICE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 | Approach | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+
+## Nursing Observation
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| IntakeOutput | INTAKE_OUTPUT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+| LineDrainTube | LINE_DRAIN_TUBE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+| RiskScore | NURSING_RISK_SCORE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
+| MobilityStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
+| CareIntervention | CARE_INTERVENTION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+| PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
+| SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |

@@ -194,5 +194,14 @@
     "DiagnosticProcedure",
     "Device",
     "Approach"
+  ],
+  "nursing_observation": [
+    "IntakeOutput",
+    "LineDrainTube",
+    "RiskScore",
+    "MobilityStatus",
+    "CareIntervention",
+    "PainScore",
+    "SkinAssessment"
   ]
 }
