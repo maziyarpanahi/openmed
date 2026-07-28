@@ -684,7 +684,7 @@ class AdvancedNERProcessor:
         if use_smart_grouping and pipeline_output:
             # Check if we have token-level data (no aggregation_strategy used)
             first_item = pipeline_output[0]
-            if "entity" in first_item and not "entity_group" in first_item:
+            if "entity" in first_item and "entity_group" not in first_item:
                 entities = self.smart_group_entities(pipeline_output, text)
             else:
                 # Already grouped, convert to EntitySpan format

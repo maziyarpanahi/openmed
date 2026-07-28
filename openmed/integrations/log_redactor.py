@@ -286,7 +286,7 @@ def _iter_ndjson_events(input_stream: Iterable[str]) -> Iterator[dict[str, Any]]
             continue
         try:
             event = json.loads(line)
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             raise LogRedactorError(
                 f"invalid JSON object at input line {line_number}"
             ) from None

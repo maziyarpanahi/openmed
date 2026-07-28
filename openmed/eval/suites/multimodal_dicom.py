@@ -838,7 +838,7 @@ def _write_pixel_dicom(
     *,
     uid_entropy: str,
 ) -> Path:
-    pydicom = _import_pydicom()
+    _import_pydicom()
     from pydicom.dataset import FileDataset, FileMetaDataset
     from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
 

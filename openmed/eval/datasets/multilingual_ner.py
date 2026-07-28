@@ -26,7 +26,6 @@ from openmed.core.labels import (
     LAB_TEST,
     LOCATION,
     MEDICATION,
-    MICROORGANISM,
     ORGANIZATION,
     OTHER,
     PERSON,

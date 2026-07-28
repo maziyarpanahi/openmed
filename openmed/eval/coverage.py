@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from openmed.core.decoding.spans import iter_grapheme_clusters
 from openmed.core.labels import CANONICAL_LABELS

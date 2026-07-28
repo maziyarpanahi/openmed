@@ -23,11 +23,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from importlib import resources
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from .anonymizer.providers.clinical_ids import (
-    gstin_check_char,
-    pan_check_letter,
     validate_abha,
     validate_australian_medicare,
     validate_australian_tfn,
@@ -47,11 +45,9 @@ from .lang_id_codemix import (
     token_language_runs,
 )
 from .language_pack_catalog import (
-    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
-    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 

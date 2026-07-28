@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Any, Iterable, Mapping, Sequence
