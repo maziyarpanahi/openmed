@@ -2,9 +2,10 @@
 
 Pathology and oncology notes record staging as compact notations such as
 ``pT2 N1 M0`` or ``ypT3a``. This module parses those *stated* descriptors into a
-structured :class:`TnmStage` -- a staging basis (``c``/``p``/``yc``/``yp``/``r``/
-``a``), the T/N/M categories, and their subcategories -- following AJCC 8th
-edition conventions.
+structured :class:`TnmStage` -- a staging basis
+(``c``/``p``/``yc``/``yp``/``r``/``a``), the T/N/M categories and their
+subcategories, an explicitly written histologic grade, and source offsets --
+following AJCC 8th edition conventions.
 
 It makes no staging decision of its own: categories are read verbatim from the
 text, never derived. Staging-shaped tokens that are not valid AJCC categories
@@ -17,7 +18,7 @@ derivation, prognostic table, or treatment inference -- see
 from __future__ import annotations
 
 import re
-from typing import Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict, cast
 
 TnmBasis = Literal["c", "p", "yc", "yp", "r", "a"]
 
@@ -45,23 +46,26 @@ class UnparsedToken(TypedDict):
 class TnmStage(TypedDict):
     """A structured TNM staging descriptor read from note text.
 
-    ``basis`` is the staging prefix shared by the categories (``None`` when none
-    is written). ``t``/``n``/``m`` are the normalized categories (e.g. ``"T2"``,
-    ``"Tis"``, ``"TX"``, ``"N0"``, ``"M1"``) and the ``*_subcategory`` fields the
-    suffix when present (e.g. ``"a"``, ``"mi"``, ``"i+"``). ``confidence`` is
-    ``"low"`` whenever a token was surfaced as ``unparsed``, the prefixes across
-    categories disagree, a bare ambiguous ``y`` prefix is used, or nothing was
-    recognized; otherwise ``"high"``. ``unparsed`` lists staging-shaped tokens
-    that were not used for the primary stage, each with a reason.
+    ``staging_basis`` is the prefix shared by the categories (``None`` when
+    none is written). ``t_category``/``n_category``/``m_category`` are the
+    normalized categories (e.g. ``"T2"``, ``"Tis"``, ``"TX"``, ``"N0"``,
+    ``"M1"``), and the ``*_subcategory`` fields hold suffixes such as ``"a"``,
+    ``"mi"``, or ``"i+"``. ``grade`` is an explicitly written ``G1``-``G4`` or
+    ``GX`` token; it is never inferred. ``span`` covers the selected descriptor
+    in the source text. ``confidence`` is ``"low"`` whenever a token was
+    surfaced as ``unparsed``, prefixes disagree, a bare ambiguous ``y`` prefix
+    is used, or nothing was recognized; otherwise ``"high"``.
     """
 
-    basis: Optional[str]
-    t: Optional[str]
+    staging_basis: Optional[TnmBasis]
+    t_category: Optional[str]
     t_subcategory: Optional[str]
-    n: Optional[str]
+    n_category: Optional[str]
     n_subcategory: Optional[str]
-    m: Optional[str]
+    m_category: Optional[str]
     m_subcategory: Optional[str]
+    grade: Optional[str]
+    span: Optional[tuple[int, int]]
     confidence: str
     unparsed: list[UnparsedToken]
     advisory: str
@@ -85,10 +89,14 @@ _PREFIX = r"(?P<pre>yp|yc|y|c|p|r|a)?"
 # are validated and surfaced as unparsed, never truncated into ``T1``/``N2``. The
 # ``is`` in-situ value is matched case-insensitively so ``Tis`` and ``TIS`` both
 # parse; T/N/M and the basis prefix stay case-sensitive to avoid prose matches.
-_BODY = r"(?P<body>(?:(?i:is)|[Xx]|\d)[^\sTNM,;:()\[\]/=-]*)"
+_BODY = r"(?P<body>(?:(?i:is)|[Xx]|\d)[^\sTNMG,;:()\[\]/=-]*)"
 _CATEGORY_RE = re.compile(
     _BOUNDARY + _PREFIX + r"(?P<cat>[TNM])" + _BODY + r"(?:\((?P<paren>[^)]{1,12})\))?"
 )
+
+# Histologic grade is separate from the T/N/M grammar and is accepted only
+# when explicitly written as GX or G1-G4.
+_GRADE_RE = re.compile(_BOUNDARY + r"(?P<cat>G)(?P<body>[Xx]|\d+)(?![A-Za-z0-9])")
 
 #: Values that are valid for each category (AJCC 8th edition).
 _VALID_VALUES: dict[str, frozenset[str]] = {
@@ -189,9 +197,10 @@ def parse_tnm(text: str) -> TnmStage:
             such as ``"pT2 N1 M0"`` or ``"ypT3a"``.
 
     Returns:
-        A :class:`TnmStage`. The primary T/N/M categories (the first valid match
-        of each, preferring a prefixed one) are normalized; ``basis`` is taken
-        from the primary categories' shared prefix. Additional or invalid
+        A :class:`TnmStage`. The primary T/N/M categories (the first valid
+        match of each, preferring a prefixed one) are normalized;
+        ``staging_basis`` is taken from the primary categories' shared prefix.
+        Explicit grade and source offsets are retained. Additional or invalid
         staging-shaped tokens are surfaced in ``unparsed`` with a reason and
         never coerced, and :data:`TNM_STAGING_ADVISORY` is always attached.
     """
@@ -212,17 +221,29 @@ def parse_tnm(text: str) -> TnmStage:
     primary_n, secondary_n = _choose_primary(by_category["N"])
     primary_m, secondary_m = _choose_primary(by_category["M"])
 
-    t = primary_t.category if primary_t else None
+    t_category = primary_t.category if primary_t else None
     t_sub = primary_t.subcategory if primary_t else None
-    n = primary_n.category if primary_n else None
+    n_category = primary_n.category if primary_n else None
     n_sub = primary_n.subcategory if primary_n else None
-    m = primary_m.category if primary_m else None
+    m_category = primary_m.category if primary_m else None
     m_sub = primary_m.subcategory if primary_m else None
+
+    valid_grades: list[re.Match[str]] = []
+    invalid_grades: list[re.Match[str]] = []
+    for match in _GRADE_RE.finditer(source):
+        if match.group("body").lower() in {"x", "1", "2", "3", "4"}:
+            valid_grades.append(match)
+        else:
+            invalid_grades.append(match)
+    primary_grade = valid_grades[0] if valid_grades else None
+    grade = (
+        f"G{primary_grade.group('body').upper()}" if primary_grade is not None else None
+    )
 
     primaries = [primary_t, primary_n, primary_m]
     raw_prefixes = [item.prefix for item in primaries if item and item.prefix]
     basis_prefixes = [pre for pre in raw_prefixes if pre in FULL_BASES]
-    basis = basis_prefixes[0] if basis_prefixes else None
+    basis = cast(TnmBasis, basis_prefixes[0]) if basis_prefixes else None
     mixed_basis = len(set(basis_prefixes)) > 1
     ambiguous_y = any(pre == "y" for pre in raw_prefixes)
 
@@ -254,10 +275,44 @@ def parse_tnm(text: str) -> TnmStage:
                 ),
             )
         )
+    for match in valid_grades[1:]:
+        surfaced.append(
+            (
+                match.start(),
+                UnparsedToken(
+                    token=match.group(0),
+                    reason="additional G category not used for the primary stage",
+                ),
+            )
+        )
+    for match in invalid_grades:
+        surfaced.append(
+            (
+                match.start(),
+                UnparsedToken(
+                    token=match.group(0),
+                    reason=f"unrecognized G category '{match.group(0)}'",
+                ),
+            )
+        )
     surfaced.sort(key=lambda item: item[0])
     unparsed = [token for _, token in surfaced]
 
-    nothing_recognized = primary_t is None and primary_n is None and primary_m is None
+    selected_matches = [
+        item.match for item in (primary_t, primary_n, primary_m) if item is not None
+    ]
+    if primary_grade is not None:
+        selected_matches.append(primary_grade)
+    span = (
+        (
+            min(match.start() for match in selected_matches),
+            max(match.end() for match in selected_matches),
+        )
+        if selected_matches
+        else None
+    )
+
+    nothing_recognized = not selected_matches
     confidence = (
         "low"
         if (unparsed or mixed_basis or ambiguous_y or nothing_recognized)
@@ -265,13 +320,15 @@ def parse_tnm(text: str) -> TnmStage:
     )
 
     return TnmStage(
-        basis=basis,
-        t=t,
+        staging_basis=basis,
+        t_category=t_category,
         t_subcategory=t_sub,
-        n=n,
+        n_category=n_category,
         n_subcategory=n_sub,
-        m=m,
+        m_category=m_category,
         m_subcategory=m_sub,
+        grade=grade,
+        span=span,
         confidence=confidence,
         unparsed=unparsed,
         advisory=TNM_STAGING_ADVISORY,

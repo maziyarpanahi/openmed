@@ -332,6 +332,28 @@ def risk_report(
     }
 
 
+def quasi_identifier_key(
+    record: Any,
+    *,
+    fields: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the ``risk_report`` quasi-identifier key for one row or record.
+
+    ``fields`` narrows table-like mappings to a candidate quasi-identifier set
+    before the standard record profiler runs. The serialized key shape is the
+    same shape emitted in ``risk_report()["singleton_records"][*]
+    ["quasi_identifier_key"]`` so callers can compare keys without duplicating
+    the normalization rules.
+    """
+
+    records = _coerce_records(_record_subset(record, fields), source="deidentified")
+    if not records:
+        return []
+    if len(records) != 1:
+        raise ValueError("quasi_identifier_key expects exactly one record")
+    return _serialized_profile_key(_profile_record(records[0]).key)
+
+
 def build_longitudinal_corpus(
     records: Any,
     *,
@@ -1148,11 +1170,20 @@ def _singleton_record(profile: _Profile, effective_k: int) -> dict[str, Any]:
         "record_index": profile.record.index,
         "record_id": profile.record.record_id,
         "effective_k": effective_k,
-        "quasi_identifier_key": [
-            {"category": category, "values": list(values)}
-            for category, values in profile.key
-        ],
+        "quasi_identifier_key": _serialized_profile_key(profile.key),
     }
+
+
+def _serialized_profile_key(
+    key: tuple[tuple[str, tuple[str, ...]], ...],
+) -> list[dict[str, Any]]:
+    return [{"category": category, "values": list(values)} for category, values in key]
+
+
+def _record_subset(record: Any, fields: Sequence[str] | None) -> Any:
+    if fields is None or not isinstance(record, Mapping):
+        return record
+    return {field: record.get(field) for field in fields if field in record}
 
 
 def _reid_rate(
@@ -1253,26 +1284,302 @@ def _span_is_direct_identifier(span: Mapping[str, Any]) -> bool:
 
 
 def _field_is_direct_identifier(name: str) -> bool:
-    normalized = _name_key(name)
-    if any(
-        safe_hint in normalized
-        for safe_hint in ("date", "age", "diagnosis", "condition")
+    """Return whether a field name strongly signals a direct identifier.
+
+    Identifier hints are matched as semantic tokens or reviewed compound
+    names.  Substring matching is intentionally avoided: ordinary fields such
+    as ``validity_score``, ``fluid_balance``, and ``candidate_score`` contain
+    the letters ``id`` but are not identifiers.
+    """
+
+    tokens = _field_name_tokens(name)
+    normalized = "".join(tokens)
+    if any(token in {"id", "identifier"} for token in tokens):
+        return True
+
+    direct_tokens = {
+        "email",
+        "emailaddress",
+        "phone",
+        "telephone",
+        "ssn",
+        "mrn",
+        "address",
+        "fax",
+        "passport",
+        "fingerprint",
+        "voiceprint",
+        "photo",
+        "photograph",
+        "imei",
+        "imsi",
+        "uuid",
+        "guid",
+        "npi",
+        "password",
+        "apikey",
+    }
+    if any(token in direct_tokens for token in tokens):
+        return True
+
+    if normalized in {
+        "id",
+        "identifier",
+        "medicalrecordnumber",
+        "socialsecuritynumber",
+        "emailaddress",
+        "phonenumber",
+        "telephonenumber",
+        "streetaddress",
+        "postaladdress",
+        "bankaccount",
+        "accountnumber",
+        "bankaccountnumber",
+        "financialaccountnumber",
+        "healthplanbeneficiarynumber",
+        "passportnumber",
+        "driverslicensenumber",
+        "driverlicense",
+        "driverslicense",
+        "licensenumber",
+        "certificatenumber",
+        "vehicleserialnumber",
+        "vin",
+        "deviceserialnumber",
+        "url",
+        "ipaddress",
+        "biometricidentifier",
+        "fullfacephoto",
+        "apikey",
+        "secretkey",
+        "firstname",
+        "givenname",
+        "lastname",
+        "familyname",
+        "middlename",
+        "fullname",
+        "surname",
+        "forename",
+        "legalname",
+        "birthname",
+        "nickname",
+        "alias",
+        "patientname",
+        "personname",
+        "membername",
+        "providername",
+        "clinicianname",
+        "physicianname",
+        "doctorname",
+        "employeename",
+        "mothermaidenname",
+        "emergencycontactname",
+        "emergencycontact",
+        "nextofkinname",
+        "nextofkin",
+        "guardianname",
+        "spousename",
+        "username",
+        "loginname",
+        "screenname",
+        "accountname",
+        "account",
+        "uuid",
+        "guid",
+        "npi",
+        "nhsnumber",
+        "abhanumber",
+        "medicarenumber",
+        "medicaidnumber",
+        "healthplannumber",
+        "healthinsurancenumber",
+        "medicalrecordno",
+        "patientnumber",
+        "patientnum",
+        "subjectnumber",
+        "subjectnum",
+        "membernumber",
+        "membernum",
+        "recordnumber",
+        "recordnum",
+        "chartnumber",
+        "chartnum",
+        "claimnumber",
+        "claimnum",
+        "beneficiarynumber",
+        "beneficiarynum",
+        "subscribernumber",
+        "subscribernum",
+        "policynumber",
+        "policynum",
+        "insurancenumber",
+        "insurancenum",
+        "hospitalnumber",
+        "hospitalnum",
+        "admissionnumber",
+        "admissionnum",
+        "encounternumber",
+        "encounternum",
+        "visitnumber",
+        "visitnum",
+        "patientkey",
+        "subjectkey",
+        "memberkey",
+        "recordkey",
+        "userkey",
+        "accountkey",
+        "deviceserial",
+        "serialnumber",
+        "licenseplate",
+        "weburl",
+        "ip",
+        "mobile",
+        "imei",
+        "imsi",
+        "photo",
+        "photograph",
+    }:
+        return True
+    if "name" in tokens and any(
+        token
+        in {
+            "diagnosis",
+            "condition",
+            "procedure",
+            "medication",
+            "facility",
+            "test",
+            "code",
+        }
+        for token in tokens
     ):
         return False
-    return any(
-        hint in normalized
-        for hint in (
-            "name",
-            "email",
-            "phone",
-            "ssn",
-            "mrn",
-            "id",
-            "address",
+    if "name" in tokens and any(
+        token
+        in {
+            "middle",
+            "legal",
+            "birth",
+            "patient",
+            "person",
+            "member",
+            "provider",
+            "clinician",
+            "physician",
+            "doctor",
+            "employee",
+            "mother",
+            "maiden",
+            "emergency",
+            "contact",
+            "guardian",
+            "spouse",
+            "kin",
+            "beneficiary",
+        }
+        for token in tokens
+    ):
+        return True
+    if any(token in {"number", "num", "no"} for token in tokens) and any(
+        token
+        in {
+            "patient",
+            "person",
+            "subject",
+            "member",
+            "record",
+            "medical",
+            "chart",
+            "claim",
+            "beneficiary",
+            "subscriber",
+            "policy",
+            "insurance",
+            "medicare",
+            "medicaid",
+            "nhs",
+            "abha",
+            "hospital",
+            "admission",
+            "encounter",
+            "visit",
             "account",
-            "password",
-            "apikey",
+            "provider",
+            "clinician",
+            "physician",
+            "employee",
+            "user",
+        }
+        for token in tokens
+    ):
+        return True
+    if "key" in tokens and any(
+        token
+        in {
+            "patient",
+            "person",
+            "subject",
+            "member",
+            "record",
+            "account",
+            "user",
+            "provider",
+            "employee",
+        }
+        for token in tokens
+    ):
+        return True
+    if "serial" in tokens and any(
+        token in {"device", "vehicle", "equipment", "serial", "number"}
+        for token in tokens
+    ):
+        return True
+    if "plate" in tokens and any(
+        token in {"license", "vehicle", "registration"} for token in tokens
+    ):
+        return True
+    if any(token in {"mobile", "cell"} for token in tokens) and any(
+        token in {"phone", "telephone", "number", "num", "no"} for token in tokens
+    ):
+        return True
+    if any(token in {"photo", "photograph"} for token in tokens) and any(
+        token in {"patient", "person", "member", "employee", "face", "full"}
+        for token in tokens
+    ):
+        return True
+    if "url" in tokens or "ip" in tokens:
+        return True
+    if normalized.endswith(
+        (
+            "patientid",
+            "personid",
+            "subjectid",
+            "recordid",
+            "memberid",
+            "accountid",
+            "userid",
+            "encounterid",
+            "documentid",
+            "providerid",
         )
+    ):
+        return True
+    if any(
+        safe_hint in tokens for safe_hint in ("date", "age", "diagnosis", "condition")
+    ):
+        return False
+    return len(tokens) == 1 and tokens[0] == "name"
+
+
+def _field_name_tokens(name: str) -> tuple[str, ...]:
+    """Split snake, kebab, spaced, and camel-case field names safely."""
+
+    separated = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", str(name))
+    separated = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", separated)
+    return tuple(
+        token.casefold()
+        for token in re.findall(r"[^\W_]+", separated, flags=re.UNICODE)
+        if token
     )
 
 
@@ -1303,5 +1610,6 @@ __all__ = [
     "build_longitudinal_corpus",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "quasi_identifier_key",
     "risk_report",
 ]

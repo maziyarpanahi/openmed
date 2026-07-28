@@ -20,24 +20,29 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
     validate_chinese_resident_id,
+    validate_czech_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
     validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_greek_amka,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_kenya_maisha_namba,
     validate_korean_rrn,
+    validate_marathi_aadhaar,
     validate_norwegian_fodselsnummer,
     validate_portuguese_cpf,
     validate_romanian_cnp,
     validate_russian_snils,
     validate_spanish_nie,
     validate_swedish_personnummer,
+    validate_tamil_aadhaar,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_ukrainian_rnokpp,
     validate_za_id_number,
 )
 
@@ -77,6 +82,9 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "zu",
     "xh",
     "zh",
+    "uk",
+    "cs",
+    "el",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -425,6 +433,33 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Umhla wokulandelela ",
         ".",
     ),
+    "uk": (
+        "Клінічна нотатка: пацієнт ",
+        " народився ",
+        ". РНОКПП пацієнта ",
+        ". Телефон ",
+        ". Адреса ",
+        ". Дата наступного огляду ",
+        ".",
+    ),
+    "cs": (
+        "Klinická poznámka: pacient ",
+        " se narodil ",
+        ". Rodné číslo pacienta ",
+        ". Telefon ",
+        ". Adresa ",
+        ". Datum kontroly ",
+        ".",
+    ),
+    "el": (
+        "Κλινική σημείωση: ασθενής ",
+        " γεννήθηκε στις ",
+        ". ΑΜΚΑ ασθενούς ",
+        ". Τηλέφωνο ",
+        ". Διεύθυνση ",
+        ". Ημερομηνία επανελέγχου ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -435,7 +470,11 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "it": validate_italian_codice_fiscale,
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
+    "as": validate_aadhaar,
     "hi": validate_aadhaar,
+    "mr": validate_marathi_aadhaar,
+    "or": validate_aadhaar,
+    "ta": validate_tamil_aadhaar,
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
@@ -452,6 +491,9 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "zu": validate_za_id_number,
     "xh": validate_za_id_number,
     "zh": validate_chinese_resident_id,
+    "uk": validate_ukrainian_rnokpp,
+    "cs": validate_czech_rodne_cislo,
+    "el": validate_greek_amka,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -462,7 +504,11 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "it": "pii_i18n.validate_italian_codice_fiscale",
     "es": "pii_i18n.validate_spanish_nie",
     "nl": "pii_i18n.validate_dutch_bsn",
+    "as": "pii_i18n.validate_aadhaar",
     "hi": "pii_i18n.validate_aadhaar",
+    "mr": "pii_i18n.validate_marathi_aadhaar",
+    "or": "pii_i18n.validate_aadhaar",
+    "ta": "pii_i18n.validate_tamil_aadhaar",
     "te": "pii_i18n.validate_aadhaar",
     "pt": "pii_i18n.validate_portuguese_cpf",
     "tr": "pii_i18n.validate_turkish_tckn",
@@ -479,6 +525,9 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "zu": "pii_i18n.validate_za_id_number",
     "xh": "pii_i18n.validate_za_id_number",
     "zh": "pii_i18n.validate_chinese_resident_id",
+    "uk": "pii_i18n.validate_ukrainian_rnokpp",
+    "cs": "pii_i18n.validate_czech_rodne_cislo",
+    "el": "pii_i18n.validate_greek_amka",
 }
 
 

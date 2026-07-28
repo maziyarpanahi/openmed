@@ -7,10 +7,10 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-OpenMed `1.9.1` completes the `1.9` rollout for one ONNX token-classification
-model contract across Python, browsers, Node.js, and Android, alongside a
-corrected Swift package, expanded clinical extraction, 21-language PII
-coverage, and stronger release evidence:
+OpenMed `2.0.0` establishes a stable major-version contract across Python,
+Swift, Kotlin/Android, JavaScript, REST, and local deployment surfaces. It
+combines policy-aware de-identification, expanded clinical and structured-data
+workflows, broad multilingual PII coverage, and fail-closed release evidence:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility
   hashes, review bundles, redaction previews, and release gates.
@@ -20,11 +20,13 @@ coverage, and stronger release evidence:
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
   browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
   Transformers.js export bundles.
-- **26 supported PII language codes: am, ar, da, de, en, es, fr, he, hi, id, it,
-  ja, ko, nl, no, pt, ro, ru, sv, sw, te, th, tr, xh, zh, and zu**, with Russian
-  and Chinese using documented multilingual default-model placeholders, locale-aware validation and surrogate
-  generation. A user-configured Indic NER adapter adds nine optional routes and
-  can also serve Hindi and Telugu. Additional validator-backed national-ID
+- **34 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr,
+  he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr,
+  uk, xh, zh, and zu**, with Russian using a documented multilingual default-model
+  placeholder and Bengali, Chinese, and Tamil using dedicated registry entries,
+  plus locale-aware validation and surrogate generation. A user-configured
+  Indic NER adapter adds four optional routes and can also serve Assamese,
+  Bengali, Hindi, Marathi, Odia, Tamil, and Telugu. Additional validator-backed national-ID
   coverage remains available for ID-only locales.
 - **Release evidence** for leakage heatmaps, model scorecards, threshold
   sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, signed
@@ -82,10 +84,12 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – Swift packaging, Android release hardening, current model examples, and dependency-security fixes for the cross-platform 1.9 release.
+- [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – major-version installation coordinates, compatibility guidance, platform coverage, and qualification requirements.
+- [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – historical Swift packaging, Android release hardening, and dependency-security fixes for the final 1.9 patch.
 - [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – historical cross-platform runtime and service release inventory.
 - [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – historical coverage checklist across examples, docs, website, and source modules.
 - [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, Apple runtimes, browser export, multimodal inputs, and FHIR/HL7.
+- [ONNX and WebGPU Export](./export-onnx-webgpu.md) – export, manifest, runtime-loading, and publication guidance for ONNX browser artifacts.
 - [Transformers.js Export](./export-transformersjs.md) – browser/WebGPU packaging for token classification bundles.
 - [FHIR Interop Helpers](./fhir-interop.md), [HL7 v2 De-identification](./hl7v2-deidentification.md), and [OMOP/lakehouse integrations](./integrations/lakehouse-redaction.md) – structured health-data workflows.
 - [MLX Backend](./mlx-backend.md), [OpenMedKit](./swift-openmedkit.md), [Android Span Parity](./android-parity.md), and [CoreML Packaging](./coreml-export.md) – local mobile/runtime paths.
@@ -94,7 +98,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – review the current patch fixes, installation coordinates, and validation evidence.
+3. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – review the current installation coordinates, compatibility contract, and validation requirements.
 4. Core guides:
    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
    - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.

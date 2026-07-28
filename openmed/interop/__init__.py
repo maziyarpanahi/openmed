@@ -83,6 +83,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="presidio",
         description="Presidio RecognizerResult adapter",
     ),
+    "quickumls": AdapterSpec(
+        name="quickumls",
+        module="openmed.interop.quickumls",
+        extra="quickumls",
+        description="QuickUMLS licensed-resource linker adapter",
+    ),
+    "scispacy_linker": AdapterSpec(
+        name="scispacy_linker",
+        module="openmed.interop.scispacy_linker",
+        extra="scispacy",
+        description="scispaCy UMLS entity-linker adapter",
+    ),
     "philter": AdapterSpec(
         name="philter",
         module="openmed.interop.philter",
@@ -106,6 +118,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.pydeid",
         extra="pydeid",
         description="pyDeid PHI span adapter",
+    ),
+    "scrubadub": AdapterSpec(
+        name="scrubadub",
+        module="openmed.interop.scrubadub",
+        extra="scrubadub",
+        description="scrubadub Filth span adapter",
+    ),
+    "spark": AdapterSpec(
+        name="spark",
+        module="openmed.interop.spark_udf",
+        extra="spark",
+        description="PySpark pandas_udf for batch column de-identification",
     ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",

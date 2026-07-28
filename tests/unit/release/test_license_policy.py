@@ -72,6 +72,21 @@ def test_current_package_data_has_no_restricted_vocab_dumps():
     assert policy.audit_restricted_vocab_data(ROOT) == []
 
 
+def test_current_bundled_resources_preserve_required_license_notices():
+    assert policy.audit_bundled_license_notices(ROOT) == []
+
+
+def test_missing_bundled_icu_license_fails_policy(tmp_path):
+    rules_target = tmp_path / policy.ICU_RULES_PATH
+    rules_target.parent.mkdir(parents=True)
+    rules_target.write_bytes((ROOT / policy.ICU_RULES_PATH).read_bytes())
+    (tmp_path / "NOTICE").write_bytes((ROOT / "NOTICE").read_bytes())
+
+    findings = policy.audit_bundled_license_notices(tmp_path)
+
+    assert findings == [f"missing bundled ICU license: {policy.ICU_LICENSE_PATH}"]
+
+
 def test_gpl_dependency_fails_policy(tmp_path):
     pyproject = write_pyproject(
         tmp_path,

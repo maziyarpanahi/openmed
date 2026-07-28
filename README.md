@@ -32,7 +32,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>2,000+ models</b> &nbsp;·&nbsp; <b>24 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ models</b> &nbsp;·&nbsp; <b>32 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -97,6 +97,17 @@ A state-of-the-art clinical NER model running locally: no API key, no network ca
 
 ---
 
+## Building with an agent?
+
+Start with the [consumer agent-usage guide](docs/agent-usage.md), or load the
+curated [llms.txt](https://openmed.life/docs/llms.txt) documentation index.
+For callable local interfaces, use the [MCP server](docs/mcp-clients.md), the
+typed [tool registry](openmed/mcp/tool_registry.py), or the
+[command-line interface](docs/agent-usage.md#command-line-interface). Ready-made
+cross-tool procedures live in the [repository skills catalog](skills/README.md).
+
+---
+
 ## Why OpenMed?
 
 |                                       |       **OpenMed**        |   Cloud medical APIs   |
@@ -105,7 +116,7 @@ A state-of-the-art clinical NER model running locally: no API key, no network ca
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          2,000+          |        Limited         |
-| Model-backed PII languages            |            21            |         Varies         |
+| Model-backed PII languages            |            29            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
@@ -129,7 +140,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -173,11 +184,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then use the immutable OpenMed `v1.9.1` release:
+Then use the immutable OpenMed `v2.0.0` release:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -244,6 +255,23 @@ flowchart LR
 
 Rendered result: a local clinical-text pipeline that returns medical entities,
 PII findings, and de-identified text without sending data to a cloud API.
+
+---
+
+## Agent Skills — build with OpenMed from your coding agent
+
+The [`skills/`](skills/) catalog ships portable [Agent Skills](https://agentskills.io) for on-device de-identification, clinical NER, FHIR export, evaluation, and the healthcare workflows around them. The same `SKILL.md` folders work in **Claude Code**, **OpenAI Codex**, **OpenCode**, and compatible agents; the installer uses each client's skills directory plus the cross-client `~/.agents/skills` convention.
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # installs for Claude Code, Codex, OpenCode, and ~/.agents/skills
+```
+
+Then ask your agent for the pipeline using synthetic placeholders:
+
+> Build a local OpenMed pipeline that de-identifies a synthetic discharge note and extracts medication entities.
+
+It loads the right skills and produces an on-device pipeline (`openmed.deidentify(...)` → `openmed.analyze_text(...)`). After the one-time model download, run that pipeline locally on real notes; do not paste real PHI into a cloud-hosted agent prompt. See the **[skills catalog and 30-second example](skills/README.md)**.
 
 ---
 
@@ -504,16 +532,18 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (26 supported languages)
+## Multilingual PII (34 supported languages)
 
-Extraction and de-identification support **26 supported PII language codes**:
-`am`, `ar`, `da`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
-Russian and Chinese routing currently use documented multilingual
-default-model placeholders while dedicated model weights remain separate.
-An optional, user-configured Indic NER family accepts nine additional routes
-(`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`, and `ta`) and can also serve
-Hindi and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never bundles or
-automatically selects those weights.
+Extraction and de-identification support **34 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+`it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`, with **600+ PII checkpoints** in total.
+Russian routing currently uses a documented multilingual default-model
+placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
+An optional, user-configured Indic NER family accepts four additional routes
+(`gu`, `kn`, `ml`, and `pa`) and can also serve Assamese, Bengali, Hindi,
+Marathi, Odia, Tamil, and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never
+bundles or automatically selects those optional weights.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
 
@@ -642,7 +672,7 @@ MkDocs build.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [OpenMed 1.9.0 Release Notes](docs/release/v1.9.0.md) | [Examples](docs/examples.md) |
+| [OpenMed 2.0.0 Release Notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Detector Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |

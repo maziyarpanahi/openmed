@@ -986,7 +986,7 @@ def run_relation_benchmark(
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
 ) -> BenchmarkReport:
-    """Run a relation-extraction model over DrugProt-style relation fixtures."""
+    """Run a relation model over fixtures with typed span relations."""
     if not fixtures:
         raise ValueError("relation benchmark requires at least one fixture")
     _validate_unique_fixture_ids(fixtures)
@@ -1056,6 +1056,7 @@ def run_relation_benchmark(
     metrics["strict_relation_f1"] = relation_metrics["strict"]
     metrics["relaxed_relation_f1"] = relation_metrics["relaxed"]
     metrics["per_relation_type_re_f1"] = relation_metrics["per_relation_type"]
+    metrics["per_language_relation_f1"] = relation_metrics["per_language"]
 
     report_metadata = dict(metadata or {})
     report_metadata.setdefault(
@@ -1066,6 +1067,10 @@ def run_relation_benchmark(
     report_metadata.setdefault(
         "relation_types",
         sorted({relation.relation_type for relation in gold_relations}),
+    )
+    report_metadata.setdefault(
+        "languages",
+        sorted({relation.head.language for relation in gold_relations}),
     )
     return BenchmarkReport(
         suite=suite,
@@ -2585,7 +2590,7 @@ def _relation_corpus_relations(
         text = str(getattr(fixture, "text", ""))
         gold.extend(
             normalize_eval_relations(
-                getattr(fixture, "relations", ()),
+                _fixture_gold_relations(fixture),
                 entity_spans=getattr(fixture, "entities", None),
                 fixture_id=fixture_id,
                 default_language=str(getattr(fixture, "language", "en")),
@@ -2611,7 +2616,7 @@ def _per_document_relations(
             (
                 tuple(
                     normalize_eval_relations(
-                        getattr(fixture, "relations", ()),
+                        _fixture_gold_relations(fixture),
                         entity_spans=getattr(fixture, "entities", None),
                         fixture_id=fixture_id,
                         default_language=str(getattr(fixture, "language", "en")),
@@ -2622,6 +2627,13 @@ def _per_document_relations(
             )
         )
     return documents
+
+
+def _fixture_gold_relations(fixture: Any) -> Iterable[Any]:
+    relations = getattr(fixture, "relations", None)
+    if relations is not None:
+        return relations
+    return getattr(fixture, "gold_relations", ())
 
 
 def _validate_relation_offsets(

@@ -17,6 +17,7 @@ The contract these tests gate lives in
 """
 
 import json
+import re
 import warnings
 
 import pytest
@@ -35,13 +36,20 @@ from openmed.core.anonymizer.locales import (
 )
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
+from openmed.core.language_pack import get_language_pack
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
+    LANGUAGE_MODEL_PREFIX,
+    LANGUAGE_MONTH_NAMES,
+    LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    validate_aadhaar,
+    validate_marathi_aadhaar,
 )
 
 # Documented set of languages whose *default* Faker locale is an intentional
@@ -143,6 +151,192 @@ class TestLocaleResolution:
         assert not caught
         assert "sw" not in L._APPROXIMATE_LOCALES
 
+    def test_assamese_pack_locale_surrogates_and_aadhaar_are_coherent(self):
+        pack = get_language_pack("as")
+
+        assert pack is not None
+        assert pack.scripts == ("Bengali",)
+        assert "as" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["as"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["as"] == "Assamese"
+        assert LANGUAGE_MODEL_PREFIX["as"] == "Assamese-"
+        assert LANGUAGE_MONTH_NAMES["as"] == [
+            "জানুৱাৰী",
+            "ফেব্ৰুৱাৰী",
+            "মাৰ্চ",
+            "এপ্ৰিল",
+            "মে",
+            "জুন",
+            "জুলাই",
+            "আগষ্ট",
+            "ছেপ্টেম্বৰ",
+            "অক্টোবৰ",
+            "নৱেম্বৰ",
+            "ডিচেম্বৰ",
+        ]
+        assert LANG_TO_LOCALE["as"] == "as_IN"
+        assert FAKER_BACKEND_LOCALE["as_IN"] == "bn_BD"
+        assert NATIONAL_ID_PROVIDERS["as"] == ("as_IN", "aadhaar")
+        assert "as" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("as") == "as_IN"
+            anonymizer = Anonymizer(lang="as", consistent=True, seed=693)
+            person = anonymizer.surrogate("অৰুণ বৰুৱা", "PERSON")
+            first_name = anonymizer.surrogate("অৰুণ", "FIRST_NAME")
+            last_name = anonymizer.surrogate("বৰুৱা", "LAST_NAME")
+            aadhaar = anonymizer.surrogate(
+                "২৪৬৭ ৭৮৩২ ৫৪৮৪",
+                "national_id",
+            )
+            assert resolve_locale("as") == "as_IN"
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "as_IN" in str(user_warnings[0].message)
+        assert "bn_BD" in str(user_warnings[0].message)
+        assert person in LOCALE_FAKE_DATA["as_IN"]["NAME"]
+        assert first_name in LOCALE_FAKE_DATA["as_IN"]["FIRST_NAME"]
+        assert last_name in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
+        assert any(
+            surname in person for surname in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
+        )
+        assert validate_aadhaar(aadhaar)
+
+    def test_odia_pack_uses_native_locale_model_and_aadhaar_provider(self):
+        pack = get_language_pack("or")
+
+        assert pack is not None
+        assert pack.scripts == ("Odia",)
+        assert "or" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["or"] == "Odia"
+        assert LANGUAGE_MODEL_PREFIX["or"] == "Odia-"
+        assert LANGUAGE_MONTH_NAMES["or"] == [
+            "ଜାନୁଆରୀ",
+            "ଫେବୃଆରୀ",
+            "ମାର୍ଚ୍ଚ",
+            "ଏପ୍ରିଲ",
+            "ମେ",
+            "ଜୁନ",
+            "ଜୁଲାଇ",
+            "ଅଗଷ୍ଟ",
+            "ସେପ୍ଟେମ୍ବର",
+            "ଅକ୍ଟୋବର",
+            "ନଭେମ୍ବର",
+            "ଡିସେମ୍ବର",
+        ]
+        assert LANG_TO_LOCALE["or"] == "or_IN"
+        assert NATIONAL_ID_PROVIDERS["or"] == ("or_IN", "aadhaar")
+        assert "or_IN" in AVAILABLE_LOCALES
+        assert "or" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("or") == "or_IN"
+            anonymizer = Anonymizer(lang="or", consistent=True, seed=692)
+            person = anonymizer.surrogate("ଅରୁଣ ଦାସ", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "୨୪୬୭ ୭୮୩୨ ୫୪୮୪",
+                "national_id",
+            )
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert re.fullmatch(r"[\u0B00-\u0B7F ]+", person)
+        assert person != "ଅରୁଣ ଦାସ"
+        assert validate_aadhaar(aadhaar)
+
+    def test_marathi_pack_uses_approximate_locale_and_three_part_names(self):
+        assert "mr" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["mr"] == "OpenMed/privacy-filter-multilingual"
+        assert LANG_TO_LOCALE["mr"] == "mr_IN"
+        assert FAKER_BACKEND_LOCALE["mr_IN"] == "hi_IN"
+        assert NATIONAL_ID_PROVIDERS["mr"] == ("mr_IN", "aadhaar")
+        assert "mr" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("mr") == "mr_IN"
+            assert resolve_locale("mr") == "mr_IN"
+            anonymizer = Anonymizer(lang="mr", consistent=True, seed=687)
+            female = anonymizer.surrogate(
+                "सौ. वैशाली सुरेश देशमुख",
+                "PERSON",
+            )
+            male = anonymizer.surrogate(
+                "श्री. अनिकेत माधव पाटील",
+                "PERSON",
+            )
+            aadhaar = anonymizer.surrogate(
+                "२४६७ ७८३२ ५४८४",
+                "national_id",
+            )
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "mr_IN" in str(user_warnings[0].message)
+        assert "hi_IN" in str(user_warnings[0].message)
+        assert validate_marathi_aadhaar(aadhaar)
+
+        female_match = re.fullmatch(
+            r"सौ\.\s+(\S+)\s+(\S+)\s+(\S+)",
+            female,
+        )
+        male_match = re.fullmatch(
+            r"श्री\.\s+(\S+)\s+(\S+)\s+(\S+)",
+            male,
+        )
+        assert female_match
+        assert male_match
+        assert female_match.group(1) in LOCALE_FAKE_DATA["mr_IN"]["FIRST_NAME_FEMALE"]
+        assert male_match.group(1) in LOCALE_FAKE_DATA["mr_IN"]["FIRST_NAME_MALE"]
+        assert female_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
+        assert male_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
+
+    def test_tamil_pack_uses_native_locale_model_and_aadhaar_provider(self):
+        assert "ta" in SUPPORTED_LANGUAGES
+        assert (
+            DEFAULT_PII_MODELS["ta"]
+            == "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1"
+        )
+        assert LANG_TO_LOCALE["ta"] == "ta_IN"
+        assert NATIONAL_ID_PROVIDERS["ta"] == ("ta_IN", "aadhaar")
+        assert "ta_IN" in AVAILABLE_LOCALES
+        assert "ta" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("ta") == "ta_IN"
+            anonymizer = Anonymizer(lang="ta", consistent=True, seed=686)
+            surrogates = [
+                anonymizer.surrogate(source, "PERSON")
+                for source in ("மு. கார்த்திக்", "R. Sudha")
+            ]
+            aadhaar = anonymizer.surrogate("2467 7832 5484", "national_id")
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert validate_aadhaar(aadhaar)
+        assert all(
+            re.fullmatch(
+                r"(?:[A-Za-z]|[\u0B80-\u0BFF]+)\.[ \t]*[\u0B80-\u0BFF]+",
+                surrogate,
+            )
+            for surrogate in surrogates
+        )
+
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):
         language = CONCEPTUAL_LOCALE_LANGUAGES[locale]
@@ -225,6 +419,22 @@ class TestApproximateLocaleWarnings:
         assert len(user_warnings) == 1
         assert "xh_ZA" in str(user_warnings[0].message)
         assert "zu_ZA" in str(user_warnings[0].message)
+
+    def test_afrikaans_approximation_warns_once_and_uses_dutch_backend(self):
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            first = resolve_locale("af")
+            second = resolve_locale("af")
+
+        assert first == second == "af_ZA"
+        assert FAKER_BACKEND_LOCALE[first] == "nl_NL"
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "af_ZA" in str(user_warnings[0].message)
+        assert "nl_NL" in str(user_warnings[0].message)
 
     def test_amharic_approximation_warns_once_and_uses_documented_backend(self):
         L._warned.clear()

@@ -26,17 +26,35 @@ def test_packaged_resources_are_license_tagged_and_within_budget(
     descriptor = package_segmenter_resources(tmp_path, DEFAULT_SEGMENTER_ID)
 
     assert descriptor["scripts"] == ["Han", "Devanagari"]
-    assert descriptor["license"] == "MIT AND ICU-1.8.1"
+    assert descriptor["license"] == "MIT AND ICU"
     assert {item["license"] for item in descriptor["resource_files"]} == {
         "MIT",
-        "ICU-1.8.1",
+        "ICU",
+    }
+    assert {item["role"] for item in descriptor["resource_files"]} == {
+        "han_dictionary",
+        "indic_break_rules",
+        "license_notice",
     }
     assert descriptor["total_size_bytes"] <= descriptor["size_budget_bytes"]
     assert descriptor["size_budget_bytes"] == SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES
     assert validate_segmenter_resources(tmp_path, descriptor)["files"] == [
         "segmenter/han_words.txt",
         "segmenter/indic_rules.json",
+        "segmenter/ICU.txt",
     ]
+    rules = json.loads(
+        (tmp_path / "segmenter" / "indic_rules.json").read_text(encoding="utf-8")
+    )
+    assert rules["license"] == "ICU"
+    assert rules["license_file"] == "ICU.txt"
+    assert rules["source"]["revision"] == "0c5873f89bf64f6bbc0a24b84f07d79b25785a42"
+    assert rules["source"]["path"] == "icu4c/source/data/brkitr/rules/char.txt"
+    assert rules["source"]["copyright"].startswith("Copyright (C) 2002-2016")
+    notice = (tmp_path / "segmenter" / "ICU.txt").read_text(encoding="utf-8")
+    assert "Copyright (C) 2002-2016, International Business Machines" in notice
+    assert "Copyright (c) 1995-2016 International Business Machines" in notice
+    assert "Permission is hereby granted, free of charge" in notice
 
 
 def test_stdlib_segmenter_does_not_import_optional_runtimes(
@@ -129,3 +147,55 @@ def test_validator_rejects_missing_declared_resource(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="segmenter resource is missing"):
         validate_segmenter_resources(tmp_path, descriptor)
+
+
+def test_validator_rejects_incomplete_icu_notice(tmp_path: Path) -> None:
+    descriptor = package_segmenter_resources(tmp_path, DEFAULT_SEGMENTER_ID)
+    _replace_resource(
+        tmp_path,
+        descriptor,
+        role="license_notice",
+        payload=b"ICU\n",
+    )
+
+    with pytest.raises(ValueError, match="ICU license notice is incomplete"):
+        validate_segmenter_resources(tmp_path, descriptor)
+
+
+def test_validator_rejects_unpinned_icu_provenance(tmp_path: Path) -> None:
+    descriptor = package_segmenter_resources(tmp_path, DEFAULT_SEGMENTER_ID)
+    rules_resource = next(
+        item
+        for item in descriptor["resource_files"]
+        if item["role"] == "indic_break_rules"
+    )
+    rules_path = tmp_path / rules_resource["path"]
+    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    rules["source"]["revision"] = "unversioned"
+    _replace_resource(
+        tmp_path,
+        descriptor,
+        role="indic_break_rules",
+        payload=(json.dumps(rules) + "\n").encode(),
+    )
+
+    with pytest.raises(ValueError, match="required ICU provenance"):
+        validate_segmenter_resources(tmp_path, descriptor)
+
+
+def _replace_resource(
+    root: Path,
+    descriptor: dict,
+    *,
+    role: str,
+    payload: bytes,
+) -> None:
+    resource = next(
+        item for item in descriptor["resource_files"] if item["role"] == role
+    )
+    (root / resource["path"]).write_bytes(payload)
+    resource["size_bytes"] = len(payload)
+    resource["sha256"] = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    descriptor["total_size_bytes"] = sum(
+        item["size_bytes"] for item in descriptor["resource_files"]
+    )

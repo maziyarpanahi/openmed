@@ -20,7 +20,7 @@ GOLD = (
     / "eval"
     / "golden"
     / "fixtures"
-    / "cancer_staging.jsonl"
+    / "tnm_stage.jsonl"
 )
 
 FIELD_FLOOR = 0.92
@@ -54,14 +54,14 @@ def test_gold_covers_bases_edge_cases_and_post_therapy():
     rows = _load_gold()
     gold = [row["gold"] for row in rows]
 
-    bases = {row["basis"] for row in gold}
+    bases = {row["staging_basis"] for row in gold}
     assert {"yc", "yp"} <= bases  # post-therapy clinical and pathologic
     assert None in bases  # a stage with no written prefix
 
-    t_categories = {row["t"] for row in gold}
+    t_categories = {row["t_category"] for row in gold}
     assert "Tis" in t_categories
     assert "TX" in t_categories
-    assert {"NX"} <= {row["n"] for row in gold}
+    assert {"NX"} <= {row["n_category"] for row in gold}
 
 
 def test_confidence_matches_gold_across_the_set():

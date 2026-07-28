@@ -15,7 +15,7 @@ with the latest BenchmarkReport for each family, tier, and format.
 | OpenMed | `PII` | `Base` | `mlx-fp` | 90 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `PII` | `Base` | `pytorch` | 218 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `PII` | `Large` | `mlx-fp` | 132 | n/a | `n/a` | `n/a` | `n/a` |
-| OpenMed | `PII` | `Large` | `pytorch` | 307 | n/a | `n/a` | `n/a` | `n/a` |
+| OpenMed | `PII` | `Large` | `pytorch` | 308 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `PII` | `n/a` | `mlx-8bit` | 3 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `PII` | `n/a` | `mlx-fp` | 4 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `PII` | `n/a` | `pytorch` | 16 | n/a | `n/a` | `n/a` | `n/a` |

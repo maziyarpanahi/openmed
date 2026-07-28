@@ -26,6 +26,7 @@ from typing import (
 )
 
 from openmed.core.decoding.spans import (
+    CjkOffsetMap,
     is_grapheme_boundary,
     is_indic_text,
     iter_grapheme_clusters,
@@ -54,6 +55,16 @@ _MAX_DICTIONARY_EXPANSION_RATIO = 100.0
 SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES = 64 * 1024
 SEGMENTER_RESOURCE_DIRECTORY = "segmenter"
 DEFAULT_SEGMENTER_ID = "openmed-cjk-indic-v1"
+_ICU_LICENSE_ID = "ICU"
+_ICU_LICENSE_FILENAME = "ICU.txt"
+_ICU_SOURCE_REPOSITORY = "https://github.com/unicode-org/icu"
+_ICU_SOURCE_REVISION = "0c5873f89bf64f6bbc0a24b84f07d79b25785a42"
+_ICU_SOURCE_PATH = "icu4c/source/data/brkitr/rules/char.txt"
+_ICU_SOURCE_COPYRIGHT = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation "
+    "and others. All Rights Reserved."
+)
+_ICU_SOURCE_RETRIEVED = "2026-07-28"
 SEGMENTER_IDS = (
     "openmed-han-v1",
     "openmed-indic-v1",
@@ -70,20 +81,28 @@ _SEGMENTER_SPECS: dict[str, dict[str, Any]] = {
     },
     "openmed-indic-v1": {
         "scripts": ["Devanagari"],
-        "license": "ICU-1.8.1",
+        "license": _ICU_LICENSE_ID,
         "resources": [
-            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+            ("indic_rules.json", "indic_break_rules", _ICU_LICENSE_ID),
+            (_ICU_LICENSE_FILENAME, "license_notice", _ICU_LICENSE_ID),
         ],
     },
     DEFAULT_SEGMENTER_ID: {
         "scripts": ["Han", "Devanagari"],
-        "license": "MIT AND ICU-1.8.1",
+        "license": f"MIT AND {_ICU_LICENSE_ID}",
         "resources": [
             ("han_words.txt", "han_dictionary", "MIT"),
-            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+            ("indic_rules.json", "indic_break_rules", _ICU_LICENSE_ID),
+            (_ICU_LICENSE_FILENAME, "license_notice", _ICU_LICENSE_ID),
         ],
     },
 }
+_ICU_LICENSE_NOTICE_MARKERS = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation and others.",
+    "ICU License - ICU 1.8.1 and later",
+    "Copyright (c) 1995-2016 International Business Machines Corporation and others",
+    "Permission is hereby granted, free of charge",
+)
 DEFAULT_MEDICAL_EXCEPTIONS = [
     "COVID-19",
     "SARS-CoV-2",
@@ -648,6 +667,8 @@ def _reject_dictionary(
 
 @dataclass(frozen=True)
 class SpanToken:
+    """A token whose half-open offsets index Python source code points."""
+
     text: str
     start: int
     end: int
@@ -952,6 +973,8 @@ def validate_segmenter_resources(
         raise ValueError(
             "segmenter total_size_bytes does not match the declared resource files"
         )
+    if "Devanagari" in scripts:
+        _validate_icu_segmenter_provenance(bundle_path, resources)
 
     return {
         "id": segmenter_id,
@@ -960,6 +983,42 @@ def validate_segmenter_resources(
         "total_size_bytes": total_size,
         "size_budget_bytes": budget,
     }
+
+
+def _validate_icu_segmenter_provenance(
+    bundle_path: Path,
+    resources: list[Mapping[str, Any]],
+) -> None:
+    """Require immutable ICU provenance and the complete bundled license notice."""
+
+    resources_by_role = {str(item.get("role") or ""): item for item in resources}
+    rules_resource = resources_by_role.get("indic_break_rules")
+    notice_resource = resources_by_role.get("license_notice")
+    if rules_resource is None or notice_resource is None:
+        raise ValueError(
+            "Indic segmenter resources must include rules and license notice"
+        )
+
+    notice_path = bundle_path / str(notice_resource.get("path") or "")
+    notice_text = notice_path.read_text(encoding="utf-8")
+    if any(marker not in notice_text for marker in _ICU_LICENSE_NOTICE_MARKERS):
+        raise ValueError("ICU license notice is incomplete")
+
+    rules_path = bundle_path / str(rules_resource.get("path") or "")
+    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    source = rules.get("source")
+    if (
+        rules.get("license") != _ICU_LICENSE_ID
+        or rules.get("license_file") != _ICU_LICENSE_FILENAME
+        or not isinstance(source, Mapping)
+        or source.get("repository") != _ICU_SOURCE_REPOSITORY
+        or source.get("revision") != _ICU_SOURCE_REVISION
+        or source.get("path") != _ICU_SOURCE_PATH
+        or source.get("copyright") != _ICU_SOURCE_COPYRIGHT
+        or source.get("retrieved") != _ICU_SOURCE_RETRIEVED
+        or not source.get("modifications")
+    ):
+        raise ValueError("Indic rules do not record the required ICU provenance")
 
 
 class ResourceSegmenter:
@@ -1366,6 +1425,51 @@ def remap_predictions_to_tokens(
         i = j
 
     return remapped
+
+
+def remap_predictions_to_chinese_words(
+    predictions: List[Dict[str, Any]],
+    text: str,
+    word_tokens: List[SpanToken],
+) -> List[Dict[str, Any]]:
+    """Remap subword predictions onto whole segmented Chinese words.
+
+    ``text`` must be the original NFC-normalized string used by the segmenter,
+    and every prediction offset must be a Python code-point offset into that
+    same string. Partial overlaps expand to whole words. Adjacent words with
+    the same label may merge, but Unicode whitespace (including U+3000) is
+    never bridged into the resulting redaction span.
+
+    Args:
+        predictions: Token-classifier predictions with ``start`` and ``end``.
+        text: Original NFC-normalized source text.
+        word_tokens: Chinese segmentation tokens over ``text``.
+
+    Returns:
+        OutputFormatter-compatible prediction dictionaries on word boundaries.
+    """
+    CjkOffsetMap(text, word_tokens)
+    for prediction in predictions:
+        start = prediction.get("start")
+        end = prediction.get("end")
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, int)
+            or not isinstance(end, int)
+        ):
+            continue
+        if not 0 <= start <= end <= len(text):
+            raise ValueError(
+                "prediction offsets must index the NFC-normalized source text"
+            )
+
+    return remap_predictions_to_tokens(
+        predictions,
+        text,
+        word_tokens,
+        gap=0,
+    )
 
 
 def _is_reasonable_length(

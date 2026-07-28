@@ -52,13 +52,16 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "indic_name_variants.json",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
+        "relations_indic.jsonl",
+        "relations_zh.jsonl",
         "surrogate_multilingual.jsonl",
         "consensus_corpus.jsonl",
         # Domain eval fixtures that are not PII de-identification gold spans and
         # must not be loaded as such by load_golden_fixtures().
         "radiology_finding.jsonl",
         "radiology_report.jsonl",
-        "cancer_staging.jsonl",
+        "measurement_trend.jsonl",
+        "tnm_stage.jsonl",
     }
 )
 

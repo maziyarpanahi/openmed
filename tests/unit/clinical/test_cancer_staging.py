@@ -10,20 +10,18 @@ import pytest
 from openmed.clinical import TNM_STAGING_ADVISORY, parse_tnm
 
 FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "clinical"
-    / "cancer_staging.jsonl"
+    Path(__file__).resolve().parents[2] / "fixtures" / "clinical" / "tnm_staging.jsonl"
 )
 
 STAGE_FIELDS = (
-    "basis",
-    "t",
+    "staging_basis",
+    "t_category",
     "t_subcategory",
-    "n",
+    "n_category",
     "n_subcategory",
-    "m",
+    "m_category",
     "m_subcategory",
+    "grade",
     "confidence",
     "unparsed",
 )
@@ -49,7 +47,7 @@ def test_fixture_rows_are_synthetic():
 def test_parser_matches_gold_row(row):
     parsed = parse_tnm(row["text"])
     for field in STAGE_FIELDS:
-        assert parsed[field] == row["gold"][field], field
+        assert parsed[field] == row["gold"].get(field), field
 
 
 # ---------------------------------------------------------------------------
@@ -70,23 +68,44 @@ def test_parser_matches_gold_row(row):
 )
 def test_each_staging_basis_prefix_is_recognized(text, basis):
     parsed = parse_tnm(text)
-    assert parsed["basis"] == basis
-    assert parsed["t"] == "T2"
+    assert parsed["staging_basis"] == basis
+    assert parsed["t_category"] == "T2"
     assert parsed["confidence"] == "high"
 
 
 def test_no_prefix_yields_no_basis():
     parsed = parse_tnm("T2 N0 M0")
-    assert parsed["basis"] is None
+    assert parsed["staging_basis"] is None
     assert parsed["confidence"] == "high"
 
 
 def test_post_therapy_prefix_attaches_only_where_written():
     # yp is written on T; N and M carry no prefix -> single shared basis, high.
     parsed = parse_tnm("ypT3 N1 M0")
-    assert parsed["basis"] == "yp"
-    assert (parsed["t"], parsed["n"], parsed["m"]) == ("T3", "N1", "M0")
+    assert parsed["staging_basis"] == "yp"
+    assert (parsed["t_category"], parsed["n_category"], parsed["m_category"]) == (
+        "T3",
+        "N1",
+        "M0",
+    )
     assert parsed["confidence"] == "high"
+
+
+def test_explicit_grade_and_source_span_are_preserved():
+    text = "Stage: pT2 N1 M0 G2 after resection."
+    parsed = parse_tnm(text)
+    assert parsed["grade"] == "G2"
+    assert parsed["span"] == (7, 19)
+
+
+def test_grade_is_never_inferred_or_coerced():
+    assert parse_tnm("pT2 N1 M0")["grade"] is None
+    parsed = parse_tnm("pT2 N1 M0 G5")
+    assert parsed["grade"] is None
+    assert parsed["confidence"] == "low"
+    assert parsed["unparsed"] == [
+        {"token": "G5", "reason": "unrecognized G category 'G5'"}
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -96,21 +115,21 @@ def test_post_therapy_prefix_attaches_only_where_written():
 
 def test_subcategories_are_split_from_categories():
     parsed = parse_tnm("pT1a N2b M1c")
-    assert (parsed["t"], parsed["t_subcategory"]) == ("T1", "a")
-    assert (parsed["n"], parsed["n_subcategory"]) == ("N2", "b")
-    assert (parsed["m"], parsed["m_subcategory"]) == ("M1", "c")
+    assert (parsed["t_category"], parsed["t_subcategory"]) == ("T1", "a")
+    assert (parsed["n_category"], parsed["n_subcategory"]) == ("N2", "b")
+    assert (parsed["m_category"], parsed["m_subcategory"]) == ("M1", "c")
 
 
 def test_microinvasion_subcategory():
     parsed = parse_tnm("T1mi N0 M0")
-    assert (parsed["t"], parsed["t_subcategory"]) == ("T1", "mi")
+    assert (parsed["t_category"], parsed["t_subcategory"]) == ("T1", "mi")
 
 
 def test_in_situ_and_zero_and_x_categories():
-    assert parse_tnm("Tis N0 M0")["t"] == "Tis"
-    assert parse_tnm("T0 N0 M0")["t"] == "T0"
+    assert parse_tnm("Tis N0 M0")["t_category"] == "Tis"
+    assert parse_tnm("T0 N0 M0")["t_category"] == "T0"
     x = parse_tnm("TX NX MX")
-    assert (x["t"], x["n"], x["m"]) == ("TX", "NX", "MX")
+    assert (x["t_category"], x["n_category"], x["m_category"]) == ("TX", "NX", "MX")
 
 
 def test_parenthetical_qualifiers_become_subcategories():
@@ -120,19 +139,32 @@ def test_parenthetical_qualifiers_become_subcategories():
 
 def test_contiguous_notation_without_spaces_is_split():
     parsed = parse_tnm("pT2N1M0")
-    assert (parsed["t"], parsed["n"], parsed["m"]) == ("T2", "N1", "M0")
-    assert parsed["basis"] == "p"
+    assert (parsed["t_category"], parsed["n_category"], parsed["m_category"]) == (
+        "T2",
+        "N1",
+        "M0",
+    )
+    assert parsed["staging_basis"] == "p"
 
 
 def test_staging_embedded_in_prose_is_found():
     parsed = parse_tnm("The resection specimen was staged pT3b N2 M0 overall.")
-    assert (parsed["basis"], parsed["t"], parsed["t_subcategory"]) == ("p", "T3", "b")
-    assert (parsed["n"], parsed["m"]) == ("N2", "M0")
+    assert (parsed["staging_basis"], parsed["t_category"], parsed["t_subcategory"]) == (
+        "p",
+        "T3",
+        "b",
+    )
+    assert (parsed["n_category"], parsed["m_category"]) == ("N2", "M0")
 
 
 def test_hyphen_separated_categories_all_parse():
     parsed = parse_tnm("pT2-N1-M0")
-    assert (parsed["basis"], parsed["t"], parsed["n"], parsed["m"]) == (
+    assert (
+        parsed["staging_basis"],
+        parsed["t_category"],
+        parsed["n_category"],
+        parsed["m_category"],
+    ) == (
         "p",
         "T2",
         "N1",
@@ -143,18 +175,18 @@ def test_hyphen_separated_categories_all_parse():
 
 def test_all_caps_in_situ_is_recognized():
     parsed = parse_tnm("TIS N0 M0")
-    assert parsed["t"] == "Tis"
+    assert parsed["t_category"] == "Tis"
     assert parsed["confidence"] == "high"
 
 
 def test_uppercase_subcategory_is_normalized_not_dropped():
     parsed = parse_tnm("T1A N0 M0")
-    assert (parsed["t"], parsed["t_subcategory"]) == ("T1", "a")
+    assert (parsed["t_category"], parsed["t_subcategory"]) == ("T1", "a")
 
 
 def test_letter_and_parenthetical_subcategory_both_preserved():
     parsed = parse_tnm("pN1a(sn)")
-    assert parsed["n"] == "N1"
+    assert parsed["n_category"] == "N1"
     assert parsed["n_subcategory"] == "a(sn)"
 
 
@@ -165,8 +197,8 @@ def test_letter_and_parenthetical_subcategory_both_preserved():
 
 def test_out_of_range_category_is_surfaced_not_coerced():
     parsed = parse_tnm("T5 N1 M0")
-    assert parsed["t"] is None  # T5 is not a valid AJCC T category
-    assert parsed["n"] == "N1" and parsed["m"] == "M0"
+    assert parsed["t_category"] is None  # T5 is not a valid AJCC T category
+    assert parsed["n_category"] == "N1" and parsed["m_category"] == "M0"
     assert parsed["confidence"] == "low"
     assert parsed["unparsed"] == [
         {"token": "T5", "reason": "unrecognized T category 'T5'"}
@@ -176,7 +208,7 @@ def test_out_of_range_category_is_surfaced_not_coerced():
 def test_multi_digit_value_is_surfaced_not_truncated():
     # "T10" must not become a confident "T1"; it is surfaced whole.
     parsed = parse_tnm("T10 N0 M0")
-    assert parsed["t"] is None
+    assert parsed["t_category"] is None
     assert parsed["confidence"] == "low"
     assert parsed["unparsed"] == [
         {"token": "T10", "reason": "unrecognized T category 'T10'"}
@@ -186,8 +218,8 @@ def test_multi_digit_value_is_surfaced_not_truncated():
 def test_non_ajcc_subcategory_is_surfaced_not_coerced():
     # 'd' is not a valid N subcategory (a/b/c); surface it, do not keep "N2".
     parsed = parse_tnm("pT2 N2d M0")
-    assert parsed["t"] == "T2" and parsed["m"] == "M0"
-    assert parsed["n"] is None
+    assert parsed["t_category"] == "T2" and parsed["m_category"] == "M0"
+    assert parsed["n_category"] is None
     assert parsed["confidence"] == "low"
     assert parsed["unparsed"] == [
         {"token": "N2d", "reason": "unrecognized N category 'N2d'"}
@@ -196,7 +228,12 @@ def test_non_ajcc_subcategory_is_surfaced_not_coerced():
 
 def test_secondary_staging_expression_is_surfaced():
     parsed = parse_tnm("pT2 N1 M0, ypT3a")
-    assert (parsed["basis"], parsed["t"], parsed["n"], parsed["m"]) == (
+    assert (
+        parsed["staging_basis"],
+        parsed["t_category"],
+        parsed["n_category"],
+        parsed["m_category"],
+    ) == (
         "p",
         "T2",
         "N1",
@@ -213,10 +250,10 @@ def test_secondary_staging_expression_is_surfaced():
 
 def test_invalid_n_and_m_values_are_surfaced():
     n4 = parse_tnm("N4")
-    assert n4["n"] is None
+    assert n4["n_category"] is None
     assert n4["unparsed"] == [{"token": "N4", "reason": "unrecognized N category 'N4'"}]
     m2 = parse_tnm("M2")
-    assert m2["m"] is None
+    assert m2["m_category"] is None
     assert m2["unparsed"] == [{"token": "M2", "reason": "unrecognized M category 'M2'"}]
 
 
@@ -231,28 +268,39 @@ def test_clean_stage_is_high_confidence():
 
 def test_mixed_prefixes_lower_confidence():
     parsed = parse_tnm("pT2 cN1 M0")
-    assert parsed["basis"] == "p"
+    assert parsed["staging_basis"] == "p"
     assert parsed["confidence"] == "low"
 
 
 def test_ambiguous_bare_y_prefix_lowers_confidence():
     parsed = parse_tnm("yT2 N0 M0")
-    assert parsed["t"] == "T2"
-    assert parsed["basis"] is None  # bare 'y' is not a full basis
+    assert parsed["t_category"] == "T2"
+    assert parsed["staging_basis"] is None  # bare 'y' is not a full basis
     assert parsed["confidence"] == "low"
 
 
 def test_nothing_recognized_is_low_confidence():
     parsed = parse_tnm("no staging notation here")
-    assert (parsed["t"], parsed["n"], parsed["m"]) == (None, None, None)
+    assert (parsed["t_category"], parsed["n_category"], parsed["m_category"]) == (
+        None,
+        None,
+        None,
+    )
     assert parsed["confidence"] == "low"
     assert parsed["unparsed"] == []
+    assert parsed["span"] is None
 
 
 def test_empty_input_returns_empty_stage_with_advisory():
     parsed = parse_tnm("")
-    assert parsed["t"] is None and parsed["n"] is None and parsed["m"] is None
-    assert parsed["basis"] is None
+    assert (
+        parsed["t_category"] is None
+        and parsed["n_category"] is None
+        and parsed["m_category"] is None
+    )
+    assert parsed["staging_basis"] is None
+    assert parsed["grade"] is None
+    assert parsed["span"] is None
     assert parsed["advisory"] == TNM_STAGING_ADVISORY
 
 

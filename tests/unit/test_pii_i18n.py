@@ -116,6 +116,7 @@ from openmed.core.pii_i18n import (
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_uganda_nin,
+    validate_ukrainian_rnokpp,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
 )
@@ -131,6 +132,8 @@ class TestConstants:
     def test_supported_languages(self):
         assert SUPPORTED_LANGUAGES == {
             "am",
+            "as",
+            "bn",
             "en",
             "fr",
             "de",
@@ -138,7 +141,10 @@ class TestConstants:
             "es",
             "nl",
             "hi",
+            "mr",
+            "or",
             "te",
+            "ta",
             "pt",
             "ar",
             "he",
@@ -153,9 +159,13 @@ class TestConstants:
             "da",
             "no",
             "sw",
+            "ta",
             "zu",
             "xh",
             "zh",
+            "uk",
+            "cs",
+            "el",
         }
 
     def test_national_id_only_languages(self):
@@ -175,8 +185,6 @@ class TestConstants:
             "hr",
             "bg",
             "fi",
-            "cs",
-            "el",
             "vi",
             "rw",
             "ur",
@@ -194,6 +202,8 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["es"] == "Spanish-"
         assert LANGUAGE_MODEL_PREFIX["nl"] == "Dutch-"
         assert LANGUAGE_MODEL_PREFIX["hi"] == "Hindi-"
+        assert LANGUAGE_MODEL_PREFIX["bn"] == "Bengali-"
+        assert LANGUAGE_MODEL_PREFIX["ta"] == "Tamil-"
         assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
         assert LANGUAGE_MODEL_PREFIX["pt"] == "Portuguese-"
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
@@ -211,20 +221,27 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["zu"] == "isiZulu-"
         assert LANGUAGE_MODEL_PREFIX["xh"] == "isiXhosa-"
         assert LANGUAGE_MODEL_PREFIX["zh"] == "Chinese-"
+        assert LANGUAGE_MODEL_PREFIX["uk"] == "Ukrainian-"
+        assert LANGUAGE_MODEL_PREFIX["cs"] == "Czech-"
+        assert LANGUAGE_MODEL_PREFIX["el"] == "Greek-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
-            INDIC_NER_LANGUAGES - {"hi", "te"}
+            INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}
         )
 
     def test_default_pii_models_naming(self):
         assert DEFAULT_PII_MODELS["am"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["as"] == "OpenMed/privacy-filter-multilingual"
         assert "French" in DEFAULT_PII_MODELS["fr"]
         assert "German" in DEFAULT_PII_MODELS["de"]
         assert "Italian" in DEFAULT_PII_MODELS["it"]
         assert "Spanish" in DEFAULT_PII_MODELS["es"]
         assert "Dutch" in DEFAULT_PII_MODELS["nl"]
         assert "Hindi" in DEFAULT_PII_MODELS["hi"]
+        assert "Bengali" in DEFAULT_PII_MODELS["bn"]
+        assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
+        assert "Tamil" in DEFAULT_PII_MODELS["ta"]
         assert "Telugu" in DEFAULT_PII_MODELS["te"]
         assert "Portuguese" in DEFAULT_PII_MODELS["pt"]
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
@@ -244,7 +261,10 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["sw"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["zu"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["xh"] == "OpenMed/privacy-filter-multilingual"
-        assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
+        assert "Chinese" in DEFAULT_PII_MODELS["zh"]
+        assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -2692,6 +2712,13 @@ class TestGetPatternsForLanguage:
         with pytest.raises(ValueError, match="Unsupported language"):
             get_patterns_for_language("xx")
 
+    @pytest.mark.parametrize("lang", ("bn", "ta", "zh"))
+    def test_v2_language_patterns_are_discoverable(self, lang):
+        patterns = get_patterns_for_language(lang)
+
+        assert patterns
+        assert all(isinstance(pattern, PIIPattern) for pattern in patterns)
+
     def test_all_returned_patterns_are_pii_pattern(self):
         for lang in SUPPORTED_LANGUAGES:
             patterns = get_patterns_for_language(lang)
@@ -2717,6 +2744,16 @@ class TestLanguageFakeData:
             data = LANGUAGE_FAKE_DATA[lang]
             for key in required_keys:
                 assert key in data, f"Missing '{key}' in LANGUAGE_FAKE_DATA['{lang}']"
+
+    @pytest.mark.parametrize("lang", ("bn", "ta", "zh"))
+    def test_v2_language_fake_data_is_synthetic_and_script_specific(self, lang):
+        data = LANGUAGE_FAKE_DATA[lang]
+
+        assert data["NAME"]
+        assert data["PHONE"]
+        assert data["DATE"]
+        assert data["LOCATION"]
+        assert all("example" in value for value in data["EMAIL"])
 
     def test_french_names_are_french(self):
         names = LANGUAGE_FAKE_DATA["fr"]["NAME"]
@@ -4431,6 +4468,139 @@ def test_finnish_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
         assert span["text"] not in result.deidentified_text
 
 
+def test_validate_ukrainian_rnokpp():
+    assert validate_ukrainian_rnokpp("2974281300")
+    assert validate_ukrainian_rnokpp("3695007088")
+
+    assert validate_ukrainian_rnokpp("2974281301") is False
+    assert validate_ukrainian_rnokpp("297428130") is False
+    assert validate_ukrainian_rnokpp("29742 81300") is False
+    assert validate_ukrainian_rnokpp("abcdefghij") is False
+
+
+def test_generated_ukrainian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["uk"] == "uk_UA"
+
+    anonymizer = Anonymizer(lang="uk", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("2974281300", "national_id")
+
+    assert validate_ukrainian_rnokpp(surrogate) is True
+    assert surrogate != "2974281300"
+
+
+def test_ukrainian_clinical_sample_expected_spans():
+    text = (
+        "Пацієнт: Олена Коваль. Дата народження 16.11.1975, "
+        "телефон +380 67 123 45 67, РНОКПП 2974281300, "
+        "адреса вулиця Хрещатик 22, поштовий індекс 01001."
+    )
+    expected = {
+        ("date", 39, 49, "16.11.1975"),
+        ("phone_number", 59, 76, "+380 67 123 45 67"),
+        ("national_id", 85, 95, "2974281300"),
+        ("street_address", 104, 122, "вулиця Хрещатик 22"),
+        ("postcode", 140, 145, "01001"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("uk"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_ukrainian_textual_date_and_street_patterns():
+    text = "Дата народження 16 листопада 1975, адреса проспект Свободи 15."
+    observed = {
+        (pattern.entity_type, match.group(0))
+        for pattern in get_patterns_for_language("uk")
+        for match in re.finditer(pattern.pattern, text, pattern.flags)
+    }
+
+    assert ("date", "16 листопада 1975") in observed
+    assert ("street_address", "проспект Свободи 15") in observed
+
+
+def test_ukrainian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/uk.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "uk"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 39, 49, "16.11.1975"),
+        ("PHONE", 59, 76, "+380 67 123 45 67"),
+        ("ID_NUM", 85, 95, "2974281300"),
+        ("STREET_ADDRESS", 104, 122, "вулиця Хрещатик 22"),
+        ("ZIPCODE", 140, 145, "01001"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    identifier = next(
+        span["text"] for span in row["gold_spans"] if span["label"] == "ID_NUM"
+    )
+    assert validate_ukrainian_rnokpp(identifier)
+
+
+def test_ukrainian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/uk.jsonl")
+    row = json.loads(fixture_path.read_text(encoding="utf-8").strip())
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-19T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="uk",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="uk",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
 def test_validate_czech_rodne_cislo():
     # Modern ten-digit form (delegated to the Czechoslovak validator).
     assert validate_czech_rodne_cislo("751116/0008")
@@ -5855,9 +6025,9 @@ class TestSouthAfricanIdentifiers:
             )
             assert surrogate_national[:3] == source_national[:3]
 
-    def test_locale_aliases_match_fixture_phones_and_not_id_runs(self):
-        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["af"]
-        assert LOCALE_PII_PATTERNS["af"] is LOCALE_PII_PATTERNS["zu"]
+    def test_sa_locale_patterns_match_fixture_phones_and_not_id_runs(self):
+        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["zu"]
+        assert LOCALE_PII_PATTERNS["af"] is not LOCALE_PII_PATTERNS["zu"]
 
         rows = [
             json.loads(line)
@@ -5866,28 +6036,28 @@ class TestSouthAfricanIdentifiers:
             .splitlines()
             if line.strip()
         ]
-        phone_patterns = [
-            pattern
-            for pattern in LOCALE_PII_PATTERNS["en_za"]
-            if pattern.entity_type == "phone_number"
-        ]
-
         assert [row["entities"][1]["text"] for row in rows] == [
             "+27 82 123 4567",
             "0827654321",
             "27829999999",
         ]
-        for row in rows:
-            id_value, phone = (entity["text"] for entity in row["entities"])
-            assert validate_south_african_id(id_value)
-            assert any(
-                re.fullmatch(pattern.pattern, phone, pattern.flags)
-                for pattern in phone_patterns
-            )
-            assert not any(
-                re.search(pattern.pattern, id_value, pattern.flags)
-                for pattern in phone_patterns
-            )
+        for locale in ("en_za", "af"):
+            phone_patterns = [
+                pattern
+                for pattern in LOCALE_PII_PATTERNS[locale]
+                if pattern.entity_type == "phone_number"
+            ]
+            for row in rows:
+                id_value, phone = (entity["text"] for entity in row["entities"])
+                assert validate_south_african_id(id_value)
+                assert any(
+                    re.fullmatch(pattern.pattern, phone, pattern.flags)
+                    for pattern in phone_patterns
+                )
+                assert not any(
+                    re.search(pattern.pattern, id_value, pattern.flags)
+                    for pattern in phone_patterns
+                )
 
     def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
         from openmed.core.pii import (
