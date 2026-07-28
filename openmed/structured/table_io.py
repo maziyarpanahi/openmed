@@ -77,7 +77,7 @@ def write_table(
 
 
 def _read_delimited(path: Path, *, delimiter: str) -> list[dict[str, Any]]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
         try:
             reader = csv.DictReader(handle, delimiter=delimiter, strict=True)
             if reader.fieldnames is None:

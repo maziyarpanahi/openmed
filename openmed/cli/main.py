@@ -227,6 +227,26 @@ def _merged_column_args(
     return tuple(dict.fromkeys((*comma_separated, *literal_columns)))
 
 
+def _release_error_message(summary: str, exc: TypeError | ValueError) -> str:
+    """Attach a bounded, single-line release validation cause."""
+
+    rendered = []
+    for character in str(exc):
+        category = unicodedata.category(character)
+        if character in "\r\n\t":
+            rendered.append(" ")
+        elif category.startswith("C") or category in {"Zl", "Zp"}:
+            rendered.append(f"\\u{ord(character):04x}")
+        else:
+            rendered.append(character)
+    detail = " ".join("".join(rendered).split())
+    if not detail:
+        detail = "No additional validation detail was provided."
+    if len(detail) > 1_000:
+        detail = detail[:997] + "..."
+    return f"{summary} Cause ({type(exc).__name__}): {detail}"
+
+
 def _role_override_arg(value: str) -> tuple[str, tuple[str, ...]]:
     if "=" not in value:
         raise argparse.ArgumentTypeError(
@@ -2787,7 +2807,10 @@ def _handle_risk_assess(args: argparse.Namespace) -> int:
         assessment = assess_release(records, policy)
     except (TypeError, ValueError) as exc:
         raise CliError(
-            "The structured release policy does not match the input schema.",
+            _release_error_message(
+                "The structured release policy does not match the input schema.",
+                exc,
+            ),
             code="invalid_release_config",
             exit_code=EXIT_USAGE,
         ) from exc
@@ -3063,7 +3086,10 @@ def _handle_risk_anonymize(args: argparse.Namespace) -> int:
         assess_release(records, policy)
     except (TypeError, ValueError) as exc:
         raise CliError(
-            "The structured release policy does not match the input schema.",
+            _release_error_message(
+                "The structured release policy does not match the input schema.",
+                exc,
+            ),
             code="invalid_release_config",
             exit_code=EXIT_USAGE,
         ) from exc
@@ -3136,7 +3162,16 @@ def _handle_risk_anonymize(args: argparse.Namespace) -> int:
             code="release_backup_cleanup_failed",
             exit_code=EXIT_ERROR,
         ) from exc
-    except (ImportError, OSError, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            _release_error_message(
+                "Failed to anonymize and validate the structured release.",
+                exc,
+            ),
+            code="release_anonymization_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+    except (ImportError, OSError) as exc:
         raise CliError(
             "Failed to anonymize and validate the structured release.",
             code="release_anonymization_failed",
@@ -3216,7 +3251,10 @@ def _validated_release_policy(args: argparse.Namespace):
         return _release_policy_from_args(args)
     except (TypeError, ValueError) as exc:
         raise CliError(
-            "The structured release policy is invalid.",
+            _release_error_message(
+                "The structured release policy is invalid.",
+                exc,
+            ),
             code="invalid_release_policy",
             exit_code=EXIT_USAGE,
         ) from exc
