@@ -140,7 +140,7 @@ OpenMed को वहीं चलाने के लिए बनाया ग
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -183,11 +183,11 @@ dependencyResolutionManagement {
 }
 ```
 
-फिर immutable OpenMed `v1.9.1` release उपयोग करें:
+फिर immutable OpenMed `v2.0.0` release उपयोग करें:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -678,7 +678,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [बैच processing](https://openmed.life/docs/batch-processing) |
 | [Configuration profiles](https://openmed.life/docs/profiles) | [REST सेवा](docs/rest-service.md) | [MLX बैकएंड](docs/mlx-backend.md) |
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [OpenMed 1.9.0 release notes](docs/release/v1.9.0.md) | [उदाहरण](docs/examples.md) |
+| [OpenMed 2.0.0 release notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
 | [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [Detector plugin SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |

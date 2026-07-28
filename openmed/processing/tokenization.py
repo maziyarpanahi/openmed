@@ -55,6 +55,16 @@ _MAX_DICTIONARY_EXPANSION_RATIO = 100.0
 SEGMENTER_RESOURCE_SIZE_BUDGET_BYTES = 64 * 1024
 SEGMENTER_RESOURCE_DIRECTORY = "segmenter"
 DEFAULT_SEGMENTER_ID = "openmed-cjk-indic-v1"
+_ICU_LICENSE_ID = "ICU"
+_ICU_LICENSE_FILENAME = "ICU.txt"
+_ICU_SOURCE_REPOSITORY = "https://github.com/unicode-org/icu"
+_ICU_SOURCE_REVISION = "0c5873f89bf64f6bbc0a24b84f07d79b25785a42"
+_ICU_SOURCE_PATH = "icu4c/source/data/brkitr/rules/char.txt"
+_ICU_SOURCE_COPYRIGHT = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation "
+    "and others. All Rights Reserved."
+)
+_ICU_SOURCE_RETRIEVED = "2026-07-28"
 SEGMENTER_IDS = (
     "openmed-han-v1",
     "openmed-indic-v1",
@@ -71,20 +81,28 @@ _SEGMENTER_SPECS: dict[str, dict[str, Any]] = {
     },
     "openmed-indic-v1": {
         "scripts": ["Devanagari"],
-        "license": "ICU-1.8.1",
+        "license": _ICU_LICENSE_ID,
         "resources": [
-            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+            ("indic_rules.json", "indic_break_rules", _ICU_LICENSE_ID),
+            (_ICU_LICENSE_FILENAME, "license_notice", _ICU_LICENSE_ID),
         ],
     },
     DEFAULT_SEGMENTER_ID: {
         "scripts": ["Han", "Devanagari"],
-        "license": "MIT AND ICU-1.8.1",
+        "license": f"MIT AND {_ICU_LICENSE_ID}",
         "resources": [
             ("han_words.txt", "han_dictionary", "MIT"),
-            ("indic_rules.json", "indic_break_rules", "ICU-1.8.1"),
+            ("indic_rules.json", "indic_break_rules", _ICU_LICENSE_ID),
+            (_ICU_LICENSE_FILENAME, "license_notice", _ICU_LICENSE_ID),
         ],
     },
 }
+_ICU_LICENSE_NOTICE_MARKERS = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation and others.",
+    "ICU License - ICU 1.8.1 and later",
+    "Copyright (c) 1995-2016 International Business Machines Corporation and others",
+    "Permission is hereby granted, free of charge",
+)
 DEFAULT_MEDICAL_EXCEPTIONS = [
     "COVID-19",
     "SARS-CoV-2",
@@ -955,6 +973,8 @@ def validate_segmenter_resources(
         raise ValueError(
             "segmenter total_size_bytes does not match the declared resource files"
         )
+    if "Devanagari" in scripts:
+        _validate_icu_segmenter_provenance(bundle_path, resources)
 
     return {
         "id": segmenter_id,
@@ -963,6 +983,42 @@ def validate_segmenter_resources(
         "total_size_bytes": total_size,
         "size_budget_bytes": budget,
     }
+
+
+def _validate_icu_segmenter_provenance(
+    bundle_path: Path,
+    resources: list[Mapping[str, Any]],
+) -> None:
+    """Require immutable ICU provenance and the complete bundled license notice."""
+
+    resources_by_role = {str(item.get("role") or ""): item for item in resources}
+    rules_resource = resources_by_role.get("indic_break_rules")
+    notice_resource = resources_by_role.get("license_notice")
+    if rules_resource is None or notice_resource is None:
+        raise ValueError(
+            "Indic segmenter resources must include rules and license notice"
+        )
+
+    notice_path = bundle_path / str(notice_resource.get("path") or "")
+    notice_text = notice_path.read_text(encoding="utf-8")
+    if any(marker not in notice_text for marker in _ICU_LICENSE_NOTICE_MARKERS):
+        raise ValueError("ICU license notice is incomplete")
+
+    rules_path = bundle_path / str(rules_resource.get("path") or "")
+    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    source = rules.get("source")
+    if (
+        rules.get("license") != _ICU_LICENSE_ID
+        or rules.get("license_file") != _ICU_LICENSE_FILENAME
+        or not isinstance(source, Mapping)
+        or source.get("repository") != _ICU_SOURCE_REPOSITORY
+        or source.get("revision") != _ICU_SOURCE_REVISION
+        or source.get("path") != _ICU_SOURCE_PATH
+        or source.get("copyright") != _ICU_SOURCE_COPYRIGHT
+        or source.get("retrieved") != _ICU_SOURCE_RETRIEVED
+        or not source.get("modifications")
+    ):
+        raise ValueError("Indic rules do not record the required ICU provenance")
 
 
 class ResourceSegmenter:
