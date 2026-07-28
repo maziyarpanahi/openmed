@@ -143,7 +143,8 @@ def test_publish_workflow_keeps_release_gates():
     assert "id-token: write" in provenance_workflow
     assert "python scripts/release/check_repo_policy.py" in provenance_workflow
     assert "Compute release metadata" in provenance_workflow
-    assert "python scripts/release/changelog.py" in provenance_workflow
+    assert 'python "$WORKFLOW_CHANGELOG"' in provenance_workflow
+    assert '"${WORKFLOW_REVISION}:scripts/release/changelog.py"' in provenance_workflow
     assert "--release-version" in provenance_workflow
     assert "steps.release_metadata.outputs.next_version" not in provenance_workflow
     assert "Verify version matches tag" in provenance_workflow
