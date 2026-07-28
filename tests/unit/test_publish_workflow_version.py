@@ -117,8 +117,16 @@ def test_publish_workflow_keeps_release_gates():
     )
 
     assert "tags:\n      - 'v*'" in publish_workflow
-    assert "workflow_dispatch:" not in publish_workflow
+    assert workflow["on"]["workflow_dispatch"]["inputs"]["tag"] == {
+        "description": "Existing immutable vX.Y.Z tag to publish.",
+        "required": "true",
+        "type": "string",
+    }
     assert "pull_request:" not in publish_workflow
+    assert workflow["concurrency"] == {
+        "group": "publish-openmed-${{ inputs.tag || github.ref_name }}",
+        "cancel-in-progress": "false",
+    }
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
     assert "pypa/gh-action-pypi-publish@v1.14.1" in publish_workflow
     assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in publish_workflow
@@ -136,8 +144,10 @@ def test_publish_workflow_keeps_release_gates():
     assert "python scripts/release/check_repo_policy.py" in provenance_workflow
     assert "Compute release metadata" in provenance_workflow
     assert "python scripts/release/changelog.py" in provenance_workflow
-    assert "steps.release_metadata.outputs.next_version" in provenance_workflow
+    assert "--release-version" in provenance_workflow
+    assert "steps.release_metadata.outputs.next_version" not in provenance_workflow
     assert "Verify version matches tag" in provenance_workflow
+    assert "Verify release source ref" in provenance_workflow
     assert "twine check dist/*" in provenance_workflow
 
 
@@ -154,6 +164,7 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
     )
 
     assert npm_verify["permissions"] == {"contents": "read"}
+    assert npm_verify["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
     assert "actions/setup-node@v7" in content
     assert "node-version: '24'" in content
     assert "package-manager-cache: false" in content
@@ -175,6 +186,7 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
         "npm publish --ignore-scripts --access public --provenance"
     )
     assert publish_step["env"]["NODE_AUTH_TOKEN"] == ("${{ secrets.NPM_ACCESS_TOKEN }}")
+    assert npm_publish["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
     assert sbom["needs"] == ["publish", "npm-publish"]
 
 
