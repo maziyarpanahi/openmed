@@ -453,7 +453,7 @@ def _read_delimited_sample(
 ) -> _TableSample:
     rows: list[dict[str, Any]] = []
     complete = True
-    with path.open("r", encoding="utf-8", newline="") as handle:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
         try:
             reader = csv.DictReader(handle, delimiter=delimiter, strict=True)
             if reader.fieldnames is None:

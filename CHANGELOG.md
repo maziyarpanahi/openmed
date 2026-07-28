@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `openmed risk discover`, `risk assess`, and `risk anonymize` handling
+  of UTF-8 BOM-prefixed CSV and TSV schemas so the first column is classified
+  consistently, and added bounded validation causes to structured-release CLI
+  errors instead of replacing actionable `TypeError` and `ValueError` details
+  with a generic schema mismatch.
+
 ## [2.0.0] - 2026-07-28
 
 OpenMed 2.0 expands the local-first privacy, clinical extraction, evaluation,
