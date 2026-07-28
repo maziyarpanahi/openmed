@@ -1,15 +1,28 @@
-# Tags matching v* build and publish OpenMed to PyPI and npm.
+# Tags matching v* build and publish OpenMed to PyPI and npm. A guarded manual
+# dispatch can recover an existing immutable tag after a workflow-only failure.
 name: Publish OpenMed Packages
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable vX.Y.Z tag to publish.
+        required: true
+        type: string
+
+concurrency:
+  group: publish-openmed-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   provenance:
     name: Build, attest, and verify distributions
     uses: ./.github/workflows/provenance.yml
+    with:
+      release-tag: ${{ inputs.tag || github.ref_name }}
     permissions:
       contents: read
       id-token: write
@@ -23,6 +36,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -32,10 +47,12 @@ jobs:
           package-manager-cache: false
 
       - name: Verify release versions agree
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           PYTHON_VERSION=$(python3 -c "import pathlib, re; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")
           NPM_VERSION=$(node -p "require('./js/openmedkit-web/package.json').version")
-          TAG_VERSION=${GITHUB_REF_NAME#v}
+          TAG_VERSION=${RELEASE_TAG#v}
           if [ "$PYTHON_VERSION" != "$TAG_VERSION" ]; then
             echo "Version mismatch: Python $PYTHON_VERSION != tag $TAG_VERSION"
             exit 1
@@ -64,7 +81,10 @@ jobs:
   publish:
     name: Publish distributions
     needs: [provenance, npm-verify]
-    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag' &&
+       startsWith(github.ref_name, 'v')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -88,7 +108,10 @@ jobs:
   npm-publish:
     name: Publish npm package
     needs: [provenance, npm-verify]
-    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag' &&
+       startsWith(github.ref_name, 'v')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
     environment:
       name: npm
@@ -99,6 +122,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -214,6 +239,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}  # this job does not check out the repo
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           PROVENANCE_OUTCOME: ${{ steps.provenance-evidence.outcome }}
           SIGN_OUTCOME: ${{ steps.sign-distributions.outcome }}
         shell: bash
@@ -225,7 +251,8 @@ jobs:
           if [ "$PROVENANCE_OUTCOME" = "success" ]; then
             for candidate in \
               release-provenance/provenance-bundles/python-distributions.intoto.json \
-              release-provenance/release-artifact-digests.txt; do
+              release-provenance/release-artifact-digests.txt \
+              release-provenance/release-source.json; do
               if [ ! -s "$candidate" ]; then
                 echo "Expected provenance evidence is missing or empty: $candidate" >&2
                 exit 1
@@ -248,9 +275,9 @@ jobs:
           printf 'Attaching release evidence:\n'
           printf -- '- %s\n' "${assets[@]}"
 
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" --generate-notes || true
-          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          gh release create "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" --generate-notes || true
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
 
   sbom:
     name: Generate release SBOM
@@ -263,6 +290,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -294,11 +322,12 @@ jobs:
           if-no-files-found: warn
 
       - name: Attach SBOM to the tagged GitHub release
-        if: github.ref_type == 'tag' && hashFiles('sbom.cdx.json') != ''
+        if: hashFiles('sbom.cdx.json') != ''
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" sbom.cdx.json --clobber \
-            || gh release create "$GITHUB_REF_NAME" sbom.cdx.json \
-                 --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$RELEASE_TAG" sbom.cdx.json --clobber \
+            || gh release create "$RELEASE_TAG" sbom.cdx.json \
+                 --title "$RELEASE_TAG" --generate-notes
