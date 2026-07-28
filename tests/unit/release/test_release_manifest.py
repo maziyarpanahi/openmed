@@ -14,6 +14,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.core.repro_hash import compute_canonical_payload_hash
 from openmed.eval.release_gates import QUARANTINED, RELEASABLE, GateReport
 
@@ -73,6 +75,7 @@ def _build(
     tmp_path,
     *,
     run_id="run-1",
+    git_sha=FIXED_SHA,
     pointer_targets=None,
     artifact_digests=None,
 ):
@@ -86,7 +89,7 @@ def _build(
         reports,
         run_id=run_id,
         created_at=FIXED_TS,
-        git_sha=FIXED_SHA,
+        git_sha=git_sha,
         artifact_digests=digests,
         pointer_targets=pointer_targets,
         ledger_path=tmp_path / "release_runs.jsonl",
@@ -270,6 +273,18 @@ def test_reconstruct_rejects_a_tampered_row(tmp_path: Path) -> None:
         raise AssertionError("tampered provenance hash was not detected")
 
 
+def test_reconstruct_rejects_quarantine_only_tampering(tmp_path: Path) -> None:
+    ledger = tmp_path / "release_runs.jsonl"
+    _build([_report("PII")], tmp_path, run_id="run-x")
+
+    (row,) = [json.loads(line) for line in ledger.read_text().splitlines()]
+    row["quarantined"] = True
+    ledger.write_text(json.dumps(row, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        orchestrate.reconstruct_run("run-x", ledger_path=ledger)
+
+
 # --- determinism ---------------------------------------------------------------
 
 
@@ -295,6 +310,64 @@ def test_same_inputs_produce_identical_provenance_hash(tmp_path: Path) -> None:
     (first,) = _build([_report("PII")], tmp_path / "a", run_id="run-1")
     (second,) = _build([_report("PII")], tmp_path / "b", run_id="run-1")
     assert first["provenance_hash"] == second["provenance_hash"]
+
+
+def test_provenance_hash_covers_run_context_and_quarantine_state(
+    tmp_path: Path,
+) -> None:
+    (record,) = _build([_report("PII")], tmp_path)
+
+    mutations = {
+        "run_id": "different-run",
+        "created_at": "2026-07-25T00:00:00+00:00",
+        "quarantined": True,
+    }
+    for field, value in mutations.items():
+        tampered = dict(record)
+        tampered[field] = value
+        assert not orchestrate.verify_record(tampered), field
+
+
+def test_invalid_git_sha_is_refused(tmp_path: Path) -> None:
+    ledger = tmp_path / "release_runs.jsonl"
+
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        _build([_report("PII")], tmp_path, git_sha="patient-123-45-6789")
+
+    assert not ledger.exists() or ledger.read_text(encoding="utf-8") == ""
+
+
+def test_unknown_gate_decision_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        _build([_report("PII", decision="PENDING")], tmp_path)
+
+
+def test_duplicate_family_in_one_run_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        _build([_report("PII"), _report("PII")], tmp_path)
+
+
+def test_empty_run_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        _build([], tmp_path)
+
+
+def test_duplicate_run_family_append_is_refused(tmp_path: Path) -> None:
+    ledger = tmp_path / "release_runs.jsonl"
+    _build([_report("PII")], tmp_path, run_id="run-duplicate")
+
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        _build([_report("PII")], tmp_path, run_id="run-duplicate")
+
+    assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_non_object_ledger_row_is_refused(tmp_path: Path) -> None:
+    ledger = tmp_path / "release_runs.jsonl"
+    ledger.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(orchestrate.ReleaseManifestError):
+        orchestrate.reconstruct_run("run-1", ledger_path=ledger)
 
 
 # --- no raw PHI ----------------------------------------------------------------

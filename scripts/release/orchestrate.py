@@ -43,17 +43,17 @@ from openmed.core.repro_hash import (
     compute_file_digest,
     resolve_git_sha,
 )
-from openmed.eval.release_gates import RELEASABLE, GateReport
+from openmed.eval.release_gates import QUARANTINED, RELEASABLE, GateReport
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = ROOT / "gates" / "release_runs.jsonl"
 
-#: Ledger fields that identity-bind an artifact to its gate report. The
-#: provenance hash covers exactly these -- at minimum the candidate artifact
-#: digest and the verified gate report hash -- so the same artifact + gate
-#: report + publish target always hashes identically, independent of run id or
-#: wall clock.
+#: Ledger fields that identity-bind the complete run outcome. The provenance
+#: hash covers every semantic field, including run identity, timestamp, and
+#: fail-closed quarantine state, so no row can be moved between runs or made to
+#: look published without invalidating its hash.
 _BINDING_FIELDS = (
+    "run_id",
     "family",
     "tier",
     "format",
@@ -62,10 +62,14 @@ _BINDING_FIELDS = (
     "artifact_digest",
     "gate_report_hash",
     "decision",
+    "quarantined",
     "pointer_target",
+    "created_at",
 )
 
 _SHA256_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+_REQUIRED_RECORD_FIELDS = frozenset((*_BINDING_FIELDS, "provenance_hash"))
 
 # Conservative PHI-shaped patterns. The builder controls its own inputs, so this
 # is a defensive guard (and the subject of a no-raw-PHI test), not a scrubber.
@@ -147,6 +151,72 @@ def _assert_no_phi(record: Mapping[str, Any]) -> None:
                 )
 
 
+def _assert_nonempty_string(record: Mapping[str, Any], field: str) -> None:
+    value = record.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise ReleaseManifestError(f"release ledger field {field!r} must be non-empty")
+
+
+def _assert_record_invariants(record: Mapping[str, Any]) -> None:
+    """Reject a ledger row that is incomplete, inconsistent, or malformed."""
+
+    missing = _REQUIRED_RECORD_FIELDS - record.keys()
+    if missing:
+        raise ReleaseManifestError(
+            f"release ledger record is missing required fields: {sorted(missing)}"
+        )
+
+    for field in (
+        "run_id",
+        "family",
+        "tier",
+        "format",
+        "repo_id",
+        "git_sha",
+        "artifact_digest",
+        "gate_report_hash",
+        "decision",
+        "created_at",
+        "provenance_hash",
+    ):
+        _assert_nonempty_string(record, field)
+
+    if not _GIT_SHA_RE.fullmatch(str(record["git_sha"])):
+        raise ReleaseManifestError("release ledger git_sha must be a 40- or 64-hex SHA")
+    for field in ("artifact_digest", "gate_report_hash", "provenance_hash"):
+        if not _SHA256_DIGEST_RE.fullmatch(str(record[field])):
+            raise ReleaseManifestError(
+                f"release ledger field {field!r} must be a sha256: digest"
+            )
+
+    decision = record["decision"]
+    if decision not in {RELEASABLE, QUARANTINED}:
+        raise ReleaseManifestError(
+            f"release ledger decision must be {RELEASABLE!r} or {QUARANTINED!r}"
+        )
+    quarantined = record["quarantined"]
+    if type(quarantined) is not bool:
+        raise ReleaseManifestError("release ledger quarantined field must be boolean")
+    expected_quarantine = decision != RELEASABLE
+    if quarantined is not expected_quarantine:
+        raise ReleaseManifestError(
+            "release ledger decision and quarantined state are inconsistent"
+        )
+
+    pointer_target = record["pointer_target"]
+    if expected_quarantine:
+        if pointer_target is not None:
+            raise ReleaseManifestError(
+                "quarantined release ledger records cannot have a publish target"
+            )
+    elif not isinstance(pointer_target, str) or not pointer_target.strip():
+        raise ReleaseManifestError(
+            "releasable release ledger records need a non-empty publish target"
+        )
+
+    _assert_no_phi(record)
+
+
 def _build_record(
     report: GateReport,
     *,
@@ -158,6 +228,10 @@ def _build_record(
 ) -> dict[str, Any]:
     """Assemble one fail-closed run record for a single family's gate report."""
 
+    if report.decision not in {RELEASABLE, QUARANTINED}:
+        raise ReleaseManifestError(
+            f"unknown gate decision for family {report.family!r}: {report.decision!r}"
+        )
     releasable = report.decision == RELEASABLE
     # Fail-closed: a non-releasable family is quarantined and never gets a target.
     resolved_target = pointer_target if releasable else None
@@ -177,7 +251,7 @@ def _build_record(
         "created_at": created_at,
     }
     record["provenance_hash"] = _binding_hash(record)
-    _assert_no_phi(record)
+    _assert_record_invariants(record)
     return record
 
 
@@ -213,6 +287,32 @@ def build_release_manifest(
     ledger = Path(ledger_path)
     ledger.parent.mkdir(parents=True, exist_ok=True)
 
+    if not reports:
+        raise ReleaseManifestError("at least one gate report is required")
+    families = [report.family for report in reports]
+    duplicate_families = sorted(
+        family for family in set(families) if families.count(family) > 1
+    )
+    if duplicate_families:
+        raise ReleaseManifestError(
+            f"duplicate gate-report families in run {run_id!r}: {duplicate_families}"
+        )
+
+    existing_rows = _load_ledger(ledger)
+    for row in existing_rows:
+        if not verify_record(row):
+            raise ReleaseManifestError(
+                "refusing to append to a release ledger containing an invalid row"
+            )
+    existing_keys = {(str(row["run_id"]), str(row["family"])) for row in existing_rows}
+    collisions = sorted(
+        family for family in families if (run_id, family) in existing_keys
+    )
+    if collisions:
+        raise ReleaseManifestError(
+            f"release ledger already contains run/family records: {collisions}"
+        )
+
     records: list[dict[str, Any]] = []
     for report in reports:
         # Default the publish target to the report's own repo id; an explicit
@@ -242,16 +342,27 @@ def _load_ledger(ledger_path: str | Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         line = line.strip()
         if line:
-            rows.append(json.loads(line))
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ReleaseManifestError(
+                    f"release ledger line {line_number} must be a JSON object"
+                )
+            rows.append(row)
     return rows
 
 
 def verify_record(record: Mapping[str, Any]) -> bool:
-    """Return True if a record's provenance hash matches a recomputation."""
+    """Return True when a record is structurally valid and hash-consistent."""
 
+    try:
+        _assert_record_invariants(record)
+    except ReleaseManifestError:
+        return False
     return _binding_hash(record) == record.get("provenance_hash")
 
 
@@ -269,14 +380,19 @@ def reconstruct_run(
 
     outcome: dict[str, dict[str, Any]] = {}
     for row in _load_ledger(ledger_path):
-        if row.get("run_id") != run_id:
-            continue
         if not verify_record(row):
             raise ReleaseManifestError(
                 f"provenance hash mismatch for family {row.get('family')!r} "
-                f"in run {run_id!r}"
+                f"in ledger run {row.get('run_id')!r}"
             )
-        outcome[str(row["family"])] = {
+        if row["run_id"] != run_id:
+            continue
+        family = str(row["family"])
+        if family in outcome:
+            raise ReleaseManifestError(
+                f"duplicate family {family!r} in ledger run {run_id!r}"
+            )
+        outcome[family] = {
             "published": not row["quarantined"],
             "quarantined": bool(row["quarantined"]),
             "decision": row["decision"],
