@@ -21,7 +21,12 @@ from .budget import (
     budget_for_policy,
     evaluate_budget,
 )
-from .dashboard import render_risk_dashboard, write_risk_dashboard
+from .dashboard import (
+    render_release_assessment_dashboard,
+    render_risk_dashboard,
+    write_release_assessment_dashboard,
+    write_risk_dashboard,
+)
 from .k_anonymity import (
     EquivalenceClass,
     KAnonymityEngine,
@@ -32,6 +37,7 @@ from .k_anonymity import (
     propose_suppression,
 )
 from .kanon import build_generalization_hierarchies, enforce_kanon, kanon_report
+from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
     LongitudinalEvidence,
@@ -40,7 +46,23 @@ from .reid import (
     build_longitudinal_corpus,
     longitudinal_attack_fingerprint,
     longitudinal_risk_report,
+    quasi_identifier_key,
     risk_report,
+)
+from .release import (
+    AnonymityPolicy,
+    AnonymizationResult,
+    AttributeDisclosureSummary,
+    GeneralizationSummary,
+    ReleaseAssessment,
+    ReleasedOutputValidation,
+    UtilitySummary,
+    anonymize_release,
+    assess_release,
+    release_dataset_digest,
+    release_schema_digest,
+    safe_risk_summary,
+    validate_released_output,
 )
 from .synthetic_tabular import (
     DEFAULT_CORRELATION_TOLERANCE,
@@ -78,17 +100,20 @@ __all__ = [
     "LongitudinalEvidence",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "PopulationRiskAssessment",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
     "analyze_k_anonymity",
     "apply_suppression",
+    "assess_population_risk",
     "budget_for_policy",
     "build_longitudinal_corpus",
     "evaluate_budget",
     "fit_tabular_profile",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "quasi_identifier_key",
     "risk_report",
     "sample_synthetic_table",
     "tabular_fidelity_report",
@@ -98,6 +123,21 @@ __all__ = [
     "propose_suppression",
     "diff_audit_reports",
     "AuditDiff",
+    "AnonymityPolicy",
+    "AnonymizationResult",
+    "AttributeDisclosureSummary",
+    "GeneralizationSummary",
+    "ReleaseAssessment",
+    "ReleasedOutputValidation",
+    "UtilitySummary",
+    "anonymize_release",
+    "assess_release",
+    "release_dataset_digest",
+    "release_schema_digest",
+    "render_release_assessment_dashboard",
     "render_risk_dashboard",
+    "safe_risk_summary",
+    "validate_released_output",
+    "write_release_assessment_dashboard",
     "write_risk_dashboard",
 ]

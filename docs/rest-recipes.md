@@ -98,7 +98,7 @@ Response:
 {
   "status": "ok",
   "service": "openmed-rest",
-  "version": "1.9.1",
+  "version": "2.0.0",
   "profile": "prod"
 }
 ```
