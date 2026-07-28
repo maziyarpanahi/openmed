@@ -462,9 +462,10 @@ class TestSaveNumpyModel:
         )
 
         manifest = validate_mlx_bundle(output)
-        assert manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+        assert manifest["segmenter"]["license"] == "MIT AND ICU"
         assert (output / "segmenter" / "han_words.txt").is_file()
         assert (output / "segmenter" / "indic_rules.json").is_file()
+        assert (output / "segmenter" / "ICU.txt").is_file()
 
     @pytest.mark.skipif(
         not _SAFETENSORS_NUMPY_AVAILABLE,
