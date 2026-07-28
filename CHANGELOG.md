@@ -242,6 +242,11 @@ agent-tool, and release-evidence contracts for the v2 line.
 
 ### Fixed
 
+- Corrected compact Indic segmenter licensing to the valid SPDX `ICU`
+  identifier, pinned the immutable ICU 57.1 source revision, retained the full
+  source copyright and permission notice in Python distributions and standalone
+  model bundles, and added fail-closed Python, Swift, and release-policy
+  validation.
 - Corrected PharmaDetect medication boundaries and optional precision
   filtering, contrastive-clause experiencer scope, radiology span and
   laterality binding, cross-platform path handling, and model-loader behavior
@@ -278,7 +283,7 @@ agent-tool, and release-evidence contracts for the v2 line.
 
 ### Complete commit and pull-request inventory
 
-The audited `1ab2eca4cc89..fa4c4ad2a190` range contains 521 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
+The audited `1ab2eca4cc89..6525adb5722c` range contains 539 commits and 197 merged pull requests. The ledger below is generated from exact Git ancestry; pull-request entries include every branch commit reachable through their merge commit, while direct and integration commits remain explicit.
 
 The final changelog-only commit that records this ledger is represented by this inventory section itself; a commit cannot contain its own content-derived SHA.
 
@@ -1009,6 +1014,24 @@ The final changelog-only commit that records this ledger is represented by this 
 - `7c4e407a9548` test: keep JavaScript dependencies out of images
 - `0402798c8713` docs: finalize the v2 release inventory
 - `fa4c4ad2a190` test: remove flaky fuzz timing assertions
+- `e83dd4766090` docs: record the Windows fuzz fix
+- `28d5036c39de` legal: add the ICU license notice
+- `271b9c1af457` legal: pin the ICU segmenter provenance
+- `8807dace9552` fix: require ICU notices in segmenter bundles
+- `cc7637a81a7a` fix: discover the ICU bundle notice
+- `5a735b023b2b` fix(swift): validate ICU bundle attribution
+- `00a192eb3e25` test(swift): cover the ICU bundle notice
+- `f2bd824ec4a8` test: enforce ICU segmenter attribution
+- `b8c1970aa88c` test(mlx): require the ICU bundle notice
+- `4ef4a2c347de` test(coreml): require the ICU bundle notice
+- `591d2cc56990` test(onnx): require the ICU bundle notice
+- `c157e00a686b` test(web): require the ICU bundle notice
+- `bf092e2605d3` fix: audit bundled license notices
+- `333d8e929569` test: guard bundled ICU licensing
+- `82d7882d45d7` docs: attribute the bundled ICU rules
+- `1162b5009b28` docs: document ICU bundle attribution
+- `677eaff81fbc` docs: note the ICU manifest correction
+- `6525adb5722c` docs: record ICU attribution hardening
 
 </details>
 
