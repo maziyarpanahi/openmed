@@ -90,6 +90,7 @@ from openmed.core.pii_i18n import (
     validate_uganda_nin,
     validate_uk_nhs_number,
     validate_uk_nino,
+    validate_ukrainian_rnokpp,
     validate_upi_id,
     validate_vehicle_registration,
     validate_vietnamese_cccd,
@@ -143,6 +144,7 @@ from .clinical_ids import (
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
+    UkrainianRnokppProvider,
     VietnameseIdProvider,
     validate_abdm_registry_id,
     validate_abha,
@@ -668,6 +670,13 @@ def _register_builtin_specs() -> None:
         validate=validate_estonian_isikukood,
         faker_method="isikukood",
         faker_provider=EstonianIsikukoodProvider,
+    )
+    _register_aliases(
+        ("uk", "uk_UA"),
+        id_type="rnokpp",
+        validate=validate_ukrainian_rnokpp,
+        faker_method="rnokpp",
+        faker_provider=UkrainianRnokppProvider,
     )
     _register_aliases(
         ("el", "el_GR"),

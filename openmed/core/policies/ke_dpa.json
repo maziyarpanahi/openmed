@@ -79,6 +79,7 @@
     "LAB_TEST": "mask",
     "PROCEDURE": "mask",
     "BODY_SITE": "mask",
+    "DEVICE": "mask",
     "ANESTHESIA_TYPE": "mask",
     "ANESTHETIC_AGENT": "mask",
     "AIRWAY_MANAGEMENT": "mask",
@@ -116,6 +117,10 @@
     "GROWTH_PARAMETER": "mask",
     "GROWTH_PERCENTILE": "mask",
     "DEVELOPMENTAL_MILESTONE": "mask",
+    "INTAKE_OUTPUT": "mask",
+    "LINE_DRAIN_TUBE": "mask",
+    "NURSING_RISK_SCORE": "mask", 
+    "CARE_INTERVENTION": "mask",
     "OTHER": "mask"
   }
 }

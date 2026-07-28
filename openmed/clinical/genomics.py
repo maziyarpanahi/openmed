@@ -99,6 +99,8 @@ _AA1 = r"[ARNDCEQGHILKMFPSTWYVUOX*]"
 _RESIDUE = rf"(?:{_AA3}|{_AA1})"
 _PROTEIN_POSITION_RE = re.compile(rf"(?P<pos>{_RESIDUE}\d+(?:_{_RESIDUE}\d+)?)")
 _RESIDUES_RE = re.compile(rf"(?:{_RESIDUE})+")
+_PROTEIN_FRAMESHIFT_RE = re.compile(rf"(?:{_RESIDUE})?fs(?:(?:Ter|\*)(?:\d+|\?))?")
+_PROTEIN_EXTENSION_RE = re.compile(rf"(?:{_RESIDUE})?ext(?:Ter|\*)(?:-?\d+|\?)")
 
 
 def _validate_dna_payload(op: str, payload: str) -> Optional[str]:
@@ -152,9 +154,9 @@ def _valid_protein_edit(edit: str) -> bool:
     """True when a protein edit is a recognized HGVS operation."""
     if edit in ("del", "dup", "=", "?"):  # incl. unknown consequence (e.g. p.Met1?)
         return True
-    if "fs" in edit:  # frameshift, incl. Ter/``*`` count variants
+    if _PROTEIN_FRAMESHIFT_RE.fullmatch(edit):
         return True
-    if "ext" in edit:  # stop-loss / N-terminal extension (e.g. GlnextTer17)
+    if _PROTEIN_EXTENSION_RE.fullmatch(edit):
         return True
     if edit.startswith("delins"):
         return bool(_RESIDUES_RE.fullmatch(edit[len("delins") :]))

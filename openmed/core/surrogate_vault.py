@@ -2,10 +2,10 @@
 
 The vault stores mappings from ``(canonical_label, lang, text_hash)`` to the
 selected surrogate value. ``text_hash`` is an HMAC-SHA256 digest of the source
-surface, or of an in-memory canonical transliteration for opted-in Indian name
-surfaces; neither form is persisted as plaintext. Persisted vault payloads
-encrypt surrogate values under a versioned epoch key so the file at rest does
-not reveal replacement identifiers.
+surface, an in-memory Pinyin key for Chinese names, or an in-memory canonical
+transliteration for opted-in Indian name surfaces; none is persisted as
+plaintext. Persisted vault payloads encrypt surrogate values under a versioned
+epoch key so the file at rest does not reveal replacement identifiers.
 """
 
 from __future__ import annotations
@@ -50,6 +50,8 @@ _KEY_ID_BYTES = 8
 _NONCE_BYTES = 16
 _INDIAN_NAME_KEY_LANG = "india"
 _INDIAN_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
+_CHINESE_NAME_KEY_LANG = "zh-pinyin"
+_CHINESE_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
 _SCRIPT_NAME_PREFIXES = {
     "bengali": "BENGALI",
     "devanagari": "DEVANAGARI",
@@ -1355,6 +1357,16 @@ class SurrogateVault:
     def _source_identity(self, source: SurrogateSource) -> _SourceIdentity:
         effective_lang = str(source.lang or "en")
         canonical_label = normalize_label(str(source.label), effective_lang)
+        if canonical_label in _CHINESE_NAME_LABELS and effective_lang.replace(
+            "-", "_"
+        ).casefold().startswith("zh"):
+            from ..processing.zh_pinyin import pinyin_fuzzy_key
+
+            return _SourceIdentity(
+                canonical_label=canonical_label,
+                key_lang=_CHINESE_NAME_KEY_LANG,
+                key_text=pinyin_fuzzy_key(source.source_text),
+            )
         if (
             self.transliteration_aware_name_matching
             and canonical_label == PERSON

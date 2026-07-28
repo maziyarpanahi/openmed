@@ -3,8 +3,10 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
-The optional Indic family adds nine user-configured routes and can also serve
-the built-in Hindi and Telugu codes. Every code documented here wires up:
+The optional Indic family adds four user-configured routes and can also serve
+the built-in Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu codes.
+Every code documented here wires
+up:
 
 - a **default PII model** from `DEFAULT_PII_MODELS`, used when you pass `lang=`
   without an explicit `model_name=` (an `env:OPENMED_INDIC_NER_MODEL` entry
@@ -44,7 +46,8 @@ print(route.metadata["runs"])
 The core fallback is deterministic and dependency-free. It combines Unicode
 script runs with each `LanguagePack`'s candidate priority and context hints;
 for example, adjacent kana selects Japanese for Han runs, while standalone Han
-prefers Chinese and Devanagari currently prefers Hindi. Install
+prefers Chinese and Marathi lexical markers disambiguate Marathi from the
+otherwise Hindi-first Devanagari route. Install
 `openmed[lid]` to enable the lazy, on-device `pycld2` adapter for ambiguous
 runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
 routing is first requested, and do not download or bundle model weights.
@@ -69,10 +72,12 @@ routing is first requested, and do not download or bundle model weights.
 | ------ | ---------- | ---------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
 | `am`   | Amharic    | `OpenMed/privacy-filter-multilingual`                      | `am_ET`      | Ethiopic patterns; `en_KE` Faker approximation warns once.   |
 | `ar`   | Arabic     | `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1`    | `ar_EG`      | Egypt is the most-populous Arabic locale; override per call. |
-| `as`   | Assamese   | `env:OPENMED_INDIC_NER_MODEL`                               | `as_IN`      | Optional Indic NER weights; Bengali Faker backend.           |
-| `bn`   | Bengali    | `env:OPENMED_INDIC_NER_MODEL`                               | `bn_BD`      | Optional Indic NER weights.                                  |
+| `as`   | Assamese   | `OpenMed/privacy-filter-multilingual`                       | `as_IN`      | Bengali Faker backend; curated Assamese names; Aadhaar.      |
+| `bn`   | Bengali    | `OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1` | `bn_BD`      | Dedicated Bengali PII registry entry.                        |
 | `da`   | Danish     | `OpenMed/privacy-filter-multilingual`                       | `da_DK`      | CPR-aware Nordic language pack.                              |
+| `cs`   | Czech      | `OpenMed/privacy-filter-multilingual`                       | `cs_CZ`      | Rodné číslo checksum-aware surrogates.                       |
 | `de`   | German     | `OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1`    | `de_DE`      | Steuer-ID surrogates via `GermanSteuerIdProvider`.           |
+| `el`   | Greek      | `OpenMed/privacy-filter-multilingual`                       | `el_GR`      | AMKA Luhn-aware surrogates.                                  |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
 | `es`   | Spanish    | `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1`   | `es_ES`      | DNI/NIE checksum-aware surrogates.                           |
 | `fr`   | French     | `OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1`    | `fr_FR`      | NIR / INSEE; `fr_SN`, `fr_CI`, and `fr_CM` locale overlays.  |
@@ -85,28 +90,29 @@ routing is first requested, and do not download or bundle model weights.
 | `kn`   | Kannada    | `env:OPENMED_INDIC_NER_MODEL`                               | `kn_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
 | `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
-| `mr`   | Marathi    | `env:OPENMED_INDIC_NER_MODEL`                               | `mr_IN`      | Optional Indic NER weights; Hindi Faker backend.             |
+| `mr`   | Marathi    | `OpenMed/privacy-filter-multilingual`                       | `mr_IN`      | Three-part names; `hi_IN` Faker approximation warns once.    |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
-| `or`   | Odia       | `env:OPENMED_INDIC_NER_MODEL`                               | `or_IN`      | Optional Indic NER weights.                                  |
+| `or`   | Odia       | `OpenMed/privacy-filter-multilingual`                       | `or_IN`      | Native Odia surrogates; Aadhaar and Odisha PIN patterns.     |
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
 | `sv`   | Swedish    | `OpenMed/privacy-filter-multilingual`                       | `sv_SE`      | Personnummer Luhn validation and surrogates.                 |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
-| `ta`   | Tamil      | `env:OPENMED_INDIC_NER_MODEL`                               | `ta_IN`      | Optional Indic NER weights.                                  |
+| `ta`   | Tamil      | `OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1`   | `ta_IN`      | Dedicated Tamil PII registry entry.                          |
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
 | `xh`   | isiXhosa   | `OpenMed/privacy-filter-multilingual`                      | `xh_ZA`      | Nguni patterns; `zu_ZA` Faker approximation warns once.      |
-| `zh`   | Chinese    | `OpenMed/privacy-filter-multilingual`                      | `zh_CN`      | Routing placeholder; no dedicated Chinese PII model yet.     |
+| `zh`   | Chinese    | `OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1`         | `zh_CN`      | Dedicated Chinese PII registry entry.                        |
 | `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
+| `uk`   | Ukrainian  | `OpenMed/privacy-filter-multilingual`                       | `uk_UA`      | RNOKPP checksum-aware surrogates.                            |
 
-Chinese segmentation and Han-script routing are supported, but the `zh`
-default remains an explicit multilingual placeholder rather than a claim that
-a dedicated Chinese PII model has shipped. Codes outside this list (for example
-`pl`, `lv`, `sk`, `ms`, `tl`, `fi`, and `ur`) are **not** model-backed PII languages.
+Chinese segmentation and Han-script routing use the dedicated `zh` registry
+entry. Codes outside this list (for example
+`pl`, `lv`, `sk`, `ms`, `tl`, `fi`, and `ur`) are **not** model-backed PII
+languages.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
@@ -114,7 +120,7 @@ validator-backed national-ID coverage
 Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
 `en_PK` backend for general surrogate data, with a one-time approximation warning.
 
-The nine optional Indic language packs never download a default checkpoint.
+The four optional Indic language packs never download a default checkpoint.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
@@ -214,7 +220,7 @@ After:  المريضة [NAME]، الهاتف [PHONE]
 
 ### Assamese — `as`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `as_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `as_IN`
 
 ```text
 Before: অৰুণ গুৱাহাটীত জীৱন চিকিৎসালয়লৈ গ'ল।
@@ -223,7 +229,7 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] গ'ল।
 
 ### Bengali — `bn`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `bn_BD`
+- Model: `OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1` · locale `bn_BD`
 
 ```text
 Before: অরুণ কলকাতায় আনন্দ হাসপাতালে গেলেন।
@@ -237,6 +243,13 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] গেলেন।
 ```text
 Before: Patient Anna Nielsen, CPR 170885-1234
 After:  Patient [NAME], CPR [ID]
+### Czech — `cs`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `cs_CZ`
+
+```text
+Before: Pacient Jan Novák, rodné číslo 751116/0008
+After:  Pacient [NAME], rodné číslo [ID]
 ```
 
 ### German — `de`
@@ -246,6 +259,15 @@ After:  Patient [NAME], CPR [ID]
 ```text
 Before: Patientin Anna Müller, Steuer-ID 86095742719
 After:  Patientin [NAME], Steuer-ID [ID]
+```
+
+### Greek — `el`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `el_GR`
+
+```text
+Before: Ασθενής Γιώργος Παπαδόπουλος, ΑΜΚΑ 16117508024
+After:  Ασθενής [NAME], ΑΜΚΑ [ID]
 ```
 
 ### English — `en`
@@ -304,16 +326,16 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] പോയി.
 
 ### Marathi — `mr`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `mr_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `mr_IN`
 
 ```text
-Before: आरव पुण्यात सह्याद्री रुग्णालयात गेला.
-After:  [PERSON] [LOCATION] [ORGANIZATION] गेला.
+Before: रुग्णाचे नाव सौ. वैशाली सुरेश देशमुख. जन्मतारीख १४ फेब्रुवारी १९८५.
+After:  रुग्णाचे नाव [PERSON]. जन्मतारीख [DATE].
 ```
 
 ### Odia — `or`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `or_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `or_IN`
 
 ```text
 Before: ଅରୁଣ ଭୁବନେଶ୍ୱରରେ କଳିଙ୍ଗ ହସ୍ପିଟାଲକୁ ଗଲେ।
@@ -331,7 +353,7 @@ After:  [PERSON] [LOCATION] ਵਿੱਚ [ORGANIZATION] ਗਿਆ।
 
 ### Tamil — `ta`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `ta_IN`
+- Model: `OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1` · locale `ta_IN`
 
 ```text
 Before: அருண் சென்னையில் காவேரி மருத்துவமனை சென்றார்.
@@ -499,16 +521,15 @@ After:  Igama lesigulane: [NAME]. Inombolo yesazisi [ID]
 
 ### Chinese — `zh`
 
-- Model placeholder: `OpenMed/privacy-filter-multilingual` · locale `zh_CN`
+- Model: `OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1` · locale `zh_CN`
 
 ```text
 Before: 患者王芳，电话 13800138000
 After:  患者[NAME]，电话 [PHONE]
 ```
 
-The default entry is an API-compatible fallback. Supply a validated Chinese
-PII model explicitly for production detection; the segmentation and exact
-offset guarantees do not imply dedicated Chinese model weights.
+The dedicated registry entry is used by default for Chinese PII detection,
+while segmentation and exact-offset guarantees remain unchanged.
 
 ### isiZulu — `zu`
 
@@ -517,4 +538,11 @@ offset guarantees do not imply dedicated Chinese model weights.
 ```text
 Before: Igama lesiguli: Nomcebo Dlamini. Inombolo kamazisi 8001015009087
 After:  Igama lesiguli: [NAME]. Inombolo kamazisi [ID]
+### Ukrainian — `uk`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `uk_UA`
+
+```text
+Before: Пацієнтка Олена Коваль, РНОКПП 2974281300
+After:  Пацієнтка [NAME], РНОКПП [ID]
 ```

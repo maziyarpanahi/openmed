@@ -23,11 +23,13 @@ from openmed.mcp.tool_registry import (
 class FakeFastMCP:
     def __init__(self) -> None:
         self.tools: dict[str, Any] = {}
+        self.tool_metadata: dict[str, dict[str, Any]] = {}
         self.resources: dict[str, Any] = {}
 
-    def tool(self, *, name: str):
+    def tool(self, *, name: str, **metadata: Any):
         def _decorator(func):
             self.tools[name] = func
+            self.tool_metadata[name] = metadata
             return func
 
         return _decorator
@@ -68,6 +70,15 @@ def test_registered_tool_invocation_validates_structured_output() -> None:
 
     with pytest.raises(ToolSchemaValidationError, match="openmed_list_models"):
         invoke_tool(spec, bad_handler, category=None, pii_language=None, limit=50)
+
+
+def test_mcp_language_listing_discovers_v2_registry_entries() -> None:
+    payload = mcp_server.openmed_list_pii_languages()
+    languages = {item["code"]: item for item in payload["languages"]}
+
+    for code in ("bn", "ta", "zh"):
+        assert languages[code]["default_pii_model"].startswith("OpenMed/OpenMed-PII-")
+        assert languages[code]["model_count"] >= 1
 
 
 def test_tool_registry_resource_is_generated_from_specs() -> None:

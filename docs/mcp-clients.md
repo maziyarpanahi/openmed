@@ -24,6 +24,69 @@ uv sync --extra mcp
 uv run openmed-mcp --version
 ```
 
+## Run in a container
+
+Build the dedicated MCP image from a checkout:
+
+```bash
+docker build -f Dockerfile.mcp -t openmed-mcp:local .
+```
+
+The image defaults to stdio. Keep stdin attached with `-i` and do not allocate
+a TTY, because MCP protocol messages use stdin and stdout:
+
+```bash
+docker run -i --rm \
+  -v openmed-hf-cache:/root/.cache/huggingface \
+  openmed-mcp:local
+```
+
+A command-map client can launch that container directly:
+
+```json
+{
+  "mcpServers": {
+    "openmed-container": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "openmed-hf-cache:/root/.cache/huggingface",
+        "openmed-mcp:local"
+      ]
+    }
+  }
+}
+```
+
+For a local Streamable HTTP endpoint, override the image's default command.
+The server must listen on all container interfaces, while the published port
+remains limited to host loopback:
+
+```bash
+docker run --rm \
+  -p 127.0.0.1:8081:8081 \
+  -v openmed-hf-cache:/root/.cache/huggingface \
+  openmed-mcp:local \
+  --transport streamable-http \
+  --host 0.0.0.0 \
+  --port 8081 \
+  --streamable-http-path /mcp
+```
+
+The equivalent Compose service includes the same loopback port binding, a
+listener health check, and a persistent model cache:
+
+```bash
+docker compose up --build mcp
+```
+
+Connect remote-style local clients to `http://127.0.0.1:8081/mcp`. Set
+`OPENMED_MCP_PORT` before starting Compose to select a different host port;
+the container endpoint remains on port `8081`.
+
 ## Local stdio connections
 
 Stdio is the recommended transport when the MCP client and OpenMed run on the

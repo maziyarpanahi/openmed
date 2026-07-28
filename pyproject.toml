@@ -79,7 +79,7 @@ integrity = [
 ]
 
 mcp = [
-  "mcp>=1.9",
+  "mcp>=1.27,<2",
 ]
 
 lid = [
@@ -124,7 +124,7 @@ dask = [
 
 spacy = [
   "click>=8.0",
-  "spacy>=3.5",
+  "spacy>=3.8.9",
 ]
 
 zh = [
@@ -137,8 +137,17 @@ indic = [
   "indic-nlp-library>=0.92",
 ]
 
+scispacy = [
+  "scispacy>=0.5.4,<1",
+]
+
+quickumls = [
+  "quickumls>=1.4,<2",
+]
+
 multimodal = [
   "numpy>=1.26",
+  "onnx>=1.21",
   "pdfplumber>=0.11",
   "python-docx>=1.1",
   "Pillow>=10.0",
@@ -213,6 +222,8 @@ cloud = [
 
 spark = [
   "pyspark>=3.5,<4",
+  "pandas>=2.0",
+  "pyarrow>=16",
 ]
 
 hf = [
@@ -256,7 +267,7 @@ coreml = [
 ]
 
 onnx = [
-  "onnx>=1.14",
+  "onnx>=1.21",
   "onnxruntime>=1.16",
   "onnxscript>=0.1.0",
   "torch>=2.0",
@@ -299,23 +310,31 @@ conflicts = [
     { extra = "awq" },
     { extra = "gliner" },
   ],
+  [
+    { extra = "onnx" },
+    { extra = "scispacy" },
+  ],
+  [
+    { extra = "multimodal" },
+    { extra = "scispacy" },
+  ],
 ]
 
 [tool.hatch.build]
 include = [
-  "openmed/**",
-  "openmed/py.typed",
-  "openmed/core/thresholds.json",
-  "openmed/core/policies/*.json",
-  "openmed/core/schemas/json/*.json",
-  "eval/redteam/corpus/adversarial_phi.jsonl",
-  "gates/baseline.json",
-  "models.jsonl",
-  "models.jsonl.sigstore.json",
-  "LICENSE",
-  "NOTICE",
-  "README.md",
-  "pyproject.toml"
+  "/openmed/**",
+  "/openmed/py.typed",
+  "/openmed/core/thresholds.json",
+  "/openmed/core/policies/*.json",
+  "/openmed/core/schemas/json/*.json",
+  "/eval/redteam/corpus/adversarial_phi.jsonl",
+  "/gates/baseline.json",
+  "/models.jsonl",
+  "/models.jsonl.sigstore.json",
+  "/LICENSE",
+  "/NOTICE",
+  "/README.md",
+  "/pyproject.toml"
 ]
 
 [tool.hatch.build.targets.wheel.force-include]

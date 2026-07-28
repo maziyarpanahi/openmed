@@ -32,12 +32,12 @@ from .format_preserve import (
     preserve_id_pattern,
     preserve_phone_format,
 )
-from .locales import ZH_CN_ADDRESS_LOCALE
+from .locales import ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
-_INDIA_LOCALES = frozenset({"en_IN", "hi_IN"})
+_INDIA_LOCALES = frozenset({"as_IN", "en_IN", "hi_IN", "mr_IN", "or_IN", "ta_IN"})
 
 
 def _contains_original_fragment(original: str, candidate: str) -> bool:
@@ -81,10 +81,22 @@ def _locale_fake_value(faker, locale: str, key: str, original: str):
 
 _HAN_NAME_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _ZH_GIVEN_NAME_FALLBACK = tuple("清宁安和嘉悦晨星岚澄涵瑞瑶璟")
+_TAMIL_BASE_LETTER = (
+    r"[\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A"
+    r"\u0B9C\u0B9E\u0B9F\u0BA3-\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9]"
+)
+_TAMIL_GRAPHEME = rf"(?:ஸ்ரீ|{_TAMIL_BASE_LETTER}[\u0BBE-\u0BCD\u0BD7]*)"
+_TAMIL_GIVEN_NAME_RE = re.compile(rf"(?:{_TAMIL_GRAPHEME}){{2,}}")
+_TAMIL_PATRONYMIC_NAME_RE = re.compile(
+    rf"(?P<initial>[A-Za-z]|{_TAMIL_GRAPHEME})"
+    rf"(?P<separator>\.[ \t]*)"
+    rf"(?P<given>(?:{_TAMIL_GRAPHEME}){{2,}}|"
+    r"[A-Za-z][A-Za-z'’-]{1,39})"
+)
 
 
 def _is_zh_cn(locale: str) -> bool:
-    return locale.replace("-", "_").casefold() == "zh_cn"
+    return is_chinese_name_locale(locale)
 
 
 def _han_characters(value: str) -> str:
@@ -128,6 +140,9 @@ def _draw_zh_given_name(faker, *, length: int, forbidden: set[str]) -> str:
 
 
 def _gen_zh_person(faker, original: str) -> str:
+    if hasattr(faker, "chinese_name"):
+        return str(faker.chinese_name(original))
+
     source = _han_characters(original)
     source_characters = set(source)
     _single_surnames, compound_surnames = _zh_surname_pools()
@@ -161,6 +176,13 @@ def _gen_person(faker, original, *, locale):
 def _gen_first_name(faker, original, *, locale):
     if _is_zh_cn(locale):
         source = _han_characters(original)
+        if hasattr(faker, "chinese_given_name"):
+            return str(
+                faker.chinese_given_name(
+                    original,
+                    length=max(1, min(len(source) or 1, 2)),
+                )
+            )
         return _draw_zh_given_name(
             faker,
             length=max(1, min(len(source) or 1, 2)),
@@ -174,6 +196,13 @@ def _gen_first_name(faker, original, *, locale):
 def _gen_last_name(faker, original, *, locale):
     if _is_zh_cn(locale):
         source = _han_characters(original)
+        if hasattr(faker, "chinese_surname"):
+            return str(
+                faker.chinese_surname(
+                    original,
+                    compound=len(source) >= 2,
+                )
+            )
         return _draw_zh_surname(
             faker,
             compound=len(source) >= 2,
@@ -186,25 +215,145 @@ def _gen_middle_name(faker, original, *, locale):
     return faker.first_name()
 
 
+_MARATHI_HONORIFIC_RE = re.compile(r"^(श्रीमती|श्री\.|सौ\.|कु\.)\s*")
+_MARATHI_FEMALE_HONORIFICS = frozenset({"श्रीमती", "सौ.", "कु."})
+
+
+def _marathi_name_values(key: str) -> tuple[str, ...]:
+    """Return the bundled synthetic Marathi name vocabulary for ``key``."""
+
+    from ..pii_i18n import LOCALE_FAKE_DATA
+
+    return tuple(LOCALE_FAKE_DATA["mr_IN"][key])
+
+
+def _draw_marathi_name_part(
+    faker,
+    original: str,
+    key: str,
+    *,
+    used: set[str] | None = None,
+) -> str:
+    values = _marathi_name_values(key)
+    excluded = used or set()
+    eligible = tuple(
+        value for value in values if value not in original and value not in excluded
+    )
+    return faker.random_element(eligible or values)
+
+
+def _gen_marathi_person(faker, original, *, locale):
+    """Preserve Marathi honorific gender and given-patronymic-surname shape."""
+
+    honorific_match = _MARATHI_HONORIFIC_RE.match(original.strip())
+    honorific = honorific_match.group(1) if honorific_match else ""
+    first_key = (
+        "FIRST_NAME_FEMALE"
+        if honorific in _MARATHI_FEMALE_HONORIFICS
+        else "FIRST_NAME_MALE"
+    )
+    first = _draw_marathi_name_part(faker, original, first_key)
+    middle = _draw_marathi_name_part(
+        faker,
+        original,
+        "FIRST_NAME_MALE",
+        used={first},
+    )
+    surname = _draw_marathi_name_part(
+        faker,
+        original,
+        "LAST_NAME",
+        used={first, middle},
+    )
+    prefix = f"{honorific} " if honorific else ""
+    return f"{prefix}{first} {middle} {surname}"
+
+
+def _gen_marathi_first_name(faker, original, *, locale):
+    return _draw_marathi_name_part(faker, original, "FIRST_NAME")
+
+
+def _gen_marathi_middle_name(faker, original, *, locale):
+    return _draw_marathi_name_part(faker, original, "FIRST_NAME_MALE")
+
+
+def _gen_marathi_last_name(faker, original, *, locale):
+    return _draw_marathi_name_part(faker, original, "LAST_NAME")
+
+
+def _draw_tamil_patronymic_initial(faker, source_initial: str) -> str:
+    if source_initial.isascii():
+        candidates = [
+            letter
+            for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            if letter.casefold() != source_initial.casefold()
+        ]
+        selected = faker.random_element(candidates)
+        return selected if source_initial.isupper() else selected.lower()
+
+    for _ in range(20):
+        candidate = str(faker.first_name())
+        match = re.match(_TAMIL_GRAPHEME, candidate)
+        if match is not None and match.group(0) != source_initial:
+            return match.group(0)
+    raise RuntimeError("could not generate a distinct Tamil patronymic initial")
+
+
+def _gen_tamil_patronymic_person(faker, original: str) -> str | None:
+    match = _TAMIL_PATRONYMIC_NAME_RE.fullmatch(original.strip())
+    if match is None:
+        return None
+
+    source_given = match.group("given")
+    for _ in range(20):
+        given_name = str(faker.first_name())
+        if (
+            _TAMIL_GIVEN_NAME_RE.fullmatch(given_name) is None
+            or given_name == source_given
+        ):
+            continue
+        initial = _draw_tamil_patronymic_initial(faker, match.group("initial"))
+        candidate = f"{initial}{match.group('separator')}{given_name}"
+        if candidate != original:
+            return candidate
+    raise RuntimeError("could not generate a distinct Tamil patronymic name")
+
+
 def _gen_india_person(faker, original, *, locale):
+    if locale == "ta_IN":
+        patronymic = _gen_tamil_patronymic_person(faker, original)
+        if patronymic is not None:
+            return patronymic
+    curated = _locale_fake_value(faker, locale, "NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_name"):
         return _draw_distinct(faker, original, "indian_name")
     return _gen_person(faker, original, locale=locale)
 
 
 def _gen_india_first_name(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "FIRST_NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
         return _draw_distinct(faker, original, "indian_first_name")
     return _gen_first_name(faker, original, locale=locale)
 
 
 def _gen_india_last_name(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "LAST_NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_last_name"):
         return _draw_distinct(faker, original, "indian_last_name")
     return _gen_last_name(faker, original, locale=locale)
 
 
 def _gen_india_middle_name(faker, original, *, locale):
+    curated = _locale_fake_value(faker, locale, "FIRST_NAME", original)
+    if curated is not None:
+        return curated
     if locale in _INDIA_LOCALES and hasattr(faker, "indian_first_name"):
         return _draw_distinct(faker, original, "indian_first_name")
     return _gen_middle_name(faker, original, locale=locale)
@@ -418,8 +567,12 @@ _DAY_FIRST_LOCALES = frozenset(
         "it_IT",
         "es_ES",
         "nl_NL",
+        "as_IN",
         "hi_IN",
+        "mr_IN",
         "en_IN",
+        "or_IN",
+        "ta_IN",
         "pt_PT",
         "pt_BR",
         "he_IL",
@@ -430,12 +583,14 @@ _DAY_FIRST_LOCALES = frozenset(
         "da_DK",
         "no_NO",
         "th_TH",
+        "uk_UA",
         "cs_CZ",
         "sk_SK",
         "af_ZA",
         "en_ZA",
         "zu_ZA",
         "xh_ZA",
+        "el_GR",
     }
 )
 
@@ -487,8 +642,12 @@ _LOCALE_ID_METHODS = {
     "it_IT": "ssn",
     "es_ES": "nie",
     "nl_NL": "ssn",
+    "as_IN": "aadhaar",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "mr_IN": "aadhaar",
+    "or_IN": "aadhaar",
+    "ta_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
@@ -508,6 +667,7 @@ _LOCALE_ID_METHODS = {
     "sv_SE": "ssn",
     "no_NO": "ssn",
     "th_TH": "thai_national_id",
+    "uk_UA": "rnokpp",
     "sk_SK": "rodne_cislo",
     "cs_CZ": "rodne_cislo",
     "ro_RO": "romanian_cnp",
@@ -727,7 +887,7 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
-    if locale in {"en_IN", "hi_IN", "te_IN"}:
+    if locale in {"as_IN", "en_IN", "hi_IN", "mr_IN", "or_IN", "te_IN"}:
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id
@@ -1249,6 +1409,30 @@ def _register_builtin_script_name_generators() -> None:
 
 
 _register_builtin_script_name_generators()
+
+
+def _register_marathi_name_generators() -> None:
+    """Install Marathi-specific three-part Devanagari name generators."""
+
+    language_pack = get_language_pack("mr")
+    if language_pack is None:  # pragma: no cover - catalog import is mandatory
+        raise RuntimeError("language pack 'mr' is not registered")
+    generators = {
+        L.PERSON: _gen_marathi_person,
+        L.FIRST_NAME: _gen_marathi_first_name,
+        L.MIDDLE_NAME: _gen_marathi_middle_name,
+        L.LAST_NAME: _gen_marathi_last_name,
+    }
+    for canonical_label, generator in generators.items():
+        register_label_generator(
+            canonical_label,
+            generator,
+            language_pack=language_pack,
+            script="Devanagari",
+        )
+
+
+_register_marathi_name_generators()
 
 
 def register_india_label_generators() -> None:

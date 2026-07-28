@@ -35,6 +35,7 @@ class PolicyName(str, Enum):
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
     CHINA_PIPL = "china_pipl"
     INDIA_DPDP_ACT = "india_dpdp_act"
+    AFRICA_MALABO_BASELINE = "africa_malabo_baseline"
     ZA_POPIA = "za_popia"
     NG_NDPA = "ng_ndpa"
     KENYA_DPA = "ke_dpa"

@@ -159,6 +159,32 @@ def test_protein_delins_insertion_and_extension_are_valid(text):
     assert _one(text)["status"] == "valid"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "p.Arg97ProfsTer23",
+        "p.Arg97fs*23",
+        "p.Arg97fsTer?",
+    ],
+)
+def test_protein_frameshift_forms_are_valid(text):
+    assert _one(text)["status"] == "valid"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "p.Arg97junkfs",
+        "p.Arg97fsjunk",
+        "p.Ter110badextstuff",
+    ],
+)
+def test_malformed_frameshift_and_extension_tails_are_rejected(text):
+    mention = _one(text)
+    assert mention["status"] == "malformed"
+    assert mention["reason"] == "invalid_amino_acid"
+
+
 @pytest.mark.parametrize("text", ["p.=", "p.?", "p.0", "p.(=)"])
 def test_protein_synonymous_and_unknown_are_valid(text):
     assert _one(text)["status"] == "valid"
