@@ -66,6 +66,10 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert "release-source.json" in content
     assert "--release-version" in content
     assert "computed next version $COMPUTED_VERSION" not in content
+    assert "WORKFLOW_REVISION: ${{ github.workflow_sha }}" in content
+    assert '"${WORKFLOW_REVISION}:scripts/release/changelog.py"' in content
+    assert '--repo "$GITHUB_WORKSPACE"' in content
+    assert "python scripts/release/changelog.py" not in content
 
 
 def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
