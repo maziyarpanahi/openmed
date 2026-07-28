@@ -90,7 +90,14 @@ jobs:
         id: release_metadata
         env:
           RELEASE_TAG: ${{ inputs.release-tag || github.ref_name }}
+          WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
+          WORKFLOW_CHANGELOG="$RUNNER_TEMP/openmed-changelog.py"
+          git show \
+            "${WORKFLOW_REVISION}:scripts/release/changelog.py" \
+            > "$WORKFLOW_CHANGELOG"
+          test -s "$WORKFLOW_CHANGELOG"
+
           release_version_args=()
           if [ -n "${RELEASE_TAG:-}" ] && [[ "$RELEASE_TAG" == v* ]]; then
             RELEASE_COMMIT=$(git rev-list -n 1 "$RELEASE_TAG")
@@ -110,7 +117,8 @@ jobs:
             RANGE="$RANGE_END"
           fi
 
-          python scripts/release/changelog.py \
+          python "$WORKFLOW_CHANGELOG" \
+            --repo "$GITHUB_WORKSPACE" \
             --range "$RANGE" \
             --current-version "$BASE_VERSION" \
             "${release_version_args[@]}" \
