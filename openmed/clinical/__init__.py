@@ -4,6 +4,11 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
+OPENMED_CLINICAL_DISCLAIMER = (
+    "OpenMed clinical outputs are assistive software outputs, not a medical "
+    "device, diagnosis, or substitute for qualified clinical judgment."
+)
+
 from .abbreviation import (
     ABBREVIATION_DISAMBIGUATION_ADVISORY,
     DEFAULT_SENSE_INVENTORY_RESOURCE,
@@ -93,6 +98,14 @@ from .coreference import (
     SpanChainKey,
     resolve_coreference,
 )
+from .document_linking import (
+    DOCUMENT_LINKING_ADVISORY,
+    DocumentCluster,
+    DocumentEdge,
+    DocumentProvenance,
+    EdgeKind,
+    link_documents,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -137,13 +150,19 @@ from .lab_values import (
     parse_reference_range,
 )
 from .medication_sig import (
+    MEDICATION_CANDIDATES,
     MEDICATION_SIG_ADVISORY,
     DurationNormalization,
     FrequencyNormalization,
+    MedicationCandidate,
+    MedicationCandidatePreset,
+    MedicationGrounder,
     MedicationSigAttributeType,
+    filter_medication_candidates,
     normalize_duration,
     normalize_frequency,
     normalize_medication_attribute,
+    resolve_medication_candidate_preset,
 )
 from .negation_scope import (
     BACKWARD,
@@ -199,15 +218,30 @@ from .radiology_report import (
     parse_radiology_report,
 )
 from .relations import (
+    CMEIE_ENTITY_TYPES,
+    CMEIE_RELATION_MAPPING,
+    INDIC_RELATION_MAPPING,
     MEDICATION_LINK_ADVISORY,
+    MULTILINGUAL_RELATION_ADVISORY,
+    MULTILINGUAL_RELATION_REGISTRY_VERSION,
+    RELATION_TYPE_REGISTRY,
     MedicationAttributeType,
     MedicationRelation,
     MedicationRelationGroup,
     MedicationRelationScorer,
     MedicationRelationType,
+    MultilingualRelation,
     RelationCandidate,
+    RelationCandidateBatch,
+    RelationCandidateRule,
     SpanReference,
+    available_multilingual_relation_languages,
+    build_relation_candidates,
+    extract_relations,
     link_medication_attributes,
+    map_relation_type,
+    multilingual_relation_rules,
+    relation_type_mapping,
 )
 from .severity_laterality import (
     LATERALITY_BILATERAL,
@@ -265,6 +299,14 @@ from .timeline import (
     evaluate_timeline_gold,
     resolve_timeline,
 )
+from .trend import (
+    TREND_ADVISORY,
+    MeasurementTrend,
+    SerialMeasurementPoint,
+    TrendDirection,
+    build_measurement_trends,
+    extract_measurement_trends,
+)
 from .units import (
     MEASUREMENT_NORMALIZATION_ADVISORY,
     ROUND_TRIP_ABS_TOLERANCE,
@@ -292,6 +334,7 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "OPENMED_CLINICAL_DISCLAIMER",
     "ABBREVIATION_DISAMBIGUATION_ADVISORY",
     "DEFAULT_SENSE_INVENTORY_RESOURCE",
     "AbbreviationAnnotation",
@@ -378,6 +421,12 @@ __all__ = [
     "CoreferenceChain",
     "SpanChainKey",
     "resolve_coreference",
+    "DOCUMENT_LINKING_ADVISORY",
+    "DocumentCluster",
+    "DocumentEdge",
+    "DocumentProvenance",
+    "EdgeKind",
+    "link_documents",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",
@@ -417,6 +466,12 @@ __all__ = [
     "TimelineEvaluationResult",
     "evaluate_timeline_gold",
     "resolve_timeline",
+    "TREND_ADVISORY",
+    "TrendDirection",
+    "SerialMeasurementPoint",
+    "MeasurementTrend",
+    "build_measurement_trends",
+    "extract_measurement_trends",
     "ConversionStatus",
     "MeasurementNormalization",
     "MEASUREMENT_NORMALIZATION_ADVISORY",
@@ -454,11 +509,17 @@ __all__ = [
     "problem_mentions_from_grounded_terms",
     "FrequencyNormalization",
     "DurationNormalization",
+    "MEDICATION_CANDIDATES",
     "MEDICATION_SIG_ADVISORY",
+    "MedicationCandidate",
+    "MedicationCandidatePreset",
+    "MedicationGrounder",
     "MedicationSigAttributeType",
+    "filter_medication_candidates",
     "normalize_frequency",
     "normalize_duration",
     "normalize_medication_attribute",
+    "resolve_medication_candidate_preset",
     "SIG_PARSER_ADVISORY",
     "Sig",
     "SpanSig",
@@ -470,9 +531,24 @@ __all__ = [
     "MedicationRelationScorer",
     "MedicationRelationType",
     "RelationCandidate",
+    "RelationCandidateBatch",
+    "RelationCandidateRule",
     "SpanReference",
     "MEDICATION_LINK_ADVISORY",
+    "MULTILINGUAL_RELATION_ADVISORY",
+    "MULTILINGUAL_RELATION_REGISTRY_VERSION",
+    "RELATION_TYPE_REGISTRY",
+    "CMEIE_ENTITY_TYPES",
+    "CMEIE_RELATION_MAPPING",
+    "INDIC_RELATION_MAPPING",
+    "MultilingualRelation",
+    "available_multilingual_relation_languages",
+    "build_relation_candidates",
+    "extract_relations",
     "link_medication_attributes",
+    "map_relation_type",
+    "multilingual_relation_rules",
+    "relation_type_mapping",
     "CURRENT",
     "FORMER",
     "NEVER",

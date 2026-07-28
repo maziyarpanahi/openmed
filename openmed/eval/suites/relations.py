@@ -6,7 +6,7 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from openmed.eval.metrics import EvalSpan, normalize_eval_span
 from openmed.eval.relation_metrics import (
@@ -23,6 +23,18 @@ RELATION_TRAP_KINDS: tuple[str, ...] = (TRAP_ASSERTION, TRAP_TEMPORAL)
 
 DEFAULT_RELATION_GOLD_PATH = (
     Path(__file__).resolve().parents[1] / "golden" / "fixtures" / "relation_gold.jsonl"
+)
+DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS: tuple[Path, ...] = (
+    Path(__file__).resolve().parents[1]
+    / "golden"
+    / "fixtures"
+    / "i18n"
+    / "relations_zh.jsonl",
+    Path(__file__).resolve().parents[1]
+    / "golden"
+    / "fixtures"
+    / "i18n"
+    / "relations_indic.jsonl",
 )
 
 
@@ -190,6 +202,25 @@ def load_relation_fixtures(path: str | Path | None = None) -> list[RelationFixtu
     return fixtures
 
 
+def load_multilingual_relation_fixtures(
+    paths: Sequence[str | Path] | None = None,
+) -> list[RelationFixture]:
+    """Load committed synthetic Chinese and Indic relation fixtures."""
+
+    fixture_paths = (
+        tuple(Path(path) for path in paths)
+        if paths is not None
+        else DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS
+    )
+    fixtures = [
+        RelationFixture.from_mapping(row)
+        for fixture_path in fixture_paths
+        for row in _load_rows(fixture_path)
+    ]
+    _validate_unique_fixture_ids(fixtures)
+    return fixtures
+
+
 def relation_suite_metadata() -> dict[str, Any]:
     """Return metadata for the synthetic relation gold suite."""
     return {
@@ -247,6 +278,7 @@ def score_relation_fixtures(
         "metadata": {
             **relation_suite_metadata(),
             "fixture_ids": [fixture.fixture_id for fixture in fixtures],
+            "languages": sorted({fixture.language for fixture in fixtures}),
             "traps": relation_trap_summary(fixtures),
         },
     }

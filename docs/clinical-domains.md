@@ -274,6 +274,16 @@
 | FeedingHistory | NUTRITIONAL_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pediatrics_growth.jsonl |
 | PediatricFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/pediatrics_growth.jsonl |
 
+## Procedures
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Procedure | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Surgery | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| DiagnosticProcedure | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Device | DEVICE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Approach | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+
 ## Nursing Observation
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |

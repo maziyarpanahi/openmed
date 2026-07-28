@@ -81,3 +81,44 @@ def test_remap_predictions_merges_adjacent_tokens_same_label():
     assert remapped[0]["start"] == 0
     assert remapped[0]["end"] == 10
     assert remapped[0]["entity_group"] == "Cell"
+
+
+def test_remap_predictions_does_not_merge_different_sentences_across_newline():
+    text = "Cyclopalm\nOndam"
+    tokens = [SpanToken("Cyclopalm", 0, 9), SpanToken("Ondam", 10, 15)]
+    preds = [
+        {
+            "start": 0,
+            "end": 9,
+            "entity_group": "CHEM",
+            "score": 0.95,
+            "metadata": {"sentence_index": 0},
+        },
+        {
+            "start": 10,
+            "end": 15,
+            "entity_group": "CHEM",
+            "score": 0.95,
+            "metadata": {"sentence_index": 1},
+        },
+    ]
+
+    remapped = remap_predictions_to_tokens(preds, text, tokens)
+
+    assert [(item["word"], item["start"], item["end"]) for item in remapped] == [
+        ("Cyclopalm", 0, 9),
+        ("Ondam", 10, 15),
+    ]
+
+
+def test_remap_predictions_does_not_merge_metadata_less_tokens_across_crlf():
+    text = "Cyclopalm\r\nOndam"
+    tokens = [SpanToken("Cyclopalm", 0, 9), SpanToken("Ondam", 11, 16)]
+    preds = [
+        {"start": 0, "end": 9, "entity_group": "CHEM", "score": 0.95},
+        {"start": 11, "end": 16, "entity_group": "CHEM", "score": 0.95},
+    ]
+
+    remapped = remap_predictions_to_tokens(preds, text, tokens, gap=2)
+
+    assert [item["word"] for item in remapped] == ["Cyclopalm", "Ondam"]

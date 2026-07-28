@@ -116,6 +116,8 @@ class LanguagePack:
         candidate_priority: Per-script deterministic routing priorities. Higher
             values win when a script maps to more than one registered pack.
         context_scripts: Neighboring scripts that strongly identify this pack.
+        routing_markers: Language-specific words that disambiguate packs sharing
+            the same script before an optional language-ID backend is consulted.
 
     Collection inputs are copied into immutable tuples or read-only mappings,
     so callers cannot mutate a registered pack through an object they retained.
@@ -132,6 +134,7 @@ class LanguagePack:
     recall_floor_overrides: Mapping[str, float] = field(default_factory=dict)
     candidate_priority: Mapping[str, int] = field(default_factory=dict)
     context_scripts: tuple[str, ...] = ()
+    routing_markers: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate and freeze the complete pack declaration."""
@@ -188,6 +191,11 @@ class LanguagePack:
             self,
             "context_scripts",
             _freeze_optional_names(self.context_scripts, "context_scripts"),
+        )
+        object.__setattr__(
+            self,
+            "routing_markers",
+            _freeze_optional_names(self.routing_markers, "routing_markers"),
         )
 
     def priority_for(self, script: str) -> int:

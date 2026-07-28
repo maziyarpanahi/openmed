@@ -27,6 +27,7 @@ import json
 import random
 import re
 import unicodedata
+from bisect import bisect_left, bisect_right
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
@@ -46,7 +47,7 @@ from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
 )
-from .decoding import remap_normalized_span, snap_span_to_grapheme_boundaries
+from .decoding import iter_grapheme_cluster_spans, remap_normalized_span
 from .offline import network_blocked_if_offline
 from .script_detect import (
     DetectionNormalization,
@@ -350,6 +351,7 @@ _DAY_FIRST_LANGS = frozenset(
         "es",
         "nl",
         "hi",
+        "mr",
         "te",
         "pt",
         "ar",
@@ -357,6 +359,9 @@ _DAY_FIRST_LANGS = frozenset(
         "cs",
         "zu",
         "xh",
+        "sv",
+        "da",
+        "no",
     }
 )
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
@@ -592,10 +597,13 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     from .pii_i18n import (
         INDIC_NER_LANGUAGES,
         INDIC_NER_MODEL_ENV,
+        NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
     )
 
-    accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    accepted_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    )
     if lang not in accepted_languages:
         raise ValueError(
             f"Unsupported language '{lang}'. Supported: {sorted(accepted_languages)}"
@@ -604,6 +612,11 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)
         if resolved is None:
+            if lang in NATIONAL_ID_ONLY_LANGUAGES:
+                raise ValueError(
+                    f"Language '{lang}' has deterministic pattern-only support; "
+                    "pass an explicit model_name for model-backed inference"
+                )
             raise ValueError(
                 f"Language '{lang}' uses optional Indic NER weights; pass an "
                 f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
@@ -755,16 +768,24 @@ def _snap_entities_to_grapheme_boundaries(
 ) -> list[EntityPrediction]:
     """Return entities whose source spans cannot bisect grapheme clusters."""
 
+    boundary_offsets = (
+        0,
+        *(end for _, end in iter_grapheme_cluster_spans(text)),
+    )
+    text_length = len(text)
     snapped_entities: list[EntityPrediction] = []
     for entity in entities:
         if entity.start is None or entity.end is None:
             snapped_entities.append(entity)
             continue
 
-        start, end = snap_span_to_grapheme_boundaries(
-            int(entity.start),
-            int(entity.end),
-            text,
+        safe_start = max(0, min(int(entity.start), text_length))
+        safe_end = max(safe_start, min(int(entity.end), text_length))
+        start = boundary_offsets[bisect_right(boundary_offsets, safe_start) - 1]
+        end = (
+            start
+            if safe_start == safe_end
+            else boundary_offsets[bisect_left(boundary_offsets, safe_end)]
         )
         if start == end:
             snapped_entities.append(entity)
@@ -2029,11 +2050,32 @@ def _build_deidentification_result(
         from .anonymizer import Anonymizer
 
         effective_consistent = consistent or seed is not None
+        vault_name_matching = bool(
+            surrogate_vault is not None
+            and getattr(
+                surrogate_vault,
+                "transliteration_aware_name_matching",
+                False,
+            )
+        )
         anonymizer = Anonymizer(
             lang=lang,
             locale=locale,
             consistent=effective_consistent,
             seed=seed,
+            transliteration_aware_name_matching=vault_name_matching,
+            indic_name_similarity_threshold=float(
+                getattr(
+                    surrogate_vault,
+                    "indic_name_similarity_threshold",
+                    0.80,
+                )
+            ),
+            indic_name_normalizer=getattr(
+                surrogate_vault,
+                "indic_name_normalizer",
+                None,
+            ),
         )
 
     deidentified = text
@@ -2694,11 +2736,33 @@ def _redact_entity(
                 )
 
                 def _create_surrogate(attempt: int) -> str:
-                    source = original if attempt == 0 else f"{original}|{attempt}"
-                    return anonymizer.surrogate(
-                        source,
-                        surrogate_label,
+                    key = surrogate_vault.key_for(
+                        original,
+                        label=label,
                         lang=lang,
+                    )
+                    if key.lang == "indic":
+                        return anonymizer.surrogate_identity(
+                            original,
+                            surrogate_label,
+                            lang=lang,
+                            attempt=attempt,
+                        )
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(source, surrogate_label, lang=lang)
+
+                key = surrogate_vault.key_for(
+                    original,
+                    label=label,
+                    lang=lang,
+                )
+                render_surrogate = None
+                if key.lang == "indic":
+                    render_surrogate = lambda identity: (
+                        anonymizer.render_name_surrogate(
+                            identity,
+                            source_surface=original,
+                        )
                     )
 
                 return surrogate_vault.get_or_create(
@@ -2707,6 +2771,7 @@ def _redact_entity(
                     lang=lang,
                     create_surrogate=_create_surrogate,
                     required_script=_surrogate_script_constraint(entity),
+                    render_surrogate=render_surrogate,
                 )
             return anonymizer.surrogate(
                 original,

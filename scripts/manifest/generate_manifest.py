@@ -20,16 +20,22 @@ except ImportError:  # pragma: no cover - exercised in minimal test envs
 DEFAULT_ORG = "OpenMed"
 DEFAULT_OUTPUT = Path("models.jsonl")
 PRESERVED_ENRICHMENT_FIELDS = (
+    "disk_mb",
+    "download_mb",
+    "download_sizes",
     "latency_ms",
     "peak_ram_mb",
     "recommended_tier",
     "script_coverage",
+    "script_eval",
     "training_provenance",
 )
 
 LANGUAGE_TAGS = {
     "ar": "ar",
     "arabic": "ar",
+    "bn": "bn",
+    "bengali": "bn",
     "de": "de",
     "german": "de",
     "en": "en",
@@ -50,13 +56,19 @@ LANGUAGE_TAGS = {
     "dutch": "nl",
     "pt": "pt",
     "portuguese": "pt",
+    "ta": "ta",
+    "tamil": "ta",
     "te": "te",
     "telugu": "te",
     "tr": "tr",
     "turkish": "tr",
+    "zh": "zh",
+    "chinese": "zh",
 }
 LANGUAGE_NAMES = {
     "arabic": "ar",
+    "bengali": "bn",
+    "chinese": "zh",
     "dutch": "nl",
     "french": "fr",
     "german": "de",
@@ -66,6 +78,7 @@ LANGUAGE_NAMES = {
     "korean": "ko",
     "portuguese": "pt",
     "spanish": "es",
+    "tamil": "ta",
     "telugu": "te",
     "turkish": "tr",
 }
@@ -178,6 +191,14 @@ def _siblings(model: Any) -> list[str]:
 
 
 def _family(repo_id: str, tags: list[str], task: str) -> str:
+    repo_lower = _repo_name(repo_id).lower()
+    if "openmed-pii-" in repo_lower or "privacy-filter" in repo_lower:
+        return "PII"
+    if "zero-shot" in repo_lower or "zeroshot" in repo_lower:
+        return "ZeroShot"
+    if "openmed-ner-" in repo_lower:
+        return "NER"
+
     lowered = " ".join([repo_id, *tags]).lower()
     if "pii" in lowered or "privacy-filter" in lowered:
         return "PII"
@@ -324,6 +345,9 @@ def _canonical_labels(family: str, repo_id: str, tags: list[str]) -> list[str]:
         return list(PII_CANONICAL_LABELS)
 
     lowered = " ".join([repo_id, *tags]).lower()
+    if "openmed-ner-pharmadetect-" in lowered:
+        return ["CHEM"]
+
     labels: list[str] = []
     for token, token_labels in DOMAIN_LABELS.items():
         if token in lowered:
@@ -462,6 +486,8 @@ def preserve_existing_enrichment(
         if previous is None:
             continue
         for field in PRESERVED_ENRICHMENT_FIELDS:
+            if field == "script_coverage" and row.get("family") != "PII":
+                continue
             if field in previous:
                 row[field] = previous[field]
     return generated

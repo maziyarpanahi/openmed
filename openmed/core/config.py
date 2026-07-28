@@ -148,6 +148,11 @@ class OpenMedConfig:
     # otherwise mixed variants are canonicalized before model inference.
     chinese_target_script: Optional[str] = None
 
+    # Link Indic personal-name spellings through a transliteration-safe vault
+    # key. Disabled by default to preserve existing pseudonymization behavior.
+    transliteration_aware_name_matching: bool = False
+    indic_name_similarity_threshold: float = 0.80
+
     # Active profile name (if any)
     profile: Optional[str] = None
 
@@ -166,6 +171,14 @@ class OpenMedConfig:
                 for key, value in profile_data.items():
                     setattr(self, key, value)
             self.profile = env_profile
+
+        if not isinstance(self.transliteration_aware_name_matching, bool):
+            raise TypeError("transliteration_aware_name_matching must be a boolean")
+        if isinstance(self.indic_name_similarity_threshold, bool):
+            raise TypeError("indic_name_similarity_threshold must be a real number")
+        self.indic_name_similarity_threshold = float(
+            self.indic_name_similarity_threshold
+        )
 
         if self.cjk_width_convention not in {"cjk", "nfkc"}:
             raise ValueError(
@@ -188,6 +201,10 @@ class OpenMedConfig:
             raise ValueError(
                 "chinese_target_script must be None, 'simplified', or "
                 f"'traditional', got {self.chinese_target_script!r}"
+            )
+        if not 0.5 <= self.indic_name_similarity_threshold <= 1.0:
+            raise ValueError(
+                "indic_name_similarity_threshold must be between 0.5 and 1.0"
             )
 
         if self.hf_token is None:
@@ -271,6 +288,21 @@ class OpenMedConfig:
                 "no",
             }
 
+        env_indic_matching = os.getenv("OPENMED_TRANSLITERATION_AWARE_NAME_MATCHING")
+        if env_indic_matching is not None:
+            self.transliteration_aware_name_matching = env_flag_enabled(
+                env_indic_matching
+            )
+
+        env_indic_threshold = os.getenv("OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD")
+        if env_indic_threshold is not None:
+            self.indic_name_similarity_threshold = float(env_indic_threshold)
+            if not 0.5 <= self.indic_name_similarity_threshold <= 1.0:
+                raise ValueError(
+                    "OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD must be between "
+                    "0.5 and 1.0"
+                )
+
         env_offline = os.getenv(OFFLINE_ENV_VAR)
         if env_offline is not None:
             self.local_only = self.local_only or env_flag_enabled(env_offline)
@@ -310,6 +342,8 @@ class OpenMedConfig:
             "local_only",
             "cjk_width_convention",
             "chinese_target_script",
+            "transliteration_aware_name_matching",
+            "indic_name_similarity_threshold",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
@@ -383,6 +417,10 @@ class OpenMedConfig:
             "local_only": self.local_only,
             "cjk_width_convention": self.cjk_width_convention,
             "chinese_target_script": self.chinese_target_script,
+            "transliteration_aware_name_matching": (
+                self.transliteration_aware_name_matching
+            ),
+            "indic_name_similarity_threshold": self.indic_name_similarity_threshold,
             "profile": self.profile,
         }
 

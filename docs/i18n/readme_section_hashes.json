@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "9c3fb81988c144c00707b0b7f75c4e0d5ce657fdc73ad22268faa3276a1c53c7",
+          "source_sha256": "5a4f7b2f6e89dd0a4f7757edc27c525c6fe9dd3f1f41c9b0d589ccc7b5d67ac2",
           "translation_heading": "__preamble__",
-          "translation_sha256": "2455d97dbc64b1a5ddc64e66272fa5299aaad46f60aab3e56baf0a7ca040472b"
+          "translation_sha256": "10243f25543e3faaff2814baf516d9ea792c1055f53095a22ca78066831408aa"
         },
         {
           "source_heading": "See it in action",
@@ -23,28 +23,40 @@
           "translation_sha256": "6fe10194c6f655474703a2f3976c05588f9c48b2e83bb33fc49b78eda4ba3062"
         },
         {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "एजेंट के साथ बना रहे हैं?",
+          "translation_sha256": "a54a1a7c82c542346fc63658f2f100594b2c5f53d816636c272e71f445381e58"
+        },
+        {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "85562a72d9945e05087503afe478d2cedf694bcc08b8f52d40bcfaaef767f0cb",
+          "source_sha256": "79207206d53644e4d18429145bff96f6f2a6182569b87748f2fbd48e7c28db64",
           "translation_heading": "OpenMed क्यों?",
-          "translation_sha256": "6e29bbd8bb8d25973cf1d8e38da1127898a2e4f807db3a08faa0d4154be8d146"
+          "translation_sha256": "ba4cc0a66f10ed82e803ca8ca9cc24c3fe9e32286ab2defe1f96c43e84618abf"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "b0d7cda36fb78c5edf06959b1edae8e31285571a519c3c9e28f7f1ea2e7e5f23",
+          "source_sha256": "08d1e0a88e8e946f15c23d291ad1dfc5251141d282215c3b36ba8f9e03fbb9c2",
           "translation_heading": "Apple डिवाइस पर: Swift, MLX और iOS",
-          "translation_sha256": "ed57d4070ca305aeec80476c165ca0639bb36aef341f89b593b2350f0d97f82c"
+          "translation_sha256": "8507a4d946f3f75b58337a65d9703c04a4423f88b2e1438e942f727c30f4c81c"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "1e9ab1b7892a75d76b77c16693953c8dcf98626b629d49851e86eebae53604c3",
+          "source_sha256": "f62dffdef9b888148cd2e9a279b69c9c2cda7a5def34f904ce6fa2ab9ba2a468",
           "translation_heading": "Android डिवाइस पर — Kotlin और ONNX Runtime Mobile",
-          "translation_sha256": "bcc1341e3e7808c95343396ec9fd7bce57cd86c3a8c552f9d60d1c53b68da269"
+          "translation_sha256": "3b002027db695b07232dac5cd6e566de2689fae77452e4c27af8655fc4485146"
         },
         {
           "source_heading": "How it works",
           "source_sha256": "f2d8b6e4c8775df6a2f41cc448c0ad9c214f629355c22d2e2fb8d766d742e5ef",
           "translation_heading": "यह कैसे काम करता है",
           "translation_sha256": "76aa43499272ee065acbfcc9c7f30d96f6ff28f7b84db1bfca08c3e485cf70b7"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — अपने coding agent से OpenMed बनाएं",
+          "translation_sha256": "c4fee3c918be55eaeb309f90805c8e2e37d7a428b486ca3883fdecf72ab1ff43"
         },
         {
           "source_heading": "Quick start",
@@ -65,10 +77,10 @@
           "translation_sha256": "00e205789902417f3c79eed3b01585d55f674be3ad0be2cacbd5b5a2b65de995"
         },
         {
-          "source_heading": "Multilingual PII (22 supported languages)",
-          "source_sha256": "b3d739d1b2ed3a6d5beb3aa498a7f040f230e8d998ea3b21549e1c46a17cf837",
-          "translation_heading": "बहुभाषी PII (22 समर्थित भाषाएँ)",
-          "translation_sha256": "ee6a355b43421dd5e8bb01c226c437e75c796532c3d7d6c4b9b2cbbced3aee9d"
+          "source_heading": "Multilingual PII (34 supported languages)",
+          "source_sha256": "44fd054b34a8f132995444da033677d590fb8afead2049bd0b51997dd3b68645",
+          "translation_heading": "बहुभाषी PII (34 समर्थित भाषाएँ)",
+          "translation_sha256": "f78e1cfa3fa70154a78305eff4de4664336e2f5fddc806f7297467b784ef24c0"
         },
         {
           "source_heading": "REST API",
@@ -78,9 +90,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "78abe2e34db570d388268b8ebc273cab9b391cf58080e01e38cdab6207fb66bd",
+          "source_sha256": "a4ba514c3aca28466c7e71ddc441774bf82d44ba21b3ae5dc3bd0a617e3d7ef0",
           "translation_heading": "दस्तावेज़ीकरण",
-          "translation_sha256": "464e3b15c769578e61587377532b0181235ceea91ba7009ad0c202fa9b83944b"
+          "translation_sha256": "23671769264ef5a021d559dfc0d8d377cefce62b67eed48dc2ca1a65417a3a28"
         },
         {
           "source_heading": "Meet the mascot",
@@ -130,9 +142,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "9c3fb81988c144c00707b0b7f75c4e0d5ce657fdc73ad22268faa3276a1c53c7",
+          "source_sha256": "5a4f7b2f6e89dd0a4f7757edc27c525c6fe9dd3f1f41c9b0d589ccc7b5d67ac2",
           "translation_heading": "__preamble__",
-          "translation_sha256": "3eec5488b813513ce5d11a004f4902287f24e6464a8702de4474db7c97b9b869"
+          "translation_sha256": "8c7ea94fb831ec62c43bc5c4d4764519236586d1cecdb8ac8ce98a588edc3c49"
         },
         {
           "source_heading": "See it in action",
@@ -147,28 +159,40 @@
           "translation_sha256": "22966c690f9cd5b3cb59a2729d15ee176dcc99c082f9b7d4129b21d08e8ce19e"
         },
         {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "Unajenga kwa wakala?",
+          "translation_sha256": "d2017c10380102dd2e94646d3833afc0958068499d5ab0818dec0fcd2b3b90a7"
+        },
+        {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "85562a72d9945e05087503afe478d2cedf694bcc08b8f52d40bcfaaef767f0cb",
+          "source_sha256": "79207206d53644e4d18429145bff96f6f2a6182569b87748f2fbd48e7c28db64",
           "translation_heading": "Kwa nini OpenMed?",
-          "translation_sha256": "895e7ffbd19f60050b793513e4cd7cba37fcadecd0dfdcbcc79b0cc47691c691"
+          "translation_sha256": "792ac6eb4cb8c3c758f5cc438fec760a66211e05ec02b5a3488feef46a324b54"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "b0d7cda36fb78c5edf06959b1edae8e31285571a519c3c9e28f7f1ea2e7e5f23",
+          "source_sha256": "08d1e0a88e8e946f15c23d291ad1dfc5251141d282215c3b36ba8f9e03fbb9c2",
           "translation_heading": "Kwenye kifaa cha Apple: Swift, MLX na iOS",
-          "translation_sha256": "c3698b31770009f75c84289f4aa490191f11cedabf7e89234e9bc6b9fb89934c"
+          "translation_sha256": "32f54f164e00dc85559a21d2dd4e302829dc1428f788b4258322b98d12fd170b"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "1e9ab1b7892a75d76b77c16693953c8dcf98626b629d49851e86eebae53604c3",
+          "source_sha256": "f62dffdef9b888148cd2e9a279b69c9c2cda7a5def34f904ce6fa2ab9ba2a468",
           "translation_heading": "Kwenye kifaa cha Android — Kotlin na ONNX Runtime Mobile",
-          "translation_sha256": "fb644de3b4a83513cbe8484ce39d23f643658e01d0dc4f9ffa75e4577c5b33ef"
+          "translation_sha256": "b4524a701281ded8172e22e186473671d864e2308c03c931d3bfbab3c053904b"
         },
         {
           "source_heading": "How it works",
           "source_sha256": "f2d8b6e4c8775df6a2f41cc448c0ad9c214f629355c22d2e2fb8d766d742e5ef",
           "translation_heading": "Jinsi inavyofanya kazi",
           "translation_sha256": "620c0e87cd7f3b36f413dbce932dbb5def89cf632593452c40431c81223531b9"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — jenga OpenMed kupitia wakala wako wa coding",
+          "translation_sha256": "88881391ba28f7acc29e7044090a20d06130c9dadbb298cad5902dbd62cc2cfa"
         },
         {
           "source_heading": "Quick start",
@@ -189,10 +213,10 @@
           "translation_sha256": "4b094ecf156d3d6876220596014d02cb45a6633ffd3af9ed90a641c966c0cdcc"
         },
         {
-          "source_heading": "Multilingual PII (22 supported languages)",
-          "source_sha256": "b3d739d1b2ed3a6d5beb3aa498a7f040f230e8d998ea3b21549e1c46a17cf837",
-          "translation_heading": "PII ya lugha nyingi (lugha 22 zinazoungwa mkono)",
-          "translation_sha256": "7534497a9661df524e76b429a252c32183f19fa01e098cf72ab9a8755add1675"
+          "source_heading": "Multilingual PII (34 supported languages)",
+          "source_sha256": "44fd054b34a8f132995444da033677d590fb8afead2049bd0b51997dd3b68645",
+          "translation_heading": "PII ya lugha nyingi (lugha 34 zinazoungwa mkono)",
+          "translation_sha256": "3dbbca65eb0f3d3be1a1beedc440c5122a7f0380e55f4eb27578912641cd2c7e"
         },
         {
           "source_heading": "REST API",
@@ -202,9 +226,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "78abe2e34db570d388268b8ebc273cab9b391cf58080e01e38cdab6207fb66bd",
+          "source_sha256": "a4ba514c3aca28466c7e71ddc441774bf82d44ba21b3ae5dc3bd0a617e3d7ef0",
           "translation_heading": "Nyaraka",
-          "translation_sha256": "ad539c726c387d8999d28ff23c17be04c916c9324c71838be2b05f1a5345df04"
+          "translation_sha256": "cca8c9639dc68815f974190c188a0db884a73d55f78aeefa0a2d8d20cd0e829c"
         },
         {
           "source_heading": "Meet the mascot",
@@ -254,9 +278,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "9c3fb81988c144c00707b0b7f75c4e0d5ce657fdc73ad22268faa3276a1c53c7",
+          "source_sha256": "5a4f7b2f6e89dd0a4f7757edc27c525c6fe9dd3f1f41c9b0d589ccc7b5d67ac2",
           "translation_heading": "__preamble__",
-          "translation_sha256": "10cb94a77b5ef80e0f1c9e33c699c07e00c1eb04883a84a511a46f641430fc83"
+          "translation_sha256": "e94f8272374519f416a2f87bf9f60251cfe45cd9d6925b04105ef9c0797b9337"
         },
         {
           "source_heading": "See it in action",
@@ -271,28 +295,40 @@
           "translation_sha256": "a08369e3824d8faa09eaf15195a7689c85781ad5b08287d50b4eaa3297911d66"
         },
         {
+          "source_heading": "Building with an agent?",
+          "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
+          "translation_heading": "使用智能体构建？",
+          "translation_sha256": "94d33c923ba1f13ae959dd894fddd80e3d1b3e6abf2139221ce1c0b8655068af"
+        },
+        {
           "source_heading": "Why OpenMed?",
-          "source_sha256": "85562a72d9945e05087503afe478d2cedf694bcc08b8f52d40bcfaaef767f0cb",
+          "source_sha256": "79207206d53644e4d18429145bff96f6f2a6182569b87748f2fbd48e7c28db64",
           "translation_heading": "为什么选择 OpenMed？",
-          "translation_sha256": "c39cd965d66d5bbc9d9982420a97f887d97bd952897b706319503c6f63e87296"
+          "translation_sha256": "23ef052bb32a28c1f2fdeeceb971a01c7e2bbfdbfa89c13717ccee5c37a3427a"
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "b0d7cda36fb78c5edf06959b1edae8e31285571a519c3c9e28f7f1ea2e7e5f23",
+          "source_sha256": "08d1e0a88e8e946f15c23d291ad1dfc5251141d282215c3b36ba8f9e03fbb9c2",
           "translation_heading": "在 Apple 设备上本地运行：Swift、MLX 与 iOS",
-          "translation_sha256": "b5024d7629d260151349e28625f4d64bf1cb907fffe1748176f16f471ab16744"
+          "translation_sha256": "40f5e68d7a4be202f9fca7cec616abff02acded69e92802589c12e3fe563de40"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "1e9ab1b7892a75d76b77c16693953c8dcf98626b629d49851e86eebae53604c3",
+          "source_sha256": "f62dffdef9b888148cd2e9a279b69c9c2cda7a5def34f904ce6fa2ab9ba2a468",
           "translation_heading": "在 Android 设备上本地运行：Kotlin 与 ONNX Runtime Mobile",
-          "translation_sha256": "a5cf88d37a56f46a26d842139f5cdb2ecf326dd3e274b320da5226dc2f8d2b53"
+          "translation_sha256": "ae7db70d7be8e2c994b63819e04aa9eac9eae32759233212f47bf1c41edc30f9"
         },
         {
           "source_heading": "How it works",
           "source_sha256": "f2d8b6e4c8775df6a2f41cc448c0ad9c214f629355c22d2e2fb8d766d742e5ef",
           "translation_heading": "工作原理",
           "translation_sha256": "aef4d998035e76fb2a69ea9657600ff40cefb9e79fb4b4e96414122006e517ba"
+        },
+        {
+          "source_heading": "Agent Skills — build with OpenMed from your coding agent",
+          "source_sha256": "188c324a54fef4a7c8c83986123c0c7a9fa4ddb1cf34b3c4d0d0bae07b7f2d4b",
+          "translation_heading": "Agent Skills — 使用编码智能体构建 OpenMed",
+          "translation_sha256": "3931ef0664eaebd1336154cf881a496d1dc757cc97e5fb00ec8d7cbef283f459"
         },
         {
           "source_heading": "Quick start",
@@ -313,10 +349,10 @@
           "translation_sha256": "14930157351c1bbc966431ecf21fd47e0b2d9ddef645e5dfcfb0ec13a95a5302"
         },
         {
-          "source_heading": "Multilingual PII (22 supported languages)",
-          "source_sha256": "b3d739d1b2ed3a6d5beb3aa498a7f040f230e8d998ea3b21549e1c46a17cf837",
-          "translation_heading": "多语言 PII（支持 22 种语言）",
-          "translation_sha256": "d50472f68f806acfbac7be74ec850a7be9826a5b5801d546a635d0e8e3e82dc3"
+          "source_heading": "Multilingual PII (34 supported languages)",
+          "source_sha256": "44fd054b34a8f132995444da033677d590fb8afead2049bd0b51997dd3b68645",
+          "translation_heading": "多语言 PII（支持 34 种语言）",
+          "translation_sha256": "f6ff050978cc7c4b3d108c0aafd8c95e4ed7566bacba1e09c627f78ff6bdeb6e"
         },
         {
           "source_heading": "REST API",
@@ -326,9 +362,9 @@
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "78abe2e34db570d388268b8ebc273cab9b391cf58080e01e38cdab6207fb66bd",
+          "source_sha256": "a4ba514c3aca28466c7e71ddc441774bf82d44ba21b3ae5dc3bd0a617e3d7ef0",
           "translation_heading": "文档",
-          "translation_sha256": "58f4d0664610ed3e21db47e516dbc8f9a441c85ee5c2c0c1a2112aae04ed47c8"
+          "translation_sha256": "4697553cf0be2b4e17f9c1cfc65e56788f9d4d651eb58498d1bbda7ff32a26d6"
         },
         {
           "source_heading": "Meet the mascot",

@@ -4,6 +4,14 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .discharge_summary import (
+    REQUIRED_DISCHARGE_SLOTS,
+    DischargeSlotName,
+    DischargeSummary,
+    DischargeSummarySection,
+    canonical_discharge_slot,
+    structure_discharge_summary,
+)
 from .flowsheet import (
     FLOWSHEET_ADVISORY,
     Flowsheet,
@@ -20,18 +28,46 @@ from .lab_panels import (
     parse_lab_report,
     structure_lab_panels,
 )
+from .qi_detect import (
+    ROLE_DIRECT_ID,
+    ROLE_FREE_TEXT,
+    ROLE_INTERNAL_LINKAGE,
+    ROLE_QUASI_ID,
+    ROLE_SAFE,
+    ROLE_SENSITIVE,
+    DiscoveryConfigurationError,
+    scan_table,
+)
+from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
 
 __all__ = [
     "FLOWSHEET_ADVISORY",
     "LAB_PANEL_ADVISORY",
     "PANEL_ORDER",
+    "REQUIRED_DISCHARGE_SLOTS",
     "AnalyteRow",
+    "DischargeSlotName",
+    "DischargeSummary",
+    "DischargeSummarySection",
+    "DiscoveryConfigurationError",
     "Flowsheet",
     "LabPanel",
     "ParameterSeries",
+    "ROLE_DIRECT_ID",
+    "ROLE_FREE_TEXT",
+    "ROLE_INTERNAL_LINKAGE",
+    "ROLE_QUASI_ID",
+    "ROLE_SAFE",
+    "ROLE_SENSITIVE",
+    "SUPPORTED_TABLE_SUFFIXES",
     "TimeSeriesPoint",
     "canonical_analyte",
+    "canonical_discharge_slot",
     "parse_lab_report",
+    "read_table",
+    "scan_table",
+    "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
+    "write_table",
 ]

@@ -188,6 +188,13 @@
     "FeedingHistory",
     "PediatricFinding"
   ],
+  "procedures": [
+    "Procedure",
+    "Surgery",
+    "DiagnosticProcedure",
+    "Device",
+    "Approach"
+  ],
   "nursing_observation": [
     "IntakeOutput",
     "LineDrainTube",

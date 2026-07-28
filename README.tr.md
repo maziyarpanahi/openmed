@@ -109,7 +109,7 @@ tespiti ve klinik çıkarım tamamen çevrimdışı, cihaz üzerinde gerçekleş
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 

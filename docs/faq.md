@@ -25,6 +25,9 @@ cache-only flags, passes `local_files_only=True` to Hub-backed loaders, and
 blocks outbound sockets during inference and de-identification. See
 [Local-only offline mode](configuration.md#local-only-offline-mode) and the
 [offline troubleshooting entry](troubleshooting.md#running-offline-air-gapped-or-offlinemodeerror-on-inference).
+For institutional pip mirrors, `HF_ENDPOINT`, HTTP proxies, resumable cache
+warming, and a metered-connection checklist, use the
+[low-bandwidth installation guide](low-bandwidth-install.md).
 
 ### Which package extras should I install?
 
@@ -87,17 +90,19 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **22 supported PII language codes**:
-`am`, `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `sw`, `te`, `th`, `tr`, `xh`, `zh`, and `zu`.
-Chinese routing currently uses the documented multilingual default-model
-placeholder; dedicated Chinese model weights are not bundled.
-Nine additional Indic codes (`as`, `bn`, `gu`, `kn`, `ml`, `mr`, `or`, `pa`,
-and `ta`) are opt-in routes through a user-configured
-`OPENMED_INDIC_NER_MODEL`; Hindi and Telugu can use the same adapter.
+PII extraction and de-identification support **34 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+`it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.
+Russian routing currently uses a documented multilingual default-model
+placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
+Four additional Indic codes (`gu`, `kn`, `ml`, and `pa`)
+are opt-in routes through a user-configured `OPENMED_INDIC_NER_MODEL`;
+Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu can use the same adapter.
 Validator-backed national-ID coverage is broader for specific ID-only locales,
-including Polish, Latvian, Slovak, Malay, Filipino, and Danish.
+including Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-22-supported-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-34-supported-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.

@@ -2,7 +2,12 @@
   "default_pii_models": {
     "am": "OpenMed/privacy-filter-multilingual",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "as": "OpenMed/privacy-filter-multilingual",
+    "bn": "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
+    "cs": "OpenMed/privacy-filter-multilingual",
+    "da": "OpenMed/privacy-filter-multilingual",
     "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
+    "el": "OpenMed/privacy-filter-multilingual",
     "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
@@ -12,15 +17,22 @@
     "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "mr": "OpenMed/privacy-filter-multilingual",
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+    "no": "OpenMed/privacy-filter-multilingual",
+    "or": "OpenMed/privacy-filter-multilingual",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ro": "OpenMed/privacy-filter-multilingual",
+    "ru": "OpenMed/privacy-filter-multilingual",
+    "sv": "OpenMed/privacy-filter-multilingual",
     "sw": "OpenMed/privacy-filter-multilingual",
+    "ta": "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "th": "OpenMed/privacy-filter-multilingual",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "uk": "OpenMed/privacy-filter-multilingual",
     "xh": "OpenMed/privacy-filter-multilingual",
-    "zh": "OpenMed/privacy-filter-multilingual",
+    "zh": "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
     "zu": "OpenMed/privacy-filter-multilingual"
   },
   "lang_to_locale": {
@@ -56,20 +68,24 @@
     "mr": "mr_IN",
     "ms": "ms_MY",
     "nl": "nl_NL",
+    "no": "no_NO",
     "or": "or_IN",
     "pa": "pa_IN",
     "pl": "pl_PL",
     "pt": "pt_PT",
     "ro": "ro_RO",
+    "ru": "ru_RU",
     "rw": "rw_RW",
     "sk": "sk_SK",
     "sr": "sr_RS",
+    "sv": "sv_SE",
     "sw": "sw",
     "ta": "ta_IN",
     "te": "en_IN",
     "th": "th_TH",
     "tl": "fil_PH",
     "tr": "tr_TR",
+    "uk": "uk_UA",
     "ur": "ur_PK",
     "vi": "vi_VN",
     "xh": "xh_ZA",
@@ -80,9 +96,6 @@
   "national_id_only_languages": [
     "af",
     "bg",
-    "cs",
-    "da",
-    "el",
     "et",
     "fi",
     "ha",
@@ -108,6 +121,10 @@
     "am": [
       "am_ET",
       "ethiopia_fayda"
+    ],
+    "as": [
+      "as_IN",
+      "aadhaar"
     ],
     "bg": [
       "bg_BG",
@@ -189,6 +206,10 @@
       "lv_LV",
       "personas_kods"
     ],
+    "mr": [
+      "mr_IN",
+      "aadhaar"
+    ],
     "ms": [
       "ms_MY",
       "mykad"
@@ -196,6 +217,14 @@
     "nl": [
       "nl_NL",
       "ssn"
+    ],
+    "no": [
+      "no_NO",
+      "ssn"
+    ],
+    "or": [
+      "or_IN",
+      "aadhaar"
     ],
     "pl": [
       "pl_PL",
@@ -209,6 +238,10 @@
       "ro_RO",
       "romanian_cnp"
     ],
+    "ru": [
+      "ru_RU",
+      "snils"
+    ],
     "rw": [
       "rw_RW",
       "rwanda_id"
@@ -221,9 +254,17 @@
       "sr_RS",
       "jmbg"
     ],
+    "sv": [
+      "sv_SE",
+      "ssn"
+    ],
     "sw": [
       "sw",
       "kenya_national_id"
+    ],
+    "ta": [
+      "ta_IN",
+      "aadhaar"
     ],
     "te": [
       "en_IN",
@@ -240,6 +281,10 @@
     "tr": [
       "tr_TR",
       "ssn"
+    ],
+    "uk": [
+      "uk_UA",
+      "rnokpp"
     ],
     "ur": [
       "ur_PK",
@@ -277,7 +322,8 @@
       "as"
     ],
     "Cyrillic": [
-      "en"
+      "ru",
+      "uk"
     ],
     "Devanagari": [
       "hi",
@@ -288,7 +334,7 @@
       "am"
     ],
     "Greek": [
-      "en"
+      "el"
     ],
     "Gujarati": [
       "gu"
@@ -321,6 +367,7 @@
       "nl",
       "pt",
       "tr",
+      "cs",
       "sw",
       "ig",
       "yo",
@@ -349,7 +396,12 @@
   "supported_languages": [
     "am",
     "ar",
+    "as",
+    "bn",
+    "cs",
+    "da",
     "de",
+    "el",
     "en",
     "es",
     "fr",
@@ -359,13 +411,20 @@
     "it",
     "ja",
     "ko",
+    "mr",
     "nl",
+    "no",
+    "or",
     "pt",
     "ro",
+    "ru",
+    "sv",
     "sw",
+    "ta",
     "te",
     "th",
     "tr",
+    "uk",
     "xh",
     "zh",
     "zu"

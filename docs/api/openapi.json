@@ -207,10 +207,17 @@
               "th",
               "ko",
               "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
               "sw",
               "zu",
               "xh",
-              "zh"
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
@@ -442,10 +449,17 @@
               "th",
               "ko",
               "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
               "sw",
               "zu",
               "xh",
-              "zh"
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
@@ -579,10 +593,17 @@
               "th",
               "ko",
               "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
               "sw",
               "zu",
               "xh",
-              "zh"
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
@@ -689,10 +710,17 @@
               "th",
               "ko",
               "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
               "sw",
               "zu",
               "xh",
-              "zh"
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
@@ -819,10 +847,17 @@
               "th",
               "ko",
               "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
               "sw",
               "zu",
               "xh",
-              "zh"
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
@@ -957,10 +992,17 @@
               "th",
               "ko",
               "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
               "sw",
               "zu",
               "xh",
-              "zh"
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
@@ -1106,7 +1148,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "1.9.1"
+    "version": "2.0.0"
   },
   "openapi": "3.1.0",
   "paths": {

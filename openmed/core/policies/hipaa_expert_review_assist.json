@@ -81,6 +81,7 @@
     "LAB_TEST": "keep",
     "PROCEDURE": "keep",
     "BODY_SITE": "keep",
+    "DEVICE": "keep",
     "ANESTHESIA_TYPE": "keep",
     "ANESTHETIC_AGENT": "keep",
     "AIRWAY_MANAGEMENT": "keep",

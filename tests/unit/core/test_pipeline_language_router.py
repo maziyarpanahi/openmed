@@ -24,12 +24,17 @@ def test_language_route_preserves_existing_positional_metadata_contract():
         (
             "患者王芳因发热入院。",
             "zh",
-            "OpenMed/privacy-filter-multilingual",
+            DEFAULT_PII_MODELS["zh"],
         ),
         (
             "रोगी अनिता बुखार के कारण भर्ती हुई।",
             "hi",
             DEFAULT_PII_MODELS["hi"],
+        ),
+        (
+            "रुग्ण वैशाली देशमुख स्थिर आहे.",
+            "mr",
+            DEFAULT_PII_MODELS["mr"],
         ),
     ),
 )

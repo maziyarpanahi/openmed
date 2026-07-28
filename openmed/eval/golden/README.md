@@ -39,6 +39,9 @@ Required fields:
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
   `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
   `policy_profile_actions`, `hard_negatives`, or `critical_findings`.
+  The standalone `indic_name_variants` fixture uses its dedicated consistency
+  suite schema because it groups multiple spellings under one synthetic
+  identity rather than representing detector spans.
 - `metadata.expected_output`: expected post-action output, including `method`
   and resulting `text`.
 - `metadata.synthetic`: must be `true`.
@@ -135,3 +138,10 @@ Required fields:
 The relation loader validates schema version, unique fixture/entity/relation
 ids, argument references, offsets, canonical entity labels, relation scopes,
 and trap metadata.
+
+`fixtures/i18n/relations_zh.jsonl` and
+`fixtures/i18n/relations_indic.jsonl` extend that schema with synthetic Chinese
+and Hindi relation examples. They reuse canonical NER labels, carry registry
+version `1`, and are scored separately through the relation metric's
+`by_language`/`per_language` payloads. No CMeIE or other external corpus text is
+bundled.

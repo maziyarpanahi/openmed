@@ -41,6 +41,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="indic",
         description="Indic segmentation and transliteration helpers",
     ),
+    "icd11_api": AdapterSpec(
+        name="icd11_api",
+        module="openmed.interop.icd11_api",
+        extra="",
+        description="Offline ICD-11 MMS snapshot grounding and builder",
+    ),
     "duckdb": AdapterSpec(
         name="duckdb",
         module="openmed.interop.duckdb_udf",
@@ -63,7 +69,7 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         name="llamaindex",
         module="openmed.interop.llamaindex",
         extra="llamaindex",
-        description="LlamaIndex FunctionTool adapter",
+        description="LlamaIndex node redaction and FunctionTool adapters",
     ),
     "pandas": AdapterSpec(
         name="pandas",
@@ -76,6 +82,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.presidio",
         extra="presidio",
         description="Presidio RecognizerResult adapter",
+    ),
+    "quickumls": AdapterSpec(
+        name="quickumls",
+        module="openmed.interop.quickumls",
+        extra="quickumls",
+        description="QuickUMLS licensed-resource linker adapter",
+    ),
+    "scispacy_linker": AdapterSpec(
+        name="scispacy_linker",
+        module="openmed.interop.scispacy_linker",
+        extra="scispacy",
+        description="scispaCy UMLS entity-linker adapter",
     ),
     "philter": AdapterSpec(
         name="philter",
@@ -100,6 +118,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.pydeid",
         extra="pydeid",
         description="pyDeid PHI span adapter",
+    ),
+    "scrubadub": AdapterSpec(
+        name="scrubadub",
+        module="openmed.interop.scrubadub",
+        extra="scrubadub",
+        description="scrubadub Filth span adapter",
+    ),
+    "spark": AdapterSpec(
+        name="spark",
+        module="openmed.interop.spark_udf",
+        extra="spark",
+        description="PySpark pandas_udf for batch column de-identification",
     ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",

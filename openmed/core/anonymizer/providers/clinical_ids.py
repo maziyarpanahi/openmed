@@ -35,6 +35,7 @@ deterministic:
   - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
   - Ghana Card PIN and Kenyan legacy/Maisha identity numbers
   - South African ID (13 digits with an embedded birth date and Luhn checksum)
+  - Ukrainian RNOKPP (10 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
   - UK NHS Number, a patient health identifier validated with the NHS
@@ -47,6 +48,7 @@ deterministic:
 
 from __future__ import annotations
 
+import hashlib
 import random
 import re
 from datetime import date
@@ -1340,8 +1342,197 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
-# Chinese mobile, bank-card, passport, and travel-permit identifiers
+# Chinese names, mobile, bank-card, passport, and travel-permit identifiers
 # ---------------------------------------------------------------------------
+
+
+SYNTHETIC_CHINESE_SURNAMES = (
+    "林",
+    "赵",
+    "周",
+    "吴",
+    "郑",
+    "冯",
+    "陈",
+    "卫",
+    "蒋",
+    "沈",
+    "韩",
+    "杨",
+    "朱",
+    "秦",
+    "许",
+    "何",
+    "吕",
+    "施",
+    "张",
+)
+"""Seed inventory for deterministic synthetic single-character surnames."""
+
+SYNTHETIC_CHINESE_COMPOUND_SURNAMES = ("欧阳", "司马", "上官", "诸葛")
+"""Seed inventory for deterministic synthetic compound surnames."""
+
+SYNTHETIC_CHINESE_GIVEN_NAME_CHARACTERS = tuple(
+    "清宁安和嘉悦晨星岚澄涵瑞瑶璟川然希远舟月知乐明舒"
+)
+"""Seed inventory for deterministic synthetic given names."""
+
+_HAN_NAME_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_SURROGATE_ATTEMPT_RE = re.compile(r"^(?P<source>.*)\|(?P<attempt>[0-9]+)$", re.DOTALL)
+
+
+def _chinese_source_and_attempt(original: str, attempt: int) -> tuple[str, int]:
+    match = _SURROGATE_ATTEMPT_RE.fullmatch(original)
+    if match is None:
+        return original, attempt
+    return match.group("source"), max(attempt, int(match.group("attempt")))
+
+
+def _chinese_name_key(original: str) -> str:
+    from openmed.processing.zh_pinyin import pinyin_fuzzy_key
+
+    return pinyin_fuzzy_key(original)
+
+
+def _stable_chinese_choice(
+    values: Sequence[str],
+    *,
+    key: str,
+    namespace: str,
+) -> str:
+    if not values:
+        raise ValueError("synthetic Chinese name inventory is empty")
+    material = f"{namespace}|{key}".encode("utf-8")
+    digest = hashlib.blake2b(material, digest_size=8).digest()
+    index = int.from_bytes(digest, "big", signed=False) % len(values)
+    return values[index]
+
+
+def _eligible_chinese_values(
+    values: Sequence[str],
+    *,
+    forbidden: set[str],
+) -> tuple[str, ...]:
+    eligible = tuple(value for value in values if set(value).isdisjoint(forbidden))
+    if not eligible:
+        raise RuntimeError("synthetic Chinese name inventory reuses source characters")
+    return eligible
+
+
+def generate_chinese_surname(
+    original: str,
+    *,
+    compound: bool | None = None,
+    attempt: int = 0,
+) -> str:
+    """Generate a deterministic synthetic Chinese surname."""
+
+    source, effective_attempt = _chinese_source_and_attempt(original, attempt)
+    source_han = "".join(_HAN_NAME_RE.findall(source))
+    if compound is None:
+        compound = len(source_han) >= 2
+    values = (
+        SYNTHETIC_CHINESE_COMPOUND_SURNAMES if compound else SYNTHETIC_CHINESE_SURNAMES
+    )
+    eligible = _eligible_chinese_values(values, forbidden=set(source_han))
+    key = f"{_chinese_name_key(source)}|{effective_attempt}"
+    return _stable_chinese_choice(eligible, key=key, namespace="surname")
+
+
+def generate_chinese_given_name(
+    original: str,
+    *,
+    length: int | None = None,
+    attempt: int = 0,
+    forbidden: Sequence[str] = (),
+) -> str:
+    """Generate a deterministic one- or two-character synthetic given name."""
+
+    source, effective_attempt = _chinese_source_and_attempt(original, attempt)
+    source_han = "".join(_HAN_NAME_RE.findall(source))
+    target_length = length if length is not None else max(1, min(len(source_han), 2))
+    if target_length not in {1, 2}:
+        raise ValueError("Chinese given-name length must be 1 or 2")
+    blocked = set(source_han) | set(forbidden)
+    eligible = _eligible_chinese_values(
+        SYNTHETIC_CHINESE_GIVEN_NAME_CHARACTERS,
+        forbidden=blocked,
+    )
+    key = f"{_chinese_name_key(source)}|{effective_attempt}"
+    output: list[str] = []
+    for position in range(target_length):
+        choices = tuple(value for value in eligible if value not in output) or eligible
+        output.append(
+            _stable_chinese_choice(
+                choices,
+                key=key,
+                namespace=f"given-{position}",
+            )
+        )
+    return "".join(output)
+
+
+def generate_chinese_name(original: str, *, attempt: int = 0) -> str:
+    """Generate a deterministic, source-disjoint synthetic Han personal name."""
+
+    source, effective_attempt = _chinese_source_and_attempt(original, attempt)
+    source_han = "".join(_HAN_NAME_RE.findall(source))
+    compound = any(
+        source_han.startswith(surname)
+        for surname in SYNTHETIC_CHINESE_COMPOUND_SURNAMES
+    )
+    target_length = 3 if compound else max(2, min(len(source_han) or 2, 3))
+    surname = generate_chinese_surname(
+        source,
+        compound=compound,
+        attempt=effective_attempt,
+    )
+    given_name = generate_chinese_given_name(
+        source,
+        length=target_length - len(surname),
+        attempt=effective_attempt,
+        forbidden=surname,
+    )
+    return f"{surname}{given_name}"
+
+
+class ChineseNameProvider(BaseProvider):
+    """Faker-compatible deterministic provider for synthetic Chinese names."""
+
+    def chinese_name(self, original: str, *, attempt: int = 0) -> str:
+        """Return a deterministic synthetic full name."""
+
+        return generate_chinese_name(original, attempt=attempt)
+
+    def chinese_given_name(
+        self,
+        original: str,
+        *,
+        length: int | None = None,
+        attempt: int = 0,
+    ) -> str:
+        """Return a deterministic synthetic given name."""
+
+        return generate_chinese_given_name(
+            original,
+            length=length,
+            attempt=attempt,
+        )
+
+    def chinese_surname(
+        self,
+        original: str,
+        *,
+        compound: bool | None = None,
+        attempt: int = 0,
+    ) -> str:
+        """Return a deterministic synthetic surname."""
+
+        return generate_chinese_surname(
+            original,
+            compound=compound,
+            attempt=attempt,
+        )
 
 
 def _distinct_digit_candidate(original: str, candidate: str) -> str:
@@ -2878,6 +3069,30 @@ class RodneCisloProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Ukrainian RNOKPP (10 digits, weighted modulo-11 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_ukrainian_rnokpp(*, rng: random.Random | None = None) -> str:
+    """Generate a checksum-valid Ukrainian RNOKPP surrogate."""
+    source = rng or random.Random()
+    day_count = source.randint(1, 50000)
+    serial = source.randint(0, 999)
+    gender_digit = source.randint(0, 9)
+    body = f"{day_count:05d}{serial:03d}{gender_digit}"
+    weights = (-1, 5, 7, 9, 4, 6, 10, 5, 7)
+    check = sum(int(digit) * weight for digit, weight in zip(body, weights)) % 11 % 10
+    return body + str(check)
+
+
+class UkrainianRnokppProvider(BaseProvider):
+    """Generates valid Ukrainian RNOKPP taxpayer registration numbers."""
+
+    def rnokpp(self) -> str:
+        return generate_ukrainian_rnokpp(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Thai national ID (13 digits, weighted mod-11 checksum)
 # ---------------------------------------------------------------------------
 
@@ -2956,6 +3171,57 @@ class RomanianCNPProvider(BaseProvider):
 
     def romanian_cnp(self) -> str:
         return generate_romanian_cnp(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Russian SNILS (insurance account number) and OMS policy number (ENP)
+# ---------------------------------------------------------------------------
+
+
+def generate_russian_snils(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Russian SNILS accepted by its validator."""
+    source = rng or random.Random()
+
+    body = [source.randint(0, 9) for _ in range(9)]
+    check = _snils_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + f"{check:02d}"
+
+
+def _snils_check_digit(digits: list[int]) -> int:
+    weights = range(9, 0, -1)
+    control = sum(weight * digit for weight, digit in zip(weights, digits)) % 101
+    return 0 if control in (100, 101) else control
+
+
+class RussianSnilsProvider(BaseProvider):
+    """Generate synthetic Russian SNILS values."""
+
+    def snils(self) -> str:
+        return generate_russian_snils(rng=self.generator.random)
+
+
+def generate_russian_oms(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Russian OMS policy number (ENP) that passes
+    :func:`validate_russian_oms`.
+    """
+    source = rng or random.Random()
+
+    body = [source.randint(0, 9) for _ in range(15)]
+    check = _oms_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _oms_check_digit(digits: list[int]) -> int:
+    total = 0
+    for position, digit in enumerate(reversed(digits), start=1):
+        if position % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return (10 - total % 10) % 10
 
 
 # ---------------------------------------------------------------------------
@@ -3535,6 +3801,7 @@ def register_clinical_providers(faker) -> None:
 
     providers = (
         *clinical_faker_provider_classes(),
+        ChineseNameProvider,
         MedicalRecordNumberProvider,
         FinancialIdentifierProvider,
         MrzProvider,
@@ -3558,6 +3825,7 @@ __all__ = [
     "BulgarianEgnProvider",
     "CanadianSINProvider",
     "ChineseIdentifierProvider",
+    "ChineseNameProvider",
     "ChineseResidentIdProvider",
     "DanishCPRProvider",
     "EastAfricanIdProvider",
@@ -3590,9 +3858,13 @@ __all__ = [
     "PhilippinesIdProvider",
     "PolishPeselProvider",
     "RomanianCNPProvider",
+    "RussianSnilsProvider",
     "RodneCisloProvider",
     "SerbianJmbgProvider",
     "SouthAfricanIdProvider",
+    "SYNTHETIC_CHINESE_COMPOUND_SURNAMES",
+    "SYNTHETIC_CHINESE_GIVEN_NAME_CHARACTERS",
+    "SYNTHETIC_CHINESE_SURNAMES",
     "ThaiNationalIdProvider",
     "VietnameseIdProvider",
     "SpanishDNIProvider",
@@ -3600,6 +3872,7 @@ __all__ = [
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
+    "UkrainianRnokppProvider",
     "generate_australian_medicare",
     "generate_australian_tfn",
     "generate_aadhaar",
@@ -3610,7 +3883,10 @@ __all__ = [
     "generate_canadian_sin",
     "generate_chinese_bank_card",
     "generate_chinese_mobile_number",
+    "generate_chinese_given_name",
+    "generate_chinese_name",
     "generate_chinese_passport",
+    "generate_chinese_surname",
     "generate_chinese_resident_id",
     "generate_danish_cpr",
     "generate_egyptian_national_id",
@@ -3655,6 +3931,8 @@ __all__ = [
     "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_romanian_cnp",
+    "generate_russian_snils",
+    "generate_russian_oms",
     "generate_portuguese_nif",
     "generate_south_african_id",
     "generate_spanish_nie",
@@ -3669,6 +3947,7 @@ __all__ = [
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
+    "generate_ukrainian_rnokpp",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
     "register_clinical_providers",

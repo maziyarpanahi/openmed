@@ -40,9 +40,17 @@ validation. It covers only the declared data tables; no optional runtime code is
 included.
 
 The compact Han dictionary uses the jieba-compatible dictionary format and is
-recorded as `MIT`. The Indic break-rule table is recorded as `ICU-1.8.1`. A
-combined descriptor records `MIT AND ICU-1.8.1`, while retaining the exact
-license on every resource entry.
+recorded as `MIT`. The Indic grapheme-break table is adapted from ICU 57.1
+`icu4c/source/data/brkitr/rules/char.txt` at immutable revision
+`0c5873f89bf64f6bbc0a24b84f07d79b25785a42` and is recorded with the SPDX
+identifier `ICU`. A combined descriptor records `MIT AND ICU`.
+
+Every Indic or combined bundle includes `segmenter/ICU.txt` as a declared,
+size-checked, digest-bound `license_notice` resource. The accompanying
+`indic_rules.json` records the upstream project, exact source path and revision,
+retrieval date, local modifications, and notice filename. Validators reject a
+bundle whose ICU notice or provenance record is missing, modified, or
+incomplete.
 
 ## Runtime behavior
 

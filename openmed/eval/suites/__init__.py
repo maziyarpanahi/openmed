@@ -97,6 +97,18 @@ from openmed.eval.suites.indian_ids import (
     load_indian_id_fixtures,
     run_indian_id_evaluation,
 )
+from openmed.eval.suites.indic_encoder import (
+    INDIC_ENCODER_RECALL_DELTA,
+    IndicRecallDeltaReport,
+    SyntheticIndicFixture,
+    run_indic_encoder_recall_delta,
+)
+from openmed.eval.suites.indic_name_consistency import (
+    INDIC_NAME_CONSISTENCY,
+    evaluate_indic_name_consistency,
+    indic_name_consistency_metadata,
+    load_indic_name_fixtures,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -116,9 +128,11 @@ from openmed.eval.suites.policy_compliance import (
     policy_compliance_metadata,
 )
 from openmed.eval.suites.relations import (
+    DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS,
     RELATIONS,
     RelationFixture,
     RelationTrap,
+    load_multilingual_relation_fixtures,
     load_relation_fixtures,
     relation_suite_metadata,
     relation_trap_summary,
@@ -150,6 +164,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     CODE_MIXED_ROUTING,
     INDIA_HEALTH_ID_LEAKAGE,
     INDIAN_MULTI_ID,
+    INDIC_NAME_CONSISTENCY,
 )
 
 
@@ -209,6 +224,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_india_health_id_fixtures(**kwargs)
     if suite == INDIAN_MULTI_ID:
         return load_indian_id_fixtures(kwargs.get("path"))
+    if suite == INDIC_NAME_CONSISTENCY:
+        return load_indic_name_fixtures(kwargs.get("path"))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -246,6 +263,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return india_health_id_metadata(**kwargs)
     if suite == INDIAN_MULTI_ID:
         return indian_id_suite_metadata(**kwargs)
+    if suite == INDIC_NAME_CONSISTENCY:
+        return indic_name_consistency_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -343,7 +362,10 @@ __all__ = [
     "CODE_MIXED_ROUTING",
     "INDIA_HEALTH_ID_LEAKAGE",
     "INDIAN_MULTI_ID",
+    "INDIC_NAME_CONSISTENCY",
+    "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
+    "DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS",
     "RelationFixture",
     "RelationTrap",
     "ComparatorAdapter",
@@ -351,12 +373,15 @@ __all__ = [
     "ComparatorMatrixRow",
     "ComparatorUnavailable",
     "ChineseTerminologyLeakageReport",
+    "IndicRecallDeltaReport",
+    "SyntheticIndicFixture",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
     "run_comparator_matrix",
+    "run_indic_encoder_recall_delta",
     "evaluate_chinese_terminology_leakage",
     "run_script_ner_benchmark",
     "load_i2b2_deid",
@@ -380,6 +405,7 @@ __all__ = [
     "load_policy_compliance_fixtures",
     "policy_compliance_metadata",
     "load_relation_fixtures",
+    "load_multilingual_relation_fixtures",
     "relation_suite_metadata",
     "relation_trap_summary",
     "score_relation_fixtures",
@@ -405,4 +431,7 @@ __all__ = [
     "indian_id_suite_metadata",
     "load_indian_id_fixtures",
     "run_indian_id_evaluation",
+    "load_indic_name_fixtures",
+    "indic_name_consistency_metadata",
+    "evaluate_indic_name_consistency",
 ]

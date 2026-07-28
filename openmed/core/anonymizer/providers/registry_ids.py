@@ -69,6 +69,7 @@ from openmed.core.pii_i18n import (
     validate_nigeria_bvn,
     validate_nigeria_hfr_code,
     validate_nigeria_nin,
+    validate_norwegian_fodselsnummer,
     validate_pakistani_cnic,
     validate_philhealth_pin,
     validate_philsys_psn,
@@ -77,9 +78,11 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cpf,
     validate_portuguese_nif,
     validate_romanian_cnp,
+    validate_russian_snils,
     validate_rwanda_id,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_swedish_personnummer,
     validate_taiwan_compatriot_permit,
     validate_tanzania_nida,
     validate_thai_national_id,
@@ -87,6 +90,7 @@ from openmed.core.pii_i18n import (
     validate_uganda_nin,
     validate_uk_nhs_number,
     validate_uk_nino,
+    validate_ukrainian_rnokpp,
     validate_upi_id,
     validate_vehicle_registration,
     validate_vietnamese_cccd,
@@ -132,6 +136,7 @@ from .clinical_ids import (
     PortugueseNIFProvider,
     RodneCisloProvider,
     RomanianCNPProvider,
+    RussianSnilsProvider,
     SerbianJmbgProvider,
     SouthAfricanIdProvider,
     SpanishDNIProvider,
@@ -139,6 +144,7 @@ from .clinical_ids import (
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
+    UkrainianRnokppProvider,
     VietnameseIdProvider,
     validate_abdm_registry_id,
     validate_abha,
@@ -593,6 +599,18 @@ def _register_builtin_specs() -> None:
         faker_provider=DanishCPRProvider,
     )
     _register_aliases(
+        ("sv", "sv_SE", "se"),
+        id_type="personnummer",
+        validate=validate_swedish_personnummer,
+        faker_method="ssn",
+    )
+    _register_aliases(
+        ("no", "no_NO", "nb", "nb_NO"),
+        id_type="fodselsnummer",
+        validate=validate_norwegian_fodselsnummer,
+        faker_method="ssn",
+    )
+    _register_aliases(
         ("th", "th_TH"),
         id_type="thai_national_id",
         validate=validate_thai_national_id,
@@ -654,6 +672,13 @@ def _register_builtin_specs() -> None:
         faker_provider=EstonianIsikukoodProvider,
     )
     _register_aliases(
+        ("uk", "uk_UA"),
+        id_type="rnokpp",
+        validate=validate_ukrainian_rnokpp,
+        faker_method="rnokpp",
+        faker_provider=UkrainianRnokppProvider,
+    )
+    _register_aliases(
         ("el", "el_GR"),
         id_type="amka",
         validate=validate_greek_amka,
@@ -693,6 +718,13 @@ def _register_builtin_specs() -> None:
         validate=validate_romanian_cnp,
         faker_method="romanian_cnp",
         faker_provider=RomanianCNPProvider,
+    )
+    _register_aliases(
+        ("ru", "ru_RU"),
+        id_type="snils",
+        validate=validate_russian_snils,
+        faker_method="snils",
+        faker_provider=RussianSnilsProvider,
     )
     _register_aliases(
         ("hu", "hu_HU"),

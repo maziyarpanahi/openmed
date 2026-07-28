@@ -27,6 +27,7 @@ from .codeable_concept_simple import system_uri as _system_uri
 SYSTEM_URI: dict[str, str] = {
     "RXNORM": _system_uri("rxnorm"),
     "ICD10CM": _system_uri("icd-10-cm"),
+    "ICD11": _system_uri("icd-11-mms"),
     "LOINC": _system_uri("loinc"),
     "SNOMED": _system_uri("snomed"),
     "HPO": _system_uri("hpo"),

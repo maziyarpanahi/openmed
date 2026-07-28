@@ -38,6 +38,8 @@ device = "cuda"
 cache_dir = "/mnt/cache/openmed"
 torch_attention_backend = "auto"
 cjk_width_convention = "cjk"
+transliteration_aware_name_matching = false
+indic_name_similarity_threshold = 0.80
 ```
 
 Runtime environment controls can select the config path, provide Hub
@@ -48,6 +50,12 @@ export OPENMED_CONFIG=/etc/openmed/config.toml
 export HF_TOKEN=hf_xxx
 export OPENMED_TORCH_DEVICE=cuda:1
 ```
+
+For Indic personal-name pseudonymization, enable
+`transliteration_aware_name_matching` and reuse the same setting when reopening
+a file-backed surrogate vault. The collision threshold and optional local
+transliterator adapter are described in
+[Transliteration-aware Indic name matching](indic-name-matching.md).
 
 ## CJK width normalization
 
@@ -159,6 +167,11 @@ message prefix:
 ```text
 OPENMED_OFFLINE/local_only=True blocks outbound network access after model loading.
 ```
+
+For `HF_ENDPOINT`, pip mirror, proxy, retry, and metered-connection setup, see
+the [low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md).
+It includes a cache-warming checklist and the `openmed doctor` fields used to
+confirm the active network environment before switching offline.
 
 ## Validation helpers
 

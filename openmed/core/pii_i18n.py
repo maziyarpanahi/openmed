@@ -34,6 +34,8 @@ from .anonymizer.providers.clinical_ids import (
     validate_bc_phn,
     validate_canadian_sin,
     validate_gstin,
+    validate_indian_phone,
+    validate_indian_pin,
     validate_luhn,
     validate_ontario_health_card,
     validate_pan,
@@ -60,8 +62,8 @@ from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 # ---------------------------------------------------------------------------
 
 # Naamapadam languages supported by the optional Indic NER adapter. Existing
-# Hindi and Telugu defaults remain available; the shared CoNLL adapter is an
-# additional opt-in model family for all 11 languages.
+# Bengali, Hindi, Tamil, and Telugu defaults remain available; the shared CoNLL
+# adapter is an additional opt-in model family for all 11 languages.
 INDIC_NER_LANGUAGES = frozenset(
     {"as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
 )
@@ -74,7 +76,7 @@ OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 # resolve explicitly configured weights without advertising them as built-in
 # language packs.
 DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
-for _language in INDIC_NER_LANGUAGES - {"hi", "te"}:
+for _language in INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}:
     DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -105,10 +107,17 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "th": "Thai",
     "ko": "Korean",
     "ro": "Romanian",
+    "ru": "Russian",
     "zh": "Chinese",
     "sw": "Swahili",
     "zu": "isiZulu",
     "xh": "isiXhosa",
+    "sv": "Swedish",
+    "da": "Danish",
+    "no": "Norwegian",
+    "uk": "Ukrainian",
+    "cs": "Czech",
+    "el": "Greek",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -139,10 +148,17 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "th": "Thai-",
     "ko": "Korean-",
     "ro": "Romanian-",
+    "ru": "Russian-",
     "zh": "Chinese-",
     "sw": "Swahili-",
     "zu": "isiZulu-",
     "xh": "isiXhosa-",
+    "sv": "Swedish-",
+    "da": "Danish-",
+    "no": "Norwegian-",
+    "uk": "Ukrainian-",
+    "cs": "Czech-",
+    "el": "Greek-",
 }
 
 # ---------------------------------------------------------------------------
@@ -288,7 +304,6 @@ TOKENIZER_SCRIPT_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
     },
 }
 
-
 INDIA_CLINICAL_MULTILINGUAL_FALLBACK = "OpenMed/privacy-filter-multilingual"
 
 
@@ -337,6 +352,12 @@ INDIA_CLINICAL_MODEL_ROUTES: Dict[str, IndiaClinicalModelRoute] = {
     )
     for lang in ("hi", "te")
 }
+
+# Backbone-only Indic encoders are an opt-in supplement, not replacements for
+# the complete Hindi and Telugu token-classification checkpoints above. Other
+# family-supported language codes can be enabled explicitly through
+# ``configure_indic_encoder(..., languages=...)`` in ``model_registry``.
+INDIC_ENCODER_PII_LANGUAGES: frozenset[str] = frozenset({"hi", "te"})
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +499,13 @@ _ARABIC_INDIC_DIGIT_TRANSLATION = str.maketrans(
     "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
     "01234567890123456789",
 )
+_DEVANAGARI_DIGIT_TRANSLATION = str.maketrans("०१२३४५६७८९", "0123456789")
+_BENGALI_ASSAMESE_DIGIT_TRANSLATION = str.maketrans(
+    "০১২৩৪৫৬৭৮৯",
+    "0123456789",
+)
+_ODIA_DIGIT_TRANSLATION = str.maketrans("୦୧୨୩୪୫୬୭୮୯", "0123456789")
+_TAMIL_DIGIT_TRANSLATION = str.maketrans("௦௧௨௩௪௫௬௭௮௯", "0123456789")
 
 
 def normalize_arabic_indic_digits(text: str) -> str:
@@ -496,6 +524,62 @@ def normalize_arabic_indic_digits(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return text.translate(_ARABIC_INDIC_DIGIT_TRANSLATION)
+
+
+def normalize_devanagari_digits(text: str) -> str:
+    """Fold Devanagari decimal digits to ASCII without changing offsets."""
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_DEVANAGARI_DIGIT_TRANSLATION)
+
+
+def normalize_bengali_assamese_digits(text: str) -> str:
+    """Fold Bengali-Assamese decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain decimal digits from U+09E6-U+09EF.
+
+    Returns:
+        Length-preserving text with Bengali-Assamese digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_BENGALI_ASSAMESE_DIGIT_TRANSLATION)
+
+
+def normalize_odia_digits(text: str) -> str:
+    """Fold Odia decimal digits to ASCII without changing offsets.
+
+    Args:
+        text: Text that may contain Odia decimal digits.
+
+    Returns:
+        Length-preserving text with Odia digits rendered as ASCII.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_ODIA_DIGIT_TRANSLATION)
+
+
+def normalize_tamil_digits(text: str) -> str:
+    """Fold Tamil decimal digits to ASCII without changing offsets.
+
+    Tamil decimal digits U+0BE6-U+0BEF are mapped one code point at a time.
+    The traditional non-positional Tamil number signs U+0BF0-U+0BF2 and all
+    non-digit characters are preserved.
+
+    Args:
+        text: Text that may contain Tamil decimal digits.
+
+    Returns:
+        Length-preserving text with Tamil decimal digits rendered as ASCII.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return text.translate(_TAMIL_DIGIT_TRANSLATION)
 
 
 EGYPTIAN_GOVERNORATE_CODES = frozenset(
@@ -1040,6 +1124,96 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+def validate_marathi_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Devanagari decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_devanagari_digits(text))
+
+
+def validate_marathi_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Devanagari digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_devanagari_digits(text)
+    )
+
+
+def validate_assamese_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Bengali-Assamese digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(
+        normalize_bengali_assamese_digits(text)
+    )
+
+
+def validate_assamese_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Assamese digits."""
+
+    return isinstance(text, str) and validate_indian_phone(
+        normalize_bengali_assamese_digits(text)
+    )
+
+
+def validate_assam_pin(text: str) -> bool:
+    """Validate an Assam PIN in the 78xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_bengali_assamese_digits(text).strip()
+    return validate_indian_pin(normalized) and 780_000 <= int(normalized) <= 789_999
+
+
+def validate_maharashtra_pin(text: str) -> bool:
+    """Validate a Maharashtra PIN in the 40xxxx-44xxxx allocation range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_devanagari_digits(text)
+    return validate_indian_pin(normalized) and 400_000 <= int(normalized) <= 449_999
+
+
+def validate_odia_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Odia decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_odia_digits(text))
+
+
+def validate_odia_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile rendered with ASCII or Odia digits."""
+
+    return isinstance(text, str) and validate_indian_phone(normalize_odia_digits(text))
+
+
+def validate_odisha_pin(text: str) -> bool:
+    """Validate an Odisha PIN in the 75xxxx-77xxxx range."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_odia_digits(text).strip()
+    return validate_indian_pin(normalized) and 750_000 <= int(normalized) <= 779_999
+
+
+def validate_tamil_aadhaar(text: str) -> bool:
+    """Validate Aadhaar after folding Tamil decimal digits to ASCII."""
+
+    return isinstance(text, str) and validate_aadhaar(normalize_tamil_digits(text))
+
+
+def validate_tamil_indian_phone(text: str) -> bool:
+    """Validate an Indian mobile after folding Tamil decimal digits."""
+
+    return isinstance(text, str) and validate_indian_phone(normalize_tamil_digits(text))
+
+
+def validate_tamil_nadu_puducherry_pin(text: str) -> bool:
+    """Validate a Tamil Nadu or Puducherry PIN in either decimal digit set."""
+
+    if not isinstance(text, str):
+        return False
+    normalized = normalize_tamil_digits(text)
+    return validate_indian_pin(normalized) and 600_000 <= int(normalized) <= 649_999
 
 
 def validate_ifsc(text: str) -> bool:
@@ -1784,6 +1958,53 @@ def validate_philhealth_pin(text: str) -> bool:
     return _matches_digit_grouping(text, (2, 9, 1))
 
 
+def validate_swedish_personnummer(text: str) -> bool:
+    """Validate a Swedish personnummer or coordination number with Luhn.
+
+    Accepted presentations contain either ten digits (``YYMMDD-NNNC``) or
+    twelve digits (``YYYYMMDD-NNNC``). A plus sign may replace the separator
+    for people aged 100 or older. The Luhn calculation always uses the final
+    ten digits, beginning with the two-digit year. Coordination numbers use
+    the same shape and checksum with 60 added to the encoded day of birth.
+    """
+    if not isinstance(text, str):
+        return False
+
+    stripped = text.strip()
+    if (
+        re.fullmatch(
+            r"(?:[0-9]{6}|[0-9]{8})(?:[-+]?[0-9]{4})",
+            stripped,
+        )
+        is None
+    ):
+        return False
+
+    digits = re.sub(r"[-+]", "", stripped)
+    if len(digits) == 12:
+        year = int(digits[0:4])
+        date_digits = digits[2:8]
+        luhn_digits = digits[2:]
+    else:
+        year = 2000 + int(digits[0:2])
+        date_digits = digits[0:6]
+        luhn_digits = digits
+
+    month = int(date_digits[2:4])
+    encoded_day = int(date_digits[4:6])
+    day = encoded_day - 60 if 61 <= encoded_day <= 91 else encoded_day
+    try:
+        date(year, month, day)
+    except ValueError:
+        return False
+
+    total = 0
+    for index, char in enumerate(luhn_digits):
+        value = int(char) * (2 if index % 2 == 0 else 1)
+        total += value // 10 + value % 10
+    return total % 10 == 0
+
+
 def _danish_cpr_candidate_years(
     year_suffix: int, century_digit: int
 ) -> tuple[int, ...]:
@@ -1837,6 +2058,70 @@ def validate_danish_cpr(text: str) -> bool:
         except (ValueError, calendar.IllegalMonthError):
             continue
     return False
+
+
+def _norwegian_birth_year(year_suffix: int, individual: int) -> int | None:
+    """Resolve the birth century encoded by a Norwegian individual number."""
+    if 0 <= individual <= 499:
+        return 1900 + year_suffix
+    if 500 <= individual <= 749 and 54 <= year_suffix <= 99:
+        return 1800 + year_suffix
+    if 500 <= individual <= 999 and 0 <= year_suffix <= 39:
+        return 2000 + year_suffix
+    if 900 <= individual <= 999 and 40 <= year_suffix <= 99:
+        return 1900 + year_suffix
+    return None
+
+
+def validate_norwegian_fodselsnummer(text: str) -> bool:
+    """Validate a Norwegian fødselsnummer or D-number with modulus-11.
+
+    A fødselsnummer has eleven digits: ``DDMMYYIIIKK``. The first six encode
+    the birth date, the next three encode an individual/century number, and
+    the last two are independently weighted control digits. D-numbers share
+    this structure with 40 added to the encoded day of birth.
+    """
+    if not isinstance(text, str):
+        return False
+
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{11}", digits) is None:
+        return False
+
+    numbers = [int(char) for char in digits]
+    encoded_day = int(digits[0:2])
+    day = encoded_day - 40 if 41 <= encoded_day <= 71 else encoded_day
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:6])
+    individual = int(digits[6:9])
+    year = _norwegian_birth_year(year_suffix, individual)
+    if year is None:
+        return False
+    try:
+        date(year, month, day)
+    except ValueError:
+        return False
+
+    first_weights = (3, 7, 6, 1, 8, 9, 4, 5, 2)
+    first_control = (
+        11
+        - sum(weight * number for weight, number in zip(first_weights, numbers[:9]))
+        % 11
+    )
+    if first_control == 11:
+        first_control = 0
+    if first_control == 10 or numbers[9] != first_control:
+        return False
+
+    second_weights = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+    second_control = (
+        11
+        - sum(weight * number for weight, number in zip(second_weights, numbers[:10]))
+        % 11
+    )
+    if second_control == 11:
+        second_control = 0
+    return second_control != 10 and numbers[10] == second_control
 
 
 def validate_polish_pesel(text: str) -> bool:
@@ -1957,6 +2242,34 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+def validate_ukrainian_rnokpp(text: str) -> bool:
+    """Validate a Ukrainian RNOKPP taxpayer registration number.
+
+    RNOKPP values contain ten digits. The last digit is the modulo-11,
+    modulo-10 checksum of the first nine digits weighted by
+    ``(-1, 5, 7, 9, 4, 6, 10, 5, 7)``.
+
+    Args:
+        text: Candidate ten-digit RNOKPP value.
+
+    Returns:
+        ``True`` when the value has the required shape and checksum.
+    """
+    if not isinstance(text, str):
+        return False
+
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{10}", digits) is None:
+        return False
+
+    weights = (-1, 5, 7, 9, 4, 6, 10, 5, 7)
+    numbers = [int(digit) for digit in digits]
+    check_digit = (
+        sum(weight * digit for weight, digit in zip(weights, numbers[:9])) % 11 % 10
+    )
+    return numbers[9] == check_digit
 
 
 def validate_greek_amka(text: str) -> bool:
@@ -2484,11 +2797,108 @@ def validate_romanian_cnp(text: str) -> bool:
     return numbers[12] == control
 
 
+def validate_russian_snils(text: str) -> bool:
+    """Validate a Russian SNILS (social insurance account number).
+
+    SNILS is an 11-digit identifier, conventionally formatted
+    ``AAA-AAA-AAA CC``, where the first nine digits carry a weighted mod-101
+    checksum:
+
+    - Weights 9 down to 1 are applied to the first nine digits.
+    - ``control = sum(weight * digit) % 101``.
+    - A remainder of 100 or 101 maps to a control value of 0.
+    - The final two digits must equal the control value.
+
+    Args:
+        text: SNILS string with exactly 11 digits. Conventional ``-``/space
+            separators are stripped before validation.
+
+    Returns:
+        True if the SNILS has 11 digits and a matching checksum.
+    """
+    if not isinstance(text, str):
+        return False
+    value = text.strip()
+    if (
+        re.fullmatch(r"(?:[0-9]{11}|[0-9]{3}-[0-9]{3}-[0-9]{3} [0-9]{2})", value)
+        is None
+    ):
+        return False
+    digits = re.sub(r"[- ]", "", value)
+
+    numbers = [int(digit) for digit in digits]
+    weights = range(9, 0, -1)
+    total = sum(weight * digit for weight, digit in zip(weights, numbers[:9]))
+    control = total % 101
+    if control in (100, 101):
+        control = 0
+
+    return numbers[9] * 10 + numbers[10] == control
+
+
+def validate_russian_oms(text: str) -> bool:
+    """Validate a Russian OMS policy number (obligatory medical insurance).
+
+    The ENP is a 16-digit identifier whose final digit is a Luhn-style check
+    digit over the preceding 15 digits:
+
+    - Reading the first 15 digits from the right, digits in odd positions
+      (immediately adjacent to the check digit, then every other digit) are
+      doubled; digits over 9 have 9 subtracted (equivalent to summing their
+      own digits). Even positions are kept as-is.
+    - The digits are summed, then rounded up to the nearest multiple of 10;
+      the difference is the expected check digit (0 if the sum is already a
+      multiple of 10).
+
+    Args:
+        text: OMS policy number containing exactly 16 ASCII digits.
+            Surrounding whitespace is ignored, but internal separators are
+            invalid.
+
+    Returns:
+        True if the OMS number has 16 digits and a matching check digit.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{16}", digits) is None:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    body = numbers[:15]
+    check_digit = numbers[15]
+
+    total = 0
+    for position, digit in enumerate(reversed(body), start=1):
+        if position % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    expected = (10 - total % 10) % 10
+
+    return expected == check_digit
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
 
 LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
+    "af": [
+        "Januarie",
+        "Februarie",
+        "Maart",
+        "April",
+        "Mei",
+        "Junie",
+        "Julie",
+        "Augustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+    ],
     "as": [
         "জানুৱাৰী",
         "ফেব্ৰুৱাৰী",
@@ -2883,6 +3293,48 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Novemba",
         "Disemba",
     ],
+    "sv": [
+        "januari",
+        "februari",
+        "mars",
+        "april",
+        "maj",
+        "juni",
+        "juli",
+        "augusti",
+        "september",
+        "oktober",
+        "november",
+        "december",
+    ],
+    "da": [
+        "januar",
+        "februar",
+        "marts",
+        "april",
+        "maj",
+        "juni",
+        "juli",
+        "august",
+        "september",
+        "oktober",
+        "november",
+        "december",
+    ],
+    "no": [
+        "januar",
+        "februar",
+        "mars",
+        "april",
+        "mai",
+        "juni",
+        "juli",
+        "august",
+        "september",
+        "oktober",
+        "november",
+        "desember",
+    ],
     "th": [
         "มกราคม",
         "กุมภาพันธ์",
@@ -2925,6 +3377,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "noiembrie",
         "decembrie",
     ],
+    "ru": [
+        "январь",
+        "февраль",
+        "март",
+        "апрель",
+        "май",
+        "июнь",
+        "июль",
+        "август",
+        "сентябрь",
+        "октябрь",
+        "ноябрь",
+        "декабрь",
+    ],
     "zh": [
         "一月",
         "二月",
@@ -2938,6 +3404,48 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "十月",
         "十一月",
         "十二月",
+    ],
+    "uk": [
+        "січень",
+        "лютий",
+        "березень",
+        "квітень",
+        "травень",
+        "червень",
+        "липень",
+        "серпень",
+        "вересень",
+        "жовтень",
+        "листопад",
+        "грудень",
+    ],
+    "cs": [
+        "leden",
+        "únor",
+        "březen",
+        "duben",
+        "květen",
+        "červen",
+        "červenec",
+        "srpen",
+        "září",
+        "říjen",
+        "listopad",
+        "prosinec",
+    ],
+    "el": [
+        "Ιανουάριος",
+        "Φεβρουάριος",
+        "Μάρτιος",
+        "Απρίλιος",
+        "Μάιος",
+        "Ιούνιος",
+        "Ιούλιος",
+        "Αύγουστος",
+        "Σεπτέμβριος",
+        "Οκτώβριος",
+        "Νοέμβριος",
+        "Δεκέμβριος",
     ],
 }
 
@@ -5194,6 +5702,413 @@ _HINGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_MARATHI_DIGIT_CLASS = r"0-9\u0966-\u096F"
+_MARATHI_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u096C-\u096F"
+_MARATHI_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0968-\u096F"
+_DEVANAGARI_BASE_LETTER = r"[\u0904-\u0939\u0958-\u0961\u0972-\u097F]"
+_DEVANAGARI_NON_VIRAMA_MARK = r"[\u0900-\u0903\u093A-\u094C\u094E-\u0957\u0962-\u0963]"
+_DEVANAGARI_GRAPHEME = (
+    rf"{_DEVANAGARI_BASE_LETTER}{_DEVANAGARI_NON_VIRAMA_MARK}*"
+    rf"(?:\u094D[\u200C\u200D]?{_DEVANAGARI_BASE_LETTER}"
+    rf"{_DEVANAGARI_NON_VIRAMA_MARK}*)*"
+)
+_MARATHI_NAME_WORD = rf"(?:{_DEVANAGARI_GRAPHEME}){{2,}}"
+_MARATHI_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["mr"]
+)
+
+_MARATHI_NAME_CONTEXT = ["नाव", "रुग्ण", "रुग्णाचे नाव", "patient"]
+_MARATHI_DATE_CONTEXT = [
+    "जन्म",
+    "जन्मतारीख",
+    "तारीख",
+    "दाखल",
+    "date",
+    "date of birth",
+    "dob",
+]
+_MARATHI_PHONE_CONTEXT = ["फोन", "मोबाइल", "दूरध्वनी", "phone", "mobile"]
+_MARATHI_AADHAAR_CONTEXT = ["आधार", "ओळख क्रमांक", "aadhaar", "aadhar", "uidai"]
+_MARATHI_PIN_CONTEXT = ["पिन", "टपाल", "टपाल क्रमांक", "pin", "postcode"]
+
+_MARATHI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![\w\u0900-\u097F])(?:श्रीमती|श्री\.|सौ\.|कु\.)[ \t]+"
+        rf"{_MARATHI_NAME_WORD}(?:[ \t]+{_MARATHI_NAME_WORD}){{2}}"
+        rf"(?![\w\u0900-\u097F])",
+        "name",
+        priority=13,
+        base_score=0.9,
+        context_words=_MARATHI_NAME_CONTEXT,
+        context_boost=0.1,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_MARATHI_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_MARATHI_MONTH_PATTERN})\s+"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_MARATHI_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"(?:\+[9\u096F][1\u0967][\s-]?)?"
+        rf"[{_MARATHI_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_MARATHI_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_MARATHI_DIGIT_CLASS}]"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_MARATHI_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_marathi_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[{_MARATHI_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{3}}"
+        rf"(?P<mr_aadhaar_sep>[ -])"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?P=mr_aadhaar_sep)"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_MARATHI_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_marathi_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_MARATHI_DIGIT_CLASS}])"
+        rf"[4\u096A][0-4\u0966-\u096A]"
+        rf"[{_MARATHI_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_MARATHI_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_MARATHI_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_maharashtra_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
+_BENGALI_ASSAMESE_DIGIT_CLASS = r"0-9\u09E6-\u09EF"
+_ASSAMESE_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u09EC-\u09EF"
+_ASSAMESE_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u09E8-\u09EF"
+_BENGALI_ASSAMESE_BASE_LETTER = (
+    r"[\u0985-\u098C\u098F-\u0990\u0993-\u09A8\u09AA-\u09B0"
+    r"\u09B2\u09B6-\u09B9\u09CE\u09DC-\u09E1\u09F0-\u09F1]"
+)
+_BENGALI_ASSAMESE_NON_VIRAMA_MARK = (
+    r"[\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7-\u09C8"
+    r"\u09CB-\u09CC\u09D7]"
+)
+_BENGALI_ASSAMESE_GRAPHEME = (
+    rf"{_BENGALI_ASSAMESE_BASE_LETTER}"
+    rf"{_BENGALI_ASSAMESE_NON_VIRAMA_MARK}*"
+    rf"(?:\u09CD[\u200C\u200D]?{_BENGALI_ASSAMESE_BASE_LETTER}"
+    rf"{_BENGALI_ASSAMESE_NON_VIRAMA_MARK}*)*"
+)
+_ASSAMESE_NAME_WORD = rf"(?:{_BENGALI_ASSAMESE_GRAPHEME}){{2,}}"
+_ASSAMESE_SURNAME = r"(?:গগৈ|বৰুৱা|শইকীয়া|বৰদলৈ|বৰা)"
+_ASSAMESE_FULL_NAME = (
+    rf"{_ASSAMESE_NAME_WORD}"
+    rf"(?:[ \t]+{_ASSAMESE_NAME_WORD})?"
+    rf"[ \t]+{_ASSAMESE_SURNAME}"
+)
+_ASSAMESE_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["as"]
+)
+
+_ASSAMESE_NAME_CONTEXT = ["শ্ৰী", "শ্ৰীমতী", "ডা.", "নাম", "ৰোগী", "patient"]
+_ASSAMESE_DATE_CONTEXT = [
+    "জন্ম",
+    "জন্ম তাৰিখ",
+    "তাৰিখ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_ASSAMESE_PHONE_CONTEXT = ["ফোন", "মোবাইল", "যোগাযোগ", "phone", "mobile"]
+_ASSAMESE_AADHAAR_CONTEXT = [
+    "আধাৰ",
+    "পৰিচয়",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_ASSAMESE_PIN_CONTEXT = [
+    "পিন",
+    "পিন কোড",
+    "ডাক",
+    "ঠিকনা",
+    "pin",
+    "postcode",
+]
+
+_ASSAMESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?:(?<=শ্ৰী )|(?<=শ্ৰীমতী )|(?<=ডা\. ))"
+        rf"{_ASSAMESE_FULL_NAME}"
+        rf"(?![\u0980-\u09FF])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_ASSAMESE_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_ASSAMESE_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_ASSAMESE_MONTH_PATTERN})\s+"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_ASSAMESE_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?:\+[9\u09EF][1\u09E7][\s-]?)?"
+        rf"[{_ASSAMESE_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_BENGALI_ASSAMESE_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_ASSAMESE_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_assamese_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[{_ASSAMESE_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}} "
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}} "
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_ASSAMESE_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_assamese_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"[7\u09ED][8\u09EE]"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_ASSAMESE_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_assam_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
+_ODIA_DIGIT_CLASS = r"0-9\u0B66-\u0B6F"
+_ODIA_MOBILE_LEADING_DIGIT_CLASS = r"6-9\u0B6C-\u0B6F"
+_ODIA_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0B68-\u0B6F"
+_ODIA_BASE_LETTER = (
+    r"[\u0B05-\u0B0C\u0B0F-\u0B10\u0B13-\u0B28\u0B2A-\u0B30"
+    r"\u0B32-\u0B33\u0B35-\u0B39\u0B5C-\u0B61\u0B71]"
+)
+_ODIA_NON_VIRAMA_MARK = (
+    r"[\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47-\u0B48"
+    r"\u0B4B-\u0B4C\u0B55-\u0B57]"
+)
+_ODIA_GRAPHEME = (
+    rf"{_ODIA_BASE_LETTER}{_ODIA_NON_VIRAMA_MARK}*"
+    rf"(?:\u0B4D[\u200C\u200D]?{_ODIA_BASE_LETTER}"
+    rf"{_ODIA_NON_VIRAMA_MARK}*)*"
+)
+_ODIA_NAME_WORD = rf"(?:{_ODIA_GRAPHEME}){{2,}}"
+_ODIA_SURNAME = r"(?:ମହାନ୍ତି|ପଟ୍ଟନାୟକ|ସାହୁ|ଦାସ)"
+_ODIA_FULL_NAME = (
+    rf"{_ODIA_NAME_WORD}"
+    rf"(?:[ \t]+{_ODIA_NAME_WORD})?"
+    rf"[ \t]+{_ODIA_SURNAME}"
+)
+_ODIA_MONTH_PATTERN = "|".join(re.escape(month) for month in LANGUAGE_MONTH_NAMES["or"])
+
+_ODIA_NAME_CONTEXT = ["ଶ୍ରୀ", "ଶ୍ରୀମତୀ", "ଡା.", "ନାମ", "ରୋଗୀ", "patient"]
+_ODIA_DATE_CONTEXT = [
+    "ଜନ୍ମ",
+    "ଜନ୍ମ ତାରିଖ",
+    "ତାରିଖ",
+    "date",
+    "date of birth",
+    "dob",
+]
+_ODIA_PHONE_CONTEXT = ["ଫୋନ୍", "ମୋବାଇଲ୍", "ଯୋଗାଯୋଗ", "phone", "mobile"]
+_ODIA_AADHAAR_CONTEXT = [
+    "ଆଧାର",
+    "ପରିଚୟ",
+    "aadhaar",
+    "aadhar",
+    "uid",
+    "uidai",
+]
+_ODIA_PIN_CONTEXT = [
+    "ପିନ୍",
+    "ପିନ୍ କୋଡ୍",
+    "ଡାକ",
+    "ଠିକଣା",
+    "pin",
+    "postcode",
+]
+
+_ODIA_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?:(?<=ଶ୍ରୀ )|(?<=ଶ୍ରୀମତୀ )|(?<=ଡା\. ))"
+        rf"{_ODIA_FULL_NAME}"
+        rf"(?![\u0B00-\u0B7F])",
+        "name",
+        priority=14,
+        base_score=0.9,
+        context_words=_ODIA_NAME_CONTEXT,
+        context_boost=0.1,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[{_ODIA_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_ODIA_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[{_ODIA_DIGIT_CLASS}]{{1,2}}\s+"
+        rf"(?:{_ODIA_MONTH_PATTERN})\s+"
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_ODIA_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"(?:\+[9\u0B6F][1\u0B67][\s-]?)?"
+        rf"[{_ODIA_MOBILE_LEADING_DIGIT_CLASS}]"
+        rf"(?:[{_ODIA_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_ODIA_DIGIT_CLASS}]"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_ODIA_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_odia_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[{_ODIA_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{3}} "
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}} "
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_ODIA_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_odia_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_ODIA_DIGIT_CLASS}])"
+        rf"[7\u0B6D][5-7\u0B6B-\u0B6D]"
+        rf"[{_ODIA_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_ODIA_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_ODIA_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_odisha_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -5259,6 +6174,150 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
+    ),
+]
+
+_TAMIL_DIGIT_CLASS = r"0-9\u0BE6-\u0BEF"
+_TAMIL_LEADING_MOBILE_DIGIT_CLASS = r"6-9\u0BEC-\u0BEF"
+_TAMIL_AADHAAR_LEADING_DIGIT_CLASS = r"2-9\u0BE8-\u0BEF"
+_TAMIL_BASE_LETTER = (
+    r"[\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A"
+    r"\u0B9C\u0B9E\u0B9F\u0BA3-\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9]"
+)
+_TAMIL_GRAPHEME = rf"(?:ஸ்ரீ|{_TAMIL_BASE_LETTER}[\u0BBE-\u0BCD\u0BD7]*)"
+_TAMIL_MONTH_PATTERN = "|".join(
+    re.escape(month) for month in LANGUAGE_MONTH_NAMES["ta"]
+)
+
+_TAMIL_NAME_CONTEXT = ["திரு", "திருமதி", "செல்வி", "டாக்டர்"]
+_TAMIL_DATE_CONTEXT = [
+    "பிறந்த தேதி",
+    "பிறப்பு",
+    "தேதி",
+    "சேர்க்கை",
+    "date",
+    "date of birth",
+    "dob",
+]
+_TAMIL_PHONE_CONTEXT = ["தொலைபேசி", "மொபைல்", "பேசி", "phone", "mobile"]
+_TAMIL_AADHAAR_CONTEXT = [
+    "ஆதார்",
+    "அடையாள எண்",
+    "aadhaar",
+    "aadhar",
+    "uidai",
+]
+_TAMIL_ADDRESS_CONTEXT = ["முகவரி", "வசிப்பிடம்", "address"]
+_TAMIL_PIN_CONTEXT = [
+    "பின்",
+    "பின் குறியீடு",
+    "அஞ்சல்",
+    "அஞ்சல் குறியீடு",
+    "pin",
+    "postcode",
+]
+
+_TAMIL_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        rf"(?<![\w\u0B80-\u0BFF])(?:[A-Za-z]|{_TAMIL_GRAPHEME})\."
+        rf"[ \t]*(?:(?:{_TAMIL_GRAPHEME}){{2,}}|"
+        r"[A-Za-z][A-Za-z'’-]{1,39})(?![\w\u0B80-\u0BFF])",
+        "name",
+        priority=13,
+        base_score=0.7,
+        context_words=_TAMIL_NAME_CONTEXT,
+        context_boost=0.3,
+        context_required=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,2}}[/-]"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{2,4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_TAMIL_DATE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,2}}\s+(?:{_TAMIL_MONTH_PATTERN})\s+"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "date",
+        priority=10,
+        base_score=0.7,
+        context_words=_TAMIL_DATE_CONTEXT,
+        context_boost=0.25,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"(?:\+[9௯][1௧][\s-]?)?"
+        rf"[{_TAMIL_LEADING_MOBILE_DIGIT_CLASS}]"
+        rf"(?:[{_TAMIL_DIGIT_CLASS}][\s.-]?){{8}}"
+        rf"[{_TAMIL_DIGIT_CLASS}]"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "phone_number",
+        priority=10,
+        base_score=0.6,
+        context_words=_TAMIL_PHONE_CONTEXT,
+        context_boost=0.35,
+        validator=validate_tamil_indian_phone,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[{_TAMIL_AADHAAR_LEADING_DIGIT_CLASS}]"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{3}}"
+        rf"(?P<ta_aadhaar_sep>[ -]?)"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?P=ta_aadhaar_sep)"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_TAMIL_AADHAAR_CONTEXT,
+        context_boost=0.4,
+        validator=validate_tamil_aadhaar,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?:(?<=முகவரி )|(?<=வசிப்பிடம் )|(?<=address ))"
+        rf"[{_TAMIL_DIGIT_CLASS}]{{1,5}}\s+"
+        rf"(?:{_TAMIL_GRAPHEME}){{2,}}"
+        rf"(?:\s+(?:{_TAMIL_GRAPHEME}){{2,}}){{1,5}}"
+        r"(?=[,.;]|$)",
+        "street_address",
+        priority=9,
+        base_score=0.7,
+        context_words=_TAMIL_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    PIIPattern(
+        rf"(?<![{_TAMIL_DIGIT_CLASS}])"
+        rf"[6௬][0-4௦-௪][{_TAMIL_DIGIT_CLASS}]{{4}}"
+        rf"(?![{_TAMIL_DIGIT_CLASS}])",
+        "postcode",
+        priority=8,
+        base_score=0.4,
+        context_words=_TAMIL_PIN_CONTEXT,
+        context_boost=0.5,
+        validator=validate_tamil_nadu_puducherry_pin,
+        reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
     ),
 ]
 
@@ -7264,6 +8323,7 @@ _NGUNI_AGE_CONTEXT = ["iminyaka", "ubudala", "age", "aged", "years old"]
 
 _NGUNI_ID_CONTEXT = [
     "identiteitsnommer",
+    "id-nommer",
     "inombolo kamazisi",
     "umazisi",
     "inombolo yesazisi",
@@ -7287,6 +8347,8 @@ _NGUNI_MEDICAL_AID_CONTEXT = [
 
 _NGUNI_PHONE_CONTEXT = [
     "selfoon",
+    "telefoon",
+    "kontaknommer",
     "ucingo",
     "umakhalekhukhwini",
     "ifowuni",
@@ -7296,6 +8358,26 @@ _NGUNI_PHONE_CONTEXT = [
     "call",
     "contact",
 ]
+
+_SA_ID_PII_PATTERN = PIIPattern(
+    r"(?<![0-9])[0-9]{13}(?![0-9])",
+    "national_id",
+    priority=15,
+    base_score=0.75,
+    context_words=_NGUNI_ID_CONTEXT,
+    context_boost=0.2,
+    validator=validate_za_id_number,
+)
+
+_SA_PHONE_PII_PATTERN = PIIPattern(
+    r"(?<![0-9])(?:\+?27[\s.-]?[678][0-9]|0[678][0-9])"
+    r"[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
+    "phone_number",
+    priority=12,
+    base_score=0.7,
+    context_words=_NGUNI_PHONE_CONTEXT,
+    context_boost=0.25,
+)
 
 _NGUNI_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
@@ -7330,15 +8412,7 @@ _NGUNI_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
-    PIIPattern(
-        r"(?<![0-9])[0-9]{13}(?![0-9])",
-        "national_id",
-        priority=15,
-        base_score=0.75,
-        context_words=_NGUNI_ID_CONTEXT,
-        context_boost=0.2,
-        validator=validate_za_id_number,
-    ),
+    _SA_ID_PII_PATTERN,
     PIIPattern(
         r"(?<![A-Z0-9])(?:[A-Z]{2,5}[- ]?)?[0-9]{6,12}(?![A-Z0-9])",
         "national_id",
@@ -7376,14 +8450,198 @@ _NGUNI_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
+    _SA_PHONE_PII_PATTERN,
+]
+
+# Related-language transfer template (Dutch -> Afrikaans):
+# - transfer structural rules only when spelling and clinical usage align
+#   (numeric/textual dates and suffix-based street addresses);
+# - replace cue words with the target language's vocabulary and add a
+#   context-gated target-language age/name rule;
+# - never inherit source-country identifiers or numbering plans. Dutch BSN,
+#   +31 phone, and alphanumeric postcode patterns are deliberately absent;
+# - overlay the target country's validated identifiers, phones, and postcodes.
+# The separate list makes those decisions auditable and prevents future Dutch
+# changes from silently altering Afrikaans behavior.
+_AFRIKAANS_NAME_CONTEXT = [
+    "naam",
+    "pasiëntnaam",
+    "pasientnaam",
+    "naam van pasiënt",
+    "naam van pasient",
+    "patient name",
+]
+
+_AFRIKAANS_DATE_CONTEXT = [
+    "geboortedatum",
+    "gebore",
+    "opnamedatum",
+    "ontslagdatum",
+    "datum",
+]
+
+_AFRIKAANS_AGE_CONTEXT = ["ouderdom", "jaar oud", "age", "aged", "years old"]
+
+_AFRIKAANS_ADDRESS_CONTEXT = [
+    "adres",
+    "woonadres",
+    "verblyfadres",
+    "woonagtig",
+    "address",
+]
+
+_AFRIKAANS_POSTCODE_CONTEXT = ["poskode", "adres", "postal code", "postcode"]
+
+_AFRIKAANS_MONTH_PATTERN = (
+    r"januarie|februarie|maart|april|mei|junie|julie|augustus|"
+    r"september|oktober|november|desember"
+)
+
+_AFRIKAANS_STREET_NAME_PATTERN = (
+    r"(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}\s+){0,3}"
+    r"[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}(?:straat|laan|weg|plein|rylaan)"
+)
+
+_AFRIKAANS_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        r"(?<![0-9])(?:\+?27[\s.-]?[678][0-9]|0[678][0-9])"
-        r"[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}(?![0-9])",
-        "phone_number",
+        r"(?:(?<=Naam: )|(?<=Pasiëntnaam: )|(?<=Pasientnaam: )|"
+        r"(?<=Naam van pasiënt: )|(?<=Naam van pasient: )|"
+        r"(?<=Patient name: ))[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}"
+        r"(?:\s+(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,30}|van|der|de|du|le)){1,5}\b",
+        "name",
         priority=12,
+        base_score=0.65,
+        context_words=_AFRIKAANS_NAME_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b(?:0?[1-9]|[12][0-9]|3[01])[./-]"
+        r"(?:0?[1-9]|1[0-2])[./-](?:19|20)[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=_AFRIKAANS_DATE_CONTEXT,
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b(?:0?[1-9]|[12][0-9]|3[01])\s+"
+        rf"(?:{_AFRIKAANS_MONTH_PATTERN})\s+(?:19|20)[0-9]{{2}}\b",
+        "date",
+        priority=8,
         base_score=0.7,
-        context_words=_NGUNI_PHONE_CONTEXT,
+        context_words=_AFRIKAANS_DATE_CONTEXT,
         context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?:(?:(?<=Ouderdom: )|(?<=Ouderdom )|(?<=Age: )|(?<=Aged ))"
+        r"(?:1[01][0-9]|120|[1-9]?[0-9])\b|"
+        r"(?<![0-9])(?:1[01][0-9]|120|[1-9]?[0-9])(?=\s+jaar oud\b))",
+        "age",
+        priority=11,
+        base_score=0.65,
+        context_words=_AFRIKAANS_AGE_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    _SA_ID_PII_PATTERN,
+    PIIPattern(
+        rf"(?:(?<=Adres: )|(?<=Woonadres: )|(?<=Verblyfadres: )|"
+        rf"(?<=Address: ))(?:[0-9]{{1,5}}\s+{_AFRIKAANS_STREET_NAME_PATTERN}|"
+        rf"{_AFRIKAANS_STREET_NAME_PATTERN}\s+[0-9]{{1,5}}[A-Za-z]?)\b",
+        "street_address",
+        priority=8,
+        base_score=0.65,
+        context_words=_AFRIKAANS_ADDRESS_CONTEXT,
+        context_boost=0.3,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![A-Za-z0-9])[0-9]{4}(?![A-Za-z0-9]|\s?[A-Z]{2}\b)",
+        "postcode",
+        priority=7,
+        base_score=0.25,
+        context_words=_AFRIKAANS_POSTCODE_CONTEXT,
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    _SA_PHONE_PII_PATTERN,
+]
+
+
+_SWEDISH_MONTH_PATTERN = (
+    r"januari|februari|mars|april|maj|juni|juli|augusti|september|"
+    r"oktober|november|december"
+)
+
+_SWEDISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.65,
+        context_words=["datum", "född", "fodd", "inlagd", "utskriven"],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b[0-9]{{1,2}}\.?\s+(?:{_SWEDISH_MONTH_PATTERN})\s+[0-9]{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=["datum", "född", "fodd", "inlagd", "utskriven"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+46[\s.-]?|0)[1-9](?:[\s.-]?[0-9]){7,8}(?![0-9])",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "tel", "mobil", "kontakt", "ring"],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<![0-9])(?:[0-9]{8}|[0-9]{6})[-+]?[0-9]{4}(?![0-9])",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "personnummer",
+            "person nr",
+            "person-id",
+            "identitetsnummer",
+        ],
+        context_boost=0.45,
+        validator=validate_swedish_personnummer,
+    ),
+    PIIPattern(
+        (
+            r"\b(?!(?:adress|bostad)\b)[A-ZÅÄÖ]"
+            r"[A-Za-zÅÄÖåäö .'-]{2,60}"
+            r"(?:gata(?:n)?|väg(?:en)?|gränd|all[eé]|torg)\s+"
+            r"[0-9]{1,5}[A-Za-z]?\b"
+        ),
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adress", "bostad", "gata", "väg"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])(?:SE[-\s]?)?[0-9]{3}\s?[0-9]{2}(?![0-9])",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["postnummer", "postnr", "postkod", "adress"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
     ),
 ]
 
@@ -7394,6 +8652,23 @@ _DANISH_MONTH_PATTERN = (
 )
 
 _DANISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.65,
+        context_words=[
+            "dato",
+            "født",
+            "foedt",
+            "fodt",
+            "fødselsdato",
+            "foedselsdato",
+            "indlagt",
+            "udskrevet",
+        ],
+        context_boost=0.3,
+    ),
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
         "date",
@@ -7430,7 +8705,7 @@ _DANISH_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
     PIIPattern(
-        r"(?<!\w)(?:\+45[\s.-]?)?(?:\d{2}[\s.-]?){3}\d{2}\b",
+        r"(?<!\w)(?:\+45[\s.-]?)?[2-9](?:[\s.-]?[0-9]){7}\b",
         "phone_number",
         priority=8,
         base_score=0.55,
@@ -7477,6 +8752,79 @@ _DANISH_PII_PATTERNS: List[PIIPattern] = [
     ),
     PIIPattern(
         r"(?<!\d)(?:DK[-\s]?)?\d{4}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["postnummer", "postnr", "postkode", "adresse"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+_NORWEGIAN_MONTH_PATTERN = (
+    r"januar|februar|mars|april|mai|juni|juli|august|september|"
+    r"oktober|november|desember"
+)
+
+_NORWEGIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b",
+        "date",
+        priority=9,
+        base_score=0.65,
+        context_words=["dato", "født", "fodt", "innlagt", "utskrevet"],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b[0-9]{{1,2}}\.?\s+(?:{_NORWEGIAN_MONTH_PATTERN})\s+[0-9]{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=["dato", "født", "fodt", "innlagt", "utskrevet"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+47[\s.-]?)?[2-9](?:[\s.-]?[0-9]){7}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "tlf", "mobil", "kontakt", "ring"],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<![0-9])[0-9]{11}(?![0-9])",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "fødselsnummer",
+            "fodselsnummer",
+            "personnummer",
+            "person nr",
+            "person-id",
+        ],
+        context_boost=0.45,
+        validator=validate_norwegian_fodselsnummer,
+    ),
+    PIIPattern(
+        (
+            r"\b(?!(?:adresse|bosted)\b)[A-ZÆØÅ]"
+            r"[A-Za-zÆØÅæøå .'-]{2,60}"
+            r"(?:gate|gata|vei(?:en)?|veg(?:en)?|all[eé]|plass|torg)\s+"
+            r"[0-9]{1,5}[A-Za-z]?\b"
+        ),
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresse", "bosted", "gate", "gata", "vei"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<![0-9])(?:NO[-\s]?)?[0-9]{4}(?![0-9])",
         "postcode",
         priority=6,
         base_score=0.25,
@@ -7612,6 +8960,127 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Russian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_RUSSIAN_MONTH_PATTERN = (
+    r"январ[яь]|феврал[яь]|март[а]?|апрел[яь]|ма[яй]|июн[яь]|июл[яь]|"
+    r"август[а]?|сентябр[яь]|октябр[яь]|ноябр[яь]|декабр[яь]"
+)
+
+_RUSSIAN_STREET_TYPES = (
+    r"улица|ул\.|проспект|пр-т|просп\.|набережная|наб\.|"
+    r"переулок|бульвар|шоссе|тупик|проезд"
+)
+
+_RUSSIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Numeric dates: DD.MM.YYYY (also tolerate / separators).
+    PIIPattern(
+        r"\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "рождения",
+            "родился",
+            "родилась",
+            "поступил",
+            "поступила",
+            "выписан",
+            "выписана",
+        ],
+        context_boost=0.3,
+    ),
+    # Dates with Cyrillic month names, genitive or nominative ("23 июля 1985").
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_RUSSIAN_MONTH_PATTERN})\s+\d{{4}}"
+        r"(?:\s*г(?:ода)?\.?)?(?!\w)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "дата",
+            "рождения",
+            "родился",
+            "родилась",
+            "поступил",
+            "поступила",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Russian phones: +7 or national 8 prefix, optional parenthesized area code.
+    PIIPattern(
+        r"(?<!\w)(?:\+7|8)[\s-]?(?:\(\d{3}\)|\d{3})"
+        r"[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "моб", "мобильный"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    # SNILS (insurance account number): 11 digits, conventionally grouped
+    # "AAA-AAA-AAA CC", guarded by the mod-101 checksum validator.
+    PIIPattern(
+        r"(?<!\d)(?:\d{3}-\d{3}-\d{3}\s\d{2}|\d{11})(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "снилс",
+            "страховой номер",
+            "номер снилс",
+        ],
+        context_boost=0.4,
+        validator=validate_russian_snils,
+    ),
+    # OMS policy number (ENP): 16 contiguous digits, guarded by the Luhn-style
+    # check-digit validator.
+    PIIPattern(
+        r"(?<!\d)\d{16}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "омс",
+            "полис омс",
+            "полис",
+            "единый номер полиса",
+            "енп",
+        ],
+        context_boost=0.4,
+        validator=validate_russian_oms,
+    ),
+    # Russian street addresses ("улица Ленина, дом 12").
+    PIIPattern(
+        rf"\b(?:{_RUSSIAN_STREET_TYPES})\s+[А-ЯЁ][а-яёА-ЯЁ\s-]{{1,40}}?,?\s*"
+        r"(?:д\.?|дом)\s*\d{1,4}[А-Яа-я]?"
+        r"(?:\s*,?\s*(?:корпус|корп\.?|строение|стр\.?|блок)\s*\d+)?"
+        r"(?:\s*,?\s*(?:квартира|кв\.?)\s*\d+)?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адрес", "место жительства", "проживает"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Russian postal index: six contiguous digits.
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["индекс", "почтовый индекс", "адрес"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
     ),
 ]
 
@@ -7824,6 +9293,102 @@ _HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
 ]
+
+# ---------------------------------------------------------------------------
+# Ukrainian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_UKRAINIAN_MONTH_PATTERN = (
+    r"січня|січень|лютого|лютий|березня|березень|квітня|квітень|"
+    r"травня|травень|червня|червень|липня|липень|серпня|серпень|"
+    r"вересня|вересень|жовтня|жовтень|листопада|листопад|грудня|грудень"
+)
+
+_UKRAINIAN_STREET_MARKER = (
+    r"вулиця|вул\.|проспект|просп\.|провулок|пров\.|бульвар|бул\.|площа|шосе"
+)
+
+_UKRAINIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "народження",
+            "народився",
+            "народилася",
+            "прийом",
+            "виписка",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_UKRAINIAN_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "дата",
+            "народження",
+            "народився",
+            "народилася",
+            "прийом",
+            "виписка",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+380[\s.-]?\d{2}|0\d{2})"
+        r"[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "мобільний", "контакт", "номер"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{10}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "рнокпп",
+            "іпн",
+            "податковий номер",
+            "ідентифікаційний номер",
+            "реєстраційний номер облікової картки платника податків",
+        ],
+        context_boost=0.45,
+        validator=validate_ukrainian_rnokpp,
+    ),
+    PIIPattern(
+        rf"\b(?:{_UKRAINIAN_STREET_MARKER})\s+"
+        r"[А-ЯІЇЄҐ][А-Яа-яІіЇїЄєҐґ0-9’ʼ.'-]*"
+        r"(?:\s+[А-Яа-яІіЇїЄєҐґ0-9’ʼ.'-]+){0,5}\s+"
+        r"\d{1,5}[А-Яа-я]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адреса", "місце проживання", "вулиця", "проспект"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["поштовий індекс", "індекс", "адреса"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 
 # ---------------------------------------------------------------------------
 # Greek PII patterns (Greek script)
@@ -8198,7 +9763,7 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
 ]
 
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
-    "af": _NGUNI_PII_PATTERNS,
+    "af": _AFRIKAANS_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
     "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
     "ig": [*_NIGERIAN_PII_PATTERNS, *_IGBO_PII_PATTERNS],
@@ -8216,9 +9781,26 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *AADHAAR_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
+    "mr": [
+        *_MARATHI_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "as": [
+        *_ASSAMESE_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "bn": [],
+    "or": [
+        *_ODIA_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
     "te": [
         *_TELUGU_PII_PATTERNS,
         *AADHAAR_PII_PATTERNS,
+        *INDIAN_MULTI_ID_PII_PATTERNS,
+    ],
+    "ta": [
+        *_TAMIL_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
     "ar": _ARABIC_PII_PATTERNS,
@@ -8243,14 +9825,18 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
     "zu": _NGUNI_PII_PATTERNS,
     "xh": _NGUNI_PII_PATTERNS,
+    "sv": _SWEDISH_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
+    "no": _NORWEGIAN_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "ru": _RUSSIAN_PII_PATTERNS,
     "fi": _FINNISH_PII_PATTERNS,
     "bg": _BULGARIAN_PII_PATTERNS,
     "hr": _CROATIAN_PII_PATTERNS,
     "sr": _SERBIAN_PII_PATTERNS,
     "hu": _HUNGARIAN_PII_PATTERNS,
     "et": _ESTONIAN_PII_PATTERNS,
+    "uk": _UKRAINIAN_PII_PATTERNS,
     "el": _GREEK_PII_PATTERNS,
     "cs": _CZECH_PII_PATTERNS,
     "vi": _VIETNAMESE_PII_PATTERNS,
@@ -8384,7 +9970,7 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar_eg": _LOCALE_DATA_PII_PATTERNS["ar_eg"],
     "ar_ma": _LOCALE_DATA_PII_PATTERNS["ar_ma"],
     "en_za": _NGUNI_PII_PATTERNS,
-    "af": _NGUNI_PII_PATTERNS,
+    "af": _AFRIKAANS_PII_PATTERNS,
     "en_ng": _NIGERIAN_PII_PATTERNS,
     "ha": _NIGERIAN_PII_PATTERNS,
     "ig": _NIGERIAN_PII_PATTERNS,
@@ -8462,6 +10048,32 @@ if _NIGERIA_HEALTH_FACILITY_PII_PATTERNS[0] not in _NIGERIAN_PII_PATTERNS:
 # separate from ``LANGUAGE_FAKE_DATA`` ensures the default ``fr`` and ``pt``
 # code paths remain unchanged unless the caller explicitly passes ``locale=``.
 LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "as_IN": {
+        "NAME": [
+            "দীপালী গগৈ",
+            "অৰুণ বৰুৱা",
+            "প্ৰিয়া শইকীয়া",
+            "মণিকা শইকীয়া",
+            "ৰঞ্জিত বৰা",
+        ],
+        "FIRST_NAME": ["দীপালী", "অৰুণ", "প্ৰিয়া", "মণিকা", "ৰঞ্জিত"],
+        "LAST_NAME": ["গগৈ", "বৰুৱা", "শইকীয়া", "বৰা"],
+    },
+    "mr_IN": {
+        "FIRST_NAME": [
+            "अनघा",
+            "मृणाल",
+            "गौरी",
+            "ईशा",
+            "अमोल",
+            "नितीन",
+            "रोहन",
+            "विवेक",
+        ],
+        "FIRST_NAME_FEMALE": ["अनघा", "मृणाल", "गौरी", "ईशा"],
+        "FIRST_NAME_MALE": ["अमोल", "नितीन", "रोहन", "विवेक"],
+        "LAST_NAME": ["कुलकर्णी", "गोखले", "जाधव", "शिंदे", "भोसले", "आपटे"],
+    },
     "fr_SN": {
         "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],
         "FIRST_NAME": ["Awa", "Mamadou", "Fatou", "Ibrahima"],
@@ -8555,6 +10167,26 @@ LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 }
 
 LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
+    "af": {
+        "NAME": [
+            "Johan van der Merwe",
+            "Annelie Botha",
+            "Pieter du Plessis",
+            "Marli Jacobs",
+        ],
+        "FIRST_NAME": ["Johan", "Annelie", "Pieter", "Marli"],
+        "LAST_NAME": ["van der Merwe", "Botha", "du Plessis", "Jacobs"],
+        "EMAIL": ["pasiënt@example.co.za", "kontak@example.org"],
+        "PHONE": ["+27 82 123 4567", "071 987 6543"],
+        "ID_NUM": ["8001015009087", "9003030123082"],
+        "STREET_ADDRESS": ["Kerkstraat 12", "45 Pretoriuslaan"],
+        "URL_PERSONAL": ["https://example.co.za"],
+        "USERNAME": ["pasiënt123", "johan88"],
+        "DATE": ["14/05/1988", "3 Januarie 1990"],
+        "AGE": ["38", "47", "29"],
+        "LOCATION": ["Kaapstad", "Pretoria", "Bloemfontein", "Stellenbosch"],
+        "ZIPCODE": ["8001", "0002", "9301", "7600"],
+    },
     "en": {
         "NAME": ["Jane Smith", "John Doe", "Alex Johnson", "Sam Taylor"],
         "FIRST_NAME": ["Jane", "John", "Alex", "Sam"],
@@ -9047,6 +10679,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["East London", "Gqeberha", "Durban", "Umlazi"],
         "ZIPCODE": ["5201", "6001", "4001", "4066"],
     },
+    "sv": {
+        "NAME": ["Anna Andersson", "Erik Johansson", "Sara Lindberg", "Lars Nilsson"],
+        "FIRST_NAME": ["Anna", "Erik", "Sara", "Lars"],
+        "LAST_NAME": ["Andersson", "Johansson", "Lindberg", "Nilsson"],
+        "EMAIL": ["patient@example.se", "kontakt@example.org"],
+        "PHONE": ["+46 70 123 45 67", "08-123 456 78"],
+        "ID_NUM": ["510312-1140", "19510312-1140"],
+        "STREET_ADDRESS": ["Södra Förstadsgatan 12", "Åsögatan 45"],
+        "URL_PERSONAL": ["https://example.se"],
+        "USERNAME": ["patient123", "anvandare456"],
+        "DATE": ["1985-08-17", "17 augusti 1985"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Stockholm", "Göteborg", "Malmö"],
+        "ZIPCODE": ["111 22", "412 53", "211 34"],
+    },
     "da": {
         "NAME": ["Anna Nielsen", "Peter Jensen", "Mette Hansen", "Lars Andersen"],
         "FIRST_NAME": ["Anna", "Peter", "Mette", "Lars"],
@@ -9054,13 +10701,28 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "EMAIL": ["patient@example.dk", "kontakt@example.org"],
         "PHONE": ["+45 20 12 34 56", "30 45 67 89"],
         "ID_NUM": ["170885-1234", "010101-4001"],
-        "STREET_ADDRESS": ["Bredgade 12", "Roskildevej 45"],
+        "STREET_ADDRESS": ["Nørrebrogade 12", "Roskildevej 45"],
         "URL_PERSONAL": ["https://example.dk"],
         "USERNAME": ["patient123", "bruger456"],
-        "DATE": ["17/08/1985", "17 august 1985"],
+        "DATE": ["1985-08-17", "17 august 1985"],
         "AGE": ["45", "62", "38"],
-        "LOCATION": ["Kobenhavn", "Aarhus", "Odense"],
+        "LOCATION": ["København", "Aarhus", "Odense"],
         "ZIPCODE": ["1260", "8000", "5000"],
+    },
+    "no": {
+        "NAME": ["Ingrid Hansen", "Ole Johansen", "Kari Nilsen", "Lars Berg"],
+        "FIRST_NAME": ["Ingrid", "Ole", "Kari", "Lars"],
+        "LAST_NAME": ["Hansen", "Johansen", "Nilsen", "Berg"],
+        "EMAIL": ["pasient@example.no", "kontakt@example.org"],
+        "PHONE": ["+47 912 34 567", "22 12 34 56"],
+        "ID_NUM": ["12035101460", "03088608002"],
+        "STREET_ADDRESS": ["Dronning Eufemias gate 16", "Storgata 15"],
+        "URL_PERSONAL": ["https://example.no"],
+        "USERNAME": ["pasient123", "bruker456"],
+        "DATE": ["1985-08-17", "17 august 1985"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Oslo", "Bergen", "Trondheim"],
+        "ZIPCODE": ["0154", "5003", "7010"],
     },
     "vi": {
         "NAME": [
@@ -9194,6 +10856,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
     },
+    "ru": {
+        "NAME": ["Иван Петров", "Мария Иванова", "Сергей Смирнов", "Елена Кузнецова"],
+        "FIRST_NAME": ["Иван", "Мария", "Сергей", "Елена"],
+        "LAST_NAME": ["Петров", "Иванова", "Смирнов", "Кузнецова"],
+        "EMAIL": ["pacient@example.ru", "kontakt@example.org"],
+        "PHONE": ["+7 916 123-45-67", "8 (495) 123-45-67"],
+        "ID_NUM": ["112-233-445 95", "1234567890123452"],
+        "STREET_ADDRESS": ["ул. Ленина, дом 12а", "пр-т Мира, дом 45, кв. 7"],
+        "URL_PERSONAL": ["https://example.ru"],
+        "USERNAME": ["pacient123", "polzovatel456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Москва", "Ленинск-Кузнецкий", "Краснодар"],
+        "ZIPCODE": ["101000", "190000", "630000"],
+    },
     "fi": {
         "NAME": ["Matti Virtanen", "Liisa Korhonen", "Juha Nieminen", "Anna Laine"],
         "FIRST_NAME": ["Matti", "Liisa", "Juha", "Anna"],
@@ -9283,6 +10960,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Tallinn", "Tartu", "Parnu"],
         "ZIPCODE": ["10115", "50090", "80010"],
+    },
+    "uk": {
+        "NAME": ["Олена Коваль", "Андрій Шевченко", "Ірина Бондар", "Тарас Мельник"],
+        "FIRST_NAME": ["Олена", "Андрій", "Ірина", "Тарас"],
+        "LAST_NAME": ["Коваль", "Шевченко", "Бондар", "Мельник"],
+        "EMAIL": ["patsiient@example.ua", "kontakt@example.org"],
+        "PHONE": ["+380 67 123 45 67", "044 123 45 67"],
+        "ID_NUM": ["2974281300", "3695007088"],
+        "STREET_ADDRESS": ["вулиця Хрещатик 22", "проспект Свободи 15"],
+        "URL_PERSONAL": ["https://example.ua"],
+        "USERNAME": ["patsiient123", "korystuvach456"],
+        "DATE": ["16.11.1975", "16 листопада 1975"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Київ", "Львів", "Одеса"],
+        "ZIPCODE": ["01001", "79000", "65000"],
     },
     "cs": {
         "NAME": ["Jana Nováková", "Petr Novák", "Marie Svobodová", "Tomáš Král"],
@@ -9400,7 +11092,15 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 LANGUAGE_FAKE_DATA.update(
     {
         "as": {
-            "NAME": ["অৰুণ দাস"],
+            "NAME": [
+                "দীপালী গগৈ",
+                "অৰুণ বৰুৱা",
+                "প্ৰিয়া শইকীয়া",
+                "মণিকা শইকীয়া",
+                "ৰঞ্জিত বৰা",
+            ],
+            "FIRST_NAME": ["দীপালী", "অৰুণ", "প্ৰিয়া", "মণিকা", "ৰঞ্জিত"],
+            "LAST_NAME": ["গগৈ", "বৰুৱা", "শইকীয়া", "বৰা"],
             "EMAIL": ["rogi@example.in"],
             "PHONE": ["+91 9876543210"],
             "DATE": ["01/01/2000"],

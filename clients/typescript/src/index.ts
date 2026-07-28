@@ -37,10 +37,17 @@ export type PIILanguage =
   | "th"
   | "ko"
   | "ro"
+  | "ru"
+  | "sv"
+  | "da"
+  | "no"
   | "sw"
   | "zu"
   | "xh"
-  | "zh";
+  | "zh"
+  | "uk"
+  | "cs"
+  | "el";
 
 export type DeidentificationMethod =
   | "mask"

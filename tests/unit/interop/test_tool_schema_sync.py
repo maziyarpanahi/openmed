@@ -68,7 +68,9 @@ def test_mcp_server_registers_exactly_the_registry_tools():
         def __init__(self):
             self.tools = {}
 
-        def tool(self, *, name):
+        def tool(self, *, name, **metadata):
+            del metadata
+
             def _decorator(func):
                 self.tools[name] = func
                 return func

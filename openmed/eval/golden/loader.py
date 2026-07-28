@@ -49,14 +49,18 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
         "india_clinical.jsonl",
+        "indic_name_variants.json",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
+        "relations_indic.jsonl",
+        "relations_zh.jsonl",
         "surrogate_multilingual.jsonl",
         "consensus_corpus.jsonl",
         # Domain eval fixtures that are not PII de-identification gold spans and
         # must not be loaded as such by load_golden_fixtures().
         "radiology_finding.jsonl",
         "radiology_report.jsonl",
+        "measurement_trend.jsonl",
     }
 )
 
@@ -177,7 +181,11 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
     if fixture_path.is_file():
         return (fixture_path,)
     paths = [
-        *fixture_path.glob("*.json"),
+        *(
+            path
+            for path in fixture_path.glob("*.json")
+            if path.name not in _SPECIALIZED_FIXTURE_NAMES
+        ),
         *(
             path
             for path in fixture_path.glob("**/*.jsonl")
