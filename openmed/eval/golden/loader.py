@@ -61,6 +61,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "radiology_finding.jsonl",
         "radiology_report.jsonl",
         "measurement_trend.jsonl",
+        "tnm_stage.jsonl",
     }
 )
 

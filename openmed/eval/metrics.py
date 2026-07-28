@@ -2357,6 +2357,50 @@ def radiology_finding_tuple_f1(
     )
 
 
+TNM_FIELDS: tuple[str, ...] = (
+    "staging_basis",
+    "t_category",
+    "t_subcategory",
+    "n_category",
+    "n_subcategory",
+    "m_category",
+    "m_subcategory",
+    "grade",
+)
+
+
+def tnm_field_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+    *,
+    fields: Sequence[str] = TNM_FIELDS,
+) -> dict[str, RateMetric]:
+    """Per-field accuracy for parsed TNM stages against gold.
+
+    ``predicted`` and ``gold`` are parallel iterables of stage mappings, each
+    carrying ``staging_basis``/``t_category``/``n_category``/``m_category``,
+    ``grade``, and the ``*_subcategory`` fields. For every field the accuracy
+    is the fraction of rows whose predicted value equals the gold value;
+    ``None == None`` counts as correct so a genuinely absent field is not
+    penalized. Parser-agnostic: callers pass already-parsed stage mappings.
+    """
+    correct = {field: 0 for field in fields}
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        for field in fields:
+            if predicted_row.get(field) == gold_row.get(field):
+                correct[field] += 1
+    return {
+        field: RateMetric(
+            rate=_safe_rate(correct[field], total, zero_denominator=1.0),
+            numerator=correct[field],
+            denominator=total,
+        )
+        for field in fields
+    }
+
+
 def _normalize_trend_entity(value: Any) -> str:
     return " ".join(str(value or "").split()).casefold()
 
@@ -3143,6 +3187,8 @@ __all__ = [
     "section_boundary_accuracy",
     "stated_category_accuracy",
     "radiology_finding_tuple_f1",
+    "TNM_FIELDS",
+    "tnm_field_accuracy",
     "trend_direction_accuracy",
     "trend_grouping_accuracy",
     "compute_relaxed_span_f1",
