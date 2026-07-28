@@ -35,10 +35,12 @@ require audited tokenizer script coverage; other families may omit it.
 |---|---|---|
 | `download_mb` | number | Recorded current-snapshot download size in decimal megabytes. |
 | `disk_mb` | number | Recorded on-disk snapshot footprint in decimal megabytes. |
+| `download_sizes` | object | Safetensors, MLX, Core ML, and ONNX download sizes in decimal megabytes; unpublished formats use `null`. |
 | `latency_ms` | object | Per-device latency map in milliseconds. Keys are device labels and values are non-negative numbers. |
 | `peak_ram_mb` | object | Per-device peak RAM map in megabytes. Keys are device labels and values are non-negative numbers. |
 | `recommended_tier` | string | One of `phone`, `laptop`, `workstation`, or `server`. |
 | `script_coverage` | object | Required on PII-family rows. Contains all 11 audited Han and Indic script targets with `unk_rate`, `byte_fallback_rate`, `tokens_per_grapheme`, and `verdict`. |
+| `script_eval` | object | Per-claimed-script dataset, recall, and leakage-floor results. Unreported release-gate values remain `null`. |
 
 For a language claimed by a model, a script verdict is `unsupported` when the
 audited UNK-token rate is strictly greater than 1%. Unclaimed scripts retain
@@ -67,6 +69,11 @@ Enriched rows may replace it with a suite list:
 
 Only aggregate metrics belong in the manifest. Do not store raw PHI, prompts,
 documents, or examples in benchmark or device result files.
+
+When `download_sizes`, `script_eval`, and `script_coverage` are present, the
+model-card generator publishes explicit download-size, per-script evaluation,
+tokenizer-coverage, and license sections. This keeps release decisions tied to
+the validated manifest instead of hand-maintained card prose.
 
 ## Refresh and enrich
 

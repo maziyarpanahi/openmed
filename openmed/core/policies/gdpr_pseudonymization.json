@@ -107,6 +107,10 @@
     "GI_SYMPTOM": "keep",
     "GI_SCORE": "keep",
     "POLYP_DESCRIPTOR": "keep",
+    "INTAKE_OUTPUT": "keep",
+    "LINE_DRAIN_TUBE": "keep",
+    "NURSING_RISK_SCORE": "keep", 
+    "CARE_INTERVENTION": "keep",
 
     "CKD_STAGE": "mask",
     "DIALYSIS_MODALITY": "mask",

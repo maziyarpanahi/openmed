@@ -28,7 +28,7 @@ OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除
 </p>
 
 <p>
-  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>27 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>32 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -93,6 +93,17 @@ for entity in result.entities:
 
 ---
 
+## 使用智能体构建？
+
+请从[面向使用者的智能体指南](docs/agent-usage.md)开始，或加载精选的
+[llms.txt](https://openmed.life/docs/llms.txt) 文档索引。对于可调用的本地接口，
+请使用 [MCP 服务器](docs/mcp-clients.md)、带类型的
+[工具注册表](openmed/mcp/tool_registry.py)或
+[命令行接口](docs/agent-usage.md#command-line-interface)。可直接使用的跨工具流程位于
+[仓库技能目录](skills/README.md)。
+
+---
+
 ## 为什么选择 OpenMed？
 
 |                                       |       **OpenMed**        |    云端医疗 API    |
@@ -101,7 +112,7 @@ for entity in result.entities:
 | 患者数据离开你的网络                   |        **从不**          |    发送给供应商     |
 | 成本                                   |       免费且开源         |    按调用计费       |
 | 专业医疗模型                           |          2,000+          |        有限         |
-| 由模型支持的 PII 语言                  |            27            |        不一         |
+| 由模型支持的 PII 语言                  |            29            |        不一         |
 | 离线 / 隔离网络（air-gapped）          |            ✅            |         ❌         |
 | Apple Silicon (MLX) 加速               |            ✅            |       不适用        |
 | 原生 iOS / macOS 应用                  |   ✅ 通过 OpenMedKit     |         ❌         |
@@ -125,7 +136,7 @@ OpenMed 专为在你数据所在之处运行而打造。在 Apple 硬件上，�
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -167,11 +178,11 @@ dependencyResolutionManagement {
 }
 ```
 
-然后使用不可变的 OpenMed `v1.9.1` 版本：
+然后使用不可变的 OpenMed `v2.0.0` 版本：
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -235,6 +246,23 @@ flowchart LR
 
 渲染结果：本地临床文本流水线会返回医疗实体、PII 检测结果和已去标识化文本，
 无需将数据发送到云端 API。
+
+---
+
+## Agent Skills — 使用编码智能体构建 OpenMed
+
+[`skills/`](skills/) 目录提供可移植的 [Agent Skills](https://agentskills.io)，覆盖设备本地去标识化、临床 NER、FHIR 导出、评估以及相关医疗工作流。同一套 `SKILL.md` 文件夹可用于 **Claude Code**、**OpenAI Codex**、**OpenCode** 和兼容的智能体；安装脚本会使用各客户端的 skills 目录，并同时支持跨客户端约定 `~/.agents/skills`。
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # 安装到 Claude Code、Codex、OpenCode 和 ~/.agents/skills
+```
+
+然后使用合成占位符让智能体生成流水线：
+
+> 构建一个本地 OpenMed 流水线，对合成出院记录进行去标识化并抽取药物实体。
+
+它会加载相应 skills，并生成设备本地流水线（`openmed.deidentify(...)` → `openmed.analyze_text(...)`）。完成一次性模型下载后，请在本地使用该流水线处理真实病历；不要把真实 PHI 粘贴到云端智能体提示词中。参阅 **[skills 目录与 30 秒示例](skills/README.md)**。
 
 ---
 
@@ -493,14 +521,14 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（支持 29 种语言）
+## 多语言 PII（支持 34 种语言）
 
-实体抽取和去标识化支持 **29 个 PII 语言代码**：
-`am`、`ar`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`nl`、`no`、`pt`、`ro`、`ru`、`sv`、`sw`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
-俄语和中文路由目前使用文档中说明的多语言默认模型占位符，专用模型权重仍单独提供。
-一个由用户选择并配置的印度语言 NER 系列还支持九条额外路由
-（`as`、`bn`、`gu`、`kn`、`ml`、`mr`、`or`、`pa` 和 `ta`），
-并且也可服务于印地语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
+实体抽取和去标识化支持 **34 个 PII 语言代码**：
+`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
+俄语路由目前使用文档中说明的多语言默认模型占位符。孟加拉语、中文和泰米尔语拥有专用注册表条目。
+一个由用户选择并配置的印度语言 NER 系列还支持四条额外路由
+（`gu`、`kn`、`ml` 和 `pa`），
+并且也可服务于阿萨姆语、孟加拉语、印地语、马拉地语、奥里亚语、泰米尔语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
 OpenMed 不会捆绑或自动选择这些权重。
 OpenMed 还为其他仅含证件号的语言区域提供基于 validator 的国家证件号覆盖，
 例如波兰、拉脱维亚、斯洛伐克、马来西亚、菲律宾和芬兰。
@@ -627,7 +655,7 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [常见问题](docs/faq.md) | [匿名化](docs/anonymization.md) | [批处理](https://openmed.life/docs/batch-processing) |
 | [配置档案](https://openmed.life/docs/profiles) | [REST 服务](docs/rest-service.md) | [MLX 后端](docs/mlx-backend.md) |
 | [Transformers.js 导出](docs/export-transformersjs.md) | [FHIR 互操作](docs/fhir-interop.md) | [HL7 v2 去标识化](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [OpenMed 1.9.0 发行说明](docs/release/v1.9.0.md) | [示例](docs/examples.md) |
+| [OpenMed 2.0.0 发行说明](docs/release/v2.0.0.md) | [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
 | [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [检测器插件 SDK](docs/plugin-sdk.md) |
 | [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |

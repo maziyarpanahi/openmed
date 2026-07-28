@@ -178,9 +178,10 @@ def test_convert_packages_and_validates_optional_segmenter(monkeypatch, tmp_path
 
     for package_path in (output_path, tmp_path / "privacy_int8.mlpackage"):
         manifest = validate_coreml_bundle(package_path)
-        assert manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+        assert manifest["segmenter"]["license"] == "MIT AND ICU"
         assert (package_path / "segmenter" / "han_words.txt").is_file()
         assert (package_path / "segmenter" / "indic_rules.json").is_file()
+        assert (package_path / "segmenter" / "ICU.txt").is_file()
 
 
 def test_convert_emits_int8_and_int4_variants(monkeypatch, tmp_path):

@@ -1,9 +1,11 @@
 # Migrating from OpenMed v1 to v2
 
-OpenMed v2 has not been released yet. This page is the living upgrade contract
-for applications moving from the latest v1 release to v2. Update it alongside
-the [changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md)
-whenever a v2 change affects downstream code.
+OpenMed v2 begins with the `2.0.0` release. This page is the durable upgrade
+contract for applications moving from the final v1 line to v2. Update it
+alongside the
+[changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md)
+whenever a v2 change affects downstream code. For the concrete first-major
+upgrade checklist, see [Migrating from 1.9 to 2.0](migration/1.9-to-2.0.md).
 
 ## Compatibility contract
 
@@ -28,7 +30,7 @@ the changelog.
 ## Upgrade checklist
 
 1. Upgrade to the latest v1 release and run the application test suite before
-   testing a v2 pre-release.
+   upgrading to v2.
 2. Review the
    [changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md)
    from the installed version through the target v2 version.
@@ -47,7 +49,7 @@ They are imported explicitly and do not replace the stable root API.
 
 | Namespace | Available since | Purpose | Upgrade action |
 |---|---:|---|---|
-| `openmed.structured` | 1.6.0 | Reserved structured-data privacy namespace in 1.9.1. The current v2 development line adds public flowsheet and lab-panel structures. | Existing v1 code is unaffected; adopt new public helpers only when the target release documents them. |
+| `openmed.structured` | 1.6.0 | Structured-data privacy namespace with public flowsheet and lab-panel structures in v2. | Existing v1 code is unaffected; adopt new public helpers only when the target release documents them. |
 | `openmed.risk` | 1.6.0 | Re-identification risk reports, privacy budgets, k-anonymity, and audit diffs. | Import risk helpers from `openmed.risk`. |
 | `openmed.interop` | 1.6.0 | Lazy optional adapters for FHIR, HL7 v2, dataframes, orchestration tools, and third-party libraries. | Use `available_adapters()` and install the adapter's optional extra. |
 | `openmed.clinical` | 1.6.0 | Clinical context, relations, timelines, normalization, and extraction helpers. | Import clinical helpers from `openmed.clinical`. |
@@ -118,7 +120,7 @@ The following compatibility behaviors are not currently deprecated:
 - REST `GET /health` remains an alias for deployments that have not moved to
   `/livez` and `/readyz`.
 
-If a future v2 release adds or removes a deprecation, the changelog is the
+If a later v2 release adds or removes a deprecation, the changelog is the
 authoritative record and this table must be updated in the same change.
 
 ## Verify an upgrade
@@ -137,6 +139,8 @@ promoting the new version.
 
 - [Changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md)
 - [Release Streams, SemVer, and Channels](release/semver-and-channels.md)
+- [Migrating from 1.9 to 2.0](migration/1.9-to-2.0.md)
+- [OpenMed 2.0.0 Release Notes](release/v2.0.0.md)
 - [OpenMed 1.9.1 Release Notes](release/v1.9.1.md)
 - [OpenMed 1.9.0 Release Notes](release/v1.9.0.md)
 - [Configuration & Validation](configuration.md)

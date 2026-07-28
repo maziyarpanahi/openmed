@@ -5,6 +5,12 @@ from pathlib import Path
 
 import pytest
 
+from openmed.compliance import (
+    CompositionEvidence,
+    ReleaseAssumptions,
+    build_release_expert_review_evidence,
+)
+from openmed.core.audit import stable_hash
 from openmed.eval import release_gates
 from openmed.eval.metrics import compute_metrics_bundle
 from openmed.eval.release_gates import (
@@ -15,6 +21,11 @@ from openmed.eval.release_gates import (
 )
 from openmed.eval.report import BenchmarkReport
 from openmed.eval.surrogate_quality import load_surrogate_quality_records
+from openmed.risk import (
+    AnonymityPolicy,
+    anonymize_release,
+    validate_released_output,
+)
 
 SIGNING_KEY = "unit-release-key"
 
@@ -166,6 +177,51 @@ def _conformal_report(*, coverage: float = 0.95) -> dict[str, object]:
 
 def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
+
+
+def _structured_release_evidence(
+    *,
+    composition: CompositionEvidence | None = None,
+):
+    rows = [
+        {
+            "patient_id": f"patient-{index}",
+            "patient_name": f"Canary Name {index}",
+            "age": 30 if index < 2 else 40,
+            "postal_code": "10001" if index < 2 else "20001",
+            "condition": "a" if index % 2 == 0 else "b",
+        }
+        for index in range(4)
+    ]
+    result = anonymize_release(
+        rows,
+        AnonymityPolicy(
+            quasi_identifiers=("age", "postal_code"),
+            sensitive_attributes=("condition",),
+            direct_identifiers=("patient_name",),
+            privacy_unit="patient_id",
+            target_k=2,
+            target_l=2,
+        ),
+    )
+    return build_release_expert_review_evidence(
+        result,
+        validation=validate_released_output(result.records, result),
+        assumptions=ReleaseAssumptions(
+            privacy_unit="patient",
+            population_scope="release_cohort",
+            release_model="restricted",
+            recipient_model="named_researchers",
+            auxiliary_data_model="reasonably_available",
+            notes_digest=stable_hash(
+                {
+                    "kind": "structured-release-gate-test",
+                    "review": "stored outside shareable evidence",
+                }
+            ),
+        ),
+        composition=composition,
+    )
 
 
 def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, object]:
@@ -929,6 +985,241 @@ def test_k_floor_release_gate_fails_realized_k_below_target(
     assert check.details["violations"]["measured_k"] == {"observed": 2, "target": 3}
 
 
+def test_structured_release_risk_gate_verifies_aggregate_evidence(
+    tmp_path: Path,
+) -> None:
+    evidence = _structured_release_evidence()
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "structured_release_risk_evidence": evidence.to_dict(),
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "structured_release_risk")
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["integrity_verified"] is True
+    assert check.details["search_complete"] is False
+    assert check.details["search_optimality_proven"] is True
+    assert check.details["qualified_expert_review_required"] is True
+    serialized = json.dumps(check.to_dict(), sort_keys=True)
+    assert "patient-0" not in serialized
+    assert "Canary Name" not in serialized
+    assert "10001" not in serialized
+    assert "condition" not in serialized
+
+
+def test_structured_release_risk_gate_rejects_tampered_evidence_without_echo(
+    tmp_path: Path,
+) -> None:
+    payload = _structured_release_evidence().to_dict()
+    payload["privacy_models"]["k_anonymity"]["achieved_k"] = 1
+    payload["unexpected_raw_value"] = "patient-canary"
+
+    standalone = release_gates.evaluate_release_risk_evidence(payload)
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"structured_release_risk_evidence": payload},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "structured_release_risk")
+    assert standalone.passed is False
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+    assert "patient-canary" not in json.dumps(check.to_dict(), sort_keys=True)
+
+
+def test_structured_release_risk_gate_rejects_missing_sensitive_models() -> None:
+    payload = _structured_release_evidence().to_dict()
+    payload["privacy_models"]["l_diversity"] = None
+    payload["privacy_models"]["t_closeness"] = None
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_rejects_nonzero_pruned_proof() -> None:
+    payload = _structured_release_evidence().to_dict()
+    information_loss = next(
+        item for item in payload["utility"] if item["metric"] == "information_loss"
+    )
+    information_loss["after"] = 0.14
+    information_loss["absolute_delta"] = 0.14
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_rejects_changed_pre_metrics_in_pruned_proof() -> (
+    None
+):
+    payload = _structured_release_evidence().to_dict()
+    payload["metrics"]["pre_transform"] = {
+        "privacy_unit_count": 4,
+        "equivalence_class_count": 4,
+        "class_sizes": {
+            "smallest": 1,
+            "largest": 1,
+            "mean": 1.0,
+            "histogram": [
+                {
+                    "lower_bound": 1,
+                    "upper_bound": 1,
+                    "class_count": 4,
+                    "privacy_unit_count": 4,
+                }
+            ],
+        },
+        "violations": {
+            "k_class_count": 4,
+            "l_class_count": 4,
+            "t_class_count": 4,
+            "any_class_count": 4,
+            "privacy_unit_count": 4,
+        },
+    }
+    payload["privacy_models"]["k_anonymity"]["pre_achieved_k"] = 1
+    payload["privacy_models"]["l_diversity"]["pre_achieved_l"] = 1
+    payload["privacy_models"]["t_closeness"]["pre_achieved_t"] = 1.0
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_requires_v3_for_pruned_proof() -> None:
+    payload = _structured_release_evidence().to_dict()
+    assert payload["search"]["complete"] is False
+    payload["schema_version"] = 2
+    payload["search"].pop("optimality_proven")
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details["integrity_verified"] is True
+    assert check.details["violations"]["search_optimality_proof"] == (
+        "schema_version_3_required_for_pruned_proof"
+    )
+
+
+def test_standalone_release_risk_verifier_requires_evidence() -> None:
+    check = release_gates.evaluate_release_risk_evidence(None)
+
+    assert check.passed is False
+    assert check.reason == "release-risk evidence is required"
+    assert check.details == {"integrity_verified": False}
+
+
+def test_multi_release_risk_gate_requires_complete_no_increase_review() -> None:
+    evidence = _structured_release_evidence(
+        composition=CompositionEvidence(
+            release_count=2,
+            longitudinal_linkage_assessed=True,
+            prior_release_overlap_assessed=True,
+            risk_status="no_material_increase_observed",
+            evidence_digest=stable_hash({"kind": "multi-release-review"}),
+        )
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(evidence)
+
+    assert check.passed is True
+    assert check.details["composition_status"] == "no_material_increase_observed"
+
+
+def test_release_gate_rejects_inconsistent_single_release_composition() -> None:
+    payload = _structured_release_evidence().to_dict()
+    payload["composition"].update(
+        {
+            "longitudinal_linkage_assessed": True,
+            "prior_release_overlap_assessed": True,
+            "risk_status": "increase_observed",
+        }
+    )
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+@pytest.mark.parametrize(
+    ("longitudinal_assessed", "overlap_assessed", "risk_status", "violation"),
+    [
+        (
+            False,
+            True,
+            "no_material_increase_observed",
+            "longitudinal_linkage_assessed",
+        ),
+        (
+            True,
+            False,
+            "no_material_increase_observed",
+            "prior_release_overlap_assessed",
+        ),
+        (True, True, "inconclusive", "risk_status"),
+    ],
+)
+def test_multi_release_risk_gate_rejects_incomplete_composition_review(
+    longitudinal_assessed: bool,
+    overlap_assessed: bool,
+    risk_status: str,
+    violation: str,
+) -> None:
+    evidence = _structured_release_evidence(
+        composition=CompositionEvidence(
+            release_count=2,
+            longitudinal_linkage_assessed=longitudinal_assessed,
+            prior_release_overlap_assessed=overlap_assessed,
+            risk_status=risk_status,
+            evidence_digest=stable_hash(
+                {
+                    "kind": "multi-release-review",
+                    "longitudinal": longitudinal_assessed,
+                    "overlap": overlap_assessed,
+                    "status": risk_status,
+                }
+            ),
+        )
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(evidence)
+
+    assert check.passed is False
+    assert violation in check.details["violations"]["composition_review"]
+
+
 def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
     result = _gate().evaluate(
         _report(
@@ -1060,8 +1351,8 @@ def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
 
     derived_count = release_gates._published_android_onnx_derivative_count(rows)
 
-    assert len(rows) == 1_519
-    assert derived_count == 751
+    assert len(rows) == 1_520
+    assert derived_count == 752
     assert len(rows) + derived_count >= 2_000
 
 

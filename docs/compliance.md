@@ -17,12 +17,16 @@ issue, and without including real patient data.
 | Framework | What OpenMed supplies | What the user still owns |
 |---|---|---|
 | **HIPAA Safe Harbor** (`policy="hipaa_safe_harbor"`) | Profile mapping `CANONICAL_LABELS` to the 18 identifier classes, many-to-one; per-class leakage metrics; audit trail. | Confirming all 18 classes for their data; the "no actual knowledge" judgment. |
-| **HIPAA Expert Determination** (`policy="hipaa_expert_review_assist"`) | Reproducible leakage/residual-risk and adversarial re-id results as documentation. | Engaging a qualified expert; the determination. |
+| **HIPAA Expert Determination** (`policy="hipaa_expert_review_assist"`) | Advisory quasi-identifier discovery, patient-level k/l/t measurement and transformation, materialized-output validation, reproducible leakage and residual-risk results, and aggregate expert-review evidence. | Selecting a qualified expert; reviewing population, auxiliary data, release context, composition, methods, thresholds, and utility; documenting and signing the determination. |
 | **GDPR pseudonymization** (`policy="gdpr_pseudonymization"`) | Reversible `replace` with separable key mapping; deterministic surrogates; transform audit. | Key custody, re-id governance, lawful basis, DPIA. |
 | **EU AI Act high-risk** | Logging through audit reports, documentation through cards, human oversight through review bundles, robustness through harness and golden suites, and cybersecurity through signing, local-only execution, and no raw logging. | Conformity assessment, registration, and deployment obligations. |
 
 ## Evidence Links
 
+- [Structured release risk and expert-review evidence](reidentification-risk.md)
+  documents advisory quasi-identifier discovery, complete patient-level k/l/t
+  assessment, generalization and suppression, materialized-output validation,
+  and aggregate-only evidence for qualified expert review.
 - [Audit reports](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/audit.py)
   provide deterministic span provenance, residual-risk snapshots, manifest
   hashes, and optional signatures for de-identification runs.
@@ -33,6 +37,9 @@ issue, and without including real patient data.
 - [Policy profiles](https://github.com/maziyarpanahi/openmed/tree/master/openmed/core/policies)
   capture the canonical policy literals and default action posture used by the
   runtime.
+- [Pan-African Malabo Convention baseline](compliance/africa-malabo-baseline.md)
+  maps Article 14(1) sensitive-data categories to conservative, non-`keep`
+  canonical-label actions while preserving national-law precedence.
 
 ## Deployment Templates
 
@@ -59,4 +66,5 @@ Use these exact literals in docs, examples, and deployment configuration:
 | `hipaa_safe_harbor` | Redact all 18 HIPAA identifiers, no exceptions. | `remove`/`mask` | High-recall union; safety sweep mandatory; residual-risk ~0. |
 | `hipaa_expert_review_assist` | Flag + surrogate, leave clinical content; produce expert-review audit. | `replace` surrogates | Balanced, with reviewer escalation on low confidence. |
 | `gdpr_pseudonymization` | Reversible pseudonyms, mapping retained under key. | `replace` + `reversible_id` | Balanced; `keep_mapping=True`; HMAC reversible IDs. |
+| `africa_malabo_baseline` | Conservative Article 14(1) sensitive-data baseline; national law prevails where stricter. | `mask` | High-recall union; safety sweep mandatory; no replacement mapping. |
 | `india_health_id` | Fully redact ABHA, ABHA Address, context-confirmed UPI, and ration-card identifiers in clinical records. | `mask` | High-recall union; safety sweep mandatory; raw identifier logging forbidden. |

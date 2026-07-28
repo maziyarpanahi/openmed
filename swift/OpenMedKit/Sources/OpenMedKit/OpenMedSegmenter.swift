@@ -79,7 +79,26 @@ public struct OpenMedSegmenter: Sendable {
             let joiners: [UInt32]
         }
 
+        struct Source: Decodable {
+            let repository: String
+            let revision: String
+            let path: String
+            let copyright: String
+            let retrieved: String
+            let modifications: String
+        }
+
+        let license: String
+        let licenseFile: String
+        let source: Source
         let scripts: [String: Script]
+
+        enum CodingKeys: String, CodingKey {
+            case license
+            case licenseFile = "license_file"
+            case source
+            case scripts
+        }
     }
 
     private let scripts: Set<String>
@@ -128,20 +147,22 @@ public struct OpenMedSegmenter: Sendable {
             ]
         case "openmed-indic-v1":
             expectedScripts = ["Devanagari"]
-            expectedLicense = "ICU-1.8.1"
+            expectedLicense = "ICU"
             expectedResources = [
                 "indic_rules.json": [
-                    "role": "indic_break_rules", "license": "ICU-1.8.1",
-                ]
+                    "role": "indic_break_rules", "license": "ICU",
+                ],
+                "ICU.txt": ["role": "license_notice", "license": "ICU"],
             ]
         case "openmed-cjk-indic-v1":
             expectedScripts = ["Han", "Devanagari"]
-            expectedLicense = "MIT AND ICU-1.8.1"
+            expectedLicense = "MIT AND ICU"
             expectedResources = [
                 "han_words.txt": ["role": "han_dictionary", "license": "MIT"],
                 "indic_rules.json": [
-                    "role": "indic_break_rules", "license": "ICU-1.8.1",
+                    "role": "indic_break_rules", "license": "ICU",
                 ],
+                "ICU.txt": ["role": "license_notice", "license": "ICU"],
             ]
         default:
             throw OpenMedSegmenterError.invalidDescriptor(
@@ -217,6 +238,21 @@ public struct OpenMedSegmenter: Sendable {
                 }
             } else if resource.role == "indic_break_rules" {
                 let rules = try JSONDecoder().decode(IndicRules.self, from: data)
+                guard
+                    rules.license == "ICU",
+                    rules.licenseFile == "ICU.txt",
+                    rules.source.repository == "https://github.com/unicode-org/icu",
+                    rules.source.revision == "0c5873f89bf64f6bbc0a24b84f07d79b25785a42",
+                    rules.source.path == "icu4c/source/data/brkitr/rules/char.txt",
+                    rules.source.copyright
+                        == "Copyright (C) 2002-2016, International Business Machines Corporation and others. All Rights Reserved.",
+                    rules.source.retrieved == "2026-07-28",
+                    !rules.source.modifications.isEmpty
+                else {
+                    throw OpenMedSegmenterError.invalidDescriptor(
+                        "Indic rules do not record the required ICU provenance"
+                    )
+                }
                 if let devanagari = rules.scripts["Devanagari"] {
                     loadedRanges = devanagari.ranges.compactMap { values in
                         guard values.count == 2 else { return nil }
@@ -224,6 +260,23 @@ public struct OpenMedSegmenter: Sendable {
                     }
                     loadedViramas = Set(devanagari.viramas)
                     loadedJoiners = Set(devanagari.joiners)
+                }
+            } else if resource.role == "license_notice" {
+                guard let notice = String(data: data, encoding: .utf8) else {
+                    throw OpenMedSegmenterError.invalidDescriptor(
+                        "ICU license notice is not UTF-8"
+                    )
+                }
+                let requiredMarkers = [
+                    "Copyright (C) 2002-2016, International Business Machines Corporation and others.",
+                    "ICU License - ICU 1.8.1 and later",
+                    "Copyright (c) 1995-2016 International Business Machines Corporation and others",
+                    "Permission is hereby granted, free of charge",
+                ]
+                guard requiredMarkers.allSatisfy({ notice.contains($0) }) else {
+                    throw OpenMedSegmenterError.invalidDescriptor(
+                        "ICU license notice is incomplete"
+                    )
                 }
             }
         }

@@ -210,8 +210,9 @@
 
         /// De-identify text under an already loaded policy profile.
         ///
-        /// Detected span offsets in the returned action records reference the
-        /// original input text even when replacement lengths differ.
+        /// Detected span offsets in the returned action records are Unicode
+        /// scalar offsets into the original input text even when replacement
+        /// lengths differ.
         public func deidentify(
             _ text: String,
             policy: Policy,
@@ -338,7 +339,7 @@
                 return [
                     TextChunk(
                         start: 0,
-                        end: text.count,
+                        end: PostProcessing.unicodeScalarCount(in: text),
                         tokenStart: 0,
                         tokenEnd: tokenOffsets.count
                     )
@@ -351,10 +352,15 @@
 
             while tokenStart < tokenOffsets.count {
                 let tokenEnd = min(tokenStart + tokenLimit, tokenOffsets.count)
+                let snapped = PostProcessing.snapScalarSpanToGraphemeBoundaries(
+                    start: tokenOffsets[tokenStart].0,
+                    end: tokenOffsets[tokenEnd - 1].1,
+                    in: text
+                )
                 chunks.append(
                     TextChunk(
-                        start: tokenOffsets[tokenStart].0,
-                        end: tokenOffsets[tokenEnd - 1].1,
+                        start: snapped.start,
+                        end: snapped.end,
                         tokenStart: tokenStart,
                         tokenEnd: tokenEnd
                     )
@@ -456,15 +462,16 @@
                 guard let replacement = record.replacement else {
                     continue
                 }
-                let lowerBound = redactedText.index(
-                    redactedText.startIndex,
-                    offsetBy: record.start
-                )
-                let upperBound = redactedText.index(
-                    lowerBound,
-                    offsetBy: record.end - record.start
-                )
-                redactedText.replaceSubrange(lowerBound..<upperBound, with: replacement)
+                guard
+                    let range = PostProcessing.scalarRange(
+                        in: redactedText,
+                        start: record.start,
+                        end: record.end
+                    )
+                else {
+                    continue
+                }
+                redactedText.replaceSubrange(range, with: replacement)
             }
 
             return PolicyDeidentificationResult(
@@ -478,9 +485,10 @@
             _ entities: [EntityPrediction],
             in text: String
         ) -> [EntityPrediction] {
-            let textLength = text.count
+            let textLength = PostProcessing.unicodeScalarCount(in: text)
             let sorted =
                 entities
+                .compactMap { $0.snappedToGraphemeBoundaries(in: text) }
                 .filter { $0.start >= 0 && $0.end > $0.start && $0.end <= textLength }
                 .sorted {
                     if $0.start == $1.start {
@@ -573,7 +581,9 @@
         ) -> EntityPrediction? {
             let start = entity.start + baseOffset
             let end = entity.end + baseOffset
-            guard start >= 0, end > start, end <= text.count else {
+            guard start >= 0, end > start,
+                end <= PostProcessing.unicodeScalarCount(in: text)
+            else {
                 return nil
             }
             return EntityPrediction(
@@ -655,12 +665,7 @@
         }
 
         private static func substring(_ text: String, start: Int, end: Int) -> String {
-            guard start >= 0, end >= start, end <= text.count else {
-                return ""
-            }
-            let lowerBound = text.index(text.startIndex, offsetBy: start)
-            let upperBound = text.index(lowerBound, offsetBy: end - start)
-            return String(text[lowerBound..<upperBound])
+            PostProcessing.scalarSubstring(text, start: start, end: end)
         }
 
         private static func deidentifiedText(
@@ -698,12 +703,7 @@
             start: Int,
             end: Int
         ) -> Range<String.Index>? {
-            guard start >= 0, end >= start, end <= text.count else {
-                return nil
-            }
-            let lowerBound = text.index(text.startIndex, offsetBy: start)
-            let upperBound = text.index(lowerBound, offsetBy: end - start)
-            return lowerBound..<upperBound
+            PostProcessing.scalarRange(in: text, start: start, end: end)
         }
 
         static func loadTokenizer(
@@ -1114,21 +1114,35 @@
                 }
 
                 if let range {
-                    let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                    let end = text.distance(from: text.startIndex, to: range.upperBound)
+                    let start = PostProcessing.scalarOffset(
+                        in: text,
+                        at: range.lowerBound
+                    )
+                    let end = PostProcessing.scalarOffset(
+                        in: text,
+                        at: range.upperBound
+                    )
                     offsets.append((start, end))
                     cursor = range.upperBound
                     continue
                 }
 
-                let start = text.distance(from: text.startIndex, to: searchStart)
+                let start = PostProcessing.scalarOffset(in: text, at: searchStart)
+                let end = min(
+                    PostProcessing.unicodeScalarCount(in: text),
+                    start + piece.unicodeScalars.count
+                )
+                let snappedCursor = PostProcessing.snapScalarSpanToGraphemeBoundaries(
+                    start: start,
+                    end: end,
+                    in: text
+                ).end
                 let endIndex =
-                    text.index(
-                        searchStart,
-                        offsetBy: piece.count,
-                        limitedBy: text.endIndex
-                    ) ?? text.endIndex
-                let end = text.distance(from: text.startIndex, to: endIndex)
+                    PostProcessing.stringIndex(
+                        in: text,
+                        scalarOffset: snappedCursor
+                    )
+                    ?? text.endIndex
                 offsets.append((start, end))
                 cursor = endIndex
             }

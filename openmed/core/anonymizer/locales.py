@@ -5,6 +5,9 @@ resolves OpenMed's ISO 639-1 codes (used everywhere else in the library) to
 the most appropriate Faker locale.
 
 Notes:
+- Afrikaans (``af``) has no Faker locale; the conceptual ``af_ZA`` locale uses
+  ``nl_NL`` as its runtime backend for generic fields while curated Afrikaans
+  compatibility values remain available through ``LANGUAGE_FAKE_DATA``.
 - Telugu (``te``) has no Faker locale; non-script-specific values fall back to
   ``en_IN`` and surface a one-time ``UserWarning``. Native Telugu name
   surrogates bypass that approximate path and therefore do not warn.
@@ -21,6 +24,12 @@ Notes:
   warning when that backend is unavailable.
 - Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
   the surname-aware, Han-only surrogate generators rather than a Latin fallback.
+- Assamese resolves conceptually to ``as_IN`` with Faker's ``bn_BD`` backend;
+  curated Assamese names prevent Bengali name data from crossing that boundary.
+- Odia resolves to Faker's native ``or_IN`` locale without an approximation
+  warning, so name surrogates remain in Odia script.
+- Tamil resolves to the native ``ta_IN`` Faker locale; patronymic-initial
+  PERSON surrogates preserve the source's initial-plus-given-name shape.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -46,6 +55,13 @@ from ..language_pack_catalog import LANG_TO_LOCALE, NATIONAL_ID_PROVIDERS
 
 ZH_CN_ADDRESS_LOCALE: Final = "zh_CN"
 """Faker locale used by Chinese hierarchical address surrogates."""
+
+ZH_NAME_LOCALES: Final = frozenset({"zh", "zh_CN", "zh_HK", "zh_TW"})
+"""Chinese locale identifiers routed to deterministic Han name providers."""
+
+_ZH_NAME_LOCALES_FOLDED: Final = frozenset(
+    locale.casefold() for locale in ZH_NAME_LOCALES
+)
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
@@ -84,7 +100,7 @@ CONCEPTUAL_LOCALE_LANGUAGES: Final[Mapping[str, str]] = {
 # keyed by the target country while allowing generic names/addresses to use a
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
-    "af_ZA": "zu_ZA",
+    "af_ZA": "nl_NL",
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
     "as_IN": "bn_BD",
@@ -236,6 +252,13 @@ def resolve_faker_backend_locale(locale: str) -> str:
     return FAKER_BACKEND_LOCALE.get(locale, locale)
 
 
+def is_chinese_name_locale(locale: str) -> bool:
+    """Return whether ``locale`` should use the Han name-surrogate provider."""
+
+    normalized = str(locale).replace("-", "_").casefold()
+    return normalized in _ZH_NAME_LOCALES_FOLDED
+
+
 def locale_coherence_report() -> list[dict[str, object]]:
     """Return locale-coherence rows for defaults and conceptual overrides.
 
@@ -306,6 +329,8 @@ __all__ = [
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
     "ZH_CN_ADDRESS_LOCALE",
+    "ZH_NAME_LOCALES",
+    "is_chinese_name_locale",
     "list_regional_locales",
     "locale_coherence_report",
     "resolve_faker_backend_locale",
