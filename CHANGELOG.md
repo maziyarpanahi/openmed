@@ -24,6 +24,11 @@ points and REST paths while establishing explicit multilingual, structured,
 agent-tool, and release-evidence contracts for the v2 line.
 
 ### Added
+- Added an offline nursing-care observation zero-shot domain with display
+  label mappings (IntakeOutput, LineDrainTube, RiskScore, MobilityStatus,
+  CareIntervention, PainScore, SkinAssessment), canonical policy label
+  metadata, synthetic per-label fixture coverage for risk-score and
+  line/drain/tube spans, and domain-coverage evaluation integration (#910).
 
 - Expanded built-in PII routing to 34 language codes and added deterministic
   identifier, date, phone, address, and surrogate support across Chinese,
