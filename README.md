@@ -140,7 +140,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -184,11 +184,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then use the immutable OpenMed `v1.9.1` release:
+Then use the immutable OpenMed `v2.0.0` release:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -255,6 +255,23 @@ flowchart LR
 
 Rendered result: a local clinical-text pipeline that returns medical entities,
 PII findings, and de-identified text without sending data to a cloud API.
+
+---
+
+## Agent Skills — build with OpenMed from your coding agent
+
+The [`skills/`](skills/) catalog ships portable [Agent Skills](https://agentskills.io) for on-device de-identification, clinical NER, FHIR export, evaluation, and the healthcare workflows around them. The same `SKILL.md` folders work in **Claude Code**, **OpenAI Codex**, **OpenCode**, and compatible agents; the installer uses each client's skills directory plus the cross-client `~/.agents/skills` convention.
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # installs for Claude Code, Codex, OpenCode, and ~/.agents/skills
+```
+
+Then ask your agent for the pipeline using synthetic placeholders:
+
+> Build a local OpenMed pipeline that de-identifies a synthetic discharge note and extracts medication entities.
+
+It loads the right skills and produces an on-device pipeline (`openmed.deidentify(...)` → `openmed.analyze_text(...)`). After the one-time model download, run that pipeline locally on real notes; do not paste real PHI into a cloud-hosted agent prompt. See the **[skills catalog and 30-second example](skills/README.md)**.
 
 ---
 
@@ -655,7 +672,7 @@ MkDocs build.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [OpenMed 1.9.0 Release Notes](docs/release/v1.9.0.md) | [Examples](docs/examples.md) |
+| [OpenMed 2.0.0 Release Notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Detector Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |

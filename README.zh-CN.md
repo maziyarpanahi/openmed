@@ -136,7 +136,7 @@ OpenMed 专为在你数据所在之处运行而打造。在 Apple 硬件上，�
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -178,11 +178,11 @@ dependencyResolutionManagement {
 }
 ```
 
-然后使用不可变的 OpenMed `v1.9.1` 版本：
+然后使用不可变的 OpenMed `v2.0.0` 版本：
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -246,6 +246,23 @@ flowchart LR
 
 渲染结果：本地临床文本流水线会返回医疗实体、PII 检测结果和已去标识化文本，
 无需将数据发送到云端 API。
+
+---
+
+## Agent Skills — 使用编码智能体构建 OpenMed
+
+[`skills/`](skills/) 目录提供可移植的 [Agent Skills](https://agentskills.io)，覆盖设备本地去标识化、临床 NER、FHIR 导出、评估以及相关医疗工作流。同一套 `SKILL.md` 文件夹可用于 **Claude Code**、**OpenAI Codex**、**OpenCode** 和兼容的智能体；安装脚本会使用各客户端的 skills 目录，并同时支持跨客户端约定 `~/.agents/skills`。
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # 安装到 Claude Code、Codex、OpenCode 和 ~/.agents/skills
+```
+
+然后使用合成占位符让智能体生成流水线：
+
+> 构建一个本地 OpenMed 流水线，对合成出院记录进行去标识化并抽取药物实体。
+
+它会加载相应 skills，并生成设备本地流水线（`openmed.deidentify(...)` → `openmed.analyze_text(...)`）。完成一次性模型下载后，请在本地使用该流水线处理真实病历；不要把真实 PHI 粘贴到云端智能体提示词中。参阅 **[skills 目录与 30 秒示例](skills/README.md)**。
 
 ---
 
@@ -638,7 +655,7 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [常见问题](docs/faq.md) | [匿名化](docs/anonymization.md) | [批处理](https://openmed.life/docs/batch-processing) |
 | [配置档案](https://openmed.life/docs/profiles) | [REST 服务](docs/rest-service.md) | [MLX 后端](docs/mlx-backend.md) |
 | [Transformers.js 导出](docs/export-transformersjs.md) | [FHIR 互操作](docs/fhir-interop.md) | [HL7 v2 去标识化](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [OpenMed 1.9.0 发行说明](docs/release/v1.9.0.md) | [示例](docs/examples.md) |
+| [OpenMed 2.0.0 发行说明](docs/release/v2.0.0.md) | [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
 | [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [检测器插件 SDK](docs/plugin-sdk.md) |
 | [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |

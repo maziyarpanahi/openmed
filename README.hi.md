@@ -140,7 +140,7 @@ OpenMed को वहीं चलाने के लिए बनाया ग
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -183,11 +183,11 @@ dependencyResolutionManagement {
 }
 ```
 
-फिर immutable OpenMed `v1.9.1` release उपयोग करें:
+फिर immutable OpenMed `v2.0.0` release उपयोग करें:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -250,6 +250,23 @@ flowchart LR
 
 Rendered परिणाम: एक स्थानीय clinical-text pipeline जो cloud API को डेटा भेजे बिना चिकित्सा एंटिटी,
 PII निष्कर्ष और डी-आइडेंटिफाइड टेक्स्ट लौटाती है।
+
+---
+
+## Agent Skills — अपने coding agent से OpenMed बनाएं
+
+[`skills/`](skills/) catalog डिवाइस पर डी-आइडेंटिफिकेशन, क्लिनिकल NER, FHIR export, evaluation और उनसे जुड़े healthcare workflows के लिए portable [Agent Skills](https://agentskills.io) देता है। वही `SKILL.md` folders **Claude Code**, **OpenAI Codex**, **OpenCode** और compatible agents में काम करते हैं; installer हर client की skills directory के साथ cross-client `~/.agents/skills` convention का उपयोग करता है।
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # Claude Code, Codex, OpenCode और ~/.agents/skills के लिए
+```
+
+फिर synthetic placeholders का उपयोग करते हुए अपने agent से pipeline बनाने के लिए कहें:
+
+> एक local OpenMed pipeline बनाएं जो synthetic discharge note को डी-आइडेंटिफाई करे और medication entities निकाले।
+
+यह सही skills load करके डिवाइस पर चलने वाली pipeline (`openmed.deidentify(...)` → `openmed.analyze_text(...)`) बनाता है। एक बार model download होने के बाद वास्तविक notes पर pipeline को locally चलाएं; वास्तविक PHI को cloud-hosted agent prompt में paste न करें। **[skills catalog और 30-second example](skills/README.md)** देखें।
 
 ---
 
@@ -661,7 +678,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [बैच processing](https://openmed.life/docs/batch-processing) |
 | [Configuration profiles](https://openmed.life/docs/profiles) | [REST सेवा](docs/rest-service.md) | [MLX बैकएंड](docs/mlx-backend.md) |
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [OpenMed 1.9.0 release notes](docs/release/v1.9.0.md) | [उदाहरण](docs/examples.md) |
+| [OpenMed 2.0.0 release notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 release notes](docs/release/v1.9.1.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
 | [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [Detector plugin SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |

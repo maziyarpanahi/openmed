@@ -149,7 +149,7 @@ uchambuzi wa kliniki hufanyika nje ya mtandao, kwenye kifaa.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -197,11 +197,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Kisha tumia toleo lisilobadilika la OpenMed `v1.9.1`:
+Kisha tumia toleo lisilobadilika la OpenMed `v2.0.0`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -268,6 +268,23 @@ flowchart LR
 
 Matokeo: mchakato wa ndani unaorudisha huluki za matibabu, PII iliyopatikana na
 matini isiyotambulisha mtu bila kutuma data kwa API ya wingu.
+
+---
+
+## Agent Skills — jenga OpenMed kupitia wakala wako wa coding
+
+Katalogi ya [`skills/`](skills/) inatoa [Agent Skills](https://agentskills.io) zinazobebeka kwa uondoaji utambulisho kwenye kifaa, NER ya kliniki, usafirishaji wa FHIR, tathmini na mitiririko ya kazi ya afya inayohusiana. Folda zilezile za `SKILL.md` zinafanya kazi katika **Claude Code**, **OpenAI Codex**, **OpenCode** na mawakala wanaooana; kisakinishi hutumia saraka ya skills ya kila mteja pamoja na utaratibu wa pamoja wa `~/.agents/skills`.
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # kwa Claude Code, Codex, OpenCode na ~/.agents/skills
+```
+
+Kisha mwombe wakala wako atengeneze mchakato kwa kutumia nafasi za mfano:
+
+> Tengeneza mchakato wa OpenMed wa ndani unaoondoa utambulisho kwenye dokezo sintetiki la kutoka hospitalini na kutoa huluki za dawa.
+
+Hupakia skills zinazofaa na kutengeneza mchakato wa kwenye kifaa (`openmed.deidentify(...)` → `openmed.analyze_text(...)`). Baada ya kupakua modeli mara moja, endesha mchakato huo ndani ya kifaa kwa madokezo halisi; usibandike PHI halisi kwenye prompt ya wakala wa wingu. Tazama **[katalogi ya skills na mfano wa sekunde 30](skills/README.md)**.
 
 ---
 
@@ -514,7 +531,7 @@ kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
 | [Maswali](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Wasifu wa Usanidi](https://openmed.life/docs/profiles) | [Huduma ya REST](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Maelezo ya Toleo la OpenMed 1.9.0](docs/release/v1.9.0.md) | [Mifano](docs/examples.md) |
+| [Maelezo ya Toleo la OpenMed 2.0.0](docs/release/v2.0.0.md) | [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Mifano](docs/examples.md) |
 | [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
 | [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Detector](docs/plugin-sdk.md) |
 | [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |

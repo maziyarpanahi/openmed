@@ -597,10 +597,13 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     from .pii_i18n import (
         INDIC_NER_LANGUAGES,
         INDIC_NER_MODEL_ENV,
+        NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
     )
 
-    accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    accepted_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    )
     if lang not in accepted_languages:
         raise ValueError(
             f"Unsupported language '{lang}'. Supported: {sorted(accepted_languages)}"
@@ -609,6 +612,11 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)
         if resolved is None:
+            if lang in NATIONAL_ID_ONLY_LANGUAGES:
+                raise ValueError(
+                    f"Language '{lang}' has deterministic pattern-only support; "
+                    "pass an explicit model_name for model-backed inference"
+                )
             raise ValueError(
                 f"Language '{lang}' uses optional Indic NER weights; pass an "
                 f"explicit model_name or set {INDIC_NER_MODEL_ENV}"

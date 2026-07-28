@@ -81,6 +81,11 @@ class ToolSpec:
     version: str = "1.0.0"
     stability: str = "stable"
     parameters: Sequence[ToolParameter] = ()
+    title: str = ""
+    read_only_hint: bool = False
+    destructive_hint: bool = True
+    idempotent_hint: bool = False
+    open_world_hint: bool = True
 
     def __post_init__(self) -> None:
         """Normalize mutable inputs and validate core metadata."""
@@ -92,6 +97,10 @@ class ToolSpec:
             raise ValueError(
                 f"tool spec {self.name!r} stability must be one of {known}"
             )
+        title = self.title.strip()
+        if not title:
+            title = self.name.removeprefix("openmed_").replace("_", " ").title()
+        object.__setattr__(self, "title", title)
         object.__setattr__(self, "input_schema", deepcopy(dict(self.input_schema)))
         object.__setattr__(self, "output_schema", deepcopy(dict(self.output_schema)))
         object.__setattr__(self, "parameters", tuple(self.parameters))
@@ -104,6 +113,44 @@ class ToolSpec:
             [parameter.signature_parameter() for parameter in self.parameters],
             return_annotation=dict[str, Any],
         )
+
+    def annotations(self) -> JsonObject:
+        """Return MCP-compatible behavioral annotations for this tool."""
+
+        return {
+            "title": self.title,
+            "readOnlyHint": self.read_only_hint,
+            "destructiveHint": self.destructive_hint,
+            "idempotentHint": self.idempotent_hint,
+            "openWorldHint": self.open_world_hint,
+        }
+
+    def mcp_output_schema(self) -> JsonSchema:
+        """Return the MCP result schema, including structured failures."""
+
+        return {
+            "type": "object",
+            "anyOf": [
+                deepcopy(dict(self.output_schema)),
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "error": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "code": {"type": "string"},
+                                "message": {"type": "string"},
+                            },
+                            "required": ["code", "message"],
+                        },
+                        "is_error": {"type": "boolean", "const": True},
+                    },
+                    "required": ["error", "is_error"],
+                },
+            ],
+        }
 
     def document(self) -> JsonObject:
         """Return a machine-readable schema document for this tool."""
@@ -790,23 +837,35 @@ _WORKFLOW_RESULT_OUTPUT = _object(
 def _tool_spec(
     *,
     name: str,
+    title: str,
     description: str,
     parameters: Sequence[ToolParameter],
     output_schema: Mapping[str, Any],
+    read_only_hint: bool,
+    destructive_hint: bool = False,
+    idempotent_hint: bool = True,
+    open_world_hint: bool = False,
 ) -> ToolSpec:
     return ToolSpec(
         name=name,
+        title=title,
         description=description,
         input_schema=input_schema(parameters),
         output_schema=output_schema,
         parameters=parameters,
+        read_only_hint=read_only_hint,
+        destructive_hint=destructive_hint,
+        idempotent_hint=idempotent_hint,
+        open_world_hint=open_world_hint,
     )
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
     _tool_spec(
         name="openmed_analyze_text",
+        title="Analyze Clinical Text",
         description="Run OpenMed named-entity recognition on clinical text.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _MODEL_NAME_PARAMETER,
@@ -828,7 +887,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_extract_pii",
+        title="Extract PII and PHI",
         description="Extract PII/PHI entities from clinical text.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _PII_MODEL_NAME_PARAMETER,
@@ -842,7 +903,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_deidentify",
+        title="De-identify Clinical Text",
         description="De-identify text by masking, removing, replacing, hashing, or shifting.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _parameter(
@@ -869,7 +932,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_list_models",
+        title="List Available Models",
         description="List OpenMed model registry entries.",
+        read_only_hint=True,
         parameters=(
             _parameter("category", _nullable("string"), Optional[str], None),
             _parameter("pii_language", _nullable("string"), Optional[str], None),
@@ -879,19 +944,25 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_list_pii_languages",
+        title="List PII Languages",
         description="List supported PII languages and default models.",
+        read_only_hint=True,
         parameters=(),
         output_schema=_LIST_PII_LANGUAGES_OUTPUT,
     ),
     _tool_spec(
         name="openmed_loaded_models",
+        title="List Loaded Models",
         description="Return currently loaded model resources.",
+        read_only_hint=True,
         parameters=(),
         output_schema=_GENERIC_OBJECT_OUTPUT,
     ),
     _tool_spec(
         name="openmed_unload_model",
+        title="Unload Model",
         description="Unload one inactive model, or all inactive models.",
+        read_only_hint=False,
         parameters=(
             _parameter("model_name", _nullable("string"), Optional[str], None),
             _parameter("all_models", _schema("boolean"), bool, False),
@@ -900,10 +971,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_run_workflow",
+        title="Run Clinical Workflow",
         description=(
             "Run a stateful multi-step OpenMed workflow with server-side "
             "intermediate handles and PHI-safe egress."
         ),
+        read_only_hint=False,
         parameters=(
             _parameter("pipeline", _object(), dict[str, Any]),
             _parameter("session_id", _nullable("string"), Optional[str], None),

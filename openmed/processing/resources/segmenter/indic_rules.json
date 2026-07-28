@@ -1,7 +1,17 @@
 {
   "format": "openmed-indic-break-rules",
   "format_version": 1,
-  "license": "ICU-1.8.1",
+  "license": "ICU",
+  "license_file": "ICU.txt",
+  "source": {
+    "project": "ICU (International Components for Unicode)",
+    "repository": "https://github.com/unicode-org/icu",
+    "revision": "0c5873f89bf64f6bbc0a24b84f07d79b25785a42",
+    "path": "icu4c/source/data/brkitr/rules/char.txt",
+    "copyright": "Copyright (C) 2002-2016, International Business Machines Corporation and others. All Rights Reserved.",
+    "retrieved": "2026-07-28",
+    "modifications": "Reduced ICU 57.1 grapheme-cluster behavior to the Devanagari block range, virama, and joiner data used by OpenMed's dependency-free segmenter."
+  },
   "scripts": {
     "Devanagari": {
       "ranges": [[2304, 2431]],
