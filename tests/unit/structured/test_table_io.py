@@ -37,6 +37,24 @@ def test_table_io_round_trip_supported_text_formats(
         assert restored == ROWS
 
 
+@pytest.mark.parametrize(
+    ("suffix", "delimiter"),
+    [(".csv", ","), (".tsv", "\t")],
+)
+def test_delimited_reader_strips_utf8_byte_order_mark(
+    tmp_path: Path,
+    suffix: str,
+    delimiter: str,
+) -> None:
+    path = tmp_path / f"bom{suffix}"
+    path.write_text(
+        f"\ufeffpatient_id{delimiter}age\npatient-1{delimiter}30\n",
+        encoding="utf-8",
+    )
+
+    assert read_table(path) == [{"patient_id": "patient-1", "age": "30"}]
+
+
 def test_table_writer_refuses_overwrite_by_default(tmp_path: Path) -> None:
     path = tmp_path / "release.jsonl"
     write_table(path, ROWS)
