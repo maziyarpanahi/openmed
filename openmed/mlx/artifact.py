@@ -27,6 +27,7 @@ _KNOWN_TOKENIZER_FILES = (
 _KNOWN_SEGMENTER_FILES = (
     "segmenter/han_words.txt",
     "segmenter/indic_rules.json",
+    "segmenter/ICU.txt",
 )
 
 _NON_TOKENIZER_FILENAMES = {
