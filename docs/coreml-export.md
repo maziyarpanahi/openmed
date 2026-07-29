@@ -3,7 +3,9 @@
 Use CoreML when you need a bundled Apple model package for Swift, iOS, or
 macOS app integration. If you want the shared OpenMed MLX artifact path, see
 the [MLX backend](mlx-backend.md) and
-[OpenMedKit Swift guide](swift-openmedkit.md).
+[OpenMedKit Swift guide](swift-openmedkit.md). For the cross-backend view
+of which architectures reach which runtimes, see the
+[Export Format Support Matrix](export-matrix.md).
 
 The CoreML converter is a local packaging path for Hugging Face
 token-classification checkpoints. After model download, conversion runs
