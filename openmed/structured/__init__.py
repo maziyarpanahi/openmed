@@ -52,6 +52,14 @@ from .relational import (
     deidentify_linked_tables,
 )
 from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
+from .tables import (
+    TABLE_ADVISORY,
+    Table,
+    TableCell,
+    TableToken,
+    cell_at,
+    structure_table,
+)
 
 __all__ = [
     "FLOWSHEET_ADVISORY",
@@ -83,8 +91,13 @@ __all__ = [
     "RelationalSchemaError",
     "SUPPORTED_TABLE_SUFFIXES",
     "SurrogateManifest",
+    "TABLE_ADVISORY",
+    "Table",
+    "TableCell",
+    "TableToken",
     "TimeSeriesPoint",
     "canonical_analyte",
+    "cell_at",
     "canonical_discharge_slot",
     "deidentify_linked_tables",
     "parse_lab_report",
@@ -93,5 +106,6 @@ __all__ = [
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
+    "structure_table",
     "write_table",
 ]
