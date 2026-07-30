@@ -12,6 +12,8 @@ from inspect import Signature
 from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
+from openmed.clinical.exporters.fhir import to_bundle
+from openmed.risk.reid import risk_report
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -476,6 +478,98 @@ def openmed_loaded_models(
     return validate_registered_tool_output("openmed_loaded_models", response)
 
 
+def openmed_fhir_bundle(
+    resources: list[Dict[str, Any]],
+    doc_id: str = "openmed-document",
+    bundle_type: str = "transaction",
+) -> Dict[str, Any]:
+    """Assemble FHIR resources into a R4 bundle."""
+    bundle = to_bundle(resources, doc_id=doc_id, bundle_type=bundle_type)
+    return validate_registered_tool_output("openmed_fhir_bundle", bundle)
+
+
+def openmed_risk_report(
+    deidentified: Any,
+    original: Optional[Any] = None,
+    aux: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """residual re-identification risk for de-identified records."""
+    response = risk_report(deidentified, original, aux)
+    return validate_registered_tool_output("openmed_risk_report", response)
+
+
+def openmed_signed_audit_report(
+    text: str,
+    method: str = "mask",
+    model_name: str = DEFAULT_PII_MODELS["en"],
+    confidence_threshold: float = 0.7,
+    lang: str = "en",
+    signing_key: Optional[str] = None,
+    key_id: str = "release",
+    keep_alive: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """returns a signed PHI-sage audit report"""
+    if not signing_key:
+        raise ValueError("A signing key is required")
+    runtime = _runtime(runtime_provider)
+
+    def operation() -> Dict[str, Any]:
+        report = openmed.deidentify(
+            text,
+            method=method,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+            config=runtime.config,
+            lang=lang,
+            loader=runtime.get_loader(),
+            audit=True,
+        )
+        report.sign(signing_key, key_id=key_id)
+        return report.to_dict()
+
+    response = _run_model_request(runtime, model_name, keep_alive, operation)
+    return validate_registered_tool_output("openmed_signed_audit_report", response)
+
+
+def openmed_search_models(
+    category: Optional[str] = None,
+    language: Optional[str] = None,
+    max_size_mb: Optional[float] = None,
+    license: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """search openmed model by category, language, size, license"""
+    models = openmed.get_all_models()
+
+    def _matches(model: ModelInfo) -> bool:
+        if category and category.strip().lower() != model.category.strip().lower():
+            return False
+        if language:
+            languages = {str(code).strip().lower() for code in model.languages}
+            if language.strip().lower() not in languages:
+                return False
+        if max_size_mb is not None:
+            size_mb = model.size_mb
+            if size_mb is None or size_mb > max_size_mb:
+                return False
+        if license:
+            declared = (model.license or "").strip().lower()
+            if license.strip().lower() not in declared:
+                return False
+        return True
+
+    matched = sorted((key, model) for key, model in models.items() if _matches(model))
+    limited = matched[: max(limit, 0)]
+    response = {
+        "count": len(matched),
+        "returned": len(limited),
+        "models": [_model_info_to_dict(key, model) for key, model in limited],
+    }
+    return validate_registered_tool_output("openmed_search_models", response)
+
+
 def openmed_health(
     *,
     runtime_provider: Optional[RuntimeProvider] = None,
@@ -618,6 +712,15 @@ def build_mcp_tool_handlers(
             **kwargs,
             runtime_provider=runtime_provider,
         ),
+        "openmed_fhir_bundle": lambda **kwargs: openmed_fhir_bundle(**kwargs),
+        "openmed_risk_report": lambda **kwargs: openmed_risk_report(**kwargs),
+        "openmed_signed_audit_report": (
+            lambda **kwargs: openmed_signed_audit_report(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
+        ),
+        "openmed_search_models": lambda **kwargs: openmed_search_models(**kwargs),
     }
 
 
