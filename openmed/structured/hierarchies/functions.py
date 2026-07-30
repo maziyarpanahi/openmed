@@ -487,29 +487,44 @@ def to_enforce_kanon_hierarchy(
         domain = list(values)
 
     spec: list[dict[str, Any]] = [{"name": f"{column_type}:exact"}]
-    # enforce_kanon's partition validator re-injects each level's outputs as
-    # source values. Close every coarser level's map over all finer levels'
-    # outputs so a re-injected representative coarsens consistently instead of
-    # passing through as an un-mapped literal (which would look like a split).
-    prior_outputs: dict[str, object] = {}
-    for index in _MERGING_LEVEL_INDICES[column_type]:
+    merging = _MERGING_LEVEL_INDICES[column_type]
+
+    # enforce_kanon's partition validator re-injects every level's outputs as
+    # candidate source values at EVERY level (finer, same, and coarser) and, for
+    # some field names, normalizes them before lookup. An output string that is
+    # left un-mapped at some level falls through to an escaped literal, which can
+    # look like a split of a class an adjacent level merged. Guard against that
+    # by first collecting every output string any coarsening rung emits together
+    # with a representative source value that produces it, then mapping that
+    # string -- at every rung -- exactly as that representative coarsens. Each
+    # re-injected output then behaves identically to a genuine occurrence of its
+    # representative at all rungs, which is the monotonicity the validator
+    # checks.
+    output_reps: dict[str, object] = {}
+    for index in merging:
+        if index == hierarchy.max_level:
+            continue
+        for value in domain:
+            output = generalize_value(column_type, value, index)
+            output_reps.setdefault(output, value)
+
+    for index in merging:
         level = hierarchy.levels[index]
         if index == hierarchy.max_level:
             # Fully suppressed rung: collapse every value into one class.
             spec.append({"name": level.key, "default": SUPPRESSED})
             continue
         value_map: dict[str, str] = {}
-        new_outputs: dict[str, object] = {}
         for value in domain:
-            output = generalize_value(column_type, value, index)
-            value_map[str(value)] = output
-            new_outputs.setdefault(output, value)
-        for prior_output, representative in prior_outputs.items():
-            value_map[prior_output] = generalize_value(
-                column_type, representative, index
+            value_map[str(value)] = generalize_value(column_type, value, index)
+        # ``setdefault`` keeps observed-value mappings authoritative when an
+        # output string coincides with an observed value (e.g. a short ZIP whose
+        # literal spelling equals a longer ZIP's prefix).
+        for output, representative in output_reps.items():
+            value_map.setdefault(
+                output, generalize_value(column_type, representative, index)
             )
         spec.append({"name": level.key, "values": value_map})
-        prior_outputs.update(new_outputs)
     return spec
 
 
