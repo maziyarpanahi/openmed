@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from openmed.clinical.grounding import (
+    VocabConcept,
     VocabLoader,
     VocabSource,
     VocabularyIndex,
@@ -98,6 +99,37 @@ def test_vocab_loader_indexes_language_aliases_from_mixed_system_fixture():
     assert rxnorm.get("metformine", language="fr") == "6809"
     assert hpo.get("发热", language="zh") == "HP:0001945"
     assert rxnorm.concept_count == 1
+
+
+def test_vocab_version_hash_covers_language_alias_content_and_is_order_stable():
+    alpha = VocabConcept(
+        system="icd10cm",
+        code="A000",
+        preferred_term="Alpha condition",
+        synonyms=("alpha",),
+        language_aliases={"es": ("afeccion alfa",), "fr": ("affection alpha",)},
+    )
+    beta = VocabConcept(
+        system="icd10cm",
+        code="B000",
+        preferred_term="Beta condition",
+        synonyms=("beta",),
+        language_aliases={"es": ("afeccion beta",)},
+    )
+    changed_alpha = VocabConcept(
+        system="icd10cm",
+        code="A000",
+        preferred_term="Alpha condition",
+        synonyms=("alpha",),
+        language_aliases={"es": ("afeccion alfa revisada",)},
+    )
+
+    original = VocabularyIndex("icd10cm", [alpha, beta])
+    reordered = VocabularyIndex("icd10cm", [beta, alpha])
+    changed = VocabularyIndex("icd10cm", [changed_alpha, beta])
+
+    assert original.content_hash == reordered.content_hash
+    assert original.content_hash != changed.content_hash
 
 
 def test_crosslingual_lexical_grounding_meets_per_language_top1_accuracy():
