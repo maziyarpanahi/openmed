@@ -51,6 +51,13 @@ from .relational import (
     SurrogateManifest,
     deidentify_linked_tables,
 )
+from .scan import (
+    ColumnClassification,
+    ColumnRole,
+    RoleOverrideError,
+    TableRoleScan,
+)
+from .scan import scan_table as scan_column_roles
 from .schema_extract import (
     SCHEMA_EXTRACT_ADVISORY,
     FieldBinding,
@@ -80,7 +87,9 @@ __all__ = [
     "REQUIRED_DISCHARGE_SLOTS",
     "SCHEMA_EXTRACT_ADVISORY",
     "AnalyteRow",
+    "ColumnClassification",
     "ColumnRef",
+    "ColumnRole",
     "DanglingForeignKeyError",
     "DateColumn",
     "DischargeSlotName",
@@ -103,6 +112,7 @@ __all__ = [
     "RelationalDeidentificationResult",
     "RelationalSchema",
     "RelationalSchemaError",
+    "RoleOverrideError",
     "SUPPORTED_TABLE_SUFFIXES",
     "ScalarType",
     "SchemaDefinitionError",
@@ -113,6 +123,7 @@ __all__ = [
     "Table",
     "TableCell",
     "TableToken",
+    "TableRoleScan",
     "TimeSeriesPoint",
     "canonical_analyte",
     "cell_at",
@@ -122,6 +133,7 @@ __all__ = [
     "normalize_field_key",
     "parse_lab_report",
     "read_table",
+    "scan_column_roles",
     "scan_table",
     "structure_discharge_summary",
     "structure_flowsheet",
