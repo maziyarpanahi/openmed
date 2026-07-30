@@ -134,6 +134,24 @@ def test_enum_match_is_case_insensitive_and_returns_canonical_form():
     assert result["data"]["sex"] == "Female"
 
 
+def test_enum_on_non_string_slot_keeps_declared_type():
+    # An ``enum`` on a numeric slot must not smuggle the option string back into
+    # ``data`` -- the value has to stay an ``int``/``float``.
+    text = "Stage: 2\nDose: 2.5\n"
+    schema = {
+        "properties": {
+            "stage": {"type": "integer", "enum": ["1", "2", "3"]},
+            "dose": {"type": "number", "enum": ["2.5", "5.0"]},
+        }
+    }
+    result = extract_to_schema(text, schema)
+
+    assert result["data"]["stage"] == 2
+    assert isinstance(result["data"]["stage"], int)
+    assert result["data"]["dose"] == 2.5
+    assert isinstance(result["data"]["dose"], float)
+
+
 # --------------------------------------------------------------------------
 # Entity and table cell binding
 # --------------------------------------------------------------------------

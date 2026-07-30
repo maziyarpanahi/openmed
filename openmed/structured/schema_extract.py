@@ -378,7 +378,11 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
         canonical = allowed.get(normalize_field_key(str(value)))
         if canonical is None:
             return None, "value is not one of the permitted enum options"
-        value = canonical
+        # ``enum`` options are stored as strings; only a string slot adopts the
+        # canonical spelling. For numeric/boolean slots the coerced value is
+        # already canonical, so keep it to preserve the declared type.
+        if field_type == "string":
+            value = canonical
 
     return value, None
 
