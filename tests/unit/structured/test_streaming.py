@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import json
+import subprocess
+import sys
 import tracemalloc
 from pathlib import Path
 
@@ -110,6 +112,79 @@ def test_memory_ceiling_rejects_high_cardinality_census(tmp_path: Path) -> None:
     # No partial release is left behind when the first pass aborts.
     assert not output.exists()
     assert not list(tmp_path.glob(".unique_out.csv.*.tmp"))
+
+
+def test_memory_ceiling_also_blocks_excess_process_rss(tmp_path: Path) -> None:
+    """The guard measures process RSS, not only the class-count estimate."""
+
+    source = tmp_path / "one_class.csv"
+    output = tmp_path / "one_class_out.csv"
+    with source.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["age", "zip", "note"])
+        for _ in range(50_000):
+            writer.writerow([40, 10_000, "synthetic"])
+
+    script = """
+from pathlib import Path
+import sys
+from openmed.structured.streaming import MemoryCeilingError, stream_deidentify_table
+
+try:
+    stream_deidentify_table(
+        Path(sys.argv[1]),
+        Path(sys.argv[2]),
+        quasi_identifiers=["age", "zip"],
+        target_k=2,
+        chunk_size=50_000,
+        memory_ceiling=2_048,
+        overwrite=True,
+    )
+except MemoryCeilingError:
+    print("blocked")
+else:
+    raise SystemExit("process RSS ceiling did not block the oversized batch")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(source), str(output)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "blocked"
+    assert not output.exists()
+    assert not list(tmp_path.glob(".one_class_out.csv.*.tmp"))
+
+
+def test_file_larger_than_memory_ceiling_streams_below_process_limit(
+    tmp_path: Path,
+) -> None:
+    """A file larger than the ceiling succeeds when its live working set fits."""
+
+    source = tmp_path / "larger_than_ceiling.csv"
+    output = tmp_path / "larger_than_ceiling_out.csv"
+    with source.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["age", "zip", "note"])
+        for index in range(50_000):
+            writer.writerow([30 + index % 5, 10_000 + index % 4, "x" * 200])
+    ceiling = 8 * 1024 * 1024
+    assert source.stat().st_size > ceiling
+
+    report = stream_deidentify_table(
+        source,
+        output,
+        quasi_identifiers=["age", "zip"],
+        target_k=2,
+        chunk_size=32,
+        memory_ceiling=ceiling,
+        overwrite=True,
+    )
+
+    assert report["decision"]["record_count"] == 50_000
+    assert report["memory"]["rss_guard_available"] is True
+    assert report["memory"]["peak_rss_delta_bytes"] <= ceiling
 
 
 # ---------------------------------------------------------------------------
