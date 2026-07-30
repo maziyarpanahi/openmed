@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "openmed"
 dynamic = ["version"]
-description = "OpenMed delivers state-of-the-art biomedical and clinical LLMs that rival proprietary enterprise stacks, unifying model discovery, advanced extractions, and one-line orchestration."
+description = "Local-first SDK for clinical extraction and de-identification workflows on hardware you control."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -49,6 +49,7 @@ dev = [
   "jsonschema>=4.0",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
+  "Pillow==12.3.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "fastapi>=0.110",
@@ -62,6 +63,7 @@ dev = [
   "python-dateutil>=2.8",
   "hypothesis>=6.100",
   "fsspec>=2025.9.0",
+  "fonttools[woff]==4.61.1",
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
   "protobuf>=5.26,<7",
