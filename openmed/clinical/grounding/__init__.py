@@ -1,6 +1,18 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
+from .assertion_grounding import (
+    ASSERTION_GROUNDING_ADVISORY,
+    GROUNDING_ASSERTION_STATUSES,
+    GROUNDING_POLICIES,
+    POLICY_DROP,
+    POLICY_STATUS,
+    POLICY_SUPPRESS,
+    AssertedGroundedSpan,
+    AssertionGroundingStatus,
+    assertion_grounding_status,
+    ground_with_context,
+)
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
 from .embeddings import (
     AliasEncoder,
@@ -52,20 +64,28 @@ from .vocab import (
 )
 
 __all__ = [
+    "ASSERTION_GROUNDING_ADVISORY",
     "AliasEmbeddingIndex",
     "AliasEncoder",
+    "AssertedGroundedSpan",
+    "AssertionGroundingStatus",
     "Candidate",
     "CandidateRankingStage",
     "ConceptMatch",
     "DenseCandidateGenerator",
     "EncoderUnavailableError",
     "FREE_VOCAB_SYSTEMS",
+    "GROUNDING_ASSERTION_STATUSES",
+    "GROUNDING_POLICIES",
     "HashingAliasEncoder",
     "IndexBackendUnavailableError",
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
     "MLXSapBERTEncoder",
+    "POLICY_DROP",
+    "POLICY_STATUS",
+    "POLICY_SUPPRESS",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RankingConfig",
     "RestrictedVocabularyError",
@@ -82,11 +102,13 @@ __all__ = [
     "VocabularyLoaderRegistry",
     "VocabularyNotFoundError",
     "VocabularyRegistryError",
+    "assertion_grounding_status",
     "available_linkers",
     "available_loaders",
     "build_index",
     "build_or_load_index",
     "generate_candidates",
+    "ground_with_context",
     "get_index",
     "get_linker",
     "get_loader",
