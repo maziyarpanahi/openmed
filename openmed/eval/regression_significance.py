@@ -49,12 +49,17 @@ DEFAULT_BLOCKING_METRIC_MARKERS = (
 )
 
 # Substrings (case-insensitive) that flip a metric to lower-is-better when no
-# explicit direction override is supplied. Mirrors the history-diff markers so
-# the two surfaces agree on regression direction.
+# explicit direction override is supplied. Mirrors the history-diff markers and
+# additionally covers every DEFAULT_BLOCKING_METRIC_MARKERS substring, so a
+# leakage-first metric can never be auto-resolved to higher-is-better (which
+# would treat a rise in leakage as an improvement and silently miss the
+# blocking regression).
 _LOWER_IS_BETTER_MARKERS = (
     "critical_leakage_count",
+    "exposure",
     "false_negative",
     "false_positive",
+    "leak",
     "leaked",
     "leakage",
     "loss",
@@ -375,8 +380,8 @@ def regression_p_value(
 
     The alternative hypothesis is that the current window moved in the metric's
     *worse* direction relative to the baseline window. The test is a closed-form
-    two-sample z-test using the normal approximation, so it is deterministic and
-    requires no resampling.
+    Welch two-sample t-test whose one-sided tail comes from the Student-t
+    distribution, so it is deterministic and requires no resampling.
 
     Args:
         baseline_values: Earlier nightly metric values.
