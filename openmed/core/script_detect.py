@@ -1049,6 +1049,45 @@ def assamese_language_evidence(text: str) -> int:
     return ra_wa_count + (2 * month_count)
 
 
+# Urdu shares the Arabic Unicode block with Arabic. These letters are used in
+# Urdu (and other Perso-Arabic orthographies) but not in standard Arabic, so
+# their presence is deterministic evidence that an Arabic-script run is Urdu
+# rather than Arabic. Letters shared with Arabic are intentionally excluded so
+# ordinary Arabic text scores zero.
+_URDU_EXCLUSIVE_LETTERS = frozenset(
+    {
+        "ٹ",  # tteh
+        "پ",  # peh
+        "چ",  # tcheh
+        "ڈ",  # ddal
+        "ڑ",  # rreh
+        "ژ",  # jeh
+        "ک",  # keheh
+        "گ",  # gaf
+        "ں",  # noon ghunna
+        "ھ",  # heh doachashmee
+        "ہ",  # heh goal
+        "ی",  # farsi yeh
+        "ے",  # yeh barree
+        "ۓ",  # yeh barree with hamza above
+    }
+)
+
+
+def urdu_language_evidence(text: str) -> int:
+    """Return deterministic Urdu evidence in Arabic-script text.
+
+    The score counts Urdu-exclusive Perso-Arabic letters that do not occur in
+    standard Arabic orthography. It intentionally does not treat shared
+    Arabic-Urdu block membership as language evidence, so ordinary Arabic text
+    scores zero.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return sum(char in _URDU_EXCLUSIVE_LETTERS for char in text)
+
+
 def candidate_languages_for_text(
     text: str,
     script: str | None = None,
@@ -1056,21 +1095,29 @@ def candidate_languages_for_text(
     """Return script candidates reordered by deterministic lexical evidence.
 
     Bengali and Assamese share a Unicode block. Assamese-exclusive ra/wa
-    letters and Assamese month spellings move ``"as"`` ahead of ``"bn"``;
-    without that evidence the catalog's established Bengali-first order is
-    preserved.
+    letters and Assamese month spellings move ``"as"`` ahead of ``"bn"``.
+    Arabic and Urdu share the Arabic block; Urdu-exclusive Perso-Arabic letters
+    move ``"ur"`` ahead of ``"ar"``. Without that evidence the catalog's
+    established order is preserved.
     """
 
     detected_script = detect_script(text) if script is None else script
     candidates = candidate_languages_for_script(detected_script)
     if (
-        detected_script != "Bengali"
-        or "as" not in candidates
-        or "bn" not in candidates
-        or assamese_language_evidence(text) == 0
+        detected_script == "Bengali"
+        and "as" in candidates
+        and "bn" in candidates
+        and assamese_language_evidence(text) > 0
     ):
-        return candidates
-    return ("as", *(code for code in candidates if code != "as"))
+        return ("as", *(code for code in candidates if code != "as"))
+    if (
+        detected_script == "Arabic"
+        and "ur" in candidates
+        and "ar" in candidates
+        and urdu_language_evidence(text) > 0
+    ):
+        return ("ur", *(code for code in candidates if code != "ur"))
+    return candidates
 
 
 def confusable_skeleton(text: str) -> str:
@@ -1787,4 +1834,5 @@ __all__ = [
     "normalize_for_pii_detection",
     "render_indian_name",
     "segment_by_script",
+    "urdu_language_evidence",
 ]

@@ -302,7 +302,7 @@ class LanguageRouter:
             for code in text_hints:
                 selected = candidates_by_code.get(code)
                 if selected is not None:
-                    return selected, 0.99, "stdlib:assamese-cues"
+                    return selected, 0.99, "stdlib:lexical-cues"
 
         if len(candidates) == 1:
             return candidates[0], 0.99, "stdlib:script"

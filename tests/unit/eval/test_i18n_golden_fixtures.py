@@ -26,7 +26,9 @@ from openmed.core.pii_i18n import (
 )
 
 _I18N_DIR = Path("openmed/eval/golden/fixtures/i18n")
-_SPECIALIZED_CORPUS_FIXTURES = frozenset({"india_clinical.jsonl"})
+_SPECIALIZED_CORPUS_FIXTURES = frozenset(
+    {"all_script_routing.jsonl", "india_clinical.jsonl"}
+)
 
 # Canonical gold label -> the pattern entity_type that must recover it.
 _LABEL_TO_ENTITY_TYPE = {

@@ -333,7 +333,7 @@ def test_assamese_cues_disambiguate_the_shared_bengali_script():
     for fixture in fixtures:
         decision = router.route(fixture.text)
         assert decision.language == "as"
-        assert any(run.source == "stdlib:assamese-cues" for run in decision.runs)
+        assert any(run.source == "stdlib:lexical-cues" for run in decision.runs)
 
     bengali = "রোগী শ্রী অরুণ দাস। জন্ম ১৪ জানুয়ারি ২০২৬।"
     decision = router.route(bengali)
