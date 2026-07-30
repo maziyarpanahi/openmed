@@ -495,6 +495,14 @@ def compare_champion_challenger(
             f"champion {champion_key!r} vs challenger {key!r}; a promotion "
             "comparison must stay within one (family, tier, format)"
         )
+    for field in ("eval_set_hash", "leakage_fixture_hash"):
+        champion_hash = getattr(champion_report, field)
+        challenger_hash = getattr(challenger_report, field)
+        if not champion_hash or champion_hash != challenger_hash:
+            raise ValueError(
+                f"champion and challenger {field} values must match and be non-empty: "
+                f"champion {champion_hash!r} vs challenger {challenger_hash!r}"
+            )
 
     ledger = _build_ledger(champion_report, challenger_report)
     verdict_name, reasons = _decide(challenger_report, ledger)

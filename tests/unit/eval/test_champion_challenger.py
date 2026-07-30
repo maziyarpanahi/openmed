@@ -47,6 +47,8 @@ def _report(
     family: str = "pii",
     tier: str = "tiny",
     fmt: str = "mlx-fp",
+    eval_set_hash: str = "a" * 8,
+    leakage_fixture_hash: str = "b" * 8,
 ) -> GateReport:
     """Build a synthetic gate report for a champion or challenger."""
 
@@ -65,8 +67,8 @@ def _report(
         p50_ms=p50_ms,
         p95_ms=p95_ms,
         ram_mb=ram_mb,
-        eval_set_hash="a" * 8,
-        leakage_fixture_hash="b" * 8,
+        eval_set_hash=eval_set_hash,
+        leakage_fixture_hash=leakage_fixture_hash,
         decision=decision,
         gate_results=gate_results,
     )
@@ -216,6 +218,23 @@ def test_mismatched_coordinates_are_rejected() -> None:
     challenger = _report(family="pii", tier="tiny", fmt="mlx-fp")
 
     with pytest.raises(ValueError, match="different rollout coordinates"):
+        compare_champion_challenger(champion, challenger)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("eval_set_hash", "different-eval"),
+        ("leakage_fixture_hash", "different-leakage"),
+    ),
+)
+def test_mismatched_evidence_corpora_are_rejected(field: str, value: str) -> None:
+    """Head-to-head metrics must come from the same committed evidence corpora."""
+
+    champion = _report()
+    challenger = _report(**{field: value})
+
+    with pytest.raises(ValueError, match=field):
         compare_champion_challenger(champion, challenger)
 
 
