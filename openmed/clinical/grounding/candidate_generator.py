@@ -9,6 +9,12 @@ emitted candidate carries provenance (``source='sparse'``, the matched alias,
 the match kind, and a content hash of the vocabulary snapshot) so downstream
 rankers and exporters can audit the source.
 
+Candidate generation is language-aware: passing a ``language`` scores a mention
+against that target language's alias space first (both the exact and the fuzzy
+stage), falling back to the English alias set when a target-language alias is
+absent, and stamps the resolved ``source_language`` on every emitted candidate.
+The English default is byte-for-byte unchanged.
+
 The fuzzy stage is a self-contained, dependency-free character trigram TF-IDF
 cosine matcher, which keeps candidate generation fully offline and byte-for-byte
 deterministic across runs.
@@ -22,7 +28,7 @@ from collections.abc import Iterable, Sequence
 
 from .registry import register_linker
 from .types import Candidate
-from .vocab import VocabLoader, VocabularyIndex, normalize_alias
+from .vocab import VocabLoader, VocabularyIndex, normalize_alias, normalize_language
 
 __all__ = [
     "SparseCandidateGenerator",
@@ -144,7 +150,7 @@ class SparseCandidateGenerator:
         self._loader = loader if loader is not None else VocabLoader()
         self._ngram_size = ngram_size
         self._min_similarity = min_similarity
-        self._ngram_indexes: dict[str, _AliasNgramIndex] = {}
+        self._ngram_indexes: dict[tuple[str, str], _AliasNgramIndex] = {}
 
     def generate(
         self,
@@ -153,6 +159,7 @@ class SparseCandidateGenerator:
         k: int = _DEFAULT_TOP_K,
         *,
         min_similarity: float | None = None,
+        language: str | None = None,
     ) -> list[Candidate]:
         """Return up to ``k`` ranked candidates for ``mention``.
 
@@ -162,6 +169,10 @@ class SparseCandidateGenerator:
                 win ties. Must be non-empty.
             k: Maximum number of candidates to return.
             min_similarity: Override for the instance fuzzy cutoff.
+            language: Source language of the mention. Its alias space is scored
+                first, falling back to the English alias set when a
+                target-language alias is absent; the normalized value is stamped
+                on every candidate's ``source_language``. Defaults to English.
 
         Raises:
             ValueError: If ``systems`` is empty or ``k`` is not positive.
@@ -176,6 +187,7 @@ class SparseCandidateGenerator:
         if k <= 0:
             raise ValueError("k must be a positive integer")
         cutoff = self._min_similarity if min_similarity is None else min_similarity
+        source_language = normalize_language(language)
 
         query = normalize_alias(mention)
         if not query:
@@ -185,7 +197,9 @@ class SparseCandidateGenerator:
         best: dict[tuple[str, str], Candidate] = {}
         for system in ordered_systems:
             index = self._loader.get_index(system)
-            for candidate in self._candidates_for_system(index, query, cutoff):
+            for candidate in self._candidates_for_system(
+                index, query, cutoff, source_language
+            ):
                 key = (candidate.system, candidate.code)
                 existing = best.get(key)
                 if existing is None or candidate.score > existing.score:
@@ -202,29 +216,34 @@ class SparseCandidateGenerator:
         return ranked[:k]
 
     def _candidates_for_system(
-        self, index: VocabularyIndex, query: str, cutoff: float
+        self,
+        index: VocabularyIndex,
+        query: str,
+        cutoff: float,
+        source_language: str,
     ) -> list[Candidate]:
         system = index.system.upper()
         version = index.content_hash
         best: dict[str, Candidate] = {}
 
-        for concept in index.lookup_all(query):
+        for concept in index.lookup_all(query, language=source_language):
             best[concept.code] = Candidate(
                 system=system,
                 code=concept.code,
                 display=concept.preferred_term,
                 score=1.0,
+                source_language=source_language,
                 source=self.source,
                 matched_alias=query,
                 match_kind="exact",
                 vocab_version=version,
             )
 
-        for alias, similarity in self._ngram_index(index).query(
+        for alias, similarity in self._ngram_index(index, source_language).query(
             query, min_similarity=cutoff
         ):
             score = round(float(similarity), 6)
-            for concept in index.lookup_all(alias):
+            for concept in index.lookup_all(alias, language=source_language):
                 existing = best.get(concept.code)
                 if existing is not None and existing.score >= score:
                     continue
@@ -233,6 +252,7 @@ class SparseCandidateGenerator:
                     code=concept.code,
                     display=concept.preferred_term,
                     score=score,
+                    source_language=source_language,
                     source=self.source,
                     matched_alias=alias,
                     match_kind="fuzzy",
@@ -240,11 +260,25 @@ class SparseCandidateGenerator:
                 )
         return list(best.values())
 
-    def _ngram_index(self, index: VocabularyIndex) -> _AliasNgramIndex:
-        cached = self._ngram_indexes.get(index.system)
+    def _ngram_index(self, index: VocabularyIndex, language: str) -> _AliasNgramIndex:
+        cache_key = (index.system, language)
+        cached = self._ngram_indexes.get(cache_key)
         if cached is None:
-            cached = _AliasNgramIndex(index.aliases, self._ngram_size)
-            self._ngram_indexes[index.system] = cached
+            aliases = index.aliases_for_language(language)
+            if language != "en":
+                # Keep English-only concepts fuzzy-reachable under a non-English
+                # language: the exact stage already falls back to English aliases
+                # per-concept, so the fuzzy n-gram vocabulary must too, otherwise a
+                # misspelled mention of an English-only concept is unreachable.
+                english = index.aliases_for_language("en")
+                if english != aliases:
+                    seen = set(aliases)
+                    aliases = (
+                        *aliases,
+                        *(alias for alias in english if alias not in seen),
+                    )
+            cached = _AliasNgramIndex(aliases, self._ngram_size)
+            self._ngram_indexes[cache_key] = cached
         return cached
 
 
@@ -265,11 +299,13 @@ def generate_candidates(
     loader: VocabLoader | None = None,
     ngram_size: int = _DEFAULT_NGRAM_SIZE,
     min_similarity: float = _DEFAULT_MIN_SIMILARITY,
+    language: str | None = None,
 ) -> list[Candidate]:
     """Generate ranked sparse ``Candidate`` objects for a clinical mention.
 
     Convenience wrapper around :class:`SparseCandidateGenerator`. See
-    :meth:`SparseCandidateGenerator.generate` for the ranking contract.
+    :meth:`SparseCandidateGenerator.generate` for the ranking and
+    source-language contract.
     """
 
     generator = SparseCandidateGenerator(
@@ -277,7 +313,7 @@ def generate_candidates(
         ngram_size=ngram_size,
         min_similarity=min_similarity,
     )
-    return generator.generate(mention, systems, k)
+    return generator.generate(mention, systems, k, language=language)
 
 
 register_linker(SPARSE_LINKER_KEY, SparseCandidateGenerator)
