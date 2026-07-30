@@ -53,6 +53,7 @@ nav:
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
+      - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
