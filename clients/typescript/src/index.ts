@@ -181,6 +181,33 @@ export interface SMARTBackendIngestionRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface OMOPLoadRequest {
+  records_jsonl: string;
+  vocabulary_version?: string | null;
+  validate_constraints?: boolean;
+}
+
+export interface OMOPRejectedSpan {
+  reason: string;
+  source_note_hash: string;
+  start: number | null;
+  end: number | null;
+  domain: string | null;
+}
+
+export interface OMOPConstraintViolations {
+  count: number;
+  by_reason: Record<string, number>;
+}
+
+export interface OMOPLoadResponse {
+  row_counts: Record<string, number>;
+  rejection_counts: Record<string, number>;
+  rejected_spans: OMOPRejectedSpan[];
+  source_note_hashes: string[];
+  constraint_violations?: OMOPConstraintViolations;
+}
+
 export interface EntityPrediction {
   text: string;
   label: string;
@@ -477,6 +504,10 @@ export class OpenMedClient {
     request: ModelUnloadRequest,
   ): Promise<ModelUnloadResponse> {
     return this.post("/models/unload", request);
+  }
+
+  async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
+    return this.post("/omop/load", request);
   }
 
   async startSmartBackendIngestion(
