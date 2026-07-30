@@ -195,6 +195,21 @@ def _normalize_optional_nonblank_string(value: Any, field_name: str) -> Optional
     return _normalize_nonblank_string(value, field_name)
 
 
+def _normalize_records_jsonl(value: Any) -> str:
+    if value is None:
+        raise ValueError("records_jsonl is required")
+    if not isinstance(value, str):
+        raise ValueError("records_jsonl must be a string")
+    if not value.strip():
+        raise ValueError("records_jsonl must not be blank")
+    max_text_length = get_max_text_length()
+    if len(value) > max_text_length:
+        raise ValueError(
+            f"records_jsonl exceeds the maximum length of {max_text_length} characters"
+        )
+    return value
+
+
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
     method = values.get("method", "mask")
     shift_dates = values.get("shift_dates")
@@ -610,6 +625,23 @@ if PYDANTIC_V2:
                 setattr(self, field_name, value)
             return self
 
+    class OmopLoadRequest(_StrictModel):
+        """Request schema for /omop/load."""
+
+        records_jsonl: str
+        vocabulary_version: Optional[str] = None
+        validate_constraints: bool = False
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+        @field_validator("vocabulary_version", mode="before")
+        @classmethod
+        def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
 else:
 
     class AnalyzeRequest(_StrictModel):
@@ -948,3 +980,18 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
+
+    class OmopLoadRequest(_StrictModel):
+        """Request schema for /omop/load."""
+
+        records_jsonl: str
+        vocabulary_version: Optional[str] = None
+        validate_constraints: bool = False
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+        @validator("vocabulary_version", pre=True)
+        def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, "vocabulary_version")
