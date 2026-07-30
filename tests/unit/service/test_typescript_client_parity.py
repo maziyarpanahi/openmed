@@ -26,6 +26,7 @@ CLIENT_METHOD_BY_PATH = {
     "/livez": "livez",
     "/models/loaded": "loadedModels",
     "/models/unload": "unloadModels",
+    "/omop/load": "loadOmop",
     "/pii/deidentify": "deidentify",
     "/pii/extract": "extractPii",
     "/pii/extract/stream": "extractPiiStream",

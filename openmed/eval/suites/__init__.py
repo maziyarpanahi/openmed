@@ -62,6 +62,13 @@ from openmed.eval.datasets.naamapadam import (
 from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.suites.candidate_ranking import (
+    CANDIDATE_RANKING,
+    build_candidate_ranking_gold,
+    candidate_ranking_metadata,
+    evaluate_candidate_ranking,
+    run_candidate_ranking,
+)
 from openmed.eval.suites.chinese_clinical_ner import (
     CHINESE_CLINICAL_NER,
     ChineseClinicalNerLeakageError,
@@ -95,6 +102,12 @@ from openmed.eval.suites.cross_lingual_grounding import (
     load_cross_lingual_grounding_fixtures,
     run_cross_lingual_grounding,
     scan_restricted_corpus_markers,
+)
+from openmed.eval.suites.grounding_index_recall import (
+    evaluate_grounding_index_recall,
+    grounding_index_recall_metadata,
+    load_grounding_index_fixtures,
+    run_grounding_index_recall,
 )
 from openmed.eval.suites.india_health_ids import (
     INDIA_HEALTH_ID_LEAKAGE,
@@ -447,6 +460,15 @@ __all__ = [
     "load_code_mixed_routing_fixtures",
     "code_mixed_routing_metadata",
     "run_code_mixed_routing",
+    "evaluate_grounding_index_recall",
+    "grounding_index_recall_metadata",
+    "load_grounding_index_fixtures",
+    "run_grounding_index_recall",
+    "CANDIDATE_RANKING",
+    "build_candidate_ranking_gold",
+    "candidate_ranking_metadata",
+    "evaluate_candidate_ranking",
+    "run_candidate_ranking",
     "assert_india_health_id_leakage_gate",
     "india_health_id_metadata",
     "load_india_health_id_fixtures",

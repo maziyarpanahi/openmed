@@ -21,7 +21,9 @@ from .backend import (
 from .cache import (
     ConceptNormalizationCache,
     NormalizationCacheStats,
+    RankedCandidateCache,
     make_normalization_cache_key,
+    make_rerank_cache_key,
 )
 from .chinese import (
     CHINESE_DRUG_SYSTEM,
@@ -64,14 +66,19 @@ from .india_terminology import (
     normalize_india_terminology_surface,
 )
 from .ranker import (
+    DEFAULT_RRF_K,
+    DEFAULT_SOURCE_WEIGHTS,
     SYNTHETIC_GOLD_SET,
     CandidateProvenance,
     ConceptNormalizer,
     NormalizationEvaluationResult,
     NormalizationGoldCase,
+    RankedCandidate,
     RankedConcept,
+    SourceContribution,
     evaluate_normalization_gold,
     generate_query_variants,
+    rank_candidates,
 )
 
 __all__ = [
@@ -97,6 +104,8 @@ __all__ = [
     "MultilingualEmbedder",
     "MultilingualEmbeddingBackend",
     "DEFAULT_AYUSH_SYSTEM_URI",
+    "DEFAULT_RRF_K",
+    "DEFAULT_SOURCE_WEIGHTS",
     "DEFAULT_INDIAN_DRUG_SYSTEM_URI",
     "GroundedIndiaTerm",
     "INDIA_TERMINOLOGY_KINDS",
@@ -113,10 +122,13 @@ __all__ = [
     "NormalizationCacheStats",
     "NormalizationEvaluationResult",
     "NormalizationGoldCase",
+    "RankedCandidate",
+    "RankedCandidateCache",
     "RankedConcept",
     "SYNTHETIC_CODE_SYSTEMS",
     "SYNTHETIC_CONCEPTS",
     "SYNTHETIC_GOLD_SET",
+    "SourceContribution",
     "SyntheticTerminologyBackend",
     "TerminologySkipNotice",
     "TerminologyBackend",
@@ -127,7 +139,9 @@ __all__ = [
     "generate_query_variants",
     "load_chinese_terminology_dictionary",
     "make_normalization_cache_key",
+    "make_rerank_cache_key",
     "normalize_chinese_clinical_surface",
+    "rank_candidates",
     "normalize_indian_clinical_abbreviation",
     "normalize_indian_clinical_entities",
     "normalize_indian_clinical_surface",
