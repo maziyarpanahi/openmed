@@ -9,7 +9,12 @@ from typing import Any
 
 from openmed.core import baseline as baseline_store
 from openmed.eval.evidence_bundle import bundle_gate_evidence
-from openmed.eval.release_gates import RELEASABLE, format_preview, preview
+from openmed.eval.release_gates import (
+    RELEASABLE,
+    build_grounding_gate_report,
+    format_preview,
+    preview,
+)
 
 from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit
 
@@ -24,6 +29,7 @@ def add_gates_command(subparsers: argparse._SubParsersAction) -> None:
 
     _add_preview_command(gates_sub)
     _add_bundle_command(gates_sub)
+    _add_grounding_command(gates_sub)
 
 
 def _add_preview_command(subparsers: argparse._SubParsersAction) -> None:
@@ -117,6 +123,19 @@ def _add_bundle_command(subparsers: argparse._SubParsersAction) -> None:
     bundle_parser.set_defaults(handler=_handle_bundle)
 
 
+def _add_grounding_command(subparsers: argparse._SubParsersAction) -> None:
+    grounding_parser = subparsers.add_parser(
+        "grounding",
+        help="Score the synthetic grounding-accuracy gold and print the table.",
+    )
+    grounding_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero when any per-system top-k floor is breached.",
+    )
+    grounding_parser.set_defaults(handler=handle_gates_grounding)
+
+
 def handle_gates_preview(args: argparse.Namespace) -> int:
     """Run a read-only release-gate preview."""
 
@@ -190,6 +209,35 @@ def _handle_bundle(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_gates_grounding(args: argparse.Namespace) -> int:
+    """Score the grounding-accuracy suite and print the per-system table."""
+
+    from openmed.eval.grounding_accuracy import (
+        evaluate_grounding_accuracy,
+        format_grounding_accuracy_table,
+    )
+
+    try:
+        accuracy = evaluate_grounding_accuracy()
+    except Exception as exc:
+        raise CliError(
+            f"Grounding accuracy evaluation failed: {exc}",
+            code="grounding_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    gate_report = build_grounding_gate_report(accuracy)
+    payload = {
+        "decision": gate_report.decision,
+        "accuracy": accuracy.to_dict(),
+        "gate_results": [check.to_dict() for check in gate_report.gate_results],
+    }
+    emit(args, payload, human=format_grounding_accuracy_table(accuracy))
+    if args.strict and gate_report.decision != RELEASABLE:
+        return 1
+    return 0
+
+
 def _read_json_object(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
@@ -218,4 +266,8 @@ def _parse_artifact(value: str) -> dict[str, Any]:
     return payload
 
 
-__all__ = ["add_gates_command", "handle_gates_preview"]
+__all__ = [
+    "add_gates_command",
+    "handle_gates_grounding",
+    "handle_gates_preview",
+]
