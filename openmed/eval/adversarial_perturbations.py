@@ -97,6 +97,7 @@ class AdversarialPerturbationVariant:
     flagged: bool
     flagged_labels: tuple[str, ...]
     seed: int
+    perturbed_documents: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready variant payload keyed by operator and label."""
@@ -106,6 +107,7 @@ class AdversarialPerturbationVariant:
             "flagged": self.flagged,
             "flagged_labels": list(self.flagged_labels),
             "leakage": self.leakage.to_dict(),
+            "perturbed_documents": self.perturbed_documents,
             "seed": self.seed,
         }
 
@@ -317,6 +319,11 @@ def adversarial_perturbation_report(
         variant_seed = seed + index
         rng = random.Random(variant_seed)
         perturbed = [perturbation(fixture, rng) for fixture in fixtures]
+        perturbed_documents = sum(
+            1
+            for original, variant in zip(fixtures, perturbed)
+            if variant.text != original.text
+        )
         leakage = _suite_leakage(perturbed, base_runner, model_name, device)
         delta_overall = leakage.overall - clean.overall
         delta_by_label = _leakage_delta_by_label(clean, leakage)
@@ -337,6 +344,7 @@ def adversarial_perturbation_report(
                 flagged=flagged,
                 flagged_labels=flagged_labels,
                 seed=variant_seed,
+                perturbed_documents=perturbed_documents,
             )
         )
 

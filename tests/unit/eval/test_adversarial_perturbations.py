@@ -221,6 +221,44 @@ def test_report_is_offline_and_serializes_without_raw_phi(monkeypatch):
     assert report.to_dict()["leakage_delta_budget"] == 0.0
 
 
+def test_variant_records_operator_coverage_to_expose_noop_operators():
+    # A gold span of pure digits has no homoglyph-map or alphabetic characters,
+    # so those operators cannot perturb it. The report must make that visible
+    # instead of reporting a falsely-clean, indistinguishable pass.
+    numeric = BenchmarkFixture.from_mapping(
+        {
+            "id": "note-2",
+            "text": "MRN is 40071 today.",
+            "language": "en",
+            "gold_spans": [{"start": 7, "end": 12, "label": "ID_NUM"}],
+        }
+    )
+
+    def _find_numeric(fixture, model_name, device):
+        start = fixture.text.find("40071")
+        if start < 0:
+            return []
+        return [{"start": start, "end": start + 5, "label": "ID_NUM"}]
+
+    report = adversarial_perturbation_report(
+        "exact",
+        [numeric],
+        runner=_find_numeric,
+        suite_name="synthetic",
+    )
+
+    # Homoglyph/combining cannot touch pure digits -> zero coverage, still "clean".
+    assert report.variant("homoglyph_substitution").perturbed_documents == 0
+    assert report.variant("combining_mark_injection").perturbed_documents == 0
+    assert not report.variant("homoglyph_substitution").flagged
+    # Zero-width and bidi still perturb adjacent digits.
+    assert report.variant("zero_width_injection").perturbed_documents == 1
+    assert report.variant("bidi_control_wrapping").perturbed_documents == 1
+    payload = report.to_dict()["variants"]
+    assert payload["homoglyph_substitution"]["perturbed_documents"] == 0
+    assert payload["zero_width_injection"]["perturbed_documents"] == 1
+
+
 def test_negative_budget_is_rejected():
     with pytest.raises(ValueError, match="non-negative"):
         adversarial_perturbation_report(
