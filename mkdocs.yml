@@ -118,6 +118,7 @@ nav:
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
+      - Export Format Support Matrix: export-matrix.md
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
