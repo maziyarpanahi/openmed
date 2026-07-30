@@ -19,6 +19,7 @@ from .index import (
     query_index,
 )
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
+from .ranker import CandidateRankingStage, RankingConfig, rank_mention
 from .registry import (
     InvalidVocabularyLoaderError,
     RestrictedVocabularyLoaderError,
@@ -33,6 +34,7 @@ from .registry import (
     register_loader,
     validate_vocabulary_loader,
 )
+from .retrieval import TwoStageRetriever, retrieve_candidates
 from .types import Candidate
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -53,6 +55,7 @@ __all__ = [
     "AliasEmbeddingIndex",
     "AliasEncoder",
     "Candidate",
+    "CandidateRankingStage",
     "ConceptMatch",
     "DenseCandidateGenerator",
     "EncoderUnavailableError",
@@ -64,9 +67,11 @@ __all__ = [
     "LexicalMatcher",
     "MLXSapBERTEncoder",
     "RESTRICTED_VOCAB_SYSTEMS",
+    "RankingConfig",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "TwoStageRetriever",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
@@ -90,7 +95,9 @@ __all__ = [
     "normalize_language",
     "normalize_term",
     "query_index",
+    "rank_mention",
     "register_linker",
     "register_loader",
+    "retrieve_candidates",
     "validate_vocabulary_loader",
 ]
