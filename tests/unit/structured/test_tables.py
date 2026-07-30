@@ -113,6 +113,21 @@ def test_leading_non_numeric_row_is_detected_as_header():
     assert not cell_at(table, 1, 1)["is_header"]
 
 
+def test_clinical_labels_containing_digits_remain_headers():
+    text, tokens = _build(
+        [
+            ["Test", "HbA1c", "Day 1"],
+            ["Result", "6.4", "120 mg"],
+        ]
+    )
+
+    table = structure_table(text, tokens)
+
+    assert table["header_rows"] == [0]
+    assert all(cell_at(table, 0, column)["is_header"] for column in range(3))
+    assert not cell_at(table, 1, 1)["is_header"]
+
+
 def test_leading_non_numeric_column_is_detected_as_header():
     text, tokens = _build(_MED_GRID)
 

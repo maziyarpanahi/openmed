@@ -30,9 +30,10 @@ TABLE_ADVISORY = (
     "typing of the cell contents."
 )
 
-# A cell is treated as a header candidate when it carries no digit; numeric cells
-# are data. Header rows/columns are the leading label band of a table.
-_DIGIT_RE = re.compile(r"\d")
+# A data cell may include units or date punctuation, but it starts with a numeric
+# value. Looking for a digit anywhere would misclassify common clinical headers
+# such as ``HbA1c`` and ``Day 1`` as data.
+_LEADING_NUMBER_RE = re.compile(r"^\s*[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)")
 
 
 class TableToken(TypedDict):
@@ -90,7 +91,9 @@ def _cluster_index(values: Sequence[float], tolerance: float) -> tuple[list[int]
 
 
 def _is_numeric(text: str) -> bool:
-    return bool(_DIGIT_RE.search(text))
+    """Return whether ``text`` begins with a numeric data value."""
+
+    return bool(_LEADING_NUMBER_RE.match(text))
 
 
 def structure_table(
@@ -190,9 +193,9 @@ def _detect_header_band(
     """Return the leading rows (or columns) that are entirely non-numeric labels.
 
     A header band is the contiguous run of leading rows/columns whose every cell
-    lacks a digit. If that run would cover the whole axis the band collapses to
-    just the first index, so a table that happens to be all text is not reported
-    as pure header.
+    does not begin with a numeric data value. If that run would cover the whole
+    axis the band collapses to just the first index, so a table that happens to
+    be all text is not reported as pure header.
     """
 
     band: list[int] = []
