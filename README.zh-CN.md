@@ -1,34 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed：端侧临床 AI · 2,000+ 个模型" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed README 横幅，包含猫咪吉祥物、小写文字标识、Open Cross，以及开源医疗 AI、下载量 3.4 亿+ 和安装量 1000 万+ 文字" width="1280" />
 
 <h2>你的数据。你的模型。你的硬件。</h2>
 
-<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
-
-<p><b>将临床文本转化为结构化、去标识化的洞见，无需上传任何内容。</b><br/>
-OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除 55+ 种 PHI 类型，你的数据从不离开设备。同一套 2,000+ 个开源模型可完全离线运行，从手机到 GPU 服务器皆可：iOS、iPadOS 和 Android 通过 OpenMedKit，另支持 React Native、普通 CPU、Apple Silicon、NVIDIA GPU、浏览器以及 REST/gRPC 服务。无需云端，无供应商锁定，患者数据绝不离开你的网络。</p>
+<p><b>在你掌控的硬件上，将临床文本转化为结构化、去标识化的洞见。</b><br/>
+OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和去标识化。模型下载、远程提供商适配器、启用遥测的路径及用户配置的集成可能使用网络；请核查每个模型和数据集的条款。</p>
 
 <p>
-  <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
-  <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
-  <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
-  <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
+  <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
+  <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
+  <a href="LICENSE">Apache-2.0 SDK source</a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift：OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon：MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/export-onnx-android.md"><img alt="Android：ONNX Runtime Mobile" src="https://img.shields.io/badge/Android-ONNX_Runtime_Mobile-128787?style=for-the-badge&logo=android&logoColor=white"></a>
-  <a href="docs/export-transformersjs.md"><img alt="浏览器：Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
-  <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
+  <a href="swift/OpenMedKit">OpenMedKit</a> ·
+  <a href="docs/mlx-backend.md">Apple Silicon / MLX</a> ·
+  <a href="docs/export-onnx-android.md">Android / ONNX Runtime Mobile</a> ·
+  <a href="docs/export-transformersjs.md">Browser / Transformers.js</a> ·
+  <a href="https://openmed.life/docs">Documentation</a>
 </p>
 
 <p>
-  <b>2,000+ 个模型</b> &nbsp;·&nbsp; <b>32 种由模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 设备本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>本地优先运行</b> &nbsp;·&nbsp; <b>33 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -55,12 +51,12 @@ OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除
 
 ## 现场演示
 
-OpenMed **完全在设备本地运行**，临床文本绝不会离开设备。以下是在 iPhone 上完全离线运行的效果：
+此 iPhone 示例会在所需模型制品就绪后使用 OpenMed 的本地运行时：
 
 <div align="center">
   <img src="docs/brand/openmed-ios-scan.png" alt="iPhone 上的 OpenMed Scan：通过 OpenMedKit 在设备本地完成 PII 去标识化和临床实体抽取" width="840" />
   <br/>
-  <sub><b>通过 <a href="swift/OpenMedKit">OpenMedKit</a> 在 iPhone 上运行</b>：扫描临床记录、完成去标识化并抽取临床信号，全部由 Apple MLX 在设备本地处理，不会上传任何内容。</sub>
+  <sub><b>通过 <a href="swift/OpenMedKit">OpenMedKit</a> 在 iPhone 上运行</b>：在此配置中，由 Apple MLX 在本地扫描临床记录、完成去标识化并抽取临床信号。</sub>
 </div>
 
 <br/>
@@ -68,7 +64,7 @@ OpenMed **完全在设备本地运行**，临床文本绝不会离开设备。�
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed 实时对一份临床出院记录进行 PII 脱敏" width="760" />
   <br/>
-  <sub><b>实时 PII 去标识化</b>：Nemotron Privacy Filter 正在对一份临床出院记录中的姓名、地址、证件号和账单数据进行脱敏，全程在本地设备上完成。<i>（图中所有数值均为合成数据。）</i></sub>
+  <sub><b>实时 PII 去标识化</b>：在此配置的本地工作流中，Nemotron Privacy Filter 会对合成临床出院记录中的姓名、地址、证件号和账单数据进行脱敏。<i>（图中所有数值均为合成数据。）</i></sub>
 </div>
 
 ---
@@ -89,7 +85,7 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-一个最先进的临床 NER 模型在本地运行，无需 API 密钥，无网络调用。
+临床 NER 模型会在所需制品就绪后使用本地运行时。
 
 ---
 
@@ -106,32 +102,24 @@ for entity in result.entities:
 
 ## 为什么选择 OpenMed？
 
-|                                       |       **OpenMed**        |    云端医疗 API    |
-| ------------------------------------- | :----------------------: | :----------------: |
-| 在你的设备/服务器上运行                |            ✅            |         ❌         |
-| 患者数据离开你的网络                   |        **从不**          |    发送给供应商     |
-| 成本                                   |       免费且开源         |    按调用计费       |
-| 专业医疗模型                           |          2,000+          |        有限         |
-| 由模型支持的 PII 语言                  |            29            |        不一         |
-| 离线 / 隔离网络（air-gapped）          |            ✅            |         ❌         |
-| Apple Silicon (MLX) 加速               |            ✅            |       不适用        |
-| 原生 iOS / macOS 应用                  |   ✅ 通过 OpenMedKit     |         ❌         |
-| 浏览器/WebGPU token 分类               | ✅ 通过 Transformers.js  |        不一         |
-| 供应商锁定                             |     无：Apache-2.0      |         有          |
+| 部署考量 | OpenMed SDK 边界 |
+| --- | --- |
+| 核心运行时 | 所需制品就绪后在本地处理 |
+| 可选网络路径 | 下载、远程适配器、遥测路径和用户集成可能使用网络 |
+| 验证 | 部署方验证模型与数据条款、隐私行为及临床适用性 |
+| 接口 | 在受支持的范围内提供 Python、Swift、Android、浏览器和服务接口 |
 
-- **专业模型**：2,000+ 个精选的生物医学与临床模型，其中许多性能超越商业专有方案。
-- **符合 HIPAA 的去标识化**：覆盖全部 18 项 Safe Harbor 标识符，智能实体合并，保留格式的伪造替换。
-- **随处运行**：支持 CPU、CUDA、Apple Silicon (MLX)、通过 OpenMedKit 运行的 iOS/macOS、Android/Kotlin、React Native、REST/gRPC 服务，以及通过 Transformers.js 运行的浏览器/WebGPU 软件包。
-- **一行部署**：Python API、Docker 化的 REST 服务，或批处理流水线。
-- **零锁定**：Apache-2.0，你的基础设施，你的数据。
+- **精选模型目录**：请针对你的用例验证每个模型、许可证和数据集。
+- **与 Safe Harbor 对齐的配置**：可面向 18 类标识符；仍需专家开展部署审查，使用 SDK 本身并不能证明符合 HIPAA。
+- **受支持的执行路径**：CPU、CUDA、MLX、移动端、服务和浏览器适配器会因环境与制品而异。
+- **部署接口**：Python、容器、服务和批处理工作流需要配置与验证。
+- **SDK 源代码**：基于 Apache-2.0 License 发布；模型和数据集条款各不相同。
 
 ---
 
 ## 在 Apple 设备上本地运行：Swift、MLX 与 iOS
 
-OpenMed 专为在你数据所在之处运行而打造。在 Apple 硬件上，它借助 **MLX** 加速，并通过
-**[OpenMedKit](swift/OpenMedKit)** 直接进入 iPhone、iPad 和 Mac 应用，因此 PII 检测与临床抽取完全离线、
-在设备本地完成。
+在受支持的 Apple 硬件上，所需制品就绪后，OpenMed 可使用 **MLX** 和 **[OpenMedKit](swift/OpenMedKit)** 进行本地处理。模型获取和用户配置的远程集成仍是独立的网络边界。
 
 ```swift
 // Add OpenMedKit to your app
@@ -234,7 +222,7 @@ const entities = await model("Patient Alice Nguyen was seen in cardiology.");
 
 ```mermaid
 flowchart LR
-    A["临床文本"] --> B["OpenMed<br/>（100% 本地）"]
+    A["临床文本"] --> B["OpenMed<br/>（本地优先）"]
     B --> C["医疗实体"]
     B --> D["检测到的 PII"]
     B --> E["去标识化文本"]
@@ -470,7 +458,7 @@ Patient: John Doe, DOB: 07/14/1970, SSN: 123-45-6789
 - **智能实体合并**让 `01/15/1970` 保持完整，而不会被拆分。
 - **策略感知流水线**提供 HIPAA/GDPR/研究配置、校准阈值、签名审计报告、脱敏预览，以及最小必要操作选择。
 - **基于 Faker 的混淆**，内置自定义临床证件号 provider（CPF、CNPJ、BSN、NIR、Codice Fiscale、NIE、Aadhaar、Steuer-ID、NPI）。
-- **HIPAA**：覆盖全部 18 项 Safe Harbor 标识符，可配置置信度阈值。
+- **HIPAA 边界**：与 Safe Harbor 对齐的类别和可配置阈值属于实现辅助；仍需专家开展部署审查，仅使用 SDK 并不能证明合规。
 - **批量与流式 PII 处理**：使用 `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)` 或增量流式辅助函数，对大量文档进行抽取或去标识化。
 
 <div align="center">
@@ -521,10 +509,10 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（支持 34 种语言）
+## 多语言 PII（34 条支持的路由；33 条由模型支持）
 
 实体抽取和去标识化支持 **34 个 PII 语言代码**：
-`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **600+ 个 PII 检查点**。
+`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
 俄语路由目前使用文档中说明的多语言默认模型占位符。孟加拉语、中文和泰米尔语拥有专用注册表条目。
 一个由用户选择并配置的印度语言 NER 系列还支持四条额外路由
 （`gu`、`kn`、`ml` 和 `pa`），
@@ -699,7 +687,7 @@ OpenMed 建立在优秀的开源工作之上：特别感谢 **OpenAI**（[Privac
 
 ## 许可证
 
-基于 [Apache-2.0 许可证](LICENSE) 发布。第三方资源声明记录在 [NOTICE](NOTICE) 中。
+OpenMed SDK 源代码基于 [Apache-2.0 License](LICENSE) 发布。第三方资源声明记录在 [NOTICE](NOTICE) 中。
 
 ## 引用
 
@@ -723,7 +711,7 @@ OpenMed 建立在优秀的开源工作之上：特别感谢 **OpenAI**（[Privac
 
 如果 OpenMed 对你有帮助，点个 star 能帮助更多人发现它。
 
-[![Star 历史图表](https://api.star-history.com/chart?repos=maziyarpanahi/openmed&type=date&legend=top-left&sealed_token=_HghchEkPCrucwFdVMULC2ufUwKUsFcTwheGjTM2VUvsTVevJ8xvrV-b5WyNkXCLDaOMTzk3vvsnzTR1rtTL7oxu90MGSTw8Eljuy0wrwEk_qEa1s83OV3hyz0-1mckZLCffMDc5Pot9Yx_MiZaQjsz4NxNnV7Pb_k-1KBWkf6gM9C9AZl3sgqRC-y2w)](https://www.star-history.com/?repos=maziyarpanahi%2Fopenmed&type=date&legend=top-left)
+[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
