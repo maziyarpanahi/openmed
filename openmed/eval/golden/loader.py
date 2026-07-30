@@ -53,6 +53,7 @@ _TOP_LEVEL_FIXTURES: tuple[Path, ...] = tuple(
 )
 _SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
+        "all_script_routing.jsonl",
         "code_mixed_hinglish.jsonl",
         "context_multilingual.jsonl",
         "dicom_sr_content.jsonl",
