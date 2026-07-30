@@ -10,16 +10,19 @@ import json
 
 import pytest
 
-from openmed.clinical.exporters import stamp_coding_provenance
-from openmed.clinical.exporters.codeable_concept import GroundedSpan
-from openmed.clinical.exporters.codeable_concept_simple import coding
+from openmed.clinical.exporters.code_provenance import (
+    CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL,
+)
+from openmed.clinical.exporters.codeable_concept import (
+    GroundedSpan,
+    to_codeable_concept,
+)
 from openmed.clinical.grounding import (
     GROUNDING_ASSIST_ONLY_ADVISORY,
     GROUNDING_METHODS,
     Candidate,
     GroundingProvenance,
     grounding_provenance,
-    provenance_version_pins,
     scan_provenance_for_raw_text,
 )
 from openmed.core.audit import (
@@ -295,10 +298,14 @@ def test_empty_grounding_leaves_report_hash_unchanged():
 
 
 def test_emitted_coding_carries_matching_system_version():
-    chain = grounding_provenance(_grounded_spans(), method="sparse")
-    pins = provenance_version_pins(chain)
+    concept = to_codeable_concept(_grounded_spans()[0])
 
-    base = coding("loinc", "L0001", "Synthetic serum marker")
-    stamped = stamp_coding_provenance(base, pins, source_label="synthetic manifest")
-
-    assert stamped["version"] == "loinc-syn-2024a"
+    assert all(coding["version"] == "loinc-syn-2024a" for coding in concept["coding"])
+    assert all(
+        {
+            "url": CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL,
+            "valueString": "grounding candidate",
+        }
+        in coding["extension"]
+        for coding in concept["coding"]
+    )
