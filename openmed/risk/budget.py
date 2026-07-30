@@ -1,4 +1,4 @@
-"""Per-document residual-risk and DP surrogate budget evaluation."""
+"""Per-document residual-risk, DP surrogate, and generation budget evaluation."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from importlib import resources
 from typing import Any, Literal, cast
 
 from openmed.core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
@@ -32,6 +33,11 @@ DEFAULT_QI_WEIGHTS: Mapping[str, float] = {
 }
 
 SurrogateDrawKind = Literal["categorical", "numeric", "date_offset"]
+
+CompositionRule = Literal["basic", "advanced"]
+
+EPSILON_POLICY_CONFIG_RESOURCE = "dp_epsilon_policies.json"
+CURRENT_EPSILON_POLICY_SCHEMA_VERSION = 1
 
 DEFAULT_RDP_ORDERS: tuple[float, ...] = (2.0, 4.0, 8.0, 16.0, 32.0, 64.0)
 DEFAULT_DP_SURROGATE_SENSITIVITIES: Mapping[
@@ -472,6 +478,452 @@ class DPSurrogateBudget:
 
 
 @dataclass(frozen=True)
+class EpsilonPolicy:
+    """Declared privacy budget ceiling for one synthetic-generation scope.
+
+    A policy bounds the cumulative ``(epsilon, delta)`` that may be spent under a
+    release scope and fixes the composition rule used to accumulate spend. It is
+    loaded from committed config and carries no source data.
+    """
+
+    scope: str
+    max_epsilon: float
+    max_delta: float
+    composition: CompositionRule = "basic"
+    delta_prime: float = 0.0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scope", _non_empty_string(self.scope))
+        object.__setattr__(
+            self,
+            "max_epsilon",
+            _positive_float(self.max_epsilon, field_name="max_epsilon"),
+        )
+        object.__setattr__(
+            self,
+            "max_delta",
+            _delta_float(self.max_delta, field_name="max_delta"),
+        )
+        object.__setattr__(
+            self,
+            "composition",
+            _composition_rule(self.composition),
+        )
+        delta_prime = _non_negative_float(self.delta_prime, field_name="delta_prime")
+        if self.composition == "advanced":
+            if delta_prime <= 0.0:
+                raise ValueError(
+                    "advanced composition requires a positive delta_prime slack"
+                )
+            if delta_prime >= self.max_delta:
+                raise ValueError("delta_prime must be smaller than max_delta")
+        else:
+            delta_prime = 0.0
+        object.__setattr__(self, "delta_prime", delta_prime)
+
+    @classmethod
+    def from_mapping(cls, scope: str, payload: Mapping[str, Any]) -> EpsilonPolicy:
+        """Build a policy from a committed-config mapping for ``scope``."""
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("policy payload must be a mapping")
+        return cls(
+            scope=scope,
+            max_epsilon=payload["max_epsilon"],
+            max_delta=payload["max_delta"],
+            composition=payload.get("composition", "basic"),
+            delta_prime=payload.get("delta_prime", 0.0),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-compatible policy payload."""
+
+        return {
+            "scope": self.scope,
+            "max_epsilon": self.max_epsilon,
+            "max_delta": self.max_delta,
+            "composition": self.composition,
+            "delta_prime": self.delta_prime,
+        }
+
+
+@dataclass(frozen=True)
+class GenerationSpend:
+    """One privacy spend charged by a synthetic-generation request.
+
+    Records only numeric accounting aggregates and scope/family identifiers; no
+    raw source rows, column values, or PHI ever enter a spend record.
+    """
+
+    sequence: int
+    scope: str
+    family: str
+    epsilon: float
+    delta: float
+    mechanism: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "sequence",
+            _positive_int(self.sequence, field_name="sequence"),
+        )
+        object.__setattr__(self, "scope", _identifier(self.scope, field_name="scope"))
+        object.__setattr__(
+            self, "family", _identifier(self.family, field_name="family")
+        )
+        object.__setattr__(
+            self,
+            "epsilon",
+            _non_negative_float(self.epsilon, field_name="epsilon"),
+        )
+        object.__setattr__(
+            self,
+            "delta",
+            _delta_float(self.delta, field_name="delta"),
+        )
+        object.__setattr__(
+            self,
+            "mechanism",
+            _identifier(self.mechanism, field_name="mechanism"),
+        )
+
+    def spend_hash(self, *, salt: str = "") -> str:
+        """Return a deterministic hash over non-PHI accounting metadata."""
+
+        payload = {
+            "delta": self.delta,
+            "epsilon": self.epsilon,
+            "family": self.family,
+            "mechanism": self.mechanism,
+            "salt": salt,
+            "scope": self.scope,
+            "sequence": self.sequence,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def to_dict(self, *, salt: str = "") -> dict[str, Any]:
+        """Return a deterministic JSON-compatible spend payload."""
+
+        return {
+            "sequence": self.sequence,
+            "scope": self.scope,
+            "family": self.family,
+            "epsilon": self.epsilon,
+            "delta": self.delta,
+            "mechanism": self.mechanism,
+            "spend_hash": self.spend_hash(salt=salt),
+        }
+
+
+@dataclass(frozen=True)
+class BudgetComposition:
+    """Cumulative composition totals for one scope under its policy rule."""
+
+    scope: str
+    composition: CompositionRule
+    query_count: int
+    epsilon: float
+    delta: float
+    max_epsilon: float
+    max_delta: float
+    remaining_epsilon: float
+    remaining_delta: float
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-compatible composition payload."""
+
+        return {
+            "scope": self.scope,
+            "composition": self.composition,
+            "query_count": self.query_count,
+            "epsilon": self.epsilon,
+            "delta": self.delta,
+            "max_epsilon": self.max_epsilon,
+            "max_delta": self.max_delta,
+            "remaining_epsilon": self.remaining_epsilon,
+            "remaining_delta": self.remaining_delta,
+        }
+
+
+@dataclass(frozen=True)
+class BudgetDecision:
+    """Outcome of gating a generation request against a scope's policy."""
+
+    allowed: bool
+    scope: str
+    requested_epsilon: float
+    requested_delta: float
+    composition: CompositionRule
+    projected_epsilon: float
+    projected_delta: float
+    max_epsilon: float
+    max_delta: float
+    remaining_epsilon: float
+    remaining_delta: float
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-compatible decision payload."""
+
+        return {
+            "allowed": self.allowed,
+            "scope": self.scope,
+            "requested_epsilon": self.requested_epsilon,
+            "requested_delta": self.requested_delta,
+            "composition": self.composition,
+            "projected_epsilon": self.projected_epsilon,
+            "projected_delta": self.projected_delta,
+            "max_epsilon": self.max_epsilon,
+            "max_delta": self.max_delta,
+            "remaining_epsilon": self.remaining_epsilon,
+            "remaining_delta": self.remaining_delta,
+            "reason": self.reason,
+        }
+
+
+class BudgetExceeded(ValueError):
+    """Raised when a generation request would exceed the scope's epsilon policy."""
+
+    def __init__(self, decision: BudgetDecision) -> None:
+        self.decision = decision
+        super().__init__(
+            "DP generation budget exceeded for scope "
+            f"{decision.scope!r}: epsilon={decision.projected_epsilon:.6g}/"
+            f"{decision.max_epsilon:.6g} (remaining {decision.remaining_epsilon:.6g}), "
+            f"delta={decision.projected_delta:.6g}/{decision.max_delta:.6g} "
+            f"(remaining {decision.remaining_delta:.6g})"
+        )
+
+
+@dataclass
+class DPGenerationBudgetAccountant:
+    """Accountant that gates synthetic-data generation against epsilon policies.
+
+    Cumulative ``(epsilon, delta)`` spend is tracked per release scope, composed
+    under the scope policy's rule (``basic`` sequential composition or ``advanced``
+    Dwork-Rothblum-Vadhan composition), and persisted as a numeric-only ledger.
+    A synthesizer bridge (sibling OM-772 work) calls :meth:`guard_generation`
+    before generation; this class never generates data itself.
+    """
+
+    policies: Mapping[str, EpsilonPolicy]
+    _ledger: list[GenerationSpend] = field(default_factory=list, repr=False)
+
+    def __post_init__(self) -> None:
+        normalized: dict[str, EpsilonPolicy] = {}
+        for scope, policy in dict(self.policies).items():
+            key = _non_empty_string(scope)
+            if not isinstance(policy, EpsilonPolicy):
+                policy = EpsilonPolicy.from_mapping(key, policy)
+            if policy.scope != key:
+                raise ValueError(
+                    f"policy scope {policy.scope!r} does not match key {key!r}"
+                )
+            normalized[key] = policy
+        if not normalized:
+            raise ValueError("at least one epsilon policy is required")
+        self.policies = normalized
+        self._ledger = list(self._ledger)
+
+    @classmethod
+    def from_config(cls) -> DPGenerationBudgetAccountant:
+        """Build an accountant from the committed epsilon-policy config."""
+
+        return cls(load_epsilon_policies())
+
+    @property
+    def ledger(self) -> tuple[GenerationSpend, ...]:
+        """Return recorded spends in charge order."""
+
+        return tuple(self._ledger)
+
+    def policy_for(self, scope: str) -> EpsilonPolicy:
+        """Return the epsilon policy governing ``scope`` or raise ``KeyError``."""
+
+        key = _non_empty_string(scope)
+        if key not in self.policies:
+            raise KeyError(f"no epsilon policy for scope {key!r}")
+        return self.policies[key]
+
+    def compose(
+        self,
+        scope: str,
+        *,
+        family: str | None = None,
+        extra: Sequence[GenerationSpend] = (),
+    ) -> BudgetComposition:
+        """Return cumulative composition for ``scope`` plus any ``extra`` spend."""
+
+        policy = self.policy_for(scope)
+        recorded = [spend for spend in self._ledger if spend.scope == policy.scope]
+        if family is not None:
+            wanted = _non_empty_string(family)
+            recorded = [spend for spend in recorded if spend.family == wanted]
+        selected = (*recorded, *extra)
+        epsilons = [spend.epsilon for spend in selected]
+        deltas = [spend.delta for spend in selected]
+        if policy.composition == "advanced":
+            epsilon = _advanced_epsilon(epsilons, policy.delta_prime)
+            delta = _advanced_delta(deltas, policy.delta_prime)
+        else:
+            epsilon = math.fsum(epsilons)
+            delta = math.fsum(deltas)
+        return BudgetComposition(
+            scope=policy.scope,
+            composition=policy.composition,
+            query_count=len(selected),
+            epsilon=epsilon,
+            delta=delta,
+            max_epsilon=policy.max_epsilon,
+            max_delta=policy.max_delta,
+            remaining_epsilon=policy.max_epsilon - epsilon,
+            remaining_delta=policy.max_delta - delta,
+        )
+
+    def check_budget(
+        self,
+        requested_epsilon: float,
+        requested_delta: float,
+        scope: str,
+        *,
+        family: str = "default",
+        mechanism: str = "gaussian",
+    ) -> BudgetDecision:
+        """Return whether a request fits the scope policy without recording it.
+
+        The ledger is never mutated. The returned decision reports the projected
+        cumulative spend, the composition rule used, and the remaining headroom.
+        """
+
+        policy = self.policy_for(scope)
+        candidate = GenerationSpend(
+            sequence=len(self._ledger) + 1,
+            scope=policy.scope,
+            family=family,
+            epsilon=requested_epsilon,
+            delta=requested_delta,
+            mechanism=mechanism,
+        )
+        committed = self.compose(policy.scope)
+        projected = self.compose(policy.scope, extra=(candidate,))
+        epsilon_ok = projected.epsilon <= policy.max_epsilon
+        delta_ok = projected.delta <= policy.max_delta
+        allowed = epsilon_ok and delta_ok
+        if allowed:
+            reason = "within budget"
+        elif not epsilon_ok and not delta_ok:
+            reason = "epsilon and delta exceed policy"
+        elif not epsilon_ok:
+            reason = "epsilon exceeds policy"
+        else:
+            reason = "delta exceeds policy"
+        return BudgetDecision(
+            allowed=allowed,
+            scope=policy.scope,
+            requested_epsilon=candidate.epsilon,
+            requested_delta=candidate.delta,
+            composition=policy.composition,
+            projected_epsilon=projected.epsilon,
+            projected_delta=projected.delta,
+            max_epsilon=policy.max_epsilon,
+            max_delta=policy.max_delta,
+            remaining_epsilon=committed.remaining_epsilon,
+            remaining_delta=committed.remaining_delta,
+            reason=reason,
+        )
+
+    def guard_generation(
+        self,
+        requested_epsilon: float,
+        requested_delta: float,
+        scope: str,
+        *,
+        family: str = "default",
+        mechanism: str = "gaussian",
+    ) -> BudgetDecision:
+        """Gate one generation request; record the spend or raise ``BudgetExceeded``.
+
+        This is the hook a synthesizer bridge calls before generating rows. On a
+        blocked request the ledger is left unchanged and ``BudgetExceeded`` is
+        raised carrying the remaining budget.
+        """
+
+        decision = self.check_budget(
+            requested_epsilon,
+            requested_delta,
+            scope,
+            family=family,
+            mechanism=mechanism,
+        )
+        if not decision.allowed:
+            raise BudgetExceeded(decision)
+        self._ledger.append(
+            GenerationSpend(
+                sequence=len(self._ledger) + 1,
+                scope=decision.scope,
+                family=family,
+                epsilon=requested_epsilon,
+                delta=requested_delta,
+                mechanism=mechanism,
+            )
+        )
+        return decision
+
+    def to_dict(self, *, salt: str = "") -> dict[str, Any]:
+        """Return a deterministic JSON-compatible accountant payload."""
+
+        return {
+            "policies": {
+                scope: self.policies[scope].to_dict() for scope in sorted(self.policies)
+            },
+            "compositions": {
+                scope: self.compose(scope).to_dict() for scope in sorted(self.policies)
+            },
+            "ledger": [spend.to_dict(salt=salt) for spend in self._ledger],
+        }
+
+
+def load_epsilon_policies() -> dict[str, EpsilonPolicy]:
+    """Load the committed epsilon-policy config as a scope-to-policy mapping."""
+
+    resource = resources.files("openmed.risk").joinpath(
+        "data",
+        EPSILON_POLICY_CONFIG_RESOURCE,
+    )
+    with resource.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    schema_version = _positive_int(
+        payload.get("schema_version"),
+        field_name="schema_version",
+    )
+    if schema_version != CURRENT_EPSILON_POLICY_SCHEMA_VERSION:
+        raise ValueError(
+            "epsilon policy schema_version "
+            f"{schema_version} is not supported; expected "
+            f"{CURRENT_EPSILON_POLICY_SCHEMA_VERSION}"
+        )
+    policies = payload.get("policies")
+    if not isinstance(policies, Mapping) or not policies:
+        raise ValueError("epsilon policy config must define a non-empty 'policies' map")
+    return {
+        str(scope): EpsilonPolicy.from_mapping(str(scope), entry)
+        for scope, entry in policies.items()
+    }
+
+
+def epsilon_policy_for(scope: str) -> EpsilonPolicy:
+    """Return the committed epsilon policy governing ``scope``."""
+
+    policies = load_epsilon_policies()
+    key = _non_empty_string(scope)
+    if key not in policies:
+        raise KeyError(f"no epsilon policy for scope {key!r}")
+    return policies[key]
+
+
+@dataclass(frozen=True)
 class RiskBudget:
     """Limits for a single document's residual disclosure risk."""
 
@@ -740,6 +1192,37 @@ def _canonical_dp_label(value: Any) -> str:
     return label.upper().replace("-", "_").replace(" ", "_")
 
 
+def _composition_rule(value: Any) -> CompositionRule:
+    rule = _non_empty_string(value)
+    if rule not in {"basic", "advanced"}:
+        raise ValueError("composition must be one of basic or advanced")
+    return cast(CompositionRule, rule)
+
+
+def _advanced_epsilon(epsilons: Sequence[float], delta_prime: float) -> float:
+    """Return the Dwork-Rothblum-Vadhan advanced composition epsilon.
+
+    For a heterogeneous sequence of pure/approximate mechanisms this uses the
+    conservative bound ``sqrt(2 * ln(1/delta') * sum(eps_i**2)) +
+    sum(eps_i * (exp(eps_i) - 1))``, which reduces to the classic homogeneous
+    advanced composition theorem when every ``eps_i`` is equal.
+    """
+
+    if not epsilons:
+        return 0.0
+    if delta_prime <= 0.0:
+        return math.inf
+    sum_squares = math.fsum(epsilon * epsilon for epsilon in epsilons)
+    tail = math.fsum(epsilon * math.expm1(epsilon) for epsilon in epsilons)
+    return math.sqrt(2.0 * math.log(1.0 / delta_prime) * sum_squares) + tail
+
+
+def _advanced_delta(deltas: Sequence[float], delta_prime: float) -> float:
+    """Return advanced-composition delta: summed per-call delta plus the slack."""
+
+    return math.fsum(deltas) + delta_prime
+
+
 def _draw_kind(value: Any) -> SurrogateDrawKind:
     kind = _non_empty_string(value)
     if kind not in {"categorical", "numeric", "date_offset"}:
@@ -753,6 +1236,18 @@ def _non_empty_string(value: Any) -> str:
     parsed = str(value).strip()
     if not parsed:
         raise ValueError("value must not be empty")
+    return parsed
+
+
+def _identifier(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(
+            f"{field_name} must be a string identifier, not "
+            f"{type(value).__name__}; raw rows must never enter the ledger"
+        )
+    parsed = value.strip()
+    if not parsed:
+        raise ValueError(f"{field_name} must not be empty")
     return parsed
 
 
@@ -987,22 +1482,33 @@ def _violations(
 
 
 __all__ = [
+    "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
+    "CompositionRule",
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_POLICY_BUDGETS",
     "DEFAULT_QI_WEIGHTS",
     "DEFAULT_RDP_ORDERS",
     "DEFAULT_RISK_BUDGET",
+    "EPSILON_POLICY_CONFIG_RESOURCE",
+    "BudgetComposition",
+    "BudgetDecision",
+    "BudgetExceeded",
+    "DPGenerationBudgetAccountant",
     "DPSurrogateBudget",
     "DPSurrogateBudgetExceeded",
     "DPSurrogateComposition",
     "DPSurrogateSensitivity",
     "DPSurrogateSensitivityRegistry",
     "DPSurrogateSpend",
+    "EpsilonPolicy",
+    "GenerationSpend",
     "RiskBudget",
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
     "RiskBudgetViolation",
     "SurrogateDrawKind",
     "budget_for_policy",
+    "epsilon_policy_for",
     "evaluate_budget",
+    "load_epsilon_policies",
 ]

@@ -1,0 +1,57 @@
+{
+  "kind": "meta",
+  "version": 1,
+  "suite": "dp_budget_scenarios",
+  "synthetic": true,
+  "scenarios": [
+    {
+      "name": "basic_under_budget",
+      "scope": "research_broad",
+      "family": "lab_panels",
+      "prior_spends": [
+        {"epsilon": 1.0, "delta": 1e-06, "mechanism": "gaussian"},
+        {"epsilon": 2.0, "delta": 1e-06, "mechanism": "gaussian"}
+      ],
+      "request": {"epsilon": 2.0, "delta": 1e-06, "mechanism": "gaussian"},
+      "expected_allowed": true,
+      "expected_projected_epsilon": 5.0
+    },
+    {
+      "name": "basic_at_budget",
+      "scope": "research_broad",
+      "family": "lab_panels",
+      "prior_spends": [
+        {"epsilon": 3.0, "delta": 1e-06, "mechanism": "gaussian"},
+        {"epsilon": 3.0, "delta": 1e-06, "mechanism": "gaussian"}
+      ],
+      "request": {"epsilon": 2.0, "delta": 1e-06, "mechanism": "gaussian"},
+      "expected_allowed": true,
+      "expected_projected_epsilon": 8.0
+    },
+    {
+      "name": "basic_over_budget",
+      "scope": "research_broad",
+      "family": "lab_panels",
+      "prior_spends": [
+        {"epsilon": 3.0, "delta": 1e-06, "mechanism": "gaussian"},
+        {"epsilon": 3.0, "delta": 1e-06, "mechanism": "gaussian"},
+        {"epsilon": 2.0, "delta": 1e-06, "mechanism": "gaussian"}
+      ],
+      "request": {"epsilon": 0.5, "delta": 1e-06, "mechanism": "gaussian"},
+      "expected_allowed": false,
+      "expected_projected_epsilon": 8.5
+    },
+    {
+      "name": "advanced_under_budget",
+      "scope": "clinical_release_default",
+      "family": "flowsheet",
+      "prior_spends": [
+        {"epsilon": 0.1, "delta": 1e-08, "mechanism": "gaussian"},
+        {"epsilon": 0.1, "delta": 1e-08, "mechanism": "gaussian"},
+        {"epsilon": 0.1, "delta": 1e-08, "mechanism": "gaussian"}
+      ],
+      "request": {"epsilon": 0.1, "delta": 1e-08, "mechanism": "gaussian"},
+      "expected_allowed": true
+    }
+  ]
+}

@@ -318,6 +318,15 @@ type SMARTBackendIngestionRequest struct {
 	KeepAlive             any                    `json:"keep_alive,omitempty"`
 }
 
+// OMOPLoadRequest is the request body for POST /omop/load. RecordsJSONL carries
+// newline-delimited grounded note records and the response is a PHI-free load
+// summary.
+type OMOPLoadRequest struct {
+	RecordsJSONL        string `json:"records_jsonl"`
+	VocabularyVersion   string `json:"vocabulary_version,omitempty"`
+	ValidateConstraints bool   `json:"validate_constraints,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Response types
 // ---------------------------------------------------------------------------
@@ -534,6 +543,30 @@ type JobResponse struct {
 	CompletedAt     *string               `json:"completed_at"`
 	ExpiresAt       string                `json:"expires_at"`
 	StatusURL       string                `json:"status_url,omitempty"`
+}
+
+// OMOPRejectedSpan is a PHI-free rejection detail from an /omop/load summary.
+type OMOPRejectedSpan struct {
+	Reason         string  `json:"reason"`
+	SourceNoteHash string  `json:"source_note_hash"`
+	Start          *int    `json:"start"`
+	End            *int    `json:"end"`
+	Domain         *string `json:"domain"`
+}
+
+// OMOPConstraintViolations summarizes CDM constraint violations by reason.
+type OMOPConstraintViolations struct {
+	Count    int            `json:"count"`
+	ByReason map[string]int `json:"by_reason"`
+}
+
+// OMOPLoadResponse is the PHI-free summary returned by POST /omop/load.
+type OMOPLoadResponse struct {
+	RowCounts            map[string]int            `json:"row_counts"`
+	RejectionCounts      map[string]int            `json:"rejection_counts"`
+	RejectedSpans        []OMOPRejectedSpan        `json:"rejected_spans"`
+	SourceNoteHashes     []string                  `json:"source_note_hashes"`
+	ConstraintViolations *OMOPConstraintViolations `json:"constraint_violations,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -927,6 +960,15 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 		return nil, err
 	}
 	if err := decodeInto("/models/unload", body, &out.Raw); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// LoadOMOP calls POST /omop/load and returns a PHI-free CDM load summary.
+func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
+	var out OMOPLoadResponse
+	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
