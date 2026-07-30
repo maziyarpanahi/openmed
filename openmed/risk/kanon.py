@@ -39,7 +39,14 @@ from .reid import (
     _Record,
 )
 
-__all__ = ["build_generalization_hierarchies", "enforce_kanon", "kanon_report"]
+__all__ = [
+    "MemoryCeilingError",
+    "StreamingKanonDecision",
+    "StreamingKanonState",
+    "build_generalization_hierarchies",
+    "enforce_kanon",
+    "kanon_report",
+]
 
 _SUPPORTED_L_METRICS = ("distinct", "entropy")
 _SUPPORTED_T_DISTANCES = ("variational",)
@@ -2058,3 +2065,252 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+# Approximate resident footprint charged for one distinct equivalence class in
+# the streaming census: a dict entry, its integer count, and the small tuple of
+# quasi-identifier tokens that key it. The exact number is not load-bearing; it
+# only needs to grow with the number of *distinct* classes so a caller can bound
+# the census independently of the row count.
+_PER_CLASS_OVERHEAD_BYTES = 96
+
+
+class MemoryCeilingError(ValueError):
+    """Raised when the streaming quasi-identifier census exceeds its ceiling.
+
+    The census only grows with the number of *distinct* generalized
+    quasi-identifier classes, never with the number of rows, so this signals a
+    genuinely high-cardinality quasi-identifier space rather than a large file.
+    Coarsen the generalization node, declare fewer quasi-identifiers, or raise
+    ``memory_ceiling`` deliberately.
+    """
+
+
+@dataclass(frozen=True)
+class StreamingKanonDecision:
+    """Aggregate outcome of a streaming k-anonymity pass.
+
+    Every field is a count derived from the global equivalence-class census;
+    no cell value, record identifier, or class key is retained, so the decision
+    is safe to log or serialize.
+    """
+
+    record_count: int
+    released_count: int
+    suppressed_count: int
+    released_k: int
+    class_count: int
+    suppressed_class_count: int
+    census_bytes: int
+
+    def to_dict(self) -> dict[str, int]:
+        """Return the decision as a JSON-serializable aggregate mapping."""
+
+        return {
+            "record_count": self.record_count,
+            "released_count": self.released_count,
+            "suppressed_count": self.suppressed_count,
+            "released_k": self.released_k,
+            "class_count": self.class_count,
+            "suppressed_class_count": self.suppressed_class_count,
+            "census_bytes": self.census_bytes,
+        }
+
+
+class StreamingKanonState:
+    """Bounded-memory, two-pass k-anonymity over an externally-iterated table.
+
+    The state derives global equivalence classes from a fixed generalization
+    node and suppresses every class whose *global* size is below ``target_k``.
+    Because generalization is applied per value and the census is keyed by the
+    generalized quasi-identifier tuple, the working set scales with the number
+    of distinct classes rather than the number of rows, and the suppression
+    decision is identical no matter how the rows are batched across chunks or
+    Parquet row groups.
+
+    Usage is two passes over the same source. Pass one calls :meth:`observe`
+    for every row; :meth:`resolve` then fixes the global census. Pass two calls
+    :meth:`generalize` and :meth:`is_released` per row to route surviving rows
+    to output. Equivalence-class keys reuse the same value normalization as
+    :func:`kanon_report`, so re-reading the released rows and measuring them
+    reproduces the ``released_k`` reported here.
+    """
+
+    def __init__(
+        self,
+        quasi_identifiers: Sequence[str],
+        *,
+        target_k: int = 2,
+        generalization: Mapping[str, int] | None = None,
+        hierarchies: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+        remove_direct_identifiers: bool = True,
+        memory_ceiling: int | None = None,
+    ) -> None:
+        qis = _validated_columns(
+            quasi_identifiers,
+            name="quasi_identifiers",
+            allow_none=False,
+        )
+        if not qis:
+            raise ValueError("quasi_identifiers must contain at least one column")
+        if type(target_k) is not int or target_k < 1:
+            raise ValueError("target_k must be an integer >= 1")
+        if memory_ceiling is not None and (
+            type(memory_ceiling) is not int or memory_ceiling < 1
+        ):
+            raise ValueError("memory_ceiling must be a positive integer of bytes")
+
+        self._qis: tuple[str, ...] = qis
+        self._target_k = int(target_k)
+        self._remove_direct = bool(remove_direct_identifiers)
+        self._memory_ceiling = memory_ceiling
+        self._levels = _build_hierarchy_levels([], qis, hierarchies)
+        self._node = self._resolve_node(generalization)
+
+        self._counts: Counter[tuple[str, ...]] = Counter()
+        self._census_bytes = 0
+        self._record_count = 0
+        self._resolved = False
+        self._suppressed: frozenset[tuple[str, ...]] = frozenset()
+        self._decision: StreamingKanonDecision | None = None
+
+    def _resolve_node(
+        self,
+        generalization: Mapping[str, int] | None,
+    ) -> dict[str, int]:
+        node = {field: 0 for field in self._qis}
+        if generalization is None:
+            return node
+        if not isinstance(generalization, Mapping):
+            raise TypeError("generalization must map quasi-identifier names to levels")
+        unknown = sorted(set(generalization) - set(self._qis))
+        if unknown:
+            raise ValueError(
+                f"generalization targets undeclared quasi-identifiers: {unknown!r}"
+            )
+        for field, level in generalization.items():
+            if type(level) is not int or level < 0 or level >= len(self._levels[field]):
+                raise ValueError(
+                    f"generalization level for {field!r} must be an integer in "
+                    f"[0, {len(self._levels[field]) - 1}]"
+                )
+            node[field] = int(level)
+        return node
+
+    @property
+    def quasi_identifiers(self) -> tuple[str, ...]:
+        """Return the sorted quasi-identifier column names."""
+
+        return self._qis
+
+    @property
+    def generalization_node(self) -> dict[str, int]:
+        """Return the per-quasi-identifier generalization level in effect."""
+
+        return dict(self._node)
+
+    @property
+    def class_count(self) -> int:
+        """Return the number of distinct global equivalence classes seen."""
+
+        return len(self._counts)
+
+    @property
+    def census_bytes(self) -> int:
+        """Return the approximate resident footprint of the class census."""
+
+        return self._census_bytes
+
+    @property
+    def record_count(self) -> int:
+        """Return the number of rows observed during the first pass."""
+
+        return self._record_count
+
+    def generalize(self, fields: Mapping[str, Any]) -> dict[str, Any]:
+        """Return ``fields`` with direct identifiers dropped and QIs generalized.
+
+        Non-quasi-identifier, non-direct-identifier columns (sensitive, free
+        text, and safe columns) pass through untouched so the caller can route
+        free-text cells through de-identification separately.
+        """
+
+        transformed: dict[str, Any] = {}
+        for name, value in fields.items():
+            if self._remove_direct and _field_is_direct_identifier(name):
+                continue
+            transformed[name] = value
+        for field in self._qis:
+            if self._remove_direct and _field_is_direct_identifier(field):
+                transformed.pop(field, None)
+                continue
+            level = self._levels[field][self._node[field]]
+            transformed[field] = level.transform(_hierarchy_input(fields, field))
+        return transformed
+
+    def class_key(self, generalized: Mapping[str, Any]) -> tuple[str, ...]:
+        """Return the equivalence-class key for already-generalized fields."""
+
+        return tuple(_explicit_qi_value(generalized, field) for field in self._qis)
+
+    def observe(self, fields: Mapping[str, Any]) -> None:
+        """Fold one source row into the global census (first pass)."""
+
+        if self._resolved:
+            raise RuntimeError("cannot observe rows after resolve()")
+        key = self.class_key(self.generalize(fields))
+        self._record_count += 1
+        if key not in self._counts:
+            projected = self._census_bytes + self._class_bytes(key)
+            if self._memory_ceiling is not None and projected > self._memory_ceiling:
+                raise MemoryCeilingError(
+                    "streaming quasi-identifier census would exceed the "
+                    f"{self._memory_ceiling}-byte ceiling at "
+                    f"{len(self._counts) + 1} distinct classes; coarsen the "
+                    "generalization, declare fewer quasi-identifiers, or raise "
+                    "memory_ceiling"
+                )
+            self._census_bytes = projected
+        self._counts[key] += 1
+
+    @staticmethod
+    def _class_bytes(key: tuple[str, ...]) -> int:
+        return _PER_CLASS_OVERHEAD_BYTES + sum(len(token) for token in key)
+
+    def resolve(self) -> StreamingKanonDecision:
+        """Fix the global census and compute the release/suppression decision."""
+
+        if not self._resolved:
+            suppressed = frozenset(
+                key for key, count in self._counts.items() if count < self._target_k
+            )
+            released_counts = [
+                count for key, count in self._counts.items() if key not in suppressed
+            ]
+            released_count = sum(released_counts)
+            self._suppressed = suppressed
+            self._resolved = True
+            self._decision = StreamingKanonDecision(
+                record_count=self._record_count,
+                released_count=released_count,
+                suppressed_count=self._record_count - released_count,
+                released_k=min(released_counts) if released_counts else 0,
+                class_count=len(self._counts),
+                suppressed_class_count=len(suppressed),
+                census_bytes=self._census_bytes,
+            )
+        assert self._decision is not None
+        return self._decision
+
+    @property
+    def decision(self) -> StreamingKanonDecision:
+        """Return the resolved decision, computing it on first access."""
+
+        return self.resolve()
+
+    def is_released(self, key: tuple[str, ...]) -> bool:
+        """Return whether rows in equivalence class ``key`` are released."""
+
+        if not self._resolved:
+            raise RuntimeError("call resolve() before is_released()")
+        return key not in self._suppressed and self._counts.get(key, 0) > 0

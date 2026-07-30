@@ -38,6 +38,14 @@ from .qi_detect import (
     DiscoveryConfigurationError,
     scan_table,
 )
+from .streaming import (
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_MEMORY_CEILING,
+    SUPPORTED_STREAMING_SUFFIXES,
+    MemoryCeilingError,
+    StreamingKanonDecision,
+    stream_deidentify_table,
+)
 from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
 
 __all__ = [
@@ -47,11 +55,14 @@ __all__ = [
     "REQUIRED_DISCHARGE_SLOTS",
     "AnalyteRow",
     "DischargeSlotName",
+    "DEFAULT_CHUNK_SIZE",
+    "DEFAULT_MEMORY_CEILING",
     "DischargeSummary",
     "DischargeSummarySection",
     "DiscoveryConfigurationError",
     "Flowsheet",
     "LabPanel",
+    "MemoryCeilingError",
     "ParameterSeries",
     "ROLE_DIRECT_ID",
     "ROLE_FREE_TEXT",
@@ -59,13 +70,16 @@ __all__ = [
     "ROLE_QUASI_ID",
     "ROLE_SAFE",
     "ROLE_SENSITIVE",
+    "SUPPORTED_STREAMING_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
+    "StreamingKanonDecision",
     "TimeSeriesPoint",
     "canonical_analyte",
     "canonical_discharge_slot",
     "parse_lab_report",
     "read_table",
     "scan_table",
+    "stream_deidentify_table",
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
