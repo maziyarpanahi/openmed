@@ -1218,7 +1218,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     _tool_spec(
         name="openmed_search_models",
         title="Search Available Models",
-        description="Search OpenMed models from the canonical manifest by category, " \
+        description="Search OpenMed models from the canonical manifest by category, "
         "license, size and language.",
         read_only_hint=True,
         destructive_hint=False,
