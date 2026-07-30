@@ -19,6 +19,7 @@ from typing import Any, Iterable
 
 from openmed.clinical.grounding import Candidate
 
+from .code_provenance import stamp_coding_provenance
 from .codeable_concept_simple import codeable_concept as _build_codeable_concept
 from .codeable_concept_simple import system_uri as _system_uri
 
@@ -56,23 +57,30 @@ def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
     """Build a FHIR R4 ``CodeableConcept`` for a grounded span.
 
     Each candidate becomes a ``Coding`` with the canonical HL7 system URI, code,
-    display, and an extension-free internal ``_score`` (the linker score, for
-    downstream filtering). Codings are ordered deterministically by the shared
-    system priority; ``.text`` is the source surface. A span with no candidates
-    yields a text-only concept.
+    display, and an internal ``_score`` (the linker score, for downstream
+    filtering). Candidates carrying a vocabulary version are stamped through
+    the shared code-provenance path. Codings are ordered deterministically by
+    the shared system priority; ``.text`` is the source surface. A span with no
+    candidates yields a text-only concept.
     """
     if not grounded_span.candidates:
         return {"text": grounded_span.text}
 
-    codings = [
-        {
+    codings = []
+    for candidate in grounded_span.candidates:
+        coding = {
             "system": _uri_for(candidate.system),
             "code": candidate.code,
             "display": candidate.display,
             "_score": float(candidate.score),
         }
-        for candidate in grounded_span.candidates
-    ]
+        if candidate.vocab_version:
+            coding = stamp_coding_provenance(
+                coding,
+                {coding["system"]: candidate.vocab_version},
+                source_label="grounding candidate",
+            )
+        codings.append(coding)
     return _build_codeable_concept(codings, text=grounded_span.text)
 
 

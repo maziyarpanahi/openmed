@@ -15,6 +15,15 @@ from .assertion_grounding import (
 )
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
+from .provenance import (
+    GROUNDING_ASSIST_ONLY_ADVISORY,
+    GROUNDING_METHODS,
+    GroundingAlternative,
+    GroundingProvenance,
+    grounding_provenance,
+    provenance_version_pins,
+    scan_provenance_for_raw_text,
+)
 from .registry import (
     InvalidVocabularyLoaderError,
     RestrictedVocabularyLoaderError,
@@ -53,7 +62,11 @@ __all__ = [
     "ConceptMatch",
     "FREE_VOCAB_SYSTEMS",
     "GROUNDING_ASSERTION_STATUSES",
+    "GROUNDING_ASSIST_ONLY_ADVISORY",
+    "GROUNDING_METHODS",
     "GROUNDING_POLICIES",
+    "GroundingAlternative",
+    "GroundingProvenance",
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
@@ -82,9 +95,12 @@ __all__ = [
     "get_index",
     "get_linker",
     "get_loader",
+    "grounding_provenance",
     "normalize_language",
     "normalize_term",
+    "provenance_version_pins",
     "register_linker",
     "register_loader",
+    "scan_provenance_for_raw_text",
     "validate_vocabulary_loader",
 ]
