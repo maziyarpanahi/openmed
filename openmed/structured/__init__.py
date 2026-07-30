@@ -51,6 +51,13 @@ from .relational import (
     SurrogateManifest,
     deidentify_linked_tables,
 )
+from .scan import (
+    ColumnClassification,
+    ColumnRole,
+    RoleOverrideError,
+    TableRoleScan,
+)
+from .scan import scan_table as scan_column_roles
 from .streaming import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_MEMORY_CEILING,
@@ -76,7 +83,9 @@ __all__ = [
     "RELATIONAL_ADVISORY",
     "REQUIRED_DISCHARGE_SLOTS",
     "AnalyteRow",
+    "ColumnClassification",
     "ColumnRef",
+    "ColumnRole",
     "DanglingForeignKeyError",
     "DateColumn",
     "DischargeSlotName",
@@ -100,6 +109,7 @@ __all__ = [
     "RelationalDeidentificationResult",
     "RelationalSchema",
     "RelationalSchemaError",
+    "RoleOverrideError",
     "SUPPORTED_STREAMING_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
     "StreamingKanonDecision",
@@ -108,6 +118,7 @@ __all__ = [
     "Table",
     "TableCell",
     "TableToken",
+    "TableRoleScan",
     "TimeSeriesPoint",
     "canonical_analyte",
     "cell_at",
@@ -115,6 +126,7 @@ __all__ = [
     "deidentify_linked_tables",
     "parse_lab_report",
     "read_table",
+    "scan_column_roles",
     "scan_table",
     "stream_deidentify_table",
     "structure_discharge_summary",
