@@ -16,8 +16,17 @@ from openmed.structured.relational import (
     KeySpace,
     RelationalSchema,
     RelationalSchemaError,
+    _namespaced_source,
+    _shift_date,
     deidentify_linked_tables,
 )
+
+
+def _surrogate(vault, key_space: str, value: str) -> str:
+    """Look a surrogate back up the same way the transform keyed it."""
+
+    return vault.get(_namespaced_source(key_space, value), label=key_space)
+
 
 VAULT_SECRET = "unit-test-vault-secret-0123456789"
 DATE_SECRET = b"unit-test-date-shift-secret-9876543210"
@@ -155,8 +164,8 @@ def test_encounter_foreign_key_join_is_reproduced_on_surrogates():
     assert len(deidentified) == len(original) == len(tables["labs"])
     expected = sorted(
         (
-            vault.get(lab["lab_id"], label="LAB_ID"),
-            vault.get(enc["encounter_id"], label="ENCOUNTER_ID"),
+            _surrogate(vault, "LAB_ID", lab["lab_id"]),
+            _surrogate(vault, "ENCOUNTER_ID", enc["encounter_id"]),
         )
         for lab, enc in original
     )
@@ -179,8 +188,8 @@ def test_patient_foreign_key_join_is_reproduced_on_surrogates():
     assert len(deidentified) == len(original) == len(tables["encounters"])
     expected = sorted(
         (
-            vault.get(enc["encounter_id"], label="ENCOUNTER_ID"),
-            vault.get(dem["patient_id"], label="PATIENT_ID"),
+            _surrogate(vault, "ENCOUNTER_ID", enc["encounter_id"]),
+            _surrogate(vault, "PATIENT_ID", dem["patient_id"]),
         )
         for enc, dem in original
     )
@@ -227,8 +236,8 @@ def test_same_source_key_yields_one_surrogate_across_all_tables():
 def test_surrogates_are_sourced_from_the_vault():
     tables, vault, result = _deidentify()
     for original, row in zip(tables["demographics"], result.tables["demographics"]):
-        assert row["patient_id"] == vault.get(
-            original["patient_id"], label="PATIENT_ID"
+        assert row["patient_id"] == _surrogate(
+            vault, "PATIENT_ID", original["patient_id"]
         )
         assert row["patient_id"] != original["patient_id"]
 
@@ -373,6 +382,82 @@ def test_manifest_offsets_are_keyed_by_surrogate_not_raw():
     raw_patient_ids = {row["patient_id"] for row in tables["demographics"]}
     assert set(result.manifest.subject_offsets).isdisjoint(raw_patient_ids)
     assert len(result.manifest.subject_offsets) == len(raw_patient_ids)
+
+
+# ---------------------------------------------------------------------------
+# Key-space injectivity — same raw value in distinct spaces must diverge
+# ---------------------------------------------------------------------------
+
+
+def _two_space_tables(order):
+    """Return two tables that share the raw value ``X1`` under distinct keys."""
+
+    people = [{"person_id": "X1", "note": "p"}]
+    orders = [{"order_id": "X1", "person_id": "X1"}]
+    tables = {"people": people, "orders": orders}
+    return {name: tables[name] for name in order}
+
+
+def _two_space_schema() -> RelationalSchema:
+    return RelationalSchema(
+        key_spaces=(
+            KeySpace(
+                "PERSON_ID",
+                (
+                    ColumnRef("people", "person_id"),
+                    ColumnRef("orders", "person_id"),
+                ),
+            ),
+            KeySpace("ORDER_ID", (ColumnRef("orders", "order_id"),)),
+        ),
+        subject_key_space="PERSON_ID",
+        foreign_keys=(ForeignKey("orders", "person_id", "people", "person_id"),),
+    )
+
+
+def test_same_raw_value_in_distinct_key_spaces_yields_distinct_surrogates():
+    result = deidentify_linked_tables(
+        _two_space_tables(("people", "orders")),
+        _two_space_schema(),
+        vault=_vault(),
+        date_shift_secret=DATE_SECRET,
+    )
+    person_surrogate = result.tables["people"][0]["person_id"]
+    order_surrogate = result.tables["orders"][0]["order_id"]
+    # The shared FK column still matches its parent (same key space).
+    assert result.tables["orders"][0]["person_id"] == person_surrogate
+    # But the identically-valued key in a different key space must diverge.
+    assert order_surrogate != person_surrogate
+
+
+def test_surrogates_are_independent_of_table_processing_order():
+    forward = deidentify_linked_tables(
+        _two_space_tables(("people", "orders")),
+        _two_space_schema(),
+        vault=_vault(),
+        date_shift_secret=DATE_SECRET,
+    )
+    reverse = deidentify_linked_tables(
+        _two_space_tables(("orders", "people")),
+        _two_space_schema(),
+        vault=_vault(),
+        date_shift_secret=DATE_SECRET,
+    )
+    assert forward.tables["people"] == reverse.tables["people"]
+    assert forward.tables["orders"] == reverse.tables["orders"]
+
+
+# ---------------------------------------------------------------------------
+# Robustness — out-of-range date shift is a descriptive error
+# ---------------------------------------------------------------------------
+
+
+def test_out_of_range_date_shift_raises_schema_error():
+    column = DateColumn("demographics", "event_date", "patient_id")
+    with pytest.raises(RelationalSchemaError, match="representable date range"):
+        _shift_date(date(9999, 12, 31), 5, column)
+    with pytest.raises(RelationalSchemaError, match="representable date range"):
+        _shift_date(date(1, 1, 1), -5, column)
 
 
 # ---------------------------------------------------------------------------

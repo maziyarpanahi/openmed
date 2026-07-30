@@ -320,12 +320,14 @@ def deidentify_linked_tables(
                 cache_key = (space_name, value)
                 if cache_key not in surrogate_by_space_value:
                     surrogate_by_space_value[cache_key] = _key_surrogate(
-                        vault, label=space_name, value=value
+                        vault, key_space=space_name, value=value
                     )
                     if cache_key not in seen_sources:
                         sources.append(
                             SurrogateSource(
-                                source_text=value, label=space_name, lang=_LANG
+                                source_text=_namespaced_source(space_name, value),
+                                label=space_name,
+                                lang=_LANG,
                             )
                         )
                         seen_sources.add(cache_key)
@@ -458,9 +460,26 @@ def _check_referential_integrity(
     return orphaned
 
 
-def _key_surrogate(vault: SurrogateVault, *, label: str, value: str) -> str:
-    token = vault.text_hash(value).rsplit(":", 1)[-1][:12]
-    stem = _surrogate_stem(label)
+_NAMESPACE_SEPARATOR = "\x00"
+
+
+def _namespaced_source(key_space: str, value: str) -> str:
+    """Return the vault source key binding ``value`` to its key space.
+
+    ``core.labels.normalize_label`` collapses every custom key-space name to
+    ``OTHER``, so the vault ``label`` alone cannot separate two key spaces that
+    share a raw value. Namespacing the value moves that distinction into the
+    HMAC'd source text, keeping surrogates per-key-space injective and
+    independent of the order tables are processed in.
+    """
+
+    return f"{key_space}{_NAMESPACE_SEPARATOR}{value}"
+
+
+def _key_surrogate(vault: SurrogateVault, *, key_space: str, value: str) -> str:
+    source_text = _namespaced_source(key_space, value)
+    token = vault.text_hash(source_text).rsplit(":", 1)[-1][:12]
+    stem = _surrogate_stem(key_space)
 
     def create(attempt: int) -> str:
         if attempt == 0:
@@ -468,15 +487,17 @@ def _key_surrogate(vault: SurrogateVault, *, label: str, value: str) -> str:
         return f"{stem}_{token}_{attempt}"
 
     return vault.get_or_create(
-        value,
-        label=label,
+        source_text,
+        label=key_space,
         lang=_LANG,
         create_surrogate=create,
     )
 
 
-def _surrogate_stem(label: str) -> str:
-    cleaned = "".join(character if character.isalnum() else "_" for character in label)
+def _surrogate_stem(key_space: str) -> str:
+    cleaned = "".join(
+        character if character.isalnum() else "_" for character in key_space
+    )
     stem = cleaned.strip("_").lower()
     return stem or "key"
 
@@ -491,14 +512,20 @@ def _key_text(value: Any) -> str | None:
 def _shift_date(value: Any, offset_days: int, date_column: DateColumn) -> Any:
     if value is None or value == "":
         return value
-    if isinstance(value, datetime):
-        return value + timedelta(days=offset_days)
-    if isinstance(value, date):
-        return value + timedelta(days=offset_days)
-    if isinstance(value, str):
-        parsed, is_datetime = _parse_iso(value, date_column)
-        shifted = parsed + timedelta(days=offset_days)
-        return shifted.isoformat() if is_datetime else shifted.date().isoformat()
+    try:
+        if isinstance(value, datetime):
+            return value + timedelta(days=offset_days)
+        if isinstance(value, date):
+            return value + timedelta(days=offset_days)
+        if isinstance(value, str):
+            parsed, is_datetime = _parse_iso(value, date_column)
+            shifted = parsed + timedelta(days=offset_days)
+            return shifted.isoformat() if is_datetime else shifted.date().isoformat()
+    except OverflowError:
+        raise RelationalSchemaError(
+            f"date column {date_column.table}.{date_column.column} shifted by "
+            f"{offset_days} day(s) falls outside the representable date range"
+        ) from None
     raise RelationalSchemaError(
         f"date column {date_column.table}.{date_column.column} holds a value that "
         "is not a date, datetime, or ISO-8601 string"
