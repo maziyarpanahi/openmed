@@ -5,41 +5,173 @@ guard APIs against malformed inputs.
 
 ## OpenMedConfig sources
 
-`OpenMedConfig` reads values in the following order:
+Construct `OpenMedConfig` directly for explicit in-process settings, or load a
+flat TOML file with `load_config_from_file()`. When no path is passed, the
+loader checks `OPENMED_CONFIG` and then
+`~/.config/openmed/config.toml` (or the matching XDG config directory).
 
-1. Explicit keyword arguments when you instantiate it.
-2. Environment variables prefixed with `OPENMED_`.
-3. YAML file passed via `OPENMED_CONFIG_FILE` (or `openmed_config=` argument).
-4. Sensible defaults (CPU device, `~/.cache/openmed`, unauthenticated Hugging Face access).
+Environment controls are field-specific rather than a generic mapping from
+every `OPENMED_*` name. For example, `HF_TOKEN`, `OPENMED_OFFLINE`,
+`OPENMED_PROFILE`, and `OPENMED_TORCH_ATTENTION_BACKEND` are supported. When
+the device preference is unset or `"auto"`, `OPENMED_TORCH_DEVICE` (or the
+legacy `OPENMED_DEVICE`) is checked before automatic **MPS → CUDA → CPU**
+selection. Set the model cache with `cache_dir=` or the TOML `cache_dir` key;
+`OPENMED_CACHE_DIR` is used by selected deployment and data tooling and is not
+a generic `OpenMedConfig` override.
 
 ```python
 from pathlib import Path
-from openmed.core import ModelLoader, OpenMedConfig
+from openmed.core import ModelLoader
+from openmed.core.config import load_config_from_file
 
-config = OpenMedConfig.from_file(Path.home() / ".config/openmed/config.yaml")
+config = load_config_from_file(Path.home() / ".config/openmed/config.toml")
 loader = ModelLoader(config=config)
 ner = loader.create_pipeline("disease_detection_superclinical", aggregation_strategy="simple")
 entities = ner("Dapagliflozin added for HFpEF symptom relief.")
 ```
 
-### Minimal YAML file
+### Minimal TOML file
 
-```yaml title="~/.config/openmed/config.yaml"
-default_org: OpenMed
-device: cuda
-cache_dir: ~/.cache/openmed
-hf_token: ${HF_TOKEN}  # optional
-pipeline:
-  aggregation_strategy: simple
-  return_all_scores: false
+```toml title="~/.config/openmed/config.toml"
+default_org = "OpenMed"
+device = "cuda"
+cache_dir = "/mnt/cache/openmed"
+torch_attention_backend = "auto"
+cjk_width_convention = "cjk"
+transliteration_aware_name_matching = false
+indic_name_similarity_threshold = 0.80
 ```
 
-Environment variables override YAML values, making it easy to swap devices or cache directories in CI/CD:
+Runtime environment controls can select the config path, provide Hub
+credentials, or choose a device when the loaded config leaves it automatic:
 
 ```bash
-export OPENMED_DEVICE=cuda:1
-export OPENMED_CACHE_DIR=/mnt/cache/openmed
+export OPENMED_CONFIG=/etc/openmed/config.toml
+export HF_TOKEN=hf_xxx
+export OPENMED_TORCH_DEVICE=cuda:1
 ```
+
+For Indic personal-name pseudonymization, enable
+`transliteration_aware_name_matching` and reuse the same setting when reopening
+a file-backed surrogate vault. The collision threshold and optional local
+transliterator adapter are described in
+[Transliteration-aware Indic name matching](indic-name-matching.md).
+
+## CJK width normalization
+
+`cjk_width_convention="cjk"` is the default. It converts full-width Latin
+letters, digits, punctuation, and U+3000 ideographic spaces before PII
+detection while preserving offsets into the original text. This lets existing
+phone, date, and identifier patterns match full-width input without changing
+the returned surface text.
+
+Set `cjk_width_convention="nfkc"` to apply strict per-character NFKC
+normalization instead. Both modes retain an explicit source map so expanded
+compatibility characters still remap to their original code-point spans.
+
+## Chinese script normalization
+
+Install the optional Apache-2.0 OpenCC integration when clinical text can mix
+Simplified and Traditional Chinese:
+
+```bash
+pip install "openmed[zh]"
+```
+
+Script conversion is disabled by default. Set `chinese_target_script` to
+`"simplified"` or `"traditional"` to canonicalize Chinese variants before PII
+detection and segmentation:
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(chinese_target_script="simplified")
+```
+
+OpenMed keeps a code-point alignment from the converted text to the source, so
+detected PHI spans are projected back to the exact original characters before
+redaction. Context-dependent phrase rewrites map conservatively to their full
+source phrase rather than guessing partial offsets. If OpenCC is absent, the
+pre-pass returns the input unchanged with identity alignment and emits one
+optional-dependency warning.
+
+Chinese numeral helpers do not require the optional script-conversion package.
+They parse everyday and financial forms, return exact source code-point spans,
+and recognize valid year/month/day expressions:
+
+```python
+from openmed.processing import (
+    find_chinese_numbers,
+    normalize_chinese_dates,
+    parse_chinese_numeral,
+)
+
+assert parse_chinese_numeral("一百零一") == 101
+numbers = find_chinese_numbers("剂量三千五百毫升")
+dates = normalize_chinese_dates("出生于一九八五年十二月三日")
+```
+
+When PII detection uses `lang="zh"`, contextual patterns also recognize valid
+Chinese-numeral dates, medical-record identifiers, and clinical quantities.
+Invalid unit sequences and impossible calendar dates are rejected.
+
+## PyTorch attention backends
+
+`torch_attention_backend="auto"` is the default. In OpenMed 1.8.1 and later,
+automatic mode leaves backend selection to Transformers so it can choose an
+implementation supported by both the installed PyTorch runtime and the model
+architecture.
+
+Set an explicit backend only when you have verified that the model supports it:
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(torch_attention_backend="eager")
+```
+
+The equivalent environment override is:
+
+```bash
+export OPENMED_TORCH_ATTENTION_BACKEND=eager
+```
+
+Supported values are `auto`, `eager`, `sdpa`, and `flash_attention_2`. The
+`eager` implementation is the compatibility fallback. `sdpa` and
+`flash_attention_2` require support from the selected Transformers model in
+addition to compatible PyTorch and hardware.
+
+## Local-only offline mode
+
+Set `OPENMED_OFFLINE=1` or instantiate `OpenMedConfig(local_only=True)` when
+model files are already present in the configured cache or passed as a local
+model path. Offline mode sets the standard cache-only loader flags
+(`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and `HF_DATASETS_OFFLINE=1`) and
+passes `local_files_only=True` to Hub-backed model loaders.
+
+```bash
+export OPENMED_OFFLINE=1
+```
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(local_only=True, cache_dir="~/.cache/openmed")
+```
+
+Download or warm the model cache before enabling this mode. Once active,
+OpenMed blocks outbound socket connections during inference and
+de-identification. A disallowed connection raises `OfflineModeError` with this
+message prefix:
+
+```text
+OPENMED_OFFLINE/local_only=True blocks outbound network access after model loading.
+```
+
+For `HF_ENDPOINT`, pip mirror, proxy, retry, and metered-connection setup, see
+the [low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md).
+It includes a cache-warming checklist and the `openmed doctor` fields used to
+confirm the active network environment before switching offline.
 
 ## Validation helpers
 
@@ -53,13 +185,14 @@ text = validate_input(
     user_supplied_text,
     max_length=2000,
     allow_empty=False,
-    strip=True,
 )
 model_id = validate_model_name("disease_detection_superclinical")
 ```
 
 - `validate_input` trims whitespace, enforces max lengths, and raises informative errors for API clients.
-- `validate_model_name` normalizes registry aliases and protects service endpoints from arbitrary HF IDs.
+- `validate_model_name` trims the value and accepts an existing local path, a
+  bare model name, or one `org/model` identifier. It validates syntax; it does
+  not enforce a model allowlist or resolve a registry alias.
 
 ## Logging and tracing
 
@@ -67,16 +200,21 @@ model_id = validate_model_name("disease_detection_superclinical")
 from openmed.utils import setup_logging
 from openmed.core import ModelLoader
 
-setup_logging(level="INFO", json=True)
+setup_logging(level="INFO", include_timestamp=True)
 loader = ModelLoader()
 ```
 
-- Use JSON output with your log shipper or disable it during notebooks.
-- Combine with `OPENMED_DISABLE_WARNINGS=1` when you want the quietest possible inference loop.
+- `setup_logging` configures standard Python logging. Add structured logging in
+  the host application when needed; OpenMed does not expose a `json=` option.
+- Keep raw clinical text, entity values, model outputs, access tokens, and
+  reversible mappings out of log records and tracing attributes.
 
 ## Cache & device tips
 
-- **CPU-only teams**: keep `device="cpu"` and rely on HF caching. PyTorch installs stay optional unless you add the
-  `gliner` extra.
-- **GPU nodes**: set `device="cuda"` and optionally `torch_dtype=float16` inside `OpenMedConfig.pipeline`.
+- **CPU-only teams**: keep `device="cpu"`, install a CPU-compatible PyTorch
+  runtime for Hugging Face inference, and rely on the configured model cache.
+- **GPU nodes**: set `device="cuda"` (or a concrete index such as `"cuda:1"`).
+  Pass backend-specific model-loading options to `ModelLoader.create_pipeline`
+  only after verifying the selected model and hardware support them;
+  `OpenMedConfig` has no `pipeline` field.
 - **Shared runners**: point `cache_dir` at an ephemeral volume per job to avoid artifacts leaking between builds.

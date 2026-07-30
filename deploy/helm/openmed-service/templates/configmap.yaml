@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openmed-service.configMapName" . }}
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+data:
+  OPENMED_PROFILE: {{ .Values.config.profile | quote }}
+  OPENMED_CACHE_DIR: {{ .Values.config.cacheDir | quote }}
+  OPENMED_SERVICE_PRELOAD_MODELS: {{ join "," .Values.config.preloadModels | quote }}
+  OPENMED_SERVICE_MAX_RESIDENT_MODELS: {{ .Values.config.maxResidentModels | quote }}
+  OPENMED_SERVICE_KEEP_ALIVE: {{ .Values.config.keepAlive | quote }}
+  OPENMED_SERVICE_MAX_TEXT_LENGTH: {{ .Values.config.maxTextLength | quote }}
+  OPENMED_SERVICE_CORS_ORIGINS: {{ join "," .Values.config.corsOrigins | quote }}
+  OPENMED_SERVICE_TRUSTED_HOSTS: {{ include "openmed-service.trustedHosts" . | quote }}
+  OPENMED_SERVICE_BATCHING_ENABLED: {{ .Values.config.batching.enabled | quote }}
+  OPENMED_SERVICE_BATCH_MAX_SIZE: {{ .Values.config.batching.maxSize | quote }}
+  OPENMED_SERVICE_BATCH_MAX_WAIT_MS: {{ .Values.config.batching.maxWaitMs | quote }}
+  OPENMED_SERVICE_COALESCING_ENABLED: {{ .Values.config.coalescing.enabled | quote }}
+  OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS: {{ .Values.config.shutdownDrainSeconds | quote }}
+  OPENMED_SERVICE_METRICS_ENABLED: {{ .Values.config.metrics.enabled | quote }}
+  OPENMED_SERVICE_RATE_LIMIT_RPS: {{ .Values.config.throttle.rateLimitRps | quote }}
+  OPENMED_SERVICE_RATE_LIMIT_BURST: {{ .Values.config.throttle.rateLimitBurst | quote }}
+  OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY: {{ .Values.config.throttle.maxConcurrency | quote }}
+  OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS: {{ .Values.config.throttle.concurrencyWaitSeconds | quote }}
+  OPENMED_SERVICE_THROTTLE_KEY: {{ .Values.config.throttle.keyBy | quote }}

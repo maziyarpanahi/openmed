@@ -95,6 +95,46 @@ def test_hypothetical_takes_precedence_over_historical():
     assert resolve_temporality("if history of MI recurs") == HYPOTHETICAL
 
 
+@pytest.mark.parametrize(
+    ("context", "target", "cue"),
+    [
+        (
+            "History of MI. Patient has acute chest pain.",
+            "chest pain",
+            "history of",
+        ),
+        (
+            "If chest pain recurs, call the clinic. Chest pain is active now.",
+            "Chest pain",
+            "if",
+        ),
+    ],
+)
+def test_temporal_cues_do_not_cross_sentence_boundary(context, target, cue):
+    span = _span_in_context(context, target)
+
+    assert resolve_temporality(span, [cue]) == RECENT
+
+
+def test_temporal_cues_do_not_cross_clause_boundary():
+    context = "History of asthma but pneumonia is present on exam."
+    span = _span_in_context(context, "pneumonia")
+
+    assert resolve_temporality(span, ["history of"]) == RECENT
+
+
+def test_nested_temporal_cues_in_scope_use_most_specific_axis():
+    context = "If history of migraine returns, call the clinic."
+    span = _span_in_context(context, "migraine")
+    hits = [
+        _hit_in_context(context, "history of"),
+        _hit_in_context(context, "If"),
+    ]
+
+    assert resolve_temporality(span, hits) == HYPOTHETICAL
+    assert resolve_temporality(span, list(reversed(hits))) == HYPOTHETICAL
+
+
 def test_cue_matching_respects_word_boundaries():
     # "if" must not fire inside "stiff"; "prior" stays a whole-word cue.
     assert resolve_temporality("stiff neck") == RECENT
@@ -103,3 +143,18 @@ def test_cue_matching_respects_word_boundaries():
 def test_result_is_always_a_valid_temporality_value():
     for text in ("acute MI", "history of MI", "if chest pain recurs"):
         assert resolve_temporality(text) in TEMPORALITY_VALUES
+
+
+def _span_in_context(context: str, target: str) -> dict[str, object]:
+    start = context.index(target)
+    return {
+        "text": target,
+        "context": context,
+        "start": start,
+        "end": start + len(target),
+    }
+
+
+def _hit_in_context(context: str, cue: str) -> dict[str, object]:
+    start = context.index(cue)
+    return {"text": cue, "start": start, "end": start + len(cue)}

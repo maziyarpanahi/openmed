@@ -270,17 +270,19 @@ def _span_problems(entity: Any, text: str) -> list[str] | None:
             if " ".join(actual.split()) == " ".join(entity_text.split()):
                 logger.info(
                     "SpanValidation: Entity %r @ [%d:%d]: "
-                    "whitespace-only text difference (span=%r, stored=%r)",
+                    "whitespace-only text difference "
+                    "(span_chars=%d, stored_chars=%d)",
                     _entity_label(entity),
                     start,
                     end,
-                    actual,
-                    entity_text,
+                    len(actual),
+                    len(entity_text),
                 )
             else:
                 problems.append(
-                    f"text mismatch: span gives {actual!r}, "
-                    f"entity stores {entity_text!r}"
+                    "text mismatch: "
+                    f"span_chars={len(actual)}, "
+                    f"entity_chars={len(entity_text)}"
                 )
 
     return problems

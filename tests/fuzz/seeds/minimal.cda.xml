@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ClinicalDocument xmlns="urn:hl7-org:v3">
+  <templateId root="1.2.3.4.5"/>
+  <id root="1.2.3.4.5" extension="DOC-001"/>
+  <recordTarget>
+    <patientRole>
+      <id extension="PATIENT-001"/>
+      <patient>
+        <name><given>Synthetic</given><family>Patient</family></name>
+        <birthTime value="20000101"/>
+      </patient>
+    </patientRole>
+  </recordTarget>
+  <component>
+    <structuredBody>
+      <component>
+        <section><text>Fabricated stable follow-up note.</text></section>
+      </component>
+    </structuredBody>
+  </component>
+</ClinicalDocument>

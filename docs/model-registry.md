@@ -1,8 +1,8 @@
 # Model Registry
 
-OpenMed ships a curated registry (`openmed.core.model_registry.OPENMED_MODELS`) that annotates every official checkpoint
-with metadata such as category, specialization, recommended confidence, and Hugging Face IDs. Use it to pick the right
-model, surface dropdowns in UIs, or validate incoming requests.
+OpenMed ships a manifest-backed registry (`openmed.core.model_registry.OPENMED_MODELS`) that annotates every official
+checkpoint with metadata such as category, specialization, recommended confidence, Hugging Face IDs, device fit, and
+benchmark summaries. Use it to pick the right model, surface dropdowns in UIs, or validate incoming requests.
 
 ## Exploring the registry
 
@@ -29,23 +29,62 @@ for model_key, info, reason in suggestions:
     print(model_key, info.display_name, reason)
 ```
 
-- `ModelInfo` objects include `display_name`, `category`, `entity_types`, size hints, and a default confidence threshold.
+- `ModelInfo` objects include `display_name`, `category`, `entity_types`, size hints, benchmark data, optional latency/RAM
+  maps, optional recommended tier, audited `script_coverage`, and a default confidence threshold.
 - `get_model_suggestions` leans on lightweight heuristics to recommend models based on text snippets or hints (disease,
   pharma, oncology, etc.).
 
 ## Metadata for UIs & validation
 
-- `ModelInfo.size_category` and `.size_mb` help you decide whether a model can fit on CPU-only infrastructure.
+- `ModelInfo.size_category`, `.size_mb`, `.latency_ms`, `.peak_ram_mb`, and `.recommended_tier` help you decide whether a
+  model can fit on CPU-only infrastructure or a target device tier.
 - `entity_types` feed dropdowns or filter chips in your frontend.
 - `recommended_confidence` can drive slider defaults or guardrails on API calls (pass it to `analyze_text`).
+- `get_pii_models_by_language` excludes any model whose audited tokenizer is explicitly `unsupported` for a script
+  claimed by that language. The underlying UNK, byte-fallback, and tokens-per-grapheme measurements remain available on
+  `ModelInfo.script_coverage` for diagnostics and UI warnings.
+
+## Plan downloads before using data
+
+Use `models size` to inspect download, disk, and estimated peak RAM requirements
+from the committed manifest. The default path is offline-safe and does not
+contact Hugging Face:
+
+```bash
+OPENMED_OFFLINE=1 openmed models size disease_detection_tiny
+openmed models size --budget-mb 100
+openmed models size --budget-mb 100 --format json
+```
+
+With a budget, the command lists only models whose remaining download fits and
+recommends the smallest qualifying snapshot for each task. Models already in
+the local Hugging Face cache are marked `cached — 0 MB to download` and count
+as zero against the budget.
+
+Use `--remote` only when you explicitly want to refresh an estimate from the
+current Hub file metadata. Supplying an alias keeps that opt-in lookup focused:
+
+```bash
+openmed models size disease_detection_tiny --remote
+```
+
+Sizes use decimal megabytes (1 MB = 1,000,000 bytes). Remote inspection requires
+the optional `openmed[hf]` dependencies; ordinary offline estimates do not.
 
 ## Keeping the registry fresh
 
-If you add a new Hugging Face checkpoint, update `openmed/core/model_registry.py` with:
+If you add a new Hugging Face checkpoint, refresh `models.jsonl` and, when measurements are available, enrich it with
+benchmark and device-fit results. See [Model Manifest](./model-manifest.md) for the schema and merge command.
 
-1. A unique key (e.g., `radiology_detection_superclinical`).
-2. The full HF model id (`OpenMed/...`), user-friendly name, category, specialization.
-3. Representative `entity_types` and a recommended confidence based on evaluation runs.
+Manifest rows drive `openmed/core/model_registry.py`; avoid hand-editing the registry for new models. A new row should
+include:
+
+1. The full HF model id (`OpenMed/...`) and core release metadata.
+2. Representative canonical entity labels.
+3. Required 11-script tokenizer coverage for PII-family entries, plus optional benchmark, latency, RAM, and
+   recommended-tier enrichment.
+4. Per-format download sizes and per-script recall/leakage-floor evidence when
+   the release model card advertises those decision fields.
 
 CI will enforce type safety through the unit tests, and the docs automatically pick up the new entry via the examples
 above.

@@ -1,17 +1,279 @@
 {
-  "biomedical": ["Disease", "Drug", "Gene", "Organism"],
-  "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
-  "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
-  "finance": ["Company", "Ticker", "Instrument", "Event"],
-  "legal": ["Case", "Court", "Judge", "Statute"],
-  "news": ["Person", "Organization", "Location", "Date"],
-  "ecommerce": ["Product", "Brand", "Price", "Attribute"],
-  "cybersecurity": ["Vulnerability", "CVE", "Software", "Vendor"],
-  "chemistry": ["Compound", "Reaction", "Property", "Unit"],
-  "organism": ["Species", "Strain", "Taxon", "Habitat"],
-  "education": ["Course", "Topic", "Institution", "Degree"],
-  "social": ["Person", "Handle", "Hashtag", "URL"],
-  "public_health": ["Condition", "Intervention", "Outcome", "Population"],
-  "cardiology": ["CardiacFinding", "ECGFinding", "EjectionFraction", "CardiacProcedure", "CardiacDevice", "Anatomy"],
-  "generic": ["Person", "Organization", "Location", "Date"]
+  "biomedical": [
+    "Disease",
+    "Drug",
+    "Gene",
+    "Organism"
+  ],
+  "clinical": [
+    "Problem",
+    "Treatment",
+    "Test",
+    "BodyPart"
+  ],
+  "genomic": [
+    "Variant",
+    "Gene",
+    "Transcript",
+    "Phenotype"
+  ],
+  "genomic_variant": [
+    "GeneSymbol",
+    "VariantDescriptor",
+    "ProteinChange",
+    "Zygosity",
+    "AlleleFrequency",
+    "ClinicalSignificance",
+    "ReferenceTranscript"
+  ],
+  "finance": [
+    "Company",
+    "Ticker",
+    "Instrument",
+    "Event"
+  ],
+  "legal": [
+    "Case",
+    "Court",
+    "Judge",
+    "Statute"
+  ],
+  "news": [
+    "Person",
+    "Organization",
+    "Location",
+    "Date"
+  ],
+  "ecommerce": [
+    "Product",
+    "Brand",
+    "Price",
+    "Attribute"
+  ],
+  "cybersecurity": [
+    "Vulnerability",
+    "CVE",
+    "Software",
+    "Vendor"
+  ],
+  "chemistry": [
+    "Compound",
+    "Reaction",
+    "Property",
+    "Unit"
+  ],
+  "organism": [
+    "Species",
+    "Strain",
+    "Taxon",
+    "Habitat"
+  ],
+  "education": [
+    "Course",
+    "Topic",
+    "Institution",
+    "Degree"
+  ],
+  "social": [
+    "Person",
+    "Handle",
+    "Hashtag",
+    "URL"
+  ],
+  "public_health": [
+    "Condition",
+    "Intervention",
+    "Outcome",
+    "Population"
+  ],
+  "disease": [
+    "Disease",
+    "Condition",
+    "Pathology"
+  ],
+  "pharmaceutical": [
+    "Chemical",
+    "Drug",
+    "Medication"
+  ],
+  "oncology": [
+    "SimpleChemical",
+    "Chemical",
+    "AminoAcid",
+    "AnatomicalSystem",
+    "Cancer",
+    "Cell",
+    "GeneOrGeneProduct",
+    "CellularComponent",
+    "DevelopingAnatomicalStructure",
+    "ImmaterialAnatomicalEntity",
+    "MultiTissueStructure",
+    "Organism",
+    "Species",
+    "Organ",
+    "OrganismSubdivision",
+    "OrganismSubstance",
+    "Tissue",
+    "PathologicalFormation"
+  ],
+  "anatomy": [
+    "Organ",
+    "Tissue",
+    "Anatomy"
+  ],
+  "genomics": [
+    "GeneOrGeneProduct",
+    "Gene",
+    "Protein",
+    "DNA",
+    "RNA",
+    "CellLine",
+    "CellType"
+  ],
+  "chemical": [
+    "SimpleChemical",
+    "Chemical",
+    "Drug",
+    "Medication"
+  ],
+  "species": [
+    "Organism",
+    "Species"
+  ],
+  "protein": [
+    "GeneOrGeneProduct",
+    "Protein",
+    "ProteinComplex",
+    "ProteinEnumeration",
+    "ProteinFamilyOrGroup",
+    "ProteinVariant"
+  ],
+  "pathology": [
+    "Disease",
+    "Condition",
+    "Pathology"
+  ],
+  "hematology": [
+    "Cancer",
+    "Disease",
+    "CellLine"
+  ],
+  "cardiology": [
+    "CardiacFinding",
+    "ECGFinding",
+    "EjectionFraction",
+    "CardiacProcedure",
+    "CardiacDevice",
+    "Anatomy"
+  ],
+  "microbiology": [
+    "Microorganism",
+    "Antibiotic",
+    "Susceptibility",
+    "SpecimenSource",
+    "CultureResult"
+  ],
+  "dermatology": [
+    "SkinLesion",
+    "Morphology",
+    "Distribution",
+    "Anatomy"
+  ],
+  "ophthalmology": [
+    "EyeFinding",
+    "VisualAcuity",
+    "IntraocularPressure",
+    "Anatomy"
+  ],
+  "generic": [
+    "Person",
+    "Organization",
+    "Location",
+    "Date"
+  ],
+  "anesthesia": [
+    "AnesthesiaType",
+    "AnestheticAgent",
+    "AirwayManagement",
+    "ASAClass",
+    "MonitoringModality",
+    "IntraoperativeEvent"
+  ],
+  "nutrition_diet": [
+    "DietType",
+    "NutritionTarget",
+    "Supplement",
+    "FeedingRoute",
+    "IntakeFinding",
+    "NutritionalStatus",
+    "FluidRestriction"
+  ],
+  "endocrinology": [
+    "GlycemicMeasure",
+    "ThyroidFunctionMeasure",
+    "HormoneLevel",
+    "InsulinRegimen",
+    "MetabolicFinding",
+    "EndocrineGland"
+  ],
+  "gastroenterology": [
+    "EndoscopicFinding",
+    "GISymptom",
+    "BowelPrepQuality",
+    "BiopsySite",
+    "GIScore",
+    "LesionMorphology",
+    "PolypDescriptor"
+  ],
+  "nephrology_renal": [
+    "RenalFunctionMeasure",
+    "CKDStage",
+    "DialysisModality",
+    "UrineFinding",
+    "FluidStatus",
+    "RenalReplacementAccess",
+    "ElectrolyteDisturbance"
+  ],
+  "immunization": [
+    "VaccineName",
+    "DoseNumber",
+    "AdministrationRoute",
+    "AdministrationSite",
+    "VaccineLot",
+    "AdministrationDate",
+    "VaccineSeries"
+  ],
+  "pulmonology": [
+    "SpirometryMeasure",
+    "OxygenSupport",
+    "RespiratoryFinding",
+    "DyspneaGrade",
+    "LungAuscultation",
+    "PFTInterpretation",
+    "AirwayDevice"
+  ],
+  "pediatrics_growth": [
+    "GrowthParameter",
+    "GrowthPercentile",
+    "GrowthZScore",
+    "DevelopmentalMilestone",
+    "FeedingHistory",
+    "PediatricFinding"
+  ],
+  "procedures": [
+    "Procedure",
+    "Surgery",
+    "DiagnosticProcedure",
+    "Device",
+    "Approach"
+  ],
+  "nursing_observation": [
+    "IntakeOutput",
+    "LineDrainTube",
+    "RiskScore",
+    "MobilityStatus",
+    "CareIntervention",
+    "PainScore",
+    "SkinAssessment"
+  ]
 }

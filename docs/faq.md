@@ -3,6 +3,10 @@
 These answers cover the questions that come up most often when teams start using OpenMed in local clinical NLP,
 PII detection, de-identification, and service deployments.
 
+Hitting a concrete error rather than a conceptual question? See
+[Troubleshooting & Common Errors](troubleshooting.md) for a symptom → cause → fix map of the failures users
+run into most (missing extras, model-download/offline issues, device selection, and REST/MCP setup).
+
 ## Install and Run
 
 ### Can OpenMed run fully locally or in an air-gapped environment?
@@ -15,8 +19,15 @@ When the identifier is an existing local path, OpenMed asks the underlying loade
 missing tokenizer, config, or weight files fail locally instead of downloading from the model hub. See
 [Loading from a local path](analyze-text.md#loading-from-a-local-path).
 
-Do not rely on an `OPENMED_OFFLINE` switch in the current package. That dedicated offline guard is tracked separately;
-today, local model paths and pre-seeded caches are the supported offline controls.
+After warming the configured cache, set `OPENMED_OFFLINE=1` or use
+`OpenMedConfig(local_only=True)`. OpenMed then enables the Hugging Face
+cache-only flags, passes `local_files_only=True` to Hub-backed loaders, and
+blocks outbound sockets during inference and de-identification. See
+[Local-only offline mode](configuration.md#local-only-offline-mode) and the
+[offline troubleshooting entry](troubleshooting.md#running-offline-air-gapped-or-offlinemodeerror-on-inference).
+For institutional pip mirrors, `HF_ENDPOINT`, HTTP proxies, resumable cache
+warming, and a metered-connection checklist, use the
+[low-bandwidth installation guide](low-bandwidth-install.md).
 
 ### Which package extras should I install?
 
@@ -25,9 +36,46 @@ Use the smallest extra that matches your runtime:
 - `openmed[hf]` for the standard Python model runtime.
 - `openmed[hf,service]` when you need the REST service.
 - `openmed[mlx]` for Python MLX acceleration on Apple Silicon.
+- `openmed[multimodal]` for document/image intake and Tesseract OCR; install
+  the system `tesseract` binary separately (`brew install tesseract` on macOS
+  or `sudo apt-get install tesseract-ocr` on Debian/Ubuntu).
+- `openmed[ocr-paddle]` for the heavier optional PaddleOCR backend.
 
 Start with the [Quick Start](getting-started.md), then use
 [Configuration & Validation](configuration.md) for cache paths, device selection, profiles, and environment overrides.
+
+### Why does a DeBERTa model say that scaled dot-product attention is unsupported?
+
+OpenMed 1.7.0 and 1.8.0 could select PyTorch scaled dot-product attention
+(`sdpa`) from runtime availability alone, even when the Transformers model
+architecture did not support it. This affected DeBERTa-v2 token-classification
+models and could occur on NVIDIA, AMD, or CPU environments.
+
+Upgrade to OpenMed 1.8.1 or later. Automatic attention selection is
+architecture-safe in those releases. For an environment temporarily pinned to
+an affected release, select the universally compatible eager implementation
+before starting Python:
+
+=== "Linux/macOS"
+
+    ```bash
+    export OPENMED_TORCH_ATTENTION_BACKEND=eager
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    $env:OPENMED_TORCH_ATTENTION_BACKEND="eager"
+    ```
+
+=== "Windows Command Prompt"
+
+    ```bat
+    set OPENMED_TORCH_ATTENTION_BACKEND=eager
+    ```
+
+See [PyTorch attention backends](configuration.md#pytorch-attention-backends)
+for the configuration API and explicit backend options.
 
 ## Models and Languages
 
@@ -42,9 +90,19 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja`, and `tr`.
+PII extraction and de-identification support **34 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+`it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.
+Russian routing currently uses a documented multilingual default-model
+placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
+Four additional Indic codes (`gu`, `kn`, `ml`, and `pa`)
+are opt-in routes through a user-configured `OPENMED_INDIC_NER_MODEL`;
+Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu can use the same adapter.
+Validator-backed national-ID coverage is broader for specific ID-only locales,
+including Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-12-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-34-supported-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.

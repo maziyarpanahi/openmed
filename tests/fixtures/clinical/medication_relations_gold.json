@@ -1,0 +1,392 @@
+[
+  {
+    "id": "case-1",
+    "text": "Continue lisinopril 10 mg PO daily and metformin 500 mg PO BID for 30 days.",
+    "spans": [
+      {
+        "id": "s0",
+        "text": "lisinopril",
+        "label": "DRUG",
+        "start": 9,
+        "end": 19,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s1",
+        "text": "10 mg",
+        "label": "DOSE",
+        "start": 20,
+        "end": 25,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s2",
+        "text": "PO",
+        "label": "ROUTE",
+        "start": 26,
+        "end": 28,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s3",
+        "text": "daily",
+        "label": "FREQUENCY",
+        "start": 29,
+        "end": 34,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s4",
+        "text": "metformin",
+        "label": "DRUG",
+        "start": 39,
+        "end": 48,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s5",
+        "text": "500 mg",
+        "label": "DOSE",
+        "start": 49,
+        "end": 55,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s6",
+        "text": "PO",
+        "label": "ROUTE",
+        "start": 56,
+        "end": 58,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s7",
+        "text": "BID",
+        "label": "FREQUENCY",
+        "start": 59,
+        "end": 62,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s8",
+        "text": "for 30 days",
+        "label": "DURATION",
+        "start": 63,
+        "end": 74,
+        "score": 0.99,
+        "section": "Medications"
+      }
+    ],
+    "relations": [
+      {"head": "s0", "attribute": "s1", "type": "drug_to_dose"},
+      {"head": "s0", "attribute": "s2", "type": "drug_to_route"},
+      {"head": "s0", "attribute": "s3", "type": "drug_to_frequency"},
+      {"head": "s4", "attribute": "s5", "type": "drug_to_dose"},
+      {"head": "s4", "attribute": "s6", "type": "drug_to_route"},
+      {"head": "s4", "attribute": "s7", "type": "drug_to_frequency"},
+      {"head": "s4", "attribute": "s8", "type": "drug_to_duration"}
+    ]
+  },
+  {
+    "id": "case-2",
+    "text": "Start amoxicillin 500 mg by mouth three times daily for 7 days; use ibuprofen 200 mg PO q6h PRN.",
+    "spans": [
+      {
+        "id": "s0",
+        "text": "amoxicillin",
+        "label": "DRUG",
+        "start": 6,
+        "end": 17,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s1",
+        "text": "500 mg",
+        "label": "DOSE",
+        "start": 18,
+        "end": 24,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s2",
+        "text": "by mouth",
+        "label": "ROUTE",
+        "start": 25,
+        "end": 33,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s3",
+        "text": "three times daily",
+        "label": "FREQUENCY",
+        "start": 34,
+        "end": 51,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s4",
+        "text": "for 7 days",
+        "label": "DURATION",
+        "start": 52,
+        "end": 62,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s5",
+        "text": "ibuprofen",
+        "label": "DRUG",
+        "start": 68,
+        "end": 77,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s6",
+        "text": "200 mg",
+        "label": "DOSE",
+        "start": 78,
+        "end": 84,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s7",
+        "text": "PO",
+        "label": "ROUTE",
+        "start": 85,
+        "end": 87,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s8",
+        "text": "q6h PRN",
+        "label": "FREQUENCY",
+        "start": 88,
+        "end": 95,
+        "score": 0.99,
+        "section": "Medications"
+      }
+    ],
+    "relations": [
+      {"head": "s0", "attribute": "s1", "type": "drug_to_dose"},
+      {"head": "s0", "attribute": "s2", "type": "drug_to_route"},
+      {"head": "s0", "attribute": "s3", "type": "drug_to_frequency"},
+      {"head": "s0", "attribute": "s4", "type": "drug_to_duration"},
+      {"head": "s5", "attribute": "s6", "type": "drug_to_dose"},
+      {"head": "s5", "attribute": "s7", "type": "drug_to_route"},
+      {"head": "s5", "attribute": "s8", "type": "drug_to_frequency"}
+    ]
+  },
+  {
+    "id": "case-3",
+    "text": "Medications: atorvastatin 20 mg nightly. Allergies: no aspirin.",
+    "spans": [
+      {
+        "id": "s0",
+        "text": "atorvastatin",
+        "label": "DRUG",
+        "start": 13,
+        "end": 25,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s1",
+        "text": "20 mg",
+        "label": "DOSE",
+        "start": 26,
+        "end": 31,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s2",
+        "text": "nightly",
+        "label": "FREQUENCY",
+        "start": 32,
+        "end": 39,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s3",
+        "text": "aspirin",
+        "label": "DRUG",
+        "start": 55,
+        "end": 62,
+        "score": 0.99,
+        "section": "Allergies"
+      }
+    ],
+    "relations": [
+      {"head": "s0", "attribute": "s1", "type": "drug_to_dose"},
+      {"head": "s0", "attribute": "s2", "type": "drug_to_frequency"}
+    ]
+  },
+  {
+    "id": "case-4",
+    "text": "Take albuterol inhaler 2 puffs inhaled q4h PRN and prednisone 40 mg daily x 5 days.",
+    "spans": [
+      {
+        "id": "s0",
+        "text": "albuterol inhaler",
+        "label": "DRUG",
+        "start": 5,
+        "end": 22,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s1",
+        "text": "2 puffs",
+        "label": "DOSE",
+        "start": 23,
+        "end": 30,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s2",
+        "text": "inhaled",
+        "label": "ROUTE",
+        "start": 31,
+        "end": 38,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s3",
+        "text": "q4h PRN",
+        "label": "FREQUENCY",
+        "start": 39,
+        "end": 46,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s4",
+        "text": "prednisone",
+        "label": "DRUG",
+        "start": 51,
+        "end": 61,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s5",
+        "text": "40 mg",
+        "label": "DOSE",
+        "start": 62,
+        "end": 67,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s6",
+        "text": "daily",
+        "label": "FREQUENCY",
+        "start": 68,
+        "end": 73,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s7",
+        "text": "x 5 days",
+        "label": "DURATION",
+        "start": 74,
+        "end": 82,
+        "score": 0.99,
+        "section": "Medications"
+      }
+    ],
+    "relations": [
+      {"head": "s0", "attribute": "s1", "type": "drug_to_dose"},
+      {"head": "s0", "attribute": "s2", "type": "drug_to_route"},
+      {"head": "s0", "attribute": "s3", "type": "drug_to_frequency"},
+      {"head": "s4", "attribute": "s5", "type": "drug_to_dose"},
+      {"head": "s4", "attribute": "s6", "type": "drug_to_frequency"},
+      {"head": "s4", "attribute": "s7", "type": "drug_to_duration"}
+    ]
+  },
+  {
+    "id": "case-5",
+    "text": "Plan: hydrochlorothiazide 25 mg daily; atenolol 50 mg qhs.",
+    "spans": [
+      {
+        "id": "s0",
+        "text": "hydrochlorothiazide",
+        "label": "DRUG",
+        "start": 6,
+        "end": 25,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s1",
+        "text": "25 mg",
+        "label": "DOSE",
+        "start": 26,
+        "end": 31,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s2",
+        "text": "daily",
+        "label": "FREQUENCY",
+        "start": 32,
+        "end": 37,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s3",
+        "text": "atenolol",
+        "label": "DRUG",
+        "start": 39,
+        "end": 47,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s4",
+        "text": "50 mg",
+        "label": "DOSE",
+        "start": 48,
+        "end": 53,
+        "score": 0.99,
+        "section": "Medications"
+      },
+      {
+        "id": "s5",
+        "text": "qhs",
+        "label": "FREQUENCY",
+        "start": 54,
+        "end": 57,
+        "score": 0.99,
+        "section": "Medications"
+      }
+    ],
+    "relations": [
+      {"head": "s0", "attribute": "s1", "type": "drug_to_dose"},
+      {"head": "s0", "attribute": "s2", "type": "drug_to_frequency"},
+      {"head": "s3", "attribute": "s4", "type": "drug_to_dose"},
+      {"head": "s3", "attribute": "s5", "type": "drug_to_frequency"}
+    ]
+  }
+]

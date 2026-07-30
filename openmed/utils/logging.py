@@ -66,11 +66,11 @@ class OpenMedLogger:
             status: Status of the loading (started, completed, failed).
         """
         if status == "started":
-            self.logger.info(f"Loading model: {model_name}")
+            self.logger.info("Loading model: %s", model_name)
         elif status == "completed":
-            self.logger.info(f"Successfully loaded model: {model_name}")
+            self.logger.info("Successfully loaded model: %s", model_name)
         elif status == "failed":
-            self.logger.error(f"Failed to load model: {model_name}")
+            self.logger.error("Failed to load model: %s", model_name)
 
     def log_processing(self, text_length: int, processing_time: float) -> None:
         """Log text processing metrics.
@@ -80,7 +80,7 @@ class OpenMedLogger:
             processing_time: Time taken for processing.
         """
         self.logger.debug(
-            f"Processed text of length {text_length} in {processing_time:.3f}s"
+            "Processed text of length %d in %.3fs", text_length, processing_time
         )
 
     def log_predictions(self, num_entities: int, model_name: str) -> None:
@@ -90,4 +90,4 @@ class OpenMedLogger:
             num_entities: Number of entities predicted.
             model_name: Name of the model used.
         """
-        self.logger.info(f"Model {model_name} predicted {num_entities} entities")
+        self.logger.info("Model %s predicted %d entities", model_name, num_entities)

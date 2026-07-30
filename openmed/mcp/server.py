@@ -5,20 +5,45 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import asdict
-from typing import Any, Callable, Dict, Optional
+from inspect import Signature
+from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.mcp.tool_registry import (
+    TOOL_REGISTRY,
+    ToolSchemaValidationError,
+    ToolSpec,
+    render_mcp_tool,
+    render_tool_registry_document,
+    validate_registered_tool_output,
+)
+from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
 RuntimeProvider = Callable[[], ServiceRuntime]
+
+
+def _safe_int_env(name: str, default: int) -> int:
+    """Read an environment variable as an int, falling back to *default* on error."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
 
 MCP_INSTRUCTIONS = (
     "OpenMed exposes local clinical NLP, PII extraction, and de-identification "
@@ -87,6 +112,141 @@ def _json_resource(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
+def _error_envelope(error: BaseException) -> Dict[str, Any]:
+    """Return a PHI-safe structured tool error without echoing input or output."""
+
+    error_module = error.__class__.__module__
+    if isinstance(error, ToolSchemaValidationError):
+        code = "invalid_result"
+        message = "The tool returned an invalid structured result."
+    elif isinstance(error, KeyError):
+        code = "unknown_tool"
+        message = "The requested tool is not available."
+    elif isinstance(error, (TypeError, ValueError)) or error_module.startswith(
+        ("jsonschema", "pydantic")
+    ):
+        code = "invalid_arguments"
+        message = "The tool arguments are invalid."
+    else:
+        code = "execution_error"
+        message = "The tool could not complete the request."
+    return {"error": {"code": code, "message": message}, "is_error": True}
+
+
+def _call_tool_result(payload: Dict[str, Any], *, is_error: bool) -> Any:
+    """Return structured content plus a JSON text fallback for older clients."""
+
+    from mcp.types import CallToolResult, TextContent
+
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text=json.dumps(payload, sort_keys=True),
+            )
+        ],
+        structuredContent=payload,
+        isError=is_error,
+    )
+
+
+def _mcp_return_annotation(spec: ToolSpec) -> Any:
+    """Build a typed result annotation from the registry's output contract."""
+
+    try:
+        from mcp.types import CallToolResult
+        from pydantic import ConfigDict, RootModel
+    except ImportError:
+        return Dict[str, Any]
+
+    model_name = "".join(part.title() for part in spec.name.split("_")) + "Result"
+    output_model = type(
+        model_name,
+        (RootModel[Dict[str, Any]],),
+        {
+            "model_config": ConfigDict(
+                json_schema_extra=spec.mcp_output_schema(),
+            )
+        },
+    )
+    return Annotated[CallToolResult, output_model]
+
+
+def _render_structured_mcp_tool(
+    spec: ToolSpec,
+    handler: Callable[..., Dict[str, Any]],
+) -> Callable[..., Any]:
+    """Render one registry tool with structured success and error results."""
+
+    registry_tool = render_mcp_tool(spec, handler)
+    return_annotation = _mcp_return_annotation(spec)
+
+    def _tool(*args: Any, **kwargs: Any) -> Any:
+        try:
+            payload = registry_tool(*args, **kwargs)
+        except Exception as error:
+            return _call_tool_result(_error_envelope(error), is_error=True)
+        return _call_tool_result(payload, is_error=False)
+
+    _tool.__name__ = registry_tool.__name__
+    _tool.__doc__ = spec.description
+    _tool.__signature__ = Signature(  # type: ignore[attr-defined]
+        parameters=tuple(spec.signature.parameters.values()),
+        return_annotation=return_annotation,
+    )
+    _tool.__annotations__ = dict(registry_tool.__annotations__)
+    _tool.__annotations__["return"] = return_annotation
+    return _tool
+
+
+def _mcp_annotations(spec: ToolSpec) -> Any:
+    """Return SDK annotations when available, or the equivalent plain mapping."""
+
+    payload = spec.annotations()
+    try:
+        from mcp.types import ToolAnnotations
+    except ImportError:
+        return payload
+    return ToolAnnotations(**payload)
+
+
+def _synchronize_registered_schemas(server: Any, spec: ToolSpec) -> None:
+    """Make FastMCP advertise the registry schemas verbatim."""
+
+    manager = getattr(server, "_tool_manager", None)
+    if manager is None:
+        return
+    registered = manager.get_tool(spec.name)
+    if registered is None:
+        return
+    registered.parameters = deepcopy(dict(spec.input_schema))
+    registered.fn_metadata.output_schema = spec.mcp_output_schema()
+    registered.__dict__.pop("output_schema", None)
+
+
+def _structured_fastmcp(base_class: Any) -> Any:
+    """Return a FastMCP class that envelopes malformed calls without logging data."""
+
+    from jsonschema import validate
+
+    class _OpenMedFastMCP(base_class):
+        async def call_tool(
+            self,
+            name: str,
+            arguments: Dict[str, Any],
+        ) -> Any:
+            try:
+                tool = self._tool_manager.get_tool(name)
+                if tool is None:
+                    raise KeyError(name)
+                validate(instance=arguments, schema=tool.parameters)
+                return await super().call_tool(name, arguments)
+            except Exception as error:
+                return _call_tool_result(_error_envelope(error), is_error=True)
+
+    return _OpenMedFastMCP
+
+
 def openmed_analyze_text(
     text: str,
     model_name: str = "disease_detection_superclinical",
@@ -135,12 +295,13 @@ def openmed_analyze_text(
         )
         return _result_to_dict(result)
 
-    return _run_model_request(
+    response = _run_model_request(
         runtime,
         payload.model_name,
         payload.keep_alive,
         operation,
     )
+    return validate_registered_tool_output("openmed_analyze_text", response)
 
 
 def openmed_extract_pii(
@@ -181,12 +342,13 @@ def openmed_extract_pii(
         )
         return _result_to_dict(result)
 
-    return _run_model_request(
+    response = _run_model_request(
         runtime,
         payload.model_name,
         payload.keep_alive,
         operation,
     )
+    return validate_registered_tool_output("openmed_extract_pii", response)
 
 
 def openmed_deidentify(
@@ -194,7 +356,7 @@ def openmed_deidentify(
     method: str = "mask",
     model_name: str = DEFAULT_PII_MODELS["en"],
     confidence_threshold: float = 0.7,
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -245,12 +407,13 @@ def openmed_deidentify(
             response["mapping"] = result.mapping
         return response
 
-    return _run_model_request(
+    response = _run_model_request(
         runtime,
         payload.model_name,
         payload.keep_alive,
         operation,
     )
+    return validate_registered_tool_output("openmed_deidentify", response)
 
 
 def openmed_list_models(
@@ -270,26 +433,28 @@ def openmed_list_models(
         }
 
     if pii_language:
-        if pii_language not in SUPPORTED_LANGUAGES:
+        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        if pii_language not in accepted_languages:
             raise ValueError(
                 f"Unsupported language '{pii_language}'. "
-                f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+                f"Supported: {sorted(accepted_languages)}"
             )
         allowed = openmed.get_pii_models_by_language(pii_language)
         models = {key: model for key, model in models.items() if key in allowed}
 
     limited_items = list(sorted(models.items()))[: max(limit, 0)]
-    return {
+    response = {
         "count": len(models),
         "returned": len(limited_items),
         "models": [_model_info_to_dict(key, model) for key, model in limited_items],
     }
+    return validate_registered_tool_output("openmed_list_models", response)
 
 
 def openmed_list_pii_languages() -> Dict[str, Any]:
     """List supported PII languages and their default model IDs."""
     languages = []
-    for code in sorted(SUPPORTED_LANGUAGES):
+    for code in sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES):
         languages.append(
             {
                 "code": code,
@@ -298,7 +463,8 @@ def openmed_list_pii_languages() -> Dict[str, Any]:
                 "model_count": len(openmed.get_pii_models_by_language(code)),
             }
         )
-    return {"count": len(languages), "languages": languages}
+    response = {"count": len(languages), "languages": languages}
+    return validate_registered_tool_output("openmed_list_pii_languages", response)
 
 
 def openmed_loaded_models(
@@ -306,7 +472,23 @@ def openmed_loaded_models(
     runtime_provider: Optional[RuntimeProvider] = None,
 ) -> Dict[str, Any]:
     """Return currently loaded model resources for the MCP runtime."""
-    return _runtime(runtime_provider).loaded_models()
+    response = _runtime(runtime_provider).loaded_models()
+    return validate_registered_tool_output("openmed_loaded_models", response)
+
+
+def openmed_health(
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Return a PHI-free MCP health summary."""
+
+    loaded = _runtime(runtime_provider).loaded_models()
+    models = loaded.get("models")
+    loaded_model_count = len(models) if isinstance(models, Mapping) else 0
+    return {
+        "version": openmed.__version__,
+        "loaded_model_count": loaded_model_count,
+    }
 
 
 def openmed_unload_model(
@@ -318,135 +500,152 @@ def openmed_unload_model(
     """Unload one inactive model or all inactive models from memory."""
     runtime = _runtime(runtime_provider)
     if all_models:
-        return runtime.unload_all_models()
+        response = runtime.unload_all_models()
+        return validate_registered_tool_output("openmed_unload_model", response)
     if model_name is None:
         raise ValueError("model_name is required unless all_models=true")
-    return runtime.unload_model(validate_model_name(model_name))
+    response = runtime.unload_model(validate_model_name(model_name))
+    return validate_registered_tool_output("openmed_unload_model", response)
+
+
+def openmed_run_workflow(
+    pipeline: Dict[str, Any],
+    session_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Run a stateful multi-step workflow with PHI-safe result egress."""
+    runtime = _runtime(runtime_provider)
+    runner = WorkflowRunner(
+        store=runtime.get_workflow_store(),
+        executors=_workflow_step_executors(runtime_provider),
+        deidentifier=_workflow_egress_deidentifier(runtime_provider),
+    )
+    response = runner.run(pipeline, session_id=session_id, workflow_id=workflow_id)
+    return validate_registered_tool_output("openmed_run_workflow", response)
+
+
+def _workflow_step_executors(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Dict[str, Callable[..., Any]]:
+    executors = builtin_workflow_step_executors()
+    executors.update(
+        {
+            "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+            "openmed_extract_pii": lambda **kwargs: openmed_extract_pii(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+            "openmed_deidentify": lambda **kwargs: _workflow_deidentify_step(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+        }
+    )
+    return executors
+
+
+def _workflow_deidentify_step(
+    *,
+    runtime_provider: Optional[RuntimeProvider],
+    text: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    if not isinstance(text, str):
+        text = json.dumps(text, sort_keys=True)
+    return openmed_deidentify(
+        text=text,
+        runtime_provider=runtime_provider,
+        **kwargs,
+    )
+
+
+def _workflow_egress_deidentifier(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Callable[[str], str]:
+    def deidentify_text(text: str) -> str:
+        response = openmed_deidentify(
+            text=text,
+            runtime_provider=runtime_provider,
+        )
+        deidentified = response.get("deidentified_text")
+        if isinstance(deidentified, str):
+            return deidentified
+        return "[REDACTED_TEXT]" if text else text
+
+    return deidentify_text
+
+
+def build_mcp_tool_handlers(
+    runtime_provider: Optional[RuntimeProvider],
+) -> dict[str, Callable[..., Dict[str, Any]]]:
+    """Return the MCP tool-name -> handler mapping bound to a runtime provider.
+
+    Exposed at module level so the tool-schema drift guard can assert this set
+    of registered tool names matches the canonical registry specs.
+    """
+
+    return {
+        "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+        "openmed_extract_pii": lambda **kwargs: openmed_extract_pii(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+        "openmed_deidentify": lambda **kwargs: openmed_deidentify(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+        "openmed_list_models": lambda **kwargs: openmed_list_models(**kwargs),
+        "openmed_list_pii_languages": (
+            lambda **kwargs: openmed_list_pii_languages(**kwargs)
+        ),
+        "openmed_loaded_models": lambda **kwargs: openmed_loaded_models(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+        "openmed_unload_model": lambda **kwargs: openmed_unload_model(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+        "openmed_run_workflow": lambda **kwargs: openmed_run_workflow(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+    }
+
+
+# Canonical set of MCP-exposed tool names, kept in sync with TOOL_REGISTRY by
+# tests/unit/interop/test_tool_schema_sync.py.
+MCP_TOOL_NAMES: frozenset[str] = frozenset(build_mcp_tool_handlers(None))
 
 
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
 ) -> None:
-    @server.tool(name="openmed_analyze_text")
-    def _analyze_text_tool(
-        text: str,
-        model_name: str = "disease_detection_superclinical",
-        confidence_threshold: Optional[float] = 0.0,
-        group_entities: bool = False,
-        aggregation_strategy: Optional[str] = "simple",
-        sentence_detection: bool = True,
-        sentence_language: str = "en",
-        sentence_clean: bool = False,
-        use_fast_tokenizer: bool = True,
-        keep_alive: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Run OpenMed named-entity recognition on clinical text."""
-        return openmed_analyze_text(
-            text=text,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            group_entities=group_entities,
-            aggregation_strategy=aggregation_strategy,
-            sentence_detection=sentence_detection,
-            sentence_language=sentence_language,
-            sentence_clean=sentence_clean,
-            use_fast_tokenizer=use_fast_tokenizer,
-            keep_alive=keep_alive,
-            runtime_provider=runtime_provider,
-        )
-
-    @server.tool(name="openmed_extract_pii")
-    def _extract_pii_tool(
-        text: str,
-        model_name: str = DEFAULT_PII_MODELS["en"],
-        confidence_threshold: float = 0.5,
-        use_smart_merging: bool = True,
-        lang: str = "en",
-        normalize_accents: Optional[bool] = None,
-        keep_alive: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Extract PII/PHI entities from clinical text."""
-        return openmed_extract_pii(
-            text=text,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            use_smart_merging=use_smart_merging,
-            lang=lang,
-            normalize_accents=normalize_accents,
-            keep_alive=keep_alive,
-            runtime_provider=runtime_provider,
-        )
-
-    @server.tool(name="openmed_deidentify")
-    def _deidentify_tool(
-        text: str,
-        method: str = "mask",
-        model_name: str = DEFAULT_PII_MODELS["en"],
-        confidence_threshold: float = 0.7,
-        keep_year: bool = True,
-        shift_dates: Optional[bool] = None,
-        date_shift_days: Optional[int] = None,
-        keep_mapping: bool = False,
-        use_smart_merging: bool = True,
-        lang: str = "en",
-        normalize_accents: Optional[bool] = None,
-        keep_alive: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """De-identify text by masking, removing, replacing, hashing, or shifting."""
-        return openmed_deidentify(
-            text=text,
-            method=method,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            keep_year=keep_year,
-            shift_dates=shift_dates,
-            date_shift_days=date_shift_days,
-            keep_mapping=keep_mapping,
-            use_smart_merging=use_smart_merging,
-            lang=lang,
-            normalize_accents=normalize_accents,
-            keep_alive=keep_alive,
-            runtime_provider=runtime_provider,
-        )
-
-    @server.tool(name="openmed_list_models")
-    def _list_models_tool(
-        category: Optional[str] = None,
-        pii_language: Optional[str] = None,
-        limit: int = 50,
-    ) -> Dict[str, Any]:
-        """List OpenMed model registry entries."""
-        return openmed_list_models(
-            category=category,
-            pii_language=pii_language,
-            limit=limit,
-        )
-
-    @server.tool(name="openmed_list_pii_languages")
-    def _list_pii_languages_tool() -> Dict[str, Any]:
-        """List supported PII languages and default models."""
-        return openmed_list_pii_languages()
-
-    @server.tool(name="openmed_loaded_models")
-    def _loaded_models_tool() -> Dict[str, Any]:
-        """Return currently loaded model resources."""
-        return openmed_loaded_models(runtime_provider=runtime_provider)
-
-    @server.tool(name="openmed_unload_model")
-    def _unload_model_tool(
-        model_name: Optional[str] = None,
-        all_models: bool = False,
-    ) -> Dict[str, Any]:
-        """Unload one inactive model, or all inactive models."""
-        return openmed_unload_model(
-            model_name=model_name,
-            all_models=all_models,
-            runtime_provider=runtime_provider,
-        )
+    handlers = build_mcp_tool_handlers(runtime_provider)
+    for spec in TOOL_REGISTRY.latest_specs():
+        server.tool(
+            name=spec.name,
+            title=spec.title,
+            description=spec.description,
+            annotations=_mcp_annotations(spec),
+            structured_output=True,
+        )(_render_structured_mcp_tool(spec, handlers[spec.name]))
+        _synchronize_registered_schemas(server, spec)
 
 
-def _register_resources(server: Any) -> None:
+def _register_resources(
+    server: Any,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> None:
     @server.resource(
         "openmed://models",
         name="OpenMed model registry",
@@ -478,6 +677,22 @@ def _register_resources(server: Any) -> None:
                 ),
             }
         )
+
+    @server.resource(
+        "openmed://tool-registry",
+        name="OpenMed tool schema registry",
+        mime_type="application/json",
+    )
+    def _tool_registry_resource() -> str:
+        return _json_resource(render_tool_registry_document())
+
+    @server.resource(
+        "openmed://health",
+        name="OpenMed health",
+        mime_type="application/json",
+    )
+    def _health_resource() -> str:
+        return _json_resource(openmed_health(runtime_provider=runtime_provider))
 
 
 def _register_prompts(server: Any) -> None:
@@ -514,19 +729,19 @@ def create_mcp_server(
     streamable_http_path: str = "/mcp",
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
-    FastMCP = _load_fastmcp()
+    FastMCP = _structured_fastmcp(_load_fastmcp())
     server = FastMCP(
         "OpenMed",
         instructions=MCP_INSTRUCTIONS,
         website_url="https://openmed.life/docs/",
         host=host or os.getenv("OPENMED_MCP_HOST", "127.0.0.1"),
-        port=port or int(os.getenv("OPENMED_MCP_PORT", "8081")),
+        port=port or _safe_int_env("OPENMED_MCP_PORT", 8081),
         streamable_http_path=streamable_http_path,
         stateless_http=True,
         json_response=True,
     )
     _register_tools(server, runtime_provider)
-    _register_resources(server)
+    _register_resources(server, runtime_provider)
     _register_prompts(server)
     return server
 
@@ -547,7 +762,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("OPENMED_MCP_PORT", "8081")),
+        default=_safe_int_env("OPENMED_MCP_PORT", 8081),
         help="Port for streamable HTTP transport.",
     )
     parser.add_argument(
