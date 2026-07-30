@@ -85,8 +85,11 @@ from openmed.eval.suites.code_mixed_routing import (
 )
 from openmed.eval.suites.india_clinical_leakage import (
     INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES,
+    INDIA_CLINICAL_MUST_DETECT_TYPES,
     INDIA_CLINICAL_PHI_LEAKAGE,
     INDIA_CLINICAL_PHI_POLICY,
+    MUST_DETECT_IDENTIFIER_MISSED,
+    RESIDUAL_IDENTIFIER_SURVIVED,
     IndiaClinicalLabelVerdict,
     IndiaClinicalLeakageFinding,
     IndiaClinicalLeakageResult,
@@ -441,8 +444,11 @@ __all__ = [
     "load_india_health_id_fixtures",
     "run_india_health_id_leakage_gate",
     "INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES",
+    "INDIA_CLINICAL_MUST_DETECT_TYPES",
     "INDIA_CLINICAL_PHI_LEAKAGE",
     "INDIA_CLINICAL_PHI_POLICY",
+    "MUST_DETECT_IDENTIFIER_MISSED",
+    "RESIDUAL_IDENTIFIER_SURVIVED",
     "IndiaClinicalLabelVerdict",
     "IndiaClinicalLeakageFinding",
     "IndiaClinicalLeakageResult",

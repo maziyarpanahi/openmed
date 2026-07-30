@@ -4,9 +4,32 @@ The gate runs clinical de-identification over every synthetic India clinical
 fixture under the India DPDP profile and the supported multilingual detection
 path, then scans each de-identified document for the original synthetic direct
 identifiers declared by the corpus (ABHA, Aadhaar, PAN, phone, person-name
-aliases, and street addresses). A surviving literal fails the gate with
-privacy-safe document, label, offset, and hash evidence; raw identifier
-surfaces never enter the result, reports, or logs.
+aliases across Latin/Devanagari/Tamil, and street addresses). A surviving
+literal fails the gate with privacy-safe document, label, offset, and hash
+evidence; raw identifier surfaces never enter the result, reports, or logs.
+
+The gate verdict is the conjunction of two independent checks:
+
+* **Zero residual after redaction.** Redaction is driven by the corpus
+  ground-truth direct-identifier spans under the DPDP profile, so it
+  deterministically removes even the Devanagari and Tamil person-name aliases
+  that the offline pattern detector cannot recover on its own.
+* **Must-detect recall floor.** Because gold-driven redaction would otherwise
+  let a detector regression pass silently, the gate also asserts that the
+  offline detector (:func:`openmed.core.safety_sweep.safety_sweep`) actually
+  finds every gold span whose identifier type is in the must-detect set
+  (:data:`INDIA_CLINICAL_MUST_DETECT_TYPES`). These are the structured direct
+  identifiers the detector handles at 100% recall on the shipped corpus:
+  Aadhaar, ABHA, and PAN. A miss on any of them fails the gate.
+
+Detector-capability gap (recorded, not gated): the offline detector cannot
+reliably recover ``person_name``, ``indian_phone``, or ``street_address`` on
+this corpus (person-name recall is 0/3). Their detection coverage is recorded
+in every result for transparency but is deliberately NOT gated, so a PASS must
+never be read as evidence that the production pipeline detects and redacts
+Indic-script names, India phone numbers, or street addresses on its own. The
+zero-residual guarantee for those types comes from the corpus gold spans, not
+from detection.
 
 The corpus is committed synthetic data only: it contains no real PHI, no
 production data, and no DUA-restricted content. The gate is deterministic and
@@ -39,6 +62,13 @@ INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES = frozenset(
         "street_address",
     }
 )
+# Structured direct identifiers the offline detector recovers at 100% recall on
+# the shipped corpus; a miss on any of these is a gated detector regression.
+INDIA_CLINICAL_MUST_DETECT_TYPES = frozenset({"aadhaar", "abha", "pan"})
+
+RESIDUAL_IDENTIFIER_SURVIVED = "residual_identifier_survived"
+MUST_DETECT_IDENTIFIER_MISSED = "must_detect_identifier_missed"
+
 _LEAKAGE_HASH_KEY = "openmed-india-clinical-phi-leakage"
 
 # Redaction callable: given one corpus record, return its de-identified text.
@@ -47,12 +77,13 @@ Deidentifier = Callable[["IndiaClinicalPHIRecord"], str]
 
 @dataclass(frozen=True)
 class IndiaClinicalLeakageFinding:
-    """Raw-text-free evidence for one surviving direct-identifier literal."""
+    """Raw-text-free evidence for one gate failure on a direct identifier."""
 
     document_id: str
     fixture_id: str
     canonical_label: str
     identifier_type: str
+    reason: str
     start: int
     end: int
     span_hash: str
@@ -66,6 +97,7 @@ class IndiaClinicalLeakageFinding:
             "end": self.end,
             "fixture_id": self.fixture_id,
             "identifier_type": self.identifier_type,
+            "reason": self.reason,
             "span_hash": self.span_hash,
             "start": self.start,
         }
@@ -73,19 +105,32 @@ class IndiaClinicalLeakageFinding:
 
 @dataclass(frozen=True)
 class IndiaClinicalLabelVerdict:
-    """Per-identifier residual-leakage verdict for one direct-identifier type."""
+    """Per-identifier verdict combining residual leakage and detection recall."""
 
     identifier_type: str
     canonical_label: str
     expected: int
     detected: int
     leaked: int
+    must_detect: bool
+
+    @property
+    def detection_complete(self) -> bool:
+        """Return whether every span of this type was detected offline."""
+
+        return self.detected >= self.expected
 
     @property
     def passed(self) -> bool:
-        """Return whether no synthetic literal of this type survived."""
+        """Return whether this type leaked nothing and cleared any recall floor.
 
-        return self.leaked == 0
+        Recall is only gated for must-detect types; partial-recall types are
+        recorded but never fail the gate on detection alone.
+        """
+
+        if self.leaked != 0:
+            return False
+        return self.detection_complete if self.must_detect else True
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, raw-text-free per-label verdict."""
@@ -93,10 +138,13 @@ class IndiaClinicalLabelVerdict:
         return {
             "canonical_label": self.canonical_label,
             "detected": self.detected,
+            "detection_complete": self.detection_complete,
             "expected": self.expected,
             "identifier_type": self.identifier_type,
             "leaked": self.leaked,
+            "must_detect": self.must_detect,
             "passed": self.passed,
+            "role": "must_detect" if self.must_detect else "recorded_not_gated",
         }
 
 
@@ -110,6 +158,9 @@ class IndiaClinicalLeakageResult:
     direct_identifier_count: int
     detected_identifier_count: int
     residual_leak_count: int
+    must_detect_miss_count: int
+    must_detect_types: tuple[str, ...] = ()
+    recorded_not_gated_types: tuple[str, ...] = ()
     label_verdicts: tuple[IndiaClinicalLabelVerdict, ...] = ()
     findings: tuple[IndiaClinicalLeakageFinding, ...] = field(default_factory=tuple)
 
@@ -118,12 +169,21 @@ class IndiaClinicalLeakageResult:
 
         return {
             "detected_identifier_count": self.detected_identifier_count,
+            "detector_capability_gap": (
+                "Recall is gated only for must_detect_types; "
+                "recorded_not_gated_types (Indic person names, India phones, "
+                "and street addresses) are recorded for transparency and are "
+                "redacted via corpus gold spans, not offline detection."
+            ),
             "direct_identifier_count": self.direct_identifier_count,
             "document_count": self.document_count,
             "failures": [finding.to_dict() for finding in self.findings],
             "label_verdicts": [verdict.to_dict() for verdict in self.label_verdicts],
+            "must_detect_miss_count": self.must_detect_miss_count,
+            "must_detect_types": list(self.must_detect_types),
             "passed": self.passed,
             "policy": self.policy,
+            "recorded_not_gated_types": list(self.recorded_not_gated_types),
             "residual_leak_count": self.residual_leak_count,
             "suite": INDIA_CLINICAL_PHI_LEAKAGE,
         }
@@ -172,7 +232,7 @@ def evaluate_india_clinical_leakage(
     policy_name: str = INDIA_CLINICAL_PHI_POLICY,
     deidentify: Deidentifier | None = None,
 ) -> IndiaClinicalLeakageResult:
-    """Run the residual-PHI leakage gate over India clinical records.
+    """Run the residual-PHI leakage and must-detect recall gate.
 
     Args:
         records: Normalized synthetic India clinical records.
@@ -197,6 +257,7 @@ def evaluate_india_clinical_leakage(
     expected: dict[str, int] = {}
     detected: dict[str, int] = {}
     leaked: dict[str, int] = {}
+    must_detect_miss_count = 0
 
     for record in records:
         direct_spans = [
@@ -212,22 +273,16 @@ def evaluate_india_clinical_leakage(
             canonical_by_type.setdefault(identifier_type, str(span.label))
             expected[identifier_type] = expected.get(identifier_type, 0) + 1
 
-            if any(_overlaps(candidate, span) for candidate in swept):
+            was_detected = any(_overlaps(candidate, span) for candidate in swept)
+            if was_detected:
                 detected[identifier_type] = detected.get(identifier_type, 0) + 1
+            elif identifier_type in INDIA_CLINICAL_MUST_DETECT_TYPES:
+                must_detect_miss_count += 1
+                findings.append(_finding(record, span, MUST_DETECT_IDENTIFIER_MISSED))
 
             if span.text and span.text in redacted:
                 leaked[identifier_type] = leaked.get(identifier_type, 0) + 1
-                findings.append(
-                    IndiaClinicalLeakageFinding(
-                        document_id=record.document_id,
-                        fixture_id=record.fixture_id,
-                        canonical_label=str(span.label),
-                        identifier_type=identifier_type,
-                        start=int(span.start),
-                        end=int(span.end),
-                        span_hash=hmac_text_hash(span.text, _LEAKAGE_HASH_KEY),
-                    )
-                )
+                findings.append(_finding(record, span, RESIDUAL_IDENTIFIER_SURVIVED))
 
     verdicts = tuple(
         IndiaClinicalLabelVerdict(
@@ -236,17 +291,37 @@ def evaluate_india_clinical_leakage(
             expected=expected[identifier_type],
             detected=detected.get(identifier_type, 0),
             leaked=leaked.get(identifier_type, 0),
+            must_detect=identifier_type in INDIA_CLINICAL_MUST_DETECT_TYPES,
         )
         for identifier_type in sorted(expected)
     )
     residual_leak_count = sum(leaked.values())
+    recorded_not_gated = tuple(
+        sorted(
+            identifier_type
+            for identifier_type in expected
+            if identifier_type not in INDIA_CLINICAL_MUST_DETECT_TYPES
+        )
+    )
+    gated_types = tuple(
+        sorted(
+            identifier_type
+            for identifier_type in expected
+            if identifier_type in INDIA_CLINICAL_MUST_DETECT_TYPES
+        )
+    )
     return IndiaClinicalLeakageResult(
-        passed=residual_leak_count == 0 and not findings,
+        passed=(
+            residual_leak_count == 0 and must_detect_miss_count == 0 and not findings
+        ),
         policy=policy.name,
         document_count=len(records),
         direct_identifier_count=sum(expected.values()),
         detected_identifier_count=sum(detected.values()),
         residual_leak_count=residual_leak_count,
+        must_detect_miss_count=must_detect_miss_count,
+        must_detect_types=gated_types,
+        recorded_not_gated_types=recorded_not_gated,
         label_verdicts=verdicts,
         findings=tuple(findings),
     )
@@ -285,6 +360,7 @@ def assert_india_clinical_leakage_gate(
         policy_name=policy_name,
     )
     if not result.passed:
+        reasons = ", ".join(sorted({finding.reason for finding in result.findings}))
         leaked_types = ", ".join(
             sorted({finding.identifier_type for finding in result.findings})
         )
@@ -293,8 +369,11 @@ def assert_india_clinical_leakage_gate(
         )
         raise AssertionError(
             "India clinical residual-PHI leakage gate failed: "
-            f"{result.residual_leak_count} surviving identifier(s) "
-            f"[{leaked_types}] in document(s) [{documents}]"
+            f"{len(result.findings)} finding(s) "
+            f"(residual={result.residual_leak_count}, "
+            f"must_detect_miss={result.must_detect_miss_count}); "
+            f"reasons [{reasons}]; identifier(s) [{leaked_types}]; "
+            f"document(s) [{documents}]"
         )
     return result
 
@@ -308,16 +387,38 @@ def india_clinical_leakage_metadata(
 
     from openmed.eval.datasets.clinical_phi import INDIA_CLINICAL_PHI_CORPUS_ID
 
+    recorded_not_gated = sorted(
+        INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES - INDIA_CLINICAL_MUST_DETECT_TYPES
+    )
     return {
         "corpus_id": INDIA_CLINICAL_PHI_CORPUS_ID,
         "direct_identifier_types": sorted(INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES),
         "fixture_path": str(fixture_path) if fixture_path is not None else None,
+        "must_detect_types": sorted(INDIA_CLINICAL_MUST_DETECT_TYPES),
         "policy": policy_name,
+        "recorded_not_gated_types": recorded_not_gated,
         "report_fields": ["document_id", "canonical_label", "offsets", "hmac_hashes"],
         "required_residual_leakage": 0,
         "suite": INDIA_CLINICAL_PHI_LEAKAGE,
         "synthetic": True,
     }
+
+
+def _finding(
+    record: "IndiaClinicalPHIRecord",
+    span: Any,
+    reason: str,
+) -> IndiaClinicalLeakageFinding:
+    return IndiaClinicalLeakageFinding(
+        document_id=record.document_id,
+        fixture_id=record.fixture_id,
+        canonical_label=str(span.label),
+        identifier_type=str(span.metadata.get("identifier_type") or ""),
+        reason=reason,
+        start=int(span.start),
+        end=int(span.end),
+        span_hash=hmac_text_hash(span.text, _LEAKAGE_HASH_KEY),
+    )
 
 
 def _overlaps(candidate: Any, span: Any) -> bool:
@@ -342,8 +443,11 @@ def _span_offset(candidate: Any, name: str) -> int | None:
 
 __all__ = [
     "INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES",
+    "INDIA_CLINICAL_MUST_DETECT_TYPES",
     "INDIA_CLINICAL_PHI_LEAKAGE",
     "INDIA_CLINICAL_PHI_POLICY",
+    "MUST_DETECT_IDENTIFIER_MISSED",
+    "RESIDUAL_IDENTIFIER_SURVIVED",
     "IndiaClinicalLabelVerdict",
     "IndiaClinicalLeakageFinding",
     "IndiaClinicalLeakageResult",
