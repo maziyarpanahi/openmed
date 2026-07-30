@@ -13,7 +13,6 @@ from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
 from openmed.clinical.exporters.fhir import to_bundle
-from openmed.risk.reid import risk_report
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -30,6 +29,7 @@ from openmed.mcp.tool_registry import (
     validate_registered_tool_output,
 )
 from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
+from openmed.risk.reid import risk_report
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
