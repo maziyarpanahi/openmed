@@ -1,9 +1,7 @@
-import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0";
-
-const DEFAULT_REPO_ID = "onnx-community/multilang-pii-ner-ONNX";
 const BACKENDS = ["wasm", "webgpu"];
 const PIPELINE_DTYPES = { wasm: "q8", webgpu: "fp16" };
 
+const runtimeInput = document.querySelector("#runtime-module");
 const repoInput = document.querySelector("#repo-id");
 const backendSelect = document.querySelector("#backend");
 const textInput = document.querySelector("#input-text");
@@ -15,32 +13,42 @@ const results = document.querySelector("#results");
 const entities = document.querySelector("#entities");
 const webGpuSupport = document.querySelector("#webgpu-support");
 
-let activeRepoId = DEFAULT_REPO_ID;
+let activeConfiguration = "";
+let runtimeFactory = null;
+let runtimeFactoryUrl = "";
 const detectors = new Map();
 const timings = createTimings();
 
-repoInput.value = new URLSearchParams(window.location.search).get("repo_id") ?? DEFAULT_REPO_ID;
+const query = new URLSearchParams(window.location.search);
+runtimeInput.value = query.get("runtime") ?? "";
+repoInput.value = query.get("model") ?? query.get("repo_id") ?? "";
 webGpuSupport.textContent = navigator.gpu
-  ? "WebGPU is available in this browser."
-  : "WebGPU is unavailable; the WASM path remains usable.";
+  ? "WebGPU is available. Runtime and model assets must be supplied locally."
+  : "WebGPU is unavailable; a locally supplied WASM runtime remains usable.";
 
 runButton.addEventListener("click", () => runSelectedBackend());
 benchmarkButton.addEventListener("click", () => benchmarkBothBackends());
 resetButton.addEventListener("click", () => resetBenchmarks());
-repoInput.addEventListener("change", () => {
+for (const input of [runtimeInput, repoInput]) {
+  input.addEventListener("change", () => {
+    try {
+      resetForConfiguration(localConfiguration());
+    } catch (error) {
+      setStatus(errorMessage(error), "error");
+    }
+  });
+}
+
+async function runSelectedBackend() {
   try {
-    resetForModel(repoId());
+    await withBusyState(async () => {
+      const backend = backendSelect.value;
+      const output = await runBackend(backend);
+      renderOutput(textInput.value, output, backend);
+    });
   } catch (error) {
     setStatus(errorMessage(error), "error");
   }
-});
-
-async function runSelectedBackend() {
-  await withBusyState(async () => {
-    const backend = backendSelect.value;
-    const output = await runBackend(backend);
-    renderOutput(textInput.value, output, backend);
-  });
 }
 
 async function benchmarkBothBackends() {
@@ -72,13 +80,13 @@ async function runBackend(backend) {
     throw new Error("this browser does not expose navigator.gpu");
   }
 
-  const selectedRepoId = repoId();
-  resetForModel(selectedRepoId);
-  const detector = await loadDetector(selectedRepoId, backend);
+  const configuration = localConfiguration();
   const input = textInput.value.trim();
   if (!input) {
     throw new Error("enter synthetic text before running inference");
   }
+  resetForConfiguration(configuration);
+  const detector = await loadDetector(configuration, backend);
 
   setStatus(`Running first ${backendLabel(backend)} inference…`);
   const startedAt = performance.now();
@@ -92,30 +100,57 @@ async function runBackend(backend) {
   return normalizeOutput(output, input);
 }
 
-async function loadDetector(selectedRepoId, backend) {
+async function loadDetector(configuration, backend) {
   if (detectors.has(backend)) {
     return detectors.get(backend);
   }
 
-  setStatus(`Loading ${selectedRepoId} for ${backendLabel(backend)}…`);
+  setStatus(
+    `Loading the local model for ${backendLabel(backend)} from ` +
+      `${configuration.modelUrl.pathname}…`,
+  );
   const startedAt = performance.now();
-  const detector = await pipeline("token-classification", selectedRepoId, {
-    device: backend,
+  const createPipeline = await loadRuntimeFactory(configuration.runtimeUrl);
+  const detector = await createPipeline({
+    backend,
     dtype: PIPELINE_DTYPES[backend],
+    modelUrl: configuration.modelUrl.href,
+    task: "token-classification",
   });
+  if (typeof detector !== "function") {
+    throw new Error(
+      "The local runtime adapter did not return a callable detector.",
+    );
+  }
   timings[backend].loadMs = performance.now() - startedAt;
   detectors.set(backend, detector);
   renderTimings();
   return detector;
 }
 
-function resetForModel(selectedRepoId) {
-  if (selectedRepoId === activeRepoId) {
+async function loadRuntimeFactory(runtimeUrl) {
+  if (runtimeFactory && runtimeFactoryUrl === runtimeUrl.href) {
+    return runtimeFactory;
+  }
+  setStatus(`Loading local runtime adapter from ${runtimeUrl.pathname}…`);
+  const runtime = await import(runtimeUrl.href);
+  if (typeof runtime.createOpenMedPipeline !== "function") {
+    throw new Error(
+      "The local runtime module must export createOpenMedPipeline(options).",
+    );
+  }
+  runtimeFactory = runtime.createOpenMedPipeline;
+  runtimeFactoryUrl = runtimeUrl.href;
+  return runtimeFactory;
+}
+
+function resetForConfiguration(configuration) {
+  if (configuration.key === activeConfiguration) {
     return;
   }
-  activeRepoId = selectedRepoId;
+  activeConfiguration = configuration.key;
   resetBenchmarks({ keepStatus: true });
-  setStatus(`Model changed to ${selectedRepoId}; benchmark state reset.`);
+  setStatus("Local runtime or model changed; benchmark state reset.");
 }
 
 function resetBenchmarks({ keepStatus = false } = {}) {
@@ -295,12 +330,29 @@ function setButtonsDisabled(disabled) {
   resetButton.disabled = disabled;
 }
 
-function repoId() {
-  const selectedRepoId = repoInput.value.trim();
-  if (!selectedRepoId || !selectedRepoId.includes("/")) {
-    throw new Error("repo_id must look like owner/model-name");
+function localConfiguration() {
+  const runtimeValue = runtimeInput.value.trim();
+  const modelValue = repoInput.value.trim();
+  if (!runtimeValue || !modelValue) {
+    throw new Error(
+      "Supply a same-origin runtime module and model bundle before running.",
+    );
   }
-  return selectedRepoId;
+  const runtimeUrl = sameOriginUrl(runtimeValue, "runtime module");
+  const modelUrl = sameOriginUrl(modelValue, "model bundle");
+  return {
+    key: `${runtimeUrl.href}\n${modelUrl.href}`,
+    modelUrl,
+    runtimeUrl,
+  };
+}
+
+function sameOriginUrl(value, label) {
+  const resolved = new URL(value, window.location.href);
+  if (resolved.origin !== window.location.origin) {
+    throw new Error(`${label} must use this page's origin`);
+  }
+  return resolved;
 }
 
 function setStatus(message, kind = "info") {
