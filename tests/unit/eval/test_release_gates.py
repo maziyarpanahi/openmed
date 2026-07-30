@@ -1356,6 +1356,108 @@ def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
     assert len(rows) + derived_count >= 2_000
 
 
+def _export_variant_manifest() -> dict[str, object]:
+    return {
+        "parent_format": "pytorch",
+        "parent_recall": {"PERSON": 0.995, "DATE": 0.995, "ID_NUM": 0.995},
+        "required_variants": ["onnx", "onnx-int8", "webgpu"],
+        "variants": [
+            {
+                "format": "onnx",
+                "tier": "base",
+                "p50_ms": 90.0,
+                "p95_ms": 280.0,
+                "ram_mb": 700.0,
+            },
+            {
+                "format": "onnx-int8",
+                "tier": "tiny",
+                "recall": {"PERSON": 0.992, "DATE": 0.993, "ID_NUM": 0.994},
+                "p50_ms": 40.0,
+                "p95_ms": 120.0,
+                "ram_mb": 300.0,
+            },
+            {
+                "format": "webgpu",
+                "tier": "base",
+                "p50_ms": 90.0,
+                "p95_ms": 280.0,
+                "ram_mb": 700.0,
+            },
+        ],
+    }
+
+
+def test_export_variant_gate_releases_passing_onnx_and_webgpu(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "export_variant_manifest": _export_variant_manifest(),
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert result.blocked_formats == ()
+    assert _check(result, "export_variants").passed is True
+    assert _check(result, "export_variants:onnx-int8").passed is True
+    assert _check(result, "export_variants:webgpu").passed is True
+
+
+def test_export_variant_gate_blocks_degraded_variant_and_reports_format(
+    tmp_path: Path,
+) -> None:
+    manifest = _export_variant_manifest()
+    manifest["variants"][1]["recall"] = {
+        "PERSON": 0.985,
+        "DATE": 0.993,
+        "ID_NUM": 0.994,
+    }
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"export_variant_manifest": manifest},
+        ),
+        _baseline(),
+    )
+
+    blocked = _check(result, "export_variants:onnx-int8")
+    assert result.decision == QUARANTINED
+    assert blocked.passed is False
+    assert blocked.blocking_format == "onnx-int8"
+    assert result.blocked_formats == ("onnx-int8",)
+    # Unrelated passing variants stay releasable within the same report.
+    assert _check(result, "export_variants:onnx").passed is True
+    assert _check(result, "export_variants:webgpu").passed is True
+
+
+def test_export_variant_gate_fails_closed_when_required_variant_missing(
+    tmp_path: Path,
+) -> None:
+    manifest = _export_variant_manifest()
+    manifest["variants"] = [
+        variant for variant in manifest["variants"] if variant["format"] != "webgpu"
+    ]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"export_variant_manifest": manifest},
+        ),
+        _baseline(),
+    )
+
+    coverage = _check(result, "export_variants")
+    assert result.decision == QUARANTINED
+    assert coverage.passed is False
+    assert coverage.details["missing_required"] == ["webgpu"]
+
+
 def _coreml_manifest() -> dict[str, object]:
     parity_pass = {
         "passed": True,
