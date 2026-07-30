@@ -1,30 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed: klinische AI op het apparaat · 2.000+ modellen" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed README-banner met de kattenmascotte, het woordmerk in kleine letters, Open Cross en de tekst Open-source AI voor de gezondheidszorg, 340M+ downloads en 10M+ installaties" width="1280" />
 
 <h3>Jouw data. Jouw model. Jouw hardware.</h3>
 
-<p><b>Zet klinische tekst om in gestructureerd, ge-de-identificeerd inzicht, zonder iets te uploaden.</b><br/>
-OpenMed extraheert biomedische entiteiten en verwijdert 55+ PHI-typen volledig op de hardware die jij beheert, zodat je gegevens het apparaat nooit verlaten. Dezelfde 2.000+ open modellen draaien van een telefoon tot een GPU-server, volledig offline: iOS en iPadOS via OpenMedKit, Android via ONNX, gewone CPU's, Apple Silicon, NVIDIA GPU's en de browser. Geen cloud. Geen vendor lock-in. Geen patiëntgegevens die je netwerk verlaten.</p>
+<p><b>Zet klinische tekst om in gestructureerd, ge-de-identificeerd inzicht op hardware die je beheert.</b><br/>
+De lokale kernruntime van OpenMed voert extractie en de-identificatie uit nadat de vereiste modelartefacten beschikbaar zijn. Modeldownloads, adapters voor externe providers, paden met telemetrie en door de gebruiker ingestelde integraties kunnen het netwerk gebruiken; controleer de voorwaarden van elk model en elke dataset.</p>
 
 <p>
-  <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
-  <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
-  <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
-  <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
+  <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
+  <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
+  <a href="LICENSE">Apache-2.0 SDK source</a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
+  <a href="swift/OpenMedKit">OpenMedKit</a> ·
+  <a href="docs/mlx-backend.md">Apple Silicon / MLX</a> ·
+  <a href="docs/export-onnx-android.md">Android / ONNX Runtime Mobile</a> ·
+  <a href="docs/export-transformersjs.md">Browser / Transformers.js</a> ·
+  <a href="https://openmed.life/docs">Documentation</a>
 </p>
 
 <p>
-  <b>2.000+ modellen</b> &nbsp;·&nbsp; <b>15 PII-talen</b> &nbsp;·&nbsp; <b>600+ PII-checkpoints</b> &nbsp;·&nbsp; <b>100% op het apparaat</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Lokale uitvoering voorop</b> &nbsp;·&nbsp; <b>33 modelondersteunde PII-talen</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -74,37 +74,30 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-Een state-of-the-art klinisch NER-model dat lokaal draait: geen API-sleutel, geen netwerkoproep.
+Een klinisch NER-model gebruikt de lokale runtime nadat de vereiste artefacten beschikbaar zijn.
 
 ---
 
 ## Waarom OpenMed?
 
-|                                       |       **OpenMed**        |     Medische cloud-API's   |
-| ------------------------------------- | :----------------------: | :------------------------: |
-| Draait op je apparaat/servers         |            ✅            |             ❌             |
-| Patiëntgegevens verlaten je netwerk   |        **Nooit**         | Naar de leverancier gestuurd |
-| Kosten                                | Gratis & open source     |     Prijs per aanroep      |
-| Gespecialiseerde medische modellen    |          2.000+          |           Beperkt          |
-| Talen                                 |           12+            |          Wisselend         |
-| Offline / air-gapped                  |            ✅            |             ❌             |
-| Apple Silicon (MLX)-versnelling       |            ✅            |           n.v.t.           |
-| Native iOS-/macOS-apps                |   ✅ via OpenMedKit       |             ❌             |
-| Vendor lock-in                        |    Geen: Apache-2.0     |             Ja             |
+| Implementatieaspect | Grens van de OpenMed SDK |
+| --- | --- |
+| Kernruntime | Verwerkt lokaal nadat de vereiste artefacten beschikbaar zijn |
+| Optionele netwerkpaden | Downloads, externe adapters, telemetriepaden en integraties kunnen het netwerk gebruiken |
+| Validatie | De beheerder valideert model- en datavoorwaarden, privacygedrag en klinische geschiktheid |
+| Interfaces | Python, Swift, Android, browser en diensten waar ondersteund |
 
-- **Gespecialiseerde modellen**: meer dan 2.000 zorgvuldig geselecteerde biomedische en klinische modellen, waarvan vele propriëtaire oplossingen overtreffen.
-- **HIPAA-bewuste de-identificatie**: alle 18 Safe Harbor-identificatoren, slimme entiteitssamenvoeging en formaatbehoudende nepwaarden.
-- **Draait overal**: CPU, CUDA, Apple Silicon (MLX), en native in iOS-/macOS-apps via OpenMedKit.
-- **Implementatie in één regel**: Python-API, gedockeriseerde REST-service of batchpipelines.
-- **Geen lock-in**: Apache-2.0, jouw infrastructuur, jouw data.
+- **Samengestelde modelcatalogus**: valideer elk model, elke licentie en dataset voor je gebruikssituatie.
+- **Op Safe Harbor afgestemde configuratie**: kan de 18 identificatorcategorieën adresseren; deskundige implementatiebeoordeling blijft vereist en gebruik van de SDK toont op zichzelf geen HIPAA-naleving aan.
+- **Ondersteunde uitvoerpaden**: CPU-, CUDA-, MLX-, mobiele, service- en browseradapters verschillen per omgeving en artefact.
+- **Implementatie-interfaces**: Python, containers, services en batchworkflows vereisen configuratie en validatie.
+- **SDK-broncode**: uitgebracht onder Apache-2.0 License; voorwaarden van modellen en datasets verschillen.
 
 ---
 
 ## Op het apparaat, op Apple: Swift, MLX & iOS
 
-OpenMed is gebouwd om te draaien waar je data al leeft. Op Apple-hardware versnelt het met **MLX** en komt het
-via **[OpenMedKit](swift/OpenMedKit)** rechtstreeks in iPhone-, iPad- en Mac-apps, zodat PII-detectie en
-klinische extractie volledig offline, op het apparaat, plaatsvinden.
+Op ondersteunde Apple-hardware kan OpenMed **MLX** en **[OpenMedKit](swift/OpenMedKit)** gebruiken voor lokale verwerking nadat de vereiste artefacten beschikbaar zijn. Modelverwerving en door de gebruiker ingestelde externe integraties blijven afzonderlijke netwerkgrenzen.
 
 ```swift
 // Add OpenMedKit to your app
@@ -125,7 +118,7 @@ Handleidingen: [MLX-backend](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/s
 
 ```mermaid
 flowchart LR
-    A["Klinische tekst"] --> B["OpenMed<br/>(100% op het apparaat)"]
+    A["Klinische tekst"] --> B["OpenMed<br/>(lokaal eerst)"]
     B --> C["Medische entiteiten"]
     B --> D["PII gedetecteerd"]
     B --> E["Ge-de-identificeerde tekst"]
@@ -249,7 +242,7 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 
 - **Slimme entiteitssamenvoeging** houdt `01/15/1970` heel in plaats van het te fragmenteren.
 - **Faker-gebaseerde verhulling** met aangepaste providers voor klinische ID's (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
-- **HIPAA**: alle 18 Safe Harbor-identificatoren, met configureerbare betrouwbaarheidsdrempels.
+- **HIPAA-grens**: op Safe Harbor afgestemde categorieën en instelbare drempels zijn implementatiehulpmiddelen; deskundige implementatiebeoordeling blijft vereist en alleen SDK-gebruik toont geen naleving aan.
 
 [Volledig PII-notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Slimme samenvoeging](docs/pii-smart-merging.md) · [Anonimisering](docs/anonymization.md)
 
@@ -282,9 +275,9 @@ Op niet-Apple-Silicon-hosts worden MLX-modelnamen automatisch vervangen door het
 
 ---
 
-## Meertalige PII (12 talen)
+## Meertalige PII (34 ondersteunde routes; 33 modelondersteund)
 
-Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr`, in totaal **600+ PII-checkpoints**.
+Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr`, in totaal **de geregistreerde PII-modelcatalogus**.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -376,7 +369,7 @@ OpenMed bouwt voort op uitstekend opensourcewerk, met speciale dank aan **OpenAI
 
 ## Licentie
 
-Uitgebracht onder de [Apache-2.0-licentie](LICENSE).
+De broncode van de OpenMed SDK wordt uitgebracht onder de [Apache-2.0 License](LICENSE).
 
 ## Citeren
 
@@ -400,9 +393,7 @@ Als OpenMed nuttig is in je onderzoek, citeer het dan:
 
 Als OpenMed nuttig voor je is, helpt een ster anderen om het te ontdekken.
 
-<a href="https://star-history.com/#maziyarpanahi/openmed&Date">
-  <img src="https://api.star-history.com/svg?repos=maziyarpanahi/openmed&type=Date" alt="Grafiek van de stergeschiedenis" width="640" />
-</a>
+[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
