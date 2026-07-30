@@ -225,6 +225,16 @@ from openmed.eval.history import (
     metric_history,
     write_run_ledger,
 )
+from openmed.eval.india_dpdp_coverage import (
+    INDIA_DPDP_COVERAGE,
+    INDIA_DPDP_POLICY,
+    DpdpCoverageGateFailure,
+    DpdpCoverageReport,
+    DpdpLabelCoverage,
+    assert_india_dpdp_coverage_gate,
+    india_dpdp_coverage_metadata,
+    run_india_dpdp_coverage,
+)
 from openmed.eval.leakage_dashboard import (
     DEFAULT_WORST_LABEL_COUNT,
     LEAKAGE_DASHBOARD_ARTIFACT_TYPE,
@@ -479,6 +489,14 @@ __all__ = [
     "BoundaryLeakageResult",
     "BenchmarkRunLedger",
     "BenchmarkRunLedgerEntry",
+    "INDIA_DPDP_COVERAGE",
+    "INDIA_DPDP_POLICY",
+    "DpdpCoverageGateFailure",
+    "DpdpCoverageReport",
+    "DpdpLabelCoverage",
+    "assert_india_dpdp_coverage_gate",
+    "india_dpdp_coverage_metadata",
+    "run_india_dpdp_coverage",
     "CalibrationArtifactPaths",
     "ConformalCalibrationGroup",
     "ConformalCalibrationReport",
