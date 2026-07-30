@@ -68,6 +68,7 @@ from .schemas import (
     AnalyzeRequest,
     DeidentifyJobRequest,
     ModelUnloadRequest,
+    OmopLoadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
     PIIExtractStreamRequest,
@@ -145,6 +146,59 @@ def _result_to_dict(result: Any) -> Dict[str, Any]:
         return dict(result)
 
     raise TypeError("Unsupported result payload type.")
+
+
+def _parse_grounded_jsonl_text(text: str) -> list[Mapping[str, Any]]:
+    """Parse newline-delimited grounded note records without echoing content.
+
+    Errors reference only the offending line number so no note text or other
+    caller-supplied content leaks into the PHI-free error envelope.
+    """
+    records: list[Mapping[str, Any]] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"records_jsonl line {line_number} is not valid JSON"
+            ) from exc
+        if not isinstance(payload, Mapping):
+            raise ValueError(f"records_jsonl line {line_number} must be a JSON object")
+        records.append(payload)
+    if not records:
+        raise ValueError("records_jsonl must contain at least one record")
+    return records
+
+
+def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
+    """Build a PHI-free OMOP load summary from an inline JSONL request body."""
+    from ..interop.omop import load_grounded_notes, validate_omop_tables
+
+    records = _parse_grounded_jsonl_text(payload.records_jsonl)
+    tables = load_grounded_notes(
+        records,
+        vocabulary_version=payload.vocabulary_version,
+    )
+    summary = tables.summary
+    response: Dict[str, Any] = {
+        "row_counts": dict(summary.row_counts),
+        "rejection_counts": dict(summary.rejection_counts),
+        "rejected_spans": [span.to_dict() for span in summary.rejected_spans],
+        "source_note_hashes": list(summary.source_note_hashes),
+    }
+    if payload.validate_constraints:
+        violations = validate_omop_tables(tables)
+        by_reason: Dict[str, int] = {}
+        for violation in violations:
+            by_reason[violation.reason] = by_reason.get(violation.reason, 0) + 1
+        response["constraint_violations"] = {
+            "count": len(violations),
+            "by_reason": by_reason,
+        }
+    return response
 
 
 def _error_response(
@@ -954,6 +1008,17 @@ def create_app() -> FastAPI:
             return await _run_with_timeout(runtime, _model_operation)
 
         return await _operation()
+
+    @app.post("/omop/load")
+    async def omop_load(payload: OmopLoadRequest, request: Request) -> Dict[str, Any]:
+        with trace_service_stage(
+            "omop_load",
+            {
+                "openmed.endpoint": "/omop/load",
+                "openmed.input.length": len(payload.records_jsonl),
+            },
+        ):
+            return await run_in_threadpool(_omop_load_summary, payload)
 
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(
