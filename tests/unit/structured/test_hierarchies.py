@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from openmed.core.date_shift import stable_offset_for
+from openmed.risk import enforce_kanon
 from openmed.structured import (
     COLUMN_TYPE_AGE,
     COLUMN_TYPE_DATE,
@@ -21,10 +22,12 @@ from openmed.structured import (
     GeneralizationLevel,
     Hierarchy,
     HierarchyError,
+    build_enforcement_hierarchies,
     describe_level,
     generalize_value,
     get_hierarchy,
     max_level,
+    to_enforce_kanon_hierarchy,
 )
 from openmed.structured.hierarchies import (
     AGE_MAX,
@@ -335,6 +338,85 @@ def test_invalid_values_raise_typed_error():
         generalize_value(
             COLUMN_TYPE_DATE, "2025-13-40", 0, patient_key="k", secret=SECRET
         )
+
+
+# --------------------------------------------------------------------------- #
+# Integration: the declarative family plugs into enforce_kanon                #
+# --------------------------------------------------------------------------- #
+def test_to_enforce_kanon_hierarchy_shape():
+    # Age enumerates its bounded domain without observed values; the spec is
+    # identity-first and each coarsening rung carries a value map (or default).
+    spec = to_enforce_kanon_hierarchy(COLUMN_TYPE_AGE)
+    assert spec[0] == {"name": "age:exact"}
+    assert "values" not in spec[0] and "default" not in spec[0]
+    assert spec[1]["values"]["45"] == "45-49"  # 5-year band rung
+    assert spec[-1] == {"name": "age:suppressed", "default": SUPPRESSED}
+
+    # The per-subject date shift rung is NOT emitted (not a class merge); the
+    # emitted date spec is identity -> month -> year -> suppressed.
+    date_spec = to_enforce_kanon_hierarchy(
+        COLUMN_TYPE_DATE, ["2024-02-29", "2024-02-15"]
+    )
+    assert [level["name"] for level in date_spec] == [
+        "date:exact",
+        "date:month",
+        "date:year",
+        "date:suppressed",
+    ]
+    assert date_spec[1]["values"]["2024-02-29"] == "2024-02"
+
+    # ZIP and date require observed values (unbounded domains).
+    with pytest.raises(HierarchyError):
+        to_enforce_kanon_hierarchy(COLUMN_TYPE_ZIP)
+    with pytest.raises(HierarchyError):
+        to_enforce_kanon_hierarchy(COLUMN_TYPE_DATE)
+
+
+def _synthetic_kanon_table():
+    """Eight synthetic records forming four pairs that merge at coarse rungs."""
+    records = []
+    for i in range(8):
+        pair = i // 2
+        records.append(
+            {
+                "pid": f"p{i}",
+                "age": 20 + pair * 10 + (i % 2),
+                "zip": f"{10000 + pair * 100 + (i % 2):05d}",
+                "admit_date": f"2025-{pair + 1:02d}-{(i % 2) + 1:02d}",
+            }
+        )
+    return records
+
+
+def test_declarative_family_plugs_into_enforce_kanon():
+    records = _synthetic_kanon_table()
+    column_to_type = {
+        "age": COLUMN_TYPE_AGE,
+        "zip": COLUMN_TYPE_ZIP,
+        "admit_date": COLUMN_TYPE_DATE,
+    }
+    hierarchies = build_enforcement_hierarchies(column_to_type, records)
+    assert set(hierarchies) == set(column_to_type)
+
+    target_k = 2
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=["age", "zip", "admit_date"],
+        hierarchies=hierarchies,
+        target_k=target_k,
+        remove_direct_identifiers=False,
+    )
+
+    # The engine accepted the declarative levels and reached the target k by
+    # generalization alone (no suppression), proving the rungs are usable.
+    assert enforced["kanon"]["k"] >= target_k
+    assert enforced["suppressed_count"] == 0
+    assert enforced["released_count"] == len(records)
+
+
+def test_build_enforcement_hierarchies_rejects_unknown_type():
+    with pytest.raises(HierarchyError):
+        build_enforcement_hierarchies({"weight": "weight"}, [{"weight": 70}])
 
 
 def test_module_imports_without_jvm_or_terminology():

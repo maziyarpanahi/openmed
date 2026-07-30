@@ -28,10 +28,12 @@ from .hierarchies import (
     GeneralizationLevel,
     Hierarchy,
     HierarchyError,
+    build_enforcement_hierarchies,
     describe_level,
     generalize_value,
     get_hierarchy,
     max_level,
+    to_enforce_kanon_hierarchy,
 )
 from .lab_panels import (
     LAB_PANEL_ADVISORY,
@@ -83,6 +85,7 @@ __all__ = [
     "ROLE_SENSITIVE",
     "SUPPORTED_TABLE_SUFFIXES",
     "TimeSeriesPoint",
+    "build_enforcement_hierarchies",
     "canonical_analyte",
     "canonical_discharge_slot",
     "describe_level",
@@ -95,5 +98,6 @@ __all__ = [
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
+    "to_enforce_kanon_hierarchy",
     "write_table",
 ]

@@ -22,10 +22,12 @@ from .functions import (
     GeneralizationLevel,
     Hierarchy,
     HierarchyError,
+    build_enforcement_hierarchies,
     describe_level,
     generalize_value,
     get_hierarchy,
     max_level,
+    to_enforce_kanon_hierarchy,
 )
 
 __all__ = [
@@ -44,8 +46,10 @@ __all__ = [
     "SUPPORTED_COLUMN_TYPES",
     "SUPPRESSED",
     "ZIP_MAX_TRUNCATION",
+    "build_enforcement_hierarchies",
     "describe_level",
     "generalize_value",
     "get_hierarchy",
     "max_level",
+    "to_enforce_kanon_hierarchy",
 ]

@@ -25,10 +25,10 @@ access.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Final
+from typing import Any, Final
 
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS, stable_offset_for
 
@@ -427,6 +427,113 @@ def generalize_value(
     return transform(value, patient_key=patient_key, secret=secret, max_days=max_days)
 
 
+# --------------------------------------------------------------------------- #
+# Interop: emit enforce_kanon-compatible generalization specs                 #
+# --------------------------------------------------------------------------- #
+# ``openmed.risk.kanon.enforce_kanon`` accepts, per column, an ordered sequence
+# of level specs (``Mapping[str, Any]``) finest-to-coarsest: index 0 is a
+# canonical identity level (no ``values``/``default``) and each later level is a
+# class-merging coarsening described by an explicit ``values`` map (source ->
+# output) or a ``default`` catch-all. This module's declarative family is
+# functional rather than value-enumerated, so a spec is materialized by mapping
+# each observed value through the family's merging rungs.
+#
+# Only class-merging rungs participate in a k-anonymity merge lattice. Per
+# column type these are the family level indices below; excluded rungs are:
+#   * ``zip`` level 0 (full value) -- an identity rung, replaced by the
+#     canonical identity level enforce_kanon prepends.
+#   * ``date`` level 0 (per-subject HMAC shift) -- a separate privacy transform,
+#     NOT a class-merging generalization, so it cannot take part in a k-anon
+#     merge and is intentionally omitted from the emitted spec.
+_MERGING_LEVEL_INDICES: Final = {
+    COLUMN_TYPE_AGE: (0, 1, 2, 3),
+    COLUMN_TYPE_ZIP: (1, 2, 3, 4, 5, 6, 7),
+    COLUMN_TYPE_DATE: (1, 2, 3),
+}
+
+
+def to_enforce_kanon_hierarchy(
+    column_type: str,
+    values: Iterable[object] | None = None,
+) -> list[dict[str, Any]]:
+    """Return an ``enforce_kanon``-compatible level-spec sequence for a column.
+
+    The result is an ordered list of level specs finest-to-coarsest, ready to be
+    passed as one column of ``openmed.risk.kanon.enforce_kanon``'s
+    ``hierarchies=`` mapping. Index 0 is a canonical identity level; each later
+    entry is a class-merging rung of this module's declarative family, rendered
+    as an explicit ``values`` map (or a ``default`` catch-all for suppression).
+
+    Because ``enforce_kanon`` hierarchies are value-enumerated, the source domain
+    must be materialized: pass the column's observed ``values``. For ``age`` the
+    full ``0..AGE_MAX`` domain is enumerated when ``values`` is omitted; ``zip``
+    and ``date`` require ``values`` (their domains are unbounded). The
+    per-subject date-shift rung is excluded because it is not a class-merging
+    generalization.
+
+    Raises :class:`HierarchyError` for an unknown ``column_type`` or when
+    ``values`` are required but not supplied.
+    """
+    hierarchy = get_hierarchy(column_type)
+    if values is None:
+        if column_type == COLUMN_TYPE_AGE:
+            domain: list[object] = list(range(AGE_MAX + 1))
+        else:
+            raise HierarchyError(
+                f"column_type {column_type!r} requires observed values to "
+                "materialize an enforce_kanon hierarchy"
+            )
+    else:
+        domain = list(values)
+
+    spec: list[dict[str, Any]] = [{"name": f"{column_type}:exact"}]
+    # enforce_kanon's partition validator re-injects each level's outputs as
+    # source values. Close every coarser level's map over all finer levels'
+    # outputs so a re-injected representative coarsens consistently instead of
+    # passing through as an un-mapped literal (which would look like a split).
+    prior_outputs: dict[str, object] = {}
+    for index in _MERGING_LEVEL_INDICES[column_type]:
+        level = hierarchy.levels[index]
+        if index == hierarchy.max_level:
+            # Fully suppressed rung: collapse every value into one class.
+            spec.append({"name": level.key, "default": SUPPRESSED})
+            continue
+        value_map: dict[str, str] = {}
+        new_outputs: dict[str, object] = {}
+        for value in domain:
+            output = generalize_value(column_type, value, index)
+            value_map[str(value)] = output
+            new_outputs.setdefault(output, value)
+        for prior_output, representative in prior_outputs.items():
+            value_map[prior_output] = generalize_value(
+                column_type, representative, index
+            )
+        spec.append({"name": level.key, "values": value_map})
+        prior_outputs.update(new_outputs)
+    return spec
+
+
+def build_enforcement_hierarchies(
+    column_to_type: Mapping[str, str],
+    records: Sequence[Mapping[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Build an ``enforce_kanon`` ``hierarchies=`` mapping from a declarative plan.
+
+    ``column_to_type`` maps each quasi-identifier column name to one of the
+    supported column types (``age``/``zip``/``date``). Observed values are read
+    from ``records`` so the emitted value maps key exactly on the values the
+    engine will see. The returned mapping is ready to pass straight to
+    ``openmed.risk.kanon.enforce_kanon(..., hierarchies=<result>)``.
+
+    Raises :class:`HierarchyError` for an unknown column type.
+    """
+    result: dict[str, list[dict[str, Any]]] = {}
+    for column, column_type in column_to_type.items():
+        observed = [record[column] for record in records if column in record]
+        result[column] = to_enforce_kanon_hierarchy(column_type, observed)
+    return result
+
+
 __all__ = [
     "AGE_BAND_WIDTHS",
     "AGE_MAX",
@@ -443,8 +550,10 @@ __all__ = [
     "SUPPORTED_COLUMN_TYPES",
     "SUPPRESSED",
     "ZIP_MAX_TRUNCATION",
+    "build_enforcement_hierarchies",
     "describe_level",
     "generalize_value",
     "get_hierarchy",
     "max_level",
+    "to_enforce_kanon_hierarchy",
 ]
