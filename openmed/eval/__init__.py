@@ -438,6 +438,20 @@ from openmed.eval.surrogate_quality import (
     evaluate_surrogate_record,
     load_surrogate_quality_records,
 )
+from openmed.eval.target_leakage import (
+    DEFAULT_OVER_REDACTION_CEILING,
+    DEFAULT_RESIDUAL_LEAKAGE_CEILING,
+    DEFAULT_TARGET_LEAKAGE_RATE,
+    TARGET_LEAKAGE_PATH,
+    TARGET_LEAKAGE_SCHEMA_VERSION,
+    LeakageTargets,
+    TargetLeakageConfigError,
+    TargetLeakageMiss,
+    get_targets,
+    load_target_leakage_config,
+    target_leakage_key,
+    validate_target_leakage_config,
+)
 from openmed.eval.threshold_sweep import (
     ThresholdSweepPoint,
     ThresholdSweepReport,
@@ -836,4 +850,16 @@ __all__ = [
     "GATED",
     "RECOVERED",
     "REGRESSION_TRACKER_SCHEMA_VERSION",
+    "DEFAULT_OVER_REDACTION_CEILING",
+    "DEFAULT_RESIDUAL_LEAKAGE_CEILING",
+    "DEFAULT_TARGET_LEAKAGE_RATE",
+    "LeakageTargets",
+    "TARGET_LEAKAGE_PATH",
+    "TARGET_LEAKAGE_SCHEMA_VERSION",
+    "TargetLeakageConfigError",
+    "TargetLeakageMiss",
+    "get_targets",
+    "load_target_leakage_config",
+    "target_leakage_key",
+    "validate_target_leakage_config",
 ]
