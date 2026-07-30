@@ -60,6 +60,35 @@ class TargetLeakageConfigError(ValueError):
     """Raised when the target-leakage config is malformed."""
 
 
+class _StrictLeakageLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys.
+
+    A duplicate key would let a later, laxer floor silently override an
+    earlier stricter one (e.g. a signed ``0.0`` downgraded to ``0.9``), so the
+    loader treats it as a malformed config rather than taking the last value.
+    """
+
+
+def _construct_mapping_no_duplicates(
+    loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False
+) -> dict[Any, Any]:
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise TargetLeakageConfigError(
+                f"target-leakage config has a duplicate key: {key!r}"
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictLeakageLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_no_duplicates,
+)
+
+
 class TargetLeakageMiss(LookupError):
     """Raised when a requested ``(family, tier, format)`` is unconfigured."""
 
@@ -109,7 +138,14 @@ def load_target_leakage_config(
 
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as handle:
-        payload = yaml.safe_load(handle)
+        try:
+            payload = yaml.load(handle, Loader=_StrictLeakageLoader)
+        except TargetLeakageConfigError:
+            raise
+        except yaml.YAMLError as exc:
+            raise TargetLeakageConfigError(
+                f"target-leakage config is not valid YAML: {exc}"
+            ) from exc
     if not isinstance(payload, Mapping):
         raise TargetLeakageConfigError("target-leakage config must be a mapping")
     validate_target_leakage_config(payload)
