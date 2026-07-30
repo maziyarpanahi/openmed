@@ -162,13 +162,15 @@ def test_registry_supports_multiple_versions_side_by_side() -> None:
         "2.0.0",
     ]
 
-#Issue #1741
-NEW_TOOLS={
+
+# Issue #1741
+NEW_TOOLS = {
     "openmed_fhir_bundle",
     "openmed_risk_report",
     "openmed_signed_audit_report",
-    "openmed_search_models"
+    "openmed_search_models",
 }
+
 
 def test_new_tools_have_correct_annotations() -> None:
     for tool in NEW_TOOLS:
@@ -177,36 +179,35 @@ def test_new_tools_have_correct_annotations() -> None:
         assert annotations["destructiveHint"] is False
         assert annotations["openWorldHint"] is False
 
-#openmed_fhir_bundle specific tests.
+
+# openmed_fhir_bundle specific tests.
 def test_fhir_bundle_assembles_a_valid_bundle() -> None:
     bundle = mcp_server.openmed_fhir_bundle(
         resources=[
-            {
-                "resourceType": "Patient", 
-                "id": "patient-1"
-            },
+            {"resourceType": "Patient", "id": "patient-1"},
             {
                 "resourceType": "Observation",
                 "id": "obs-1",
                 "status": "final",
                 "subject": {"reference": "Patient/patient-1"},
-            }
+            },
         ],
         doc_id="doc-1",
     )
     assert bundle["resourceType"] == "Bundle"
-    assert bundle["type"] == 'transaction'
+    assert bundle["type"] == "transaction"
     assert len(bundle["entry"]) == 2
     patient_full_url = bundle["entry"][0]["fullUrl"]
     subject = bundle["entry"][1]["resource"]["subject"]["reference"]
     assert subject == patient_full_url
+
 
 def test_fhir_bundle_raises_value_error_without_resource_type() -> None:
     with pytest.raises(ValueError):
         mcp_server.openmed_fhir_bundle(resources=[{"id": "patient-1"}])
 
 
-#openmed_risk_report specific tests
+# openmed_risk_report specific tests
 def _span(text, label, value, *, section="assessment"):
     start = text.index(value)
     return {
@@ -215,6 +216,7 @@ def _span(text, label, value, *, section="assessment"):
         "end": start + len(value),
         "metadata": {"section": section},
     }
+
 
 def test_risk_report_is_schema_valid() -> None:
     text = (
@@ -273,18 +275,20 @@ def test_risk_report_output_is_phi_safe() -> None:
     for quasi_identifier in report["quasi_identifiers"]:
         assert quasi_identifier["value"] != text
         assert len(quasi_identifier["value"]) < len(text)
-    
 
-#openmed_signed_audit_report specific tests
+
+# openmed_signed_audit_report specific tests
 class _StubRuntime:
     config = None
+
     def get_loader(self):
         return None
-    def run_model_request(self, model_name, keep_alive, operation):
-       del model_name, keep_alive
-       return operation()
 
-    
+    def run_model_request(self, model_name, keep_alive, operation):
+        del model_name, keep_alive
+        return operation()
+
+
 def _sample_audit_report(text: str) -> AuditReport:
     text = "Patient John Doe called 555-1234."
     return AuditReport(
