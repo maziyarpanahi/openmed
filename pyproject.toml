@@ -183,6 +183,13 @@ gptq = [
   "auto-gptq>=0.7.1",
 ]
 
+# License-quarantined marker extra (invariant I2). Installs nothing: tools
+# such as MedCAT/CogStack are Elastic License 2.0 (source-available, not OSI
+# open source) and must never be pip-installed as an OpenMed dependency.
+# Reach them only through openmed/interop/bridges/ as out-of-process
+# subprocess calls; the caller installs and licenses the tool separately.
+interop-gpl = []
+
 grounding = [
   "rapidfuzz>=3.9,<4",
   "hnswlib>=0.8,<1",
