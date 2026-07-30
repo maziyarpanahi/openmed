@@ -29,6 +29,9 @@ from openmed.clinical.grounding import (
 )
 from openmed.clinical.grounding.index import brute_force_neighbors
 from openmed.clinical.grounding.vocab import VocabLoader, VocabSource
+from openmed.eval.suites.grounding_index_recall import (
+    evaluate_grounding_index_recall,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _FIXTURE = _REPO_ROOT / "openmed/eval/golden/fixtures/grounding_vocab_synthetic.jsonl"
@@ -111,6 +114,23 @@ def test_query_matches_brute_force_reference_recall_at_10(tmp_path):
 
     recall = total / count
     assert recall >= 0.95
+
+
+def test_hnsw_backend_matches_brute_force_reference_recall_at_10(tmp_path):
+    """The optional ANN path itself must satisfy the issue's recall floor."""
+
+    pytest.importorskip("hnswlib")
+
+    report = evaluate_grounding_index_recall(
+        HashingAliasEncoder(),
+        cache_dir=tmp_path,
+        systems=list(_SYSTEMS),
+        k=10,
+        backend="hnsw",
+    )
+
+    assert report["backend"] == "hnsw"
+    assert report["recall_at_k"] >= 0.95
 
 
 def test_changing_vocabulary_version_rekeys_and_rebuilds(tmp_path):
