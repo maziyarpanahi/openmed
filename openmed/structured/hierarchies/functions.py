@@ -76,7 +76,7 @@ def _coerce_age(value: object) -> int:
         age = value
     elif isinstance(value, str):
         text = value.strip()
-        if not text.isdigit():
+        if not text.isdecimal():
             raise HierarchyError(f"age must be a non-negative integer, got {value!r}")
         age = int(text)
     else:
