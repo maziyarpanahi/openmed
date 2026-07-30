@@ -2162,8 +2162,28 @@ def _g14_extraction_fairness_check(
             details={"ceiling": ceiling},
         )
 
-    per_group_f1 = _extraction_group_f1(metric.get("per_group"))
-    gap = _optional_float(
+    raw_per_group = metric.get("per_group")
+    per_group_f1 = _extraction_group_f1(raw_per_group)
+    if (
+        not isinstance(raw_per_group, Mapping)
+        or len(per_group_f1) != len(raw_per_group)
+        or len(per_group_f1) < 2
+        or any(not 0.0 <= score <= 1.0 for score in per_group_f1.values())
+    ):
+        return GateCheck(
+            "G14",
+            False,
+            reason="extraction-fairness metric is malformed",
+            details={
+                "ceiling": ceiling,
+                "error": (
+                    "per_group must contain at least two groups with finite "
+                    "entity_f1 values in [0, 1]"
+                ),
+            },
+        )
+
+    reported_gap = _optional_float(
         _first_value(
             metric.get("extraction_f1_gap"),
             metric.get("f1_gap"),
@@ -2171,23 +2191,26 @@ def _g14_extraction_fairness_check(
             metric.get("gap"),
         )
     )
-    if gap is None and per_group_f1:
-        gap = max(per_group_f1.values()) - min(per_group_f1.values())
-    if gap is None:
+    computed_gap = max(per_group_f1.values()) - min(per_group_f1.values())
+    if reported_gap is not None and (
+        not 0.0 <= reported_gap <= 1.0
+        or not math.isclose(reported_gap, computed_gap, abs_tol=1e-12)
+    ):
         return GateCheck(
             "G14",
             False,
             reason="extraction-fairness metric is malformed",
-            details={"ceiling": ceiling},
+            details={
+                "ceiling": ceiling,
+                "computed_gap": computed_gap,
+                "reported_gap": reported_gap,
+                "error": "reported extraction_f1_gap does not match per_group",
+            },
         )
+    gap = computed_gap
 
-    worst_group = metric.get("worst_group")
-    best_group = metric.get("best_group")
-    if per_group_f1:
-        if worst_group is None:
-            worst_group = min(per_group_f1, key=lambda key: (per_group_f1[key], key))
-        if best_group is None:
-            best_group = max(per_group_f1, key=lambda key: (per_group_f1[key], key))
+    worst_group = min(per_group_f1, key=lambda key: (per_group_f1[key], key))
+    best_group = max(per_group_f1, key=lambda key: (per_group_f1[key], key))
 
     passed = gap <= ceiling
     return GateCheck(

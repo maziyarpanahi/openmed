@@ -762,6 +762,66 @@ def test_g14_computes_gap_from_per_group_when_gap_missing(tmp_path: Path) -> Non
     assert check.details["worst_group"] == "note_type=progress_note"
 
 
+@pytest.mark.parametrize("reported_gap", (-0.1, 0.0, 1.1))
+def test_g14_rejects_invalid_or_inconsistent_reported_gap(
+    tmp_path: Path,
+    reported_gap: float,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": reported_gap,
+                    "per_group": {
+                        "site=site_alpha": {"entity_f1": 0.95},
+                        "site=site_beta": {"entity_f1": 0.45},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "extraction-fairness metric is malformed"
+    assert check.details["computed_gap"] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    "per_group",
+    (
+        {"site=only": {"entity_f1": 0.9}},
+        {
+            "site=alpha": {"entity_f1": 0.9},
+            "site=beta": {"entity_f1": -0.1},
+        },
+        {
+            "site=alpha": {"entity_f1": 0.9},
+            "site=beta": {"entity_f1": "unknown"},
+        },
+    ),
+)
+def test_g14_rejects_malformed_group_evidence(
+    tmp_path: Path,
+    per_group: dict[str, object],
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"extraction_fairness": {"per_group": per_group}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "extraction-fairness metric is malformed"
+
+
 def test_g14_quarantines_from_extraction_fairness_report(tmp_path: Path) -> None:
     from openmed.eval import (
         extraction_fairness_report,
