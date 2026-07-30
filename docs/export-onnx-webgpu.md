@@ -7,6 +7,10 @@ token-classification checkpoint or local model directory into:
 - an fp16 ONNX graph intended for WebGPU
 - an optional Transformers.js bundle for browser pipelines
 
+For the cross-backend view of which architectures reach ONNX (default,
+Android, or Transformers.js), see the
+[Export Format Support Matrix](export-matrix.md).
+
 Android uses a separate, fixed-opset profile documented in
 [Android ONNX Export](./export-onnx-android.md).
 
