@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import openmed.structured.streaming as streaming
 from openmed.risk import kanon_report
 from openmed.structured import read_table, write_table
 from openmed.structured.streaming import (
@@ -147,14 +148,33 @@ else:
 """
     result = subprocess.run(
         [sys.executable, "-c", script, str(source), str(output)],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
 
+    assert result.returncode == 0, (
+        f"memory guard subprocess failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
     assert result.stdout.strip() == "blocked"
     assert not output.exists()
     assert not list(tmp_path.glob(".one_class_out.csv.*.tmp"))
+
+
+def test_linux_rss_reader_uses_current_resident_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Linux RSS measurement reads current resident pages from procfs."""
+
+    monkeypatch.setattr(streaming.sys, "platform", "linux")
+    monkeypatch.setattr(
+        streaming.Path,
+        "read_text",
+        lambda _path, **_kwargs: "100 7 0 0 0 0 0\n",
+    )
+    monkeypatch.setattr(streaming.os, "sysconf", lambda _name: 4_096)
+
+    assert streaming._process_rss_bytes() == 7 * 4_096
 
 
 def test_file_larger_than_memory_ceiling_streams_below_process_limit(

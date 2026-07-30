@@ -199,7 +199,7 @@ class _ProcessMemoryGuard:
 
     def __init__(self, ceiling: int | None) -> None:
         self._ceiling = ceiling
-        self._baseline = _peak_rss_bytes()
+        self._baseline = _process_rss_bytes()
         self._peak_delta = 0
 
     @property
@@ -217,7 +217,7 @@ class _ProcessMemoryGuard:
     def check(self, *, stage: str) -> None:
         """Record current peak growth and fail when it exceeds the ceiling."""
 
-        current = _peak_rss_bytes()
+        current = _process_rss_bytes()
         if self._baseline is None or current is None:
             return
         delta = max(0, current - self._baseline)
@@ -230,8 +230,8 @@ class _ProcessMemoryGuard:
             )
 
 
-def _peak_rss_bytes() -> int | None:
-    """Return process peak resident memory in bytes when the OS exposes it."""
+def _process_rss_bytes() -> int | None:
+    """Return current process resident memory in bytes when measurable."""
 
     if os.name == "nt":  # pragma: no cover - exercised by hosted Windows CI
         try:
@@ -257,11 +257,23 @@ def _peak_rss_bytes() -> int | None:
             if ctypes.windll.psapi.GetProcessMemoryInfo(
                 process, ctypes.byref(counters), counters.cb
             ):
-                return int(counters.PeakWorkingSetSize)
+                return int(counters.WorkingSetSize)
         except (AttributeError, OSError):
             return None
         return None
 
+    if sys.platform.startswith("linux"):
+        try:
+            resident_pages = int(
+                Path("/proc/self/statm").read_text(encoding="ascii").split()[1]
+            )
+            return resident_pages * int(os.sysconf("SC_PAGE_SIZE"))
+        except (IndexError, OSError, ValueError):
+            pass
+
+    # Portable fallback where the OS does not expose a cheap current-RSS
+    # counter. This is a high-water mark, but the guard still records the
+    # greatest observed growth from its initialization baseline.
     try:
         import resource
     except ImportError:  # pragma: no cover - non-POSIX fallback
