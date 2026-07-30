@@ -12,6 +12,14 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.labels import (
+    CANONICAL_LABELS,
+    hipaa_class_for,
+    policy_label_for,
+    risk_level_for,
+    system_hints_for,
+)
+from openmed.core.labels import normalize_label as normalize_canonical_label
 from openmed.core.model_registry import (
     _CATEGORY_ENTITY_TYPES,
     OPENMED_MODELS,
@@ -19,7 +27,11 @@ from openmed.core.model_registry import (
     get_model_suggestions,
 )
 from openmed.core.pii_entity_merger import is_more_specific, normalize_label
-from openmed.ner.labels import available_domains, get_default_labels
+from openmed.ner.labels import (
+    available_domains,
+    get_default_labels,
+    load_default_label_map,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -33,6 +45,7 @@ LABEL_MAPS_PATH = (
     / "label_maps"
     / "defaults.json"
 )
+CLINICAL_FIXTURES_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "clinical"
 
 
 @pytest.fixture
@@ -74,6 +87,55 @@ class TestDefaultsJsonInvariants:
                     f"Domain {domain!r} label {label!r} drifts from the "
                     "letters-only display-label style"
                 )
+
+
+class TestNerFamilyDomains:
+    DISPLAY_LABEL_OVERRIDES = {
+        "CHEM": "Chemical",
+        "CL": "CellLine",
+        "DNA": "DNA",
+        "PROTEIN_ENUM": "ProteinEnumeration",
+        "PROTEIN_FAMILIY_OR_GROUP": "ProteinFamilyOrGroup",
+        "RNA": "RNA",
+    }
+    SHIPPED_CATEGORIES = {
+        info.category
+        for info in OPENMED_MODELS.values()
+        if info.model_id.startswith("OpenMed/OpenMed-NER-")
+    }
+
+    @classmethod
+    def _display_label(cls, entity_type):
+        return cls.DISPLAY_LABEL_OVERRIDES.get(
+            entity_type,
+            "".join(part.title() for part in entity_type.split("_")),
+        )
+
+    def test_every_shipped_ner_family_has_a_domain(self):
+        assert self.SHIPPED_CATEGORIES
+
+        missing = {category.lower() for category in self.SHIPPED_CATEGORIES} - set(
+            available_domains()
+        )
+        assert not missing, f"Missing zero-shot domains for NER families: {missing}"
+
+    @pytest.mark.parametrize("category", sorted(SHIPPED_CATEGORIES))
+    def test_family_labels_match_registry_metadata(self, category):
+        expected = [
+            self._display_label(entity_type)
+            for entity_type in _CATEGORY_ENTITY_TYPES[category]
+        ]
+        assert get_default_labels(category.lower()) == expected
+
+
+def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> None:
+    path = tmp_path / "labels.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in label file") as exc_info:
+        load_default_label_map(path)
+
+    assert str(path) in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -135,8 +197,769 @@ class TestCardiologyRouting:
 
 
 # ---------------------------------------------------------------------------
+# Microbiology domain (issue #314)
+# ---------------------------------------------------------------------------
+
+
+class TestMicrobiologyDomain:
+    EXPECTED_LABELS = [
+        "Microorganism",
+        "Antibiotic",
+        "Susceptibility",
+        "SpecimenSource",
+        "CultureResult",
+    ]
+
+    MICROBIOLOGY_TEXT = "Blood culture grew MRSA, resistant to oxacillin"
+
+    def test_microbiology_in_available_domains(self):
+        assert "microbiology" in available_domains()
+
+    def test_get_default_labels_returns_microbiology_set(self):
+        labels = get_default_labels("microbiology")
+        assert labels == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            ("susceptibility", "SUSCEPTIBILITY"),
+            ("antibiotic", "ANTIBIOTIC"),
+            ("microorganism", "MICROORGANISM"),
+            ("organism", "MICROORGANISM"),
+        ],
+    )
+    def test_microbiology_labels_normalize(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+
+    def test_match_categories_routes_microbiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.MICROBIOLOGY_TEXT)
+        ]
+        assert categories[0] == "Microbiology"
+
+    def test_microbiology_is_registry_metadata_not_a_live_category(self):
+        # Domain metadata is ready before a dedicated Microbiology model is
+        # registered, matching the Cardiology forward-metadata pattern.
+        assert "Microbiology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Microbiology" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.MICROBIOLOGY_TEXT)
+        assert suggestions
+        assert all(
+            info.category != "Microbiology" for _key, info, _reason in suggestions
+        )
+
+
+# ---------------------------------------------------------------------------
+# Dermatology and ophthalmology domains (issue #318)
+# ---------------------------------------------------------------------------
+
+
+class TestSpecialtyDomains:
+    EXPECTED = {
+        "dermatology": ["SkinLesion", "Morphology", "Distribution", "Anatomy"],
+        "ophthalmology": [
+            "EyeFinding",
+            "VisualAcuity",
+            "IntraocularPressure",
+            "Anatomy",
+        ],
+    }
+
+    def test_domains_in_available_domains(self):
+        domains = available_domains()
+        assert "dermatology" in domains
+        assert "ophthalmology" in domains
+
+    def test_get_default_labels_returns_expected_sets(self):
+        for domain, expected in self.EXPECTED.items():
+            labels = get_default_labels(domain)
+            assert labels  # non-empty
+            assert labels == expected
+
+    def test_specialty_labels_have_no_duplicates(self):
+        for domain in self.EXPECTED:
+            labels = get_default_labels(domain)
+            lowered = [label.lower() for label in labels]
+            assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Dermatology and ophthalmology routing in model_registry (issue #318)
+# ---------------------------------------------------------------------------
+
+
+class TestSpecialtyRouting:
+    DERM_TEXT = "Erythematous macule with pruritus noted on the forearm"
+    OPHTH_TEXT = (
+        "Fundus exam shows elevated intraocular pressure consistent with glaucoma"
+    )
+
+    def test_match_categories_routes_dermatology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.DERM_TEXT)
+        ]
+        assert "Dermatology" in categories
+
+    def test_match_categories_routes_ophthalmology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.OPHTH_TEXT)
+        ]
+        assert "Ophthalmology" in categories
+
+    def test_specialties_are_registry_metadata_not_live_categories(self):
+        # Forward metadata for future models; no specialty model exists today.
+        from openmed.core.model_registry import CATEGORIES
+
+        for category in ("Dermatology", "Ophthalmology"):
+            assert category in _CATEGORY_ENTITY_TYPES
+            assert category not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_specialties(self):
+        for text in (self.DERM_TEXT, self.OPHTH_TEXT):
+            suggestions = get_model_suggestions(text)
+            assert suggestions  # still returns something useful
+            assert all(
+                info.category not in {"Dermatology", "Ophthalmology"}
+                for _key, info, _reason in suggestions
+            )
+
+
+# ---------------------------------------------------------------------------
+# Nutrition and Diet-Order domains (issue #951)
+# ---------------------------------------------------------------------------
+class TestNutritionDomain:
+    EXPECTED_LABELS = [
+        "DietType",
+        "NutritionTarget",
+        "Supplement",
+        "FeedingRoute",
+        "IntakeFinding",
+        "NutritionalStatus",
+        "FluidRestriction",
+    ]
+
+    def test_nutrition_in_available_domains(self):
+        assert "nutrition_diet" in available_domains()
+
+    def test_get_default_labels_returns_nutrition_set(self):
+        assert get_default_labels("nutrition_diet") == self.EXPECTED_LABELS
+
+    def test_nutrition_labels_have_no_duplicates(self):
+        labels = get_default_labels("nutrition_diet")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Nutrition and Diet-Order routing in model_registry (issue #951)
+# ---------------------------------------------------------------------------
+
+
+class TestNutritionRouting:
+    NUTRITION_TEXT = "1800 kcal diabetic diet, PEG feeds at 60 mL/hr"
+
+    def test_match_categories_routes_nutrition(self):
+        categories = [c for c, _ in _match_categories(self.NUTRITION_TEXT)]
+        assert "Nutrition" in categories
+
+    def test_nutrition_is_registry_metadata_not_a_live_category(self):
+        assert "Nutrition" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Nutrition" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_nutrition(self):
+        suggestions = get_model_suggestions(self.NUTRITION_TEXT)
+        assert suggestions
+        assert all(info.category != "Nutrition" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Immunization and Vaccine-Administration domain (issue #897)
+# ---------------------------------------------------------------------------
+class TestImmunizationDomain:
+    """FHIR Immunization-aligned labels and offline fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "VaccineName",
+        "DoseNumber",
+        "AdministrationRoute",
+        "AdministrationSite",
+        "VaccineLot",
+        "AdministrationDate",
+        "VaccineSeries",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "VaccineName": "VACCINE_NAME",
+        "DoseNumber": "DOSE_NUMBER",
+        "AdministrationRoute": "ADMINISTRATION_ROUTE",
+        "AdministrationSite": "BODY_SITE",
+        "VaccineLot": "VACCINE_LOT",
+        "AdministrationDate": "DATE",
+        "VaccineSeries": "VACCINE_SERIES",
+    }
+    EXPECTED_ENTITIES = [
+        ("VaccineName", 0, 12, "Tdap vaccine"),
+        ("DoseNumber", 14, 25, "dose 1 of 2"),
+        ("AdministrationRoute", 44, 59, "intramuscularly"),
+        ("AdministrationSite", 67, 79, "left deltoid"),
+        ("AdministrationDate", 83, 93, "2026-03-14"),
+        ("VaccineLot", 103, 108, "A123B"),
+        ("VaccineSeries", 112, 125, "series 1 of 2"),
+    ]
+
+    def test_immunization_in_available_domains(self):
+        assert "immunization" in available_domains()
+
+    def test_get_default_labels_returns_immunization_set(self):
+        assert get_default_labels("immunization") == self.EXPECTED_LABELS
+
+    def test_immunization_labels_have_no_duplicates(self):
+        labels = get_default_labels("immunization")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_immunization_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert hipaa_class_for(expected)
+
+        if label == "AdministrationDate":
+            assert policy_label_for(expected) == "QUASI_IDENTIFIER"
+            assert risk_level_for(expected) == "medium"
+            assert system_hints_for(expected) == ()
+        else:
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert risk_level_for(expected) == "low"
+            assert system_hints_for(expected)
+
+    def test_immunization_fixture_reports_offline_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "immunization.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not recommend vaccination" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+    def test_immunization_domain_does_not_add_model_routing(self):
+        assert "Immunization" not in _CATEGORY_ENTITY_TYPES
+        categories = [
+            category
+            for category, _reason in _match_categories(
+                "Tdap vaccine, dose 1 of 2, left deltoid"
+            )
+        ]
+        assert "Immunization" not in categories
+
+
+# ---------------------------------------------------------------------------
+# Nursing observation domain (issue #910)
+# --------
+class TestNursingObservation:
+    """Nursing-care observation domain and offline fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "IntakeOutput",
+        "LineDrainTube",
+        "RiskScore",
+        "MobilityStatus",
+        "CareIntervention",
+        "PainScore",
+        "SkinAssessment",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "IntakeOutput": "INTAKE_OUTPUT",
+        "LineDrainTube": "LINE_DRAIN_TUBE",
+        "RiskScore": "NURSING_RISK_SCORE",
+        "MobilityStatus": "OTHER",
+        "CareIntervention": "CARE_INTERVENTION",
+        "PainScore": "OTHER",
+        "SkinAssessment": "BODY_SITE",
+    }
+    EXPECTED_ENTITIES = [
+        ("IntakeOutput", 8, 26, "output 450mL clear"),
+        ("LineDrainTube", 37, 51, "Foley catheter"),
+        ("RiskScore", 67, 82, "Braden score 14"),
+        ("RiskScore", 84, 98, "fall risk high"),
+        ("MobilityStatus", 100, 121, "Ambulates with walker"),
+        ("PainScore", 123, 132, "pain 3/10"),
+        ("CareIntervention", 134, 150, "Repositioned q2h"),
+        ("SkinAssessment", 152, 171, "skin dry and intact"),
+    ]
+
+    def test_nursing_in_available_domains(self):
+        assert "nursing_observation" in available_domains()
+
+    def test_get_default_labels_returns_nursing_set(self):
+        assert get_default_labels("nursing_observation") == self.EXPECTED_LABELS
+
+    def test_nursing_labels_have_no_duplicates(self):
+        labels = get_default_labels("nursing_observation")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_nursing_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert risk_level_for(expected) == "low"
+        assert system_hints_for(expected)
+
+    def test_nursing_fixture_reports_offline_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "nursing_observation.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not recommend care interventions" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        # The synthetic fixture covers every display label in a single row.
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+    def test_nursing_domain_does_not_add_model_routing(self):
+        """Nursing observations are zero-shot extracted and do not route to legacy models."""
+        assert "NursingObservation" not in _CATEGORY_ENTITY_TYPES
+
+
+# ---------------------------------------------------------------------------
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Anesthesia domain (issue #952)
+# ---------------------------------------------------------------------------
+
+
+class TestAnesthesiaDomain:
+    EXPECTED_LABELS = [
+        "AnesthesiaType",
+        "AnestheticAgent",
+        "AirwayManagement",
+        "ASAClass",
+        "MonitoringModality",
+        "IntraoperativeEvent",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "AnesthesiaType": "ANESTHESIA_TYPE",
+        "AnestheticAgent": "ANESTHETIC_AGENT",
+        "AirwayManagement": "AIRWAY_MANAGEMENT",
+        "ASAClass": "ASA_CLASS",
+        "MonitoringModality": "OTHER",
+        "IntraoperativeEvent": "OTHER",
+    }
+
+    def test_anesthesia_in_available_domains(self):
+        assert "anesthesia" in available_domains()
+
+    def test_get_default_labels_returns_anesthesia_set(self):
+        assert get_default_labels("anesthesia") == self.EXPECTED_LABELS
+
+    def test_anesthesia_labels_have_no_duplicates(self):
+        labels = get_default_labels("anesthesia")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_anesthesia_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+
+        if expected != "OTHER":
+            assert expected in CANONICAL_LABELS
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert system_hints_for(expected)
+
+    def test_anesthesia_fixture_reports_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "anesthesia.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert rows
+
+        observed_labels = set()
+        for row in rows:
+            assert row["metadata"]["synthetic"] is True
+            disclaimer = row["metadata"]["disclaimer"]
+            assert "not clinical guidance" in disclaimer
+            assert "does not infer ASA class or dosing" in disclaimer
+            text = row["text"]
+            for entity in row["entities"]:
+                start = entity["start"]
+                end = entity["end"]
+                assert text[start:end] == entity["text"]
+                observed_labels.add(entity["label"])
+
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Anesthesia routing in model_registry (issue #952)
+# ---------------------------------------------------------------------------
+
+
+class TestAnesthesiaRouting:
+    ANESTHESIA_TEXT = "General anesthesia with sevoflurane, ETT, and ASA II"
+
+    def test_match_categories_routes_anesthesia(self):
+        categories = [c for c, _ in _match_categories(self.ANESTHESIA_TEXT)]
+        assert "Anesthesia" in categories
+
+    def test_anesthesia_is_registry_metadata_not_a_live_category(self):
+        assert "Anesthesia" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Anesthesia" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_anesthesia(self):
+        suggestions = get_model_suggestions(self.ANESTHESIA_TEXT)
+        assert suggestions
+        assert all(info.category != "Anesthesia" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Endocrinology domain (issue #895)
+# ---------------------------------------------------------------------------
+
+
+class TestEndocrinologyDomain:
+    """Endocrinology domain labels, canonical mappings, and fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "GlycemicMeasure",
+        "ThyroidFunctionMeasure",
+        "HormoneLevel",
+        "InsulinRegimen",
+        "MetabolicFinding",
+        "EndocrineGland",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "GlycemicMeasure": "GLYCEMIC_MEASURE",
+        "ThyroidFunctionMeasure": "THYROID_MEASURE",
+        "HormoneLevel": "HORMONE_LEVEL",
+        "InsulinRegimen": "INSULIN_REGIMEN",
+        "MetabolicFinding": "CONDITION",
+        "EndocrineGland": "BODY_SITE",
+    }
+    EXPECTED_ENTITIES = [
+        ("GlycemicMeasure", 0, 10, "HbA1c 8.2%"),
+        ("GlycemicMeasure", 15, 32, "glucose 186 mg/dL"),
+        ("ThyroidFunctionMeasure", 50, 63, "TSH 6.1 mIU/L"),
+        ("HormoneLevel", 68, 87, "cortisol 4.8 mcg/dL"),
+        ("InsulinRegimen", 127, 148, "glargine 24 units qHS"),
+        ("MetabolicFinding", 150, 168, "Metabolic syndrome"),
+        ("EndocrineGland", 173, 180, "thyroid"),
+    ]
+
+    def test_endocrinology_domain_has_expected_labels(self):
+        assert "endocrinology" in available_domains()
+        assert get_default_labels("endocrinology") == self.EXPECTED_LABELS
+
+    def test_endocrinology_labels_have_no_duplicates(self):
+        labels = get_default_labels("endocrinology")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_endocrinology_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_endocrinology_fixture_has_expected_output(self):
+        path = CLINICAL_FIXTURES_PATH / "endocrinology.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not infer insulin dosing or glycemic-control targets" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Endocrinology routing in model_registry (issue #895)
+# ---------------------------------------------------------------------------
+
+
+class TestEndocrinologyRouting:
+    ENDOCRINOLOGY_TEXT = "HbA1c 8.2%, TSH 6.1, on glargine 24 units qHS"
+
+    def test_match_categories_routes_endocrinology(self):
+        categories = [c for c, _ in _match_categories(self.ENDOCRINOLOGY_TEXT)]
+        assert "Endocrinology" in categories
+
+    def test_endocrinology_is_registry_metadata_not_a_live_category(self):
+        assert "Endocrinology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Endocrinology" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_endocrinology(self):
+        suggestions = get_model_suggestions(self.ENDOCRINOLOGY_TEXT)
+        assert suggestions
+        assert all(info.category != "Endocrinology" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Gastroenterology domain (issue #894)
+# ---------------------------------------------------------------------------
+
+
+class TestGastroenterologyDomain:
+    """Gastroenterology domain labels, canonical mappings, and fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "EndoscopicFinding",
+        "GISymptom",
+        "BowelPrepQuality",
+        "BiopsySite",
+        "GIScore",
+        "LesionMorphology",
+        "PolypDescriptor",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "EndoscopicFinding": "ENDOSCOPIC_FINDING",
+        "GISymptom": "GI_SYMPTOM",
+        "BowelPrepQuality": "GI_SCORE",
+        "BiopsySite": "BODY_SITE",
+        "GIScore": "GI_SCORE",
+        "LesionMorphology": "POLYP_DESCRIPTOR",
+        "PolypDescriptor": "POLYP_DESCRIPTOR",
+    }
+    EXPECTED_ENTITIES = [
+        ("EndoscopicFinding", 0, 11, "Colonoscopy"),
+        ("PolypDescriptor", 18, 41, "two 5 mm sessile polyps"),
+        ("BiopsySite", 49, 62, "sigmoid colon"),
+        ("LesionMorphology", 68, 81, "mild erythema"),
+        ("BowelPrepQuality", 83, 112, "Boston bowel prep score was 8"),
+        ("GIScore", 114, 134, "Bristol stool type 4"),
+        ("GISymptom", 171, 179, "cramping"),
+    ]
+
+    def test_gastroenterology_domain_has_expected_labels(self):
+        assert "gastroenterology" in available_domains()
+        assert get_default_labels("gastroenterology") == self.EXPECTED_LABELS
+
+    def test_gastroenterology_labels_have_no_duplicates(self):
+        labels = get_default_labels("gastroenterology")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_gastroenterology_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_gastroenterology_fixture_has_expected_output(self):
+        path = CLINICAL_FIXTURES_PATH / "gastroenterology.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not infer diagnosis" in disclaimer
+        assert "polyp-risk stratification" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Gastroenterology routing in model_registry (issue #894)
+# ---------------------------------------------------------------------------
+
+
+class TestGastroenterologyRouting:
+    GASTROENTEROLOGY_TEXT = (
+        "Colonoscopy found sessile polyps with Boston bowel prep score 8"
+    )
+
+    def test_match_categories_routes_gastroenterology(self):
+        categories = [c for c, _ in _match_categories(self.GASTROENTEROLOGY_TEXT)]
+        assert "Gastroenterology" in categories
+
+    def test_gastroenterology_is_registry_metadata_not_a_live_category(self):
+        assert "Gastroenterology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Gastroenterology" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_gastroenterology(self):
+        suggestions = get_model_suggestions(self.GASTROENTEROLOGY_TEXT)
+        assert suggestions
+        assert all(info.category != "Gastroenterology" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Procedures domain (issue #313)
+# ---------------------------------------------------------------------------
+
+
+class TestProceduresDomain:
+    EXPECTED_LABELS = [
+        "Procedure",
+        "Surgery",
+        "DiagnosticProcedure",
+        "Device",
+        "Approach",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "Procedure": "PROCEDURE",
+        "Surgery": "PROCEDURE",
+        "DiagnosticProcedure": "PROCEDURE",
+        "Device": "DEVICE",
+        "Approach": "OTHER",
+    }
+
+    def test_procedures_in_available_domains(self):
+        assert "procedures" in available_domains()
+
+    def test_get_default_labels_returns_procedures_set(self):
+        labels = get_default_labels("procedures")
+        assert labels  # non-empty
+        assert labels == self.EXPECTED_LABELS
+
+    def test_procedures_labels_have_no_duplicates(self):
+        labels = get_default_labels("procedures")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_procedures_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+
+        if expected != "OTHER":
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert system_hints_for(expected)
+
+
+# ---------------------------------------------------------------------------
+# Procedures routing in model_registry (issue #313)
+# ---------------------------------------------------------------------------
+
+
+class TestProceduresRouting:
+    PROCEDURES_TEXT = "Patient underwent laparoscopic cholecystectomy"
+
+    def test_match_categories_routes_procedures(self):
+        categories = [c for c, _ in _match_categories(self.PROCEDURES_TEXT)]
+        assert "Procedures" in categories
+
+    def test_procedures_is_registry_metadata_not_a_live_category(self):
+        assert "Procedures" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Procedures" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_procedures(self):
+        suggestions = get_model_suggestions(self.PROCEDURES_TEXT)
+        assert suggestions
+        assert all(info.category != "Procedures" for _k, info, _r in suggestions)
 
 
 class TestNormalizeLabelIdempotency:
@@ -160,6 +983,7 @@ class TestNormalizeLabelIdempotency:
             "aadhaar",
             "cpf",
             "cnpj",
+            "teudat_zehut",
             "postcode",
             "zipcode",
             "zip",
@@ -211,6 +1035,7 @@ class TestSpecificityHierarchy:
             "codice_fiscale",
             "cpf",
             "cnpj",
+            "teudat_zehut",
         ],
     }
 
@@ -274,10 +1099,17 @@ class TestModelRegistryEntityTypes:
 
     def test_at_least_one_pii_model_per_supported_language(self):
         """Every supported language should have at least one PII model in the registry."""
-        from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+        from openmed.core.pii_i18n import (
+            DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+            DEFAULT_PII_MODELS,
+            SUPPORTED_LANGUAGES,
+        )
 
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
         for lang in SUPPORTED_LANGUAGES:
+            if lang in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES:
+                assert DEFAULT_PII_MODELS[lang] == "OpenMed/privacy-filter-multilingual"
+                continue
             if lang == "en":
                 # English models don't have a language infix
                 assert any(
@@ -289,6 +1121,13 @@ class TestModelRegistryEntityTypes:
                 ), "No English PII model found"
             else:
                 # Non-English keys use pii_{lang}_ prefix, e.g. pii_de_superclinical_small
-                assert any(k.startswith(f"pii_{lang}_") for k in pii_keys), (
+                has_language_key = any(k.startswith(f"pii_{lang}_") for k in pii_keys)
+                default_model_id = DEFAULT_PII_MODELS.get(lang)
+                has_default_model = any(
+                    info.model_id == default_model_id and lang in info.languages
+                    for info in OPENMED_MODELS.values()
+                    if info.category == "Privacy"
+                )
+                assert has_language_key or has_default_model, (
                     f"No PII model found for language {lang!r}"
                 )

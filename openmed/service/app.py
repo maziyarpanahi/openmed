@@ -3,26 +3,125 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Mapping, Optional
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.cors import CORSMiddleware
 
 import openmed
+from openmed.processing import format_predictions
+from openmed.utils.validation import validate_model_name
 
+from .auth import ServiceAuth, parse_service_auth_config
+from .batcher import (
+    BackpressureError,
+    BatchPriorityHandle,
+    BatchResult,
+    DynamicBatcher,
+    normalize_priority,
+)
+from .coalesce import RequestCoalescer, coalescing_key
+from .jobs import DeidentifyJobQueue, job_response_payload
+from .logging import (
+    CorrelationIdMiddleware,
+    current_request_id,
+    service_log_config_from_env,
+    set_access_log_model_name,
+)
+from .metrics import (
+    PROMETHEUS_CONTENT_TYPE,
+    PrometheusMetricsRegistry,
+    metrics_enabled_from_env,
+)
+from .openhim_mediator import (
+    OPENHIM_HEARTBEAT_PATH,
+    OPENHIM_MEDIA_TYPE,
+    OPENHIM_MEDIATOR_PATH,
+    OpenHIMMediatorSettings,
+    build_openhim_envelope,
+    create_openhim_mediator,
+    failed_openhim_result,
+    mediator_response_headers,
+    transform_mediator_payload,
+)
+from .privacy_gateway import (
+    HttpExternalLLMTransport,
+    InMemoryReidentificationStore,
+    PrivacyGateway,
+    PrivacyGatewayAuditTrail,
+    PrivacyGatewayConfigurationError,
+    PrivacyGatewayError,
+    PrivacyGatewayPolicy,
+    PrivacyTransportError,
+)
+from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
+    DeidentifyJobRequest,
     ModelUnloadRequest,
+    OmopLoadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
+    PIIExtractStreamRequest,
+    PrivacyGatewayRequest,
+    SMARTBackendIngestionRequest,
 )
+from .security_headers import (
+    SERVICE_CORS_HEADERS,
+    SERVICE_CORS_METHODS,
+    ErrorEnvelopeTrustedHostMiddleware,
+    parse_service_security_config,
+)
+from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
+from .throttle import ServiceThrottle, format_retry_after
+from .tracing import (
+    OpenTelemetryMiddleware,
+    result_summary_attributes,
+    service_tracing_from_env,
+    set_current_span_attributes,
+    trace_service_stage,
+)
+from .warm_pool import WarmPoolBackpressureError
 
 SERVICE_NAME = "openmed-rest"
+REQUEST_PRIORITY_HEADER = "x-openmed-priority"
+_PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
+_SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
+_MODEL_BACKED_PATHS = frozenset(
+    {
+        "/analyze",
+        "/pii/extract",
+        "/pii/extract/stream",
+        "/pii/deidentify",
+        "/jobs",
+        _PRIVACY_GATEWAY_PATH,
+        _SMART_BACKEND_START_PATH,
+        OPENHIM_MEDIATOR_PATH,
+    }
+)
+_ServicePayload = Dict[str, Any]
+_ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
+_AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
+_PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
+
+
+@dataclass(frozen=True)
+class _AnalyzeBatchJob:
+    payload: AnalyzeRequest
+
+
+@dataclass(frozen=True)
+class _PIIExtractBatchJob:
+    payload: PIIExtractRequest
 
 
 class ServiceTimeoutError(RuntimeError):
@@ -49,23 +148,80 @@ def _result_to_dict(result: Any) -> Dict[str, Any]:
     raise TypeError("Unsupported result payload type.")
 
 
+def _parse_grounded_jsonl_text(text: str) -> list[Mapping[str, Any]]:
+    """Parse newline-delimited grounded note records without echoing content.
+
+    Errors reference only the offending line number so no note text or other
+    caller-supplied content leaks into the PHI-free error envelope.
+    """
+    records: list[Mapping[str, Any]] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"records_jsonl line {line_number} is not valid JSON"
+            ) from exc
+        if not isinstance(payload, Mapping):
+            raise ValueError(f"records_jsonl line {line_number} must be a JSON object")
+        records.append(payload)
+    if not records:
+        raise ValueError("records_jsonl must contain at least one record")
+    return records
+
+
+def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
+    """Build a PHI-free OMOP load summary from an inline JSONL request body."""
+    from ..interop.omop import load_grounded_notes, validate_omop_tables
+
+    records = _parse_grounded_jsonl_text(payload.records_jsonl)
+    tables = load_grounded_notes(
+        records,
+        vocabulary_version=payload.vocabulary_version,
+    )
+    summary = tables.summary
+    response: Dict[str, Any] = {
+        "row_counts": dict(summary.row_counts),
+        "rejection_counts": dict(summary.rejection_counts),
+        "rejected_spans": [span.to_dict() for span in summary.rejected_spans],
+        "source_note_hashes": list(summary.source_note_hashes),
+    }
+    if payload.validate_constraints:
+        violations = validate_omop_tables(tables)
+        by_reason: Dict[str, int] = {}
+        for violation in violations:
+            by_reason[violation.reason] = by_reason.get(violation.reason, 0) + 1
+        response["constraint_violations"] = {
+            "count": len(violations),
+            "by_reason": by_reason,
+        }
+    return response
+
+
 def _error_response(
     status_code: int,
     code: str,
     message: str,
     *,
     details: Optional[Any] = None,
+    headers: Optional[Mapping[str, str]] = None,
 ) -> JSONResponse:
     """Return a standardized API error response."""
+    error = {
+        "code": code,
+        "message": message,
+        "details": details,
+    }
+    request_id = current_request_id()
+    if request_id is not None:
+        error["request_id"] = request_id
     return JSONResponse(
         status_code=status_code,
-        content={
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details,
-            }
-        },
+        headers=headers,
+        content={"error": error},
     )
 
 
@@ -98,13 +254,54 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.runtime = runtime
     app.state.profile = runtime.profile
     app.state.config = runtime.config
+    app.state.batching = runtime.batching
+    app.state.coalescing = runtime.coalescing
+    app.state.paged_kv_cache = runtime.paged_kv_cache
+    app.state.analyze_batcher = None
+    app.state.pii_extract_batcher = None
+    app.state.request_coalescer = None
+    existing_job_queue = getattr(app.state, "job_queue", None)
+    if (
+        existing_job_queue is None
+        or getattr(existing_job_queue, "runtime", None) is not runtime
+    ):
+        if existing_job_queue is not None:
+            existing_job_queue.shutdown()
+        app.state.job_queue = DeidentifyJobQueue.from_env(runtime)
+    if runtime.coalescing.enabled:
+        app.state.request_coalescer = RequestCoalescer()
+    if runtime.batching.enabled:
+        app.state.analyze_batcher = DynamicBatcher(
+            lambda jobs: _dispatch_analyze_batch(runtime, jobs),
+            max_batch_size=runtime.batching.max_batch_size,
+            max_wait_ms=runtime.batching.max_wait_ms,
+            max_queue_size_per_priority=runtime.batching.max_queue_size,
+            metrics=runtime.metrics,
+        )
+        app.state.pii_extract_batcher = DynamicBatcher(
+            lambda jobs: _dispatch_pii_extract_batch(runtime, jobs),
+            max_batch_size=runtime.batching.max_batch_size,
+            max_wait_ms=runtime.batching.max_wait_ms,
+            max_queue_size_per_priority=runtime.batching.max_queue_size,
+            metrics=runtime.metrics,
+        )
+    app.state.throttle = ServiceThrottle(
+        runtime.throttle,
+        error_response=_error_response,
+        backpressure_check=(
+            _batch_backpressure_check if runtime.batching.enabled else None
+        ),
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
 
 
 def _get_service_runtime(request: Request) -> ServiceRuntime:
     """Return the initialized service runtime."""
     runtime = getattr(request.app.state, "runtime", None)
     if runtime is None:
-        runtime = ServiceRuntime.from_env()
+        runtime = ServiceRuntime.from_env(
+            metrics=getattr(request.app.state, "metrics", None)
+        )
         _attach_runtime(request.app, runtime)
     return runtime
 
@@ -127,18 +324,174 @@ async def _run_with_timeout(
         raise ServiceTimeoutError(timeout_seconds) from exc
 
 
+async def _await_with_timeout(
+    runtime: ServiceRuntime,
+    awaitable: Any,
+) -> Any:
+    """Await async service work under the profile timeout."""
+    timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
+    if timeout_seconds <= 0:
+        return await awaitable
+
+    try:
+        return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+    except asyncio.TimeoutError as exc:
+        raise ServiceTimeoutError(timeout_seconds) from exc
+
+
+def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
+    batcher = getattr(request.app.state, "analyze_batcher", None)
+    if batcher is None:
+        raise RuntimeError("Analyze batcher is not initialized")
+    return batcher
+
+
+def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
+    batcher = getattr(request.app.state, "pii_extract_batcher", None)
+    if batcher is None:
+        raise RuntimeError("PII extract batcher is not initialized")
+    return batcher
+
+
+def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
+    manager = getattr(request.app.state, "smart_backend_jobs", None)
+    if manager is None:
+        manager = SMARTBackendJobManager()
+        request.app.state.smart_backend_jobs = manager
+    return manager
+
+
+def _get_job_queue(request: Request) -> DeidentifyJobQueue:
+    queue = getattr(request.app.state, "job_queue", None)
+    if queue is None:
+        runtime = _get_service_runtime(request)
+        queue = DeidentifyJobQueue.from_env(runtime)
+        request.app.state.job_queue = queue
+    return queue
+
+
+async def _run_maybe_coalesced(
+    request: Request,
+    endpoint: str,
+    payload: Any,
+    operation: _ServiceOperation,
+    *,
+    priority: str,
+    on_priority_upgrade: Optional[Callable[[str], Any]] = None,
+) -> _ServicePayload:
+    coalescer = getattr(request.app.state, "request_coalescer", None)
+    if coalescer is None:
+        return await operation()
+
+    with trace_service_stage(
+        "request_coalescing",
+        {
+            "openmed.endpoint": endpoint,
+            "openmed.coalescing.enabled": True,
+        },
+    ):
+        return await coalescer.run(
+            coalescing_key(endpoint, payload),
+            operation,
+            priority=priority,
+            on_priority_upgrade=on_priority_upgrade,
+        )
+
+
+def _request_priority(request: Request) -> str:
+    return normalize_priority(request.headers.get(REQUEST_PRIORITY_HEADER))
+
+
+def _backpressure_response(exc: BackpressureError) -> JSONResponse:
+    response = _error_response(
+        503,
+        "backpressure",
+        str(exc),
+        details=exc.to_details(),
+    )
+    response.headers["Retry-After"] = format_retry_after(exc.retry_after_seconds)
+    return response
+
+
+async def _batch_backpressure_check(request: Request) -> Optional[BackpressureError]:
+    batcher: Any
+    if request.url.path == "/analyze":
+        batcher = getattr(request.app.state, "analyze_batcher", None)
+    elif request.url.path == "/pii/extract":
+        batcher = getattr(request.app.state, "pii_extract_batcher", None)
+    else:
+        return None
+
+    if batcher is None:
+        return None
+    return await batcher.admission_error(_request_priority(request))
+
+
+def _metrics_route_label(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if isinstance(route_path, str) and route_path:
+        return route_path
+    return "unknown"
+
+
 def create_app() -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
+    openhim_settings = OpenHIMMediatorSettings.from_env()
+
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
-        runtime = ServiceRuntime.from_env()
+        runtime = ServiceRuntime.from_env(
+            metrics=getattr(fastapi_app.state, "metrics", None)
+        )
         _attach_runtime(fastapi_app, runtime)
+        if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
+            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
+        fastapi_app.state.ready = False
+        fastapi_app.state.shutting_down = False
+        fastapi_app.state.inflight = 0
+        fastapi_app.state.openhim_mediator = None
 
         if runtime.preload_models:
             await run_in_threadpool(runtime.preload)
 
-        yield
+        if openhim_settings.enabled:
+            mediator = create_openhim_mediator(openhim_settings)
+            fastapi_app.state.openhim_mediator = mediator
+            try:
+                await mediator.start()
+            except Exception:
+                await mediator.stop()
+                raise
+
+        fastapi_app.state.ready = True
+
+        try:
+            yield
+        finally:
+            fastapi_app.state.ready = False
+            fastapi_app.state.shutting_down = True
+            mediator = getattr(fastapi_app.state, "openhim_mediator", None)
+            if mediator is not None:
+                await mediator.stop()
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + float(
+                getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
+            )
+            while getattr(fastapi_app.state, "inflight", 0) > 0 and (
+                loop.time() < deadline
+            ):
+                await asyncio.sleep(0.05)
+            tracing = getattr(fastapi_app.state, "tracing", None)
+            if tracing is not None:
+                tracing.shutdown()
+            manager = getattr(fastapi_app.state, "smart_backend_jobs", None)
+            if manager is not None:
+                await manager.cancel_all()
+            job_queue = getattr(fastapi_app.state, "job_queue", None)
+            if job_queue is not None:
+                job_queue.shutdown()
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -146,6 +499,97 @@ def create_app() -> FastAPI:
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
     )
+    security_config = parse_service_security_config()
+    app.state.security = security_config
+    if security_config.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=security_config.cors_origins,
+            allow_methods=SERVICE_CORS_METHODS,
+            allow_headers=SERVICE_CORS_HEADERS,
+        )
+    app.add_middleware(
+        ErrorEnvelopeTrustedHostMiddleware,
+        allowed_hosts=security_config.trusted_hosts,
+        www_redirect=False,
+    )
+    app.state.auth = ServiceAuth(
+        parse_service_auth_config(),
+        error_response=_error_response,
+    )
+    app.state.metrics = (
+        PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
+    )
+    app.state.tracing = service_tracing_from_env()
+    app.state.openhim_settings = openhim_settings
+    app.state.openhim_deidentifier = None
+
+    @app.middleware("http")
+    async def _readiness_middleware(request: Request, call_next):
+        path = request.url.path
+        if path in _MODEL_BACKED_PATHS:
+            state = request.app.state
+            if getattr(state, "shutting_down", False):
+                return _error_response(
+                    503,
+                    "not_ready",
+                    "Service is shutting down and not accepting new requests",
+                    details=None,
+                )
+            state.inflight = getattr(state, "inflight", 0) + 1
+            try:
+                return await call_next(request)
+            finally:
+                state.inflight = getattr(state, "inflight", 0) - 1
+        return await call_next(request)
+
+    if app.state.metrics is not None:
+
+        @app.middleware("http")
+        async def _metrics_middleware(request: Request, call_next):
+            metrics = request.app.state.metrics
+            metrics.request_started()
+            start_time = time.perf_counter()
+            status_code = 500
+            try:
+                response = await call_next(request)
+                status_code = response.status_code
+                return response
+            finally:
+                metrics.request_finished(
+                    route=_metrics_route_label(request),
+                    status_code=status_code,
+                    duration_seconds=time.perf_counter() - start_time,
+                )
+
+        @app.get("/metrics", include_in_schema=False)
+        async def metrics(request: Request) -> Response:
+            registry = request.app.state.metrics
+            runtime = _get_service_runtime(request)
+            registry.set_circuit_breaker_state_counts(
+                runtime.circuit_breaker_state_counts()
+            )
+            return Response(
+                content=registry.render(),
+                media_type=PROMETHEUS_CONTENT_TYPE,
+            )
+
+    @app.middleware("http")
+    async def _throttle_middleware(request: Request, call_next):
+        throttle = getattr(request.app.state, "throttle", None)
+        if throttle is None:
+            _get_service_runtime(request)
+            throttle = getattr(request.app.state, "throttle", None)
+        if throttle is None:
+            return await call_next(request)
+        return await throttle.dispatch(request, call_next)
+
+    @app.middleware("http")
+    async def _auth_middleware(request: Request, call_next):
+        auth = getattr(request.app.state, "auth", None)
+        if auth is None:
+            return await call_next(request)
+        return await auth.dispatch(request, call_next)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
@@ -166,6 +610,80 @@ def create_app() -> FastAPI:
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(BackpressureError)
+    async def _backpressure_handler(
+        _: Request,
+        exc: BackpressureError,
+    ) -> JSONResponse:
+        return _backpressure_response(exc)
+
+    @app.exception_handler(PrivacyGatewayConfigurationError)
+    async def _privacy_gateway_config_handler(
+        _: Request,
+        exc: PrivacyGatewayConfigurationError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            exc.error_code,
+            "Privacy gateway external endpoint is not configured",
+            details={"reason": exc.reason_code},
+        )
+
+    @app.exception_handler(PrivacyTransportError)
+    async def _privacy_gateway_transport_handler(
+        _: Request,
+        exc: PrivacyTransportError,
+    ) -> JSONResponse:
+        return _error_response(
+            502,
+            exc.error_code,
+            "External LLM transport failed",
+            details={"reason": exc.reason_code},
+        )
+
+    @app.exception_handler(PrivacyGatewayError)
+    async def _privacy_gateway_error_handler(
+        _: Request,
+        exc: PrivacyGatewayError,
+    ) -> JSONResponse:
+        return _error_response(
+            400,
+            exc.error_code,
+            str(exc),
+            details={"reason": exc.reason_code},
+        )
+
+    @app.exception_handler(CircuitBreakerOpenError)
+    async def _circuit_breaker_handler(
+        _: Request,
+        exc: CircuitBreakerOpenError,
+    ) -> JSONResponse:
+        retry_after = str(exc.retry_after_seconds)
+        return _error_response(
+            503,
+            "circuit_breaker_open",
+            "Model backend is temporarily unavailable",
+            details=circuit_breaker_details(exc),
+            headers={"Retry-After": retry_after},
+        )
+
+    @app.exception_handler(WarmPoolBackpressureError)
+    async def _warm_pool_backpressure_handler(
+        _: Request,
+        exc: WarmPoolBackpressureError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "model_name": exc.model_name,
+                "required_bytes": exc.required_bytes,
+                "budget_bytes": exc.budget_bytes,
+                "wait_seconds": exc.wait_seconds,
+            },
         )
 
     @app.exception_handler(ValueError)
@@ -209,6 +727,91 @@ def create_app() -> FastAPI:
             "profile": runtime.profile,
         }
 
+    @app.get("/livez")
+    async def livez() -> Dict[str, str]:
+        return {"status": "ok", "service": SERVICE_NAME}
+
+    @app.get("/readyz")
+    async def readyz(request: Request):
+        if getattr(request.app.state, "ready", False):
+            return {"status": "ready", "service": SERVICE_NAME}
+        return _error_response(
+            503,
+            "not_ready",
+            "Service preload has not completed",
+            details=None,
+        )
+
+    if openhim_settings.enabled:
+
+        @app.get(OPENHIM_HEARTBEAT_PATH)
+        async def openhim_heartbeat(request: Request) -> Dict[str, Any]:
+            mediator = getattr(request.app.state, "openhim_mediator", None)
+            if mediator is None:
+                return {
+                    "enabled": True,
+                    "registered": False,
+                    "urn": str(openhim_settings.registration["urn"]),
+                    "last_heartbeat_at": None,
+                    "last_error": "not_started",
+                }
+            return mediator.status()
+
+        @app.post(OPENHIM_MEDIATOR_PATH)
+        async def openhim_deidentify(request: Request) -> Response:
+            runtime = _get_service_runtime(request)
+            headers = mediator_response_headers(request.headers)
+            body = await request.body()
+            configured_deidentifier = getattr(
+                request.app.state, "openhim_deidentifier", None
+            )
+
+            def _runtime_deidentifier(text: str, **kwargs: Any) -> Any:
+                if configured_deidentifier is not None:
+                    return configured_deidentifier(text, **kwargs)
+                return openmed.deidentify(
+                    text,
+                    config=runtime.config,
+                    loader=runtime.get_loader(),
+                    **kwargs,
+                )
+
+            def _transform() -> Any:
+                return transform_mediator_payload(
+                    body,
+                    headers,
+                    200,
+                    deidentifier=_runtime_deidentifier,
+                    policy=openhim_settings.policy,
+                    method=openhim_settings.method,
+                )
+
+            try:
+                result = await _run_with_timeout(runtime, _transform)
+            except (TypeError, ValueError, UnicodeError, json.JSONDecodeError):
+                result = failed_openhim_result(400, "invalid_payload")
+            except Exception:
+                result = failed_openhim_result(500, "processing_failed")
+
+            if not result.transformed:
+                return Response(
+                    content=result.body,
+                    status_code=result.status_code,
+                    headers=dict(result.headers),
+                )
+
+            envelope = build_openhim_envelope(
+                result,
+                urn=str(openhim_settings.registration["urn"]),
+                request_method=request.method,
+                request_path=request.url.path,
+            )
+            return Response(
+                content=json.dumps(envelope, ensure_ascii=False, separators=(",", ":")),
+                status_code=200,
+                media_type=OPENHIM_MEDIA_TYPE,
+            )
+
     @app.get("/models/loaded")
     async def loaded_models(request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
@@ -220,93 +823,665 @@ def create_app() -> FastAPI:
         request: Request,
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        set_access_log_model_name(request, payload.model_name)
         if payload.all:
             return runtime.unload_all_models()
-        assert payload.model_name is not None
+        if payload.model_name is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=400, detail="model_name is required when 'all' is not set"
+            )
         return runtime.unload_model(payload.model_name)
 
     @app.post("/analyze")
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
+        set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
+        priority = _request_priority(request)
+        priority_handle = BatchPriorityHandle(priority)
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _analyze_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            if runtime.batching.enabled:
+                return await _await_with_timeout(
+                    runtime,
+                    _get_analyze_batcher(request).submit(
+                        _AnalyzeBatchJob(payload),
+                        priority=priority,
+                        priority_handle=priority_handle,
+                    ),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _analyze_payload(payload, runtime),
+                )
+
+            with trace_service_stage(
+                "model_request",
+                {
+                    "openmed.endpoint": "/analyze",
+                    "openmed.input.length": len(payload.text),
+                    "openmed.model_name": payload.model_name,
+                },
+            ):
+                return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/analyze",
+            payload,
+            _operation,
+            priority=priority,
+            on_priority_upgrade=priority_handle.promote,
+        )
 
     @app.post("/pii/extract")
     async def pii_extract(
         payload: PIIExtractRequest, request: Request
     ) -> Dict[str, Any]:
+        set_access_log_model_name(request, payload.model_name)
+        runtime = _get_service_runtime(request)
+        priority = _request_priority(request)
+        priority_handle = BatchPriorityHandle(priority)
+
+        async def _operation() -> Dict[str, Any]:
+            if runtime.batching.enabled:
+                return await _await_with_timeout(
+                    runtime,
+                    _get_pii_extract_batcher(request).submit(
+                        _PIIExtractBatchJob(payload),
+                        priority=priority,
+                        priority_handle=priority_handle,
+                    ),
+                )
+
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _pii_extract_payload(payload, runtime),
+                )
+
+            with trace_service_stage(
+                "model_request",
+                {
+                    "openmed.endpoint": "/pii/extract",
+                    "openmed.input.length": len(payload.text),
+                    "openmed.model_name": payload.model_name,
+                },
+            ):
+                return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/pii/extract",
+            payload,
+            _operation,
+            priority=priority,
+            on_priority_upgrade=priority_handle.promote,
+        )
+
+    @app.post("/pii/extract/stream")
+    async def pii_extract_stream(
+        payload: PIIExtractStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
         runtime = _get_service_runtime(request)
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _pii_extract_payload(payload, runtime),
-            )
+        async def _events():
+            async for event in runtime.stream_pii_extract(
+                text=payload.text,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                use_smart_merging=payload.use_smart_merging,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                keep_alive=payload.keep_alive,
+                chunk_size=payload.chunk_size,
+                window_chars=payload.window_chars,
+                tokenizer_context_chars=payload.tokenizer_context_chars,
+                max_entity_chars=payload.max_entity_chars,
+            ):
+                event_payload = event.to_dict(include_text=payload.include_text)
+                event_payload["audit"] = event.to_audit_dict()
+                yield json.dumps(event_payload, sort_keys=True) + "\n"
 
-        return await _run_with_timeout(runtime, _operation)
+        return StreamingResponse(_events(), media_type="application/x-ndjson")
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(
         payload: PIIDeidentifyRequest,
         request: Request,
     ) -> Dict[str, Any]:
+        set_access_log_model_name(request, payload.model_name)
+        runtime = _get_service_runtime(request)
+        priority = _request_priority(request)
+
+        async def _operation() -> Dict[str, Any]:
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _pii_deidentify_payload(payload, runtime),
+                )
+
+            with trace_service_stage(
+                "model_request",
+                {
+                    "openmed.endpoint": "/pii/deidentify",
+                    "openmed.input.length": len(payload.text),
+                    "openmed.model_name": payload.model_name,
+                },
+            ):
+                return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/pii/deidentify",
+            payload,
+            _operation,
+            priority=priority,
+        )
+
+    @app.post(_PRIVACY_GATEWAY_PATH)
+    async def privacy_gateway_complete(
+        payload: PrivacyGatewayRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _pii_deidentify_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _privacy_gateway_payload(
+                        payload,
+                        runtime,
+                        request.app,
+                    ),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            return await _run_with_timeout(runtime, _model_operation)
 
+        return await _operation()
+
+    @app.post("/omop/load")
+    async def omop_load(payload: OmopLoadRequest, request: Request) -> Dict[str, Any]:
+        with trace_service_stage(
+            "omop_load",
+            {
+                "openmed.endpoint": "/omop/load",
+                "openmed.input.length": len(payload.records_jsonl),
+            },
+        ):
+            return await run_in_threadpool(_omop_load_summary, payload)
+
+    @app.post(_SMART_BACKEND_START_PATH)
+    async def start_smart_backend_ingestion(
+        payload: SMARTBackendIngestionRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        runtime = _get_service_runtime(request)
+        manager = _get_smart_backend_manager(request)
+        config = _smart_backend_config_from_payload(payload)
+        deidentifier = _smart_backend_deidentifier(payload, runtime)
+        return manager.start(config, deidentifier=deidentifier).to_dict()
+
+    @app.get("/fhir/smart-backend/ingestions/{job_id}")
+    async def smart_backend_ingestion_status(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_smart_backend_manager(request).get(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+
+    @app.get("/fhir/smart-backend/ingestions/{job_id}/summary")
+    async def smart_backend_ingestion_summary(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_smart_backend_manager(request).summary(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+        except ValueError as exc:
+            raise StarletteHTTPException(
+                status_code=409,
+                detail=str(exc),
+            ) from exc
+
+    @app.post("/jobs", status_code=202)
+    async def create_job(
+        payload: DeidentifyJobRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        _get_service_runtime(request)
+        queue = _get_job_queue(request)
+        record = queue.submit(payload)
+        return job_response_payload(record, status_url=f"/jobs/{record['id']}")
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(job_id: str, request: Request) -> Dict[str, Any]:
+        queue = _get_job_queue(request)
+        record = queue.get(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job_response_payload(record, status_url=f"/jobs/{job_id}")
+
+    if app.state.tracing.enabled:
+        app.add_middleware(
+            OpenTelemetryMiddleware,
+            tracing=app.state.tracing,
+        )
+    app.add_middleware(
+        CorrelationIdMiddleware,
+        log_config=service_log_config_from_env(),
+    )
     return app
+
+
+async def _dispatch_analyze_batch(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    return await run_in_threadpool(_dispatch_analyze_batch_sync, runtime, list(jobs))
+
+
+def _dispatch_analyze_batch_sync(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    results: list[Optional[BatchResult[_ServicePayload]]] = [None] * len(jobs)
+    groups: dict[Tuple[Any, ...], list[int]] = {}
+    for index, job in enumerate(jobs):
+        groups.setdefault(_analyze_batch_key(job.payload), []).append(index)
+
+    for indexes in groups.values():
+        _dispatch_analyze_group(runtime, jobs, indexes, results)
+
+    return _completed_batch_results(results)
+
+
+def _dispatch_analyze_group(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+    indexes: Sequence[int],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
+    active_jobs: list[Tuple[int, str, Any]] = []
+
+    for index in indexes:
+        try:
+            model_key = runtime.begin_model_request(jobs[index].payload.model_name)
+        except Exception as exc:
+            results[index] = exc
+        else:
+            active_jobs.append((index, model_key, jobs[index].payload.keep_alive))
+
+    try:
+        active_indexes = [index for index, _, _ in active_jobs]
+        if not active_indexes:
+            return
+
+        payloads = [jobs[index].payload for index in active_indexes]
+        if _can_backend_batch_analyze(payloads, runtime):
+            try:
+                with trace_service_stage(
+                    "analyze_batch",
+                    {
+                        "openmed.batch.size": len(payloads),
+                        "openmed.input.count": len(payloads),
+                        "openmed.input.total_length": sum(
+                            len(payload.text) for payload in payloads
+                        ),
+                        "openmed.model_name": payloads[0].model_name,
+                    },
+                ):
+                    batch_results = _analyze_payload_batch(payloads, runtime)
+                if len(batch_results) != len(active_indexes):
+                    raise ValueError(
+                        "Analyze batch returned "
+                        f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                    )
+            except Exception:
+                for index in active_indexes:
+                    try:
+                        results[index] = _analyze_payload(jobs[index].payload, runtime)
+                    except Exception as exc:
+                        results[index] = exc
+            else:
+                for index, result in zip(active_indexes, batch_results):
+                    results[index] = result
+        else:
+            for index in active_indexes:
+                try:
+                    results[index] = _analyze_payload(jobs[index].payload, runtime)
+                except Exception as exc:
+                    results[index] = exc
+    finally:
+        _finish_active_batch_requests(runtime, active_jobs, results)
+
+
+async def _dispatch_pii_extract_batch(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_PIIExtractBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    return await run_in_threadpool(
+        _dispatch_pii_extract_batch_sync,
+        runtime,
+        list(jobs),
+    )
+
+
+def _dispatch_pii_extract_batch_sync(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_PIIExtractBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    results: list[Optional[BatchResult[_ServicePayload]]] = [None] * len(jobs)
+    groups: dict[Tuple[Any, ...], list[int]] = {}
+    for index, job in enumerate(jobs):
+        groups.setdefault(_pii_extract_batch_key(job.payload), []).append(index)
+
+    for indexes in groups.values():
+        _dispatch_pii_extract_group(runtime, jobs, indexes, results)
+
+    return _completed_batch_results(results)
+
+
+def _dispatch_pii_extract_group(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_PIIExtractBatchJob],
+    indexes: Sequence[int],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
+    active_jobs: list[Tuple[int, str, Any]] = []
+    for index in indexes:
+        try:
+            model_key = runtime.begin_model_request(jobs[index].payload.model_name)
+        except Exception as exc:
+            results[index] = exc
+        else:
+            active_jobs.append((index, model_key, jobs[index].payload.keep_alive))
+
+    try:
+        active_indexes = [index for index, _, _ in active_jobs]
+        if not active_indexes:
+            return
+        payloads = [jobs[index].payload for index in active_indexes]
+        try:
+            with trace_service_stage(
+                "pii_extract_batch",
+                {
+                    "openmed.batch.size": len(payloads),
+                    "openmed.input.count": len(payloads),
+                    "openmed.input.total_length": sum(
+                        len(payload.text) for payload in payloads
+                    ),
+                    "openmed.model_name": payloads[0].model_name,
+                },
+            ):
+                batch_results = _pii_extract_payload_batch(payloads, runtime)
+            if len(batch_results) != len(active_indexes):
+                raise ValueError(
+                    "PII extract batch returned "
+                    f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                )
+        except Exception:
+            for index in active_indexes:
+                try:
+                    results[index] = _pii_extract_payload(jobs[index].payload, runtime)
+                except Exception as exc:
+                    results[index] = exc
+        else:
+            for index, result in zip(active_indexes, batch_results):
+                results[index] = result
+    except Exception as exc:
+        for index, _, _ in active_jobs:
+            if results[index] is None:
+                results[index] = exc
+    finally:
+        _finish_active_batch_requests(runtime, active_jobs, results)
+
+
+def _finish_active_batch_requests(
+    runtime: ServiceRuntime,
+    active_jobs: Sequence[Tuple[int, str, Any]],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
+    for index, model_key, keep_alive in active_jobs:
+        try:
+            result = results[index]
+            error = result if isinstance(result, BaseException) else None
+            runtime.finish_model_request(model_key, keep_alive, error=error)
+        except Exception as exc:
+            if not isinstance(results[index], BaseException):
+                results[index] = exc
+
+
+def _completed_batch_results(
+    results: Sequence[Optional[BatchResult[_ServicePayload]]],
+) -> list[BatchResult[_ServicePayload]]:
+    completed: list[BatchResult[_ServicePayload]] = []
+    for result in results:
+        if result is None:
+            completed.append(RuntimeError("Batch job did not produce a result"))
+        else:
+            completed.append(result)
+    return completed
+
+
+def _analyze_batch_key(payload: AnalyzeRequest) -> Tuple[Any, ...]:
+    return (
+        payload.model_name,
+        payload.confidence_threshold,
+        payload.group_entities,
+        payload.aggregation_strategy,
+        payload.sentence_detection,
+        payload.sentence_language,
+        payload.sentence_clean,
+        payload.use_fast_tokenizer,
+    )
+
+
+def _can_backend_batch_analyze(
+    payloads: Sequence[AnalyzeRequest],
+    runtime: ServiceRuntime,
+) -> bool:
+    if not payloads:
+        return False
+    first = payloads[0]
+    return not first.sentence_detection and not bool(
+        getattr(runtime.config, "use_medical_tokenizer", False)
+    )
+
+
+def _normalize_batch_predictions(
+    raw_predictions: Any, expected_count: int
+) -> list[Any]:
+    if expected_count == 1:
+        if isinstance(raw_predictions, list) and (
+            not raw_predictions or isinstance(raw_predictions[0], dict)
+        ):
+            return [raw_predictions]
+        if isinstance(raw_predictions, list) and len(raw_predictions) == 1:
+            return [raw_predictions[0]]
+        return [raw_predictions]
+
+    if not isinstance(raw_predictions, list):
+        raise ValueError("Analyze backend returned a non-list batch result")
+    if len(raw_predictions) != expected_count:
+        raise ValueError(
+            "Analyze backend returned "
+            f"{len(raw_predictions)} results for {expected_count} inputs"
+        )
+    return list(raw_predictions)
+
+
+def _analyze_payload_batch(
+    payloads: Sequence[AnalyzeRequest],
+    runtime: ServiceRuntime,
+) -> list[_ServicePayload]:
+    if not payloads:
+        return []
+
+    first = payloads[0]
+    model_name = validate_model_name(first.model_name)
+    loader = runtime.get_loader()
+    pipeline = loader.create_pipeline(
+        model_name,
+        task="token-classification",
+        aggregation_strategy=first.aggregation_strategy,
+        use_fast_tokenizer=first.use_fast_tokenizer,
+    )
+
+    effective_max_length = loader.get_max_sequence_length(
+        model_name,
+        tokenizer=getattr(pipeline, "tokenizer", None),
+    )
+    tokenizer = getattr(pipeline, "tokenizer", None)
+    if tokenizer is not None and effective_max_length is not None:
+        try:
+            tokenizer.model_max_length = int(effective_max_length)
+        except Exception:
+            pass
+
+    import time
+
+    texts = [payload.text for payload in payloads]
+    start_time = time.time()
+    raw_predictions = pipeline(texts, batch_size=len(texts))
+    processing_time = time.time() - start_time
+    per_item_time = processing_time / len(texts) if texts else 0.0
+    normalized = _normalize_batch_predictions(raw_predictions, len(texts))
+
+    responses: list[_ServicePayload] = []
+    for payload, predictions in zip(payloads, normalized):
+        if predictions is None:
+            predictions = []
+        elif isinstance(predictions, dict):
+            predictions = [predictions]
+        else:
+            predictions = list(predictions)
+
+        metadata = {"sentence_detection": False}
+        if effective_max_length is not None:
+            metadata["max_length"] = effective_max_length
+        result = format_predictions(
+            predictions,
+            payload.text,
+            model_name=model_name,
+            output_format="dict",
+            include_confidence=True,
+            confidence_threshold=payload.confidence_threshold,
+            group_entities=payload.group_entities,
+            metadata=metadata,
+            processing_time=per_item_time,
+        )
+        responses.append(_result_to_dict(result))
+    return responses
+
+
+def _pii_extract_batch_key(payload: PIIExtractRequest) -> Tuple[Any, ...]:
+    return (
+        payload.model_name,
+        payload.confidence_threshold,
+        payload.use_smart_merging,
+        payload.lang,
+        payload.normalize_accents,
+    )
+
+
+def _pii_extract_payload_batch(
+    payloads: Sequence[PIIExtractRequest],
+    runtime: ServiceRuntime,
+) -> list[_ServicePayload]:
+    from openmed.core.pii import _extract_pii_batch
+
+    if not payloads:
+        return []
+
+    first = payloads[0]
+    results = _extract_pii_batch(
+        [payload.text for payload in payloads],
+        model_name=first.model_name,
+        confidence_threshold=first.confidence_threshold,
+        config=runtime.config,
+        use_smart_merging=first.use_smart_merging,
+        lang=first.lang,
+        normalize_accents=first.normalize_accents,
+        loader=runtime.get_loader(),
+        batch_size=len(payloads),
+    )
+    return [_result_to_dict(result) for result in results]
 
 
 def _analyze_payload(
     payload: AnalyzeRequest, runtime: ServiceRuntime
 ) -> Dict[str, Any]:
-    result = openmed.analyze_text(
-        payload.text,
-        model_name=payload.model_name,
-        config=runtime.config,
-        loader=runtime.get_loader(),
-        aggregation_strategy=payload.aggregation_strategy,
-        output_format="dict",
-        confidence_threshold=payload.confidence_threshold,
-        group_entities=payload.group_entities,
-        sentence_detection=payload.sentence_detection,
-        sentence_language=payload.sentence_language,
-        sentence_clean=payload.sentence_clean,
-        use_fast_tokenizer=payload.use_fast_tokenizer,
-    )
-    return _result_to_dict(result)
+    with trace_service_stage(
+        "analyze_pipeline",
+        {
+            "openmed.endpoint": "/analyze",
+            "openmed.input.length": len(payload.text),
+            "openmed.model_name": payload.model_name,
+        },
+    ):
+        result = openmed.analyze_text(
+            payload.text,
+            model_name=payload.model_name,
+            config=runtime.config,
+            loader=runtime.get_loader(),
+            aggregation_strategy=payload.aggregation_strategy,
+            output_format="dict",
+            confidence_threshold=payload.confidence_threshold,
+            group_entities=payload.group_entities,
+            sentence_detection=payload.sentence_detection,
+            sentence_language=payload.sentence_language,
+            sentence_clean=payload.sentence_clean,
+            use_fast_tokenizer=payload.use_fast_tokenizer,
+        )
+        response = _result_to_dict(result)
+        set_current_span_attributes(result_summary_attributes(response))
+        return response
 
 
 def _pii_extract_payload(
     payload: PIIExtractRequest,
     runtime: ServiceRuntime,
 ) -> Dict[str, Any]:
-    result = openmed.extract_pii(
-        payload.text,
-        model_name=payload.model_name,
-        confidence_threshold=payload.confidence_threshold,
-        config=runtime.config,
-        use_smart_merging=payload.use_smart_merging,
-        lang=payload.lang,
-        normalize_accents=payload.normalize_accents,
-        loader=runtime.get_loader(),
-    )
-    return _result_to_dict(result)
+    with trace_service_stage(
+        "pii_extract_pipeline",
+        {
+            "openmed.endpoint": "/pii/extract",
+            "openmed.input.length": len(payload.text),
+            "openmed.model_name": payload.model_name,
+        },
+    ):
+        result = openmed.extract_pii(
+            payload.text,
+            model_name=payload.model_name,
+            confidence_threshold=payload.confidence_threshold,
+            config=runtime.config,
+            use_smart_merging=payload.use_smart_merging,
+            lang=payload.lang,
+            normalize_accents=payload.normalize_accents,
+            loader=runtime.get_loader(),
+        )
+        response = _result_to_dict(result)
+        set_current_span_attributes(result_summary_attributes(response))
+        return response
 
 
 def _pii_deidentify_payload(
@@ -315,34 +1490,165 @@ def _pii_deidentify_payload(
 ) -> Dict[str, Any]:
     from openmed.core.policy import canonical_policy_name, load_policy
 
-    policy_name = canonical_policy_name(payload.policy) if payload.policy else None
-    policy_profile = load_policy(policy_name) if policy_name is not None else None
+    with trace_service_stage(
+        "pii_deidentify_pipeline",
+        {
+            "openmed.endpoint": "/pii/deidentify",
+            "openmed.input.length": len(payload.text),
+            "openmed.model_name": payload.model_name,
+        },
+    ):
+        policy_name = canonical_policy_name(payload.policy) if payload.policy else None
+        policy_profile = load_policy(policy_name) if policy_name is not None else None
 
-    result = openmed.deidentify(
+        result = openmed.deidentify(
+            payload.text,
+            method=payload.method,
+            model_name=payload.model_name,
+            confidence_threshold=payload.confidence_threshold,
+            keep_year=payload.keep_year,
+            shift_dates=payload.shift_dates,
+            date_shift_days=payload.date_shift_days,
+            keep_mapping=payload.keep_mapping,
+            config=runtime.config,
+            use_smart_merging=payload.use_smart_merging,
+            use_safety_sweep=payload.use_safety_sweep,
+            lang=payload.lang,
+            normalize_accents=payload.normalize_accents,
+            loader=runtime.get_loader(),
+            policy=policy_name,
+        )
+
+        response = _result_to_dict(result)
+        set_current_span_attributes(result_summary_attributes(response))
+        should_emit_mapping = payload.keep_mapping or bool(
+            policy_profile is not None and policy_profile.keep_mapping
+        )
+        if should_emit_mapping and getattr(result, "mapping", None):
+            response["mapping"] = result.mapping
+        return response
+
+
+def _privacy_gateway_payload(
+    payload: PrivacyGatewayRequest,
+    runtime: ServiceRuntime,
+    fastapi_app: FastAPI,
+) -> Dict[str, Any]:
+    transport = _get_privacy_gateway_transport(fastapi_app)
+    audit_trail = _get_privacy_gateway_audit_trail(fastapi_app)
+    store = _get_privacy_gateway_store(fastapi_app)
+
+    def _extractor(text: str, **kwargs: Any) -> Any:
+        return openmed.extract_pii(
+            text,
+            config=runtime.config,
+            loader=runtime.get_loader(),
+            **kwargs,
+        )
+
+    gateway = PrivacyGateway(
+        transport=transport,
+        extractor=_extractor,
+        audit_trail=audit_trail,
+        store=store,
+    )
+    policy = PrivacyGatewayPolicy(
+        name=payload.policy,
+        min_confidence=payload.confidence_threshold,
+        detector_confidence_floor=payload.detector_confidence_floor,
+        disallowed_entity_categories=frozenset(payload.disallowed_entity_categories),
+    )
+    result = gateway.complete(
         payload.text,
-        method=payload.method,
+        policy=policy,
         model_name=payload.model_name,
-        confidence_threshold=payload.confidence_threshold,
-        keep_year=payload.keep_year,
-        shift_dates=payload.shift_dates,
-        date_shift_days=payload.date_shift_days,
-        keep_mapping=payload.keep_mapping,
-        config=runtime.config,
         use_smart_merging=payload.use_smart_merging,
-        use_safety_sweep=payload.use_safety_sweep,
         lang=payload.lang,
         normalize_accents=payload.normalize_accents,
-        loader=runtime.get_loader(),
-        policy=policy_name,
+    )
+    return result.to_dict()
+
+
+def _get_privacy_gateway_transport(fastapi_app: FastAPI) -> Any:
+    transport = getattr(fastapi_app.state, "privacy_gateway_transport", None)
+    if transport is not None:
+        return transport
+    transport = HttpExternalLLMTransport.from_env()
+    fastapi_app.state.privacy_gateway_transport = transport
+    return transport
+
+
+def _get_privacy_gateway_audit_trail(
+    fastapi_app: FastAPI,
+) -> PrivacyGatewayAuditTrail:
+    audit_trail = getattr(fastapi_app.state, "privacy_gateway_audit_trail", None)
+    if audit_trail is None:
+        audit_trail = PrivacyGatewayAuditTrail()
+        fastapi_app.state.privacy_gateway_audit_trail = audit_trail
+    return audit_trail
+
+
+def _get_privacy_gateway_store(fastapi_app: FastAPI) -> InMemoryReidentificationStore:
+    store = getattr(fastapi_app.state, "privacy_gateway_store", None)
+    if store is None:
+        store = InMemoryReidentificationStore()
+        fastapi_app.state.privacy_gateway_store = store
+    return store
+
+
+def _smart_backend_config_from_payload(
+    payload: SMARTBackendIngestionRequest,
+) -> SMARTBackendConfig:
+    return SMARTBackendConfig(
+        fhir_base_url=payload.fhir_base_url,
+        token_url=payload.token_url,
+        client_id=payload.client_id,
+        private_key_pem=payload.private_key_pem,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        key_id=payload.key_id,
+        scope=payload.scope,
+        export_path=payload.export_path,
+        max_inflight_downloads=payload.max_inflight_downloads,
+        poll_interval_seconds=payload.poll_interval_seconds,
+        request_timeout_seconds=payload.request_timeout_seconds,
+        policy=payload.policy or "hipaa_safe_harbor",
+        method=payload.method,
     )
 
-    response = _result_to_dict(result)
-    should_emit_mapping = payload.keep_mapping or bool(
-        policy_profile is not None and policy_profile.keep_mapping
-    )
-    if should_emit_mapping and getattr(result, "mapping", None):
-        response["mapping"] = result.mapping
-    return response
+
+def _smart_backend_deidentifier(
+    payload: SMARTBackendIngestionRequest,
+    runtime: ServiceRuntime,
+):
+    def _deidentifier(text: str, **kwargs: Any) -> Any:
+        method = str(kwargs.get("method", payload.method))
+        policy = kwargs.get("policy") or payload.policy
+        consistent = bool(kwargs.get("consistent", False))
+
+        def _operation() -> Any:
+            return openmed.deidentify(
+                text,
+                method=method,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                config=runtime.config,
+                use_smart_merging=payload.use_smart_merging,
+                use_safety_sweep=payload.use_safety_sweep,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                loader=runtime.get_loader(),
+                policy=policy,
+                consistent=consistent,
+            )
+
+        return runtime.run_model_request(
+            payload.model_name,
+            payload.keep_alive,
+            _operation,
+        )
+
+    return _deidentifier
 
 
 app = create_app()

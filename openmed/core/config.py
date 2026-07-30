@@ -1,15 +1,32 @@
 """Configuration management for OpenMed."""
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
+from .offline import (
+    OFFLINE_ENV_VAR,
+    configure_offline_mode,
+    env_flag_enabled,
+)
 
 # Environment variable used to override the config file location
 CONFIG_ENV_VAR = "OPENMED_CONFIG"
 
 # Environment variable for active profile
 PROFILE_ENV_VAR = "OPENMED_PROFILE"
+
+# Official CPU-oriented INT8 artifact used by the low-resource profile.
+LOW_RESOURCE_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android"
+LOW_RESOURCE_PII_REVISION = "82f57fcab68125b05f1aa9fdd41319732358311b"
+
+# Environment variable for the PyTorch/Transformers attention backend.
+TORCH_ATTENTION_BACKEND_ENV_VAR = "OPENMED_TORCH_ATTENTION_BACKEND"
+
+CHINESE_SEGMENTATION_BACKEND_ENV_VAR = "OPENMED_CHINESE_SEGMENTATION_BACKEND"
+CHINESE_USER_DICT_ENV_VAR = "OPENMED_CHINESE_USER_DICT"
+CHINESE_PKUSEG_DOMAIN_ENV_VAR = "OPENMED_CHINESE_PKUSEG_DOMAIN"
 
 _xdg_config = os.getenv("XDG_CONFIG_HOME")
 if _xdg_config:
@@ -43,6 +60,20 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "timeout": 120,
         "use_medical_tokenizer": False,
     },
+    "low_resource": {
+        "backend": "onnx",
+        "batch_size": 1,
+        "device": "cpu",
+        "lazy_model_loading": True,
+        "log_level": "WARNING",
+        "num_workers": 1,
+        "onnx_intra_op_num_threads": 2,
+        "onnx_variant": "int8",
+        "pii_model": LOW_RESOURCE_PII_MODEL,
+        "pii_model_revision": LOW_RESOURCE_PII_REVISION,
+        "timeout": 900,
+        "use_medical_tokenizer": False,
+    },
 }
 
 
@@ -74,8 +105,53 @@ class OpenMedConfig:
     # Optional list of terms to keep intact when remapping output onto medical tokens
     medical_tokenizer_exceptions: Optional[List[str]] = None
 
-    # Inference backend: None (auto-detect), "hf" (HuggingFace/PyTorch), "mlx" (Apple MLX)
+    # Chinese word segmentation. jieba is lightweight and bundled; the other
+    # backends are optional and load only when explicitly selected.
+    chinese_segmentation_backend: str = "jieba"
+    chinese_user_dict_path: Optional[str] = None
+    chinese_pkuseg_domain: str = "medicine"
+
+    # Protect common clinical vocabulary from PERSON/LOCATION/ORGANIZATION over-redaction
+    clinical_protect_enabled: bool = True
+    clinical_protect_terms: Optional[List[str]] = None
+    clinical_protect_use_builtin: bool = True
+
+    # Inference backend: None (auto-detect), "hf", "mlx", or CPU-only "onnx"
     backend: Optional[str] = None
+
+    # Runtime resource controls. None preserves backend-specific defaults.
+    batch_size: Optional[int] = None
+    num_workers: Optional[int] = None
+    lazy_model_loading: bool = True
+
+    # Optional profile-selected PII model and ONNX Runtime tuning.
+    pii_model: Optional[str] = None
+    pii_model_revision: Optional[str] = None
+    onnx_variant: str = "auto"
+    onnx_intra_op_num_threads: Optional[int] = None
+
+    # PyTorch/Transformers attention backend: auto, flash_attention_2, sdpa, or eager
+    torch_attention_backend: str = "auto"
+
+    # Optional load-time bitsandbytes 4-bit quantization for CUDA torch loads
+    load_in_4bit: bool = False
+    bnb_4bit_use_double_quant: bool = True
+
+    # Cache-only, no-egress mode for inference and de-identification
+    local_only: bool = False
+
+    # CJK width normalization convention: "cjk" (Latin/digits/symbols to
+    # half-width, Han left as-is) or "nfkc" (strict per-character NFKC).
+    cjk_width_convention: str = "cjk"
+
+    # Optional OpenCC pre-pass for Chinese text. None disables conversion;
+    # otherwise mixed variants are canonicalized before model inference.
+    chinese_target_script: Optional[str] = None
+
+    # Link Indic personal-name spellings through a transliteration-safe vault
+    # key. Disabled by default to preserve existing pseudonymization behavior.
+    transliteration_aware_name_matching: bool = False
+    indic_name_similarity_threshold: float = 0.80
 
     # Active profile name (if any)
     profile: Optional[str] = None
@@ -84,6 +160,52 @@ class OpenMedConfig:
         """Post-initialization to set default values."""
         if self.cache_dir is None:
             self.cache_dir = os.path.expanduser("~/.cache/openmed")
+
+        # An environment-selected built-in profile must affect runtime settings,
+        # not merely record its name. Apply it before field-specific environment
+        # overrides so those overrides retain their existing precedence.
+        env_profile = os.getenv(PROFILE_ENV_VAR)
+        if env_profile and self.profile is None:
+            profile_data = PROFILE_PRESETS.get(env_profile)
+            if profile_data is not None:
+                for key, value in profile_data.items():
+                    setattr(self, key, value)
+            self.profile = env_profile
+
+        if not isinstance(self.transliteration_aware_name_matching, bool):
+            raise TypeError("transliteration_aware_name_matching must be a boolean")
+        if isinstance(self.indic_name_similarity_threshold, bool):
+            raise TypeError("indic_name_similarity_threshold must be a real number")
+        self.indic_name_similarity_threshold = float(
+            self.indic_name_similarity_threshold
+        )
+
+        if self.cjk_width_convention not in {"cjk", "nfkc"}:
+            raise ValueError(
+                "cjk_width_convention must be 'cjk' or 'nfkc', got "
+                f"{self.cjk_width_convention!r}"
+            )
+
+        if self.batch_size is not None and self.batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if self.num_workers is not None and self.num_workers < 0:
+            raise ValueError("num_workers must be non-negative")
+        if self.onnx_variant not in {"auto", "int8", "fp16", "fp32"}:
+            raise ValueError("onnx_variant must be auto, int8, fp16, or fp32")
+        if (
+            self.onnx_intra_op_num_threads is not None
+            and self.onnx_intra_op_num_threads <= 0
+        ):
+            raise ValueError("onnx_intra_op_num_threads must be positive")
+        if self.chinese_target_script not in {None, "simplified", "traditional"}:
+            raise ValueError(
+                "chinese_target_script must be None, 'simplified', or "
+                f"'traditional', got {self.chinese_target_script!r}"
+            )
+        if not 0.5 <= self.indic_name_similarity_threshold <= 1.0:
+            raise ValueError(
+                "indic_name_similarity_threshold must be between 0.5 and 1.0"
+            )
 
         if self.hf_token is None:
             self.hf_token = os.getenv("HF_TOKEN")
@@ -102,10 +224,90 @@ class OpenMedConfig:
                 item.strip() for item in env_exceptions.split(",") if item.strip()
             ]
 
-        # Check for profile environment variable
-        env_profile = os.getenv(PROFILE_ENV_VAR)
-        if env_profile and self.profile is None:
-            self.profile = env_profile
+        env_chinese_backend = os.getenv(CHINESE_SEGMENTATION_BACKEND_ENV_VAR)
+        if env_chinese_backend:
+            self.chinese_segmentation_backend = env_chinese_backend
+        self.chinese_segmentation_backend = (
+            self.chinese_segmentation_backend.strip().lower()
+        )
+        if self.chinese_segmentation_backend not in {"jieba", "pkuseg", "hanlp"}:
+            raise ValueError(
+                "chinese_segmentation_backend must be jieba, pkuseg, or hanlp"
+            )
+
+        env_chinese_user_dict = os.getenv(CHINESE_USER_DICT_ENV_VAR)
+        if env_chinese_user_dict:
+            self.chinese_user_dict_path = env_chinese_user_dict
+
+        env_pkuseg_domain = os.getenv(CHINESE_PKUSEG_DOMAIN_ENV_VAR)
+        if env_pkuseg_domain:
+            self.chinese_pkuseg_domain = env_pkuseg_domain
+        self.chinese_pkuseg_domain = self.chinese_pkuseg_domain.strip()
+        if not self.chinese_pkuseg_domain:
+            raise ValueError("chinese_pkuseg_domain must not be empty")
+
+        env_protect = os.getenv("OPENMED_CLINICAL_PROTECT")
+        if env_protect is not None:
+            self.clinical_protect_enabled = env_protect.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+
+        env_protect_terms = os.getenv("OPENMED_CLINICAL_PROTECT_TERMS")
+        if env_protect_terms:
+            self.clinical_protect_terms = [
+                item.strip() for item in env_protect_terms.split(",") if item.strip()
+            ]
+
+        env_protect_builtin = os.getenv("OPENMED_CLINICAL_PROTECT_USE_BUILTIN")
+        if env_protect_builtin is not None:
+            self.clinical_protect_use_builtin = env_protect_builtin.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+
+        env_attention_backend = os.getenv(TORCH_ATTENTION_BACKEND_ENV_VAR)
+        if env_attention_backend is not None:
+            self.torch_attention_backend = env_attention_backend
+
+        env_load_in_4bit = os.getenv("OPENMED_LOAD_IN_4BIT")
+        if env_load_in_4bit is not None:
+            self.load_in_4bit = env_load_in_4bit.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+
+        env_bnb_double_quant = os.getenv("OPENMED_BNB_4BIT_USE_DOUBLE_QUANT")
+        if env_bnb_double_quant is not None:
+            self.bnb_4bit_use_double_quant = env_bnb_double_quant.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+
+        env_indic_matching = os.getenv("OPENMED_TRANSLITERATION_AWARE_NAME_MATCHING")
+        if env_indic_matching is not None:
+            self.transliteration_aware_name_matching = env_flag_enabled(
+                env_indic_matching
+            )
+
+        env_indic_threshold = os.getenv("OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD")
+        if env_indic_threshold is not None:
+            self.indic_name_similarity_threshold = float(env_indic_threshold)
+            if not 0.5 <= self.indic_name_similarity_threshold <= 1.0:
+                raise ValueError(
+                    "OPENMED_INDIC_NAME_SIMILARITY_THRESHOLD must be between "
+                    "0.5 and 1.0"
+                )
+
+        env_offline = os.getenv(OFFLINE_ENV_VAR)
+        if env_offline is not None:
+            self.local_only = self.local_only or env_flag_enabled(env_offline)
+
+        configure_offline_mode(self)
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "OpenMedConfig":
@@ -120,7 +322,28 @@ class OpenMedConfig:
             "timeout",
             "use_medical_tokenizer",
             "medical_tokenizer_exceptions",
+            "chinese_segmentation_backend",
+            "chinese_user_dict_path",
+            "chinese_pkuseg_domain",
+            "clinical_protect_enabled",
+            "clinical_protect_terms",
+            "clinical_protect_use_builtin",
             "backend",
+            "batch_size",
+            "num_workers",
+            "lazy_model_loading",
+            "pii_model",
+            "pii_model_revision",
+            "onnx_variant",
+            "onnx_intra_op_num_threads",
+            "torch_attention_backend",
+            "load_in_4bit",
+            "bnb_4bit_use_double_quant",
+            "local_only",
+            "cjk_width_convention",
+            "chinese_target_script",
+            "transliteration_aware_name_matching",
+            "indic_name_similarity_threshold",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
@@ -131,7 +354,7 @@ class OpenMedConfig:
         """Create config from a named profile.
 
         Args:
-            profile_name: Name of the profile (dev, prod, test, fast, or custom).
+            profile_name: Name of a built-in or custom profile.
             **overrides: Additional config values to override.
 
         Returns:
@@ -174,7 +397,30 @@ class OpenMedConfig:
             "timeout": self.timeout,
             "use_medical_tokenizer": self.use_medical_tokenizer,
             "medical_tokenizer_exceptions": self.medical_tokenizer_exceptions,
+            "chinese_segmentation_backend": self.chinese_segmentation_backend,
+            "chinese_user_dict_path": self.chinese_user_dict_path,
+            "chinese_pkuseg_domain": self.chinese_pkuseg_domain,
+            "clinical_protect_enabled": self.clinical_protect_enabled,
+            "clinical_protect_terms": self.clinical_protect_terms,
+            "clinical_protect_use_builtin": self.clinical_protect_use_builtin,
             "backend": self.backend,
+            "batch_size": self.batch_size,
+            "num_workers": self.num_workers,
+            "lazy_model_loading": self.lazy_model_loading,
+            "pii_model": self.pii_model,
+            "pii_model_revision": self.pii_model_revision,
+            "onnx_variant": self.onnx_variant,
+            "onnx_intra_op_num_threads": self.onnx_intra_op_num_threads,
+            "torch_attention_backend": self.torch_attention_backend,
+            "load_in_4bit": self.load_in_4bit,
+            "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
+            "local_only": self.local_only,
+            "cjk_width_convention": self.cjk_width_convention,
+            "chinese_target_script": self.chinese_target_script,
+            "transliteration_aware_name_matching": (
+                self.transliteration_aware_name_matching
+            ),
+            "indic_name_similarity_threshold": self.indic_name_similarity_threshold,
             "profile": self.profile,
         }
 

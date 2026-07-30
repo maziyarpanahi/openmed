@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Optional
 
 
 def validate_input(

@@ -7,6 +7,12 @@ assignees: ''
 
 ---
 
+> ⚠️ **Security issue? Do not file it here.** A redaction bypass or PHI/PII leak
+> must be reported **privately** via our
+> [security advisory form](https://github.com/maziyarpanahi/openmed/security/advisories/new)
+> — see [SECURITY.md](https://github.com/maziyarpanahi/openmed/blob/master/SECURITY.md).
+> Never paste real patient data into a public issue.
+
 **Describe the bug**
 A clear and concise description of what the bug is.
 

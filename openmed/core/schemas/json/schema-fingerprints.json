@@ -1,6 +1,6 @@
 {
   "action": {
-    "fingerprint": "sha256:c62cc995a07fbe13d199f55dc65009329de389aaf7d49c2478d14b2a9a064a43",
+    "fingerprint": "sha256:77743f37088ea6fbbad3f9ebf8121243a27c4bd7a71507f9208f189715aa7796",
     "properties": [
       "action",
       "metadata",
@@ -43,6 +43,38 @@
     ],
     "schema_version": 1
   },
+  "attestation": {
+    "fingerprint": "sha256:c15d894ac1b2e1096dffd14efbac45912b1d5c498cbdd9ed130681cec00e4689",
+    "properties": [
+      "disclaimer",
+      "execution",
+      "generated_at",
+      "integrity_hash",
+      "jurisdiction",
+      "models",
+      "policy",
+      "profile_id",
+      "repro_hash",
+      "run",
+      "schema_version",
+      "template"
+    ],
+    "required": [
+      "disclaimer",
+      "execution",
+      "generated_at",
+      "integrity_hash",
+      "jurisdiction",
+      "models",
+      "policy",
+      "profile_id",
+      "repro_hash",
+      "run",
+      "schema_version",
+      "template"
+    ],
+    "schema_version": 1
+  },
   "code": {
     "fingerprint": "sha256:ad4e56848f6cbf9cf3d3935af4ab264c318479ad81a16fb5f3de4db6ee1af48f",
     "properties": [
@@ -66,7 +98,7 @@
     "schema_version": 1
   },
   "entity": {
-    "fingerprint": "sha256:95d4b7026fd2dac95cf0a6d279eb31b46e51ee5d8d6edbf5733287313f0e441d",
+    "fingerprint": "sha256:b47ea001d3e341205a30e6c5e8818c9182b78ca27d8083c5048a828b9d8d0581",
     "properties": [
       "canonical_label",
       "entity_type",
@@ -130,7 +162,7 @@
     "schema_version": 1
   },
   "span": {
-    "fingerprint": "sha256:29cb59267e46adfac0f277c94a41586357def44fcccb833d8324a0c5e21acc45",
+    "fingerprint": "sha256:c996e49b36c73a3f694cf307b8447535234331ff34624a1019f4f62ce0b056f2",
     "properties": [
       "action",
       "canonical_label",

@@ -1,27 +1,100 @@
-"""Backend-agnostic decoding utilities (Viterbi, BIOES span construction).
+"""Backend-agnostic decoding utilities.
 
 These utilities are extracted from the MLX privacy-filter pipeline so they
 can be reused by the PyTorch wrapper as well. They depend only on the
-standard library — no torch, no mlx.
+standard library: no torch, no mlx.
 """
 
-from .spans import refine_privacy_filter_span, trim_span_whitespace
+from .graph import (
+    EdgeCardinality,
+    EdgeDecisionTrace,
+    GraphExplainReport,
+    SpanEdge,
+    SpanGraph,
+    SpanGraphConstraints,
+    SpanNode,
+    decode_span_graph,
+    edge_f1,
+)
+from .spans import (
+    CjkOffsetMap,
+    IndicSpanRefinement,
+    TokenClassificationSpan,
+    TokenClassificationStreamEvent,
+    assert_cjk_span_boundaries,
+    coerce_token_classification_spans,
+    is_grapheme_boundary,
+    is_han_dominant,
+    is_indic_text,
+    iter_grapheme_cluster_spans,
+    iter_grapheme_clusters,
+    project_word_spans_to_char_spans,
+    reconcile_stream_spans,
+    refine_indic_name_span,
+    refine_privacy_filter_span,
+    remap_normalized_span,
+    snap_char_span_to_word_boundaries,
+    snap_span_to_grapheme_boundaries,
+    snap_span_to_graphemes,
+    stable_span_id,
+    stable_span_key,
+    trim_span_whitespace,
+)
 from .viterbi import (
     VITERBI_BIAS_KEYS,
+    IncrementalViterbiState,
     TokenLabelInfo,
     build_label_info,
+    labels_to_char_spans,
     labels_to_token_spans,
+    resolve_viterbi_biases,
+    token_spans_to_char_spans,
     viterbi_decode,
+    viterbi_decode_incremental,
     zero_viterbi_biases,
 )
 
 __all__ = [
+    "CjkOffsetMap",
+    "EdgeCardinality",
+    "EdgeDecisionTrace",
+    "GraphExplainReport",
+    "IncrementalViterbiState",
+    "IndicSpanRefinement",
+    "SpanEdge",
+    "SpanGraph",
+    "SpanGraphConstraints",
+    "SpanNode",
+    "TokenClassificationSpan",
+    "TokenClassificationStreamEvent",
     "TokenLabelInfo",
     "VITERBI_BIAS_KEYS",
+    "assert_cjk_span_boundaries",
     "build_label_info",
+    "coerce_token_classification_spans",
+    "decode_span_graph",
+    "edge_f1",
+    "is_han_dominant",
+    "is_grapheme_boundary",
+    "is_indic_text",
+    "iter_grapheme_cluster_spans",
+    "iter_grapheme_clusters",
+    "labels_to_char_spans",
     "labels_to_token_spans",
+    "project_word_spans_to_char_spans",
+    "reconcile_stream_spans",
+    "refine_indic_name_span",
+    "remap_normalized_span",
     "refine_privacy_filter_span",
+    "resolve_viterbi_biases",
+    "snap_char_span_to_word_boundaries",
+    "snap_span_to_grapheme_boundaries",
+    "snap_span_to_graphemes",
+    "stable_span_key",
+    "stable_span_id",
     "trim_span_whitespace",
+    "token_spans_to_char_spans",
     "viterbi_decode",
+    "viterbi_decode_incremental",
     "zero_viterbi_biases",
 ]

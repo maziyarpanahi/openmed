@@ -1,32 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — ローカルファーストの医療 AI" width="400" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed：オンデバイスの臨床 AI · 2,000 以上のモデル" width="400" />
 
-<h3>デバイスから出ない、ローカルファーストの医療 AI</h3>
+<h3>あなたのデータ。あなたのモデル。あなたのハードウェア。</h3>
 
-<p><b>臨床テキストを 1 行のコードで構造化された知見に変換します。</b><br/>
-エンティティ抽出、PII の非識別化、そして完全に自分のハードウェア上で動作する 1,000 以上の専門医療モデル——
-Python のワンライナーから、Apple MLX を活用した iPhone のネイティブ Swift アプリまで。クラウド不要。
-ベンダーロックインなし。患者データがネットワークの外に出ることはありません。</p>
+<p><b>臨床テキストを、構造化され匿名化されたインサイトへ変換します。アップロードは一切ありません。</b><br/>
+OpenMed は生物医学エンティティを抽出し、55+ 種類の PHI を、お客様が管理するハードウェア上で完全に除去するため、データがデバイスから外に出ることはありません。同じ 2,000+ のオープンモデルが、スマートフォンから GPU サーバーまで、完全オフラインで動作します。iOS と iPadOS では OpenMedKit 経由、Android では ONNX 経由、通常の CPU、Apple Silicon、NVIDIA GPU、そしてブラウザに対応します。クラウドなし。ベンダーロックインなし。患者データがネットワークの外に出ることもありません。</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift — OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon — MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
+  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
 </p>
 
 <p>
-  <b>1,000+ モデル</b> &nbsp;·&nbsp; <b>12 言語</b> &nbsp;·&nbsp; <b>247 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ モデル</b> &nbsp;·&nbsp; <b>15 の PII 対応言語</b> &nbsp;·&nbsp; <b>600+ 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -55,7 +53,7 @@ Python のワンライナーから、Apple MLX を活用した iPhone のネイ�
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed が臨床退院サマリーの PII をリアルタイムで非識別化" width="760" />
   <br/>
-  <sub><b>リアルタイムの PII 非識別化</b>——Nemotron Privacy Filter が臨床退院サマリーの氏名・住所・ID・請求データをオンデバイスでマスキングします。<i>（表示されている値はすべて合成データです。）</i></sub>
+  <sub><b>リアルタイムの PII 非識別化</b>：Nemotron Privacy Filter が臨床退院サマリーの氏名・住所・ID・請求データをオンデバイスでマスキングします。<i>（表示されている値はすべて合成データです。）</i></sub>
 </div>
 
 ---
@@ -76,7 +74,7 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-最先端の臨床 NER モデルがローカルで動作——API キー不要、ネットワーク呼び出しなし。
+最先端の臨床 NER モデルがローカルで動作：API キー不要、ネットワーク呼び出しなし。
 
 ---
 
@@ -87,37 +85,37 @@ for entity in result.entities:
 | 自分のデバイス/サーバーで動作          |            ✅            |            ❌             |
 | 患者データがネットワーク外に出る       |      **決して出ない**     |     ベンダーに送信         |
 | コスト                                |  無料・オープンソース     |   呼び出しごとの課金       |
-| 専門医療モデル                        |          1,000+          |          限定的           |
+| 専門医療モデル                        |          2,000+          |          限定的           |
 | 言語                                  |           12+            |          まちまち         |
 | オフライン / 隔離環境 (air-gapped)    |            ✅            |            ❌             |
 | Apple Silicon (MLX) アクセラレーション |            ✅            |          非対応           |
 | ネイティブ iOS / macOS アプリ          |   ✅ OpenMedKit 経由     |            ❌             |
-| ベンダーロックイン                    |    なし — Apache-2.0     |            あり           |
+| ベンダーロックイン                    |    なし：Apache-2.0     |            あり           |
 
-- **専門モデル** — 厳選された 1,000 以上の生物医学・臨床モデル。その多くは商用の専有スタックを上回ります。
-- **HIPAA 対応の非識別化** — 18 項目すべての Safe Harbor 識別子、スマートなエンティティ統合、フォーマットを保持する偽データ置換。
-- **どこでも動作** — CPU、CUDA、Apple Silicon (MLX)、そして OpenMedKit 経由で iOS/macOS アプリにネイティブ対応。
-- **1 行でデプロイ** — Python API、Docker 化された REST サービス、またはバッチパイプライン。
-- **ロックインなし** — Apache-2.0、あなたのインフラ、あなたのデータ。
+- **専門モデル**：厳選された 2,000 以上の生物医学・臨床モデル。その多くは商用の専有スタックを上回ります。
+- **HIPAA 対応の非識別化**：18 項目すべての Safe Harbor 識別子、スマートなエンティティ統合、フォーマットを保持する偽データ置換。
+- **どこでも動作**：CPU、CUDA、Apple Silicon (MLX)、そして OpenMedKit 経由で iOS/macOS アプリにネイティブ対応。
+- **1 行でデプロイ**：Python API、Docker 化された REST サービス、またはバッチパイプライン。
+- **ロックインなし**：Apache-2.0、あなたのインフラ、あなたのデータ。
 
 ---
 
-## オンデバイス、Apple 上で — Swift、MLX、iOS
+## オンデバイス、Apple 上で：Swift、MLX、iOS
 
 OpenMed は、データがすでに存在する場所で動作するよう作られています。Apple ハードウェアでは **MLX** で高速化し、
-**[OpenMedKit](swift/OpenMedKit)** を通じて iPhone・iPad・Mac アプリに直接組み込めます——PII 検出と臨床抽出は
+**[OpenMedKit](swift/OpenMedKit)** を通じて iPhone・iPad・Mac アプリに直接組み込めます。PII 検出と臨床抽出は
 完全にオフラインで、デバイス上で行われます。
 
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
-- **MLX ランタイム** — PII トークン分類、Privacy Filter ファミリー、実験的な GLiNER ファミリーの zero-shot タスクに対応（CoreML フォールバック経路あり）。
-- **1 つのモデル名であらゆるプラットフォーム** — Apple 以外のハードウェアでは、MLX のモデル名は対応する PyTorch チェックポイントに自動的にフォールバックします。
-- **Apple Silicon 上の Python** も対応：`pip install "openmed[mlx]"`。
+- **MLX ランタイム**：PII トークン分類、Privacy Filter ファミリー、実験的な GLiNER ファミリーの zero-shot タスクに対応（CoreML フォールバック経路あり）。
+- **1 つのモデル名であらゆるプラットフォーム**：Apple 以外のハードウェアでは、MLX のモデル名は対応する PyTorch チェックポイントに自動的にフォールバックします。
+- **Apple Silicon 上の Python** も対応：`pip install --upgrade "openmed[mlx]"`。
 
 ガイド：[MLX バックエンド](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML エクスポート](docs/coreml-export.md)
 
@@ -143,13 +141,13 @@ flowchart LR
 
 ```bash
 # Core + Hugging Face runtime (Linux, macOS, Windows; CPU or CUDA)
-pip install "openmed[hf]"
+pip install --upgrade "openmed[hf]"
 
 # Add the REST service
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 
 # Apple Silicon acceleration (MLX)
-pip install "openmed[mlx]"
+pip install --upgrade "openmed[mlx]"
 ```
 
 <table>
@@ -220,7 +218,7 @@ result = analyze_text(
 
 ## モデル
 
-厳選された専門医療 NER モデルのレジストリ——[全カタログ](https://openmed.life/docs/model-registry)を参照してください。
+厳選された専門医療 NER モデルのレジストリ。[全カタログ](https://openmed.life/docs/model-registry)を参照してください。
 
 | モデル | 専門分野 | エンティティ種別 | サイズ |
 |--------|----------|------------------|--------|
@@ -250,17 +248,17 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 ```
 
 - **スマートなエンティティ統合**は `01/15/1970` を分割せずにそのまま保持します。
-- **Faker ベースの難読化**——臨床 ID 用のカスタムプロバイダー（CPF、CNPJ、BSN、NIR、Codice Fiscale、NIE、Aadhaar、Steuer-ID、NPI）を内蔵。
+- **Faker ベースの難読化**：臨床 ID 用のカスタムプロバイダー（CPF、CNPJ、BSN、NIR、Codice Fiscale、NIE、Aadhaar、Steuer-ID、NPI）を内蔵。
 - **HIPAA**：18 項目すべての Safe Harbor 識別子、信頼度しきい値を設定可能。
 
 [完全な PII ノートブック](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [スマート統合](docs/pii-smart-merging.md) · [匿名化](docs/anonymization.md)
 
 <details>
-<summary><b>Privacy Filter ファミリー</b> — OpenAI Privacy Filter アーキテクチャ上の 3 つのモデルファミリー</summary>
+<summary><b>Privacy Filter ファミリー</b>：OpenAI Privacy Filter アーキテクチャ上の 3 つのモデルファミリー</summary>
 
 <br/>
 
-モデルのコードは同一です（局所注意・sink トークン・RoPE+YaRN・tiktoken `o200k_base` トークナイザを備えた gpt-oss 風スパース MoE Transformer）。異なるのは学習データのみです。すべて**同一の** `extract_pii()` / `deidentify()` API を経由します——変更するのは `model_name=` 引数だけです。
+モデルのコードは同一です（局所注意・sink トークン・RoPE+YaRN・tiktoken `o200k_base` トークナイザを備えた gpt-oss 風スパース MoE Transformer）。異なるのは学習データのみです。すべて**同一の** `extract_pii()` / `deidentify()` API を経由します。変更するのは `model_name=` 引数だけです。
 
 | バリアント | PyTorch (CPU + CUDA) | MLX (Apple Silicon) | MLX 8-bit |
 | --- | --- | --- | --- |
@@ -278,7 +276,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-nemotron")    # same code, 
 extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silicon (MLX)
 ```
 
-Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTorch チェックポイントに自動的に置き換えられます（一度だけ警告が表示されます）——モデル名を 1 つ書けば、どこでも動作します。[Privacy Filter アーキテクチャとバックエンドのルーティング](docs/anonymization.md#privacy-filter-family)を参照してください。
+Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTorch チェックポイントに自動的に置き換えられます（一度だけ警告が表示されます）。モデル名を 1 つ書けば、どこでも動作します。[Privacy Filter アーキテクチャとバックエンドのルーティング](docs/anonymization.md#privacy-filter-family)を参照してください。
 
 </details>
 
@@ -286,7 +284,7 @@ Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTo
 
 ## 多言語 PII（12 言語）
 
-`en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化——合計 **247 個の PII チェックポイント**。
+`en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化：合計 **600+ 個の PII チェックポイント**。
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -320,12 +318,12 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 リクエスト検証、共有パイプラインのプリロード、統一されたエラーエンベロープを備えた、Docker フレンドリーな FastAPI サービス。
 
 ```bash
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:local .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:local
 ```
 
 ```bash
@@ -355,7 +353,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 <img src="docs/brand/openmed-mascot-icon.png" alt="OpenMed マスコット" width="104" align="left" />
 
 OpenMed の守護者は、小さな**アヴィセンナ（イブン・スィーナー、Avicenna / Ibn Sina）**に扮したふわふわのペルシャ
-猫です——その『医学典範』（*Canon of Medicine*）は約 600 年にわたり世界の標準的な医学教科書でした。開かれた
+猫です。その『医学典範』（*Canon of Medicine*）は約 600 年にわたり世界の標準的な医学教科書でした。開かれた
 医学知識の書を見守り、配色は**ペルシャ・ターコイズ（fīrūza）**にちなんでいます。あなたの最もプライベートな
 データを守る、ローカルファーストの守護者です。
 
@@ -365,16 +363,16 @@ OpenMed の守護者は、小さな**アヴィセンナ（イブン・スィー�
 
 ## コントリビュート
 
-コントリビューション歓迎——バグ報告、機能リクエスト、PR いずれも歓迎します。
+コントリビューション歓迎：バグ報告、機能リクエスト、PR いずれも歓迎します。
 
 - [Issue を開く](https://github.com/maziyarpanahi/openmed/issues)
-- **翻訳歓迎** — 上部の言語スイッチャーにリンクされた他言語の README の完成にご協力ください。
+- **翻訳歓迎**：上部の言語スイッチャーにリンクされた他言語の README の完成にご協力ください。
 
 ---
 
 ## クレジット
 
-OpenMed は優れたオープンソースの成果の上に成り立っています——特に **OpenAI**（[Privacy Filter](https://huggingface.co/openai/privacy-filter) アーキテクチャ）、**NVIDIA**（[Nemotron PII データセット](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)）、**Hugging Face**（`transformers` とモデルエコシステム）、**Apple**（[MLX](https://github.com/ml-explore/mlx)）、そして **[Faker](https://faker.readthedocs.io/)** のメンテナーに感謝します。
+OpenMed は優れたオープンソースの成果の上に成り立っています。特に **OpenAI**（[Privacy Filter](https://huggingface.co/openai/privacy-filter) アーキテクチャ）、**NVIDIA**（[Nemotron PII データセット](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)）、**Hugging Face**（`transformers` とモデルエコシステム）、**Apple**（[MLX](https://github.com/ml-explore/mlx)）、そして **[Faker](https://faker.readthedocs.io/)** のメンテナーに感謝します。
 
 ## ライセンス
 
