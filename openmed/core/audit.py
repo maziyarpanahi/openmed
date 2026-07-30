@@ -993,6 +993,7 @@ class AuditReport:
     document_length: int
     input_hash: str
     deidentified_text_hash: str
+    grounding: list[dict[str, Any]] = field(default_factory=list)
     repro_hash: str = ""
     signature: AuditSignature | None = None
 
@@ -1002,8 +1003,27 @@ class AuditReport:
             span.context = span._serialized_context(
                 document_length=self.document_length
             )
+        self.grounding = self._normalized_grounding()
         if not self.repro_hash:
             self.repro_hash = self.recompute_repro_hash()
+
+    def _normalized_grounding(self) -> list[dict[str, Any]]:
+        """Return grounding provenance as sanitized, deterministically ordered dicts.
+
+        Grounding provenance records (see
+        :class:`openmed.clinical.grounding.GroundingProvenance`) are fed in as
+        PHI-safe mappings alongside detector provenance -- the no-raw-text
+        guarantee is a property of the record contract itself (it carries only
+        offsets, hashes, and code metadata). They are passed through the standard
+        audit sanitizer and sorted by canonical JSON so two logically identical
+        runs hash identically regardless of the order codes were emitted.
+        """
+        normalized = [
+            _sanitize_audit_value(dict(entry))
+            for entry in self.grounding
+            if isinstance(entry, Mapping)
+        ]
+        return sorted(normalized, key=_canonical_json)
 
     def _validate_structure(self) -> None:
         if type(self.document_length) is not int or self.document_length < 0:
@@ -1068,6 +1088,8 @@ class AuditReport:
             "input_hash": self.input_hash,
             "deidentified_text_hash": self.deidentified_text_hash,
         }
+        if self.grounding:
+            payload["grounding"] = self.grounding
         if include_repro_hash:
             payload["repro_hash"] = self.repro_hash
         if include_signature:
@@ -1165,6 +1187,11 @@ class AuditReport:
             document_length=data.get("document_length", 0),
             input_hash=str(data.get("input_hash", "")),
             deidentified_text_hash=str(data.get("deidentified_text_hash", "")),
+            grounding=[
+                dict(item)
+                for item in data.get("grounding", [])
+                if isinstance(item, Mapping)
+            ],
             repro_hash=str(data.get("repro_hash", "")),
             signature=(
                 AuditSignature.from_dict(signature_data)
