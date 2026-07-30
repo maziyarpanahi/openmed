@@ -46,8 +46,10 @@ _SOURCE_PRIORITY: tuple[FieldSource, ...] = ("entity", "table", "key_value")
 _KEY_VALUE_RE = re.compile(
     r"^[ \t]*(?P<key>[A-Za-z][A-Za-z0-9 /_.-]*?)[ \t]*[:：][ \t]*(?P<value>\S.*?)[ \t]*$"
 )
-_INTEGER_RE = re.compile(r"-?\d+")
-_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+# Match one complete decimal token without accepting a prefix of a malformed
+# decimal such as ``3,5``. Integer slots inspect the same token and reject a
+# fractional value instead of silently truncating it.
+_NUMBER_TOKEN_RE = re.compile(r"(?<![\d.,])[+-]?\d+(?:\.\d+)?(?![\d.,])")
 _TRUE_TOKENS = frozenset({"true", "yes", "y", "positive", "present", "1"})
 _FALSE_TOKENS = frozenset({"false", "no", "n", "negative", "absent", "0"})
 
@@ -355,12 +357,12 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
     if field_type == "string":
         value: Any = raw
     elif field_type == "integer":
-        match = _INTEGER_RE.search(raw)
-        if match is None:
+        match = _NUMBER_TOKEN_RE.search(raw)
+        if match is None or "." in match.group():
             return None, "expected an integer value"
         value = int(match.group())
     elif field_type == "number":
-        match = _NUMBER_RE.search(raw)
+        match = _NUMBER_TOKEN_RE.search(raw)
         if match is None:
             return None, "expected a numeric value"
         value = float(match.group())
