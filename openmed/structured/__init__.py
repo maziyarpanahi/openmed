@@ -38,6 +38,13 @@ from .qi_detect import (
     DiscoveryConfigurationError,
     scan_table,
 )
+from .scan import (
+    ColumnClassification,
+    ColumnRole,
+    RoleOverrideError,
+    TableRoleScan,
+)
+from .scan import scan_table as scan_column_roles
 from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
 
 __all__ = [
@@ -46,6 +53,8 @@ __all__ = [
     "PANEL_ORDER",
     "REQUIRED_DISCHARGE_SLOTS",
     "AnalyteRow",
+    "ColumnClassification",
+    "ColumnRole",
     "DischargeSlotName",
     "DischargeSummary",
     "DischargeSummarySection",
@@ -59,12 +68,15 @@ __all__ = [
     "ROLE_QUASI_ID",
     "ROLE_SAFE",
     "ROLE_SENSITIVE",
+    "RoleOverrideError",
     "SUPPORTED_TABLE_SUFFIXES",
+    "TableRoleScan",
     "TimeSeriesPoint",
     "canonical_analyte",
     "canonical_discharge_slot",
     "parse_lab_report",
     "read_table",
+    "scan_column_roles",
     "scan_table",
     "structure_discharge_summary",
     "structure_flowsheet",
