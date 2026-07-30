@@ -257,3 +257,24 @@ def test_max_rows_bounds_the_profile() -> None:
 def test_empty_source_is_rejected() -> None:
     with pytest.raises(ValueError):
         scan_table([])
+
+
+def test_non_string_headers_do_not_crash() -> None:
+    # Non-string column labels (e.g. integer labels from a headerless load)
+    # must be stringified and classified, never raise.
+    row_scan = scan_table([{0: "Alice Smith", 1: "02139"}])
+    assert row_scan.to_dict() == {"0": "safe", "1": "safe"}
+
+    mapping_scan = scan_table({7: ["02139", "30301"]})
+    assert mapping_scan.to_dict() == {"7": "safe"}
+
+    class _FrameLike:
+        def __init__(self, data: dict[Any, list[Any]]) -> None:
+            self._data = data
+            self.columns = list(data)
+
+        def __getitem__(self, key: Any) -> list[Any]:
+            return self._data[key]
+
+    frame_scan = scan_table(_FrameLike({0: ["02139", "30301"]}))
+    assert frame_scan.to_dict() == {"0": "safe"}
