@@ -106,6 +106,22 @@ def test_coercion_failure_is_reported_and_slot_left_unfilled():
     assert text[issue["start"] : issue["end"]] == "unknown"
 
 
+@pytest.mark.parametrize("raw", ["3.9", "3,5"])
+def test_integer_coercion_rejects_fractional_values_instead_of_truncating(raw):
+    text = f"Stage: {raw}\n"
+    schema = {
+        "required": ["stage"],
+        "properties": {"stage": {"type": "integer"}},
+    }
+
+    result = extract_to_schema(text, schema)
+
+    assert "stage" not in result["data"]
+    assert result["missing_required"] == ["stage"]
+    assert result["errors"][0]["reason"] == "expected an integer value"
+    assert result["errors"][0]["raw"] == raw
+
+
 def test_pattern_violation_is_reported():
     text = "MRN: 12AB\n"
     schema = {"properties": {"mrn": {"type": "string", "pattern": r"\d{6}"}}}
