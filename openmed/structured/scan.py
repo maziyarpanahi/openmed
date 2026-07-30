@@ -455,22 +455,25 @@ def _columnar_view(
         return _pivot_rows(rows, max_rows=max_rows)
 
     # pandas / polars style frames expose ``columns`` and are column-indexable.
+    # Column labels may be non-string (e.g. integer labels from a headerless
+    # load); index with the original label but expose a stringified name.
     if not isinstance(source, (Mapping, Sequence)) and hasattr(source, "columns"):
         names = tuple(str(name) for name in source.columns)
-        columnar = {name: list(source[name]) for name in names}
+        columnar = {str(name): list(source[name]) for name in source.columns}
         return _bound_columns(names, columnar, max_rows=max_rows)
 
     if isinstance(source, Mapping):
-        names = tuple(str(name) for name in source)
+        names_list: list[str] = []
         columnar: dict[str, list[Any]] = {}
-        for name in names:
+        for name in source:
             column = source[name]
             if isinstance(column, (str, bytes)) or not isinstance(column, Sequence):
                 raise ValueError(
                     "Columnar mapping values must be sequences of cell values"
                 )
-            columnar[name] = list(column)
-        return _bound_columns(names, columnar, max_rows=max_rows)
+            columnar[str(name)] = list(column)
+            names_list.append(str(name))
+        return _bound_columns(tuple(names_list), columnar, max_rows=max_rows)
 
     if isinstance(source, Sequence) and not isinstance(source, (str, bytes)):
         rows = list(source)
@@ -492,14 +495,17 @@ def _pivot_rows(
     bounded = rows if max_rows is None else rows[:max_rows]
     names: list[str] = []
     seen: set[str] = set()
+    ordered_keys: list[Any] = []
     for row in bounded:
         for name in row:
-            if name not in seen:
-                seen.add(name)
-                names.append(name)
+            key = str(name)
+            if key not in seen:
+                seen.add(key)
+                names.append(key)
+                ordered_keys.append(name)
     if not names:
         raise ValueError("Table source must include at least one column")
-    columnar = {name: [row.get(name) for row in bounded] for name in names}
+    columnar = {str(name): [row.get(name) for row in bounded] for name in ordered_keys}
     return tuple(names), columnar
 
 
