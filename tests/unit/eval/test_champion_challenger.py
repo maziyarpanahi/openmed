@@ -209,6 +209,16 @@ def test_gate_fix_counts_as_promotion_win() -> None:
     assert "gate.G11" in verdict.wins
 
 
+def test_mismatched_coordinates_are_rejected() -> None:
+    """A champion and challenger from different (family, tier, format) cannot compare."""
+
+    champion = _report(family="clinical", tier="large", fmt="onnx")
+    challenger = _report(family="pii", tier="tiny", fmt="mlx-fp")
+
+    with pytest.raises(ValueError, match="different rollout coordinates"):
+        compare_champion_challenger(champion, challenger)
+
+
 def test_bootstrap_without_champion_promotes_releasable() -> None:
     """With no incumbent, a releasable challenger bootstraps the pointer."""
 

@@ -484,6 +484,18 @@ def compare_champion_challenger(
     champion_report = _gate_report(champion_payload)
     champion_f1 = _aggregate_f1(champion_payload)
 
+    champion_key = baseline_key(
+        champion_report.family,
+        champion_report.tier,
+        champion_report.format,
+    )
+    if champion_key != key:
+        raise ValueError(
+            "champion and challenger describe different rollout coordinates: "
+            f"champion {champion_key!r} vs challenger {key!r}; a promotion "
+            "comparison must stay within one (family, tier, format)"
+        )
+
     ledger = _build_ledger(champion_report, challenger_report)
     verdict_name, reasons = _decide(challenger_report, ledger)
 
