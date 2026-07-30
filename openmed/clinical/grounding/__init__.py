@@ -1,6 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
+from .candidate_generator import SparseCandidateGenerator, generate_candidates
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .registry import (
     InvalidVocabularyLoaderError,
@@ -42,6 +43,7 @@ __all__ = [
     "RESTRICTED_VOCAB_SYSTEMS",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
+    "SparseCandidateGenerator",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
@@ -54,6 +56,7 @@ __all__ = [
     "VocabularyRegistryError",
     "available_linkers",
     "available_loaders",
+    "generate_candidates",
     "get_index",
     "get_linker",
     "get_loader",
