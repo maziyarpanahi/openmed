@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import csv
 import os
+import sys
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
@@ -98,8 +99,10 @@ def stream_deidentify_table(
             identifiers from the release.
         chunk_size: Rows per CSV batch / Parquet row-group batch. Bounds the
             second-pass write buffer.
-        memory_ceiling: Byte ceiling on the first-pass class census. ``None``
-            disables the guard. Raises :class:`MemoryCeilingError` if exceeded.
+        memory_ceiling: Byte ceiling on both the first-pass class census and
+            additional peak process RSS after input initialization. ``None``
+            disables both guards. Raises :class:`MemoryCeilingError` if either
+            bound is exceeded.
         overwrite: Allow replacing an existing ``output_path``.
         deidentifier: Optional de-identification callable (primarily for tests).
             Defaults to :func:`openmed.core.pii.deidentify`.
@@ -125,6 +128,7 @@ def stream_deidentify_table(
 
     columns = _read_columns(resolved_input, input_suffix)
     free_text = _validated_subset(free_text_columns, columns, name="free_text_columns")
+    memory_guard = _ProcessMemoryGuard(memory_ceiling)
     state = StreamingKanonState(
         quasi_identifiers,
         target_k=target_k,
@@ -141,6 +145,7 @@ def stream_deidentify_table(
     for batch in _iter_batches(resolved_input, input_suffix, chunk_size):
         for row in batch:
             state.observe(row)
+        memory_guard.check(stage="first pass")
     decision = state.resolve()
 
     output_columns = [
@@ -159,6 +164,7 @@ def stream_deidentify_table(
                 if not state.is_released(state.class_key(generalized)):
                     continue
                 yield _project_row(generalized, output_columns, free_text, redact)
+            memory_guard.check(stage="second pass")
 
     _write_stream(
         resolved_output,
@@ -167,6 +173,7 @@ def stream_deidentify_table(
         released_rows(),
         chunk_size=chunk_size,
     )
+    memory_guard.check(stage="completion")
 
     return {
         "schema_version": "1.0",
@@ -174,6 +181,10 @@ def stream_deidentify_table(
         "output_format": output_suffix.lstrip("."),
         "chunk_size": chunk_size,
         "memory_ceiling": memory_ceiling,
+        "memory": {
+            "rss_guard_available": memory_guard.available,
+            "peak_rss_delta_bytes": memory_guard.peak_delta_bytes,
+        },
         "quasi_identifiers": list(state.quasi_identifiers),
         "free_text_columns": list(free_text),
         "released_columns": output_columns,
@@ -181,6 +192,83 @@ def stream_deidentify_table(
         "target_k": int(target_k),
         "decision": decision.to_dict(),
     }
+
+
+class _ProcessMemoryGuard:
+    """Enforce an additional-process-RSS ceiling from a stable baseline."""
+
+    def __init__(self, ceiling: int | None) -> None:
+        self._ceiling = ceiling
+        self._baseline = _peak_rss_bytes()
+        self._peak_delta = 0
+
+    @property
+    def available(self) -> bool:
+        """Return whether this platform exposes process peak RSS."""
+
+        return self._baseline is not None
+
+    @property
+    def peak_delta_bytes(self) -> int | None:
+        """Return peak RSS growth since initialization, when measurable."""
+
+        return self._peak_delta if self.available else None
+
+    def check(self, *, stage: str) -> None:
+        """Record current peak growth and fail when it exceeds the ceiling."""
+
+        current = _peak_rss_bytes()
+        if self._baseline is None or current is None:
+            return
+        delta = max(0, current - self._baseline)
+        self._peak_delta = max(self._peak_delta, delta)
+        if self._ceiling is not None and self._peak_delta > self._ceiling:
+            raise MemoryCeilingError(
+                "streaming table de-identification exceeded the "
+                f"{self._ceiling}-byte additional process RSS ceiling during "
+                f"{stage}; observed {self._peak_delta} bytes"
+            )
+
+
+def _peak_rss_bytes() -> int | None:
+    """Return process peak resident memory in bytes when the OS exposes it."""
+
+    if os.name == "nt":  # pragma: no cover - exercised by hosted Windows CI
+        try:
+            import ctypes
+
+            class _ProcessMemoryCounters(ctypes.Structure):
+                _fields_ = [
+                    ("cb", ctypes.c_ulong),
+                    ("PageFaultCount", ctypes.c_ulong),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            counters = _ProcessMemoryCounters()
+            counters.cb = ctypes.sizeof(counters)
+            process = ctypes.windll.kernel32.GetCurrentProcess()
+            if ctypes.windll.psapi.GetProcessMemoryInfo(
+                process, ctypes.byref(counters), counters.cb
+            ):
+                return int(counters.PeakWorkingSetSize)
+        except (AttributeError, OSError):
+            return None
+        return None
+
+    try:
+        import resource
+    except ImportError:  # pragma: no cover - non-POSIX fallback
+        return None
+    peak = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    # Darwin reports bytes; Linux and the BSDs report KiB.
+    return peak if sys.platform == "darwin" else peak * 1024
 
 
 def _project_row(
