@@ -370,6 +370,37 @@
         "title": "ModelUnloadRequest",
         "type": "object"
       },
+      "OmopLoadRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for /omop/load.",
+        "properties": {
+          "records_jsonl": {
+            "title": "Records Jsonl",
+            "type": "string"
+          },
+          "validate_constraints": {
+            "default": false,
+            "title": "Validate Constraints",
+            "type": "boolean"
+          },
+          "vocabulary_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vocabulary Version"
+          }
+        },
+        "required": [
+          "records_jsonl"
+        ],
+        "title": "OmopLoadRequest",
+        "type": "object"
+      },
       "PIIDeidentifyRequest": {
         "additionalProperties": false,
         "description": "Request schema for /pii/deidentify.",
@@ -1497,6 +1528,46 @@
           }
         },
         "summary": "Unload Models"
+      }
+    },
+    "/omop/load": {
+      "post": {
+        "operationId": "omop_load_omop_load_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OmopLoadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Omop Load Omop Load Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Omop Load"
       }
     },
     "/pii/deidentify": {
