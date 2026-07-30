@@ -51,7 +51,22 @@ from .relational import (
     SurrogateManifest,
     deidentify_linked_tables,
 )
+from .scan import (
+    ColumnClassification,
+    ColumnRole,
+    RoleOverrideError,
+    TableRoleScan,
+)
+from .scan import scan_table as scan_column_roles
 from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
+from .tables import (
+    TABLE_ADVISORY,
+    Table,
+    TableCell,
+    TableToken,
+    cell_at,
+    structure_table,
+)
 
 __all__ = [
     "FLOWSHEET_ADVISORY",
@@ -60,7 +75,9 @@ __all__ = [
     "RELATIONAL_ADVISORY",
     "REQUIRED_DISCHARGE_SLOTS",
     "AnalyteRow",
+    "ColumnClassification",
     "ColumnRef",
+    "ColumnRole",
     "DanglingForeignKeyError",
     "DateColumn",
     "DischargeSlotName",
@@ -81,17 +98,26 @@ __all__ = [
     "RelationalDeidentificationResult",
     "RelationalSchema",
     "RelationalSchemaError",
+    "RoleOverrideError",
     "SUPPORTED_TABLE_SUFFIXES",
     "SurrogateManifest",
+    "TABLE_ADVISORY",
+    "Table",
+    "TableCell",
+    "TableToken",
+    "TableRoleScan",
     "TimeSeriesPoint",
     "canonical_analyte",
+    "cell_at",
     "canonical_discharge_slot",
     "deidentify_linked_tables",
     "parse_lab_report",
     "read_table",
+    "scan_column_roles",
     "scan_table",
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
+    "structure_table",
     "write_table",
 ]
