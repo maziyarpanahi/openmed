@@ -167,6 +167,7 @@ def test_linux_rss_reader_uses_current_resident_pages(
     """Linux RSS measurement reads current resident pages from procfs."""
 
     monkeypatch.setattr(streaming.sys, "platform", "linux")
+    monkeypatch.setattr(streaming.os, "name", "posix")
     monkeypatch.setattr(
         streaming.Path,
         "read_text",
