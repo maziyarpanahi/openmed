@@ -131,6 +131,7 @@ def bundle_gate_evidence(
     evidence_root: str | Path | None = None,
     extra_artifacts: Mapping[str, str | Path] | Sequence[Mapping[str, Any]] = (),
     manifest_name: str = MANIFEST_FILENAME,
+    extraction_fairness: Mapping[str, Any] | Any | None = None,
 ) -> EvidenceBundleResult:
     """Collect evidence referenced by *gate_report* into *output_dir*.
 
@@ -150,7 +151,11 @@ def bundle_gate_evidence(
     _add_inferred_required_specs(payload, specs)
 
     artifacts = _materialise_artifacts(specs, destination, root)
-    manifest = _build_manifest(payload, artifacts)
+    manifest = _build_manifest(
+        payload,
+        artifacts,
+        extraction_fairness=_extraction_fairness_section(extraction_fairness),
+    )
     summary = _render_summary(manifest)
 
     manifest_path = destination / manifest_name
@@ -535,9 +540,30 @@ def _copy_artifact(
     return relative
 
 
+def _extraction_fairness_section(
+    extraction_fairness: Mapping[str, Any] | Any | None,
+) -> dict[str, Any] | None:
+    """Return the optional, PHI-free extraction-fairness evidence section."""
+    if extraction_fairness is None:
+        return None
+    source = extraction_fairness
+    if hasattr(source, "model_card_evidence") and callable(source.model_card_evidence):
+        source = source.model_card_evidence()
+    elif hasattr(source, "to_dict") and callable(source.to_dict):
+        source = source.to_dict()
+    if not isinstance(source, Mapping):
+        raise TypeError(
+            "extraction_fairness must be a mapping or expose "
+            "model_card_evidence()/to_dict()"
+        )
+    return json.loads(json.dumps(source, sort_keys=True))
+
+
 def _build_manifest(
     payload: Mapping[str, Any],
     artifacts: Sequence[Mapping[str, Any]],
+    *,
+    extraction_fairness: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     gate_summary = _gate_summary(payload, artifacts)
     stability_summary = _stability_summary(payload)
@@ -552,7 +578,7 @@ def _build_manifest(
     missing_gates = [
         gate for gate, state in gate_summary.items() if state["status"] == "missing"
     ]
-    return {
+    manifest: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "gate_report": {
             "repo_id": payload.get("repo_id"),
@@ -583,6 +609,9 @@ def _build_manifest(
         "gates": gate_summary,
         "artifacts": [dict(entry) for entry in artifacts],
     }
+    if extraction_fairness is not None:
+        manifest["extraction_fairness"] = extraction_fairness
+    return manifest
 
 
 def _gate_summary(
