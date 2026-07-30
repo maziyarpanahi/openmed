@@ -236,11 +236,12 @@ def _process_rss_bytes() -> int | None:
     if os.name == "nt":  # pragma: no cover - exercised by hosted Windows CI
         try:
             import ctypes
+            from ctypes import wintypes
 
             class _ProcessMemoryCounters(ctypes.Structure):
                 _fields_ = [
-                    ("cb", ctypes.c_ulong),
-                    ("PageFaultCount", ctypes.c_ulong),
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
                     ("PeakWorkingSetSize", ctypes.c_size_t),
                     ("WorkingSetSize", ctypes.c_size_t),
                     ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
@@ -253,12 +254,23 @@ def _process_rss_bytes() -> int | None:
 
             counters = _ProcessMemoryCounters()
             counters.cb = ctypes.sizeof(counters)
-            process = ctypes.windll.kernel32.GetCurrentProcess()
-            if ctypes.windll.psapi.GetProcessMemoryInfo(
-                process, ctypes.byref(counters), counters.cb
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            psapi = ctypes.WinDLL("psapi", use_last_error=True)
+            get_current_process = kernel32.GetCurrentProcess
+            get_current_process.argtypes = []
+            get_current_process.restype = wintypes.HANDLE
+            get_process_memory_info = psapi.GetProcessMemoryInfo
+            get_process_memory_info.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(_ProcessMemoryCounters),
+                wintypes.DWORD,
+            ]
+            get_process_memory_info.restype = wintypes.BOOL
+            if get_process_memory_info(
+                get_current_process(), ctypes.byref(counters), counters.cb
             ):
                 return int(counters.WorkingSetSize)
-        except (AttributeError, OSError):
+        except (AttributeError, ctypes.ArgumentError, OSError):
             return None
         return None
 

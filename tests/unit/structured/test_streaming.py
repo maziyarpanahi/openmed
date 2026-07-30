@@ -172,7 +172,12 @@ def test_linux_rss_reader_uses_current_resident_pages(
         "read_text",
         lambda _path, **_kwargs: "100 7 0 0 0 0 0\n",
     )
-    monkeypatch.setattr(streaming.os, "sysconf", lambda _name: 4_096)
+    monkeypatch.setattr(
+        streaming.os,
+        "sysconf",
+        lambda _name: 4_096,
+        raising=False,
+    )
 
     assert streaming._process_rss_bytes() == 7 * 4_096
 
