@@ -4,6 +4,19 @@ Intended contents include harness.py, metrics.py, suites/, golden/, report.py,
 calibrate.py, and release_gates.py.
 """
 
+from openmed.eval.adversarial_perturbations import (
+    DEFAULT_ADVERSARIAL_PERTURBATION_PROBABILITY,
+    DEFAULT_ADVERSARIAL_PERTURBATIONS,
+    DEFAULT_LEAKAGE_DELTA_BUDGET,
+    AdversarialPerturbationGateError,
+    AdversarialPerturbationReport,
+    AdversarialPerturbationVariant,
+    adversarial_perturbation_report,
+    bidi_control_wrapping_perturbation,
+    combining_mark_injection_perturbation,
+    homoglyph_substitution_perturbation,
+    zero_width_injection_perturbation,
+)
 from openmed.eval.attacks.linkage import (
     LinkageAttackResult,
     LongitudinalLinkageAttackResult,
@@ -527,6 +540,17 @@ from openmed.eval.utility import (
 )
 
 __all__ = [
+    "DEFAULT_ADVERSARIAL_PERTURBATIONS",
+    "DEFAULT_ADVERSARIAL_PERTURBATION_PROBABILITY",
+    "DEFAULT_LEAKAGE_DELTA_BUDGET",
+    "AdversarialPerturbationGateError",
+    "AdversarialPerturbationReport",
+    "AdversarialPerturbationVariant",
+    "adversarial_perturbation_report",
+    "bidi_control_wrapping_perturbation",
+    "combining_mark_injection_perturbation",
+    "homoglyph_substitution_perturbation",
+    "zero_width_injection_perturbation",
     "DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
     "ABSTENTION_ROUTE_ACCEPT",
