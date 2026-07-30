@@ -1,38 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed · डिवाइस पर क्लिनिकल AI · 2,000+ मॉडल" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="बिल्ली शुभंकर, छोटे अक्षरों वाले वर्डमार्क, Open Cross और ओपन-सोर्स हेल्थकेयर AI, 340M+ डाउनलोड और 10M+ इंस्टॉल टेक्स्ट वाला OpenMed README बैनर" width="1280" />
 
 <h2>आपका डेटा। आपका मॉडल। आपका हार्डवेयर।</h2>
 
-<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
-
-<p><b>कुछ भी अपलोड किए बिना क्लिनिकल टेक्स्ट को संरचित, डी-आइडेंटिफाइड जानकारी में बदलें।</b><br/>
-OpenMed आपके नियंत्रण वाले हार्डवेयर पर ही बायोमेडिकल एंटिटी निकालता है और 55+ PHI प्रकार हटाता है,
-इसलिए आपका डेटा कभी डिवाइस से बाहर नहीं जाता। वही 2,000+ ओपन मॉडल फ़ोन से GPU सर्वर तक पूरी तरह
-ऑफ़लाइन चलते हैं: OpenMedKit के माध्यम से iOS, iPadOS और Android, साथ ही React Native, सामान्य CPU,
-Apple Silicon, NVIDIA GPU, ब्राउज़र और REST/gRPC सेवाएँ। कोई क्लाउड नहीं। कोई वेंडर लॉक-इन नहीं।
-रोगी डेटा आपके नेटवर्क से बाहर नहीं जाता।</p>
+<p><b>अपने नियंत्रण वाले हार्डवेयर पर क्लिनिकल टेक्स्ट को संरचित, डी-आइडेंटिफ़ाइड जानकारी में बदलें।</b><br/>
+आवश्यक मॉडल आर्टिफ़ैक्ट उपलब्ध होने के बाद OpenMed का मुख्य स्थानीय रनटाइम निष्कर्षण और डी-आइडेंटिफ़िकेशन करता है। मॉडल डाउनलोड, रिमोट प्रोवाइडर अडैप्टर, टेलीमेट्री-सक्षम पथ और उपयोगकर्ता द्वारा कॉन्फ़िगर किए गए एकीकरण नेटवर्क का उपयोग कर सकते हैं; हर मॉडल और डेटासेट की शर्तें जाँचें।</p>
 
 <p>
-  <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
-  <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
-  <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
-  <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
+  <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
+  <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
+  <a href="LICENSE">Apache-2.0 SDK source</a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/export-onnx-android.md"><img alt="Android: ONNX Runtime Mobile" src="https://img.shields.io/badge/Android-ONNX_Runtime_Mobile-128787?style=for-the-badge&logo=android&logoColor=white"></a>
-  <a href="docs/export-transformersjs.md"><img alt="ब्राउज़र: Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
-  <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
+  <a href="swift/OpenMedKit">OpenMedKit</a> ·
+  <a href="docs/mlx-backend.md">Apple Silicon / MLX</a> ·
+  <a href="docs/export-onnx-android.md">Android / ONNX Runtime Mobile</a> ·
+  <a href="docs/export-transformersjs.md">Browser / Transformers.js</a> ·
+  <a href="https://openmed.life/docs">Documentation</a>
 </p>
 
 <p>
-  <b>2,000+ मॉडल</b> &nbsp;·&nbsp; <b>32 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>600+ PII चेकपॉइंट</b> &nbsp;·&nbsp; <b>100% डिवाइस पर</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>33 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -59,12 +51,12 @@ Apple Silicon, NVIDIA GPU, ब्राउज़र और REST/gRPC सेव�
 
 ## इसे काम करते देखें
 
-OpenMed **पूरी तरह डिवाइस पर चलता है**; क्लिनिकल टेक्स्ट कभी उससे बाहर नहीं जाता। यहाँ यह iPhone पर पूरी तरह ऑफ़लाइन चल रहा है:
+यह iPhone उदाहरण आवश्यक मॉडल आर्टिफ़ैक्ट उपलब्ध होने के बाद OpenMed के स्थानीय रनटाइम का उपयोग करता है:
 
 <div align="center">
   <img src="docs/brand/openmed-ios-scan.png" alt="iPhone पर OpenMed Scan · OpenMedKit के माध्यम से डिवाइस पर PII डी-आइडेंटिफिकेशन और क्लिनिकल निष्कर्षण" width="840" />
   <br/>
-  <sub><b><a href="swift/OpenMedKit">OpenMedKit</a> के माध्यम से iPhone पर</b>: क्लिनिकल नोट स्कैन करें, उसे डी-आइडेंटिफाई करें और क्लिनिकल संकेत निकालें—Apple MLX के साथ पूरी तरह स्थानीय रूप से। कुछ भी अपलोड नहीं होता।</sub>
+  <sub><b><a href="swift/OpenMedKit">OpenMedKit</a> के माध्यम से iPhone पर</b>: इस कॉन्फ़िगरेशन में Apple MLX स्थानीय रूप से क्लिनिकल नोट को स्कैन, डी-आइडेंटिफ़ाई और संकेतों को निकालता है।</sub>
 </div>
 
 <br/>
@@ -72,7 +64,7 @@ OpenMed **पूरी तरह डिवाइस पर चलता है**
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed क्लिनिकल डिस्चार्ज दस्तावेज़ से PII को रीयल-टाइम में छिपा रहा है" width="760" />
   <br/>
-  <sub><b>रीयल-टाइम PII डी-आइडेंटिफिकेशन</b>: Nemotron Privacy Filter नाम, पते, ID और बिलिंग डेटा को क्लिनिकल डिस्चार्ज पैकेट से पूरी तरह डिवाइस पर छिपाता है। <i>(दिखाए गए सभी मान सिंथेटिक हैं।)</i></sub>
+  <sub><b>रीयल-टाइम PII डी-आइडेंटिफिकेशन</b>: इस कॉन्फ़िगर किए गए स्थानीय वर्कफ़्लो में Nemotron Privacy Filter सिंथेटिक क्लिनिकल डिस्चार्ज पैकेट से नाम, पते, ID और बिलिंग डेटा छिपाता है। <i>(दिखाए गए सभी मान सिंथेटिक हैं।)</i></sub>
 </div>
 
 ---
@@ -93,7 +85,7 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-एक अत्याधुनिक क्लिनिकल NER मॉडल स्थानीय रूप से चलता है: कोई API कुंजी नहीं, कोई नेटवर्क कॉल नहीं।
+आवश्यक आर्टिफ़ैक्ट उपलब्ध होने के बाद एक क्लिनिकल NER मॉडल स्थानीय रनटाइम का उपयोग करता है।
 
 ---
 
@@ -110,32 +102,24 @@ for entity in result.entities:
 
 ## OpenMed क्यों?
 
-|                                       |       **OpenMed**        |     क्लाउड चिकित्सा API     |
-| ------------------------------------- | :----------------------: | :-------------------------: |
-| आपके डिवाइस / सर्वर पर चलता है        |            ✅            |             ❌              |
-| रोगी डेटा आपके नेटवर्क से बाहर जाता है |       **कभी नहीं**       |       वेंडर को भेजा जाता है  |
-| लागत                                  |     मुफ़्त और ओपन-सोर्स   |        प्रति-कॉल शुल्क       |
-| विशेष चिकित्सा मॉडल                    |          2,000+          |            सीमित            |
-| मॉडल-समर्थित PII भाषाएँ               |            29            |            भिन्न            |
-| ऑफ़लाइन / एयर-गैप्ड                   |            ✅            |             ❌              |
-| Apple Silicon (MLX) त्वरण             |            ✅            |          लागू नहीं          |
-| नेटिव iOS / macOS ऐप्स                | ✅ OpenMedKit के माध्यम से |             ❌              |
-| ब्राउज़र/WebGPU टोकन वर्गीकरण          | ✅ Transformers.js के माध्यम से |        भिन्न            |
-| वेंडर लॉक-इन                          |    कोई नहीं (Apache-2.0) |             हाँ             |
+| परिनियोजन विचार | OpenMed SDK की सीमा |
+| --- | --- |
+| मुख्य रनटाइम | आवश्यक आर्टिफ़ैक्ट उपलब्ध होने के बाद स्थानीय रूप से प्रोसेस करता है |
+| वैकल्पिक नेटवर्क पथ | डाउनलोड, रिमोट अडैप्टर, टेलीमेट्री पथ और एकीकरण नेटवर्क उपयोग कर सकते हैं |
+| सत्यापन | परिनियोजन स्वामी मॉडल व डेटा शर्तें, गोपनीयता व्यवहार और क्लिनिकल उपयुक्तता जाँचता है |
+| इंटरफ़ेस | जहाँ समर्थित हों वहाँ Python, Swift, Android, ब्राउज़र और सेवाएँ |
 
-- **विशेष मॉडल**: 2,000+ सावधानी से चुने गए बायोमेडिकल और क्लिनिकल मॉडल, जिनमें से कई प्रोप्राइटरी समाधानों से बेहतर प्रदर्शन करते हैं।
-- **HIPAA-सचेत डी-आइडेंटिफिकेशन**: सभी 18 Safe Harbor पहचानकर्ता, स्मार्ट एंटिटी मर्जिंग और फ़ॉर्मेट-संरक्षित सिंथेटिक मान।
-- **हर जगह चलता है**: CPU, CUDA, Apple Silicon (MLX), OpenMedKit के माध्यम से iOS/macOS, Android/Kotlin, React Native, REST/gRPC सेवाएँ और Transformers.js के माध्यम से ब्राउज़र/WebGPU बंडल।
-- **एक पंक्ति में परिनियोजन**: Python API, Docker-आधारित REST सेवा या बैच पाइपलाइन।
-- **शून्य लॉक-इन**: Apache-2.0, आपका इंफ्रास्ट्रक्चर, आपका डेटा।
+- **चयनित मॉडल कैटलॉग**: अपने उपयोग के लिए हर मॉडल, लाइसेंस और डेटासेट को सत्यापित करें।
+- **Safe Harbor-संरेखित कॉन्फ़िगरेशन**: 18 पहचानकर्ता श्रेणियों को लक्षित कर सकता है; विशेषज्ञ परिनियोजन समीक्षा आवश्यक रहती है और केवल SDK का उपयोग HIPAA अनुपालन सिद्ध नहीं करता।
+- **समर्थित निष्पादन पथ**: CPU, CUDA, MLX, मोबाइल, सेवा और ब्राउज़र अडैप्टर वातावरण व आर्टिफ़ैक्ट के अनुसार बदलते हैं।
+- **परिनियोजन इंटरफ़ेस**: Python, कंटेनर, सेवाएँ और बैच वर्कफ़्लो कॉन्फ़िगरेशन व सत्यापन माँगते हैं।
+- **SDK स्रोत**: Apache-2.0 License के अंतर्गत जारी; मॉडल और डेटासेट की शर्तें अलग-अलग होती हैं।
 
 ---
 
 ## Apple डिवाइस पर: Swift, MLX और iOS
 
-OpenMed को वहीं चलाने के लिए बनाया गया है जहाँ आपका डेटा पहले से मौजूद है। Apple हार्डवेयर पर यह **MLX** से
-तेज़ होता है और **[OpenMedKit](swift/OpenMedKit)** के माध्यम से सीधे iPhone, iPad और Mac ऐप में पहुँचता है,
-ताकि PII पहचान और क्लिनिकल निष्कर्षण पूरी तरह ऑफ़लाइन, डिवाइस पर हों।
+समर्थित Apple हार्डवेयर पर, आवश्यक आर्टिफ़ैक्ट उपलब्ध होने के बाद OpenMed स्थानीय प्रोसेसिंग के लिए **MLX** और **[OpenMedKit](swift/OpenMedKit)** का उपयोग कर सकता है। मॉडल प्राप्ति और उपयोगकर्ता द्वारा कॉन्फ़िगर किए गए रिमोट एकीकरण अलग नेटवर्क सीमाएँ हैं।
 
 ```swift
 // Add OpenMedKit to your app
@@ -238,7 +222,7 @@ const entities = await model("Patient Alice Nguyen was seen in cardiology.");
 
 ```mermaid
 flowchart LR
-    A["Clinical text"] --> B["OpenMed<br/>(100% on-device)"]
+    A["Clinical text"] --> B["OpenMed<br/>(local-first)"]
     B --> C["Medical entities"]
     B --> D["PII detected"]
     B --> E["De-identified text"]
@@ -494,7 +478,7 @@ print(result.deidentified_text)
 - **स्मार्ट एंटिटी मर्जिंग** `01/15/1970` को खंडित करने के बजाय पूरा रखती है।
 - **नीति-सचेत पाइपलाइन** HIPAA/GDPR/research profiles, calibrated thresholds, signed audit reports, redaction previews और minimum-necessary action selection जोड़ती हैं।
 - **Faker-आधारित obfuscation** में clinical-ID के custom providers शामिल हैं (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI)।
-- **HIPAA**: सभी 18 Safe Harbor पहचानकर्ता, configurable confidence thresholds के साथ।
+- **HIPAA सीमा**: Safe Harbor-संरेखित श्रेणियाँ और कॉन्फ़िगर करने योग्य सीमाएँ कार्यान्वयन सहायक हैं; विशेषज्ञ परिनियोजन समीक्षा आवश्यक रहती है और केवल SDK उपयोग अनुपालन सिद्ध नहीं करता।
 - **बैच और streaming PII**: `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)` या incremental streaming helpers से अनेक दस्तावेज़ों में PII निकालें या डी-आइडेंटिफाई करें।
 
 <div align="center">
@@ -545,10 +529,10 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (34 समर्थित भाषाएँ)
+## बहुभाषी PII (34 समर्थित रूट; 33 मॉडल-समर्थित)
 
 निष्कर्षण और डी-आइडेंटिफिकेशन **34 समर्थित PII भाषा codes** में उपलब्ध हैं:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **600+ PII checkpoints** के साथ।
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
 Russian routing अभी दस्तावेज़ित multilingual default-model placeholder का उपयोग
 करती है। Bengali, Chinese और Tamil के dedicated registry entries हैं।
 एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family चार अतिरिक्त routes
@@ -723,7 +707,7 @@ OpenMed उत्कृष्ट ओपन-सोर्स कार्य प�
 
 ## लाइसेंस
 
-[Apache-2.0 License](LICENSE) के अंतर्गत जारी। Third-party asset notices [NOTICE](NOTICE) में दर्ज हैं।
+OpenMed SDK का स्रोत [Apache-2.0 License](LICENSE) के अंतर्गत जारी किया गया है। Third-party asset notices [NOTICE](NOTICE) में दर्ज हैं।
 
 ## उद्धरण
 
@@ -747,7 +731,7 @@ OpenMed उत्कृष्ट ओपन-सोर्स कार्य प�
 
 यदि OpenMed आपके लिए उपयोगी है, तो एक star दूसरों को इसे खोजने में मदद करता है।
 
-[![स्टार इतिहास चार्ट](https://api.star-history.com/chart?repos=maziyarpanahi/openmed&type=date&legend=top-left&sealed_token=_HghchEkPCrucwFdVMULC2ufUwKUsFcTwheGjTM2VUvsTVevJ8xvrV-b5WyNkXCLDaOMTzk3vvsnzTR1rtTL7oxu90MGSTw8Eljuy0wrwEk_qEa1s83OV3hyz0-1mckZLCffMDc5Pot9Yx_MiZaQjsz4NxNnV7Pb_k-1KBWkf6gM9C9AZl3sgqRC-y2w)](https://www.star-history.com/?repos=maziyarpanahi%2Fopenmed&type=date&legend=top-left)
+[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
