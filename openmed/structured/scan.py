@@ -96,6 +96,15 @@ _FREE_TEXT_UNIQUENESS = 0.8
 _DATE_PATTERN = re.compile(
     r"^\s*(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\s*$"
 )
+_COLUMN_OWNER_AFFIXES = (
+    "patient",
+    "person",
+    "subject",
+    "member",
+    "provider",
+    "clinician",
+    "doctor",
+)
 
 
 @dataclass(frozen=True)
@@ -286,7 +295,7 @@ def _classify_column(
     *,
     override: ColumnRole | None,
 ) -> ColumnClassification:
-    label = normalize_label(column)
+    label = _normalize_column_label(column)
     canonical_label = None if label == OTHER else label
     stats = _column_stats(values)
 
@@ -312,6 +321,34 @@ def _classify_column(
         overridden=False,
         signals=signals,
     )
+
+
+def _normalize_column_label(column: str) -> str:
+    """Resolve a column name through the taxonomy and common owner affixes.
+
+    Clinical schemas frequently qualify otherwise canonical identifier headers
+    with an entity owner (for example ``patient_name`` or ``subject_id``).
+    The core taxonomy intentionally normalizes entity labels rather than schema
+    phrases, so this detector retries the canonical portion after removing one
+    recognized owner affix. Unknown phrases such as ``patient_status`` still
+    remain unknown and follow the documented safe-default path.
+    """
+
+    label = normalize_label(column)
+    if label != OTHER:
+        return label
+    compact = re.sub(r"[^a-z0-9]", "", column.casefold())
+    for affix in _COLUMN_OWNER_AFFIXES:
+        candidates: list[str] = []
+        if compact.startswith(affix):
+            candidates.append(compact[len(affix) :])
+        if compact.endswith(affix):
+            candidates.append(compact[: -len(affix)])
+        for candidate in candidates:
+            resolved = normalize_label(candidate)
+            if resolved != OTHER:
+                return resolved
+    return OTHER
 
 
 def _role_from_label_and_shape(

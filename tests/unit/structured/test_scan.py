@@ -116,6 +116,25 @@ def test_unknown_column_defaults_to_safe_with_low_confidence() -> None:
     assert scan.confidence["widget_serial_token"] < 0.5
 
 
+def test_owner_qualified_identifier_headers_are_not_treated_as_safe() -> None:
+    rows = [
+        {
+            "patient_name": f"Synthetic Patient {index}",
+            "subject_id": f"SYN-{index:04d}",
+            "provider_email": f"provider{index}@example.invalid",
+            "patient_status": "active",
+        }
+        for index in range(4)
+    ]
+
+    scan = scan_table(rows)
+
+    assert scan["patient_name"] is ColumnRole.DIRECT_ID
+    assert scan["subject_id"] is ColumnRole.DIRECT_ID
+    assert scan["provider_email"] is ColumnRole.DIRECT_ID
+    assert scan["patient_status"] is ColumnRole.SAFE
+
+
 def test_date_likeness_promotes_unlabeled_column() -> None:
     rows = [{"seen_on": f"2024-0{month}-15"} for month in range(1, 8)]
 
