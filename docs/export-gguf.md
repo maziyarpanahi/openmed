@@ -3,7 +3,9 @@
 OpenMed exports local encoder backbones to GGUF for embedding inference in
 llama.cpp-compatible runtimes. The export is intended for dense grounding and
 retrieval models such as SapBERT. It produces both an F16 artifact and a Q8_0
-artifact from the same local checkpoint.
+artifact from the same local checkpoint. For the cross-backend view of which
+architectures reach GGUF versus the token-classification export paths, see the
+[Export Format Support Matrix](export-matrix.md).
 
 Token-classification checkpoints are intentionally rejected. llama.cpp supports
 the BERT-family encoder embedding path, but it does not expose the classifier
