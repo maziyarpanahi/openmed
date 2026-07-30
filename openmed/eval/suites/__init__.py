@@ -62,6 +62,13 @@ from openmed.eval.datasets.naamapadam import (
 from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.suites.candidate_ranking import (
+    CANDIDATE_RANKING,
+    build_candidate_ranking_gold,
+    candidate_ranking_metadata,
+    evaluate_candidate_ranking,
+    run_candidate_ranking,
+)
 from openmed.eval.suites.chinese_clinical_ner import (
     CHINESE_CLINICAL_NER,
     ChineseClinicalNerLeakageError,
@@ -433,6 +440,11 @@ __all__ = [
     "grounding_index_recall_metadata",
     "load_grounding_index_fixtures",
     "run_grounding_index_recall",
+    "CANDIDATE_RANKING",
+    "build_candidate_ranking_gold",
+    "candidate_ranking_metadata",
+    "evaluate_candidate_ranking",
+    "run_candidate_ranking",
     "assert_india_health_id_leakage_gate",
     "india_health_id_metadata",
     "load_india_health_id_fixtures",

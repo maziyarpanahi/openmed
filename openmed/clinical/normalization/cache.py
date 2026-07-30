@@ -15,8 +15,10 @@ from .backend import BackendIdentity, TerminologyBackend, normalize_surface
 __all__ = [
     "ConceptNormalizationCache",
     "NormalizationCacheStats",
+    "RankedCandidateCache",
     "make_index_cache_key",
     "make_normalization_cache_key",
+    "make_rerank_cache_key",
 ]
 
 
@@ -93,6 +95,93 @@ class ConceptNormalizationCache:
             writes=self._writes,
             size=len(self._store),
         )
+
+
+class RankedCandidateCache:
+    """Bounded in-memory cache of reranked candidate lists.
+
+    Keyed by the normalized mention text, the vocabulary version, and a
+    ``fingerprint`` of the context (section / assertion / preferred concepts)
+    and fusion parameters, so a document reranks each distinct configuration
+    once and reuses the result for repeated occurrences — while the same surface
+    under a different section or parameter set gets its own entry rather than a
+    stale one. Raw mention text is never embedded in the key.
+    """
+
+    def __init__(self, max_entries: int = 1024) -> None:
+        self._store = ResultCache(max_entries=max_entries)
+        self._hits = 0
+        self._misses = 0
+        self._writes = 0
+
+    def get(
+        self, mention: str, vocab_version: str, fingerprint: Any = None
+    ) -> Any | None:
+        """Return a cached ranking for ``(mention, vocab_version, fingerprint)``."""
+
+        value = self._store.get(self.key_for(mention, vocab_version, fingerprint))
+        if value is None:
+            self._misses += 1
+            return None
+        self._hits += 1
+        return value
+
+    def set(
+        self, mention: str, vocab_version: str, value: Any, fingerprint: Any = None
+    ) -> None:
+        """Store ``value`` for ``(mention, vocab_version, fingerprint)``."""
+
+        self._store.set(self.key_for(mention, vocab_version, fingerprint), value)
+        self._writes += 1
+
+    def key_for(self, mention: str, vocab_version: str, fingerprint: Any = None) -> str:
+        """Return the content-addressed cache key for a rerank result."""
+
+        return make_rerank_cache_key(mention, vocab_version, fingerprint)
+
+    def clear(self) -> None:
+        """Drop cached rankings and reset counters."""
+
+        self._store.clear()
+        self._hits = 0
+        self._misses = 0
+        self._writes = 0
+
+    def stats(self) -> NormalizationCacheStats:
+        """Return current cache counters."""
+
+        return NormalizationCacheStats(
+            hits=self._hits,
+            misses=self._misses,
+            writes=self._writes,
+            size=len(self._store),
+        )
+
+
+def make_rerank_cache_key(
+    mention: str, vocab_version: str, fingerprint: Any = None
+) -> str:
+    """Return a hashed rerank cache key.
+
+    The key covers the normalized mention, the vocabulary version, and a
+    ``fingerprint`` of everything else that determines the ranking (the section
+    / assertion / preferred-concept context and the fusion parameters), so a
+    shared cache never serves a ranking computed under a different section or
+    parameter set for the same surface.
+    """
+
+    payload = {
+        "normalized_mention": normalize_surface(mention),
+        "vocab_version": str(vocab_version),
+        "fingerprint": fingerprint,
+    }
+    serialized = json.dumps(
+        freeze_value(payload),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return f"grounding-rerank:{digest}"
 
 
 def make_normalization_cache_key(
