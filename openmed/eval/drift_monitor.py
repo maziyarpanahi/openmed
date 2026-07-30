@@ -125,9 +125,10 @@ class DriftInputError(ValueError):
 def assert_no_raw_text(payload: Any, *, where: str = "drift record") -> None:
     """Assert a payload carries only aggregates/hashes/offsets, never raw text.
 
-    Structurally rejects forbidden text-bearing keys and any string value that
-    is not a short single token (label/script/bucket name, hash, timestamp, or
-    schema version). Numbers, booleans, and null are always allowed.
+    Structurally rejects forbidden text-bearing keys, any mapping key that is
+    not a short single token, and any string value that is not a short single
+    token (label/script/bucket name, hash, timestamp, or schema version).
+    Numbers, booleans, and null are always allowed.
     """
 
     _walk_no_raw_text(payload, where=where, path="")
@@ -141,6 +142,12 @@ def _walk_no_raw_text(value: Any, *, where: str, path: str) -> None:
                 raise DriftPrivacyError(
                     f"{where} contains a forbidden raw-text field "
                     f"{_join_path(path, key_text)!r}"
+                )
+            if not _SAFE_TOKEN.fullmatch(key_text):
+                raise DriftPrivacyError(
+                    f"{where} field {_join_path(path, key_text)!r} uses a "
+                    "non-aggregate mapping key; only counts, hashes, and safe "
+                    "identifiers are permitted as keys"
                 )
             _walk_no_raw_text(child, where=where, path=_join_path(path, key_text))
         return
