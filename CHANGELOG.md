@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a license-quarantined MedCAT/CogStack subprocess bridge
+  (`openmed/interop/bridges/medcat.py`) that shells out to a user-provided
+  MedCAT process and maps its `{cui, name, score}` concept output onto
+  OpenMed span-code fields (`{system, code, score}`). MedCAT is Elastic
+  License 2.0 and is never imported in-process or bundled; invocation is
+  blocked until the caller acknowledges the license via
+  `OPENMED_ACCEPT_MEDCAT_LICENSE` or an interactive prompt. Added an empty
+  `interop-gpl` extra documenting that it installs nothing (#1789).
 - Added `openmed redact-files` for local-only text and line-delimited file
   redaction with atomic output, PHI-free JSON summaries, consistent surrogate
   replacement, and no source overwrite (#2278).
