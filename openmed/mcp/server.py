@@ -433,12 +433,12 @@ def openmed_list_models(
         }
 
     if pii_language:
-        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
-        if pii_language not in accepted_languages:
-            raise ValueError(
-                f"Unsupported language '{pii_language}'. "
-                f"Supported: {sorted(accepted_languages)}"
-            )
+        from openmed.utils.validation import validate_language
+
+        validate_language(
+            pii_language,
+            accepted=SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES,
+        )
         allowed = openmed.get_pii_models_by_language(pii_language)
         models = {key: model for key, model in models.items() if key in allowed}
 

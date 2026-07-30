@@ -593,6 +593,8 @@ def _strip_accents(text: str) -> str:
 
 def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     """Validate language and resolve language-specific default PII model."""
+    from openmed.utils.validation import validate_language
+
     from .model_registry import get_default_pii_model
     from .pii_i18n import (
         INDIC_NER_LANGUAGES,
@@ -604,10 +606,7 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     accepted_languages = (
         SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
     )
-    if lang not in accepted_languages:
-        raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(accepted_languages)}"
-        )
+    validate_language(lang, accepted=accepted_languages)
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)

@@ -589,7 +589,7 @@ Validation example:
     "details": [
       {
         "field": "body.text",
-        "message": "Text must not be blank",
+        "message": "Input text cannot be empty",
         "type": "value_error"
       }
     ]

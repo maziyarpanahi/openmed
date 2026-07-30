@@ -9,6 +9,7 @@ from openmed.core.policy import canonical_policy_name
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
+    validate_text_input,
 )
 
 from .keep_alive import parse_keep_alive
@@ -82,20 +83,10 @@ PIILanguage = Literal[
 
 
 def _normalize_text(value: Any) -> str:
-    if value is None:
-        raise ValueError("Text is required")
-    if not isinstance(value, str):
-        value = str(value)
-
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError("Text must not be blank")
-    max_text_length = get_max_text_length()
-    if len(normalized) > max_text_length:
-        raise ValueError(
-            f"Text exceeds the maximum length of {max_text_length} characters"
-        )
-    return normalized
+    # Route REST (and, transitively, the MCP tool handlers that build these
+    # schemas) through the shared input gateway so length, byte-size, and
+    # encoding guardrails match the library exactly.
+    return validate_text_input(value, max_length=get_max_text_length())
 
 
 def _normalize_model_name(value: str) -> str:

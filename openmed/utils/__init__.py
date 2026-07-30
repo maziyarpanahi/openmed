@@ -19,14 +19,23 @@ from .profiling import (
     profile,
     timed,
 )
-from .validation import validate_input, validate_model_name
+from .validation import (
+    InputValidationError,
+    validate_input,
+    validate_language,
+    validate_model_name,
+    validate_text_input,
+)
 
 __all__ = [
     "deprecated",
     "setup_logging",
     "get_logger",
+    "InputValidationError",
     "validate_input",
+    "validate_language",
     "validate_model_name",
+    "validate_text_input",
     # Profiling utilities
     "Profiler",
     "ProfileReport",

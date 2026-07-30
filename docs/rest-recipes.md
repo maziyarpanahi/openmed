@@ -480,7 +480,7 @@ bad-request, timeout, and internal errors:
     "details": [
       {
         "field": "body.text",
-        "message": "Value error, Text must not be blank",
+        "message": "Value error, Input text cannot be empty",
         "type": "value_error"
       }
     ],
