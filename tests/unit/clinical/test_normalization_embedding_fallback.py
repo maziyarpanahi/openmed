@@ -177,3 +177,85 @@ def test_ragged_embedder_output_degrades_to_lexical_without_dropping():
 
     assert result.used_embedding is False
     assert result.concepts == _concepts()  # no drops, lexical order preserved
+
+
+def test_source_language_defaults_to_english_when_not_threaded():
+    # No source language threaded: the grounded record exposes the English
+    # default, so existing English behavior and serialized output are unchanged.
+    result = embedding_fallback("fiebre", _concepts(), lexical_candidates=())
+
+    assert result.source_language == "en"
+
+
+def test_source_language_default_is_repr_identical_to_explicit_english():
+    # Passing no source language must be byte-for-byte identical to passing the
+    # English default, so the English path stays stable.
+    default = embedding_fallback("fiebre", _concepts(), lexical_candidates=())
+    english = embedding_fallback(
+        "fiebre", _concepts(), lexical_candidates=(), source_language="en"
+    )
+
+    assert repr(default) == repr(english)
+
+
+def test_source_language_propagates_into_reranked_result():
+    # An enabled, available backend stamps the resolved language on the grounded
+    # record it re-ranks, so a non-English mention's language is auditable.
+    target = SYNTHETIC_CONCEPTS[2]
+    vectors = {
+        "fiebre": (0.0, 0.0, 1.0),
+        target.normalized_terms[0]: (0.0, 0.0, 1.0),
+    }
+    backend = MultilingualEmbeddingBackend(
+        enabled=True, embedder=_StubEmbedder(vectors)
+    )
+
+    result = backend.fallback(
+        "fiebre", _concepts(), lexical_candidates=(), source_language="es"
+    )
+
+    assert result.used_embedding is True
+    assert result.concepts[0].code == target.code
+    assert result.source_language == "es"
+
+
+def test_source_language_propagates_on_lexical_present_path():
+    # When a lexical alias already matched the embedder is never consulted, but
+    # the resolved source language is still exposed on the grounded record.
+    embedder = _StubEmbedder({})
+    backend = MultilingualEmbeddingBackend(enabled=True, embedder=embedder)
+    lexical = (SYNTHETIC_CONCEPTS[0],)
+
+    result = backend.fallback(
+        "aster fever", _concepts(), lexical_candidates=lexical, source_language="fr"
+    )
+
+    assert result.used_embedding is False
+    assert result.concepts == lexical
+    assert embedder.calls == []
+    assert result.source_language == "fr"
+
+
+def test_source_language_propagates_when_backend_disabled():
+    # Even on the graceful lexical-only degrade path, the language is threaded
+    # through to the grounded record's provenance.
+    result = embedding_fallback(
+        "fiebre", _concepts(), lexical_candidates=(), source_language="de"
+    )
+
+    assert result.used_embedding is False
+    assert result.concepts == _concepts()
+    assert result.source_language == "de"
+
+
+def test_source_language_normalization_matches_grounding_contract():
+    # The fallback must resolve a source-language tag to the same code the
+    # sparse candidate generator stamps, so the language flows end-to-end with a
+    # single, consistent contract across the generation and fallback surfaces.
+    from openmed.clinical.grounding import normalize_language
+
+    for tag in (None, "", "en", "ES", "fr-FR", "pt_BR", "zh-Hans", "  De  "):
+        result = embedding_fallback(
+            "fiebre", _concepts(), lexical_candidates=(), source_language=tag
+        )
+        assert result.source_language == normalize_language(tag)

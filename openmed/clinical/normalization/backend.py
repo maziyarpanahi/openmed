@@ -59,6 +59,26 @@ def normalize_surface(text: str) -> str:
     return " ".join(value.split())
 
 
+def _normalize_source_language(value: object | None, *, default: str = "en") -> str:
+    """Return a normalized source-language tag for fallback provenance.
+
+    Mirrors the grounding loader's language normalization so a source language
+    threaded into the embedding fallback resolves to the same code the sparse
+    candidate generator stamps on its candidates: Unicode NFKC, case folding,
+    region-subtag stripping, and an English default when no language is given.
+    Keeping the rule local preserves this module's import-light, self-contained
+    design (it never imports the grounding package to normalize a tag).
+    """
+
+    if value in (None, ""):
+        return default
+    text = unicodedata.normalize("NFKC", str(value)).strip().casefold()
+    text = text.replace("_", "-")
+    text = re.sub(r"[^a-z0-9-]+", "", text)
+    language = text.split("-", 1)[0]
+    return language or default
+
+
 @dataclass(frozen=True)
 class BackendIdentity:
     """Stable identity used to isolate cache entries by backend version."""
@@ -321,11 +341,18 @@ class EmbeddingFallbackResult:
     re-ranked the candidate pool by multilingual similarity. When it is False
     the ``concepts`` tuple holds the unchanged lexical ordering, so callers
     degrade to lexical-only ranking without any exception during grounding.
+
+    ``source_language`` records the resolved source-language code the fallback
+    was invoked for, so a downstream grounded record can expose the mention's
+    language consistently with the sparse candidate generator. It defaults to
+    ``"en"``, keeping existing English results and their serialized output
+    unchanged when no source language is threaded through.
     """
 
     concepts: tuple[TerminologyConcept, ...]
     used_embedding: bool
     status: EmbeddingBackendStatus
+    source_language: str = "en"
 
 
 class MultilingualEmbeddingBackend:
@@ -431,18 +458,30 @@ class MultilingualEmbeddingBackend:
         self,
         mention: str,
         concepts: Sequence[TerminologyConcept],
+        *,
+        source_language: str | None = None,
     ) -> EmbeddingFallbackResult:
         """Re-rank ``concepts`` by multilingual similarity to ``mention``.
 
         Returns the concepts unchanged (``used_embedding=False``) whenever the
         backend is disabled, unavailable, or the embedding step fails, so this
         never raises during normal grounding.
+
+        Args:
+            mention: Surface span text whose language the fallback matches.
+            concepts: Candidate pool to re-rank.
+            source_language: Source language of the mention. The normalized code
+                is stamped on the result's ``source_language`` for provenance;
+                it defaults to English so existing results are unchanged.
         """
 
+        resolved_language = _normalize_source_language(source_language)
         pool = tuple(concepts)
         embedder = self._load_embedder()
         if embedder is None or not pool:
-            return EmbeddingFallbackResult(pool, False, self.status())
+            return EmbeddingFallbackResult(
+                pool, False, self.status(), resolved_language
+            )
         try:
             texts = [normalize_surface(mention), *(_concept_text(c) for c in pool)]
             vectors = [
@@ -451,18 +490,23 @@ class MultilingualEmbeddingBackend:
             if len(vectors) != len(pool) + 1:
                 # A ragged embedder output would silently drop concepts via zip;
                 # degrade to lexical instead of returning a truncated pool.
-                return EmbeddingFallbackResult(pool, False, self.status())
+                return EmbeddingFallbackResult(
+                    pool, False, self.status(), resolved_language
+                )
             mention_vector = vectors[0]
             scored = sorted(
                 zip(pool, vectors[1:]),
                 key=lambda item: (-_cosine(mention_vector, item[1]), item[0].key),
             )
         except Exception:  # pragma: no cover - defensive graceful degradation
-            return EmbeddingFallbackResult(pool, False, self.status())
+            return EmbeddingFallbackResult(
+                pool, False, self.status(), resolved_language
+            )
         return EmbeddingFallbackResult(
             tuple(concept for concept, _ in scored),
             True,
             EmbeddingBackendStatus(True, "ready"),
+            resolved_language,
         )
 
     def fallback(
@@ -471,22 +515,28 @@ class MultilingualEmbeddingBackend:
         concepts: Sequence[TerminologyConcept],
         *,
         lexical_candidates: Sequence[TerminologyConcept] = (),
+        source_language: str | None = None,
     ) -> EmbeddingFallbackResult:
         """Apply the embedding fallback only when no lexical alias matched.
 
         When ``lexical_candidates`` is non-empty a target-language alias already
         exists, so those candidates are returned unchanged. Only the zero-alias
-        case consults the embedding model, via :meth:`rank`.
+        case consults the embedding model, via :meth:`rank`. The resolved
+        ``source_language`` is stamped on the result in both paths so a grounded
+        record exposes the mention's language consistently; it defaults to
+        English, leaving existing English results unchanged.
         """
 
+        resolved_language = _normalize_source_language(source_language)
         lexical = tuple(lexical_candidates)
         if lexical:
             return EmbeddingFallbackResult(
                 lexical,
                 False,
                 EmbeddingBackendStatus(self.available, "lexical alias present"),
+                resolved_language,
             )
-        return self.rank(mention, concepts)
+        return self.rank(mention, concepts, source_language=resolved_language)
 
 
 def embedding_fallback(
@@ -495,17 +545,25 @@ def embedding_fallback(
     *,
     lexical_candidates: Sequence[TerminologyConcept] = (),
     backend: MultilingualEmbeddingBackend | None = None,
+    source_language: str | None = None,
 ) -> EmbeddingFallbackResult:
     """Rank ``concepts`` by the optional multilingual fallback, or lexically.
 
     Convenience wrapper around :class:`MultilingualEmbeddingBackend`. When no
     backend is supplied a disabled backend is used, so the default behavior is
-    lexical-only and imports no embedding dependency. See
-    :meth:`MultilingualEmbeddingBackend.fallback` for the zero-alias contract.
+    lexical-only and imports no embedding dependency. ``source_language`` threads
+    the mention's language through to the result's provenance, defaulting to
+    English. See :meth:`MultilingualEmbeddingBackend.fallback` for the zero-alias
+    contract.
     """
 
     active = backend if backend is not None else MultilingualEmbeddingBackend()
-    return active.fallback(mention, concepts, lexical_candidates=lexical_candidates)
+    return active.fallback(
+        mention,
+        concepts,
+        lexical_candidates=lexical_candidates,
+        source_language=source_language,
+    )
 
 
 def _concept_text(concept: TerminologyConcept) -> str:
