@@ -2,6 +2,22 @@
 
 from . import linkers as _linkers  # noqa: F401
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
+from .embeddings import (
+    AliasEncoder,
+    EncoderUnavailableError,
+    HashingAliasEncoder,
+    MLXSapBERTEncoder,
+    load_encoder,
+)
+from .index import (
+    AliasEmbeddingIndex,
+    DenseCandidateGenerator,
+    IndexBackendUnavailableError,
+    build_index,
+    build_or_load_index,
+    load_index,
+    query_index,
+)
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .registry import (
     InvalidVocabularyLoaderError,
@@ -34,12 +50,19 @@ from .vocab import (
 )
 
 __all__ = [
+    "AliasEmbeddingIndex",
+    "AliasEncoder",
     "Candidate",
     "ConceptMatch",
+    "DenseCandidateGenerator",
+    "EncoderUnavailableError",
     "FREE_VOCAB_SYSTEMS",
+    "HashingAliasEncoder",
+    "IndexBackendUnavailableError",
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
+    "MLXSapBERTEncoder",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
@@ -56,12 +79,17 @@ __all__ = [
     "VocabularyRegistryError",
     "available_linkers",
     "available_loaders",
+    "build_index",
+    "build_or_load_index",
     "generate_candidates",
     "get_index",
     "get_linker",
     "get_loader",
+    "load_encoder",
+    "load_index",
     "normalize_language",
     "normalize_term",
+    "query_index",
     "register_linker",
     "register_loader",
     "validate_vocabulary_loader",
