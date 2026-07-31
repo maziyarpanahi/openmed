@@ -286,7 +286,13 @@ def _run_pipeline(golden: dict[str, Any], linkers: dict[str, Any]) -> dict[str, 
 
         # Stage 5 - FHIR CodeableConcept + resource for this grounded span.
         concept = to_codeable_concept(grounded)
-        resource = _resource_for(expected["fhir_resource_type"], index, concept, status)
+        resource = _resource_for(
+            expected["fhir_resource_type"],
+            index,
+            concept,
+            status,
+            golden["disclaimer"],
+        )
         resources.append(resource)
 
         per_entity.append(
@@ -319,6 +325,7 @@ def _resource_for(
     index: int,
     concept: dict[str, Any],
     status: str,
+    disclaimer: str,
 ) -> dict[str, Any]:
     """Wrap a grounded ``CodeableConcept`` into a minimal FHIR R4 resource.
 
@@ -328,12 +335,14 @@ def _resource_for(
     ``condition-ver-status`` code systems.
     """
     subject = {"reference": "Patient/synthetic-patient"}
+    advisory_note = [{"text": disclaimer}]
     if resource_type == "Condition":
         resource: dict[str, Any] = {
             "resourceType": "Condition",
             "id": f"condition-{index}",
             "subject": subject,
             "code": concept,
+            "note": advisory_note,
         }
         resource.update(_condition_status_elements(status))
         return resource
@@ -344,6 +353,7 @@ def _resource_for(
             "status": "active",
             "subject": subject,
             "medicationCodeableConcept": concept,
+            "note": advisory_note,
         }
     if resource_type == "Observation":
         return {
@@ -352,6 +362,7 @@ def _resource_for(
             "status": "final",
             "subject": subject,
             "code": concept,
+            "note": advisory_note,
         }
     raise AssertionError(f"unexpected resource type {resource_type!r}")
 
@@ -564,12 +575,23 @@ class TestFHIRExportStage:
         """Every in-Bundle reference targets a urn:uuid entry (no dangling)."""
         bundle = pipeline["bundle"]
         full_urls = {entry["fullUrl"] for entry in bundle["entry"]}
-        for reference in _collect_references(bundle):
-            # References that were rewritten point at a Bundle entry; the
-            # subject reference to the identifier-free Patient stays literal
-            # only if the Patient is absent - here the Patient is present.
-            if reference.startswith("urn:uuid:"):
-                assert reference in full_urls
+        references = list(_collect_references(bundle))
+        assert len(references) == len(pipeline["per_entity"])
+        for reference in references:
+            assert reference.startswith("urn:uuid:")
+            assert reference in full_urls
+
+    def test_resource_shapes_match_golden(self, pipeline, golden):
+        """Every emitted clinical resource type matches its golden shape."""
+        actual = {
+            row["entity"].text: row["resource"]["resourceType"]
+            for row in pipeline["per_entity"]
+        }
+        expected = {
+            item["text"]: item["fhir_resource_type"]
+            for item in golden["expected_entities"]
+        }
+        assert actual == expected
 
     def test_condition_status_materialised_from_assertion(self, pipeline):
         """Refuted / inactive / active flow from assertion into the Condition."""
@@ -667,11 +689,22 @@ def test_registry_exposes_expected_linkers():
 
 
 @pytest.mark.integration
-def test_golden_fixture_carries_medical_device_disclaimer(golden):
-    """The golden fixture documents that its clinical output is advisory only."""
+def test_clinical_output_carries_medical_device_disclaimer(pipeline, golden):
+    """Every emitted clinical resource carries the golden advisory note."""
     disclaimer = golden["disclaimer"].lower()
     assert "synthetic" in disclaimer
     assert "not a medical device" in disclaimer
+    for resource in pipeline["resources"][1:]:
+        assert resource["note"] == [{"text": golden["disclaimer"]}]
+
+    bundle_resources = [
+        entry["resource"]
+        for entry in pipeline["bundle"]["entry"]
+        if entry["resource"]["resourceType"] != "Patient"
+    ]
+    assert len(bundle_resources) == len(pipeline["per_entity"])
+    for resource in bundle_resources:
+        assert resource["note"] == [{"text": golden["disclaimer"]}]
 
 
 @pytest.mark.integration
