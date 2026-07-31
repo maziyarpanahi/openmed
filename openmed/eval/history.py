@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import math
+import statistics
 from dataclasses import dataclass, field
 from numbers import Real
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from openmed.core.baseline import (
     BASELINE_PATH,
@@ -15,6 +16,12 @@ from openmed.core.baseline import (
     baseline_key,
     get_baseline,
     require_baseline,
+)
+from openmed.eval.metrics import (
+    BootstrapCI,
+    PairedSignificance,
+    bootstrap_ci,
+    paired_significance,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -48,6 +55,12 @@ _LOWER_IS_BETTER_MARKERS = (
 ReportLike = BenchmarkReport | Mapping[str, Any] | str | Path
 LEDGER_SCHEMA_VERSION = 1
 RunLedgerKey = tuple[str, str, str, int]
+
+AGGREGATION_SCHEMA_VERSION = 1
+DEFAULT_CI_RESAMPLES = 1000
+DEFAULT_CI_ALPHA = 0.05
+DEFAULT_CI_SEED = 0
+AggregationGroupKey = tuple[str, str, str, str]
 
 
 @dataclass(frozen=True)
@@ -659,6 +672,286 @@ def append_run_to_ledger(
     return updated
 
 
+@dataclass(frozen=True)
+class MetricDistribution:
+    """Deterministic per-metric distribution over repeated seeded runs.
+
+    One instance summarizes every ledger row sharing a
+    ``(model_id, suite, manifest_hash)`` triple for a single ``metric``. The
+    contributing samples are the metric's values across distinct seeds, so the
+    summary describes run-to-run sampling variation rather than one run. Values
+    are ordered by seed before any statistic is computed, which makes the
+    bootstrap confidence interval byte-identical regardless of the order in
+    which the ledger rows were appended.
+    """
+
+    model_id: str
+    suite: str
+    manifest_hash: str
+    metric: str
+    seeds: tuple[int, ...]
+    values: tuple[float, ...]
+    mean: float
+    median: float
+    variance: float
+    stdev: float
+    minimum: float
+    maximum: float
+    confidence_interval: BootstrapCI
+
+    @property
+    def count(self) -> int:
+        """Return the number of seeded runs contributing to the summary."""
+
+        return len(self.values)
+
+    @property
+    def key(self) -> AggregationGroupKey:
+        """Return the aggregation group key for this distribution."""
+
+        return (self.model_id, self.suite, self.manifest_hash, self.metric)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "confidence_interval": self.confidence_interval.to_dict(),
+            "count": self.count,
+            "manifest_hash": self.manifest_hash,
+            "maximum": self.maximum,
+            "mean": self.mean,
+            "median": self.median,
+            "metric": self.metric,
+            "minimum": self.minimum,
+            "model_id": self.model_id,
+            "seeds": list(self.seeds),
+            "stdev": self.stdev,
+            "suite": self.suite,
+            "values": list(self.values),
+            "variance": self.variance,
+        }
+
+
+@dataclass(frozen=True)
+class RunAggregation:
+    """Deterministic aggregation of ledger rows into per-metric distributions."""
+
+    distributions: tuple[MetricDistribution, ...] = ()
+    window: int | None = None
+    schema_version: int = AGGREGATION_SCHEMA_VERSION
+
+    def distribution(
+        self,
+        model_id: str,
+        suite: str,
+        manifest_hash: str,
+        metric: str,
+    ) -> MetricDistribution | None:
+        """Return the distribution for one group key, if present."""
+
+        key = (model_id, suite, manifest_hash, metric)
+        for dist in self.distributions:
+            if dist.key == key:
+                return dist
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "distributions": [dist.to_dict() for dist in self.distributions],
+            "schema_version": self.schema_version,
+            "window": self.window,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the aggregation to deterministic JSON."""
+
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+
+def aggregate_run_ledger(
+    ledger: "BenchmarkRunLedger | Iterable[BenchmarkRunLedgerEntry]",
+    *,
+    window: int | None = None,
+    n_resamples: int = DEFAULT_CI_RESAMPLES,
+    alpha: float = DEFAULT_CI_ALPHA,
+    seed: int = DEFAULT_CI_SEED,
+) -> RunAggregation:
+    """Aggregate ledger rows into deterministic per-metric distributions.
+
+    Rows are grouped by ``(model_id, suite, manifest_hash)`` and, within each
+    group, by metric. ``window`` keeps only the most recent runs per group --
+    the trailing baseline window -- ordered by ``generated_at`` then ``seed`` so
+    the selection depends on the set of rows rather than their append order.
+    Each metric yields a :class:`MetricDistribution` whose bootstrap confidence
+    interval is reproducible byte-for-byte for a fixed ``seed``. The whole
+    result is order-independent: aggregating the same set of rows in any order
+    produces an identical :meth:`RunAggregation.to_json`.
+    """
+
+    if window is not None and window < 1:
+        raise ValueError("window must be a positive integer or None")
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be at least 1")
+
+    entries = _ledger_entries(ledger)
+    groups: dict[tuple[str, str, str], list[BenchmarkRunLedgerEntry]] = {}
+    for entry in entries:
+        group_key = (entry.model_id, entry.suite, entry.manifest_hash)
+        groups.setdefault(group_key, []).append(entry)
+
+    distributions: list[MetricDistribution] = []
+    for group_key in sorted(groups):
+        model_id, suite, manifest_hash = group_key
+        selected = _trailing_window(groups[group_key], window)
+        by_metric: dict[str, dict[int, float]] = {}
+        for row in selected:
+            for metric_name, value in row.metrics.items():
+                by_metric.setdefault(metric_name, {})[row.seed] = value
+        for metric_name in sorted(by_metric):
+            seed_values = by_metric[metric_name]
+            ordered_seeds = tuple(sorted(seed_values))
+            values = tuple(seed_values[run_seed] for run_seed in ordered_seeds)
+            distributions.append(
+                _metric_distribution(
+                    model_id=model_id,
+                    suite=suite,
+                    manifest_hash=manifest_hash,
+                    metric=metric_name,
+                    seeds=ordered_seeds,
+                    values=values,
+                    n_resamples=n_resamples,
+                    alpha=alpha,
+                    seed=seed,
+                )
+            )
+    return RunAggregation(distributions=tuple(distributions), window=window)
+
+
+def paired_run_significance(
+    baseline: "BenchmarkRunLedger | Iterable[BenchmarkRunLedgerEntry]",
+    candidate: "BenchmarkRunLedger | Iterable[BenchmarkRunLedgerEntry]",
+    metric: str,
+    *,
+    n_resamples: int = DEFAULT_CI_RESAMPLES,
+    seed: int = DEFAULT_CI_SEED,
+) -> PairedSignificance:
+    """Paired permutation test between two seeded run sets for one metric.
+
+    ``baseline`` and ``candidate`` are ledger rows -- typically a trailing
+    baseline window and a candidate window. Rows are paired by seed: only seeds
+    present in both sets and carrying ``metric`` contribute, and the aligned
+    per-seed values are ordered by seed so the permutation stream is byte-stable
+    for a fixed ``seed``. The observed delta is
+    ``mean(candidate) - mean(baseline)``. Each input set is expected to hold at
+    most one row per seed (as a single manifest window does); when a set repeats
+    a seed the last row read for that seed wins.
+    """
+
+    baseline_by_seed = _metric_by_seed(baseline, metric)
+    candidate_by_seed = _metric_by_seed(candidate, metric)
+    shared = sorted(baseline_by_seed.keys() & candidate_by_seed.keys())
+    candidate_values = [candidate_by_seed[run_seed] for run_seed in shared]
+    baseline_values = [baseline_by_seed[run_seed] for run_seed in shared]
+    return paired_significance(
+        candidate_values,
+        baseline_values,
+        _mean,
+        n_resamples=n_resamples,
+        seed=seed,
+    )
+
+
+def _ledger_entries(
+    ledger: "BenchmarkRunLedger | Iterable[BenchmarkRunLedgerEntry]",
+) -> list[BenchmarkRunLedgerEntry]:
+    if isinstance(ledger, BenchmarkRunLedger):
+        return list(ledger.entries)
+    return [
+        entry
+        if isinstance(entry, BenchmarkRunLedgerEntry)
+        else BenchmarkRunLedgerEntry.from_mapping(entry)
+        for entry in ledger
+    ]
+
+
+def _trailing_window(
+    rows: Iterable[BenchmarkRunLedgerEntry],
+    window: int | None,
+) -> list[BenchmarkRunLedgerEntry]:
+    ordered = sorted(rows, key=lambda entry: (entry.generated_at or "", entry.seed))
+    if window is None:
+        return ordered
+    return ordered[-window:]
+
+
+def _metric_by_seed(
+    ledger: "BenchmarkRunLedger | Iterable[BenchmarkRunLedgerEntry]",
+    metric: str,
+) -> dict[int, float]:
+    result: dict[int, float] = {}
+    for entry in _ledger_entries(ledger):
+        if metric in entry.metrics:
+            result[entry.seed] = entry.metrics[metric]
+    return result
+
+
+def _metric_distribution(
+    *,
+    model_id: str,
+    suite: str,
+    manifest_hash: str,
+    metric: str,
+    seeds: tuple[int, ...],
+    values: tuple[float, ...],
+    n_resamples: int,
+    alpha: float,
+    seed: int,
+) -> MetricDistribution:
+    value_list = list(values)
+    interval = bootstrap_ci(
+        value_list,
+        _mean,
+        n_resamples=n_resamples,
+        alpha=alpha,
+        seed=seed,
+    )
+    if len(value_list) >= 2:
+        variance = statistics.variance(value_list)
+        stdev = statistics.stdev(value_list)
+    else:
+        variance = 0.0
+        stdev = 0.0
+    return MetricDistribution(
+        model_id=model_id,
+        suite=suite,
+        manifest_hash=manifest_hash,
+        metric=metric,
+        seeds=tuple(seeds),
+        values=tuple(value_list),
+        mean=_mean(value_list),
+        median=statistics.median(value_list),
+        variance=variance,
+        stdev=stdev,
+        minimum=min(value_list),
+        maximum=max(value_list),
+        confidence_interval=interval,
+    )
+
+
+def _mean(values: Sequence[float]) -> float:
+    materialized = list(values)
+    if not materialized:
+        return 0.0
+    return math.fsum(materialized) / len(materialized)
+
+
 def _metric_delta(
     metric: str,
     *,
@@ -912,6 +1205,7 @@ def _format_run_key(key: RunLedgerKey) -> str:
 
 
 __all__ = [
+    "AGGREGATION_SCHEMA_VERSION",
     "BenchmarkHistoryDiff",
     "BenchmarkRunLedger",
     "BenchmarkRunLedgerEntry",
@@ -923,15 +1217,19 @@ __all__ = [
     "LEDGER_SCHEMA_VERSION",
     "LOWER_IS_BETTER",
     "MetricDelta",
+    "MetricDistribution",
     "MetricHistoryPoint",
     "REGRESSION",
+    "RunAggregation",
     "RunLedgerConflict",
     "UNCHANGED",
+    "aggregate_run_ledger",
     "append_run_ledger_entry",
     "append_run_to_ledger",
     "diff_against_baseline",
     "load_run_ledger",
     "metric_direction",
     "metric_history",
+    "paired_run_significance",
     "write_run_ledger",
 ]

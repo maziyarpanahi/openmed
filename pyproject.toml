@@ -185,6 +185,8 @@ gptq = [
 
 grounding = [
   "rapidfuzz>=3.9,<4",
+  "hnswlib>=0.8,<1",
+  "numpy>=1.26",
 ]
 
 langchain = [
