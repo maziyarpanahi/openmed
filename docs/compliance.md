@@ -57,6 +57,21 @@ and supervisory-authority guidance:
   defines intended-purpose, limitation, accuracy/leakage, human-oversight,
   robustness, and GDPR fields for manifest- and `BenchmarkReport`-backed cards.
 
+## Regional implementation checklists
+
+These operational checklists help teams prepare jurisdiction-specific review;
+they do not replace legal advice or supervisory-authority guidance:
+
+- [GDPR data-subject access and deletion export](compliance/gdpr-dsar-export.md)
+  covers local evidence collection, identity verification, export, deletion,
+  and audit handling.
+- [Kenya Data Protection Act identifier checklist](compliance/ke-dpa-identifier-checklist.md)
+  maps synthetic identifier fixtures and conservative validation steps.
+- [Nigeria Data Protection Act identifier checklist](compliance/ng-ndpa-identifier-checklist.md)
+  documents local identifier handling and deployment review.
+- [South Africa POPIA identifier checklist](compliance/za-popia-identifier-checklist.md)
+  documents synthetic validation and residual-risk review.
+
 ## Policy Literals
 
 Use these exact literals in docs, examples, and deployment configuration:

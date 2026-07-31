@@ -1,11 +1,11 @@
 site_name: OpenMed
-site_description: "Open-source healthcare NLP toolkit with curated models, Apple Silicon MLX acceleration, OpenMedKit for Swift apps, advanced NER, and one-call orchestration."
+site_description: "Local-first OpenMed documentation for clinical NLP, de-identification, model discovery, and on-device or self-hosted healthcare workflows."
 site_url: https://openmed.life/docs/
 site_dir: site/docs
 repo_url: https://github.com/maziyarpanahi/openmed
 repo_name: maziyarpanahi/openmed
 edit_uri: edit/master/docs/
-copyright: "© {year} Maziyar Panahi — Apache-2.0"
+copyright: "© {year} Maziyar Panahi — OpenMed SDK: Apache-2.0"
 strict: true
 
 nav:
@@ -13,9 +13,6 @@ nav:
       - Welcome: index.md
       - Feature Map: feature-map.md
       - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
-      - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
-      - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
-      - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - African Developer Onboarding: africa-onboarding.md
@@ -160,7 +157,6 @@ nav:
       - Migrate from 1.9 to 2.0: migration/1.9-to-2.0.md
       - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
-      - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
       - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
       - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
@@ -169,33 +165,47 @@ nav:
       - API Reference: api-reference.md
 
 extra_css:
+  - stylesheets/openmed-system.css
   - stylesheets/openmed-brand.css
+
+extra_javascript:
+  - javascripts/openmed-docs.js
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   logo: assets/openmed-mark.svg
   favicon: assets/openmed-favicon.svg
-  font:
-    text: Inter Tight
-    code: JetBrains Mono
+  font: false
   palette:
-    - scheme: default
+    - media: "(prefers-color-scheme)"
+      scheme: default
       primary: custom
       accent: custom
       toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - scheme: slate
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
       primary: custom
       accent: custom
       toggle:
         icon: material/weather-sunny
-        name: Switch to light mode
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to system theme
   features:
     - navigation.sections
     - navigation.tabs
     - navigation.tracking
+    - navigation.footer
+    - navigation.top
     - toc.integrate
     - content.action.edit
     - content.code.annotate
@@ -204,6 +214,7 @@ theme:
     - announce.dismiss
 
 extra:
+  social_image: https://openmed.life/og.png
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/maziyarpanahi/openmed
@@ -212,8 +223,8 @@ extra:
       link: https://huggingface.co/OpenMed
       name: Hugging Face
     - icon: fontawesome/brands/x-twitter
-      link: https://x.com/MaziyarPanahi
-      name: Maziyar on X
+      link: https://x.com/OpenMed_AI
+      name: OpenMed on X
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/openmed-ai/
       name: LinkedIn
@@ -222,7 +233,7 @@ plugins:
   - search
   - i18n:
       docs_structure: suffix
-      fallback_to_default: true
+      fallback_to_default: false
       reconfigure_material: true
       languages:
         - locale: en
@@ -232,6 +243,11 @@ plugins:
         - locale: zh
           name: 简体中文
           build: true
+          nav:
+            - Overview:
+                - Welcome: index.md
+                - Quick Start: getting-started.md
+                - China Onboarding: onboarding-china.md
           nav_translations:
             Overview: 概览
             Welcome: 欢迎
@@ -244,6 +260,11 @@ plugins:
         - locale: hi
           name: हिन्दी
           build: true
+          nav:
+            - Overview:
+                - Welcome: index.md
+                - Quick Start: getting-started.md
+                - India Onboarding: onboarding-india.md
           nav_translations:
             Overview: अवलोकन
             Welcome: स्वागत
@@ -321,6 +342,9 @@ watch:
   - openmed/zero_shot
 
 exclude_docs: |
+  _hooks.py
+  __pycache__/**
+  overrides/**
   demo/web/README.md
   website/**
   brand/**

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta
+      name="description"
+      content="بيانات اصطناعية لاختبار اتجاه النص وإمكانية الوصول في توثيق OpenMed."
+    />
+    <link
+      rel="canonical"
+      href="https://openmed.life/docs/demo/rtl/"
+    />
+    <link rel="icon" href="../../assets/openmed-favicon.svg" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-system.css" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-standalone.css" />
+    <title>اختبار اتجاه النص — OpenMed</title>
+  </head>
+  <body>
+    <a class="om-skip-link" href="#main">انتقل إلى المحتوى</a>
+    <header class="om-site-header">
+      <div class="om-site-header__inner">
+        <a class="om-brand" href="/docs/" aria-label="توثيق OpenMed">
+          <img
+            src="../../assets/openmed-mark.svg"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span>openmed</span>
+          <span class="om-brand__product">اختبار RTL</span>
+        </a>
+        <nav class="om-site-nav" aria-label="روابط الصفحة">
+          <a href="/docs/">التوثيق</a>
+          <a href="/docs/languages/">اللغات</a>
+          <button class="om-theme-toggle" type="button" data-openmed-theme>
+            Theme: system
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="om-page">
+      <section class="om-hero" aria-labelledby="page-title">
+        <p class="eyebrow">اختبار اصطناعي غير مفهرس</p>
+        <h1 id="page-title">واجهة الرعاية الصحية من اليمين إلى اليسار</h1>
+        <p class="lede">
+          هذه الصفحة مخصّصة لاختبار التخطيط فقط. كل الأسماء والمعرّفات
+          والأرقام أدناه اصطناعية، ولا تمثل بيانات مريض حقيقية.
+        </p>
+      </section>
+
+      <div class="om-grid">
+        <section class="om-card" aria-labelledby="mixed-heading">
+          <h2 id="mixed-heading">نص مختلط الاتجاه</h2>
+          <p>
+            المريض الاصطناعي <bdi>سامي النجار</bdi> يستخدم المعرّف
+            <bdi dir="ltr">SYNTH-AR-0042</bdi> في العيادة التجريبية.
+          </p>
+          <p>
+            يجب أن تبقى الكلمات التقنية مثل <bdi dir="ltr">OpenMedSpan</bdi>
+            والمسار <bdi dir="ltr">/docs/api/</bdi> مقروءة من اليسار إلى
+            اليمين داخل الفقرة العربية.
+          </p>
+        </section>
+
+        <section class="om-card" aria-labelledby="form-heading">
+          <h2 id="form-heading">حقول نموذج اصطناعي</h2>
+          <div class="field">
+            <label for="synthetic-name">الاسم الاصطناعي</label>
+            <input id="synthetic-name" value="ليلى منصور" />
+          </div>
+          <div class="field">
+            <label for="synthetic-note">ملاحظة اصطناعية</label>
+            <textarea id="synthetic-note">المراجعة في 2030-04-12. هذا النص للاختبار فقط.</textarea>
+          </div>
+        </section>
+
+        <section class="om-card om-card--full" aria-labelledby="table-heading">
+          <h2 id="table-heading">جدول التحقّق</h2>
+          <div class="table-wrap">
+            <table>
+              <caption class="om-sr-only">
+                حالات اصطناعية لاختبار الجداول من اليمين إلى اليسار
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">الحالة</th>
+                  <th scope="col">المعرّف</th>
+                  <th scope="col">النتيجة</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">اسم عربي</th>
+                  <td dir="ltr"><code>SYNTH-AR-0042</code></td>
+                  <td>تم الحجب</td>
+                </tr>
+                <tr>
+                  <th scope="row">اسم عبري اصطناعي</th>
+                  <td dir="ltr"><code>SYNTH-HE-0017</code></td>
+                  <td>تم الحجب</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="om-card om-card--full" aria-labelledby="code-heading">
+          <h2 id="code-heading">كتلة شفرة يسار إلى يمين</h2>
+          <pre dir="ltr" tabindex="0"><code>from openmed import deidentify
+
+result = deidentify(
+    "Synthetic patient: Sami Al-Najjar",
+    lang="ar",
+    method="mask",
+)</code></pre>
+        </section>
+      </div>
+    </main>
+
+    <footer class="om-site-footer">
+      <div class="om-site-footer__inner">
+        <span>OpenMed documentation</span>
+        <span>بيانات اصطناعية فقط · لا تتم فهرسة هذه الصفحة</span>
+      </div>
+    </footer>
+
+    <script src="../../javascripts/openmed-standalone.js"></script>
+  </body>
+</html>
