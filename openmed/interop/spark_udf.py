@@ -96,12 +96,19 @@ def make_deidentify_udf(*, policy: str = "hipaa_safe_harbor", **kwargs: Any) -> 
     """
 
     pandas_udf, StringType = _load_pandas_udf()
+    pandas_module = _import_module("pandas")
 
-    @pandas_udf(StringType())
     def _redact(texts: Any) -> Any:
         return _deidentify_series(texts, policy=policy, **kwargs)
 
-    return _redact
+    # PySpark 3.5 infers the pandas UDF type from runtime annotations and
+    # rejects ``Any`` or postponed ``"pd.Series"`` annotations. Keep pandas
+    # lazy while supplying the concrete types before applying the decorator.
+    _redact.__annotations__ = {
+        "texts": pandas_module.Series,
+        "return": pandas_module.Series,
+    }
+    return pandas_udf(StringType())(_redact)
 
 
 def deidentify_columns(
