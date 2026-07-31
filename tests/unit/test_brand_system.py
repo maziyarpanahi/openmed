@@ -82,6 +82,19 @@ def test_social_manifest_portability_ignores_only_derivative_encoding_bytes() ->
     ) != renderer._manifest_without_derivative_byte_hashes(manifest)
 
 
+def test_brand_validation_is_python310_and_crlf_portable(tmp_path: Path) -> None:
+    validator = _load_validator()
+    renderer = _load_social_renderer()
+    crlf_source = tmp_path / "provenance.md"
+    crlf_source.write_bytes(b"approved\r\nmetadata\r\n")
+    expected = hashlib.sha256(b"approved\nmetadata\n").hexdigest()
+
+    assert abs(validator._cube_root(-8.0) + 2.0) < 1e-12
+    assert validator._source_sha256(crlf_source) == expected
+    assert renderer._source_sha256(crlf_source) == expected
+    assert validator._sha256(crlf_source) != expected
+
+
 def test_faq_parity_rejects_visible_answer_drift() -> None:
     validator = _load_validator()
     faq_page = {

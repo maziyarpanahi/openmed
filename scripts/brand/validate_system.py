@@ -101,6 +101,25 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _source_sha256(path: Path) -> str:
+    """Hash text provenance independently of checkout line-ending policy."""
+
+    data = path.read_bytes()
+    if path.suffix.lower() in {
+        ".css",
+        ".html",
+        ".js",
+        ".json",
+        ".md",
+        ".svg",
+        ".txt",
+        ".yaml",
+        ".yml",
+    }:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
 def _load_json(relative: str) -> dict[str, Any]:
     return json.loads((REPO_ROOT / relative).read_text(encoding="utf-8"))
 
@@ -324,12 +343,18 @@ def _contrast(first: str, second: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+def _cube_root(value: float) -> float:
+    """Return a real cube root on every supported Python version."""
+
+    return math.copysign(abs(value) ** (1.0 / 3.0), value)
+
+
 def _srgb_to_oklch(value: str) -> tuple[float, float, float]:
     red, green, blue, _ = _parse_color(value)
     red, green, blue = map(_linear_channel, (red, green, blue))
-    l_root = math.cbrt(0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue)
-    m_root = math.cbrt(0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue)
-    s_root = math.cbrt(0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue)
+    l_root = _cube_root(0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue)
+    m_root = _cube_root(0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue)
+    s_root = _cube_root(0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue)
     lightness = 0.2104542553 * l_root + 0.793617785 * m_root - 0.0040720468 * s_root
     axis_a = 1.9779984951 * l_root - 2.428592205 * m_root + 0.4505937099 * s_root
     axis_b = 0.0259040371 * l_root + 0.7827717662 * m_root - 0.808675766 * s_root
@@ -467,14 +492,14 @@ def _validate_provenance(errors: list[str]) -> None:
     export_readme = BRAND_ROOT / "social/exports/README.md"
     if (
         not export_readme.is_file()
-        or _sha256(export_readme) != REQUIRED_HANDOFF_HASHES["social/README.md"]
+        or _source_sha256(export_readme) != REQUIRED_HANDOFF_HASHES["social/README.md"]
     ):
         errors.append("approved social export README differs from the handoff")
 
     repository_inputs = provenance["repository_inputs"]
     for record in repository_inputs.values():
         path = REPO_ROOT / record["path"]
-        if not path.is_file() or _sha256(path) != record["sha256"]:
+        if not path.is_file() or _source_sha256(path) != record["sha256"]:
             errors.append(f"repository input hash mismatch: {record['path']}")
 
 
@@ -830,7 +855,7 @@ def _validate_fonts_and_consumers(errors: list[str]) -> None:
             )
         if (
             not license_path.is_file()
-            or _sha256(license_path) != license_record["sha256"]
+            or _source_sha256(license_path) != license_record["sha256"]
         ):
             errors.append(f"font license hash mismatch: {license_record['file']}")
         licensed_families.update(license_record["applies_to"])
@@ -1385,7 +1410,7 @@ def _validate_approved_social(errors: list[str]) -> None:
             errors.append(f"social synchronizer contract drifted: {field}")
 
     expected_source_hashes = {
-        relative: _sha256(REPO_ROOT / relative)
+        relative: _source_sha256(REPO_ROOT / relative)
         for relative in manifest.get("source_hashes", {})
     }
     if manifest.get("source_hashes") != expected_source_hashes:
@@ -1440,7 +1465,7 @@ def _validate_approved_social(errors: list[str]) -> None:
 
     expected_master_paths = {asset.get("master", "") for asset in source_by_id.values()}
     actual_master_paths = {
-        str(path.relative_to(REPO_ROOT))
+        path.relative_to(REPO_ROOT).as_posix()
         for path in (BRAND_ROOT / "social").glob("*-2x.png")
     }
     if actual_master_paths != expected_master_paths:

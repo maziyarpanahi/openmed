@@ -35,6 +35,12 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _source_sha256(path: Path) -> str:
+    """Hash text inputs independently of checkout line-ending policy."""
+
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def _pixel_sha256(image: Image.Image) -> str:
     return hashlib.sha256(image.convert("RGBA").tobytes()).hexdigest()
 
@@ -217,7 +223,7 @@ def render_all(root: Path) -> dict[str, Any]:
                 root / "docs/brand/social/previews" / f"{asset['id']}-safe-zone.png"
             )
             _render_preview(native, asset["safe_zone"], preview_path)
-            entry["safe_zone_preview"] = str(preview_path.relative_to(root))
+            entry["safe_zone_preview"] = preview_path.relative_to(root).as_posix()
             entry["safe_zone_preview_sha256"] = _sha256(preview_path)
         assets.append(entry)
 
@@ -257,16 +263,20 @@ def render_all(root: Path) -> dict[str, Any]:
     source_paths = (SOURCE, PROFILE_COPY, CLAIMS, source_readme)
     return {
         "schema_version": 3,
-        "source": str(SOURCE.relative_to(REPO_ROOT)),
-        "profile_copy": str(PROFILE_COPY.relative_to(REPO_ROOT)),
+        "source": SOURCE.relative_to(REPO_ROOT).as_posix(),
+        "profile_copy": PROFILE_COPY.relative_to(REPO_ROOT).as_posix(),
         "source_hashes": {
-            str(path.relative_to(REPO_ROOT)): _sha256(path) for path in source_paths
+            path.relative_to(REPO_ROOT).as_posix(): _source_sha256(path)
+            for path in source_paths
         },
         "approved_exports": dict(sorted(approved_exports.items())),
         "resolved_profile_copy": profile,
         "resolved_profile_copy_sha256": hashlib.sha256(profile_bytes).hexdigest(),
         "synchronizer": {
-            "implementation": str(Path(__file__).resolve().relative_to(REPO_ROOT)),
+            "implementation": Path(__file__)
+            .resolve()
+            .relative_to(REPO_ROOT)
+            .as_posix(),
             "engine": "byte copy plus Pillow size derivatives",
             "pillow_version": PIL.__version__,
             "master_policy": "byte-identical approved export",
@@ -486,7 +496,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print(f"synchronized {len(manifest['assets'])} approved social exports")
-    print(f"wrote {MANIFEST.relative_to(REPO_ROOT)}")
+    print(f"wrote {MANIFEST.relative_to(REPO_ROOT).as_posix()}")
     return 0
 
 
