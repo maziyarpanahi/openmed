@@ -153,6 +153,44 @@ def test_make_deidentify_udf_raises_clear_error_without_pyspark(monkeypatch):
         spark_udf.make_deidentify_udf()
 
 
+def test_make_deidentify_udf_supplies_runtime_pandas_series_annotations(monkeypatch):
+    captured_annotations: dict[str, object] = {}
+
+    class FakeStringType:
+        pass
+
+    def fake_pandas_udf(return_type):
+        assert isinstance(return_type, FakeStringType)
+
+        def decorate(function):
+            captured_annotations.update(function.__annotations__)
+            return function
+
+        return decorate
+
+    monkeypatch.setattr(
+        spark_udf,
+        "_load_pandas_udf",
+        lambda: (fake_pandas_udf, FakeStringType),
+    )
+
+    udf = spark_udf.make_deidentify_udf()
+
+    assert callable(udf)
+    series_annotation = captured_annotations["texts"]
+    assert series_annotation is captured_annotations["return"]
+    assert getattr(series_annotation, "__module__", None) == "pandas.core.series"
+    assert getattr(series_annotation, "__qualname__", None) == "Series"
+
+
+def test_make_deidentify_udf_constructs_real_pandas_udf_when_installed():
+    pytest.importorskip("pyspark")
+
+    udf = spark_udf.make_deidentify_udf(deidentifier=fake_deidentifier)
+
+    assert callable(udf)
+
+
 class _FakeDataFrame:
     def __init__(self, columns: dict[str, str]) -> None:
         self.columns = dict(columns)
