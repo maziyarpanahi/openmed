@@ -36,7 +36,7 @@ from openmed.clinical.normalization.cache import make_index_cache_key
 from .embeddings import AliasEncoder
 from .registry import register_linker
 from .types import Candidate
-from .vocab import VocabLoader, VocabularyIndex, normalize_alias
+from .vocab import VocabLoader, VocabularyIndex, normalize_alias, normalize_language
 
 __all__ = [
     "AliasEmbeddingIndex",
@@ -155,7 +155,11 @@ class AliasEmbeddingIndex:
         }
 
     def query(
-        self, vector: Sequence[float], k: int = _DEFAULT_TOP_K
+        self,
+        vector: Sequence[float],
+        k: int = _DEFAULT_TOP_K,
+        *,
+        source_language: str | None = None,
     ) -> list[Candidate]:
         """Return up to ``k`` ranked dense candidates for a mention ``vector``.
 
@@ -177,6 +181,7 @@ class AliasEmbeddingIndex:
         fetch = min(len(self._records), max(k * 4, k))
         neighbors = self._neighbors(vector, fetch)
 
+        resolved_language = normalize_language(source_language)
         best: dict[tuple[str, str], Candidate] = {}
         for row, similarity in neighbors:
             record = self._records[row]
@@ -190,6 +195,7 @@ class AliasEmbeddingIndex:
                 code=record.code,
                 display=record.display,
                 score=score,
+                source_language=resolved_language,
                 source=DENSE_SOURCE,
                 matched_alias=record.matched_alias,
                 match_kind=DENSE_MATCH_KIND,
@@ -206,11 +212,13 @@ class AliasEmbeddingIndex:
         mention: str,
         encoder: AliasEncoder,
         k: int = _DEFAULT_TOP_K,
+        *,
+        source_language: str | None = None,
     ) -> list[Candidate]:
         """Encode ``mention`` with ``encoder`` and return dense candidates."""
 
         (vector,) = encoder.encode([mention])
-        return self.query(vector, k)
+        return self.query(vector, k, source_language=source_language)
 
     def _neighbors(
         self, vector: Sequence[float], fetch: int
@@ -541,6 +549,8 @@ class DenseCandidateGenerator:
         mention: str,
         systems: Sequence[str],
         k: int = _DEFAULT_TOP_K,
+        *,
+        language: str | None = None,
     ) -> list[Candidate]:
         """Return up to ``k`` dense candidates for ``mention``.
 
@@ -561,7 +571,12 @@ class DenseCandidateGenerator:
         index = self._resolve_index(ordered_systems)
         if index is None:
             return []
-        return index.query_text(mention, self._encoder, k)
+        return index.query_text(
+            mention,
+            self._encoder,
+            k,
+            source_language=language,
+        )
 
     def _resolve_index(self, systems: Sequence[str]) -> AliasEmbeddingIndex | None:
         if self._index is not None:

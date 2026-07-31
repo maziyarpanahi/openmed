@@ -18,11 +18,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from .candidate_generator import SparseCandidateGenerator
+from .candidate_generator import SPARSE_LINKER_KEY, SparseCandidateGenerator
 from .embeddings import AliasEncoder
-from .index import AliasEmbeddingIndex, DenseCandidateGenerator
+from .index import DENSE_LINKER_KEY, AliasEmbeddingIndex, DenseCandidateGenerator
+from .registry import get_linker
 from .types import Candidate
-from .vocab import FREE_VOCAB_SYSTEMS, VocabLoader
+from .vocab import FREE_VOCAB_SYSTEMS, VocabLoader, normalize_language
 
 __all__ = [
     "DEFAULT_RETRIEVAL_K",
@@ -71,12 +72,14 @@ class TwoStageRetriever:
     ) -> None:
         self._loader = loader if loader is not None else VocabLoader()
         self._encoder = encoder
-        self._sparse = SparseCandidateGenerator(
+        sparse_factory = get_linker(SPARSE_LINKER_KEY)
+        dense_factory = get_linker(DENSE_LINKER_KEY)
+        self._sparse: SparseCandidateGenerator = sparse_factory(
             self._loader,
             ngram_size=ngram_size,
             min_similarity=min_similarity,
         )
-        self._dense = DenseCandidateGenerator(
+        self._dense: DenseCandidateGenerator = dense_factory(
             encoder,
             index=index,
             loader=self._loader,
@@ -98,6 +101,7 @@ class TwoStageRetriever:
         sparse_k: int | None = None,
         dense_k: int | None = None,
         include_dense: bool = True,
+        source_language: str | None = None,
     ) -> list[Candidate]:
         """Return the sparse-then-dense candidate union for ``mention``.
 
@@ -110,6 +114,9 @@ class TwoStageRetriever:
             include_dense: When ``False`` the dense channel is skipped entirely,
                 yielding the sparse-only baseline even if an encoder is
                 configured.
+            source_language: Source language selected by the calling router or
+                pipeline. The normalized code is passed to both retrieval
+                channels and stamped on every emitted candidate.
 
         Returns:
             The concatenation of the sparse candidate list followed by the dense
@@ -119,10 +126,12 @@ class TwoStageRetriever:
         """
 
         ordered_systems = tuple(systems)
+        resolved_language = normalize_language(source_language)
         sparse = self._sparse.generate(
             mention,
             ordered_systems,
             sparse_k if sparse_k is not None else k,
+            language=resolved_language,
         )
         if self._encoder is None or not include_dense:
             return sparse
@@ -130,6 +139,7 @@ class TwoStageRetriever:
             mention,
             ordered_systems,
             dense_k if dense_k is not None else k,
+            language=resolved_language,
         )
         return [*sparse, *dense]
 
@@ -147,6 +157,7 @@ def retrieve_candidates(
     backend: str = "auto",
     sparse_k: int | None = None,
     dense_k: int | None = None,
+    source_language: str | None = None,
 ) -> list[Candidate]:
     """Union sparse and dense candidates for a clinical mention.
 
@@ -169,4 +180,5 @@ def retrieve_candidates(
         k,
         sparse_k=sparse_k,
         dense_k=dense_k,
+        source_language=source_language,
     )

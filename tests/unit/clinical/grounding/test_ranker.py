@@ -9,6 +9,7 @@ byte-for-byte reproducible.
 from __future__ import annotations
 
 import hashlib
+import json
 import socket
 from pathlib import Path
 
@@ -27,6 +28,9 @@ from openmed.clinical.normalization.ranker import RankedCandidate
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _FIXTURE = _REPO_ROOT / "openmed/eval/golden/fixtures/grounding_vocab_synthetic.jsonl"
+_CROSS_LINGUAL_FIXTURE = (
+    _REPO_ROOT / "openmed/eval/golden/fixtures/grounding_crosslingual.jsonl"
+)
 _SYSTEMS = ("icd10cm", "rxnorm", "loinc", "hpo", "mesh")
 
 
@@ -67,6 +71,42 @@ def test_retrieve_without_encoder_is_sparse_only(tmp_path):
 
     assert candidates
     assert {candidate.source for candidate in candidates} == {"sparse"}
+
+
+def test_retriever_passes_normalized_language_through_registered_channels(
+    tmp_path, monkeypatch
+):
+    from openmed.clinical.grounding import registry
+
+    calls: list[tuple[str, str | None]] = []
+
+    class _RecordingGenerator:
+        def __init__(self, source):
+            self.source = source
+
+        def generate(self, *args, language=None, **kwargs):
+            calls.append((self.source, language))
+            return []
+
+    monkeypatch.setitem(
+        registry._LINKERS,
+        "sparse",
+        lambda *args, **kwargs: _RecordingGenerator("sparse"),
+    )
+    monkeypatch.setitem(
+        registry._LINKERS,
+        "dense",
+        lambda *args, **kwargs: _RecordingGenerator("dense"),
+    )
+
+    retriever = TwoStageRetriever(_loader(tmp_path), encoder=HashingAliasEncoder())
+    retriever.retrieve(
+        "synthetic mention",
+        ["icd10cm"],
+        source_language="ES-mx",
+    )
+
+    assert calls == [("sparse", "es"), ("dense", "es")]
 
 
 # --------------------------------------------------------------------------- #
@@ -112,6 +152,63 @@ def test_stage_is_deterministic(tmp_path):
     second = stage.rank("type 2 diabetes", systems=["icd10cm"])
     assert [item.concept_key for item in first] == [item.concept_key for item in second]
     assert [item.fused_score for item in first] == [item.fused_score for item in second]
+
+
+def test_stage_threads_language_into_serialized_grounded_record(tmp_path):
+    stage = CandidateRankingStage(
+        _loader(tmp_path, _CROSS_LINGUAL_FIXTURE),
+        encoder=HashingAliasEncoder(),
+    )
+
+    ranked = stage.rank(
+        "diabetes mellitus tipo 2",
+        systems=["icd10cm"],
+        source_language="es-MX",
+    )
+
+    assert ranked
+    assert ranked[0].candidate.code == "E119"
+    assert all(item.candidate.source_language == "es" for item in ranked)
+    payload = json.loads(json.dumps(ranked[0].to_dict()))
+    assert payload["candidate"]["source_language"] == "es"
+
+
+def test_stage_keeps_default_and_explicit_english_outputs_identical(tmp_path):
+    stage = CandidateRankingStage(_loader(tmp_path))
+
+    default = stage.rank("type 2 diabetes", systems=["icd10cm"])
+    explicit = stage.rank(
+        "type 2 diabetes",
+        systems=["icd10cm"],
+        source_language="en",
+    )
+
+    assert default == explicit
+    assert [item.to_dict() for item in default] == [item.to_dict() for item in explicit]
+
+
+def test_ranked_cache_is_isolated_by_source_language(tmp_path):
+    cache = RankedCandidateCache()
+    stage = CandidateRankingStage(
+        _loader(tmp_path, _CROSS_LINGUAL_FIXTURE),
+        cache=cache,
+    )
+
+    english = stage.rank(
+        "metformin",
+        systems=["rxnorm"],
+        source_language="en",
+    )
+    spanish = stage.rank(
+        "metformin",
+        systems=["rxnorm"],
+        source_language="es",
+    )
+
+    assert english and spanish
+    assert english is not spanish
+    assert english[0].candidate.source_language == "en"
+    assert spanish[0].candidate.source_language == "es"
 
 
 # --------------------------------------------------------------------------- #
