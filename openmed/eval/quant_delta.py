@@ -504,6 +504,282 @@ def evaluate_coreml_span_parity(
     )
 
 
+EXPORT_VARIANT_FORMAT_PREFIXES = ("onnx", "webgpu")
+_EXPORT_TIER_FIT_KEYS = ("p50_ms", "p95_ms", "ram_mb")
+
+
+@dataclass(frozen=True)
+class ExportVariantParityResult:
+    """Per-variant release evidence for one ONNX or WebGPU export."""
+
+    format: str
+    runtime: str
+    quantized: bool
+    passed: bool
+    tier: str
+    tier_fit_passed: bool
+    reason: str
+    quant_delta: QuantRecallDeltaResult | None = None
+    tier_budget: Mapping[str, float] | None = None
+    tier_violations: Mapping[str, Any] = field(default_factory=dict)
+    source: str = "computed"
+
+    @property
+    def blocking_format(self) -> str | None:
+        return None if self.passed else self.format
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "format": self.format,
+            "runtime": self.runtime,
+            "quantized": self.quantized,
+            "passed": self.passed,
+            "tier": self.tier,
+            "tier_fit_passed": self.tier_fit_passed,
+            "reason": self.reason,
+            "quant_delta": (
+                self.quant_delta.to_dict() if self.quant_delta is not None else None
+            ),
+            "tier_budget": (
+                dict(self.tier_budget) if self.tier_budget is not None else None
+            ),
+            "tier_violations": dict(self.tier_violations),
+            "source": self.source,
+        }
+
+
+@dataclass(frozen=True)
+class ExportVariantGateResult:
+    """Aggregate ONNX/WebGPU export-variant release-gate evidence."""
+
+    passed: bool
+    parent_format: str
+    reason: str
+    variant_results: tuple[ExportVariantParityResult, ...] = ()
+    missing_required: tuple[str, ...] = ()
+    evaluated_formats: tuple[str, ...] = ()
+
+    @property
+    def blocked_formats(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {result.format for result in self.variant_results if not result.passed}
+            )
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "parent_format": self.parent_format,
+            "reason": self.reason,
+            "variant_results": [result.to_dict() for result in self.variant_results],
+            "missing_required": list(self.missing_required),
+            "evaluated_formats": list(self.evaluated_formats),
+            "blocked_formats": list(self.blocked_formats),
+        }
+
+
+def evaluate_export_variant_gate(
+    *,
+    variants: Sequence[Mapping[str, Any]],
+    tier_budgets: Mapping[str, Mapping[str, float]],
+    parent_recall: Mapping[str, Any] | None = None,
+    parent_format: str = "",
+    required_variants: Sequence[str] = (),
+    tier_aliases: Mapping[str, str] | None = None,
+) -> ExportVariantGateResult:
+    """Evaluate declared ONNX and WebGPU export variants against G4 and G5.
+
+    Each variant is gated for quantized recall delta against the floating-point
+    parent where applicable (G4) and for target-device tier fit (G5). A variant
+    is blocked without affecting sibling variants that pass. Missing recall or
+    tier-fit evidence fails the variant closed. ``required_variants`` that are
+    absent from the manifest are reported so the gate can fail closed on a
+    declared-but-missing export.
+    """
+
+    results: list[ExportVariantParityResult] = []
+    evaluated: set[str] = set()
+    for variant in variants:
+        if not isinstance(variant, Mapping):
+            continue
+        raw_format = str(variant.get("format") or variant.get("name") or "").strip()
+        runtime = _export_runtime(raw_format)
+        if runtime == "unknown":
+            continue
+        evaluated.add(_normalise_dimension(raw_format))
+        results.append(
+            _evaluate_export_variant(
+                variant=variant,
+                format_name=raw_format,
+                runtime=runtime,
+                parent_recall=parent_recall,
+                tier_budgets=tier_budgets,
+                tier_aliases=tier_aliases,
+            )
+        )
+
+    missing_required = tuple(
+        str(item)
+        for item in required_variants
+        if _normalise_dimension(str(item)) not in evaluated
+    )
+    evaluated_formats = tuple(sorted(result.format for result in results))
+
+    if not results:
+        reason = "no ONNX/WebGPU export variants declared"
+        passed = False
+    elif missing_required:
+        reason = "required export variant missing: " + ", ".join(missing_required)
+        passed = False
+    elif all(result.passed for result in results):
+        reason = "ok"
+        passed = True
+    else:
+        blocked = ", ".join(result.format for result in results if not result.passed)
+        reason = "export variant blocked: " + blocked
+        passed = False
+
+    return ExportVariantGateResult(
+        passed=passed,
+        parent_format=str(parent_format or ""),
+        reason=reason,
+        variant_results=tuple(results),
+        missing_required=missing_required,
+        evaluated_formats=evaluated_formats,
+    )
+
+
+def _evaluate_export_variant(
+    *,
+    variant: Mapping[str, Any],
+    format_name: str,
+    runtime: str,
+    parent_recall: Mapping[str, Any] | None,
+    tier_budgets: Mapping[str, Mapping[str, float]],
+    tier_aliases: Mapping[str, str] | None,
+) -> ExportVariantParityResult:
+    quantized = is_quantized_format(format_name)
+    candidate_recall = _mapping_or_empty(
+        variant.get("recall") or variant.get("per_label_recall")
+    )
+    if quantized:
+        quant_delta = evaluate_quant_recall_delta(
+            format_name=format_name,
+            candidate_recall=candidate_recall,
+            parent_recall=parent_recall,
+            precomputed_delta=variant.get("quant_recall_delta"),
+        )
+        quant_passed = quant_delta.passed
+        if quant_delta.source == "missing_evidence":
+            quant_reason = "quantized export requires recall-delta evidence"
+        elif not quant_passed:
+            quant_reason = "quantized recall delta exceeds limit"
+        else:
+            quant_reason = ""
+    else:
+        quant_delta = evaluate_quant_recall_delta(
+            format_name=format_name,
+            candidate_recall=candidate_recall,
+        )
+        quant_passed = True
+        quant_reason = ""
+
+    tier = str(variant.get("tier") or "")
+    tier_passed, tier_budget, tier_violations, tier_reason = _export_tier_fit(
+        variant=variant,
+        tier=tier,
+        tier_budgets=tier_budgets,
+        tier_aliases=tier_aliases,
+    )
+
+    passed = quant_passed and tier_passed
+    reasons = [reason for reason in (quant_reason, tier_reason) if reason]
+    reason = "ok" if passed else "; ".join(reasons) or "export variant blocked"
+    return ExportVariantParityResult(
+        format=format_name,
+        runtime=runtime,
+        quantized=quantized,
+        passed=passed,
+        tier=tier,
+        tier_fit_passed=tier_passed,
+        reason=reason,
+        quant_delta=quant_delta,
+        tier_budget=tier_budget,
+        tier_violations=tier_violations,
+    )
+
+
+def _export_tier_fit(
+    *,
+    variant: Mapping[str, Any],
+    tier: str,
+    tier_budgets: Mapping[str, Mapping[str, float]],
+    tier_aliases: Mapping[str, str] | None,
+) -> tuple[bool, Mapping[str, float] | None, dict[str, Any], str]:
+    normalized_tier = _normalise_dimension(tier)
+    if tier_aliases:
+        normalized_tier = tier_aliases.get(normalized_tier, normalized_tier)
+    budget = tier_budgets.get(normalized_tier)
+    if budget is None:
+        return False, None, {"tier": tier}, "unknown target device tier"
+
+    observed: dict[str, float] = {}
+    missing: list[str] = []
+    for key in _EXPORT_TIER_FIT_KEYS:
+        value = _optional_float(_export_metric(variant, key))
+        if value is None:
+            missing.append(key)
+        else:
+            observed[key] = value
+    if missing:
+        return (
+            False,
+            dict(budget),
+            {"missing": missing},
+            "tier-fit latency/RAM evidence required",
+        )
+
+    violations = {
+        key: {"observed": observed[key], "limit": float(budget[key])}
+        for key in budget
+        if observed.get(key) is not None and observed[key] > float(budget[key])
+    }
+    if violations:
+        return False, dict(budget), violations, "tier latency or RAM budget exceeded"
+    return True, dict(budget), {}, ""
+
+
+def _export_metric(variant: Mapping[str, Any], key: str) -> Any:
+    if key in ("p50_ms", "p95_ms"):
+        latency = variant.get("latency")
+        latency_map = latency if isinstance(latency, Mapping) else {}
+        return variant.get(key, latency_map.get(key))
+    if key == "ram_mb":
+        resources = variant.get("resources")
+        resource_map = resources if isinstance(resources, Mapping) else {}
+        return variant.get(
+            "ram_mb",
+            variant.get(
+                "peak_rss_mib",
+                resource_map.get("peak_rss_mib", resource_map.get("ram_mb")),
+            ),
+        )
+    return variant.get(key)
+
+
+def _export_runtime(format_name: str) -> str:
+    normalized = _normalise_dimension(format_name)
+    for prefix in EXPORT_VARIANT_FORMAT_PREFIXES:
+        if normalized.startswith(prefix):
+            return prefix
+    return "unknown"
+
+
+def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
 def is_quantized_format(format_name: str) -> bool:
     return limit_for_format(format_name) is not None
 
@@ -887,7 +1163,10 @@ __all__ = [
     "COREML_RECALL_DELTA_LIMIT",
     "DEFAULT_SPECULATIVE_KL_LIMIT",
     "DEFAULT_SPECULATIVE_SPEEDUP_LIMIT",
+    "EXPORT_VARIANT_FORMAT_PREFIXES",
     "CoreMLSpanParityResult",
+    "ExportVariantGateResult",
+    "ExportVariantParityResult",
     "G1_G2_LABELS",
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
@@ -895,6 +1174,7 @@ __all__ = [
     "QuantRecallDeltaResult",
     "SpeculativeRedactionParityResult",
     "evaluate_coreml_span_parity",
+    "evaluate_export_variant_gate",
     "evaluate_onnx_logit_parity",
     "evaluate_quant_recall_delta",
     "evaluate_speculative_redaction_parity",

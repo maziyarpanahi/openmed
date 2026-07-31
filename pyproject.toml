@@ -187,6 +187,8 @@ gptq = [
 
 grounding = [
   "rapidfuzz>=3.9,<4",
+  "hnswlib>=0.8,<1",
+  "numpy>=1.26",
 ]
 
 langchain = [
@@ -329,6 +331,7 @@ include = [
   "/openmed/core/thresholds.json",
   "/openmed/core/policies/*.json",
   "/openmed/core/schemas/json/*.json",
+  "/openmed/risk/data/*.json",
   "/eval/redteam/corpus/adversarial_phi.jsonl",
   "/gates/baseline.json",
   "/models.jsonl",
