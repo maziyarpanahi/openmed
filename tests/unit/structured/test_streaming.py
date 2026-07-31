@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tracemalloc
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -166,18 +167,16 @@ def test_linux_rss_reader_uses_current_resident_pages(
 ) -> None:
     """Linux RSS measurement reads current resident pages from procfs."""
 
-    monkeypatch.setattr(streaming.sys, "platform", "linux")
-    monkeypatch.setattr(streaming.os, "name", "posix")
+    monkeypatch.setattr(streaming, "sys", SimpleNamespace(platform="linux"))
     monkeypatch.setattr(
-        streaming.Path,
-        "read_text",
-        lambda _path, **_kwargs: "100 7 0 0 0 0 0\n",
+        streaming,
+        "os",
+        SimpleNamespace(name="posix", sysconf=lambda _name: 4_096),
     )
     monkeypatch.setattr(
-        streaming.os,
-        "sysconf",
-        lambda _name: 4_096,
-        raising=False,
+        streaming,
+        "Path",
+        lambda _path: SimpleNamespace(read_text=lambda **_kwargs: "100 7 0 0 0 0 0\n"),
     )
 
     assert streaming._process_rss_bytes() == 7 * 4_096
