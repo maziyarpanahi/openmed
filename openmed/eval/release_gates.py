@@ -50,6 +50,7 @@ from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
     QuantRecallDeltaResult,
+    evaluate_export_variant_gate,
     evaluate_quant_recall_delta,
 )
 from openmed.eval.report import BenchmarkReport
@@ -60,6 +61,7 @@ FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
 GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
+EXPORT_VARIANT_GATE = "export_variants"
 I18N_THROUGHPUT_GATE = "i18n_throughput"
 I18N_THROUGHPUT_REGRESSION_THRESHOLD = 0.20
 I18N_THROUGHPUT_BASELINE_FAMILY = "i18n-throughput"
@@ -81,6 +83,9 @@ G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+#: Maximum tolerated worst-group-vs-best-group extraction-F1 gap across
+#: synthetic site/note-type/demographic surrogate groups before G14 quarantines.
+G14_EXTRACTION_DISPARITY_CEILING = 0.050
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "as": 0.0,
@@ -741,6 +746,7 @@ class ReleaseGate:
         checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g11_critical_finding_recall_check(metrics, metadata))
+        checks.append(_g14_extraction_fairness_check(metrics, metadata))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
             _g5_check(
@@ -771,6 +777,9 @@ class ReleaseGate:
         ):
             checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
             checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
+        export_manifest = _export_variant_manifest(metadata)
+        if export_manifest:
+            checks.extend(_export_variant_checks(export_manifest, metrics, metadata))
         checks.append(_zero_shot_language_leakage_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
@@ -2125,6 +2134,133 @@ def _critical_finding_misses(metric: Mapping[str, Any]) -> list[dict[str, Any]]:
     return misses
 
 
+def _g14_extraction_fairness_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Quarantine when extraction quality diverges too much across surrogate groups.
+
+    Reads a PHI-free extraction-fairness metric (``extraction_fairness``) and
+    fails when the worst-group-vs-best-group entity-F1 gap over synthetic
+    site/note-type/demographic surrogate groups exceeds
+    :data:`G14_EXTRACTION_DISPARITY_CEILING`. The metric is assistive and never
+    infers demographic attributes from clinical text; when absent the gate is a
+    no-op advisory pass.
+    """
+    ceiling = G14_EXTRACTION_DISPARITY_CEILING
+    metric = _first_mapping(
+        metadata.get("extraction_fairness"),
+        metrics.get("extraction_fairness"),
+        metadata.get("extraction_fairness_audit"),
+        metrics.get("extraction_fairness_audit"),
+    )
+    if not metric:
+        return GateCheck(
+            "G14",
+            True,
+            reason="not provided",
+            details={"ceiling": ceiling},
+        )
+
+    raw_per_group = metric.get("per_group")
+    per_group_f1 = _extraction_group_f1(raw_per_group)
+    if (
+        not isinstance(raw_per_group, Mapping)
+        or len(per_group_f1) != len(raw_per_group)
+        or len(per_group_f1) < 2
+        or any(not 0.0 <= score <= 1.0 for score in per_group_f1.values())
+    ):
+        return GateCheck(
+            "G14",
+            False,
+            reason="extraction-fairness metric is malformed",
+            details={
+                "ceiling": ceiling,
+                "error": (
+                    "per_group must contain at least two groups with finite "
+                    "entity_f1 values in [0, 1]"
+                ),
+            },
+        )
+
+    reported_gap = _optional_float(
+        _first_value(
+            metric.get("extraction_f1_gap"),
+            metric.get("f1_gap"),
+            metric.get("disparity"),
+            metric.get("gap"),
+        )
+    )
+    computed_gap = max(per_group_f1.values()) - min(per_group_f1.values())
+    if reported_gap is not None and (
+        not 0.0 <= reported_gap <= 1.0
+        or not math.isclose(reported_gap, computed_gap, abs_tol=1e-12)
+    ):
+        return GateCheck(
+            "G14",
+            False,
+            reason="extraction-fairness metric is malformed",
+            details={
+                "ceiling": ceiling,
+                "computed_gap": computed_gap,
+                "reported_gap": reported_gap,
+                "error": "reported extraction_f1_gap does not match per_group",
+            },
+        )
+    gap = computed_gap
+
+    worst_group = min(per_group_f1, key=lambda key: (per_group_f1[key], key))
+    best_group = max(per_group_f1, key=lambda key: (per_group_f1[key], key))
+
+    passed = gap <= ceiling
+    return GateCheck(
+        "G14",
+        passed,
+        reason=(
+            "ok"
+            if passed
+            else "extraction-F1 disparity across surrogate groups exceeds ceiling"
+        ),
+        details={
+            "ceiling": ceiling,
+            "extraction_f1_gap": gap,
+            "worst_group": (str(worst_group) if worst_group is not None else None),
+            "best_group": (str(best_group) if best_group is not None else None),
+            "per_group_f1": per_group_f1,
+            "worst_group_by_metric": _worst_group_by_metric(
+                metric.get("worst_group_by_metric")
+            ),
+            "assistive": True,
+        },
+    )
+
+
+def _extraction_group_f1(value: Any) -> dict[str, float]:
+    if not isinstance(value, Mapping):
+        return {}
+    scores: dict[str, float] = {}
+    for group, payload in value.items():
+        score: float | None
+        if isinstance(payload, Mapping):
+            score = _optional_float(
+                _first_value(payload.get("entity_f1"), payload.get("f1"))
+            )
+        else:
+            score = _optional_float(payload)
+        if score is not None:
+            scores[str(group)] = score
+    return scores
+
+
+def _worst_group_by_metric(value: Any) -> dict[str, str | None]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        str(metric): (str(group) if group is not None else None)
+        for metric, group in sorted(value.items(), key=lambda item: str(item[0]))
+    }
+
+
 def _adversarial_recall_under_attack_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -2294,6 +2430,113 @@ def _coreml_variant_parity_check(
         },
         blocking_format=next(iter(failures), missing[0] if missing else None),
     )
+
+
+def _export_variant_manifest(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    inline = _mapping(
+        metadata.get("export_variant_manifest")
+        or metadata.get("export_conversion_manifest")
+        or metadata.get("onnx_webgpu_manifest")
+        or metadata.get("export_manifest")
+    )
+    if inline:
+        return inline
+
+    variants = metadata.get("export_variants")
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        manifest: dict[str, Any] = {"variants": list(variants)}
+        required = metadata.get("required_export_variants")
+        if isinstance(required, Sequence) and not isinstance(required, (str, bytes)):
+            manifest["required_variants"] = list(required)
+        return manifest
+
+    manifest_path = _optional_path(
+        _first_value(
+            metadata.get("export_variant_manifest_path"),
+            metadata.get("export_manifest_path"),
+        )
+    )
+    if manifest_path is None or not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return _mapping(loaded)
+
+
+def _export_variant_checks(
+    manifest: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[GateCheck]:
+    variants_raw = manifest.get("variants")
+    variants = (
+        [_mapping(item) for item in variants_raw if isinstance(item, Mapping)]
+        if isinstance(variants_raw, Sequence)
+        and not isinstance(variants_raw, (str, bytes))
+        else []
+    )
+
+    parent_recall = _first_mapping(
+        manifest.get("parent_recall"),
+        manifest.get("fp_parent_per_label_recall"),
+    ) or _quant_parent_recall(metrics, metadata)
+
+    required = manifest.get("required_variants") or metadata.get(
+        "required_export_variants"
+    )
+    required_variants = (
+        [str(item) for item in required]
+        if isinstance(required, Sequence) and not isinstance(required, (str, bytes))
+        else []
+    )
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_TIER_BUDGETS,
+        parent_recall=parent_recall or None,
+        parent_format=str(manifest.get("parent_format") or ""),
+        required_variants=required_variants,
+        tier_aliases=_TIER_ALIASES,
+    )
+
+    coverage_passed = bool(result.variant_results) and not result.missing_required
+    if not result.variant_results:
+        coverage_reason = "no ONNX/WebGPU export variants declared"
+    elif result.missing_required:
+        coverage_reason = "required export variant missing"
+    else:
+        coverage_reason = "ok"
+
+    checks: list[GateCheck] = [
+        GateCheck(
+            EXPORT_VARIANT_GATE,
+            coverage_passed,
+            reason=coverage_reason,
+            details={
+                "parent_format": result.parent_format,
+                "evaluated_formats": list(result.evaluated_formats),
+                "missing_required": list(result.missing_required),
+                "blocked_formats": list(result.blocked_formats),
+            },
+            blocking_format=(
+                result.missing_required[0] if result.missing_required else None
+            ),
+        )
+    ]
+    for variant in result.variant_results:
+        checks.append(
+            GateCheck(
+                f"{EXPORT_VARIANT_GATE}:{variant.format}",
+                variant.passed,
+                reason=variant.reason,
+                details=variant.to_dict(),
+                blocking_format=variant.blocking_format,
+            )
+        )
+    return checks
 
 
 def _g5_check(
@@ -4387,10 +4630,12 @@ __all__ = [
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
     "G11_CRITICAL_RECALL_FLOOR",
+    "G14_EXTRACTION_DISPARITY_CEILING",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
     "SURROGATE_QUALITY_GATE",
+    "EXPORT_VARIANT_GATE",
     "GROUNDING_ACCURACY_GATE",
     "GROUNDING_TOP1_FLOOR",
     "GROUNDING_TOP5_FLOOR",
