@@ -246,6 +246,8 @@ def publish_artifact(
     gate_report_path: str | Path | None = None,
     gate_signing_key: bytes | str | None = None,
     gate_signing_key_env: str = DEFAULT_GATE_SIGNING_KEY_ENV,
+    champion_gate_report_path: str | Path | None = None,
+    champion_challenger_record_path: str | Path | None = None,
     calibration_report_path: str | Path | None = None,
     calibration_thresholds_path: str | Path | None = None,
     fairness_report_path: str | Path | None = None,
@@ -275,6 +277,17 @@ def publish_artifact(
                 gate_signing_key,
                 env_var=gate_signing_key_env,
             ),
+        )
+
+    if champion_gate_report_path is not None:
+        _require_champion_challenger_promotion(
+            champion_gate_report_path,
+            challenger=verified_gate_report,
+            signing_key=_resolve_gate_signing_key(
+                gate_signing_key,
+                env_var=gate_signing_key_env,
+            ),
+            record_path=champion_challenger_record_path,
         )
 
     token = token or read_hf_token(token_env)
@@ -480,6 +493,48 @@ def _load_verified_gate_report(
     return report
 
 
+def _require_champion_challenger_promotion(
+    champion_gate_report_path: str | Path,
+    *,
+    challenger: GateReport | None,
+    signing_key: bytes | str,
+    record_path: str | Path | None,
+) -> None:
+    """Fail closed unless the challenger wins the champion-challenger gate.
+
+    This is the offline promotion check that must pass before the STABLE
+    transition. The champion ``-vN`` gate report and the challenger candidate
+    report are compared with no live model call; publishing is refused unless
+    the deterministic verdict is ``PROMOTE``. When the challenger wins, the
+    signed comparison record is written (if a path is given) so the ledger is
+    reproducible from the two committed reports.
+    """
+
+    from openmed.eval.champion_challenger import (
+        PROMOTE,
+        compare_champion_challenger,
+        write_comparison_record,
+    )
+
+    if challenger is None:
+        raise HfPublishError(
+            "champion-challenger promotion requires a challenger gate report; "
+            "pass gate_report_path alongside champion_gate_report_path"
+        )
+    champion = _load_verified_gate_report(
+        champion_gate_report_path,
+        signing_key=signing_key,
+    )
+    verdict = compare_champion_challenger(champion, challenger)
+    if verdict.verdict != PROMOTE:
+        raise HfPublishError(
+            "champion-challenger verdict must be PROMOTE before publishing; "
+            f"received {verdict.verdict!r} ({'; '.join(verdict.reasons) or 'no reason'})"
+        )
+    if record_path is not None:
+        write_comparison_record(verdict, record_path)
+
+
 def artifact_sha256(path: str | Path) -> str:
     """Return a deterministic sha256 digest for a file or directory tree."""
 
@@ -592,6 +647,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--champion-gate-report",
+        default=None,
+        help=(
+            "Optional champion (-vN) signed gate report; when set, publishing "
+            "is refused unless the challenger wins the champion-challenger gate"
+        ),
+    )
+    parser.add_argument(
+        "--champion-challenger-record",
+        default=None,
+        help="Optional path to write the signed champion-challenger comparison record",
+    )
+    parser.add_argument(
         "--calibration-report",
         default=None,
         help="Optional calibration report JSON included in the datasheet",
@@ -676,6 +744,8 @@ def main(argv: list[str] | None = None) -> None:
         smoke_failure_reason=args.smoke_failure_reason,
         gate_report_path=args.gate_report,
         gate_signing_key_env=args.gate_signing_key_env,
+        champion_gate_report_path=args.champion_gate_report,
+        champion_challenger_record_path=args.champion_challenger_record,
         calibration_report_path=args.calibration_report,
         calibration_thresholds_path=args.calibration_thresholds,
         fairness_report_path=args.fairness_report,
