@@ -7,9 +7,9 @@ deploy anything.
 The pinned Playwright suite covers Chromium, Firefox, and WebKit across the
 marketing site, documentation, real Chinese and Hindi routes, generated
 leaderboard, browser demo, and the non-indexed synthetic RTL fixture. The
-matrix exercises light, dark, both resolved system themes, mobile, landscape,
-desktop, print, a 400% zoom proxy, no-JavaScript, reduced-motion, text-spacing,
-keyboard-focus, and forced-colors states.
+matrix exercises light and dark, including both OS-resolved first-visit states,
+mobile, landscape, desktop, print, a 400% zoom proxy, no-JavaScript,
+reduced-motion, text-spacing, keyboard-focus, and forced-colors states.
 
 Run the complete gate from the repository root:
 

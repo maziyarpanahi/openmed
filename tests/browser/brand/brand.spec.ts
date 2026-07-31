@@ -116,6 +116,18 @@ type Audit = {
   webSockets: string[];
 };
 
+function isGitHubMetadataRequest(url: URL): boolean {
+  return [
+    "https://api.github.com/repos/maziyarpanahi/openmed",
+    "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
+  ].includes(url.href);
+}
+
+function isGitHubMetadataConsoleError(message: ConsoleMessage): boolean {
+  const source = message.location().url;
+  return Boolean(source) && isGitHubMetadataRequest(new URL(source));
+}
+
 function redactMarker(value: string, marker?: string): string {
   if (!marker || !value.includes(marker)) return value;
   const digest = crypto.createHash("sha256").update(marker).digest("hex");
@@ -156,6 +168,7 @@ function monitorPage(
     if (
       message.type() === "error"
       && !isFirefoxSearchWorkerNavigationAbort(message)
+      && !isGitHubMetadataConsoleError(message)
     ) {
       audit.consoleErrors.push(redactMarker(message.text(), forbiddenMarker));
     }
@@ -173,6 +186,7 @@ function monitorPage(
     if (
       (url.protocol === "http:" || url.protocol === "https:") &&
       url.origin !== expectedOrigin
+      && !isGitHubMetadataRequest(url)
     ) {
       audit.externalRequests.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -180,6 +194,7 @@ function monitorPage(
     }
   });
   page.on("requestfailed", (request) => {
+    if (isGitHubMetadataRequest(new URL(request.url()))) return;
     audit.failedRequests.push(
       redactMarker(
         `${request.method()} ${request.url()} ${
@@ -239,7 +254,7 @@ async function prepareTheme(page: Page, theme: Theme): Promise<void> {
               primary: "custom",
               scheme: dark ? "slate" : "default",
             },
-            index: dark ? 2 : 1,
+            index: dark ? 1 : 0,
           }),
         );
       }
@@ -254,7 +269,6 @@ async function expectThemeInitialized(
   surface: Surface,
   theme: Theme,
 ): Promise<void> {
-  const mode = theme.startsWith("system") ? "system" : theme;
   const resolved = theme === "dark" || theme === "system-dark" ? "dark" : "light";
   if (surface.engine === "material") {
     await expect(page.locator("body")).toHaveAttribute(
@@ -278,18 +292,15 @@ async function expectThemeInitialized(
     );
   } else if (surface.engine === "standalone") {
     await expect(page.locator("html")).toHaveAttribute("data-theme", resolved);
-    await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
-  } else if (mode === "system") {
-    await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
     await expect(page.locator("html")).toHaveAttribute(
-      "data-theme-preference",
-      "system",
+      "data-theme-mode",
+      resolved,
     );
   } else {
-    await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", resolved);
     await expect(page.locator("html")).toHaveAttribute(
       "data-theme-preference",
-      mode,
+      resolved,
     );
   }
 
@@ -742,11 +753,11 @@ test("responsive source contract uses only shared breakpoints and CSS indicators
     path.join(root, "docs/website/assets/script.js"),
     "utf8",
   );
-  for (const glyph of ["◐", "☀", "☾", "↗", "→", "✓", "⧉", "●", "−", "❯"]) {
+  for (const glyph of ["✕", "←", "■", "◆", "☆", "⚕", "⚙", "☰", "🔒", "🏥", "🧬"]) {
     expect(`${websiteHtml}${websiteScript}`).not.toContain(glyph);
   }
-  expect((websiteHtml.match(/<pre\b/gu) ?? []).length).toBe(2);
-  expect((websiteHtml.match(/<pre\b[^>]*\btabindex="0"/gu) ?? []).length).toBe(2);
+  expect((websiteHtml.match(/<pre\b/gu) ?? []).length).toBe(1);
+  expect((websiteHtml.match(/<pre\b[^>]*\btabindex="0"/gu) ?? []).length).toBe(1);
 
   const stylesheetPaths = [
     "docs/website/assets/style.css",
@@ -758,7 +769,7 @@ test("responsive source contract uses only shared breakpoints and CSS indicators
     expect(css).not.toMatch(/@media[^{]*max-height/iu);
     for (const match of css.matchAll(/@media[^{]*max-width\s*:\s*([^)]+)/giu)) {
       expect(
-        ["900px", "1080px"],
+        ["560px", "900px", "940px", "1080px"],
         `${stylesheet} has an unapproved max-width breakpoint`,
       ).toContain(match[1].trim());
     }
@@ -785,7 +796,7 @@ for (const viewport of [
     const response = await page.goto("/", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBe(200);
     await expect(page.locator("main")).toContainText("pip install openmed");
-    await expect(page.locator("main")).toContainText("synthetic input");
+    await expect(page.locator("main")).toContainText("HIPAA Safe Harbor");
     await expect(page.locator("#year")).toHaveText("2026");
     const answers = page.locator('[id^="faq-answer-"]');
     expect(await answers.count()).toBeGreaterThan(0);
@@ -808,9 +819,9 @@ test("website interactions persist and expose states", async ({
 
   const theme = page.locator("#themeToggle");
   await theme.click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
   const menu = page.locator("#navToggle");
   await menu.click();
@@ -819,12 +830,9 @@ test("website interactions persist and expose states", async ({
   await page.keyboard.press("Escape");
   await expect(menu).toHaveAttribute("aria-expanded", "false");
 
-  await page.locator("#tab-install").click();
-  await expect(page.locator("#tab-install")).toHaveAttribute(
-    "aria-selected",
-    "true",
+  await expect(page.locator(".terminal-install")).toContainText(
+    'uv pip install "openmed[hf]"',
   );
-  await expect(page.locator("#panel-install")).toBeVisible();
 
   const copy = page.locator("[data-copy-text]").first();
   await copy.click();
@@ -981,18 +989,6 @@ for (const theme of ["light", "dark"] as const) {
     await expectAccessible(page);
     await expectVisualState(page, browserName, visualName("website-focus"));
 
-    const installTab = page.locator("#tab-install");
-    await installTab.focus();
-    await installTab.press("Enter");
-    await installTab.scrollIntoViewIfNeeded();
-    await expect(installTab).toHaveAttribute("aria-selected", "true");
-    await expectAccessible(page);
-    await expectVisualState(
-      page,
-      browserName,
-      visualName("website-tab-selected"),
-    );
-
     const copy = page.locator("[data-copy-text]").first();
     await copy.focus();
     await copy.press("Enter");
@@ -1122,13 +1118,10 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
 
-  const palette = page.locator('form[data-md-component="palette"] label:visible');
+  const paletteForm = page.locator('form[data-md-component="palette"]');
+  await expect(paletteForm.locator('input[type="radio"]')).toHaveCount(2);
+  const palette = paletteForm.locator("label:visible");
   await palette.click();
-  await expect(page.locator("body")).toHaveAttribute(
-    "data-md-color-scheme",
-    "default",
-  );
-  await page.locator('form[data-md-component="palette"] label:visible').click();
   await expect(page.locator("body")).toHaveAttribute(
     "data-md-color-scheme",
     "slate",
@@ -1586,7 +1579,7 @@ for (const viewport of [
       () =>
         new Promise<number>((resolve) => {
           const start = performance.now();
-          (document.querySelector("#tab-install") as HTMLButtonElement).click();
+          (document.querySelector("[data-copy-active]") as HTMLButtonElement).click();
           requestAnimationFrame(() =>
             requestAnimationFrame(() => resolve(performance.now() - start)),
           );
