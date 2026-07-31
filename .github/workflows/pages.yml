@@ -41,6 +41,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.0-noble@sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471
+      options: --ipc=host
     steps:
       - name: Checkout
         uses: actions/checkout@v7
