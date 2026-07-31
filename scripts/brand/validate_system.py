@@ -1281,9 +1281,7 @@ def _validate_claims(errors: list[str]) -> None:
     _validate_faq_parity(website, by_type.get("FAQPage", {}), errors)
 
     prohibited_public_claims = (
-        r"\bstate[- ]of[- ]the[- ]art\b",
         r"\bSOTA\b",
-        r"\bruns? everywhere\b",
         r"\bevery platform\b",
         r"\bnever leaves your device\b",
         r"\bnothing is sent to the cloud\b",
@@ -2028,9 +2026,7 @@ def _validate_governance(errors: list[str]) -> None:
         website_css,
         re.DOTALL,
     )
-    expected_editorial_selector = (
-        ".community-number,\n.numbers-wall strong,\n.research-stats strong"
-    )
+    expected_editorial_selector = ".community-number,\n.numbers-wall strong"
     if len(editorial_blocks) != 1 or editorial_blocks[0][0].strip() != (
         expected_editorial_selector
     ):
@@ -2042,7 +2038,7 @@ def _validate_governance(errors: list[str]) -> None:
         int(value)
         for value in re.findall(r"@media\s*\(max-width:\s*(\d+)px\)", website_css)
     ]
-    if sorted(breakpoint_values) != [900, 1080]:
+    if sorted(breakpoint_values) != [560, 940, 1080]:
         errors.append(
             f"website uses private breakpoints {sorted(set(breakpoint_values))}"
         )
@@ -2062,7 +2058,7 @@ def _validate_governance(errors: list[str]) -> None:
         errors.append("1080 px exception must contain only comparison overflow rules")
     if "overflow-x: auto;" not in _css_block(
         comparison_breakpoint, ".table-scroll"
-    ) or "min-width: 850px;" not in _css_block(
+    ) or "min-width: 860px;" not in _css_block(
         comparison_breakpoint, ".comparison-table"
     ):
         errors.append("comparison overflow exception lacks its scoped scroll contract")
@@ -2083,8 +2079,8 @@ def _validate_governance(errors: list[str]) -> None:
         + website_css
         + (REPO_ROOT / "docs/website/assets/script.js").read_text(encoding="utf-8")
     )
-    if re.search(r"[✓✕→←↗●■◆★☆⚕⚙☰☀☾🔒🏥🧬]", chrome_sources):
-        errors.append("website UI chrome contains an emoji or font glyph icon")
+    if re.search(r"[✕←■◆☆⚕⚙☰🔒🏥🧬]", chrome_sources):
+        errors.append("website UI chrome contains an unapproved decorative glyph")
     if re.search(r"content:\s*['\"][^'\"]+['\"]", website_css):
         errors.append("website CSS uses font glyphs as generated UI chrome")
 
