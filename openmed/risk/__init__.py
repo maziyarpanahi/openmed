@@ -47,7 +47,14 @@ from .k_anonymity import (
     apply_suppression,
     propose_suppression,
 )
-from .kanon import build_generalization_hierarchies, enforce_kanon, kanon_report
+from .kanon import (
+    MemoryCeilingError,
+    StreamingKanonDecision,
+    StreamingKanonState,
+    build_generalization_hierarchies,
+    enforce_kanon,
+    kanon_report,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
@@ -139,6 +146,9 @@ __all__ = [
     "risk_report",
     "sample_synthetic_table",
     "tabular_fidelity_report",
+    "MemoryCeilingError",
+    "StreamingKanonDecision",
+    "StreamingKanonState",
     "build_generalization_hierarchies",
     "enforce_kanon",
     "kanon_report",

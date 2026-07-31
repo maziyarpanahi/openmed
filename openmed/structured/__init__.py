@@ -83,6 +83,14 @@ from .scan import (
     TableRoleScan,
 )
 from .scan import scan_table as scan_column_roles
+from .streaming import (
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_MEMORY_CEILING,
+    SUPPORTED_STREAMING_SUFFIXES,
+    MemoryCeilingError,
+    StreamingKanonDecision,
+    stream_deidentify_table,
+)
 from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
 from .tables import (
     TABLE_ADVISORY,
@@ -117,6 +125,8 @@ __all__ = [
     "DanglingForeignKeyError",
     "DateColumn",
     "DischargeSlotName",
+    "DEFAULT_CHUNK_SIZE",
+    "DEFAULT_MEMORY_CEILING",
     "DischargeSummary",
     "DischargeSummarySection",
     "DiscoveryConfigurationError",
@@ -127,6 +137,7 @@ __all__ = [
     "HierarchyError",
     "KeySpace",
     "LabPanel",
+    "MemoryCeilingError",
     "ParameterSeries",
     "ROLE_DIRECT_ID",
     "ROLE_FREE_TEXT",
@@ -138,7 +149,9 @@ __all__ = [
     "RelationalSchema",
     "RelationalSchemaError",
     "RoleOverrideError",
+    "SUPPORTED_STREAMING_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
+    "StreamingKanonDecision",
     "SurrogateManifest",
     "TABLE_ADVISORY",
     "Table",
@@ -160,6 +173,7 @@ __all__ = [
     "read_table",
     "scan_column_roles",
     "scan_table",
+    "stream_deidentify_table",
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
