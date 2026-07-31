@@ -123,6 +123,7 @@ classification:
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
+    - chinese-segmentation-operations.md
     - indic-normalization.md
     - configuration.md
     - profiles.md

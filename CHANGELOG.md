@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a Chinese segmentation operations guide covering supported pkuseg and
+  HanLP versions, cache and storage layout, deployment matrices, upgrade and
+  rollback steps, institutional dictionary governance, and the local-model
+  regression check (#1557).
+
 ### Fixed
 
 - Fixed the PySpark batch de-identification adapter so

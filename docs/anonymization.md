@@ -415,7 +415,9 @@ select one. `pkuseg` defaults to the `medicine` domain, configurable through
 `chinese_pkuseg_domain`; HanLP accepts a preloaded tokenizer or a local model
 path through `create_chinese_segmenter(..., hanlp_model=...)`. OpenMed never
 downloads optional model files implicitly, so provision those assets before
-selecting either backend.
+selecting either backend. For supported model versions, cache layout, upgrade
+and rollback steps, dictionary governance, and regression checks, see
+[Chinese segmentation model operations](chinese-segmentation-operations.md).
 
 ## Privacy-filter family
 
