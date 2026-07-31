@@ -41,9 +41,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.0-noble@sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471
-      options: --ipc=host
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -89,11 +86,15 @@ jobs:
           cache-dependency-path: tests/browser/brand/package-lock.json
       - name: Install pinned browser test dependencies
         run: npm ci --prefix tests/browser/brand
-      - name: Install pinned browser engines
-        working-directory: tests/browser/brand
-        run: npx playwright install --with-deps chromium firefox webkit
       - name: Validate light, dark, mobile, and documentation surfaces
-        run: npm --prefix tests/browser/brand test
+        run: |
+          docker run --rm --ipc=host \
+            --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --workdir /work \
+            --env CI=true \
+            mcr.microsoft.com/playwright:v1.62.0-noble@sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471 \
+            /bin/bash -lc "npm --prefix tests/browser/brand test"
       - name: Upload browser validation evidence
         if: always()
         uses: actions/upload-artifact@v7
