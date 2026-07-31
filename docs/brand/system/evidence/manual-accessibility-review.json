@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-07-29",
+  "review_scope": "repository_candidate",
+  "reviewer_role": "repository-candidate manual accessibility review",
+  "artifact": "staged repository candidate",
+  "surfaces": [
+    {
+      "id": "website",
+      "path": "/"
+    },
+    {
+      "id": "docs-landing",
+      "path": "/docs/"
+    },
+    {
+      "id": "docs-guide",
+      "path": "/docs/getting-started/"
+    },
+    {
+      "id": "docs-api",
+      "path": "/docs/api-reference/"
+    },
+    {
+      "id": "docs-chinese",
+      "path": "/docs/zh/"
+    },
+    {
+      "id": "docs-hindi",
+      "path": "/docs/hi/"
+    },
+    {
+      "id": "leaderboard",
+      "path": "/docs/eval/benchmark-leaderboard/"
+    },
+    {
+      "id": "browser-demo",
+      "path": "/docs/demo/web/"
+    },
+    {
+      "id": "rtl-fixture",
+      "path": "/docs/demo/rtl/"
+    }
+  ],
+  "viewports": [
+    "320x800",
+    "390x844",
+    "667x320",
+    "768x1024",
+    "1440x900",
+    "1536x864"
+  ],
+  "themes": [
+    "light",
+    "dark",
+    "system-light",
+    "system-dark"
+  ],
+  "presentation_modes": [
+    "forced-colors",
+    "print-where-relevant"
+  ],
+  "methods": [
+    "keyboard-only operation and visible-focus review",
+    "accessible names, roles, and states review",
+    "400 percent zoom proxy review",
+    "WCAG text-spacing worst-case override review",
+    "reduced-motion review",
+    "forced-colors review",
+    "automated axe WCAG 2.2 AA scan",
+    "WCAG 2.2 AA contrast review",
+    "manual visual snapshot review",
+    "oversized WebKit screenshot tiling review",
+    "print review where relevant"
+  ],
+  "results": {
+    "keyboard_only_and_visible_focus": "pass",
+    "accessible_names_roles_states": "pass",
+    "zoom_400_percent_proxy": "pass",
+    "text_spacing_worst_case": "pass",
+    "reduced_motion": "pass",
+    "forced_colors": "pass",
+    "axe_wcag_2_2_aa": "pass",
+    "contrast_wcag_2_2_aa": "pass",
+    "manual_snapshots": "pass",
+    "oversized_webkit_tiling": "pass",
+    "print_where_relevant": "pass"
+  },
+  "axe": {
+    "standard": "WCAG 2.2 AA",
+    "unwaived_violations": 0
+  },
+  "waivers": [],
+  "external_live_phase": "pending_phase_5",
+  "qualification": "Repository-candidate staged-artifact accessibility evidence only; this is not user testing and is not live-platform approval."
+}

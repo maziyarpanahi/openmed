@@ -18,6 +18,7 @@
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "replace",
     "QUASI_IDENTIFIER": "replace",
+    "SENSITIVE_ATTRIBUTE": "replace",
     "CLINICAL_CONCEPT": "keep"
   },
   "actions": {
@@ -58,6 +59,7 @@
     "LITECOIN_ADDRESS": "replace",
     "MASKED_NUMBER": "replace",
     "GENDER": "replace",
+    "ETHNICITY": "replace",
     "EYE_COLOR": "replace",
     "HEIGHT": "replace",
     "ORGANIZATION": "replace",
@@ -78,6 +80,7 @@
     "LAB_TEST": "keep",
     "PROCEDURE": "keep",
     "BODY_SITE": "keep",
+    "DEVICE": "keep",
     "ANESTHESIA_TYPE": "keep",
     "ANESTHETIC_AGENT": "keep",
     "AIRWAY_MANAGEMENT": "keep",
@@ -86,6 +89,11 @@
     "NUTRITION_TARGET": "keep",
     "FEEDING_ROUTE": "keep",
     "NUTRITIONAL_STATUS": "keep",
+    "VACCINE_NAME": "keep",
+    "DOSE_NUMBER": "keep",
+    "ADMINISTRATION_ROUTE": "keep",
+    "VACCINE_LOT": "keep",
+    "VACCINE_SERIES": "keep",
     "GENE_SYMBOL": "keep",
     "VARIANT_DESCRIPTOR": "keep",
     "PROTEIN_CHANGE": "keep",
@@ -99,6 +107,22 @@
     "GI_SYMPTOM": "keep",
     "GI_SCORE": "keep",
     "POLYP_DESCRIPTOR": "keep",
+    "INTAKE_OUTPUT": "keep",
+    "LINE_DRAIN_TUBE": "keep",
+    "NURSING_RISK_SCORE": "keep", 
+    "CARE_INTERVENTION": "keep",
+
+    "CKD_STAGE": "mask",
+    "DIALYSIS_MODALITY": "mask",
+    "RENAL_FUNCTION_MEASURE": "mask",
+    "URINE_FINDING": "mask",
+    "SPIROMETRY_MEASURE": "mask",
+    "OXYGEN_SUPPORT": "mask",
+    "RESPIRATORY_FINDING": "mask",
+    "DYSPNEA_GRADE": "mask",
+    "GROWTH_PARAMETER": "mask",
+    "GROWTH_PERCENTILE": "mask",
+    "DEVELOPMENTAL_MILESTONE": "mask",
     "OTHER": "keep"
   }
 }

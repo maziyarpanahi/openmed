@@ -1,6 +1,11 @@
 import Foundation
 
 /// Decodes BIO-tagged token predictions into grouped entity spans.
+///
+/// All public span offsets are half-open Unicode scalar (code point) offsets.
+/// They are independent of UTF-8 and UTF-16 storage, and emitted entity
+/// boundaries are snapped outward so they never bisect an extended grapheme
+/// cluster.
 public enum PostProcessing {
 
     /// A single per-token prediction before grouping.
@@ -8,7 +13,10 @@ public enum PostProcessing {
         public let labelId: Int
         public let label: String
         public let score: Float
+        /// Inclusive Unicode scalar offset in the original text.
         public let startOffset: Int
+
+        /// Exclusive Unicode scalar offset in the original text.
         public let endOffset: Int
     }
 
@@ -17,6 +25,157 @@ public enum PostProcessing {
         case first
         case average
         case max
+    }
+
+    private static let indicLinkers: Set<UInt32> = [
+        0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D,
+        0x0BCD, 0x0C4D, 0x0CCD, 0x0D4D,
+    ]
+
+    private static let indicConsonantRanges: [ClosedRange<UInt32>] = [
+        0x0915...0x0939,
+        0x0958...0x095F,
+        0x0978...0x097F,
+        0x0995...0x09B9,
+        0x09DC...0x09DF,
+        0x09F0...0x09F1,
+        0x0A15...0x0A39,
+        0x0A59...0x0A5E,
+        0x0A95...0x0AB9,
+        0x0B15...0x0B39,
+        0x0B5C...0x0B5D,
+        0x0B5F...0x0B5F,
+        0x0B95...0x0BB9,
+        0x0C15...0x0C39,
+        0x0C58...0x0C5A,
+        0x0C95...0x0CB9,
+        0x0CDC...0x0CDE,
+        0x0D15...0x0D3A,
+    ]
+
+    /// Return the number of Unicode scalar values in `text`.
+    public static func unicodeScalarCount(in text: String) -> Int {
+        text.unicodeScalars.count
+    }
+
+    /// Convert a `String.Index` into a Unicode scalar offset.
+    public static func scalarOffset(
+        in text: String,
+        at index: String.Index
+    ) -> Int {
+        text.unicodeScalars.distance(
+            from: text.unicodeScalars.startIndex,
+            to: index
+        )
+    }
+
+    /// Convert a Unicode scalar offset into a `String.Index`.
+    public static func stringIndex(
+        in text: String,
+        scalarOffset: Int
+    ) -> String.Index? {
+        guard scalarOffset >= 0,
+            scalarOffset <= unicodeScalarCount(in: text)
+        else {
+            return nil
+        }
+        return text.unicodeScalars.index(
+            text.unicodeScalars.startIndex,
+            offsetBy: scalarOffset
+        )
+    }
+
+    /// Convert a half-open Unicode scalar span into a Swift string range.
+    public static func scalarRange(
+        in text: String,
+        start: Int,
+        end: Int
+    ) -> Range<String.Index>? {
+        guard start >= 0, end >= start,
+            isGraphemeBoundary(start, in: text),
+            isGraphemeBoundary(end, in: text),
+            let lowerBound = stringIndex(in: text, scalarOffset: start),
+            let upperBound = stringIndex(in: text, scalarOffset: end)
+        else {
+            return nil
+        }
+        return lowerBound..<upperBound
+    }
+
+    /// Slice `text` with half-open Unicode scalar offsets.
+    public static func scalarSubstring(
+        _ text: String,
+        start: Int,
+        end: Int
+    ) -> String {
+        guard let range = scalarRange(in: text, start: start, end: end) else {
+            return ""
+        }
+        return String(text[range])
+    }
+
+    /// Return every extended-grapheme boundary as a Unicode scalar offset.
+    public static func graphemeBoundaries(in text: String) -> [Int] {
+        var boundaries = [0]
+        boundaries.reserveCapacity(text.count + 1)
+        var scalarOffset = 0
+        for character in text {
+            scalarOffset += character.unicodeScalars.count
+            boundaries.append(scalarOffset)
+        }
+        let scalars = Array(text.unicodeScalars)
+        return boundaries.filter {
+            $0 == 0
+                || $0 == scalars.count
+                || !continuesIndicConjunct(scalars, at: $0)
+        }
+    }
+
+    /// Return whether a Unicode scalar offset lies on a grapheme boundary.
+    public static func isGraphemeBoundary(
+        _ offset: Int,
+        in text: String
+    ) -> Bool {
+        guard offset >= 0, offset <= unicodeScalarCount(in: text) else {
+            return false
+        }
+        return graphemeBoundaries(in: text).contains(offset)
+    }
+
+    /// Clamp and snap a Unicode scalar span outward to grapheme boundaries.
+    ///
+    /// Empty spans remain empty and move to the preceding boundary. Non-empty
+    /// spans expand to include every extended grapheme cluster they touch.
+    public static func snapScalarSpanToGraphemeBoundaries(
+        start: Int,
+        end: Int,
+        in text: String
+    ) -> (start: Int, end: Int) {
+        let textLength = unicodeScalarCount(in: text)
+        let safeStart = max(0, min(start, textLength))
+        let safeEnd = max(safeStart, min(end, textLength))
+        let boundaries = graphemeBoundaries(in: text)
+        let snappedStart = boundaries.last(where: { $0 <= safeStart }) ?? 0
+        guard safeStart != safeEnd else {
+            return (snappedStart, snappedStart)
+        }
+        let snappedEnd = boundaries.first(where: { $0 >= safeEnd }) ?? textLength
+        return (snappedStart, snappedEnd)
+    }
+
+    /// Replace a Unicode scalar span without relying on `String.count`.
+    public static func replacingScalarSpan(
+        in text: String,
+        start: Int,
+        end: Int,
+        with replacement: String
+    ) -> String? {
+        guard let range = scalarRange(in: text, start: start, end: end) else {
+            return nil
+        }
+        var result = text
+        result.replaceSubrange(range, with: replacement)
+        return result
     }
 
     struct SemanticUnitPattern {
@@ -793,35 +952,29 @@ public enum PostProcessing {
             return entities
         }
 
-        let textLength = text.count
+        let textLength = unicodeScalarCount(in: text)
 
         return entities.map { entity in
-            var start = max(0, min(entity.start, textLength))
-            var end = max(start, min(entity.end, textLength))
+            let snapped = snapScalarSpanToGraphemeBoundaries(
+                start: entity.start,
+                end: entity.end,
+                in: text
+            )
+            var start = snapped.start
+            var end = snapped.end
 
             var extended = 0
             while end < textLength,
                 extended < 10,
                 let character = character(at: end, in: text),
+                isLatinWordContinuation(character, after: end, in: text),
                 isWordLike(character)
             {
-                end += 1
+                end += character.unicodeScalars.count
                 extended += 1
             }
 
-            while start < end,
-                let character = character(at: start, in: text),
-                character.isWhitespace
-            {
-                start += 1
-            }
-
-            while end > start,
-                let character = character(at: end - 1, in: text),
-                character.isWhitespace
-            {
-                end -= 1
-            }
+            (start, end) = trimScalarWhitespace(start: start, end: end, in: text)
 
             guard start < end else {
                 return entity
@@ -985,8 +1138,8 @@ public enum PostProcessing {
                     continue
                 }
 
-                let start = text.distance(from: text.startIndex, to: range.lowerBound)
-                let end = text.distance(from: text.startIndex, to: range.upperBound)
+                let start = scalarOffset(in: text, at: range.lowerBound)
+                let end = scalarOffset(in: text, at: range.upperBound)
 
                 let overlaps = units.contains { existing in
                     start < existing.end && end > existing.start
@@ -1157,12 +1310,17 @@ public enum PostProcessing {
             confidence = average(scores)
         }
 
+        let snapped = snapScalarSpanToGraphemeBoundaries(
+            start: start,
+            end: end,
+            in: text
+        )
         return EntityPrediction(
             label: label,
-            text: substring(text, start: start, end: end),
+            text: substring(text, start: snapped.start, end: snapped.end),
             confidence: confidence,
-            start: start,
-            end: end
+            start: snapped.start,
+            end: snapped.end
         )
     }
 
@@ -1178,8 +1336,17 @@ public enum PostProcessing {
         }
 
         let windowStart = max(0, start - contextWindow)
-        let windowEnd = min(text.count, end + contextWindow)
-        let contextText = substring(text, start: windowStart, end: windowEnd).lowercased()
+        let windowEnd = min(unicodeScalarCount(in: text), end + contextWindow)
+        let snappedWindow = snapScalarSpanToGraphemeBoundaries(
+            start: windowStart,
+            end: windowEnd,
+            in: text
+        )
+        let contextText = substring(
+            text,
+            start: snappedWindow.start,
+            end: snappedWindow.end
+        ).lowercased()
 
         for contextWord in contextWords {
             let normalizedWord = contextWord.lowercased()
@@ -1297,10 +1464,7 @@ public enum PostProcessing {
     }
 
     private static func substring(_ text: String, start: Int, end: Int) -> String {
-        guard let range = characterRange(in: text, start: start, end: end) else {
-            return ""
-        }
-        return String(text[range])
+        scalarSubstring(text, start: start, end: end)
     }
 
     private static func characterRange(
@@ -1308,25 +1472,126 @@ public enum PostProcessing {
         start: Int,
         end: Int
     ) -> Range<String.Index>? {
-        guard start >= 0, end >= start, end <= text.count else {
-            return nil
-        }
-
-        let lowerBound = text.index(text.startIndex, offsetBy: start)
-        let upperBound = text.index(lowerBound, offsetBy: end - start)
-        return lowerBound..<upperBound
+        scalarRange(in: text, start: start, end: end)
     }
 
     private static func character(
         at offset: Int,
         in text: String
     ) -> Character? {
-        guard offset >= 0, offset < text.count else {
+        guard offset >= 0,
+            let index = stringIndex(in: text, scalarOffset: offset),
+            index < text.endIndex
+        else {
             return nil
         }
 
-        let index = text.index(text.startIndex, offsetBy: offset)
         return text[index]
+    }
+
+    private static func character(endingAt offset: Int, in text: String) -> Character? {
+        guard offset > 0,
+            let upperBound = stringIndex(in: text, scalarOffset: offset),
+            upperBound > text.startIndex
+        else {
+            return nil
+        }
+        return text[text.index(before: upperBound)]
+    }
+
+    static func trimScalarWhitespace(
+        start: Int,
+        end: Int,
+        in text: String
+    ) -> (start: Int, end: Int) {
+        let snapped = snapScalarSpanToGraphemeBoundaries(
+            start: start,
+            end: end,
+            in: text
+        )
+        var trimmedStart = snapped.start
+        var trimmedEnd = snapped.end
+        while trimmedStart < trimmedEnd,
+            let character = character(at: trimmedStart, in: text),
+            character.isWhitespace
+        {
+            trimmedStart += character.unicodeScalars.count
+        }
+        while trimmedEnd > trimmedStart,
+            let character = character(endingAt: trimmedEnd, in: text),
+            character.isWhitespace
+        {
+            trimmedEnd -= character.unicodeScalars.count
+        }
+        return (trimmedStart, trimmedEnd)
+    }
+
+    private static func isLatinWordContinuation(
+        _ candidate: Character,
+        after offset: Int,
+        in text: String
+    ) -> Bool {
+        guard let previous = character(endingAt: offset, in: text) else {
+            return false
+        }
+        return isLatinWordLike(previous) && isLatinWordLike(candidate)
+    }
+
+    private static func isLatinWordLike(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy { scalar in
+            let value = scalar.value
+            return scalar.properties.numericType != nil
+                || (0x0041...0x024F).contains(value)
+                || scalar.properties.generalCategory == .nonspacingMark
+                || scalar.properties.generalCategory == .spacingMark
+                || scalar.properties.generalCategory == .enclosingMark
+        }
+    }
+
+    private static func continuesIndicConjunct(
+        _ scalars: [Unicode.Scalar],
+        at index: Int
+    ) -> Bool {
+        guard index > 0, index < scalars.count,
+            isIndicConsonant(scalars[index])
+        else {
+            return false
+        }
+
+        var sawLinker = false
+        var cursor = index - 1
+        while cursor >= 0 {
+            let scalar = scalars[cursor]
+            if indicLinkers.contains(scalar.value) {
+                sawLinker = true
+                cursor -= 1
+                continue
+            }
+            if isGraphemeExtensionOrJoiner(scalar) {
+                cursor -= 1
+                continue
+            }
+            return sawLinker && isIndicConsonant(scalar)
+        }
+        return false
+    }
+
+    private static func isIndicConsonant(_ scalar: Unicode.Scalar) -> Bool {
+        indicConsonantRanges.contains { $0.contains(scalar.value) }
+    }
+
+    private static func isGraphemeExtensionOrJoiner(
+        _ scalar: Unicode.Scalar
+    ) -> Bool {
+        if scalar.value == 0x200C || scalar.value == 0x200D {
+            return true
+        }
+        switch scalar.properties.generalCategory {
+        case .nonspacingMark, .spacingMark, .enclosingMark:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func isWordLike(_ character: Character) -> Bool {

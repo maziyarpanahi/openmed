@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="description"
+      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+    />
+    <link
+      rel="canonical"
+      href="https://openmed.life/docs/demo/web/"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OpenMed" />
+    <meta
+      property="og:title"
+      content="OpenMed browser PII benchmark"
+    />
+    <meta
+      property="og:description"
+      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+    />
+    <meta property="og:url" content="https://openmed.life/docs/demo/web/" />
+    <meta property="og:image" content="https://openmed.life/og.png" />
+    <meta property="og:image:alt" content="OpenMed local-first healthcare NLP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="OpenMed browser PII benchmark"
+    />
+    <meta
+      name="twitter:description"
+      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+    />
+    <meta name="twitter:image" content="https://openmed.life/og.png" />
+    <meta name="twitter:image:alt" content="OpenMed local-first healthcare NLP" />
+    <link rel="icon" href="../../assets/openmed-favicon.svg" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-system.css" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-standalone.css" />
+    <title>OpenMed browser PII benchmark</title>
+  </head>
+  <body>
+    <a class="om-skip-link" href="#main">Skip to content</a>
+    <header class="om-site-header">
+      <div class="om-site-header__inner">
+        <a class="om-brand" href="/docs/" aria-label="OpenMed documentation">
+          <img
+            src="../../assets/openmed-mark.svg"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span>openmed</span>
+          <span class="om-brand__product">browser benchmark</span>
+        </a>
+        <nav class="om-site-nav" aria-label="Page links">
+          <a href="/docs/">Documentation</a>
+          <a href="/docs/export-onnx-webgpu/">ONNX and WebGPU</a>
+          <a
+            href="https://github.com/maziyarpanahi/openmed/tree/master/docs/demo/web"
+          >Source</a>
+          <button class="om-theme-toggle" type="button" data-openmed-theme>
+            Theme: system
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="om-page">
+      <section class="om-hero" aria-labelledby="page-title">
+        <p class="eyebrow">Local browser inference</p>
+        <h1 id="page-title">WASM vs WebGPU PII detection</h1>
+        <p class="lede">
+          Load a Transformers.js token-classification bundle, detect sensitive
+          spans in synthetic text, and compare cold model load with first
+          inference latency. Inference runs in this browser. Runtime and model
+          assets must be supplied from the same origin as this page.
+        </p>
+      </section>
+
+      <div class="grid">
+        <section class="card" aria-labelledby="settings-heading">
+          <h2 id="settings-heading">Model and backend</h2>
+          <div class="field">
+            <label for="runtime-module">Local runtime adapter module</label>
+            <input
+              id="runtime-module"
+              name="runtime-module"
+              value=""
+              placeholder="./vendor/openmed-transformers-runtime.js"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="runtime-note"
+            />
+            <p id="runtime-note" class="note">
+              The same-origin module must export
+              <code>createOpenMedPipeline(options)</code>.
+            </p>
+          </div>
+          <div class="field">
+            <label for="repo-id">Local model bundle URL</label>
+            <input
+              id="repo-id"
+              name="repo-id"
+              value=""
+              placeholder="./models/openmed-pii/"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <div class="field">
+            <label for="backend">Execution backend</label>
+            <select id="backend" name="backend">
+              <option value="wasm">WASM (CPU)</option>
+              <option value="webgpu">WebGPU</option>
+            </select>
+          </div>
+          <p id="webgpu-support" class="note"></p>
+        </section>
+
+        <section class="card" aria-labelledby="timing-heading">
+          <h2 id="timing-heading">Timing panel</h2>
+          <div class="table-wrap">
+            <table>
+              <caption class="om-sr-only">
+                Model load and first inference timing by execution backend
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Backend</th>
+                  <th scope="col">Model load</th>
+                  <th scope="col">First inference</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">WASM</th>
+                  <td id="wasm-load">—</td>
+                  <td id="wasm-first">—</td>
+                </tr>
+                <tr>
+                  <th scope="row">WebGPU</th>
+                  <td id="webgpu-load">—</td>
+                  <td id="webgpu-first">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">
+            Reset before a new cold-load comparison. Browser disk caches may
+            make later downloads faster.
+          </p>
+        </section>
+
+        <section class="card full" aria-labelledby="input-heading">
+          <h2 id="input-heading">Synthetic input</h2>
+          <label for="input-text">Text to inspect</label>
+          <textarea id="input-text" name="input-text">John Doe was born on 12/12/1990 and lives in Berlin.</textarea>
+          <div class="actions">
+            <button id="run-selected" type="button">Run selected backend</button>
+            <button id="benchmark-both" type="button">Benchmark both</button>
+            <button id="reset" class="secondary" type="button">
+              Reset benchmarks
+            </button>
+          </div>
+          <p id="status" class="status" role="status" aria-live="polite">
+            Ready. Supply same-origin runtime and model assets; use synthetic
+            data only.
+          </p>
+        </section>
+
+        <section class="card full" aria-labelledby="results-heading">
+          <h2 id="results-heading">Detected spans</h2>
+          <div id="results" class="results">No inference run yet.</div>
+          <ul id="entities" class="entities" aria-label="Detected entities"></ul>
+        </section>
+      </div>
+
+      <p class="note">
+        Demonstration only. Results can be incomplete and must not be used to
+        make clinical decisions or certify that text is de-identified.
+      </p>
+    </main>
+
+    <footer class="om-site-footer">
+      <div class="om-site-footer__inner">
+        <span>OpenMed documentation</span>
+        <span>Local-first healthcare NLP · synthetic data only</span>
+      </div>
+    </footer>
+
+    <script src="../../javascripts/openmed-standalone.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
