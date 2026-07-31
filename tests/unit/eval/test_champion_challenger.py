@@ -290,7 +290,9 @@ def test_record_reproduces_across_process(tmp_path: Path) -> None:
 
     cli_record = tmp_path / "cli.json"
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(_WORKTREE_ROOT)
+    env["PYTHONPATH"] = os.pathsep.join(
+        filter(None, (str(_WORKTREE_ROOT), env.get("PYTHONPATH")))
+    )
     result = subprocess.run(
         [
             sys.executable,
