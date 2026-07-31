@@ -579,6 +579,20 @@ def diff_against_baseline(
     )
 
 
+def metric_direction(
+    metric: str,
+    metric_directions: Mapping[str, str] | None = None,
+) -> str:
+    """Resolve whether higher or lower values are better for *metric*.
+
+    Returns :data:`HIGHER_IS_BETTER` or :data:`LOWER_IS_BETTER`. An explicit
+    ``metric_directions`` override wins; otherwise the metric name is matched
+    against the lower-is-better markers (leakage, latency, loss, memory, ...).
+    """
+
+    return _direction(metric, metric_directions)
+
+
 def metric_history(
     reports_in_order: Iterable[ReportLike],
     metric: str,
@@ -1214,6 +1228,7 @@ __all__ = [
     "append_run_to_ledger",
     "diff_against_baseline",
     "load_run_ledger",
+    "metric_direction",
     "metric_history",
     "paired_run_significance",
     "write_run_ledger",
