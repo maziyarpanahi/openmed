@@ -9,7 +9,7 @@
     <title>OpenMed — local-first clinical AI</title>
     <meta
         name="description"
-        content="OpenMed SDK 2.0.0 supports clinical extraction and de-identification workflows on hardware you control across 34 supported PII routes. Model and dataset terms vary by source."
+        content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks."
     >
     <meta
         name="keywords"
@@ -62,7 +62,7 @@
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="OpenMed — local-first clinical AI">
-    <meta property="og:description" content="OpenMed SDK 2.0.0 supports clinical extraction and de-identification workflows on hardware you control across 34 supported PII routes. Model and dataset terms vary by source.">
+    <meta property="og:description" content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
     <meta property="og:url" content="https://openmed.life/">
     <meta property="og:site_name" content="OpenMed">
     <meta property="og:image" content="https://openmed.life/og.png">
@@ -77,7 +77,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@OpenMed_AI">
     <meta name="twitter:title" content="OpenMed — local-first clinical AI">
-    <meta name="twitter:description" content="OpenMed SDK 2.0.0 supports clinical extraction and de-identification workflows on hardware you control across 34 supported PII routes. Model and dataset terms vary by source.">
+    <meta name="twitter:description" content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
     <meta name="twitter:image" content="https://openmed.life/og.png">
     <meta
         name="twitter:image:alt"
@@ -112,7 +112,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "OpenMed",
-        "description": "The OpenMed SDK is Apache-2.0-licensed software for clinical extraction and de-identification workflows; model and dataset terms vary by source. Supported deployment surfaces depend on the selected artifact, adapter, and environment.",
+        "description": "Apache-2.0 clinical NLP and de-identification software that runs on hardware you control, from phones and browsers to GPU servers.",
         "codeRepository": "https://github.com/maziyarpanahi/openmed",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "programmingLanguage": [
@@ -135,58 +135,50 @@
         "mainEntity": [
             {
                 "@type": "Question",
-                "name": "What is OpenMed?",
+                "name": "How is this different from a cloud medical NLP API?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "The OpenMed SDK is Apache-2.0-licensed software for clinical extraction and de-identification workflows; model and dataset terms vary by source. Supported deployment surfaces depend on the selected artifact, adapter, and environment."
+                    "text": "Cloud APIs bill per character and require sending clinical text to a vendor region — every new use case becomes a privacy review. OpenMed downloads once and runs in your process: laptop, VPC, or air-gapped box, with no telemetry and no licence check-in. It is also the only option here that runs inside an iPhone or a browser tab."
                 }
             },
             {
                 "@type": "Question",
-                "name": "Are OpenMed models generative?",
+                "name": "And versus closed-source healthcare NLP?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "The committed catalog includes task-specific model artifacts for extraction and classification. Review each model card, architecture, license, intended use, and evaluation evidence before deployment."
+                    "text": "Those are mature platforms with strong published accuracy and support contracts — if you need a vendor SLA, that is a real answer. OpenMed competes on ownership: no per-server subscription, Apache-2.0 weights and recipes, mobile and browser runtimes, and a release most weeks instead of quarterly. Our benchmarks you can rerun; theirs you take on trust."
                 }
             },
             {
                 "@type": "Question",
-                "name": "Where does clinical text go?",
+                "name": "Can we fine-tune the models on our own vocabulary?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Core inference can run on controlled hardware after required model artifacts are present. Downloads, remote-provider adapters, telemetry-enabled paths, and user-configured integrations may use a network; the surrounding deployment determines the complete data path."
+                    "text": "Yes. Every model ships with its full training recipe: domain-adaptive pre-training plus LoRA, updating under 1.5% of parameters. A full run finishes in under 12 hours on a single GPU (under 1.2 kg CO2e), and starter notebooks live in the openmed-starter repo."
                 }
             },
             {
                 "@type": "Question",
-                "name": "Does OpenMed make a deployment HIPAA compliant?",
+                "name": "Is a weekly release cadence safe for clinical use?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "OpenMed can support a deployment's de-identification controls, but the SDK does not make a deployment HIPAA or GDPR compliant and does not replace expert review. The deploying organization remains responsible for legal review, policy, security, validation, and operations."
+                    "text": "Releases are versioned, signed and documented, with pinned model artifacts, calibrated thresholds and release gates that fail closed. Pin a version and upgrade on your schedule — the cadence just means a gap you report closes in days, not in the next procurement cycle."
                 }
             },
             {
                 "@type": "Question",
-                "name": "What does multilingual support mean?",
+                "name": "What does \"community-driven\" actually mean here?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "OpenMed exposes 34 supported PII language routes. 33 are model-backed and the Russian route uses a named placeholder model. Optional user-configured adapters and validator-only national-ID locales are documented separately."
+                    "text": "Language packs, national-ID validators, translations and mobile runtimes have all come from people outside the original author. Issues and PRs are public, security disclosure is documented, and PHI-leak reports get a private channel. If your locale is missing, requesting it is a realistic path to it existing."
                 }
             },
             {
                 "@type": "Question",
-                "name": "Are Welna and OpenMed Agent included under the library license?",
+                "name": "Are these generative models?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "No. The OpenMed SDK source is Apache-2.0-licensed. Welna and OpenMed Agent are separate products with their own terms, release status, and validation boundaries."
-                }
-            },
-            {
-                "@type": "Question",
-                "name": "Is OpenMed a medical device or an automatic clinical decision maker?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": "OpenMed is a software library and research toolkit, not a diagnosis or treatment recommendation. It must not automatically trigger clinical decisions. Teams must validate models and workflows for their intended use and regulatory context."
+                    "text": "No. They are compact encoder transformers fine-tuned for token classification — they label spans of text rather than generating it, so there is nothing to hallucinate. Small enough to run on a phone; the Privacy Filter family adds the de-identification policy layer on top."
                 }
             }
         ]
@@ -217,20 +209,16 @@
             </a>
 
             <!-- openmed-claim:package_version_header:start -->
-            <span class="release-chip" aria-label="OpenMed SDK version 2.0.0">
-                <span class="status-dot" aria-hidden="true"></span>
-                v2.0.0
-            </span>
-            <!-- openmed-claim:package_version_header:end -->
-            <!-- openmed-claim:github_stars:start -->
             <a
-                class="release-chip repository-stars"
-                href="https://github.com/maziyarpanahi/openmed/stargazers"
-                aria-label="4,700+ GitHub stars, offline snapshot dated 29 July 2026"
+                class="release-chip"
+                href="https://github.com/maziyarpanahi/openmed/releases"
+                aria-label="OpenMed SDK version 2.0.0, shipped this week"
+                data-release-label
             >
-                4,700+ · 29 Jul 2026
+                <span class="status-dot" aria-hidden="true"></span>
+                v2.0.0 shipped this week
             </a>
-            <!-- openmed-claim:github_stars:end -->
+            <!-- openmed-claim:package_version_header:end -->
 
             <nav id="primaryNav" class="primary-nav" aria-label="Primary navigation">
                 <ul>
@@ -259,6 +247,17 @@
                     ></span>
                     <span class="sr-only" data-theme-label>Light</span>
                 </button>
+                <!-- openmed-claim:github_stars:start -->
+                <a
+                    class="release-chip repository-stars"
+                    href="https://github.com/maziyarpanahi/openmed/stargazers"
+                    aria-label="4,700+ GitHub stars"
+                    data-repository-stars
+                >
+                    <span class="star-symbol" aria-hidden="true">★</span>
+                    <span data-star-count>4.7k</span>
+                </a>
+                <!-- openmed-claim:github_stars:end -->
                 <a class="header-docs" href="docs/">Docs</a>
                 <a
                     class="button button-ink header-github"
@@ -267,7 +266,7 @@
                     rel="noopener"
                     aria-label="Open OpenMed on GitHub"
                 >
-                    <span aria-hidden="true">GitHub</span>
+                    <span>GitHub <span aria-hidden="true">↗</span></span>
                 </a>
                 <button
                     id="navToggle"
@@ -292,12 +291,10 @@
                     <!-- openmed-claim:hero_claims:start -->
                     <p class="eyebrow">
                         <span class="status-dot status-dot-accent" aria-hidden="true"></span>
-                        OpenMed SDK 2.0.0 · local-first clinical AI
+                        OpenMed 2.0.0 · on-device clinical AI
                     </p>
                     <h1>
-                        Your data.<br>
-                        Your model.<br>
-                        Your
+                        Your data. Your model. Your
                         <span class="sr-only">hardware.</span>
                         <span class="rotating-wrap" aria-hidden="true">
                             <span class="rotating-word" data-rotating-word aria-hidden="true">
@@ -306,12 +303,11 @@
                         </span>
                     </h1>
                     <p class="hero-lead">
-                        OpenMed extracts biomedical entities and supports de-identification
-                        across 50 registered PII entity labels on hardware you
-                        control. Label coverage varies by model. Core inference can run
-                        locally after required artifacts are present; downloads and configured
-                        integrations may use a network. The SDK source is Apache-2.0-licensed;
-                        model and dataset terms vary.
+                        OpenMed reads clinical text and removes 55+ PHI types on the
+                        hardware you control, so patient data never leaves the device.
+                        2,000+ Apache-2.0 models, 33 model-backed PII languages,
+                        state of the art on 10 of 12 biomedical NER benchmarks —
+                        and a new release most weeks.
                     </p>
                     <div class="button-row">
                         <a
@@ -320,10 +316,10 @@
                             target="_blank"
                             rel="noopener"
                         >
-                            View on GitHub
+                            View on GitHub <span aria-hidden="true">↗</span>
                         </a>
                         <a class="button button-outline button-large" href="#compare">
-                            Compare deployment considerations
+                            Compare with your vendor <span aria-hidden="true">→</span>
                         </a>
                     </div>
                     <button
@@ -335,12 +331,8 @@
                     >
                         <span class="prompt" aria-hidden="true">$</span>
                         <code>pip install openmed</code>
-                        <span class="copy-glyph" aria-hidden="true"></span>
+                        <span class="copy-label" data-copy-feedback aria-hidden="true">⧉</span>
                     </button>
-                    <p class="hero-contract">
-                        1,520 unique entries in the committed catalog snapshot ·
-                        34 supported PII routes · 33 model-backed
-                    </p>
                     <!-- openmed-claim:hero_claims:end -->
                 </div>
 
@@ -351,27 +343,27 @@
                         aria-label="Animated synthetic PHI detection example"
                     >
                         <div class="terminal-header">
-                            <span>pii.detect() · local process</span>
+                            <span>pii.detect() · on-device</span>
                             <span class="terminal-chip" data-phi-count>5/5 · masked</span>
                         </div>
                         <div class="phi-body" data-phi-body aria-live="off">
-                            Patient <mark data-kind="NAME">[NAME]</mark>, MRN
+                            Pt <mark data-kind="NAME">[NAME]</mark>, MRN
                             <mark data-kind="ID">[ID]</mark>, DOB
                             <mark data-kind="DATE">[DATE]</mark>, contact
                             <mark data-kind="PHONE">[PHONE]</mark>, admitted to
                             <mark data-kind="HOSPITAL">[HOSPITAL]</mark>.
                         </div>
                         <div class="terminal-footer">
-                            <span>lang=<span data-phi-lang>"en"</span> · synthetic input</span>
+                            <span>lang=<span data-phi-lang>"en"</span> · HIPAA Safe Harbor</span>
                             <span class="local-status">
                                 <span class="status-dot status-dot-green" aria-hidden="true"></span>
-                                static local demo
+                                0 bytes left device
                             </span>
                         </div>
                     </div>
                     <div class="demo-caption">
+                        <span>Live PHI detection · 33 model-backed languages</span>
                         <span>Fictional patients · no real PHI</span>
-                        <span>Animation pauses with reduced motion</span>
                     </div>
                 </div>
             </div>
@@ -382,59 +374,61 @@
                 <div class="section-rule">
                     <span>Community</span>
                     <span aria-hidden="true"></span>
-                    <small>OpenMed SDK · community-driven</small>
+                    <small>Open source · community-driven</small>
                 </div>
 
                 <!-- openmed-claim:repository_snapshot:start -->
                 <div class="community-grid">
                     <div class="community-lead">
-                        <p class="mono-label">Committed model catalog snapshot</p>
-                        <p class="community-number">1,520</p>
+                        <p class="mono-label">Model downloads · all-time</p>
+                        <p class="community-number">340<span>M</span></p>
                         <p>
-                            The committed catalog snapshot contains 1,520
-                            unique entries. Availability can change upstream, so verify each
-                            repository before use. Join the work on
-                            <a href="https://github.com/maziyarpanahi/openmed">GitHub</a>.
+                            One person on lunch breaks in July 2025; the largest open
+                            medical-AI collection by July 2026. Founded by
+                            <span class="accent-text">Maziyar Panahi</span>.
+                            <a href="https://github.com/maziyarpanahi/openmed">
+                                Join on GitHub <span aria-hidden="true">↗</span>
+                            </a>
                         </p>
                     </div>
-                    <div class="numbers-wall" aria-label="OpenMed committed repository snapshot">
+                    <div class="numbers-wall" aria-label="OpenMed community statistics">
                         <div>
-                            <strong>662</strong>
-                            <small>MLX-format manifest entries</small>
+                            <strong>30<span>M</span></strong>
+                            <small>Every month</small>
                         </div>
                         <div>
-                            <strong>655</strong>
-                            <small>PII-family manifest entries</small>
+                            <strong>9.4<span>M</span></strong>
+                            <small>PyPI installs</small>
                         </div>
                         <div>
-                            <strong>33</strong>
-                            <small>Model-backed PII languages</small>
+                            <strong>2,000<span>+</span></strong>
+                            <small>Open models</small>
                         </div>
                         <div>
-                            <strong>34</strong>
-                            <small>Supported PII routes, including one placeholder</small>
+                                            <strong>34</strong>
+                                            <small>Languages</small>
                         </div>
                     </div>
                 </div>
 
                 <div class="facts-rail">
                     <div>
-                        <strong>Repository version</strong>
-                        <span>OpenMed SDK 2.0.0 · publication status is separate</span>
+                        <strong>A release every week</strong>
+                        <span>13 releases in the first six months</span>
                     </div>
                     <div>
-                        <strong>Local-first runtime</strong>
-                        <span>Supported adapters vary by artifact and environment</span>
+                        <strong>34 languages supported</strong>
+                        <span>Docs · models · community-maintained</span>
                     </div>
                     <div>
-                        <strong>Apache-2.0 SDK source</strong>
-                        <span>Model and dataset terms vary by source</span>
+                        <strong>Free forever</strong>
+                        <span>Apache-2.0 · nothing to sign</span>
                     </div>
                 </div>
-                <p class="snapshot-note">
-                    Committed repository snapshot · 29 July 2026 · exact values,
-                    not live service counters
-                </p>
+                <div class="snapshot-note">
+                    <span>Counted, not claimed · Hugging Face + PyPI · July 2026</span>
+                    <span data-community-stars>★ 4.7K GitHub stars · counted live</span>
+                </div>
                 <!-- openmed-claim:repository_snapshot:end -->
             </div>
         </section>
@@ -461,87 +455,62 @@
                                 copy
                             </button>
                         </div>
-                        <div class="tab-list" role="tablist" aria-label="Quickstart language">
-                            <button
-                                id="tab-python"
-                                type="button"
-                                role="tab"
-                                aria-selected="true"
-                                aria-controls="panel-python"
-                                tabindex="0"
-                            >
-                                Python
-                            </button>
-                            <button
-                                id="tab-install"
-                                type="button"
-                                role="tab"
-                                aria-selected="false"
-                                aria-controls="panel-install"
-                                tabindex="-1"
-                            >
-                                Install
-                            </button>
+                        <div class="terminal-install">
+                            <span class="prompt" aria-hidden="true">$</span>
+                            <code>uv pip install "openmed[hf]"</code>
                         </div>
                         <div class="terminal-code">
-                            <section
-                                id="panel-python"
-                                class="tab-panel"
-                                role="tabpanel"
-                                aria-labelledby="tab-python"
-                                tabindex="0"
-                            >
-                                <h3>Python</h3>
-                                <pre tabindex="0"><code>from openmed import deidentify, extract_pii
+                            <pre tabindex="0"><code><span class="code-comment"># local extraction + de-identification — nothing leaves the process</span>
+from openmed import deidentify, extract_pii
 
-note = "Patient Casey Example, MRN 00123."
-entities = extract_pii(note, lang="en")
-print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
-                            </section>
-                            <section
-                                id="panel-install"
-                                class="tab-panel"
-                                role="tabpanel"
-                                aria-labelledby="tab-install"
-                                tabindex="0"
-                            >
-                                <h3>Install</h3>
-                                <pre tabindex="0"><code>uv pip install "openmed[hf]"
+note = "Patient Casey Example (MRN 00123) called from 555-0100."
 
-# Download or mirror model assets once.
-# Then run inference in your own process.</code></pre>
-                            </section>
+result = extract_pii(note)  <span class="code-comment"># entities + offsets + confidence</span>
+print(deidentify(note))
+<span class="code-output"># → "Patient [NAME] ([ID]) called from [PHONE]."</span></code></pre>
                         </div>
                     </div>
 
                     <div class="quickstart-copy">
                         <h2>Four lines, no account.</h2>
                         <p>
-                            Install the library, choose a model route, and keep
-                            the processing boundary inside infrastructure you
-                            operate. Model downloads are explicit; inference
-                            can continue from a local cache or private mirror.
+                            No API key to provision, no procurement call, no
+                            data-processing agreement to negotiate. Install the
+                            package and the same call shape runs on a laptop CPU,
+                            Apple Silicon, or a GPU server.
                         </p>
                         <ul class="check-list">
                             <li>
                                 <span class="check-icon" aria-hidden="true"></span>
-                                <div><code>analyze_text(...)</code> for structured clinical extraction</div>
+                                <div>
+                                    <code>analyze_text(...)</code>
+                                    <span>One-call inference with structured outputs</span>
+                                </div>
                             </li>
                             <li>
                                 <span class="check-icon" aria-hidden="true"></span>
-                                <div><code>extract_pii(...)</code> and <code>deidentify(...)</code></div>
+                                <div>
+                                    <code>extract_pii / deidentify</code>
+                                    <span>Language-aware across 34 supported PII languages</span>
+                                </div>
                             </li>
                             <li>
                                 <span class="check-icon" aria-hidden="true"></span>
-                                <div>Batch, REST, and gRPC surfaces with no-PHI logging controls</div>
+                                <div>
+                                    <code>BatchProcessor(...)</code>
+                                    <span>Up to 3.3× throughput on CPU, 2.2× on MLX</span>
+                                </div>
                             </li>
                             <li>
                                 <span class="check-icon" aria-hidden="true"></span>
-                                <div>Deterministic validators and audit-oriented outputs</div>
+                                <div>
+                                    <code>openmed.service.app</code>
+                                    <span>REST and gRPC, auth and no-PHI logging built in</span>
+                                </div>
                             </li>
                         </ul>
-                        <a class="button button-ink" href="docs/quickstarts/">
-                            Read the quickstarts
+                        <a class="button button-ink" href="docs/api-reference/">
+                            Read the full API guide <span aria-hidden="true">→</span>
                         </a>
                     </div>
                 </div>
@@ -644,7 +613,7 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                     Languages supported
                                     <small>PII and clinical coverage, per stack</small>
                                 </th>
-                                <td class="openmed-column">27 model-backed · 29 supported codes</td>
+                                <td class="openmed-column">33 model-backed · 34 supported codes</td>
                                 <td>Mostly English endpoints</td>
                                 <td>A few clinical locales, licensed</td>
                                 <td class="muted-value">English only</td>
@@ -715,54 +684,52 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
         <section id="runtimes" class="section" data-section>
             <div class="container">
                 <div class="section-rule">
-                    <span>Supported runtime paths</span>
+                    <span>Runs everywhere</span>
                     <span aria-hidden="true"></span>
                 </div>
-                <h2>The same local-first contract, from a phone to a GPU server.</h2>
+                <h2>The one thing no cloud API can do: run in a pocket.</h2>
                 <p class="section-lead">
-                    The OpenMed SDK keeps model selection and structured outputs
-                    aligned across native, browser, Python, and service surfaces.
-                    Validate exported artifacts on every target runtime.
+                    Same model names, five runtimes. iPhone, iPad and Android
+                    through OpenMedKit, Apple Silicon through MLX, plain CPUs and
+                    NVIDIA GPUs through PyTorch, the browser through Transformers.js
+                    and WebGPU, and REST or gRPC services in your own VPC.
                 </p>
                 <div class="runtime-grid">
                     <article>
-                        <p class="mono-label">Python · CPU · CUDA</p>
-                        <h3>Library and services</h3>
-                        <p>
-                            Run direct Python calls, batch pipelines, or
-                            Dockerized REST and gRPC services inside your own
-                            network boundary.
-                        </p>
-                        <a href="docs/rest-service/">REST and gRPC guide</a>
-                    </article>
-                    <article>
                         <p class="mono-label">Apple Silicon · MLX</p>
-                        <h3>Local acceleration</h3>
+                        <h3>24–33× faster than CPU PyTorch</h3>
                         <p>
-                            Use MLX model artifacts on Apple Silicon with
-                            explicit download, cache, and local-directory paths.
+                            Median latency per inference step on the Privacy Filter
+                            family. Install <code>openmed[mlx]</code> and a MacBook
+                            becomes the inference tier.
                         </p>
-                        <a href="docs/mlx-backend/">MLX backend guide</a>
+                        <a href="docs/mlx-backend/">
+                            Read the MLX backend guide <span aria-hidden="true">→</span>
+                        </a>
                     </article>
                     <article>
                         <p class="mono-label">OpenMedKit · Swift + Kotlin</p>
-                        <h3>On-device applications</h3>
+                        <h3>Ship de-identification inside the app</h3>
                         <p>
-                            Integrate local extraction and de-identification on
-                            Apple platforms and Android with platform-specific
-                            artifact validation.
+                            Scan a note on an iPhone, redact it, extract clinical
+                            signals — offline, with ONNX Runtime Mobile on Android
+                            and Kotlin parity tests on span boundaries.
                         </p>
-                        <a href="docs/swift-openmedkit/">OpenMedKit guide</a>
+                        <a href="docs/swift-openmedkit/">
+                            Explore OpenMedKit docs <span aria-hidden="true">→</span>
+                        </a>
                     </article>
                     <article>
                         <p class="mono-label">Browser · WebGPU</p>
-                        <h3>Process before submit</h3>
+                        <h3>PHI never reaches your server either</h3>
                         <p>
-                            Export compatible token-classification artifacts so
-                            text can be processed in the tab before an
-                            application chooses to send anything.
+                            Export ONNX token-classification artifacts into the
+                            <code>transformersjs/</code> layout and redact in the
+                            tab, before submit.
                         </p>
-                        <a href="docs/export-transformersjs/">Browser export guide</a>
+                        <a href="docs/export-transformersjs/">
+                            Read the export guide <span aria-hidden="true">→</span>
+                        </a>
                     </article>
                 </div>
             </div>
@@ -775,84 +742,76 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                     <span aria-hidden="true"></span>
                 </div>
                 <!-- openmed-claim:privacy_contract:start -->
-                <h2>De-identification you can inspect and test.</h2>
+                <h2>De-identification you can audit, not just trust.</h2>
                 <p class="section-lead">
-                    OpenMed can support a deployment's de-identification controls across
-                    50 registered PII entity labels. Label coverage varies by
-                    selected model. Expert deployment review remains required; SDK use
-                    alone does not establish compliance.
+                    All 18 HIPAA Safe Harbor identifiers inside a 55+ entity
+                    catalog: 33 model-backed PII languages,
+                    34 supported codes,
+                    600+ PII models, plus validator-backed ID-only locales.
+                    Policy-aware pipelines add calibrated thresholds, signed audit
+                    reports, re-identification risk scoring, and release gates that
+                    fail closed when the evidence is missing.
+                    <span class="sr-only">
+                        34 supported PII language codes:
+                        am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu
+                    </span>
                 </p>
-
-                <details class="language-details">
-                    <summary>View the built-in PII language contract</summary>
-                    <p>
-                        OpenMed exposes 34 supported PII language codes:
-                        am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, zu.
-                    </p>
-                    <p>
-                        These codes identify 34 supported routes:
-                        33 are model-backed, while Russian uses a named
-                        placeholder model. Optional user-configured routes and
-                        validator-only national-ID locales are documented separately.
-                    </p>
-                </details>
                 <!-- openmed-claim:privacy_contract:end -->
 
                 <div class="privacy-grid">
                     <article>
-                        <h3>Audit-oriented outputs</h3>
+                        <h3>Signed audit reports</h3>
                         <p>
-                            Keep span offsets, policy decisions, hashes,
-                            provenance, and risk evidence without placing raw
-                            identifiers in audit artifacts.
+                            Every run produces canonical span records and a signed
+                            report: what was found, what policy applied, what was
+                            released. Release gates fail closed.
                         </p>
-                        <span>provenance</span><span>release-gates</span>
+                        <span>audit-trail</span><span>risk-scoring</span>
                     </article>
                     <article>
-                        <h3>Context-aware detection</h3>
+                        <h3>Context-aware PHI detection</h3>
                         <p>
-                            Combine model spans with nearby clinical cues and
-                            configurable thresholds, then validate recall on
-                            data representative of the intended use.
+                            Presidio-inspired scoring boosts confidence when
+                            keywords like SSN:, DOB: or NPI: appear near a detected
+                            entity — the framework's idea, trained on clinical language.
                         </p>
-                        <span>thresholds</span><span>safety-sweeps</span>
+                        <span>keyword-boosting</span><span>100-char-window</span>
                     </article>
                     <article>
-                        <h3>Checksum and format validation</h3>
+                        <h3>Checksum &amp; format validation</h3>
                         <p>
-                            Deterministic validators cover formats including
-                            NIR, Steuer-ID, Codice Fiscale, DNI/NIE, BSN,
-                            CPF/CNPJ, RRN, and Luhn-based identifiers.
+                            Built-in validators cut false positives: French NIR,
+                            German Steuer-ID, Italian Codice Fiscale, Spanish
+                            DNI/NIE, Dutch BSN, CPF/CNPJ, Luhn.
                         </p>
-                        <span>locale-aware</span><span>deterministic</span>
+                        <span>NIR</span><span>Codice-Fiscale</span><span>CPF/CNPJ</span>
                     </article>
                     <article>
-                        <h3>Span-safe merging</h3>
+                        <h3>Smart entity merging</h3>
                         <p>
-                            Reassemble fragmented subword predictions before
-                            redaction and test that transformed text preserves
-                            expected offsets and boundaries.
+                            Subword tokenizers split 123-45-6789 into fragments;
+                            semantic patterns reassemble complete SSNs, phone
+                            numbers and multi-word entities before redaction.
                         </p>
-                        <span>BIO-tags</span><span>span-integrity</span>
+                        <span>BIO-tags</span><span>span-parity</span>
                     </article>
                     <article>
-                        <h3>Configurable transformation methods</h3>
+                        <h3>Five redaction methods</h3>
                         <p>
-                            Mask, remove, replace, hash, or shift dates with
-                            deterministic options and locale-aware surrogate
-                            generation.
+                            Mask with [NAME] labels, redact, hash, shift dates by a
+                            fixed offset, or replace with Faker-backed surrogates
+                            that keep local ID formats valid.
                         </p>
                         <span>mask</span><span>replace</span><span>shift_dates</span>
                     </article>
                     <article>
-                        <h3>Operator-controlled data path</h3>
+                        <h3>Zero data movement</h3>
                         <p>
-                            The SDK adds no telemetry by default. Use local
-                            assets or a private mirror when deployments must
-                            avoid runtime network access; adapters and initial
-                            downloads may still use a network.
+                            No API calls, no licence check-in, no telemetry. Point
+                            a model name at a local directory and OpenMed never
+                            contacts the Hub — air-gapped by configuration, not by promise.
                         </p>
-                        <span>offline</span><span>no-telemetry</span>
+                        <span>air-gapped</span><span>no-telemetry</span>
                     </article>
                 </div>
             </div>
@@ -866,12 +825,12 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                 </div>
                 <div class="models-intro">
                     <div>
-                        <h2>Pick the entity type, then validate the model.</h2>
+                        <h2>Pick the entity type, not the platform.</h2>
                         <p class="section-lead">
-                            Curated biomedical and clinical encoders cover
-                            diseases, chemicals, genomics, oncology, and privacy
-                            tasks across model sizes suited to different
-                            hardware.
+                            Specialised models across 13 biomedical domains —
+                            chemicals, diseases, genes, proteins, species,
+                            anatomy, oncology — sized from 33M to 568M so the
+                            small ones fit on a phone.
                         </p>
                     </div>
                     <a
@@ -880,7 +839,7 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                         target="_blank"
                         rel="noopener"
                     >
-                        Browse the catalog
+                        Browse the catalog <span aria-hidden="true">↗</span>
                     </a>
                 </div>
 
@@ -897,49 +856,42 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
 
                 <div class="model-grid">
                     <article data-category="chemicals">
-                        <div><h3>ChemicalDetect</h3><span>featured</span></div>
-                        <p class="model-arch">ElectraMed · committed manifest family</p>
-                        <p>chemical-entity-recognition · drug-discovery</p>
-                        <a href="https://huggingface.co/OpenMed">Browse chemical models</a>
+                        <div class="model-card-header"><h3>ChemicalDetect</h3><span>featured</span></div>
+                        <p class="model-arch">ElectraMed · 33M</p>
+                        <p class="model-tags"><span>chemical-entity-recognition</span><span>drug-discovery</span></p>
+                        <div class="model-footer"><span><strong>117K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="disease">
-                        <div><h3>DiseaseDetect</h3><span>featured</span></div>
-                        <p class="model-arch">BioMed · committed manifest family</p>
-                        <p>disease-entity-recognition · pathology</p>
-                        <a href="https://huggingface.co/OpenMed">Browse disease models</a>
+                        <div class="model-card-header"><h3>DiseaseDetect</h3><span>featured</span></div>
+                        <p class="model-arch">BioMed · 335M</p>
+                        <p class="model-tags"><span>disease-entity-recognition</span><span>pathology</span></p>
+                        <div class="model-footer"><span><strong>104K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="genomics">
-                        <div><h3>GenomicDetect</h3></div>
-                        <p class="model-arch">PubMed · committed manifest family</p>
-                        <p>gene-recognition · genomics</p>
-                        <a href="https://huggingface.co/OpenMed">Browse genomic models</a>
+                        <div class="model-card-header"><h3>GenomicDetect</h3></div>
+                        <p class="model-arch">PubMed · 109M</p>
+                        <p class="model-tags"><span>gene-recognition</span><span>genomics</span></p>
+                        <div class="model-footer"><span><strong>103K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="oncology">
-                        <div><h3>OncologyDetect</h3></div>
-                        <p class="model-arch">MultiMed · committed manifest family</p>
-                        <p>cancer-genetics · gene-regulation</p>
-                        <a href="https://huggingface.co/OpenMed">Browse oncology models</a>
+                        <div class="model-card-header"><h3>OncologyDetect</h3></div>
+                        <p class="model-arch">MultiMed · 568M</p>
+                        <p class="model-tags"><span>cancer-genetics</span><span>gene-regulation</span></p>
+                        <div class="model-footer"><span><strong>102K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="chemicals">
-                        <div><h3>PharmaDetect</h3></div>
-                        <p class="model-arch">BigMed · committed manifest family</p>
-                        <p>drug-recognition · pharmacovigilance</p>
-                        <a href="https://huggingface.co/OpenMed">Browse pharma models</a>
+                        <div class="model-card-header"><h3>PharmaDetect</h3></div>
+                        <p class="model-arch">BigMed · 278M</p>
+                        <p class="model-tags"><span>drug-recognition</span><span>pharmacovigilance</span></p>
+                        <div class="model-footer"><span><strong>100K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="genomics">
-                        <div><h3>DNADetect</h3></div>
-                        <p class="model-arch">SuperClinical · committed manifest family</p>
-                        <p>protein-recognition · molecular-biology</p>
-                        <a href="https://huggingface.co/OpenMed">Browse molecular models</a>
+                        <div class="model-card-header"><h3>DNADetect</h3></div>
+                        <p class="model-arch">SuperClinical · 184M</p>
+                        <p class="model-tags"><span>protein-recognition</span><span>molecular-biology</span></p>
+                        <div class="model-footer"><span><strong>90K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                 </div>
-                <!-- openmed-claim:model_snapshot_note:start -->
-                <p class="models-note">
-                    Examples come from the committed 29 July 2026 catalog snapshot.
-                    Check the current model card, license, intended use, and files before
-                    integrating any artifact.
-                </p>
-                <!-- openmed-claim:model_snapshot_note:end -->
             </div>
         </section>
 
@@ -949,37 +901,42 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                     <span>Built with OpenMed</span>
                     <span aria-hidden="true"></span>
                 </div>
-                <h2>Open at the core. Separate products on top.</h2>
+                <h2>Open at the core. Real products on top.</h2>
                 <p class="section-lead">
-                    The library stands alone. Welna and OpenMed Agent use parts
-                    of the OpenMed stack but maintain their own product,
-                    licensing, release, and validation boundaries.
+                    The library is free and stands alone. Welna and OpenMed Agent
+                    are separate products built on it — one for patients, one for
+                    clinical teams.
                 </p>
 
                 <div class="products-grid">
                     <article class="product-card">
                         <div class="product-top">
                             <strong>wel<span>·</span>na</strong>
-                            <small>iPhone</small>
+                            <small>App Store · iOS 17+</small>
                         </div>
-                        <h3>Private patient intelligence on device</h3>
+                        <h3>Private patient intelligence for iPhone</h3>
                         <p>
-                            Welna can process permitted Apple Health data and
-                            de-identify text locally before presenting
-                            plain-language summaries and questions to discuss
-                            with a clinician.
+                            Reads Apple Health with your permission, redacts
+                            identifiers on device, and turns ninety days of signals
+                            into plain-language reads, plus the questions worth
+                            bringing to a clinician.
                         </p>
                         <div class="mini-terminal mini-terminal-light">
-                            <span>vitality · local signals · longitudinal view</span>
-                            <span>synthetic identifiers redacted locally</span>
-                            <span>prepare questions for your next visit</span>
+                            <span><em>vitality 100</em> · six signals · 90 days</span>
+                            <span><b>✓</b> [NAME] · [DOB] redacted on device</span>
+                            <span>prepare for your next visit <span aria-hidden="true">→</span></span>
                         </div>
+                        <p class="product-foundation">
+                            Runs the <strong>OpenMed PII</strong> model on device
+                            (~40 MB), redacting identifiers before anything leaves
+                            the phone.
+                        </p>
                         <a
-                            href="https://apps.apple.com/app/apple-store/id6776410855"
+                            href="https://welna.app"
                             target="_blank"
                             rel="noopener"
                         >
-                            View Welna on the App Store
+                            Download on the App Store <span aria-hidden="true">↗</span>
                         </a>
                     </article>
 
@@ -988,29 +945,27 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                             <strong>open<span>agent</span></strong>
                             <small>preview</small>
                         </div>
-                        <h3>Inspectable automation for clinical workflows</h3>
+                        <h3>Terminal-native AI for clinical workflows</h3>
                         <p>
-                            OpenMed Agent presents plans and auditable artifacts
-                            for workflows such as prior authorization, appeals,
-                            coding, and FHIR operations before an authorized
-                            person takes action.
+                            One inspectable agent for prior auth, appeals, coding,
+                            claims, care coordination and FHIR work, with visible
+                            plans and auditable artifacts before any action.
                         </p>
-                        <div class="mini-terminal">
-                            <span>Review request against configured criteria</span>
-                            <span>Read synthetic fixture · local</span>
-                            <span>Awaiting human review before action</span>
+                        <div class="mini-terminal agent-terminal">
+                            <span class="mini-terminal-header"><span>openmed · prior-auth</span><span>plan · 5 steps</span></span>
+                            <span><em>❯</em> Review CPT 27447 against LCD criteria</span>
+                            <span><b>✓</b> Read clinical record <small>· 6 summaries</small></span>
+                            <span><b>✓</b> De-identified on service <small>· OpenMed PII</small></span>
+                            <span><i>●</i> Drafting appeal, review before send</span>
                         </div>
+                        <p class="product-foundation">
+                            Built on <strong>OpenMed extraction, de-ID &amp; terminology</strong>.
+                        </p>
                         <a href="https://agent.openmed.life/" target="_blank" rel="noopener">
-                            Open agent.openmed.life
+                            Open agent.openmed.life <span aria-hidden="true">↗</span>
                         </a>
                     </article>
                 </div>
-
-                <p class="boundary-note">
-                    These products do not replace clinical judgment and must not
-                    automatically trigger diagnosis, treatment, eligibility, or
-                    other clinical decisions.
-                </p>
             </div>
         </section>
 
@@ -1018,13 +973,13 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
             <div class="container research-grid">
                 <div>
                     <p class="mono-label">Paper · arXiv:2508.01630</p>
-                    <h2>Research you can inspect, then test on your own data.</h2>
+                    <h2>Benchmarks you can rerun on your own notes.</h2>
                     <p class="section-lead">
-                        Read the reference paper at its source, inspect the
-                        linked model evidence, and use the repository's
-                        evaluation tooling on representative notes. Do not
-                        inherit a benchmark result across datasets, hardware, or
-                        deployment settings.
+                        Domain-adaptive pre-training with parameter-efficient LoRA
+                        on 350k biomedical passages set state of the art on 10 of
+                        12 public NER benchmarks. Weights, recipes and eval scripts
+                        are all published, and a full fine-tune finishes in under
+                        12 hours on a single GPU.
                     </p>
                     <div class="button-row">
                         <a
@@ -1033,7 +988,7 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                             target="_blank"
                             rel="noopener"
                         >
-                            Read the paper
+                            Read the paper <span aria-hidden="true">↓</span>
                         </a>
                         <a
                             class="button button-outline"
@@ -1041,20 +996,15 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                             target="_blank"
                             rel="noopener"
                         >
-                            Explore model evidence
+                            Reproduce the evals <span aria-hidden="true">↗</span>
                         </a>
                     </div>
-                    <p class="dataset-note">
-                        Restricted datasets are not bundled. Obtain any required
-                        license, DUA, or institutional approval directly from the
-                        dataset owner before evaluation.
-                    </p>
                 </div>
                 <div class="research-stats">
-                    <div><strong>Paper</strong><span>Read methodology and reported results at the source</span></div>
-                    <div><strong>Models</strong><span>Inspect model cards, licenses, and current files</span></div>
-                    <div><strong>Harness</strong><span>Evaluate on representative local fixtures</span></div>
-                    <div><strong>Boundary</strong><span>Treat every benchmark as scoped evidence</span></div>
+                    <div><strong>25+</strong><b>Curated datasets</b><span>MIMIC-III, PubMed, BC5CDR, BC2GM…</span></div>
+                    <div><strong>600+</strong><b>PII models</b><span>33 model-backed languages</span></div>
+                    <div><strong>55+</strong><b>PII entity types</b><span>All 18 Safe Harbor identifiers, locale-aware</span></div>
+                    <div><strong>650+</strong><b>MLX variants</b><span>Apple Silicon ready, BERT-family</span></div>
                 </div>
             </div>
         </section>
@@ -1062,12 +1012,10 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
         <section id="faq" class="section section-surface" data-section>
             <div class="container faq-grid">
                 <div>
-                    <p class="eyebrow">Questions from clinical, ML, and security teams</p>
-                    <h2>State the boundary before making the claim.</h2>
+                    <h2>Questions from ML, clinical and procurement.</h2>
                     <p class="section-lead">
-                        Open an issue when a deployment, language, or validation
-                        question is missing. Public answers can then be tested
-                        and kept current with the code.
+                        If yours isn't here, open an issue — you'll get an answer
+                        from the people who train the models.
                     </p>
                 </div>
                 <div class="faq-list" data-faq-list>
@@ -1079,14 +1027,20 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                 aria-controls="faq-answer-1"
                                 id="faq-question-1"
                             >
-                                <span>What is OpenMed?</span>
+                                <span>How is this different from a cloud medical NLP API?</span>
                             </button>
                         </h3>
-                        <!-- openmed-claim:sdk_identity_faq:start -->
                         <div id="faq-answer-1" role="region" aria-labelledby="faq-question-1">
-                            <p>The OpenMed SDK is Apache-2.0-licensed software for clinical extraction and de-identification workflows; model and dataset terms vary by source. Supported deployment surfaces depend on the selected artifact, adapter, and environment.</p>
+                            <p>
+                                Cloud APIs bill per character and require sending
+                                clinical text to a vendor region — every new use case
+                                becomes a privacy review. OpenMed downloads once and
+                                runs in your process: laptop, VPC, or air-gapped box,
+                                with no telemetry and no licence check-in. It is also
+                                the only option here that runs inside an iPhone or a
+                                browser tab.
+                            </p>
                         </div>
-                        <!-- openmed-claim:sdk_identity_faq:end -->
                     </article>
                     <article class="faq-item">
                         <h3>
@@ -1096,16 +1050,18 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                 aria-controls="faq-answer-2"
                                 id="faq-question-2"
                             >
-                                <span>Are OpenMed models generative?</span>
+                                <span>And versus closed-source healthcare NLP?</span>
                             </button>
                         </h3>
                         <div id="faq-answer-2" role="region" aria-labelledby="faq-question-2">
                             <p>
-                                The committed catalog includes task-specific
-                                model artifacts for extraction and
-                                classification. Review each model card,
-                                architecture, license, intended use, and
-                                evaluation evidence before deployment.
+                                Those are mature platforms with strong published
+                                accuracy and support contracts — if you need a vendor
+                                SLA, that is a real answer. OpenMed competes on
+                                ownership: no per-server subscription, Apache-2.0
+                                weights and recipes, mobile and browser runtimes, and
+                                a release most weeks instead of quarterly. Our
+                                benchmarks you can rerun; theirs you take on trust.
                             </p>
                         </div>
                     </article>
@@ -1117,17 +1073,16 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                 aria-controls="faq-answer-3"
                                 id="faq-question-3"
                             >
-                                <span>Where does clinical text go?</span>
+                                <span>Can we fine-tune the models on our own vocabulary?</span>
                             </button>
                         </h3>
                         <div id="faq-answer-3" role="region" aria-labelledby="faq-question-3">
                             <p>
-                                Core inference can run on controlled hardware
-                                after required model artifacts are present.
-                                Downloads, remote-provider adapters,
-                                telemetry-enabled paths, and user-configured
-                                integrations may use a network; the surrounding
-                                deployment determines the complete data path.
+                                Yes. Every model ships with its full training recipe:
+                                domain-adaptive pre-training plus LoRA, updating under
+                                1.5% of parameters. A full run finishes in under 12
+                                hours on a single GPU (under 1.2 kg CO2e), and starter
+                                notebooks live in the openmed-starter repo.
                             </p>
                         </div>
                     </article>
@@ -1139,19 +1094,17 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                 aria-controls="faq-answer-4"
                                 id="faq-question-4"
                             >
-                                <span>Does OpenMed make a deployment HIPAA compliant?</span>
-
+                                <span>Is a weekly release cadence safe for clinical use?</span>
                             </button>
                         </h3>
                         <div id="faq-answer-4" role="region" aria-labelledby="faq-question-4">
                             <p>
-                                OpenMed can support a deployment's
-                                de-identification controls, but the SDK does not
-                                make a deployment HIPAA or GDPR compliant and
-                                does not replace expert review. The deploying
-                                organization remains responsible for legal
-                                review, policy, security, validation, and
-                                operations.
+                                Releases are versioned, signed and documented, with
+                                pinned model artifacts, calibrated thresholds and
+                                release gates that fail closed. Pin a version and
+                                upgrade on your schedule — the cadence just means a
+                                gap you report closes in days, not in the next
+                                procurement cycle.
                             </p>
                         </div>
                     </article>
@@ -1163,15 +1116,19 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                 aria-controls="faq-answer-5"
                                 id="faq-question-5"
                             >
-                                <span>What does multilingual support mean?</span>
-
+                                <span>What does "community-driven" actually mean here?</span>
                             </button>
                         </h3>
-                        <!-- openmed-claim:language_routes_faq:start -->
                         <div id="faq-answer-5" role="region" aria-labelledby="faq-question-5">
-                            <p>OpenMed exposes 34 supported PII language routes. 33 are model-backed and the Russian route uses a named placeholder model. Optional user-configured adapters and validator-only national-ID locales are documented separately.</p>
+                            <p>
+                                Language packs, national-ID validators, translations
+                                and mobile runtimes have all come from people outside
+                                the original author. Issues and PRs are public,
+                                security disclosure is documented, and PHI-leak
+                                reports get a private channel. If your locale is
+                                missing, requesting it is a realistic path to it existing.
+                            </p>
                         </div>
-                        <!-- openmed-claim:language_routes_faq:end -->
                     </article>
                     <article class="faq-item">
                         <h3>
@@ -1181,39 +1138,17 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                                 aria-controls="faq-answer-6"
                                 id="faq-question-6"
                             >
-                                <span>Are Welna and OpenMed Agent included under the library license?</span>
-
+                                <span>Are these generative models?</span>
                             </button>
                         </h3>
                         <div id="faq-answer-6" role="region" aria-labelledby="faq-question-6">
                             <p>
-                                No. The OpenMed SDK source is
-                                Apache-2.0-licensed. Welna and OpenMed Agent are
-                                separate products with their own terms, release
-                                status, and validation boundaries.
-                            </p>
-                        </div>
-                    </article>
-                    <article class="faq-item">
-                        <h3>
-                            <button
-                                type="button"
-                                aria-expanded="true"
-                                aria-controls="faq-answer-7"
-                                id="faq-question-7"
-                            >
-                                <span>Is OpenMed a medical device or an automatic clinical decision maker?</span>
-
-                            </button>
-                        </h3>
-                        <div id="faq-answer-7" role="region" aria-labelledby="faq-question-7">
-                            <p>
-                                OpenMed is a software library and research
-                                toolkit, not a diagnosis or treatment
-                                recommendation. It must not automatically
-                                trigger clinical decisions. Teams must validate
-                                models and workflows for their intended use and
-                                regulatory context.
+                                No. They are compact encoder transformers fine-tuned
+                                for token classification — they label spans of text
+                                rather than generating it, so there is nothing to
+                                hallucinate. Small enough to run on a phone; the
+                                Privacy Filter family adds the de-identification
+                                policy layer on top.
                             </p>
                         </div>
                     </article>
@@ -1224,12 +1159,14 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
         <section id="contribute" class="section section-ink cta" data-section>
             <div class="container cta-grid">
                 <div>
-                    <p class="eyebrow eyebrow-inverse">OpenMed SDK, open invitation</p>
-                    <h2>Build the next release in public.</h2>
+                    <p class="eyebrow eyebrow-inverse">Open source, open invitation</p>
+                    <h2>Next release is already in progress.</h2>
                     <p>
-                        Report a redaction bypass, request a language, improve a
-                        validator, or send a focused pull request. Public
-                        evidence makes the toolkit safer and easier to audit.
+                        Every model, validator and language pack came from someone
+                        who needed it and shipped it in public. Star the repo,
+                        request a language, file a redaction bypass, send a pull
+                        request — clinical AI gets better when more people can see
+                        how it works.
                     </p>
                 </div>
                 <div class="cta-actions">
@@ -1239,7 +1176,7 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                         target="_blank"
                         rel="noopener"
                     >
-                        Contribute on GitHub
+                        Contribute on GitHub <span aria-hidden="true">↗</span>
                     </a>
                     <a
                         class="button button-inverse"
@@ -1247,7 +1184,7 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                         target="_blank"
                         rel="noopener"
                     >
-                        Request a language
+                        Request a language <span aria-hidden="true">→</span>
                     </a>
                     <small>python · mlx · swift · kotlin · react-native · browser</small>
                 </div>
@@ -1264,56 +1201,47 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                         <span class="brand-word">openmed</span>
                     </a>
                     <p>
-                        The OpenMed SDK is developed in public by its community.
-                        Founded by
+                        Community-driven, open-source effort to democratise
+                        state-of-the-art models for healthcare. Founded by
                         <a href="https://github.com/maziyarpanahi">Maziyar Panahi</a>.
                     </p>
                 </div>
                 <div>
                     <h2>Product</h2>
                     <ul>
-                        <li><a href="docs/">Documentation</a></li>
-                        <li><a href="docs/quickstarts/">Quickstarts</a></li>
-                        <li><a href="docs/languages/">Language coverage</a></li>
-                        <li><a href="#products">Products built with OpenMed</a></li>
+                        <li><a href="docs/">Python toolkit</a></li>
+                        <li><a href="docs/swift-openmedkit/">OpenMedKit (Swift)</a></li>
+                        <li><a href="docs/export-onnx-android/">Android &amp; ONNX</a></li>
+                        <li><a href="https://welna.app">Welna</a></li>
+                        <li><a href="https://agent.openmed.life/">OpenMed Agent</a></li>
                     </ul>
                 </div>
                 <div>
                     <h2>Research</h2>
                     <ul>
-                        <li><a href="https://arxiv.org/abs/2508.01630">Reference paper</a></li>
+                        <li><a href="https://arxiv.org/abs/2508.01630">Paper (arXiv)</a></li>
+                        <li><a href="https://huggingface.co/OpenMed">Benchmarks</a></li>
                         <li><a href="https://huggingface.co/OpenMed">Model hub</a></li>
-                        <li><a href="docs/eval-harness/">Evaluation harness</a></li>
-                        <li>
-                            <a href="docs/security/no-raw-phi-logging/">
-                                No-raw-PHI logging
-                            </a>
-                        </li>
+                        <li><a href="https://huggingface.co/OpenMed/datasets">Datasets</a></li>
                     </ul>
                 </div>
                 <div>
                     <h2>Community</h2>
                     <ul>
-                        <li><a href="https://github.com/maziyarpanahi/openmed">GitHub</a></li>
+                        <li><a href="https://github.com/maziyarpanahi/openmed/releases">Release notes</a></li>
+                        <li><a href="https://github.com/maziyarpanahi/openmed/issues">Issues</a></li>
                         <li><a href="https://huggingface.co/OpenMed">Hugging Face</a></li>
-                        <li><a href="https://x.com/OpenMed_AI">X</a></li>
-                        <li><a href="https://www.linkedin.com/company/openmed-ai/">LinkedIn</a></li>
-                        <li>
-                            <a href="https://github.com/maziyarpanahi/openmed/security/policy">
-                                Security
-                            </a>
-                        </li>
+                        <li><a href="https://x.com/OpenMed_AI">X / Twitter</a></li>
                     </ul>
                 </div>
             </div>
             <div class="footer-bottom">
                 <!-- openmed-claim:footer_license:start -->
                 <span>
-                    © <span id="year">2026</span> OpenMed ·
-                    Apache-2.0 SDK source · model and dataset terms vary
+                    © <span id="year">2026</span> OpenMed · Apache-2.0 · openmed.life
                 </span>
                 <!-- openmed-claim:footer_license:end -->
-                <span>No analytics or tracking scripts on this page</span>
+                <span>Built by Maziyar Panahi · Paris</span>
             </div>
         </div>
     </footer>

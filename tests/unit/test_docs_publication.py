@@ -343,6 +343,58 @@ def test_website_preserves_the_approved_head_to_head_matrix() -> None:
     assert website.count("<tr>") >= 11
 
 
+def test_website_preserves_every_approved_landing_view_and_interaction() -> None:
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+    script = (DOCS / "website" / "assets" / "script.js").read_text(encoding="utf-8")
+
+    approved_copy = (
+        "shipped this week",
+        "Your data. Your model. Your",
+        "pii.detect() · on-device",
+        "Live PHI detection · 33 model-backed languages",
+        "Model downloads · all-time",
+        "340<span>M</span>",
+        "30<span>M</span>",
+        "9.4<span>M</span>",
+        "2,000<span>+</span>",
+        "Counted, not claimed · Hugging Face + PyPI · July 2026",
+        "Four lines, no account.",
+        "No API key to provision, no procurement call",
+        "The one thing no cloud API can do: run in a pocket.",
+        "24–33× faster than CPU PyTorch",
+        "De-identification you can audit, not just trust.",
+        "Signed audit reports",
+        "Zero data movement",
+        "Pick the entity type, not the platform.",
+        "ElectraMed · 33M",
+        "117K</strong> downloads",
+        "Open at the core. Real products on top.",
+        "Terminal-native AI for clinical workflows",
+        "Benchmarks you can rerun on your own notes.",
+        "25+</strong><b>Curated datasets",
+        "Questions from ML, clinical and procurement.",
+        "How is this different from a cloud medical NLP API?",
+        "Are these generative models?",
+        "Next release is already in progress.",
+        "Built by Maziyar Panahi · Paris",
+    )
+    for text in approved_copy:
+        assert text in website
+
+    assert len(re.findall(r'<article class="faq-item">', website)) == 6
+    runtimes = website.split('<section id="runtimes"', 1)[1].split(
+        '<section id="privacy"', 1
+    )[0]
+    assert len(re.findall(r"<article>", runtimes)) == 3
+    assert 'const GITHUB_CACHE_KEY = "om_gh_repo"' in script
+    assert "6 * 60 * 60 * 1000" in script
+    assert "https://api.github.com/repos/maziyarpanahi/openmed" in script
+    assert "James Whitfield" in script
+    assert "Claire Moreau" in script
+    assert "Jonas Weber" in script
+    assert "Ayşe Yılmaz" in script
+
+
 def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() -> None:
     publication = _load_yaml(PUBLICATION)
     demo = (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8")
