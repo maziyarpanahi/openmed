@@ -37,10 +37,10 @@ jobs:
       ids: ${{ steps.plan.outputs.ids }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -55,7 +55,7 @@ jobs:
           --github-output "$GITHUB_OUTPUT"
 
   batch-release:
-    name: Batch model release
+    name: Release ${{ matrix.id }}
     runs-on: macos-latest
     needs: plan-batch
     if: github.event_name == 'schedule' && needs.plan-batch.outputs.count != '0'
@@ -67,10 +67,10 @@ jobs:
       url: https://huggingface.co/OpenMed
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -99,7 +99,7 @@ jobs:
 
     - name: Upload queued model artifacts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: batch-release-${{ matrix.id }}
         path: release-artifacts/${{ matrix.id }}/
@@ -181,7 +181,7 @@ jobs:
   convert-onnx:
     name: Convert to ONNX and WebGPU
     runs-on: ubuntu-latest
-    if: contains(github.event.inputs.formats, 'onnx')
+    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.formats, 'onnx')
 
     steps:
     - uses: actions/checkout@v7

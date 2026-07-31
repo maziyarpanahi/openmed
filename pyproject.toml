@@ -232,8 +232,7 @@ hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
   "accelerate>=0.29",
-  "tokenizers>=0.15",
-  "PyYAML>=6.0"
+  "tokenizers>=0.15"
 ]
 
 service = [

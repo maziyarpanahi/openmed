@@ -6,12 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 
 try:
     import yaml
@@ -24,6 +25,8 @@ DEFAULT_OUTPUT_ROOT = Path("release-artifacts")
 DEFAULT_MANIFEST = Path("models.jsonl")
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday")
 QUANTIZED_EDGE_FORMATS = {"mlx-4bit", "mlx-8bit", "coreml"}
+SUPPORTED_FORMATS = {"mlx-fp", *QUANTIZED_EDGE_FORMATS}
+_SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class BatchDispatchError(RuntimeError):
@@ -44,11 +47,20 @@ class QueueItem:
     gate_command: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_mapping(cls, value: dict[str, Any]) -> "QueueItem":
+    def from_mapping(cls, value: Mapping[str, Any]) -> "QueueItem":
         item_id = _required_str(value, "id")
-        formats = tuple(_normalize_format(format_name) for format_name in _required_list(value, "formats"))
+        if not _SAFE_ID_RE.fullmatch(item_id):
+            raise BatchDispatchError(
+                f"queue item id {item_id!r} must use lowercase letters, digits, '.', '_', or '-'"
+            )
+        formats = tuple(
+            _normalize_format(format_name)
+            for format_name in _required_list(value, "formats")
+        )
         if not formats:
-            raise BatchDispatchError(f"queue item {item_id!r} must list at least one format")
+            raise BatchDispatchError(
+                f"queue item {item_id!r} must list at least one format"
+            )
 
         return cls(
             id=item_id,
@@ -56,11 +68,15 @@ class QueueItem:
             weekday=_normalize_weekday(_required_str(value, "weekday")),
             theme=_required_str(value, "theme"),
             formats=formats,
-            publish=bool(value.get("publish", True)),
-            depends_on_green_parent=tuple(
-                str(parent) for parent in value.get("depends_on_green_parent", []) or []
+            publish=_optional_bool(value, "publish", default=True),
+            depends_on_green_parent=_optional_str_list(
+                value,
+                "depends_on_green_parent",
             ),
-            gate_command=tuple(str(part) for part in value.get("gate_command", []) or []),
+            gate_command=_optional_str_list(
+                value,
+                "gate_command",
+            ),
         )
 
     def matrix_entry(self) -> dict[str, Any]:
@@ -104,30 +120,81 @@ def load_queue(path: str | Path = DEFAULT_QUEUE) -> list[QueueItem]:
         raise BatchDispatchError("PyYAML is required to read the release queue")
 
     path = Path(path)
-    with path.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle) or {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except OSError as exc:
+        raise BatchDispatchError(f"could not read release queue {path}: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise BatchDispatchError(
+            f"invalid release queue YAML in {path}: {exc}"
+        ) from exc
 
+    if not isinstance(data, Mapping):
+        raise BatchDispatchError("release queue must be a YAML mapping")
     if data.get("version") != 1:
         raise BatchDispatchError("release queue version must be 1")
 
-    items = [QueueItem.from_mapping(item) for item in data.get("items", []) or []]
-    validate_queue(items)
+    weekly_themes = data.get("weekly_themes")
+    if not isinstance(weekly_themes, Mapping):
+        raise BatchDispatchError("release queue weekly_themes must be a mapping")
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        raise BatchDispatchError("release queue items must be a non-empty list")
+
+    items: list[QueueItem] = []
+    for position, raw_item in enumerate(raw_items):
+        if not isinstance(raw_item, Mapping):
+            raise BatchDispatchError(
+                f"release queue item at index {position} must be a mapping"
+            )
+        items.append(QueueItem.from_mapping(raw_item))
+    validate_queue(items, weekly_themes=weekly_themes)
     return items
 
 
-def validate_queue(items: Iterable[QueueItem]) -> None:
+def validate_queue(
+    items: Iterable[QueueItem],
+    *,
+    weekly_themes: Mapping[str, Any] | None = None,
+) -> None:
     """Validate uniqueness and parent ordering in the release queue."""
 
     by_id: dict[str, QueueItem] = {}
     for item in items:
         if item.id in by_id:
             raise BatchDispatchError(f"duplicate queue item id: {item.id}")
+        if not item.formats or set(item.formats) - SUPPORTED_FORMATS:
+            raise BatchDispatchError(
+                f"queue item {item.id!r} contains unsupported release formats"
+            )
         by_id[item.id] = item
 
+    if weekly_themes is not None:
+        normalized_themes: dict[str, str] = {}
+        for day, theme in weekly_themes.items():
+            if not isinstance(day, str) or not isinstance(theme, str) or not theme:
+                raise BatchDispatchError(
+                    "release queue weekly_themes keys and values must be non-empty strings"
+                )
+            normalized_themes[_normalize_weekday(day)] = theme
+        missing_days = sorted(set(WEEKDAYS) - set(normalized_themes))
+        if missing_days:
+            raise BatchDispatchError(
+                "release queue weekly_themes missing weekdays: "
+                + ", ".join(missing_days)
+            )
+        for item in by_id.values():
+            expected_theme = normalized_themes[item.weekday]
+            if item.theme != expected_theme:
+                raise BatchDispatchError(
+                    f"queue item {item.id!r} theme {item.theme!r} does not match "
+                    f"{item.weekday!r} theme {expected_theme!r}"
+                )
+
     for item in by_id.values():
-        if not (set(item.formats) & QUANTIZED_EDGE_FORMATS):
-            continue
-        if not item.depends_on_green_parent:
+        is_edge_item = bool(set(item.formats) & QUANTIZED_EDGE_FORMATS)
+        if is_edge_item and not item.depends_on_green_parent:
             raise BatchDispatchError(
                 f"quantized edge item {item.id!r} must declare depends_on_green_parent"
             )
@@ -142,6 +209,18 @@ def validate_queue(items: Iterable[QueueItem]) -> None:
             if parent_day >= item_day:
                 raise BatchDispatchError(
                     f"queue item {item.id!r} must trail parent {parent_id!r} by at least one day"
+                )
+            if not parent.publish:
+                raise BatchDispatchError(
+                    f"queue item {item.id!r} depends on unpublished parent {parent_id!r}"
+                )
+            if parent.model_id != item.model_id:
+                raise BatchDispatchError(
+                    f"queue item {item.id!r} and parent {parent_id!r} must use the same model_id"
+                )
+            if set(parent.formats) & QUANTIZED_EDGE_FORMATS:
+                raise BatchDispatchError(
+                    f"queue item {item.id!r} parent {parent_id!r} must be a non-edge artifact"
                 )
 
 
@@ -284,7 +363,12 @@ def run_item(
 def parse_item_json(value: str) -> QueueItem:
     """Parse one matrix item JSON value from the workflow environment."""
 
-    data = json.loads(value)
+    try:
+        data = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise BatchDispatchError(f"invalid queue item JSON: {exc.msg}") from exc
+    if not isinstance(data, dict):
+        raise BatchDispatchError("queue item JSON must be an object")
     if "formats" not in data and "format" in data:
         data["formats"] = [data["format"]]
     return QueueItem.from_mapping(data)
@@ -380,7 +464,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     run_item_parser.add_argument("--item-json", default=None)
     _add_run_args(run_item_parser)
 
-    run_batch_parser = subparsers.add_parser("run-batch", help="Run selected queue items")
+    run_batch_parser = subparsers.add_parser(
+        "run-batch", help="Run selected queue items"
+    )
     _add_queue_selection_args(run_batch_parser)
     _add_run_args(run_batch_parser)
 
@@ -485,18 +571,43 @@ def _print_results(results: Iterable[ItemResult]) -> None:
         print("failed queue items: " + ", ".join(failures), file=sys.stderr)
 
 
-def _required_str(value: dict[str, Any], key: str) -> str:
+def _required_str(value: Mapping[str, Any], key: str) -> str:
     raw = value.get(key)
-    if not isinstance(raw, str) or not raw:
+    if not isinstance(raw, str) or not raw or raw != raw.strip() or "\n" in raw:
         raise BatchDispatchError(f"queue item field {key!r} must be a non-empty string")
     return raw
 
 
-def _required_list(value: dict[str, Any], key: str) -> list[Any]:
+def _required_list(value: Mapping[str, Any], key: str) -> list[Any]:
     raw = value.get(key)
     if not isinstance(raw, list):
         raise BatchDispatchError(f"queue item field {key!r} must be a list")
     return raw
+
+
+def _optional_bool(
+    value: Mapping[str, Any],
+    key: str,
+    *,
+    default: bool,
+) -> bool:
+    raw = value.get(key, default)
+    if not isinstance(raw, bool):
+        raise BatchDispatchError(f"queue item field {key!r} must be a boolean")
+    return raw
+
+
+def _optional_str_list(value: Mapping[str, Any], key: str) -> tuple[str, ...]:
+    raw = value.get(key, [])
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list) or any(
+        not isinstance(part, str) or not part or part != part.strip() for part in raw
+    ):
+        raise BatchDispatchError(
+            f"queue item field {key!r} must be a list of non-empty strings"
+        )
+    return tuple(raw)
 
 
 def _normalize_weekday(value: str) -> str:
@@ -507,7 +618,9 @@ def _normalize_weekday(value: str) -> str:
 
 
 def _normalize_format(value: Any) -> str:
-    normalized = str(value).strip().lower().replace("_", "-")
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise BatchDispatchError("queue item formats must contain non-empty strings")
+    normalized = value.lower().replace("_", "-")
     aliases = {
         "mlx": "mlx-fp",
         "mlx-float": "mlx-fp",
@@ -515,7 +628,10 @@ def _normalize_format(value: Any) -> str:
         "mlx-int8": "mlx-8bit",
         "mlx-int4": "mlx-4bit",
     }
-    return aliases.get(normalized, normalized)
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in SUPPORTED_FORMATS:
+        raise BatchDispatchError(f"unsupported release format: {value!r}")
+    return normalized
 
 
 if __name__ == "__main__":
