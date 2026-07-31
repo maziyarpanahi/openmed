@@ -55,6 +55,13 @@ from openmed.eval.metrics import compute_exact_span_f1, compute_leakage_rate
 VALIDATION_REPORT_SCHEMA_VERSION = "openmed.clinical_validation_report.v1"
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_SIGNING_KEY = "openmed-clinical-validation-local-key"
+_VALIDATION_CODE_HASH_MODULES = (
+    "openmed.eval.harness",
+    "openmed.eval.metrics",
+    "openmed.eval.fairness",
+    "openmed.clinical.validation.protocol",
+    "openmed.clinical.validation.study",
+)
 
 ValidationRunner = Callable[[BenchmarkFixture, str, str], Iterable[Any]]
 
@@ -462,7 +469,7 @@ def run_validation_study(
         axis: _subgroup_metrics(
             fixtures,
             config=config,
-            runner=model_runner,
+            predictions_by_fixture=predictions_by_fixture,
             axis=axis,
         )
         for axis in config.subgroup_axes
@@ -539,6 +546,10 @@ def _overall_metrics(
         "false_positives": f1.false_positives,
         "false_negatives": f1.false_negatives,
         "leakage_rate": leakage.overall,
+        "leakage_unit": "grapheme_cluster",
+        "leaked_graphemes": leakage.leaked_graphemes,
+        "total_graphemes": leakage.total_graphemes,
+        # Compatibility aliases retained by ``openmed.eval.LeakageMetrics``.
         "leaked_chars": leakage.leaked_chars,
         "total_chars": leakage.total_chars,
     }
@@ -548,14 +559,23 @@ def _subgroup_metrics(
     fixtures: Sequence[BenchmarkFixture],
     *,
     config: StudyConfig,
-    runner: ModelRunner,
+    predictions_by_fixture: Mapping[str, Sequence[Any]],
     axis: str,
 ) -> dict[str, Any]:
     axis_fixtures = [_regroup(fixture, axis) for fixture in fixtures]
+
+    def cached_runner(
+        fixture: BenchmarkFixture,
+        model_name: str,
+        device: str,
+    ) -> Sequence[Any]:
+        del model_name, device
+        return predictions_by_fixture[fixture.fixture_id]
+
     report = fairness_report(
         config.model_name,
         axis_fixtures,
-        runner=runner,
+        runner=cached_runner,
         device=config.device,
     )
     payload = report.to_dict()
@@ -615,7 +635,7 @@ def _build_provenance(
         "data_revision": config.data_revision,
         "dataset_source": "user-supplied",
         "dataset_manifest_hash": manifest["manifest_hash"],
-        "eval_code_hash": f"sha256:{eval_code_hash()}",
+        "eval_code_hash": (f"sha256:{eval_code_hash(_VALIDATION_CODE_HASH_MODULES)}"),
         "fixture_count": len(fixtures),
         "acceptance_thresholds": [
             threshold.to_dict()

@@ -84,7 +84,7 @@ DEFAULT_ACCEPTANCE_THRESHOLDS: tuple[AcceptanceThreshold, ...] = (
         direction=UPPER_BOUND,
         threshold=0.01,
         primary=True,
-        description="Character-weighted PHI leakage rate must not exceed 1%.",
+        description=("Grapheme-cluster-weighted PHI leakage rate must not exceed 1%."),
     ),
     AcceptanceThreshold(
         metric="recall",

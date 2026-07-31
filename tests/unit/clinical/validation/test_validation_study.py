@@ -145,6 +145,9 @@ def test_perfect_runner_meets_all_acceptance_criteria() -> None:
     assert overall["precision"] == 1.0
     assert overall["f1"] == 1.0
     assert overall["leakage_rate"] == 0.0
+    assert overall["leakage_unit"] == "grapheme_cluster"
+    assert overall["leaked_graphemes"] == 0
+    assert overall["total_graphemes"] > 0
 
     metrics_seen = {result["metric"] for result in payload["acceptance"]}
     assert {"recall", "precision", "f1", "leakage_rate"} <= metrics_seen
@@ -206,6 +209,31 @@ def test_repro_and_provenance_hashes_are_deterministic() -> None:
         == second.provenance["dataset_manifest_hash"]
     )
     assert first.signature.value == second.signature.value
+
+
+def test_runner_predictions_are_reused_for_all_metric_views() -> None:
+    calls: list[str] = []
+
+    def counting_runner(fixture, model_name, device):
+        calls.append(fixture.fixture_id)
+        return _perfect_runner(fixture, model_name, device)
+
+    report = run_validation_study(_config(), runner=counting_runner)
+
+    assert report.accepted is True
+    assert calls == [
+        f"val-{language}-{index:04d}"
+        for language, index in (
+            ("en", 1),
+            ("en", 2),
+            ("en", 3),
+            ("en", 4),
+            ("en", 5),
+            ("es", 1),
+            ("es", 2),
+            ("es", 3),
+        )
+    ]
 
 
 def test_report_signature_verifies_and_detects_tampering() -> None:

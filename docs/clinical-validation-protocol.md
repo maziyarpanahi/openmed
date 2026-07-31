@@ -58,7 +58,7 @@ A validation study evaluates one model against one labeled dataset.
 
 | Metric | Source | Meaning |
 |---|---|---|
-| Leakage rate | `compute_leakage_rate` | Character-weighted fraction of gold PHI characters not covered by a prediction. Lower is better. |
+| Leakage rate | `compute_leakage_rate` | Grapheme-cluster-weighted fraction of gold PHI not covered by a same-label prediction. Lower is better. |
 | Recall | `compute_exact_span_f1` | Exact-span, label-aware detection recall over gold PHI spans. |
 
 ### Secondary metrics
@@ -116,7 +116,8 @@ Every report records:
   produced by `build_training_data_manifest`. It fingerprints the documents and
   gold spans **without persisting raw text**.
 - `eval_code_hash` — a hash of the eval harness and metric code, so a change in
-  scoring logic changes the provenance.
+  the harness, metrics, fairness scoring, protocol, or study runner changes the
+  provenance.
 - `acceptance_thresholds` — the exact thresholds the study was judged against.
 - `repro_hash` — a `sha256` over the full, deterministic, PHI-free report
   payload.
@@ -154,7 +155,8 @@ For offline or CI runs, pass a deterministic `runner` with the harness
 
 The JSON report contains: `study_id`, `model_name`, `device`, `protocol_id`,
 `schema_version`, `fixture_count`, `metrics.overall`
-(`recall`/`precision`/`f1`/`leakage_rate` and supporting counts), `subgroups`
+(`recall`/`precision`/`f1`/`leakage_rate`, the `grapheme_cluster` unit, and
+supporting counts), `subgroups`
 (per-axis `per_group` breakdowns with `leakage_disparity` and `worst_group`),
 `acceptance` (per-metric outcomes), `accepted`, `provenance`, `disclaimer`,
 `repro_hash`, and `signature`. The Markdown report renders the same content as a
