@@ -612,6 +612,97 @@
       "version": "1.0.0"
     },
     {
+      "description": "Assemble FHIR resources into a R4 bundle. ",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_type": {
+            "default": "transaction",
+            "enum": [
+              "transaction",
+              "batch",
+              "collection"
+            ],
+            "type": "string"
+          },
+          "doc_id": {
+            "default": "openmed-document",
+            "type": "string"
+          },
+          "resources": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "resourceType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "resourceType"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resources"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_fhir_bundle",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "entry": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "fullUrl": {
+                  "type": "string"
+                },
+                "request": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "resource": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "fullUrl",
+                "resource"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "resourceType": {
+            "enum": [
+              "Bundle"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resourceType",
+          "type",
+          "entry"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
       "description": "List OpenMed model registry entries.",
       "input_schema": {
         "additionalProperties": false,
@@ -784,6 +875,166 @@
       "version": "1.0.0"
     },
     {
+      "description": "Reidentification risk for de-identified text",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "aux": {
+            "default": null,
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "deidentified": {},
+          "original": {
+            "default": null,
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "deidentified"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_risk_report",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "k_min": {
+            "type": "integer"
+          },
+          "leakage_rate": {
+            "type": "number"
+          },
+          "quasi_identifiers": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "end": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "normalized_value": {
+                  "type": "string"
+                },
+                "record_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "record_index": {
+                  "type": "integer"
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "record_index",
+                "record_id",
+                "category",
+                "value",
+                "normalized_value",
+                "source",
+                "start",
+                "end",
+                "section"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "reid_rate": {
+            "type": "number"
+          },
+          "singleton_records": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "effective_k": {
+                  "type": "integer"
+                },
+                "quasi_identifier_key": {
+                  "items": {
+                    "additionalProperties": true,
+                    "properties": {
+                      "category": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "category",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "record_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "record_index": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "record_index",
+                "record_id",
+                "effective_k",
+                "quasi_identifier_key"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "leakage_rate",
+          "reid_rate",
+          "k_min",
+          "singleton_records",
+          "quasi_identifiers"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
       "description": "Run a stateful multi-step OpenMed workflow with server-side intermediate handles and PHI-safe egress.",
       "input_schema": {
         "additionalProperties": false,
@@ -922,6 +1173,389 @@
           "final_output",
           "outputs",
           "trace"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Search OpenMed models from the canonical manifest by category, license, size and language.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "language": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "license": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_size_mb": {
+            "default": null,
+            "minimum": 0.0,
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "openmed_search_models",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "entity_types": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "model_id": {
+                  "type": "string"
+                },
+                "size_category": {
+                  "type": "string"
+                },
+                "size_mb": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "specialization": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "model_id",
+                "display_name",
+                "category",
+                "specialization",
+                "description",
+                "entity_types",
+                "size_category",
+                "size_mb"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "returned": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "returned",
+          "models"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Run deidentification with auditing set as True and return a signed audit report",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.7,
+            "description": "Minimum confidence score for de-identification.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "keep_alive": {
+            "default": null,
+            "description": "Optional model keep-alive duration for the service runtime.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key_id": {
+            "default": "release",
+            "type": "string"
+          },
+          "lang": {
+            "default": "en",
+            "description": "PII language code.",
+            "enum": [
+              "am",
+              "ar",
+              "as",
+              "bn",
+              "cs",
+              "da",
+              "de",
+              "el",
+              "en",
+              "es",
+              "fr",
+              "gu",
+              "he",
+              "hi",
+              "id",
+              "it",
+              "ja",
+              "kn",
+              "ko",
+              "ml",
+              "mr",
+              "nl",
+              "no",
+              "or",
+              "pa",
+              "pt",
+              "ro",
+              "ru",
+              "sv",
+              "sw",
+              "ta",
+              "te",
+              "th",
+              "tr",
+              "uk",
+              "xh",
+              "zh",
+              "zu"
+            ],
+            "type": "string"
+          },
+          "method": {
+            "default": "mask",
+            "enum": [
+              "hash",
+              "mask",
+              "remove",
+              "replace",
+              "shift_dates"
+            ],
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "description": "PII model registry key, local model path, or model identifier.",
+            "type": "string"
+          },
+          "signing_key": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "Clinical text to process.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_signed_audit_report",
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "deidentified_text_hash": {
+            "type": "string"
+          },
+          "detectors": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "document_length": {
+            "type": "integer"
+          },
+          "input_hash": {
+            "type": "string"
+          },
+          "manifest_hash": {
+            "type": "string"
+          },
+          "openmed_version": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "repro_hash": {
+            "type": "string"
+          },
+          "residual_risk": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "resolved_profile": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "safety_sweep": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "signature": {
+            "additionalProperties": true,
+            "properties": {
+              "algorithm": {
+                "type": "string"
+              },
+              "key_id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key_id",
+              "algorithm",
+              "value"
+            ],
+            "type": "object"
+          },
+          "spans": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number"
+                },
+                "context": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "end": {
+                  "type": "integer"
+                },
+                "evidence": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "sources": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "start": {
+                  "type": "integer"
+                },
+                "surrogate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "text_hash": {
+                  "type": "string"
+                },
+                "threshold": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "start",
+                "end",
+                "label",
+                "canonical_label",
+                "sources",
+                "confidence",
+                "threshold",
+                "action",
+                "surrogate",
+                "text_hash"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "thresholds": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          }
+        },
+        "required": [
+          "policy",
+          "spans",
+          "openmed_version",
+          "manifest_hash",
+          "document_length",
+          "input_hash",
+          "deidentified_text_hash",
+          "repro_hash",
+          "signature"
         ],
         "type": "object"
       },
