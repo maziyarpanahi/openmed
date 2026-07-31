@@ -50,6 +50,7 @@ from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
     QuantRecallDeltaResult,
+    evaluate_export_variant_gate,
     evaluate_quant_recall_delta,
 )
 from openmed.eval.report import BenchmarkReport
@@ -58,7 +59,9 @@ RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
+GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
+EXPORT_VARIANT_GATE = "export_variants"
 I18N_THROUGHPUT_GATE = "i18n_throughput"
 I18N_THROUGHPUT_REGRESSION_THRESHOLD = 0.20
 I18N_THROUGHPUT_BASELINE_FAMILY = "i18n-throughput"
@@ -770,6 +773,9 @@ class ReleaseGate:
         ):
             checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
             checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
+        export_manifest = _export_variant_manifest(metadata)
+        if export_manifest:
+            checks.extend(_export_variant_checks(export_manifest, metrics, metadata))
         checks.append(_zero_shot_language_leakage_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
@@ -2293,6 +2299,113 @@ def _coreml_variant_parity_check(
         },
         blocking_format=next(iter(failures), missing[0] if missing else None),
     )
+
+
+def _export_variant_manifest(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    inline = _mapping(
+        metadata.get("export_variant_manifest")
+        or metadata.get("export_conversion_manifest")
+        or metadata.get("onnx_webgpu_manifest")
+        or metadata.get("export_manifest")
+    )
+    if inline:
+        return inline
+
+    variants = metadata.get("export_variants")
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        manifest: dict[str, Any] = {"variants": list(variants)}
+        required = metadata.get("required_export_variants")
+        if isinstance(required, Sequence) and not isinstance(required, (str, bytes)):
+            manifest["required_variants"] = list(required)
+        return manifest
+
+    manifest_path = _optional_path(
+        _first_value(
+            metadata.get("export_variant_manifest_path"),
+            metadata.get("export_manifest_path"),
+        )
+    )
+    if manifest_path is None or not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return _mapping(loaded)
+
+
+def _export_variant_checks(
+    manifest: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[GateCheck]:
+    variants_raw = manifest.get("variants")
+    variants = (
+        [_mapping(item) for item in variants_raw if isinstance(item, Mapping)]
+        if isinstance(variants_raw, Sequence)
+        and not isinstance(variants_raw, (str, bytes))
+        else []
+    )
+
+    parent_recall = _first_mapping(
+        manifest.get("parent_recall"),
+        manifest.get("fp_parent_per_label_recall"),
+    ) or _quant_parent_recall(metrics, metadata)
+
+    required = manifest.get("required_variants") or metadata.get(
+        "required_export_variants"
+    )
+    required_variants = (
+        [str(item) for item in required]
+        if isinstance(required, Sequence) and not isinstance(required, (str, bytes))
+        else []
+    )
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_TIER_BUDGETS,
+        parent_recall=parent_recall or None,
+        parent_format=str(manifest.get("parent_format") or ""),
+        required_variants=required_variants,
+        tier_aliases=_TIER_ALIASES,
+    )
+
+    coverage_passed = bool(result.variant_results) and not result.missing_required
+    if not result.variant_results:
+        coverage_reason = "no ONNX/WebGPU export variants declared"
+    elif result.missing_required:
+        coverage_reason = "required export variant missing"
+    else:
+        coverage_reason = "ok"
+
+    checks: list[GateCheck] = [
+        GateCheck(
+            EXPORT_VARIANT_GATE,
+            coverage_passed,
+            reason=coverage_reason,
+            details={
+                "parent_format": result.parent_format,
+                "evaluated_formats": list(result.evaluated_formats),
+                "missing_required": list(result.missing_required),
+                "blocked_formats": list(result.blocked_formats),
+            },
+            blocking_format=(
+                result.missing_required[0] if result.missing_required else None
+            ),
+        )
+    ]
+    for variant in result.variant_results:
+        checks.append(
+            GateCheck(
+                f"{EXPORT_VARIANT_GATE}:{variant.format}",
+                variant.passed,
+                reason=variant.reason,
+                details=variant.to_dict(),
+                blocking_format=variant.blocking_format,
+            )
+        )
+    return checks
 
 
 def _g5_check(
@@ -3827,6 +3940,163 @@ def _key_bytes(key: bytes | str) -> bytes:
     raise TypeError("signing key must be bytes or str")
 
 
+GROUNDING_TOP1_FLOOR = 0.90
+GROUNDING_TOP5_FLOOR = 0.97
+# Provisional multilingual floors: zh/hi grounding coverage is still maturing,
+# so these are documented as advisory-but-blocking placeholders below the
+# English strict floors.
+GROUNDING_MULTILINGUAL_TOP1_FLOOR = 0.80
+GROUNDING_MULTILINGUAL_TOP5_FLOOR = 0.90
+_GROUNDING_PERMISSIVE_SYSTEMS: tuple[str, ...] = ("rxnorm", "loinc", "icd10cm")
+_GROUNDING_MULTILINGUAL_LANGUAGES: tuple[str, ...] = ("zh", "hi")
+
+
+@dataclass(frozen=True)
+class GroundingGateConfig:
+    """Per-system top-k accuracy floors for the grounding release gate.
+
+    English gold is held to the strict ``top-1 >= 0.90`` / ``top-5 >= 0.97``
+    floors; ``zh``/``hi`` gold is held to lower, explicitly provisional floors
+    while multilingual grounding coverage matures.
+    """
+
+    permissive_systems: tuple[str, ...] = _GROUNDING_PERMISSIVE_SYSTEMS
+    english_top1_floor: float = GROUNDING_TOP1_FLOOR
+    english_top5_floor: float = GROUNDING_TOP5_FLOOR
+    multilingual_languages: tuple[str, ...] = _GROUNDING_MULTILINGUAL_LANGUAGES
+    multilingual_top1_floor: float = GROUNDING_MULTILINGUAL_TOP1_FLOOR
+    multilingual_top5_floor: float = GROUNDING_MULTILINGUAL_TOP5_FLOOR
+
+    def floors_for(self, language: str) -> tuple[float, float]:
+        """Return the ``(top1, top5)`` floors for a language."""
+
+        if language == "en":
+            return self.english_top1_floor, self.english_top5_floor
+        return self.multilingual_top1_floor, self.multilingual_top5_floor
+
+    def check(self, report: Any) -> tuple[GateCheck, ...]:
+        """Return one :class:`GateCheck` per permissive system in the report."""
+
+        checks: list[GateCheck] = []
+        for system in self.permissive_systems:
+            system_accuracy = report.system(system)
+            if system_accuracy is None:
+                checks.append(
+                    GateCheck(
+                        f"{GROUNDING_ACCURACY_GATE}:{system}",
+                        False,
+                        reason="grounding accuracy missing for system",
+                        details={"system": system},
+                    )
+                )
+                continue
+
+            breaches: list[str] = []
+            languages: dict[str, Any] = {}
+            evaluated = ["en", *self.multilingual_languages]
+            for language in evaluated:
+                metrics = system_accuracy.language(language)
+                if metrics is None:
+                    continue
+                top1_floor, top5_floor = self.floors_for(language)
+                languages[language] = {
+                    "support": metrics.support,
+                    "top1_accuracy": metrics.top1_accuracy,
+                    "top5_accuracy": metrics.top5_accuracy,
+                    "abstention_rate": metrics.abstention_rate,
+                    "top1_floor": top1_floor,
+                    "top5_floor": top5_floor,
+                }
+                if metrics.top1_accuracy < top1_floor:
+                    breaches.append(
+                        f"{language}.top1 {metrics.top1_accuracy:.4f} < {top1_floor:.2f}"
+                    )
+                if metrics.top5_accuracy < top5_floor:
+                    breaches.append(
+                        f"{language}.top5 {metrics.top5_accuracy:.4f} < {top5_floor:.2f}"
+                    )
+
+            if "en" not in languages:
+                breaches.append("en (missing English gold)")
+
+            checks.append(
+                GateCheck(
+                    f"{GROUNDING_ACCURACY_GATE}:{system}",
+                    not breaches,
+                    reason="ok"
+                    if not breaches
+                    else "grounding accuracy below floor: " + "; ".join(breaches),
+                    details={"system": system, "languages": languages},
+                )
+            )
+        return tuple(checks)
+
+
+def evaluate_grounding_accuracy_gate(
+    report: Any | None = None,
+    *,
+    config: GroundingGateConfig | None = None,
+    gold_dir: str | Path | None = None,
+) -> tuple[GateCheck, ...]:
+    """Score the grounding accuracy suite and return per-system gate checks.
+
+    When *report* is omitted the shipped synthetic gold is scored with the real
+    sparse candidate generator. Passing a precomputed report (or one produced by
+    a deliberately broken linker) lets callers exercise the floors directly.
+    """
+
+    from openmed.eval import grounding_accuracy as grounding_module
+
+    resolved_config = config or GroundingGateConfig()
+    if report is None:
+        if gold_dir is None:
+            report = grounding_module.evaluate_grounding_accuracy()
+        else:
+            report = grounding_module.evaluate_grounding_accuracy(gold_dir=gold_dir)
+    return resolved_config.check(report)
+
+
+def build_grounding_gate_report(
+    report: Any | None = None,
+    *,
+    config: GroundingGateConfig | None = None,
+    gold_dir: str | Path | None = None,
+) -> GateReport:
+    """Build an unsigned :class:`GateReport` carrying the grounding checks."""
+
+    from openmed.eval import grounding_accuracy as grounding_module
+
+    resolved_config = config or GroundingGateConfig()
+    if report is None:
+        if gold_dir is None:
+            report = grounding_module.evaluate_grounding_accuracy()
+        else:
+            report = grounding_module.evaluate_grounding_accuracy(gold_dir=gold_dir)
+
+    checks = resolved_config.check(report)
+    decision = RELEASABLE if all(check.passed for check in checks) else QUARANTINED
+    eval_set_hash = stable_hash(report.to_dict())
+    return GateReport(
+        repo_id="grounding-accuracy-suite",
+        family="grounding",
+        tier="suite",
+        param_count=None,
+        format="pattern-only",
+        per_label_recall={},
+        per_label_precision={},
+        critical_leakage_count=0,
+        residual_leakage_rate=0.0,
+        quant_recall_delta=None,
+        p50_ms=None,
+        p95_ms=None,
+        ram_mb=None,
+        eval_set_hash=eval_set_hash,
+        leakage_fixture_hash="",
+        decision=decision,
+        gate_results=checks,
+    )
+
+
 def preview(
     report: BenchmarkReport | Mapping[str, Any],
     baseline: Mapping[str, Any] | None = None,
@@ -3889,6 +4159,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--throughput-candidate",
         help="Path to a zh/hi/ta throughput benchmark JSON payload.",
     )
+    candidate_group.add_argument(
+        "--grounding",
+        action="store_true",
+        help="Score the shipped grounding-accuracy gold and gate on top-k floors.",
+    )
     parser.add_argument(
         "--baseline",
         help="Optional baseline JSON payload. Defaults to the baseline store.",
@@ -3949,6 +4224,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.throughput_candidate:
         return _run_i18n_throughput_gate_cli(args)
+
+    if args.grounding:
+        return _run_grounding_accuracy_gate_cli(args)
 
     candidate_path = Path(args.candidate)
     if not candidate_path.is_file():
@@ -4029,6 +4307,25 @@ def _run_i18n_throughput_gate_cli(args: argparse.Namespace) -> int:
     )
     print(json.dumps(payload, sort_keys=True))
     return 0 if check.passed else 1
+
+
+def _run_grounding_accuracy_gate_cli(args: argparse.Namespace) -> int:
+    try:
+        report = build_grounding_gate_report()
+    except Exception as exc:
+        print(f"grounding accuracy gate evaluation failed: {exc}", file=sys.stderr)
+        return 2
+
+    signed = report.sign(
+        args.signing_key
+        or os.environ.get("OPENMED_RELEASE_GATE_KEY", _DEFAULT_SIGNING_KEY),
+        key_id=args.key_id,
+    )
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(signed.to_json() + "\n", encoding="utf-8")
+    print(signed.to_json())
+    return 0 if signed.decision == RELEASABLE else 1
 
 
 def _read_json_file(path: Path) -> dict[str, Any]:
@@ -4206,16 +4503,25 @@ __all__ = [
     "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
     "SURROGATE_QUALITY_GATE",
+    "EXPORT_VARIANT_GATE",
+    "GROUNDING_ACCURACY_GATE",
+    "GROUNDING_TOP1_FLOOR",
+    "GROUNDING_TOP5_FLOOR",
+    "GROUNDING_MULTILINGUAL_TOP1_FLOOR",
+    "GROUNDING_MULTILINGUAL_TOP5_FLOOR",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",
     "RELEASABLE",
     "GateCheck",
     "GateReport",
+    "GroundingGateConfig",
     "ModelStewardConfig",
     "ReleaseGate",
     "apply_flakiness_quarantine",
     "build_arg_parser",
+    "build_grounding_gate_report",
     "evaluate_federated_boundary_gate",
+    "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",
     "main",
