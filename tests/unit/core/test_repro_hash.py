@@ -12,6 +12,7 @@ import pytest
 from openmed.core.repro_hash import (
     ReproducibilityVerificationError,
     build_training_provenance,
+    compute_canonical_payload_hash,
     compute_environment_lock_digest,
     compute_reproducibility_hash,
     load_training_provenance,
@@ -115,3 +116,40 @@ def test_environment_lock_digest_matches_uv_lock_sha256(tmp_path: Path) -> None:
     expected = hashlib.sha256(lock.read_bytes()).hexdigest()
 
     assert compute_environment_lock_digest(lock) == f"sha256:{expected}"
+
+
+def test_canonical_payload_hash_follows_the_gate_report_contract() -> None:
+    # Sorted keys, compact separators, ensure_ascii, UTF-8, sha256: prefix --
+    # the same contract GateReport uses, so a record can bind to a report hash.
+    payload = {"b": 2, "a": "clinical note", "c": [1, {"z": None, "y": True}]}
+    canonical = json.dumps(
+        payload,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    expected = f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+    assert compute_canonical_payload_hash(payload) == expected
+    # Key order in the input must not change the hash.
+    assert compute_canonical_payload_hash({"a": 1, "b": 2}) == (
+        compute_canonical_payload_hash({"b": 2, "a": 1})
+    )
+
+
+def test_canonical_payload_hash_escapes_non_ascii_and_rejects_nan() -> None:
+    # ensure_ascii=True: a non-ASCII value hashes via its escaped form.
+    escaped = json.dumps(
+        {"note": "café"},
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    assert compute_canonical_payload_hash({"note": "café"}) == (
+        f"sha256:{hashlib.sha256(escaped).hexdigest()}"
+    )
+
+    with pytest.raises(ValueError):
+        compute_canonical_payload_hash({"score": float("nan")})

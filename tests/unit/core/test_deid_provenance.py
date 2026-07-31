@@ -6,6 +6,8 @@ from datetime import datetime
 from unittest.mock import patch
 
 from openmed.core.audit import AuditReport, verify_repro_hash
+from openmed.core.config import OpenMedConfig
+from openmed.core.offline import HF_OFFLINE_ENV_VARS, OFFLINE_ENV_VAR
 from openmed.core.pii import deidentify
 from openmed.core.safety_sweep import SAFETY_SWEEP_SOURCE
 from openmed.processing.outputs import EntityPrediction, PredictionResult
@@ -67,6 +69,28 @@ def test_audit_repro_hash_is_stable_for_identical_inputs(mock_extract):
 
     assert first.repro_hash == second.repro_hash
     assert first.to_json() == second.to_json()
+
+
+@patch("openmed.core.pii.extract_pii")
+def test_audit_captures_local_only_evidence_at_run_time(mock_extract, monkeypatch):
+    text = "Patient John Doe."
+    mock_extract.return_value = _prediction(text)
+    monkeypatch.delenv(OFFLINE_ENV_VAR, raising=False)
+    for name in HF_OFFLINE_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+    report = deidentify(
+        text,
+        method="mask",
+        config=OpenMedConfig(local_only=True),
+        audit=True,
+    )
+
+    assertion = report.resolved_profile["offline_assertion"]
+    assert assertion["asserted"] is True
+    assert assertion["source"] == "config"
+    assert assertion["network_guard_requested"] is True
+    assert assertion["dependency_flags_enabled"] is True
 
 
 @patch("openmed.core.pii.extract_pii")

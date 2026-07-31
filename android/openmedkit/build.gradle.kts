@@ -5,7 +5,14 @@ plugins {
     signing
 }
 
-group = "org.openmed"
+val publicationGroup = providers.gradleProperty("openmedAndroidGroup")
+    .orElse("org.openmed")
+    .get()
+val publicationArtifact = providers.gradleProperty("openmedAndroidArtifact")
+    .orElse("openmedkit")
+    .get()
+
+group = publicationGroup
 version = providers.gradleProperty("openmedAndroidVersion")
     .orElse(providers.environmentVariable("OPENMED_ANDROID_VERSION"))
     .orElse("0.0.0-SNAPSHOT")
@@ -141,8 +148,8 @@ afterEvaluate {
             create<MavenPublication>("release") {
                 from(components["release"])
 
-                groupId = "org.openmed"
-                artifactId = "openmedkit"
+                groupId = publicationGroup
+                artifactId = publicationArtifact
                 version = project.version.toString()
 
                 pom {
@@ -198,7 +205,8 @@ afterEvaluate {
 
         setRequired {
             gradle.taskGraph.allTasks.any {
-                it.name.startsWith("publish") || it.name == "bundleCentralPortalPublication"
+                it.name == "publishReleasePublicationToCentralStagingRepository" ||
+                    it.name == "bundleCentralPortalPublication"
             } && !isSnapshotVersion()
         }
 
@@ -214,6 +222,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.onnxruntime.android)
+    implementation(libs.djl.tokenizers)
+    implementation(libs.djl.tokenizer.native.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)

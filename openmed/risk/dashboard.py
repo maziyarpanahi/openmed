@@ -1,17 +1,30 @@
-"""Self-contained HTML rendering for re-identification risk reports."""
+"""HTML dashboards for local-sensitive diagnostics and aggregate release evidence."""
 
 from __future__ import annotations
 
 import html as html_mod
 import json
+import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-__all__ = ["render_risk_dashboard", "write_risk_dashboard"]
+from .release import (
+    AnonymizationResult,
+    ReleaseAssessment,
+    _validated_column_name,
+)
+
+__all__ = [
+    "render_release_assessment_dashboard",
+    "render_risk_dashboard",
+    "write_release_assessment_dashboard",
+    "write_risk_dashboard",
+]
 
 _DEFAULT_TITLE = "OpenMed Risk Dashboard"
+_DEFAULT_RELEASE_TITLE = "OpenMed Release Assessment Dashboard"
 
 _CSS = """
 :root {
@@ -137,6 +150,20 @@ tr:last-child th {
 .subtle {
   color: #526170;
 }
+
+.notice {
+  padding: 12px 14px;
+  border-left: 4px solid #9b2c2c;
+  background: #fff5f5;
+  color: #742a2a;
+}
+
+.safe-notice {
+  padding: 12px 14px;
+  border-left: 4px solid #2b6cb0;
+  background: #ebf8ff;
+  color: #2a4365;
+}
 """.strip()
 
 
@@ -146,7 +173,13 @@ def render_risk_dashboard(
     kanon: Mapping[str, Any] | None = None,
     title: str | None = None,
 ) -> str:
-    """Render a deterministic, self-contained HTML risk dashboard.
+    """Render a local-sensitive, self-contained diagnostic dashboard.
+
+    This legacy renderer intentionally displays raw quasi-identifier values,
+    record references, equivalence-class keys, and member indices. Keep its
+    output on trusted local storage. Use
+    :func:`render_release_assessment_dashboard` for shareable aggregate
+    evidence.
 
     Args:
         risk: Mapping returned by :func:`openmed.risk.risk_report`.
@@ -168,6 +201,70 @@ def render_risk_dashboard(
     if kanon is not None:
         body.append(_render_kanon(kanon))
 
+    return _render_document(document_title, body)
+
+
+def write_risk_dashboard(
+    risk: Mapping[str, Any],
+    path: str | Path,
+    **kwargs: Any,
+) -> Path:
+    """Write a local-sensitive diagnostic dashboard and return its path."""
+
+    output_path = Path(path)
+    output_path.write_text(render_risk_dashboard(risk, **kwargs), encoding="utf-8")
+    return output_path
+
+
+def render_release_assessment_dashboard(
+    assessment: ReleaseAssessment | AnonymizationResult | Mapping[str, Any],
+    *,
+    title: str | None = None,
+) -> str:
+    """Render only allow-listed aggregate release evidence.
+
+    Args:
+        assessment: A :class:`ReleaseAssessment`, an
+            :class:`AnonymizationResult`, or the mapping returned by
+            ``to_dict()`` / ``to_safe_dict()`` on those objects. Detailed
+            ``risk_report`` and ``kanon_report`` mappings are rejected.
+        title: Optional document and page title.
+
+    Returns:
+        A complete, deterministic HTML document with no external assets.
+
+    Raises:
+        TypeError: If ``assessment`` is not a supported aggregate artifact.
+    """
+
+    payload = _release_dashboard_payload(assessment)
+    document_title = title or _DEFAULT_RELEASE_TITLE
+    body = [_render_release_header(document_title)]
+    artifact = payload.get("artifact")
+    if artifact == "deidentification_release_assessment":
+        body.append(_render_release_assessment(payload, section_id="assessment"))
+    else:
+        body.extend(_render_anonymization_summary(payload))
+    return _render_document(document_title, body)
+
+
+def write_release_assessment_dashboard(
+    assessment: ReleaseAssessment | AnonymizationResult | Mapping[str, Any],
+    path: str | Path,
+    *,
+    title: str | None = None,
+) -> Path:
+    """Write an aggregate release-evidence dashboard and return its path."""
+
+    output_path = Path(path)
+    output_path.write_text(
+        render_release_assessment_dashboard(assessment, title=title),
+        encoding="utf-8",
+    )
+    return output_path
+
+
+def _render_document(title: str, body: Sequence[str]) -> str:
     return "\n".join(
         [
             "<!doctype html>",
@@ -175,7 +272,7 @@ def render_risk_dashboard(
             "<head>",
             '<meta charset="utf-8" />',
             '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-            f"<title>{_escape(document_title)}</title>",
+            f"<title>{_escape(title)}</title>",
             "<style>",
             _CSS,
             "</style>",
@@ -190,18 +287,6 @@ def render_risk_dashboard(
     )
 
 
-def write_risk_dashboard(
-    risk: Mapping[str, Any],
-    path: str | Path,
-    **kwargs: Any,
-) -> Path:
-    """Write a rendered risk dashboard and return the output path."""
-
-    output_path = Path(path)
-    output_path.write_text(render_risk_dashboard(risk, **kwargs), encoding="utf-8")
-    return output_path
-
-
 def _render_header(title: str) -> str:
     return "\n".join(
         [
@@ -209,12 +294,306 @@ def _render_header(title: str) -> str:
             f"<h1>{_escape(title)}</h1>",
             (
                 '<p class="subtle">'
-                "Residual disclosure risk summary for de-identified records."
+                "Record-level residual disclosure-risk diagnostics."
                 "</p>"
+            ),
+            (
+                '<p class="notice"><strong>Local-sensitive diagnostic.</strong> '
+                "This report can contain raw quasi-identifier values, record "
+                "references, class keys, and member indices. Keep it on trusted "
+                "local storage.</p>"
             ),
             "</header>",
         ]
     )
+
+
+def _render_release_header(title: str) -> str:
+    return "\n".join(
+        [
+            "<header>",
+            f"<h1>{_escape(title)}</h1>",
+            (
+                '<p class="subtle">'
+                "Aggregate disclosure-risk evidence for a declared release policy."
+                "</p>"
+            ),
+            (
+                '<p class="safe-notice"><strong>Aggregate evidence only.</strong> '
+                "Qualified expert review is required. This dashboard is not an "
+                "Expert Determination or compliance certificate.</p>"
+            ),
+            "</header>",
+        ]
+    )
+
+
+def _release_dashboard_payload(value: Any) -> Mapping[str, Any]:
+    value_type = type(value)
+    if (
+        value_type.__module__ == "openmed.risk.release"
+        and value_type.__name__ == "ReleaseAssessment"
+    ):
+        payload = value.to_dict()
+    elif (
+        value_type.__module__ == "openmed.risk.release"
+        and value_type.__name__ == "AnonymizationResult"
+    ):
+        payload = value.to_safe_dict()
+    elif isinstance(value, Mapping):
+        payload = value
+    else:
+        raise TypeError(
+            "assessment must be a ReleaseAssessment, AnonymizationResult, "
+            "or their safe aggregate mapping"
+        )
+
+    artifact = payload.get("artifact") if isinstance(payload, Mapping) else None
+    if artifact not in {
+        "deidentification_release_assessment",
+        "deidentification_anonymization_summary",
+    }:
+        raise TypeError(
+            "assessment mapping must be a safe release assessment or "
+            "anonymization summary artifact"
+        )
+    return payload
+
+
+def _render_release_assessment(
+    assessment: Mapping[str, Any],
+    *,
+    section_id: str,
+    heading: str = "Release Assessment",
+) -> str:
+    policy = _mapping(assessment.get("policy"))
+    kanon = _mapping(assessment.get("k_anonymity"))
+    identity_risk = _mapping(assessment.get("sample_identity_risk"))
+    meets_policy = assessment.get("meets_policy")
+    verdict = (
+        "meets declared policy"
+        if meets_policy is True
+        else "does not meet declared policy"
+        if meets_policy is False
+        else "not reported"
+    )
+    sections = [
+        f'<section aria-labelledby="{_escape(section_id)}">',
+        f'<h2 id="{_escape(section_id)}">{_escape(heading)}</h2>',
+        '<div class="metric-grid">',
+        _metric("Result", verdict),
+        _metric("Rows", _format_count(assessment.get("row_count"))),
+        _metric(
+            "Privacy units",
+            _format_count(assessment.get("privacy_unit_count")),
+        ),
+        _metric("Achieved k", _format_count(kanon.get("achieved_k"))),
+        _metric("Target k", _format_count(policy.get("target_k"))),
+        _metric("Max sample identity risk", _format_rate(identity_risk.get("max"))),
+        "</div>",
+        "<h2>Declared Policy</h2>",
+        _table(
+            ["Field", "Value"],
+            [
+                [
+                    "Quasi-identifiers",
+                    ", ".join(
+                        _safe_metadata_strings(assessment.get("quasi_identifiers"))
+                    ),
+                ],
+                [
+                    "Sensitive attributes",
+                    ", ".join(
+                        _safe_metadata_strings(assessment.get("sensitive_attributes"))
+                    ),
+                ],
+                ["Target l", _format_count(policy.get("target_l"))],
+                ["Target t", _format_rate(policy.get("target_t"))],
+                [
+                    "Warnings",
+                    _format_count(
+                        assessment.get(
+                            "warning_count",
+                            len(_as_sequence(assessment.get("warnings"))),
+                        )
+                    ),
+                ],
+            ],
+        ),
+    ]
+    distribution = _safe_distribution_rows(kanon.get("class_size_distribution"))
+    if distribution:
+        sections.extend(
+            [
+                "<h2>Class Size Distribution</h2>",
+                _table(
+                    ["Class size", "Class count"],
+                    [[str(size), str(count)] for size, count in distribution],
+                ),
+            ]
+        )
+    attribute_rows = _safe_attribute_rows(assessment.get("attribute_disclosure"))
+    if attribute_rows:
+        sections.extend(
+            [
+                "<h2>Attribute Disclosure</h2>",
+                _table(
+                    [
+                        "Attribute",
+                        "Achieved l",
+                        "l violations",
+                        "Achieved t",
+                        "t violations",
+                    ],
+                    attribute_rows,
+                ),
+            ]
+        )
+    sections.append("</section>")
+    return "\n".join(sections)
+
+
+def _render_anonymization_summary(
+    summary: Mapping[str, Any],
+) -> list[str]:
+    sections: list[str] = []
+    before = summary.get("before")
+    after = summary.get("after")
+    if isinstance(before, Mapping):
+        sections.append(
+            _render_release_assessment(
+                before,
+                section_id="assessment-before",
+                heading="Before Anonymization",
+            )
+        )
+    if isinstance(after, Mapping):
+        sections.append(
+            _render_release_assessment(
+                after,
+                section_id="assessment-after",
+                heading="After Anonymization",
+            )
+        )
+
+    generalization = _mapping(summary.get("generalization"))
+    utility = _mapping(summary.get("utility"))
+    sections.append(
+        "\n".join(
+            [
+                '<section aria-labelledby="transformation-summary">',
+                '<h2 id="transformation-summary">Transformation and Utility</h2>',
+                '<div class="metric-grid">',
+                _metric(
+                    "Information loss",
+                    _format_rate(generalization.get("information_loss")),
+                ),
+                _metric(
+                    "Row suppression",
+                    _format_rate(utility.get("row_suppression_rate")),
+                ),
+                _metric(
+                    "Privacy-unit suppression",
+                    _format_rate(utility.get("privacy_unit_suppression_rate")),
+                ),
+                _metric(
+                    "QI cell change",
+                    _format_rate(utility.get("quasi_identifier_cell_change_rate")),
+                ),
+                _metric(
+                    "Released rows",
+                    _format_count(utility.get("released_rows")),
+                ),
+                "</div>",
+                *_render_safe_generalization_levels(generalization.get("levels")),
+                "</section>",
+            ]
+        )
+    )
+    return sections
+
+
+def _render_safe_generalization_levels(value: Any) -> list[str]:
+    rows = []
+    for item in _as_sequence(value):
+        if not isinstance(item, Mapping):
+            continue
+        attribute = _safe_schema_label(item.get("attribute"))
+        if attribute is None:
+            continue
+        rows.append(
+            [
+                attribute,
+                _format_count(item.get("level")),
+                _format_rate(item.get("loss")),
+            ]
+        )
+    rows.sort(key=lambda row: (row[0], row[1]))
+    if not rows:
+        return []
+    return [
+        "<h2>Selected Generalization</h2>",
+        _table(["Attribute", "Level", "Loss"], rows),
+    ]
+
+
+def _safe_metadata_strings(value: Any) -> list[str]:
+    labels = (_safe_schema_label(item) for item in _as_sequence(value))
+    return sorted(label for label in labels if label is not None)
+
+
+def _safe_schema_label(value: Any) -> str | None:
+    """Return a validated source-schema label for escaped text rendering."""
+
+    try:
+        return _validated_column_name(value, name="dashboard schema labels")
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_distribution_rows(value: Any) -> list[tuple[int, int]]:
+    rows: list[tuple[int, int]] = []
+    for item in _as_sequence(value):
+        if isinstance(item, Mapping):
+            size = item.get("size")
+            count = item.get("class_count")
+        elif (
+            isinstance(item, Sequence) and not isinstance(item, str) and len(item) >= 2
+        ):
+            size, count = item[0], item[1]
+        else:
+            continue
+        if (
+            isinstance(size, int)
+            and not isinstance(size, bool)
+            and isinstance(count, int)
+            and not isinstance(count, bool)
+        ):
+            rows.append((size, count))
+    return sorted(rows)
+
+
+def _safe_attribute_rows(value: Any) -> list[list[str]]:
+    rows = []
+    for item in _as_sequence(value):
+        if not isinstance(item, Mapping):
+            continue
+        attribute = _safe_schema_label(item.get("attribute"))
+        if attribute is None:
+            continue
+        l_diversity = _mapping(item.get("l_diversity"))
+        t_closeness = _mapping(item.get("t_closeness"))
+        rows.append(
+            [
+                attribute,
+                _format_number(l_diversity.get("achieved")),
+                _format_count(l_diversity.get("violating_classes")),
+                _format_number(t_closeness.get("achieved")),
+                _format_count(t_closeness.get("violating_classes")),
+            ]
+        )
+    rows.sort(key=lambda row: row[0])
+    return rows
 
 
 def _render_headline_metrics(risk: Mapping[str, Any]) -> str:
@@ -569,17 +948,27 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 
 def _format_rate(value: Any) -> str:
-    if isinstance(value, int | float):
+    if type(value) is int:
         return f"{value:.1%}"
-    return _display(value)
+    if type(value) is float and math.isfinite(value):
+        return f"{value:.1%}"
+    return ""
 
 
 def _format_count(value: Any) -> str:
-    if isinstance(value, int):
+    if type(value) is int:
         return str(value)
-    if isinstance(value, float) and value.is_integer():
+    if type(value) is float and math.isfinite(value) and value.is_integer():
         return str(int(value))
-    return _display(value)
+    return ""
+
+
+def _format_number(value: Any) -> str:
+    if type(value) is int:
+        return str(value)
+    if type(value) is float and math.isfinite(value):
+        return str(value)
+    return ""
 
 
 def _display(value: Any) -> str:

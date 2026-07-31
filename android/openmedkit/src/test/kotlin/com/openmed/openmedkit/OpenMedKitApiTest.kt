@@ -1,5 +1,6 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.onnx.TokenPrediction
 import com.openmed.openmedkit.policy.PolicyAction
 import com.openmed.openmedkit.policy.PolicyProfiles
 import java.io.File
@@ -10,6 +11,30 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class OpenMedKitApiTest {
+    @Test
+    fun aggregatesBioTokensAcrossWhitespace() {
+        val entities = aggregateTokenPredictions(
+            text = "Alice Nguyen",
+            predictions = listOf(
+                TokenPrediction(1, "B-PERSON", 0.99f, 0, 5),
+                TokenPrediction(2, "E-PERSON", 0.97f, 6, 12),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                TokenClassificationPrediction(
+                    label = "PERSON",
+                    text = "Alice Nguyen",
+                    confidence = 0.98f,
+                    start = 0,
+                    end = 12,
+                ),
+            ),
+            entities,
+        )
+    }
+
     @Test
     fun analyzeTextFiltersByConfidenceThreshold() = runTest {
         val kit = OpenMedKit(

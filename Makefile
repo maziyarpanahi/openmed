@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lint format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check docs-serve docs-build docs-stage docs-deploy
+.PHONY: help build publish release clean install lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check docs-serve docs-build docs-stage docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -28,6 +28,10 @@ lint: ## Run Ruff lint checks
 	@echo "🔎 Running Ruff lint checks..."
 	ruff check .
 
+type-check: ## Type-check the annotated public-module scope
+	@echo "🔎 Running scoped mypy checks..."
+	mypy
+
 format: ## Apply Ruff import fixes and formatting
 	@echo "🎨 Formatting Python code with Ruff..."
 	ruff check --fix .
@@ -45,7 +49,7 @@ format-swift: ## Apply Swift formatting for OpenMedKit
 	@echo "🎨 Formatting Swift code with swift-format..."
 	scripts/format_swift.sh
 
-quality: lint format-check test ## Run the local quality gate
+quality: lint type-check format-check test ## Run the local quality gate
 
 test: ## Run the test suite
 	@echo "🧪 Running tests..."
@@ -71,6 +75,9 @@ docs-serve: ## Run the MkDocs dev server with live reload
 docs-build: ## Build the MkDocs site (strict mode)
 	@echo "🏗️ Building documentation..."
 	uv run mkdocs build --strict
+	@echo "🔎 Verifying LLM documentation feeds..."
+	test -s site/docs/llms.txt
+	test -s site/docs/llms-full.txt
 
 docs-stage: docs-build ## Build docs and bundle them with the marketing site into site/
 	@echo "📦 Bundling marketing site with docs..."
