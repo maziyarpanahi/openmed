@@ -155,7 +155,7 @@ def render_leaderboard_json(rows: Iterable[LeaderboardRow]) -> str:
 
 
 def render_leaderboard_html(rows: Iterable[LeaderboardRow]) -> str:
-    """Render deterministic, self-contained leaderboard HTML."""
+    """Render deterministic leaderboard HTML using the shared docs system."""
 
     ranked_rows = sorted(rows, key=_row_sort_key)
     suites = _group_rows(ranked_rows)
@@ -165,11 +165,20 @@ def render_leaderboard_html(rows: Iterable[LeaderboardRow]) -> str:
     for suite_index, (suite, families) in enumerate(suites.items()):
         tab_id = f"suite-{suite_index}"
         selected = suite_index == 0
+        suite_row_count = sum(len(family_rows) for family_rows in families.values())
+        suite_row_noun = "row" if suite_row_count == 1 else "rows"
+        escaped_suite = html.escape(suite)
         tab_buttons.append(
             '<button class="tab" role="tab" '
             f'id="{tab_id}-tab" aria-controls="{tab_id}" '
             f'aria-selected="{"true" if selected else "false"}" '
-            f'data-target="{tab_id}">{html.escape(suite)}</button>'
+            f'tabindex="{"0" if selected else "-1"}" '
+            f'data-target="{tab_id}" data-label="{escaped_suite}" '
+            f'aria-label="{escaped_suite}, {suite_row_count} benchmark '
+            f'{suite_row_noun}">'
+            f"{escaped_suite} "
+            '<span data-leaderboard-tab-count aria-hidden="true">'
+            f"({suite_row_count})</span></button>"
         )
         family_sections = [
             _render_family_table(family, family_rows)
@@ -177,7 +186,8 @@ def render_leaderboard_html(rows: Iterable[LeaderboardRow]) -> str:
         ]
         panels.append(
             f'<section class="suite-panel" id="{tab_id}" '
-            f'role="tabpanel" aria-labelledby="{tab_id}-tab"'
+            f'role="tabpanel" aria-labelledby="{tab_id}-tab" tabindex="0" '
+            f'data-match-count="{suite_row_count}"'
             f"{' hidden' if not selected else ''}>"
             f"{''.join(family_sections)}</section>"
         )
@@ -188,37 +198,167 @@ def render_leaderboard_html(rows: Iterable[LeaderboardRow]) -> str:
         "<head>\n"
         '  <meta charset="utf-8">\n'
         '  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '  <meta name="referrer" content="no-referrer">\n'
+        '  <meta name="description" content="Versioned OpenMed synthetic '
+        'benchmark results ranked by leakage first and recall second.">\n'
+        '  <link rel="canonical" href="https://openmed.life/docs/eval/'
+        'benchmark-leaderboard/">\n'
+        '  <meta property="og:type" content="website">\n'
+        '  <meta property="og:site_name" content="OpenMed">\n'
+        '  <meta property="og:title" content="OpenMed Public Benchmark '
+        'Leaderboard">\n'
+        '  <meta property="og:description" content="Versioned OpenMed synthetic '
+        'benchmark results ranked by leakage first and recall second.">\n'
+        '  <meta property="og:url" content="https://openmed.life/docs/eval/'
+        'benchmark-leaderboard/">\n'
+        '  <meta property="og:image" content="https://openmed.life/og.png">\n'
+        '  <meta property="og:image:alt" content="OpenMed local-first '
+        'healthcare NLP">\n'
+        '  <meta name="twitter:card" content="summary_large_image">\n'
+        '  <meta name="twitter:title" content="OpenMed Public Benchmark '
+        'Leaderboard">\n'
+        '  <meta name="twitter:description" content="Versioned OpenMed synthetic '
+        'benchmark results ranked by leakage first and recall second.">\n'
+        '  <meta name="twitter:image" content="https://openmed.life/og.png">\n'
+        '  <meta name="twitter:image:alt" content="OpenMed local-first '
+        'healthcare NLP">\n'
+        '  <link rel="icon" href="../../assets/openmed-favicon.svg">\n'
+        '  <link rel="stylesheet" href="../../stylesheets/openmed-system.css">\n'
+        '  <link rel="stylesheet" '
+        'href="../../stylesheets/openmed-standalone.css">\n'
         "  <title>OpenMed Public Benchmark Leaderboard</title>\n"
-        "  <style>\n"
-        "    :root{color-scheme:light dark;font-family:system-ui,sans-serif}\n"
-        "    body{margin:0 auto;max-width:96rem;padding:2rem;line-height:1.5}\n"
-        "    header{display:flex;gap:1rem;align-items:start;justify-content:space-between;flex-wrap:wrap}\n"
-        "    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.5rem 0}\n"
-        "    .tab{border:1px solid #64748b;border-radius:.4rem;padding:.55rem .9rem;background:transparent;cursor:pointer}\n"
-        '    .tab[aria-selected="true"]{background:#2563eb;color:#fff;border-color:#2563eb}\n'
-        "    .table-wrap{overflow-x:auto;margin-bottom:2rem}\n"
-        "    table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}\n"
-        "    th,td{border-bottom:1px solid #94a3b8;padding:.6rem;text-align:left;vertical-align:top}\n"
-        "    th.numeric,td.numeric{text-align:right}\n"
-        "    code{overflow-wrap:anywhere}\n"
-        "    .metric-note{color:#64748b}\n"
-        "  </style>\n"
         "</head>\n"
         "<body>\n"
-        "<header><div><h1>OpenMed Public Benchmark Leaderboard</h1>"
-        '<p class="metric-note">Ranked leakage ascending, then recall descending. '
-        "Every row links to its archived synthetic report.</p></div>"
-        '<a href="leaderboard.json" download>Download leaderboard.json</a></header>\n'
+        '<a class="om-skip-link" href="#main">Skip to content</a>\n'
+        '<header class="om-site-header"><div class="om-site-header__inner">'
+        '<a class="om-brand" href="/docs/" '
+        'aria-label="OpenMed documentation">'
+        '<img src="../../assets/openmed-mark.svg" alt="" width="28" height="28">'
+        "<span>openmed</span>"
+        '<span class="om-brand__product">benchmark evidence</span></a>'
+        '<nav class="om-site-nav" aria-label="Page links">'
+        '<a href="/docs/">Documentation</a>'
+        '<a href="/docs/eval/leaderboard/">Leaderboard contract</a>'
+        '<a href="https://github.com/maziyarpanahi/openmed/tree/master/'
+        'docs/benchmarks">Reports</a>'
+        '<button class="om-theme-toggle" type="button" '
+        "data-openmed-theme>Theme: system</button>"
+        "</nav></div></header>\n"
+        '<main id="main" class="om-page">\n'
+        '<section class="om-hero" aria-labelledby="page-title">'
+        '<p class="om-eyebrow">Public synthetic evidence</p>'
+        '<h1 id="page-title">OpenMed Public Benchmark Leaderboard</h1>'
+        '<p class="om-lede">Ranked leakage ascending, then recall descending. '
+        "Every row links to its archived synthetic report.</p>"
+        '<div class="om-actions">'
+        '<a class="om-link-button" href="leaderboard.json" download>'
+        "Download leaderboard.json</a>"
+        "</div></section>\n"
+        '<div class="om-grid"><div class="om-card om-card--full" role="search" '
+        'aria-label="Filter benchmark results" data-leaderboard-filter hidden>'
+        '<label for="leaderboard-filter">Filter benchmark results</label>'
+        '<input id="leaderboard-filter" type="search" autocomplete="off" '
+        'spellcheck="false" aria-controls="leaderboard-results" '
+        'aria-describedby="leaderboard-filter-status" '
+        'placeholder="Model, family, device, release, date, or hash">'
+        '<p id="leaderboard-filter-status" class="status" role="status" '
+        'aria-live="polite" aria-atomic="true">'
+        f"Showing {len(ranked_rows)} of {len(ranked_rows)} benchmark "
+        f"{'row' if len(ranked_rows) == 1 else 'rows'}.</p>"
+        "</div></div>\n"
+        '<section id="leaderboard-results" aria-label="Benchmark results">\n'
         f'<div class="tabs" role="tablist" aria-label="Benchmark suites">{"".join(tab_buttons)}</div>\n'
         f"{''.join(panels)}\n"
+        "</section>\n"
+        "</main>\n"
+        '<footer class="om-site-footer"><div class="om-site-footer__inner">'
+        "<span>OpenMed documentation</span>"
+        "<span>Synthetic reports · deterministic publication</span>"
+        "</div></footer>\n"
+        '<script src="../../javascripts/openmed-standalone.js"></script>\n'
         "<script>\n"
-        "  const tabs = document.querySelectorAll('[role=\"tab\"]');\n"
-        "  tabs.forEach((tab) => tab.addEventListener('click', () => {\n"
-        "    tabs.forEach((item) => item.setAttribute('aria-selected', String(item === tab)));\n"
-        "    document.querySelectorAll('[role=\"tabpanel\"]').forEach((panel) => {\n"
-        "      panel.hidden = panel.id !== tab.dataset.target;\n"
+        "  (() => {\n"
+        "    const tabs = Array.from(document.querySelectorAll('[role=\"tab\"]'));\n"
+        "    const panels = Array.from(document.querySelectorAll('[role=\"tabpanel\"]'));\n"
+        "    const filterRegion = document.querySelector('[data-leaderboard-filter]');\n"
+        "    const filter = document.getElementById('leaderboard-filter');\n"
+        "    const filterStatus = document.getElementById('leaderboard-filter-status');\n"
+        "    const rows = Array.from(document.querySelectorAll('[data-leaderboard-row]'));\n"
+        "    const groups = Array.from(document.querySelectorAll('[data-leaderboard-group]'));\n"
+        "    const normalize = (value) => value.trim().replace(/\\s+/g, ' ').toLowerCase();\n"
+        "    const activate = (tab, moveFocus = false) => {\n"
+        "      tabs.forEach((item) => {\n"
+        "        const selected = item === tab;\n"
+        "        item.setAttribute('aria-selected', String(selected));\n"
+        "        item.tabIndex = selected ? 0 : -1;\n"
+        "      });\n"
+        "      panels.forEach((panel) => {\n"
+        "        panel.hidden = panel.id !== tab.dataset.target;\n"
+        "      });\n"
+        "      if (moveFocus) tab.focus();\n"
+        "    };\n"
+        "    tabs.forEach((tab) => {\n"
+        "      tab.addEventListener('click', () => activate(tab));\n"
+        "      tab.addEventListener('keydown', (event) => {\n"
+        "        const current = tabs.indexOf(tab);\n"
+        "        let next = current;\n"
+        "        if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;\n"
+        "        if (event.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;\n"
+        "        if (event.key === 'Home') next = 0;\n"
+        "        if (event.key === 'End') next = tabs.length - 1;\n"
+        "        if (next === current) return;\n"
+        "        event.preventDefault();\n"
+        "        activate(tabs[next], true);\n"
+        "      });\n"
         "    });\n"
-        "  }));\n"
+        "    const applyFilter = () => {\n"
+        "      const rawQuery = filter.value.trim();\n"
+        "      const query = normalize(rawQuery);\n"
+        "      let matchCount = 0;\n"
+        "      rows.forEach((row) => {\n"
+        "        const matches = !query || normalize(row.dataset.search).includes(query);\n"
+        "        row.hidden = !matches;\n"
+        "        if (matches) matchCount += 1;\n"
+        "      });\n"
+        "      groups.forEach((group) => {\n"
+        "        group.hidden = !group.querySelector('[data-leaderboard-row]:not([hidden])');\n"
+        "      });\n"
+        "      panels.forEach((panel) => {\n"
+        "        const count = panel.querySelectorAll('[data-leaderboard-row]:not([hidden])').length;\n"
+        "        panel.dataset.matchCount = String(count);\n"
+        "        const tab = document.getElementById(`${panel.id}-tab`);\n"
+        "        tab.querySelector('[data-leaderboard-tab-count]').textContent = `(${count})`;\n"
+        "        const noun = count === 1 ? 'row' : 'rows';\n"
+        "        tab.setAttribute('aria-label', `${tab.dataset.label}, ${count} matching benchmark ${noun}`);\n"
+        "      });\n"
+        "      const selected = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true');\n"
+        "      if (query && matchCount > 0 && selected) {\n"
+        "        const selectedPanel = document.getElementById(selected.dataset.target);\n"
+        "        if (Number(selectedPanel.dataset.matchCount) === 0) {\n"
+        "          const matchingPanel = panels.find((panel) => Number(panel.dataset.matchCount) > 0);\n"
+        "          activate(document.getElementById(`${matchingPanel.id}-tab`));\n"
+        "        }\n"
+        "      }\n"
+        "      if (!query) {\n"
+        "        const noun = rows.length === 1 ? 'row' : 'rows';\n"
+        "        filterStatus.textContent = `Showing ${rows.length} of ${rows.length} benchmark ${noun}.`;\n"
+        "      } else if (matchCount === 0) {\n"
+        "        filterStatus.textContent = `No benchmark rows match “${rawQuery}”.`;\n"
+        "      } else {\n"
+        "        const noun = rows.length === 1 ? 'row' : 'rows';\n"
+        "        filterStatus.textContent = `Showing ${matchCount} of ${rows.length} benchmark ${noun} for “${rawQuery}”.`;\n"
+        "      }\n"
+        "    };\n"
+        "    filter.addEventListener('input', applyFilter);\n"
+        "    filter.addEventListener('keydown', (event) => {\n"
+        "      if (event.key !== 'Escape' || !filter.value) return;\n"
+        "      event.preventDefault();\n"
+        "      filter.value = '';\n"
+        "      applyFilter();\n"
+        "    });\n"
+        "    filterRegion.hidden = false;\n"
+        "    applyFilter();\n"
+        "  })();\n"
         "</script>\n"
         "</body>\n"
         "</html>\n"
@@ -553,10 +693,12 @@ def _suite_payload(rows: Iterable[LeaderboardRow]) -> list[dict[str, Any]]:
 def _render_family_table(family: str, rows: Sequence[LeaderboardRow]) -> str:
     body: list[str] = []
     for rank, row in enumerate(rows, start=1):
+        search_text = _row_search_text(row)
         body.append(
-            "<tr>"
+            "<tr data-leaderboard-row "
+            f'data-search="{html.escape(search_text)}">'
             f'<td class="numeric">{rank}</td>'
-            f"<td>{html.escape(row.model_name)}</td>"
+            f'<th scope="row">{html.escape(row.model_name)}</th>'
             f"<td>{html.escape(row.device)}</td>"
             f'<td class="numeric">{_format_percent(row.leakage)}</td>'
             f'<td class="numeric">{_format_percent(row.recall)}</td>'
@@ -569,14 +711,39 @@ def _render_family_table(family: str, rows: Sequence[LeaderboardRow]) -> str:
             "</tr>"
         )
     return (
+        "<section data-leaderboard-group "
+        f'aria-label="{html.escape(family)} benchmark results">'
         f"<h2>{html.escape(family)}</h2>"
         '<div class="table-wrap"><table>'
-        '<thead><tr><th class="numeric">Rank</th><th>Model</th><th>Device</th>'
-        '<th class="numeric">Leakage</th><th class="numeric">Recall</th>'
-        '<th class="numeric">F1</th><th>Release</th><th>Run date</th>'
-        "<th>Reproducibility hash</th><th>Report</th></tr></thead>"
-        f"<tbody>{''.join(body)}</tbody></table></div>"
+        f'<caption class="om-sr-only">{html.escape(family)} benchmark '
+        "results</caption>"
+        '<thead><tr><th class="numeric" scope="col">Rank</th>'
+        '<th scope="col">Model</th><th scope="col">Device</th>'
+        '<th class="numeric" scope="col">Leakage</th>'
+        '<th class="numeric" scope="col">Recall</th>'
+        '<th class="numeric" scope="col">F1</th>'
+        '<th scope="col">Release</th><th scope="col">Run date</th>'
+        '<th scope="col">Reproducibility hash</th>'
+        '<th scope="col">Report</th></tr></thead>'
+        f"<tbody>{''.join(body)}</tbody></table></div></section>"
     )
+
+
+def _row_search_text(row: LeaderboardRow) -> str:
+    values = (
+        row.suite,
+        row.model_family,
+        row.model_name,
+        row.device,
+        _format_percent(row.leakage),
+        _format_percent(row.recall),
+        _format_percent(row.f1),
+        row.release_tag,
+        row.run_date,
+        row.reproducibility_hash,
+        row.report_path,
+    )
+    return " ".join(" ".join(values).split())
 
 
 def _format_percent(value: float) -> str:

@@ -94,10 +94,12 @@
 
           devPythonPackages =
             (with python.pkgs; [
+              brotli
               cryptography
               dask
               duckdb
               fastapi
+              fonttools
               fsspec
               huggingface-hub
               httpx
@@ -110,6 +112,7 @@
               opentelemetry-exporter-otlp-proto-http
               opentelemetry-sdk
               pandas
+              pillow
               pyarrow
               polars
               protobuf

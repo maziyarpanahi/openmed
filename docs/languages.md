@@ -3,6 +3,8 @@
 OpenMed's PII detection and de-identification are multilingual. Built-in
 language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
+Terminology maintainers and translators should also use the
+[localization glossary](i18n/glossary.md) for stable product and privacy terms.
 The optional Indic family adds four user-configured routes and can also serve
 the built-in Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu codes.
 Every code documented here wires

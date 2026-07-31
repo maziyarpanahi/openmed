@@ -37,7 +37,8 @@ workflows, broad multilingual PII coverage, and fail-closed release evidence:
 - **Curated registries** – discoverable Hugging Face models with metadata (domain, size, device guidance).
 - **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for scripts, notebooks, or services.
 - **PII detection & de-identification** – HIPAA-aware smart entity merging,
-  policy profiles, signed audit reports, and production-ready de-identification.
+  policy profiles, signed audit reports, and deployment-oriented
+  de-identification workflows.
 - **Apple Silicon and mobile acceleration** – MLX-backed Python inference plus Swift-native and Android/Kotlin app integration through OpenMedKit.
 - **REST service** – FastAPI endpoints for `/livez`, `/readyz`, `/analyze`,
   `/pii/extract`, `/pii/deidentify`, warm pools, batching, metrics, and
@@ -100,23 +101,23 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
 3. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – review the current installation coordinates, compatibility contract, and validation requirements.
 4. Core guides:
-   - [Analyze Text Helper](./analyze-text.md) for single-call inference.
-   - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.
-   - [PII Detection & Smart Merging](./pii-smart-merging.md) for HIPAA-compliant de-identification (v0.5.0).
-   - [Batch Processing](./batch-processing.md) for multi-text/file processing.
-   - [ModelLoader & Pipelines](./model-loader.md) for long-running jobs.
-   - [Model Registry](./model-registry.md) to pick the right checkpoint.
-   - [Configuration Profiles](./profiles.md) for dev/prod/test switching.
-   - [Advanced NER & Output Formatting](./output-formatting.md) to polish spans.
-   - [Medical-Aware Tokenizer](./medical-tokenizer.md) for better clinical token boundaries.
-   - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
-   - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
-   - [Performance Profiling](./profiling.md) for timing and optimization.
-   - [Examples](./examples.md) and [Testing & QA](./testing.md) for day-to-day operations.
-4. Project operations:
-   - [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
-   - [Release Streams & Channels](./release/semver-and-channels.md) – model artifact and library release policy.
-   - [Generative Model Policy](./generative-model-policy.md) – approved and prohibited model-assisted workflows.
+    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
+    - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.
+    - [PII Detection & Smart Merging](./pii-smart-merging.md) for PHI de-identification workflows (v0.5.0).
+    - [Batch Processing](./batch-processing.md) for multi-text/file processing.
+    - [ModelLoader & Pipelines](./model-loader.md) for long-running jobs.
+    - [Model Registry](./model-registry.md) to pick the right checkpoint.
+    - [Configuration Profiles](./profiles.md) for dev/prod/test switching.
+    - [Advanced NER & Output Formatting](./output-formatting.md) to polish spans.
+    - [Medical-Aware Tokenizer](./medical-tokenizer.md) for better clinical token boundaries.
+    - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
+    - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
+    - [Performance Profiling](./profiling.md) for timing and optimization.
+    - [Examples](./examples.md) and [Testing & QA](./testing.md) for day-to-day operations.
+5. Project operations:
+    - [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
+    - [Release Streams & Channels](./release/semver-and-channels.md) – model artifact and library release policy.
+    - [Generative Model Policy](./generative-model-policy.md) – approved and prohibited model-assisted workflows.
 
 Need something that is not here yet? Drop an issue on GitHub and mention the
 missing recipe. Every addition is just a Markdown file away.

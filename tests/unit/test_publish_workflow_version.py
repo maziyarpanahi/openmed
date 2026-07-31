@@ -21,6 +21,7 @@ JITPACK_CONFIG = ROOT / "jitpack.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
 WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
+BRAND_CLAIMS = ROOT / "docs" / "brand" / "system" / "claims.yml"
 SWIFT_GUIDE = ROOT / "docs" / "swift-openmedkit.md"
 ANDROID_ONNX_GUIDE = ROOT / "docs" / "export-onnx-android.md"
 SWIFT_PACKAGE = ROOT / "Package.swift"
@@ -434,8 +435,13 @@ def test_documented_model_ids_use_concrete_public_examples():
     )
 
 
-def test_localized_readmes_advertise_current_model_count():
+def test_localized_readmes_omit_unverified_model_count():
     readmes = sorted(ROOT.glob("README*.md"))
+    claims = json.loads(BRAND_CLAIMS.read_text(encoding="utf-8"))["claims"]
 
     assert len(readmes) >= 14
-    assert all("2%2C000+" in path.read_text(encoding="utf-8") for path in readmes)
+    assert claims["broader_compatible_model_count"]["status"] == "unverified"
+    for path in readmes:
+        content = path.read_text(encoding="utf-8")
+        assert "2%2C000+" not in content
+        assert "2,000+ models" not in content
