@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,6 +15,7 @@ from .backend import BackendIdentity, TerminologyBackend, normalize_surface
 __all__ = [
     "ConceptNormalizationCache",
     "NormalizationCacheStats",
+    "make_index_cache_key",
     "make_normalization_cache_key",
 ]
 
@@ -111,3 +113,38 @@ def make_normalization_cache_key(
     )
     digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
     return f"concept-normalization:{digest}"
+
+
+def make_index_cache_key(
+    vocab_versions: Mapping[str, str] | Sequence[str],
+    encoder_id: str,
+    *,
+    params: Mapping[str, Any] | None = None,
+) -> str:
+    """Return a content-addressed cache key for an alias embedding index.
+
+    The key folds together each vocabulary system's content hash (its
+    edition/version fingerprint), the encoder id, and the index build
+    parameters. Any change to the vocabulary rows, the terminology edition, the
+    encoder, or the build parameters yields a different key, so a persisted
+    index is rebuilt rather than silently serving codes from a stale edition.
+    """
+
+    if isinstance(vocab_versions, Mapping):
+        versions = {
+            str(system): str(version) for system, version in vocab_versions.items()
+        }
+    else:
+        versions = {str(version): str(version) for version in vocab_versions}
+    payload = {
+        "vocab_versions": versions,
+        "encoder_id": str(encoder_id),
+        "params": dict(params or {}),
+    }
+    serialized = json.dumps(
+        freeze_value(payload),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return f"grounding-index:{digest}"

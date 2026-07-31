@@ -90,6 +90,7 @@ REVIEWED_LICENSES = {
     "grpcio": "Apache-2.0",
     "griffe": "ISC",
     "hanlp": "Apache-2.0",
+    "hnswlib": "Apache-2.0",
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
     "indic-nlp-library": "MIT",

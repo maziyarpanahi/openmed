@@ -832,6 +832,153 @@ _WORKFLOW_RESULT_OUTPUT = _object(
         "trace",
     ),
 )
+_FHIR_RESOURCE_SCHEMA = _object(
+    properties={"resourceType": _schema("string")},
+    required=("resourceType",),
+    additional=True,
+)
+_FHIR_BUNDLE_ENTRY_OUTPUT = _object(
+    properties={
+        "fullUrl": _schema("string"),
+        "resource": _object(),
+        "request": _nullable("object"),
+    },
+    required=("fullUrl", "resource"),
+)
+_FHIR_BUNDLE_OUTPUT = _object(
+    properties={
+        "resourceType": _schema("string", enum=["Bundle"]),
+        "type": _schema("string"),
+        "entry": _array(_FHIR_BUNDLE_ENTRY_OUTPUT),
+    },
+    required=("resourceType", "type", "entry"),
+)
+_QUASI_IDENTIFIER_OUTPUT = _object(
+    properties={
+        "record_index": _schema("integer"),
+        "record_id": _nullable("string"),
+        "category": _schema("string"),
+        "value": _schema("string"),
+        "normalized_value": _schema("string"),
+        "source": _schema("string"),
+        "start": _nullable("integer"),
+        "end": _nullable("integer"),
+        "section": _nullable("string"),
+    },
+    required=(
+        "record_index",
+        "record_id",
+        "category",
+        "value",
+        "normalized_value",
+        "source",
+        "start",
+        "end",
+        "section",
+    ),
+)
+_QUASI_IDENTIFIER_KEY_OUTPUT = _object(
+    properties={
+        "category": _schema("string"),
+        "values": _array(_schema("string")),
+    },
+    required=("category", "values"),
+)
+_SINGLETON_RECORD_OUTPUT = _object(
+    properties={
+        "record_index": _schema("integer"),
+        "record_id": _nullable("string"),
+        "effective_k": _schema("integer"),
+        "quasi_identifier_key": _array(_QUASI_IDENTIFIER_KEY_OUTPUT),
+    },
+    required=(
+        "record_index",
+        "record_id",
+        "effective_k",
+        "quasi_identifier_key",
+    ),
+)
+_RISK_REPORT_OUTPUT = _object(
+    properties={
+        "leakage_rate": _schema("number"),
+        "reid_rate": _schema("number"),
+        "k_min": _schema("integer"),
+        "singleton_records": _array(_SINGLETON_RECORD_OUTPUT),
+        "quasi_identifiers": _array(_QUASI_IDENTIFIER_OUTPUT),
+    },
+    required=(
+        "leakage_rate",
+        "reid_rate",
+        "k_min",
+        "singleton_records",
+        "quasi_identifiers",
+    ),
+)
+_AUDIT_SPAN_OUTPUT = _object(
+    properties={
+        "start": _schema("integer"),
+        "end": _schema("integer"),
+        "label": _schema("string"),
+        "canonical_label": _schema("string"),
+        "sources": _array(_schema("string")),
+        "confidence": _schema("number"),
+        "threshold": _schema("number"),
+        "action": _schema("string"),
+        "surrogate": _nullable("string"),
+        "text_hash": _schema("string"),
+        "evidence": _object(),
+        "context": _object(),
+    },
+    required=(
+        "start",
+        "end",
+        "label",
+        "canonical_label",
+        "sources",
+        "confidence",
+        "threshold",
+        "action",
+        "surrogate",
+        "text_hash",
+    ),
+)
+_AUDIT_SIGNATURE_OUTPUT = _object(
+    properties={
+        "key_id": _schema("string"),
+        "algorithm": _schema("string"),
+        "value": _schema("string"),
+    },
+    required=("key_id", "algorithm", "value"),
+)
+_SIGNED_AUDIT_REPORT_OUTPUT = _object(
+    properties={
+        "policy": _schema("string"),
+        "resolved_profile": _object(),
+        "detectors": _array(_object()),
+        "safety_sweep": _object(),
+        "spans": _array(_AUDIT_SPAN_OUTPUT),
+        "thresholds": _object(),
+        "residual_risk": _object(),
+        "openmed_version": _schema("string"),
+        "manifest_hash": _schema("string"),
+        "document_length": _schema("integer"),
+        "input_hash": _schema("string"),
+        "deidentified_text_hash": _schema("string"),
+        "repro_hash": _schema("string"),
+        "signature": _AUDIT_SIGNATURE_OUTPUT,
+    },
+    required=(
+        "policy",
+        "spans",
+        "openmed_version",
+        "manifest_hash",
+        "document_length",
+        "input_hash",
+        "deidentified_text_hash",
+        "repro_hash",
+        "signature",
+    ),
+)
 
 
 def _tool_spec(
@@ -984,8 +1131,128 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         ),
         output_schema=_WORKFLOW_RESULT_OUTPUT,
     ),
+    _tool_spec(
+        name="openmed_fhir_bundle",
+        title="Assemble FHIR Bundle",
+        description="Assemble FHIR resources into a R4 bundle. ",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "resources", _array(_FHIR_RESOURCE_SCHEMA), list[dict[str, Any]]
+            ),
+            _parameter("doc_id", _schema("string"), str, "openmed-document"),
+            _parameter(
+                "bundle_type",
+                _schema(
+                    "string",
+                    enum=["transaction", "batch", "collection"],
+                ),
+                str,
+                "transaction",
+            ),
+        ),
+        output_schema=_FHIR_BUNDLE_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_risk_report",
+        title="Score Re-identification Risk",
+        description="Reidentification risk for de-identified text",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "deidentified",
+                {},
+                Any,
+            ),
+            _parameter(
+                "original",
+                _nullable("object"),
+                Optional[Any],
+                None,
+            ),
+            _parameter(
+                "aux",
+                _nullable("object"),
+                Optional[Any],
+                None,
+            ),
+        ),
+        output_schema=_RISK_REPORT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_signed_audit_report",
+        title="Generate Signed Audit Report",
+        description="Run deidentification with auditing set as True and return a signed audit report",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _TEXT_PARAMETER,
+            _parameter(
+                "method",
+                _schema(
+                    "string",
+                    enum=["hash", "mask", "remove", "replace", "shift_dates"],
+                ),
+                str,
+                "mask",
+            ),
+            _PII_MODEL_NAME_PARAMETER,
+            _DEID_CONFIDENCE_PARAMETER,
+            _LANG_PARAMETER,
+            _parameter(
+                "signing_key",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter("key_id", _schema("string"), str, "release"),
+            _KEEP_ALIVE_PARAMETER,
+        ),
+        output_schema=_SIGNED_AUDIT_REPORT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_search_models",
+        title="Search Available Models",
+        description="Search OpenMed models from the canonical manifest by category, "
+        "license, size and language.",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "category",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter(
+                "language",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter(
+                "max_size_mb",
+                _nullable("number", minimum=0.0),
+                Optional[float],
+                None,
+            ),
+            _parameter(
+                "license",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter("limit", _schema("integer", minimum=0), int, 50),
+        ),
+        output_schema=_LIST_MODELS_OUTPUT,
+    ),
 )
-
 TOOL_REGISTRY = ToolRegistry(TOOL_SPECS)
 
 __all__ = [

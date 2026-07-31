@@ -83,6 +83,12 @@ from openmed.eval.suites.code_mixed_routing import (
     load_code_mixed_routing_fixtures,
     run_code_mixed_routing,
 )
+from openmed.eval.suites.grounding_index_recall import (
+    evaluate_grounding_index_recall,
+    grounding_index_recall_metadata,
+    load_grounding_index_fixtures,
+    run_grounding_index_recall,
+)
 from openmed.eval.suites.india_clinical_leakage import (
     INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES,
     INDIA_CLINICAL_MUST_DETECT_TYPES,
@@ -439,6 +445,10 @@ __all__ = [
     "load_code_mixed_routing_fixtures",
     "code_mixed_routing_metadata",
     "run_code_mixed_routing",
+    "evaluate_grounding_index_recall",
+    "grounding_index_recall_metadata",
+    "load_grounding_index_fixtures",
+    "run_grounding_index_recall",
     "assert_india_health_id_leakage_gate",
     "india_health_id_metadata",
     "load_india_health_id_fixtures",
