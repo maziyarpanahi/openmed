@@ -40,6 +40,7 @@ from .provenance import (
     provenance_version_pins,
     scan_provenance_for_raw_text,
 )
+from .ranker import CandidateRankingStage, RankingConfig, rank_mention
 from .registry import (
     InvalidVocabularyLoaderError,
     RestrictedVocabularyLoaderError,
@@ -54,6 +55,7 @@ from .registry import (
     register_loader,
     validate_vocabulary_loader,
 )
+from .retrieval import TwoStageRetriever, retrieve_candidates
 from .types import Candidate
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -77,6 +79,7 @@ __all__ = [
     "AssertedGroundedSpan",
     "AssertionGroundingStatus",
     "Candidate",
+    "CandidateRankingStage",
     "ConceptMatch",
     "DenseCandidateGenerator",
     "EncoderUnavailableError",
@@ -97,9 +100,11 @@ __all__ = [
     "POLICY_STATUS",
     "POLICY_SUPPRESS",
     "RESTRICTED_VOCAB_SYSTEMS",
+    "RankingConfig",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "TwoStageRetriever",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
@@ -127,8 +132,10 @@ __all__ = [
     "normalize_term",
     "provenance_version_pins",
     "query_index",
+    "rank_mention",
     "register_linker",
     "register_loader",
+    "retrieve_candidates",
     "scan_provenance_for_raw_text",
     "validate_vocabulary_loader",
 ]
