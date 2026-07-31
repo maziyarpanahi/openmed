@@ -1007,9 +1007,9 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         "hero_claims": hero,
         "repository_snapshot": repository_snapshot,
         "package_version_quickstart": (f"<span>openmed {version} · quickstart</span>"),
-        "competitive_matrix_boundary": f"""<p class="table-note">
-    Decision checklist, not a vendor capability matrix ·
-    reviewed {display_date}
+        "competitive_matrix_boundary": """<p class="table-note">
+    <span>Capability and cadence rows describe publicly documented positions · July 2026</span>
+    <span>Sources: vendor docs · arXiv:2508.01630 · OpenMed release feed</span>
 </p>""",
         "privacy_contract": privacy_contract,
         "model_snapshot_note": f"""<p class="models-note">

@@ -551,25 +551,29 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
         <section id="compare" class="section section-ink" data-section>
             <div class="container">
                 <div class="section-rule section-rule-inverse">
-                    <span>Deployment checklist</span>
+                    <span>Head to head</span>
                     <span aria-hidden="true"></span>
                 </div>
                 <div class="compare-intro">
                     <div>
-                        <h2>Choose the deployment boundary before the model.</h2>
+                        <h2>Every other option asks you to give something up.</h2>
                         <p>
-                            Clinical NLP can arrive as a remote API, a licensed
-                            self-hosted stack, a research toolkit, or an open
-                            runtime you operate. The useful comparison is what
-                            each delivery model requires from your data and team.
+                            Cloud medical APIs want your notes. Licensed clinical
+                            NLP wants a per-server subscription. Research toolkits
+                            stopped shipping. OpenMed is the only one of the four
+                            that runs on a phone, costs nothing, and shipped this
+                            week.
                         </p>
                     </div>
                     <aside>
-                        <strong>Category-level comparison</strong>
+                        <strong>What we don't claim</strong>
                         <p>
-                            Provider capabilities, contracts, and prices change.
-                            Validate each product against current documentation
-                            and your own security and clinical requirements.
+                            Incumbents publish strong accuracy numbers on their own
+                            harnesses — one closed-source vendor reports 96% F1 on
+                            PHI detection against 91% Azure, 83% AWS and 79%
+                            GPT-4o. We don't ask you to take ours on trust instead:
+                            the weights, recipes and eval scripts are public, so
+                            you can rerun all of it on your own notes.
                         </p>
                     </aside>
                 </div>
@@ -577,73 +581,132 @@ print(deidentify(note, lang="en", method="mask").deidentified_text)</code></pre>
                 <div
                     class="table-scroll"
                     role="region"
-                    aria-label="Clinical NLP deployment boundary checklist"
+                    aria-label="Head-to-head clinical NLP comparison"
                     tabindex="0"
                 >
                     <table class="comparison-table">
                         <caption class="sr-only">
-                            Deployment questions for OpenMed, cloud APIs,
-                            licensed self-hosted software, and research toolkits
+                            Capability and cadence comparison for OpenMed, cloud
+                            APIs, licensed clinical NLP, and research toolkits
                         </caption>
+                        <colgroup>
+                            <col class="comparison-decision-column">
+                            <col span="4" class="comparison-option-column">
+                        </colgroup>
                         <thead>
                             <tr>
-                                <th scope="col">Decision</th>
-                                <th scope="col" class="openmed-column">OpenMed</th>
-                                <th scope="col">Cloud API</th>
-                                <th scope="col">Licensed self-hosted</th>
-                                <th scope="col">Research toolkit</th>
+                                <th scope="col"><span class="sr-only">Capability</span></th>
+                                <th scope="col" class="openmed-column">
+                                    <strong>OpenMed</strong>
+                                    <span>Apache-2.0 · on-device</span>
+                                </th>
+                                <th scope="col">
+                                    <strong>Cloud APIs</strong>
+                                    <span>AWS Comprehend Medical · Azure Health · Google Healthcare NLP</span>
+                                </th>
+                                <th scope="col">
+                                    <strong>Licensed clinical NLP</strong>
+                                    <span>Enterprise NLP suites, per-server subscription</span>
+                                </th>
+                                <th scope="col">
+                                    <strong>Research toolkits</strong>
+                                    <span>medspaCy · MedCAT · cTAKES</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <th scope="row">Inference location</th>
-                                <td class="openmed-column">Hardware you operate</td>
-                                <td>Confirm processing region and subprocessors</td>
-                                <td>Confirm product architecture</td>
-                                <td>Confirm package and model behavior</td>
+                                <th scope="row">
+                                    Where inference runs
+                                    <small>The question every compliance review starts with</small>
+                                </th>
+                                <td class="openmed-column">Your hardware — phone to GPU server</td>
+                                <td>Vendor cloud region</td>
+                                <td>Your servers, per-server licence</td>
+                                <td>Your servers</td>
                             </tr>
                             <tr>
-                                <th scope="row">Network needed for each inference</th>
-                                <td class="openmed-column">Core inference can run after required assets are present</td>
-                                <td>Confirm runtime connectivity requirement</td>
-                                <td>Confirm runtime connectivity requirement</td>
-                                <td>Confirm package and model behavior</td>
+                                <th scope="row">Patient data leaves the network</th>
+                                <td class="openmed-column">Never</td>
+                                <td class="muted-value">Sent to the vendor</td>
+                                <td>No</td>
+                                <td>No</td>
                             </tr>
                             <tr>
-                                <th scope="row">Library license</th>
-                                <td class="openmed-column">Apache-2.0 SDK; model licenses vary</td>
-                                <td>Review current service terms</td>
-                                <td>Review current commercial agreement</td>
-                                <td>Review code, model, and dataset licenses</td>
+                                <th scope="row">What it costs at 10M notes</th>
+                                <td class="openmed-column">$0 — Apache-2.0, weights included</td>
+                                <td class="muted-value">Per-character billing</td>
+                                <td class="muted-value">Per-server subscription</td>
+                                <td>$0</td>
                             </tr>
                             <tr>
-                                <th scope="row">Phone and tablet runtime</th>
-                                <td class="openmed-column">OpenMedKit and ONNX Runtime Mobile</td>
-                                <td>Confirm supported client boundary</td>
-                                <td>Confirm supported runtime</td>
-                                <td>Confirm integration path</td>
+                                <th scope="row">
+                                    Languages supported
+                                    <small>PII and clinical coverage, per stack</small>
+                                </th>
+                                <td class="openmed-column">27 model-backed · 29 supported codes</td>
+                                <td>Mostly English endpoints</td>
+                                <td>A few clinical locales, licensed</td>
+                                <td class="muted-value">English only</td>
                             </tr>
                             <tr>
-                                <th scope="row">Browser-local inference</th>
-                                <td class="openmed-column">Transformers.js and WebGPU exports</td>
-                                <td>Confirm browser processing boundary</td>
-                                <td>Confirm supported runtime</td>
-                                <td>Confirm model compatibility</td>
+                                <th scope="row">
+                                    Runs on iPhone and Android
+                                    <small>Where clinicians actually stand</small>
+                                </th>
+                                <td class="openmed-column">OpenMedKit · ONNX Runtime Mobile</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
                             </tr>
                             <tr>
-                                <th scope="row">Reproducibility evidence</th>
-                                <td class="openmed-column">Repository tests and evaluation tooling</td>
-                                <td>Request scoped evidence</td>
-                                <td>Request scoped evidence</td>
-                                <td>Inspect project evidence</td>
+                                <th scope="row">Apple Silicon acceleration</th>
+                                <td class="openmed-column">MLX — 24–33× faster than CPU</td>
+                                <td class="muted-value">n/a</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Runs in the browser</th>
+                                <td class="openmed-column">Transformers.js · WebGPU</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    CPU-optimised ONNX builds
+                                    <small>Most hospital hardware has no GPU</small>
+                                </th>
+                                <td class="openmed-column">fp32, fp16 and INT8 exports, ORT Mobile ready</td>
+                                <td class="muted-value">n/a — cloud only</td>
+                                <td>Heavyweight JVM runtime</td>
+                                <td>CPU, unoptimised</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    Release cadence
+                                    <small>How fast a gap gets closed</small>
+                                </th>
+                                <td class="openmed-column">Weekly, in public</td>
+                                <td>Vendor roadmap</td>
+                                <td>Quarterly majors</td>
+                                <td class="muted-value">Largely dormant</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Benchmarks you can rerun</th>
+                                <td class="openmed-column">arXiv:2508.01630 · open weights + scripts</td>
+                                <td>Vendor white papers</td>
+                                <td>Vendor-run comparisons</td>
+                                <td>Academic papers</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
                 <!-- openmed-claim:competitive_matrix_boundary:start -->
                 <p class="table-note">
-                    Decision checklist, not a vendor capability matrix ·
-                    reviewed 29 July 2026
+                    <span>Capability and cadence rows describe publicly documented positions · July 2026</span>
+                    <span>Sources: vendor docs · arXiv:2508.01630 · OpenMed release feed</span>
                 </p>
                 <!-- openmed-claim:competitive_matrix_boundary:end -->
             </div>

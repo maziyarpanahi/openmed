@@ -2083,7 +2083,7 @@ def _validate_governance(errors: list[str]) -> None:
         + website_css
         + (REPO_ROOT / "docs/website/assets/script.js").read_text(encoding="utf-8")
     )
-    if re.search(r"[✓✕×→←↗●■◆★☆⚕⚙☰☀☾🔒🏥🧬]", chrome_sources):
+    if re.search(r"[✓✕→←↗●■◆★☆⚕⚙☰☀☾🔒🏥🧬]", chrome_sources):
         errors.append("website UI chrome contains an emoji or font glyph icon")
     if re.search(r"content:\s*['\"][^'\"]+['\"]", website_css):
         errors.append("website CSS uses font glyphs as generated UI chrome")

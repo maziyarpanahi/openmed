@@ -317,6 +317,32 @@ def test_published_theme_controls_offer_only_light_and_dark() -> None:
     assert all("Theme: system" not in page for page in standalone_pages)
 
 
+def test_website_preserves_the_approved_head_to_head_matrix() -> None:
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+
+    expected_copy = (
+        "Every other option asks you to give something up.",
+        "What we don't claim",
+        "AWS Comprehend Medical · Azure Health · Google Healthcare NLP",
+        "Enterprise NLP suites, per-server subscription",
+        "medspaCy · MedCAT · cTAKES",
+        "Where inference runs",
+        "Patient data leaves the network",
+        "What it costs at 10M notes",
+        "Languages supported",
+        "Runs on iPhone and Android",
+        "Apple Silicon acceleration",
+        "Runs in the browser",
+        "CPU-optimised ONNX builds",
+        "Release cadence",
+        "Benchmarks you can rerun",
+        "Capability and cadence rows describe publicly documented positions",
+    )
+    for text in expected_copy:
+        assert text in website
+    assert website.count("<tr>") >= 11
+
+
 def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() -> None:
     publication = _load_yaml(PUBLICATION)
     demo = (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8")
