@@ -1,6 +1,6 @@
 # भारत के उपयोगकर्ताओं के लिए OpenMed ऑनबोर्डिंग
 
-[English version](../../onboarding-india/)
+[English version](/docs/onboarding-india/)
 
 यह गाइड भारत के लिए लोकल-फर्स्ट डी-आइडेंटिफिकेशन सेटअप दिखाती है: आज उपलब्ध
 OpenMed पॉलिसी से शुरू करें, सिंथेटिक Aadhaar और ABHA फ़ॉर्मैट पहचानकर्ताओं को
@@ -153,8 +153,8 @@ target अधिकतम 350 MB resident RAM है। मौजूदा token
 44M checkpoint Devanagari समर्थित है। नया passing script audit न हो तो 33M और
 66M checkpoints को Devanagari notes के लिए न चुनें। Memory target को हर Python
 environment की guarantee न मानें; अपनी deployment machine और वास्तविक input
-lengths पर peak RSS मापें। [Device Tiers and SLOs](tiers.md) और
-[Tokenizer Script Coverage](model-tokenizer-script-coverage.md) देखें।
+lengths पर peak RSS मापें। [Device Tiers and SLOs](/docs/tiers/) और
+[Tokenizer Script Coverage](/docs/model-tokenizer-script-coverage/) देखें।
 
 कम संसाधन वाले clinic workstation या startup VM पर:
 
@@ -174,7 +174,7 @@ lengths पर peak RSS मापें। [Device Tiers and SLOs](tiers.md) औ
 
 कई छोटे notes के लिए `BatchProcessor(operation="deidentify")` document
 `batch_size` control देता है और underlying loader reuse करता है। API के लिए
-[Batch Processing](batch-processing.md) देखें।
+[Batch Processing](/docs/batch-processing/) देखें।
 
 ## Production checklist
 

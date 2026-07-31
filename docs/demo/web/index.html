@@ -4,258 +4,108 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
-    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+    />
+    <link
+      rel="canonical"
+      href="https://openmed.life/docs/demo/web/"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OpenMed" />
+    <meta
+      property="og:title"
+      content="OpenMed browser PII benchmark"
+    />
+    <meta
+      property="og:description"
+      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+    />
+    <meta property="og:url" content="https://openmed.life/docs/demo/web/" />
+    <meta property="og:image" content="https://openmed.life/og.png" />
+    <meta property="og:image:alt" content="OpenMed local-first healthcare NLP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="OpenMed browser PII benchmark"
+    />
+    <meta
+      name="twitter:description"
+      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+    />
+    <meta name="twitter:image" content="https://openmed.life/og.png" />
+    <meta name="twitter:image:alt" content="OpenMed local-first healthcare NLP" />
+    <link rel="icon" href="../../assets/openmed-favicon.svg" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-system.css" />
+    <link rel="stylesheet" href="../../stylesheets/openmed-standalone.css" />
     <title>OpenMed browser PII benchmark</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-          "Segoe UI", sans-serif;
-        --background: #f4f7f5;
-        --surface: #ffffff;
-        --text: #17201b;
-        --muted: #5d6b63;
-        --border: #cfdbd3;
-        --accent: #0c7450;
-        --accent-strong: #07563b;
-        --mark: #ffe59a;
-        --error: #b42318;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --background: #111713;
-          --surface: #19221c;
-          --text: #f0f6f2;
-          --muted: #adbbb2;
-          --border: #34443a;
-          --accent: #65d6a7;
-          --accent-strong: #9be8c7;
-          --mark: #725a12;
-          --error: #ffb4ab;
-        }
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        background: var(--background);
-        color: var(--text);
-      }
-
-      main {
-        width: min(960px, calc(100% - 2rem));
-        margin: 3rem auto;
-      }
-
-      h1,
-      h2 {
-        line-height: 1.2;
-      }
-
-      h1 {
-        margin-bottom: 0.5rem;
-        font-size: clamp(2rem, 5vw, 3.5rem);
-      }
-
-      h2 {
-        margin-top: 0;
-        font-size: 1.15rem;
-      }
-
-      p {
-        line-height: 1.6;
-      }
-
-      .eyebrow {
-        color: var(--accent);
-        font-size: 0.78rem;
-        font-weight: 750;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      .lede {
-        max-width: 65ch;
-        color: var(--muted);
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1rem;
-        margin-top: 2rem;
-      }
-
-      .card {
-        padding: 1.25rem;
-        border: 1px solid var(--border);
-        border-radius: 0.85rem;
-        background: var(--surface);
-      }
-
-      .card.full {
-        grid-column: 1 / -1;
-      }
-
-      label,
-      legend {
-        display: block;
-        margin-bottom: 0.45rem;
-        font-weight: 700;
-      }
-
-      input,
-      select,
-      textarea,
-      button {
-        width: 100%;
-        border: 1px solid var(--border);
-        border-radius: 0.55rem;
-        font: inherit;
-      }
-
-      input,
-      select,
-      textarea {
-        padding: 0.72rem 0.8rem;
-        background: var(--surface);
-        color: var(--text);
-      }
-
-      textarea {
-        min-height: 12rem;
-        resize: vertical;
-        line-height: 1.5;
-      }
-
-      .field + .field {
-        margin-top: 1rem;
-      }
-
-      .actions {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-        gap: 0.65rem;
-        margin-top: 1rem;
-      }
-
-      button {
-        padding: 0.75rem 1rem;
-        cursor: pointer;
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #ffffff;
-        font-weight: 750;
-      }
-
-      button.secondary {
-        background: transparent;
-        color: var(--accent-strong);
-      }
-
-      button:disabled {
-        cursor: wait;
-        opacity: 0.65;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-variant-numeric: tabular-nums;
-      }
-
-      th,
-      td {
-        padding: 0.7rem 0.55rem;
-        border-bottom: 1px solid var(--border);
-        text-align: left;
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 0.8rem;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-      }
-
-      .status {
-        min-height: 1.5rem;
-        margin: 1rem 0 0;
-        color: var(--muted);
-      }
-
-      .status[data-kind="error"] {
-        color: var(--error);
-      }
-
-      .results {
-        min-height: 4rem;
-        padding: 1rem;
-        border: 1px dashed var(--border);
-        border-radius: 0.55rem;
-        line-height: 1.8;
-        overflow-wrap: anywhere;
-        white-space: pre-wrap;
-      }
-
-      mark {
-        padding: 0.08rem 0.16rem;
-        border-radius: 0.2rem;
-        background: var(--mark);
-        color: inherit;
-      }
-
-      .entities {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.45rem;
-        margin: 0.85rem 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .entities li {
-        padding: 0.35rem 0.55rem;
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        font-size: 0.86rem;
-      }
-
-      .note {
-        color: var(--muted);
-        font-size: 0.88rem;
-      }
-
-      code {
-        overflow-wrap: anywhere;
-      }
-    </style>
   </head>
   <body>
-    <main>
-      <div class="eyebrow">Local browser inference</div>
-      <h1>WASM vs WebGPU PII detection</h1>
-      <p class="lede">
-        Load a Transformers.js token-classification bundle, detect sensitive
-        spans in synthetic text, and compare cold model load with first
-        inference latency. Inference runs in this browser; model and runtime
-        assets are downloaded from their configured hosts.
-      </p>
+    <a class="om-skip-link" href="#main">Skip to content</a>
+    <header class="om-site-header">
+      <div class="om-site-header__inner">
+        <a class="om-brand" href="/docs/" aria-label="OpenMed documentation">
+          <img
+            src="../../assets/openmed-mark.svg"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span>openmed</span>
+          <span class="om-brand__product">browser benchmark</span>
+        </a>
+        <nav class="om-site-nav" aria-label="Page links">
+          <a href="/docs/">Documentation</a>
+          <a href="/docs/export-onnx-webgpu/">ONNX and WebGPU</a>
+          <a
+            href="https://github.com/maziyarpanahi/openmed/tree/master/docs/demo/web"
+          >Source</a>
+          <button class="om-theme-toggle" type="button" data-openmed-theme>
+            Theme: system
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="om-page">
+      <section class="om-hero" aria-labelledby="page-title">
+        <p class="eyebrow">Local browser inference</p>
+        <h1 id="page-title">WASM vs WebGPU PII detection</h1>
+        <p class="lede">
+          Load a Transformers.js token-classification bundle, detect sensitive
+          spans in synthetic text, and compare cold model load with first
+          inference latency. Inference runs in this browser. Runtime and model
+          assets must be supplied from the same origin as this page.
+        </p>
+      </section>
 
       <div class="grid">
         <section class="card" aria-labelledby="settings-heading">
           <h2 id="settings-heading">Model and backend</h2>
           <div class="field">
-            <label for="repo-id">Manifest <code>repo_id</code></label>
+            <label for="runtime-module">Local runtime adapter module</label>
+            <input
+              id="runtime-module"
+              name="runtime-module"
+              value=""
+              placeholder="./vendor/openmed-transformers-runtime.js"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="runtime-note"
+            />
+            <p id="runtime-note" class="note">
+              The same-origin module must export
+              <code>createOpenMedPipeline(options)</code>.
+            </p>
+          </div>
+          <div class="field">
+            <label for="repo-id">Local model bundle URL</label>
             <input
               id="repo-id"
               name="repo-id"
-              value="onnx-community/multilang-pii-ner-ONNX"
+              value=""
+              placeholder="./models/openmed-pii/"
               autocomplete="off"
               spellcheck="false"
             />
@@ -272,27 +122,32 @@
 
         <section class="card" aria-labelledby="timing-heading">
           <h2 id="timing-heading">Timing panel</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Backend</th>
-                <th>Model load</th>
-                <th>First inference</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>WASM</td>
-                <td id="wasm-load">—</td>
-                <td id="wasm-first">—</td>
-              </tr>
-              <tr>
-                <td>WebGPU</td>
-                <td id="webgpu-load">—</td>
-                <td id="webgpu-first">—</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <caption class="om-sr-only">
+                Model load and first inference timing by execution backend
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Backend</th>
+                  <th scope="col">Model load</th>
+                  <th scope="col">First inference</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">WASM</th>
+                  <td id="wasm-load">—</td>
+                  <td id="wasm-first">—</td>
+                </tr>
+                <tr>
+                  <th scope="row">WebGPU</th>
+                  <td id="webgpu-load">—</td>
+                  <td id="webgpu-first">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <p class="note">
             Reset before a new cold-load comparison. Browser disk caches may
             make later downloads faster.
@@ -311,7 +166,8 @@
             </button>
           </div>
           <p id="status" class="status" role="status" aria-live="polite">
-            Ready. Use synthetic data only.
+            Ready. Supply same-origin runtime and model assets; use synthetic
+            data only.
           </p>
         </section>
 
@@ -328,6 +184,14 @@
       </p>
     </main>
 
+    <footer class="om-site-footer">
+      <div class="om-site-footer__inner">
+        <span>OpenMed documentation</span>
+        <span>Local-first healthcare NLP · synthetic data only</span>
+      </div>
+    </footer>
+
+    <script src="../../javascripts/openmed-standalone.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>

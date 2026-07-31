@@ -26,6 +26,17 @@ family and reproducibility metadata from the matching `models.jsonl` entry,
 but missing ranking evidence fails the render instead of publishing an
 unverifiable row.
 
+Publication and trust evidence is documented separately:
+
+- [Open benchmark publication status](../status/open-benchmark-publication.md)
+  records the current benchmark publication boundary.
+- [Trust-status contract](../status/trust-status-contract.md) defines how
+  public evidence states are represented.
+- [Project status](../status/index.md) summarizes the related public status
+  surfaces.
+- [Historical leaderboard contract](../leaderboard/index.md) documents the
+  earlier scorecard publication format.
+
 ## Source and refresh flow
 
 Only committed `BenchmarkReport` JSON under `docs/benchmarks/` with
