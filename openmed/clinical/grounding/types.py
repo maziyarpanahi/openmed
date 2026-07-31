@@ -37,3 +37,18 @@ class Candidate:
         """Alias for :attr:`code`, matching the free-vocabulary schema."""
 
         return self.code
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-ready candidate record including source language."""
+
+        return {
+            "system": self.system,
+            "code": self.code,
+            "display": self.display,
+            "score": self.score,
+            "source_language": self.source_language,
+            "source": self.source,
+            "matched_alias": self.matched_alias,
+            "match_kind": self.match_kind,
+            "vocab_version": self.vocab_version,
+        }

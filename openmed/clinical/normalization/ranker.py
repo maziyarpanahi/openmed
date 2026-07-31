@@ -544,6 +544,25 @@ class RankedCandidate:
 
         return dict(self.features)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return a user-facing JSON-ready ranked grounding record."""
+
+        return {
+            "candidate": self.candidate.to_dict(),
+            "fused_score": self.fused_score,
+            "contributions": [
+                {
+                    "source": contribution.source,
+                    "rank": contribution.rank,
+                    "weight": contribution.weight,
+                    "rrf": contribution.rrf,
+                }
+                for contribution in self.contributions
+            ],
+            "features": self.feature_map,
+            "sources": list(self.sources),
+        }
+
 
 def _rerank_fingerprint(
     context: "RerankContext | None",
@@ -551,6 +570,7 @@ def _rerank_fingerprint(
     rrf_k: int,
     section_weight: float,
     assertion_weight: float,
+    source_language: str | None,
 ) -> dict[str, Any]:
     """Identity of everything besides the mention/vocab that determines a rerank
     result: the context (section, assertion, preferred concepts) and the fusion
@@ -573,6 +593,7 @@ def _rerank_fingerprint(
         "weights": sorted((str(key), float(value)) for key, value in weights.items()),
         "section_weight": float(section_weight),
         "assertion_weight": float(assertion_weight),
+        "source_language": source_language,
     }
 
 
@@ -587,6 +608,7 @@ def rank_candidates(
     assertion_weight: float = DEFAULT_ASSERTION_WEIGHT,
     cache: RankedCandidateCache | None = None,
     vocab_version: str | None = None,
+    source_language: str | None = None,
 ) -> tuple[RankedCandidate, ...]:
     """Fuse sparse and dense candidates into a reranked concept list.
 
@@ -620,6 +642,7 @@ def rank_candidates(
             context, and fusion parameters is returned without recomputation.
         vocab_version: Vocabulary version for cache keying; required to use
             ``cache``.
+        source_language: Normalized source language for cache isolation.
 
     Returns:
         A deterministically ordered tuple of :class:`RankedCandidate`.
@@ -632,7 +655,14 @@ def rank_candidates(
 
     use_cache = cache is not None and vocab_version is not None
     fingerprint = (
-        _rerank_fingerprint(context, weights, rrf_k, section_weight, assertion_weight)
+        _rerank_fingerprint(
+            context,
+            weights,
+            rrf_k,
+            section_weight,
+            assertion_weight,
+            source_language,
+        )
         if use_cache
         else None
     )

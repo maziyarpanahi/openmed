@@ -41,7 +41,7 @@ from openmed.clinical.normalization.ranker import (
 from .embeddings import AliasEncoder, load_encoder
 from .retrieval import DEFAULT_RETRIEVAL_K, TwoStageRetriever
 from .types import Candidate
-from .vocab import FREE_VOCAB_SYSTEMS, VocabLoader
+from .vocab import FREE_VOCAB_SYSTEMS, VocabLoader, normalize_language
 
 if TYPE_CHECKING:
     from openmed.clinical.context import RerankContext
@@ -154,6 +154,7 @@ class CandidateRankingStage:
         systems: Sequence[str] | None = None,
         *,
         context: "RerankContext | None" = None,
+        source_language: str | None = None,
     ) -> tuple[RankedCandidate, ...]:
         """Return the reranked candidates for ``mention``.
 
@@ -165,6 +166,9 @@ class CandidateRankingStage:
                 ``config.rerank`` is set -- including when no dense encoder is
                 present, where it still refines the sparse ranking. With rerank
                 off the stage returns the pure sparse baseline and ignores it.
+            source_language: Source language selected by the calling router or
+                pipeline. Defaults to English and is preserved on serialized
+                ranked candidates.
 
         Returns:
             A deterministically ordered tuple of
@@ -175,12 +179,14 @@ class CandidateRankingStage:
             tuple(systems) if systems is not None else self._config.systems
         )
         rerank = self._config.rerank
+        resolved_language = normalize_language(source_language)
 
         if rerank:
             candidates = self._retriever.retrieve(
                 mention,
                 ordered_systems,
                 self._config.k,
+                source_language=resolved_language,
             )
             rerank_context = context
         else:
@@ -191,6 +197,7 @@ class CandidateRankingStage:
                 ordered_systems,
                 self._config.k,
                 include_dense=False,
+                source_language=resolved_language,
             )
             rerank_context = None
 
@@ -203,6 +210,7 @@ class CandidateRankingStage:
             source_weights=self._config.source_weights,
             cache=self._cache if vocab_version is not None else None,
             vocab_version=vocab_version,
+            source_language=resolved_language,
         )
 
 
@@ -211,6 +219,7 @@ def rank_mention(
     systems: Sequence[str] | None = None,
     *,
     context: "RerankContext | None" = None,
+    source_language: str | None = None,
     loader: VocabLoader | None = None,
     encoder: AliasEncoder | None = None,
     config: RankingConfig | None = None,
@@ -230,7 +239,12 @@ def rank_mention(
         config=config,
         cache=cache,
     )
-    return stage.rank(mention, systems, context=context)
+    return stage.rank(
+        mention,
+        systems,
+        context=context,
+        source_language=source_language,
+    )
 
 
 def _vocab_version(candidates: Sequence[Candidate]) -> str | None:
