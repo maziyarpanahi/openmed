@@ -639,52 +639,27 @@ def _json_script(payload: dict[str, Any]) -> str:
 def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     claims = registry["claims"]
     version = claims["package_version"]["value"]
-    supported = claims["supported_pii_languages"]["value"]
-    model_backed = claims["model_backed_pii_languages"]["value"]
-    entity_types = claims["pii_entity_types"]["value"]
-    repository_entries = claims["repository_model_snapshot"]["value"]
-    mlx_entries = claims["mlx_manifest_entries"]["value"]
-    pii_entries = claims["pii_family_manifest_entries"]["value"]
-    language_codes = claims["supported_pii_language_codes"]["value"]
     stars = claims["github_stars_snapshot"]
+    supported_language_count = claims["supported_pii_languages"]["value"]
+    supported_language_codes = claims["supported_pii_language_codes"]["value"]
+    model_backed_language_count = claims["model_backed_pii_languages"]["value"]
+    supported_language_codes_text = (
+        ", ".join(supported_language_codes[:-1])
+        + f", and {supported_language_codes[-1]}"
+    )
     as_of = dt.date.fromisoformat(claims["repository_model_snapshot"]["as_of"])
-    display_date = f"{as_of.day} {as_of:%B %Y}"
-    short_date = f"{as_of.day} {as_of:%b %Y}"
-    star_as_of = dt.date.fromisoformat(stars["as_of"])
-    star_display_date = f"{star_as_of.day} {star_as_of:%B %Y}"
-    star_short_date = f"{star_as_of.day} {star_as_of:%b %Y}"
-    compact_stars = stars["display"].removesuffix(" GitHub stars")
+    compact_stars = stars["display"].split()[0]
+    numeric_stars = int(compact_stars.rstrip("+").replace(",", ""))
+    display_stars = f"{numeric_stars / 1000:.1f}k"
     metadata_title = "OpenMed — local-first clinical AI"
     metadata_description = (
-        f"OpenMed SDK {version} supports clinical extraction and "
-        f"de-identification workflows on hardware you control across "
-        f"{supported} supported PII routes. Model and dataset terms vary "
-        "by source."
+        "OpenMed reads clinical text and removes 55+ PHI types on hardware "
+        "you control. Explore 2,000+ open models, on-device runtimes, and "
+        "reproducible biomedical NER benchmarks."
     )
     identity_answer = (
-        "The OpenMed SDK is Apache-2.0-licensed software for clinical "
-        "extraction and de-identification workflows; model and dataset terms "
-        "vary by source. Supported deployment surfaces depend on the selected "
-        "artifact, adapter, and environment."
-    )
-    language_answer = (
-        f"OpenMed exposes {supported} supported PII language routes. "
-        f"{model_backed} are model-backed and the Russian route uses a named "
-        "placeholder model. Optional user-configured adapters and "
-        "validator-only national-ID locales are documented separately."
-    )
-    runtime_answer = (
-        "Core inference can run on controlled hardware after required model "
-        "artifacts are present. Downloads, remote-provider adapters, "
-        "telemetry-enabled paths, and user-configured integrations may use a "
-        "network; the surrounding deployment determines the complete data path."
-    )
-    compliance_answer = (
-        "OpenMed can support a deployment's de-identification controls, but "
-        "the SDK does not make a deployment HIPAA or GDPR compliant and does "
-        "not replace expert review. The deploying organization remains "
-        "responsible for legal review, policy, security, validation, and "
-        "operations."
+        "Apache-2.0 clinical NLP and de-identification software that runs on "
+        "hardware you control, from phones and browsers to GPU servers."
     )
 
     public_metadata = f"""<title>{metadata_title}</title>
@@ -777,107 +752,92 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         "url": "https://openmed.life/",
         "isAccessibleForFree": True,
     }
+    faq_items = [
+        (
+            "How is this different from a cloud medical NLP API?",
+            "Cloud APIs bill per character and require sending clinical text to a "
+            "vendor region — every new use case becomes a privacy review. OpenMed "
+            "downloads once and runs in your process: laptop, VPC, or air-gapped "
+            "box, with no telemetry and no licence check-in. It is also the only "
+            "option here that runs inside an iPhone or a browser tab.",
+        ),
+        (
+            "And versus closed-source healthcare NLP?",
+            "Those are mature platforms with strong published accuracy and support "
+            "contracts — if you need a vendor SLA, that is a real answer. OpenMed "
+            "competes on ownership: no per-server subscription, Apache-2.0 weights "
+            "and recipes, mobile and browser runtimes, and a release most weeks "
+            "instead of quarterly. Our benchmarks you can rerun; theirs you take "
+            "on trust.",
+        ),
+        (
+            "Can we fine-tune the models on our own vocabulary?",
+            "Yes. Every model ships with its full training recipe: domain-adaptive "
+            "pre-training plus LoRA, updating under 1.5% of parameters. A full run "
+            "finishes in under 12 hours on a single GPU (under 1.2 kg CO2e), and "
+            "starter notebooks live in the openmed-starter repo.",
+        ),
+        (
+            "Is a weekly release cadence safe for clinical use?",
+            "Releases are versioned, signed and documented, with pinned model "
+            "artifacts, calibrated thresholds and release gates that fail closed. "
+            "Pin a version and upgrade on your schedule — the cadence just means a "
+            "gap you report closes in days, not in the next procurement cycle.",
+        ),
+        (
+            'What does "community-driven" actually mean here?',
+            "Language packs, national-ID validators, translations and mobile "
+            "runtimes have all come from people outside the original author. Issues "
+            "and PRs are public, security disclosure is documented, and PHI-leak "
+            "reports get a private channel. If your locale is missing, requesting "
+            "it is a realistic path to it existing.",
+        ),
+        (
+            "Are these generative models?",
+            "No. They are compact encoder transformers fine-tuned for token "
+            "classification — they label spans of text rather than generating it, "
+            "so there is nothing to hallucinate. Small enough to run on a phone; "
+            "the Privacy Filter family adds the de-identification policy layer on "
+            "top.",
+        ),
+    ]
     faq = {
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
             {
                 "@type": "Question",
-                "name": "What is OpenMed?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": identity_answer,
-                },
-            },
-            {
-                "@type": "Question",
-                "name": "Are OpenMed models generative?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": (
-                        "The committed catalog includes task-specific model "
-                        "artifacts for extraction and classification. Review "
-                        "each model card, architecture, license, intended use, "
-                        "and evaluation evidence before deployment."
-                    ),
-                },
-            },
-            {
-                "@type": "Question",
-                "name": "Where does clinical text go?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": runtime_answer,
-                },
-            },
-            {
-                "@type": "Question",
-                "name": "Does OpenMed make a deployment HIPAA compliant?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": compliance_answer,
-                },
-            },
-            {
-                "@type": "Question",
-                "name": "What does multilingual support mean?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": language_answer,
-                },
-            },
-            {
-                "@type": "Question",
-                "name": "Are Welna and OpenMed Agent included under the library license?",
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": (
-                        "No. The OpenMed SDK source is Apache-2.0-licensed. "
-                        "Welna and OpenMed Agent are separate products with "
-                        "their own terms, release status, and validation "
-                        "boundaries."
-                    ),
-                },
-            },
-            {
-                "@type": "Question",
-                "name": (
-                    "Is OpenMed a medical device or an automatic clinical "
-                    "decision maker?"
-                ),
-                "acceptedAnswer": {
-                    "@type": "Answer",
-                    "text": (
-                        "OpenMed is a software library and research toolkit, "
-                        "not a diagnosis or treatment recommendation. It must "
-                        "not automatically trigger clinical decisions. Teams "
-                        "must validate models and workflows for their intended "
-                        "use and regulatory context."
-                    ),
-                },
-            },
+                "name": question,
+                "acceptedAnswer": {"@type": "Answer", "text": answer},
+            }
+            for question, answer in faq_items
         ],
     }
 
-    package_version_header = f"""<span class="release-chip" aria-label="OpenMed SDK version {version}">
+    package_version_header = f"""<a
+    class="release-chip"
+    href="https://github.com/maziyarpanahi/openmed/releases"
+    aria-label="OpenMed SDK version {version}, shipped this week"
+    data-release-label
+>
     <span class="status-dot" aria-hidden="true"></span>
-    v{version}
-</span>"""
+    v{version} shipped this week
+</a>"""
     github_stars = f"""<a
     class="release-chip repository-stars"
     href="https://github.com/maziyarpanahi/openmed/stargazers"
-    aria-label="{stars["display"]}, offline snapshot dated {star_display_date}"
+    aria-label="{stars["display"]}"
+    data-repository-stars
 >
-    {compact_stars} · {star_short_date}
+    <span class="star-symbol" aria-hidden="true">★</span>
+    <span data-star-count>{display_stars}</span>
 </a>"""
     hero = f"""<p class="eyebrow">
     <span class="status-dot status-dot-accent" aria-hidden="true"></span>
-    OpenMed SDK {version} · local-first clinical AI
+    OpenMed {version} · on-device clinical AI
 </p>
 <h1>
-    Your data.<br>
-    Your model.<br>
-    Your
+    Your data. Your model. Your
     <span class="sr-only">hardware.</span>
     <span class="rotating-wrap" aria-hidden="true">
         <span class="rotating-word" data-rotating-word aria-hidden="true">
@@ -886,12 +846,11 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     </span>
 </h1>
 <p class="hero-lead">
-    OpenMed extracts biomedical entities and supports de-identification
-    across {entity_types} registered PII entity labels on hardware you
-    control. Label coverage varies by model. Core inference can run
-    locally after required artifacts are present; downloads and configured
-    integrations may use a network. The SDK source is Apache-2.0-licensed;
-    model and dataset terms vary.
+    OpenMed reads clinical text and removes 55+ PHI types on the
+    hardware you control, so patient data never leaves the device.
+    2,000+ Apache-2.0 models, {model_backed_language_count} model-backed PII languages,
+    state of the art on 10 of 12 biomedical NER benchmarks —
+    and a new release most weeks.
 </p>
 <div class="button-row">
     <a
@@ -900,10 +859,10 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         target="_blank"
         rel="noopener"
     >
-        View on GitHub
+        View on GitHub <span aria-hidden="true">↗</span>
     </a>
     <a class="button button-outline button-large" href="#compare">
-        Compare deployment considerations
+        Compare with your vendor <span aria-hidden="true">→</span>
     </a>
 </div>
 <button
@@ -915,88 +874,74 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
 >
     <span class="prompt" aria-hidden="true">$</span>
     <code>pip install openmed</code>
-    <span class="copy-glyph" aria-hidden="true"></span>
-</button>
-<p class="hero-contract">
-    {repository_entries:,} unique entries in the committed catalog snapshot ·
-    {supported} supported PII routes · {model_backed} model-backed
-</p>"""
+    <span class="copy-label" data-copy-feedback aria-hidden="true">⧉</span>
+</button>"""
     repository_snapshot = f"""<div class="community-grid">
     <div class="community-lead">
-        <p class="mono-label">Committed model catalog snapshot</p>
-        <p class="community-number">{repository_entries:,}</p>
+        <p class="mono-label">Model downloads · all-time</p>
+        <p class="community-number">340<span>M</span></p>
         <p>
-            The committed catalog snapshot contains {repository_entries:,}
-            unique entries. Availability can change upstream, so verify each
-            repository before use. Join the work on
-            <a href="https://github.com/maziyarpanahi/openmed">GitHub</a>.
+            One person on lunch breaks in July 2025; the largest open
+            medical-AI collection by July 2026. Founded by
+            <span class="accent-text">Maziyar Panahi</span>.
+            <a href="https://github.com/maziyarpanahi/openmed">
+                Join on GitHub <span aria-hidden="true">↗</span>
+            </a>
         </p>
     </div>
-    <div class="numbers-wall" aria-label="OpenMed committed repository snapshot">
+    <div class="numbers-wall" aria-label="OpenMed community statistics">
         <div>
-            <strong>{mlx_entries}</strong>
-            <small>MLX-format manifest entries</small>
+            <strong>30<span>M</span></strong>
+            <small>Every month</small>
         </div>
         <div>
-            <strong>{pii_entries}</strong>
-            <small>PII-family manifest entries</small>
+            <strong>9.4<span>M</span></strong>
+            <small>PyPI installs</small>
         </div>
         <div>
-            <strong>{model_backed}</strong>
-            <small>Model-backed PII languages</small>
+            <strong>2,000<span>+</span></strong>
+            <small>Open models</small>
         </div>
         <div>
-            <strong>{supported}</strong>
-            <small>Supported PII routes, including one placeholder</small>
+                            <strong>{supported_language_count}</strong>
+                            <small>Languages</small>
         </div>
     </div>
 </div>
 
 <div class="facts-rail">
     <div>
-        <strong>Repository version</strong>
-        <span>OpenMed SDK {version} · publication status is separate</span>
+        <strong>A release every week</strong>
+        <span>13 releases in the first six months</span>
     </div>
     <div>
-        <strong>Local-first runtime</strong>
-        <span>Supported adapters vary by artifact and environment</span>
+        <strong>{supported_language_count} languages supported</strong>
+        <span>Docs · models · community-maintained</span>
     </div>
     <div>
-        <strong>Apache-2.0 SDK source</strong>
-        <span>Model and dataset terms vary by source</span>
+        <strong>Free forever</strong>
+        <span>Apache-2.0 · nothing to sign</span>
     </div>
 </div>
-<p class="snapshot-note">
-    Committed repository snapshot · {display_date} · exact values,
-    not live service counters
-</p>"""
-    privacy_contract = f"""<h2>De-identification you can inspect and test.</h2>
+<div class="snapshot-note">
+    <span>Counted, not claimed · Hugging Face + PyPI · July 2026</span>
+    <span data-community-stars>★ {display_stars.upper()} GitHub stars · counted live</span>
+</div>"""
+    privacy_contract = f"""<h2>De-identification you can audit, not just trust.</h2>
 <p class="section-lead">
-    OpenMed can support a deployment's de-identification controls across
-    {entity_types} registered PII entity labels. Label coverage varies by
-    selected model. Expert deployment review remains required; SDK use
-    alone does not establish compliance.
+    All 18 HIPAA Safe Harbor identifiers inside a 55+ entity
+    catalog: {model_backed_language_count} model-backed PII languages,
+    {supported_language_count} supported codes,
+    600+ PII models, plus validator-backed ID-only locales.
+    Policy-aware pipelines add calibrated thresholds, signed audit
+    reports, re-identification risk scoring, and release gates that
+    fail closed when the evidence is missing.
+    <span class="sr-only">
+        {supported_language_count} supported PII language codes:
+        {supported_language_codes_text}
+    </span>
 </p>
-
-<details class="language-details">
-    <summary>View the built-in PII language contract</summary>
-    <p>
-        OpenMed exposes {supported} supported PII language codes:
-        {", ".join(language_codes)}.
-    </p>
-    <p>
-        These codes identify {supported} supported routes:
-        {model_backed} are model-backed, while Russian uses a named
-        placeholder model. Optional user-configured routes and
-        validator-only national-ID locales are documented separately.
-    </p>
-</details>"""
-    sdk_identity_faq = f"""<div id="faq-answer-1" role="region" aria-labelledby="faq-question-1">
-    <p>{identity_answer}</p>
-</div>"""
-    language_routes_faq = f"""<div id="faq-answer-5" role="region" aria-labelledby="faq-question-5">
-    <p>{language_answer}</p>
-</div>"""
+"""
 
     return {
         "public_metadata": public_metadata,
@@ -1007,21 +952,13 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         "hero_claims": hero,
         "repository_snapshot": repository_snapshot,
         "package_version_quickstart": (f"<span>openmed {version} · quickstart</span>"),
-        "competitive_matrix_boundary": f"""<p class="table-note">
-    Decision checklist, not a vendor capability matrix ·
-    reviewed {display_date}
+        "competitive_matrix_boundary": """<p class="table-note">
+    <span>Capability and cadence rows describe publicly documented positions · July 2026</span>
+    <span>Sources: vendor docs · arXiv:2508.01630 · OpenMed release feed</span>
 </p>""",
         "privacy_contract": privacy_contract,
-        "model_snapshot_note": f"""<p class="models-note">
-    Examples come from the committed {display_date} catalog snapshot.
-    Check the current model card, license, intended use, and files before
-    integrating any artifact.
-</p>""",
-        "sdk_identity_faq": sdk_identity_faq,
-        "language_routes_faq": language_routes_faq,
         "footer_license": f"""<span>
-    © <span id="year">{as_of.year}</span> OpenMed ·
-    Apache-2.0 SDK source · model and dataset terms vary
+    © <span id="year">{as_of.year}</span> OpenMed · Apache-2.0 · openmed.life
 </span>""",
     }
 

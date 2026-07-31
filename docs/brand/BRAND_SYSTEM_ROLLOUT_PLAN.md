@@ -697,8 +697,9 @@ equality, @2x/native mapping, and distribution-copy equality are tested.
 - Add accessible names, native FAQ buttons, tab semantics, selected filter
   state, keyboard behavior, focus order, live feedback, skip navigation, and
   reduced-motion behavior.
-- Implement light/dark/system theme handling, persistence, a scroll-safe mobile
-  menu, copy feedback, no-horizontal-overflow down to 320 px, no-JavaScript
+- Implement light/dark theme handling with an OS-resolved first visit,
+  persistence, a scroll-safe mobile menu, copy feedback,
+  no-horizontal-overflow down to 320 px, no-JavaScript
   fallback, and 400% zoom/320-CSS-pixel reflow plus text-spacing resilience.
 - Generate canonical, Open Graph, X card, JSON-LD, favicon, Apple touch, and
   structured FAQ metadata from reviewed sources. Add validated
@@ -929,9 +930,9 @@ Test the staged site, not only production:
 
 | Surface | Viewports | Themes | Required flows |
 |---|---|---|---|
-| Website | 320×800, 390×844, 667×320, 768×1024, 1440×900, 1536×864 | light, dark, system | menu, theme persistence, anchors, code tabs/copy, filters, FAQ, external links |
-| Website, JavaScript disabled | 390×844, 1440×900 | system | meaningful content/code, PHI-demo fallback, visible FAQ answers, static year, install guidance |
-| Docs landing | same | light, dark, system | nav drawer, search, locale links, theme, footer |
+| Website | 320×800, 390×844, 667×320, 768×1024, 1440×900, 1536×864 | light, dark; OS-resolved first visit | menu, theme persistence, anchors, code tabs/copy, filters, FAQ, external links |
+| Website, JavaScript disabled | 390×844, 1440×900 | OS-resolved | meaningful content/code, PHI-demo fallback, visible FAQ answers, static year, install guidance |
+| Docs landing | same | light, dark; OS-resolved first visit | nav drawer, search, locale links, theme, footer |
 | Docs guide | 390×844, 1440×900 | light, dark | headings, admonitions, tables, code copy |
 | Docs API page | 390×844, 1440×900 | light, dark | API nav, deep links, overflow, code |
 | Real Chinese/Hindi page | 390×844, 1440×900 | light, dark | nav, code, exact translation switch, untranslated state |
@@ -1078,7 +1079,8 @@ performed as part of this repository validation.
 - [x] Title, description, canonical, OG/X metadata, JSON-LD, FAQ schema,
       image alt metadata, theme metadata, manifest, identity set, favicon,
       touch icon, robots, sitemap, and `CNAME`
-- [x] Desktop/tablet/mobile, light/dark/system, zoom, print, and no-JavaScript
+- [x] Desktop/tablet/mobile, light/dark with OS-resolved initial state, zoom,
+      print, and no-JavaScript
       fallback
 
 ### Documentation

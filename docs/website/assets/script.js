@@ -1,13 +1,14 @@
 /* OpenMed.life progressive enhancement.
-   No analytics, runtime API fetches, or clinical-text network requests. */
+   No analytics or clinical-text network requests. Public repository metadata
+   is refreshed from GitHub and cached for six hours. */
 
 document.documentElement.classList.add("js");
 
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
+    initGitHubMetadata();
     initMobileMenu();
     initDemoMotion();
-    initTabs();
     initCopyControls();
     initModelFilters();
     initFAQ();
@@ -22,26 +23,16 @@ function initTheme() {
     const button = document.getElementById("themeToggle");
     const themeColors = [...document.querySelectorAll("[data-theme-color]")];
     const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
-    const preferences = ["system", "light", "dark"];
-    let preference = readThemePreference();
+    const preferences = ["light", "dark"];
+    let preference = readThemePreference()
+        || (systemDark.matches ? "dark" : "light");
 
     if (!preferences.includes(preference)) {
-        preference = "system";
-    }
-
-    function resolvedTheme() {
-        if (preference === "system") {
-            return systemDark.matches ? "dark" : "light";
-        }
-        return preference;
+        preference = systemDark.matches ? "dark" : "light";
     }
 
     function applyTheme() {
-        if (preference === "system") {
-            root.removeAttribute("data-theme");
-        } else {
-            root.setAttribute("data-theme", preference);
-        }
+        root.setAttribute("data-theme", preference);
         root.dataset.themePreference = preference;
 
         const currentIndex = preferences.indexOf(preference);
@@ -57,7 +48,7 @@ function initTheme() {
                 `Color theme: ${preference}. Activate for ${next}.`,
             );
         }
-        const selectedColor = resolvedTheme() === "dark" ? "#0B0E13" : "#F4F7F8";
+        const selectedColor = preference === "dark" ? "#0B0E13" : "#F4F7F8";
         themeColors.forEach(meta => {
             meta.content = selectedColor;
         });
@@ -74,18 +65,15 @@ function initTheme() {
         applyTheme();
     });
 
-    const onSystemThemeChange = () => {
-        if (preference === "system") applyTheme();
-    };
-    addMediaListener(systemDark, onSystemThemeChange);
     applyTheme();
 }
 
 function readThemePreference() {
     try {
-        return localStorage.getItem("openmed-theme") || "system";
+        const value = localStorage.getItem("openmed-theme");
+        return value === "light" || value === "dark" ? value : null;
     } catch {
-        return "system";
+        return null;
     }
 }
 
@@ -98,6 +86,98 @@ function addMediaListener(media, handler) {
         media.addEventListener("change", handler);
     } else {
         media.addListener(handler);
+    }
+}
+
+/* Live public repository metadata ---------------------------------------- */
+
+const GITHUB_CACHE_KEY = "om_gh_repo";
+const GITHUB_CACHE_TTL = 6 * 60 * 60 * 1000;
+const GITHUB_REPOSITORY_URL =
+    "https://api.github.com/repos/maziyarpanahi/openmed";
+const GITHUB_RELEASE_URL = `${GITHUB_REPOSITORY_URL}/releases/latest`;
+
+function formatStars(value) {
+    if (!Number.isFinite(value)) return "Star";
+    if (value < 1000) return String(value);
+    return `${Math.round(value / 100) / 10}k`;
+}
+
+function applyGitHubMetadata(metadata) {
+    const stars = Number(metadata?.stars);
+    const starLabel = formatStars(stars);
+    document.querySelectorAll("[data-star-count]").forEach(node => {
+        node.textContent = starLabel;
+    });
+    document.querySelectorAll("[data-community-stars]").forEach(node => {
+        node.textContent = Number.isFinite(stars)
+            ? `★ ${starLabel.toUpperCase()} GitHub stars · counted live`
+            : "Counted, not claimed";
+    });
+
+    const release = typeof metadata?.release === "string"
+        ? metadata.release.replace(/^v/u, "")
+        : "";
+    if (release) {
+        document.querySelectorAll("[data-release-label]").forEach(node => {
+            node.setAttribute(
+                "aria-label",
+                `OpenMed SDK version ${release}, shipped this week`,
+            );
+            const dot = node.querySelector(".status-dot");
+            node.replaceChildren();
+            if (dot) node.append(dot);
+            node.append(document.createTextNode(`v${release} shipped this week`));
+        });
+    }
+}
+
+function readGitHubCache() {
+    try {
+        const cached = JSON.parse(localStorage.getItem(GITHUB_CACHE_KEY) || "null");
+        if (
+            cached
+            && Number.isFinite(cached.t)
+            && Date.now() - cached.t < GITHUB_CACHE_TTL
+        ) {
+            return cached;
+        }
+    } catch {
+        // Storage can be unavailable or contain stale data.
+    }
+    return null;
+}
+
+async function initGitHubMetadata() {
+    const cached = readGitHubCache();
+    if (cached) {
+        applyGitHubMetadata(cached);
+        return;
+    }
+
+    try {
+        const [repositoryResponse, releaseResponse] = await Promise.all([
+            fetch(GITHUB_REPOSITORY_URL),
+            fetch(GITHUB_RELEASE_URL),
+        ]);
+        if (!repositoryResponse.ok || !releaseResponse.ok) return;
+        const [repository, release] = await Promise.all([
+            repositoryResponse.json(),
+            releaseResponse.json(),
+        ]);
+        const metadata = {
+            stars: repository.stargazers_count,
+            release: release.tag_name,
+            t: Date.now(),
+        };
+        applyGitHubMetadata(metadata);
+        try {
+            localStorage.setItem(GITHUB_CACHE_KEY, JSON.stringify(metadata));
+        } catch {
+            // The live values still apply when storage is unavailable.
+        }
+    } catch {
+        // Static release and star values are the offline fallback.
     }
 }
 
@@ -165,16 +245,16 @@ const PHI_SAMPLES = [
     {
         lang: "en",
         parts: [
-            { text: "Patient " },
-            { text: "Casey Example", label: "NAME" },
+            { text: "Pt " },
+            { text: "James Whitfield", label: "NAME" },
             { text: ", MRN " },
-            { text: "00123", label: "ID" },
+            { text: "4482913", label: "ID" },
             { text: ", DOB " },
             { text: "03/14/1962", label: "DATE" },
             { text: ", contact " },
-            { text: "(312) 555-0142", label: "PHONE" },
+            { text: "(312) 847-2214", label: "PHONE" },
             { text: ", admitted to " },
-            { text: "Example Hospital", label: "HOSPITAL" },
+            { text: "Northwestern Memorial", label: "HOSPITAL" },
             { text: "." },
         ],
     },
@@ -182,13 +262,15 @@ const PHI_SAMPLES = [
         lang: "fr",
         parts: [
             { text: "Mme " },
-            { text: "Camille Exemple", label: "NAME" },
+            { text: "Claire Moreau", label: "NAME" },
             { text: ", née le " },
             { text: "12/07/1958", label: "DATE" },
             { text: ", NIR " },
             { text: "2 58 07 75 116 001 23", label: "NIR" },
             { text: ", suivie à l’" },
-            { text: "Hôpital Exemple", label: "HOSPITAL" },
+            { text: "Hôpital Saint-Louis", label: "HOSPITAL" },
+            { text: " à " },
+            { text: "Paris", label: "LOCATION" },
             { text: "." },
         ],
     },
@@ -196,13 +278,13 @@ const PHI_SAMPLES = [
         lang: "de",
         parts: [
             { text: "Patient " },
-            { text: "Jonas Beispiel", label: "NAME" },
+            { text: "Jonas Weber", label: "NAME" },
             { text: ", geb. " },
             { text: "21.11.1970", label: "DATE" },
             { text: ", Steuer-ID " },
             { text: "57 144 261 809", label: "STEUER_ID" },
             { text: ", behandelt in der " },
-            { text: "Beispielklinik", label: "HOSPITAL" },
+            { text: "Charité Berlin", label: "HOSPITAL" },
             { text: "." },
         ],
     },
@@ -210,13 +292,15 @@ const PHI_SAMPLES = [
         lang: "tr",
         parts: [
             { text: "Hasta " },
-            { text: "Ayşe Örnek", label: "NAME" },
+            { text: "Ayşe Yılmaz", label: "NAME" },
             { text: ", TCKN " },
             { text: "10000000146", label: "TCKN" },
             { text: ", tel " },
-            { text: "+90 532 555 0182", label: "PHONE" },
+            { text: "+90 532 417 8823", label: "PHONE" },
             { text: ", " },
-            { text: "Örnek Hastanesi", label: "HOSPITAL" },
+            { text: "Acıbadem Hastanesi", label: "HOSPITAL" },
+            { text: ", " },
+            { text: "İstanbul", label: "LOCATION" },
             { text: "." },
         ],
     },
@@ -328,46 +412,6 @@ function renderPHI(demo, sample, phase) {
     if (lang) lang.textContent = `"${sample.lang}"`;
 }
 
-/* Tabs ------------------------------------------------------------------- */
-
-function initTabs() {
-    document.querySelectorAll("[data-code-example]").forEach(group => {
-        const tabs = [...group.querySelectorAll('[role="tab"]')];
-        const panels = [...group.querySelectorAll('[role="tabpanel"]')];
-        if (!tabs.length || !panels.length) return;
-
-        function activate(tab, moveFocus = false) {
-            tabs.forEach(candidate => {
-                const selected = candidate === tab;
-                candidate.setAttribute("aria-selected", String(selected));
-                candidate.tabIndex = selected ? 0 : -1;
-            });
-            panels.forEach(panel => {
-                panel.hidden = panel.id !== tab.getAttribute("aria-controls");
-            });
-            if (moveFocus) tab.focus();
-        }
-
-        tabs.forEach((tab, index) => {
-            tab.addEventListener("click", () => activate(tab));
-            tab.addEventListener("keydown", event => {
-                let nextIndex = null;
-                if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
-                if (event.key === "ArrowLeft") {
-                    nextIndex = (index - 1 + tabs.length) % tabs.length;
-                }
-                if (event.key === "Home") nextIndex = 0;
-                if (event.key === "End") nextIndex = tabs.length - 1;
-                if (nextIndex === null) return;
-                event.preventDefault();
-                activate(tabs[nextIndex], true);
-            });
-        });
-
-        activate(tabs.find(tab => tab.getAttribute("aria-selected") === "true") || tabs[0]);
-    });
-}
-
 /* Copy ------------------------------------------------------------------- */
 
 function initCopyControls() {
@@ -381,11 +425,7 @@ function initCopyControls() {
     document.querySelectorAll("[data-copy-active]").forEach(button => {
         button.addEventListener("click", async () => {
             const group = button.closest("[data-code-example]");
-            const activeTab = group?.querySelector('[role="tab"][aria-selected="true"]');
-            const panelId = activeTab?.getAttribute("aria-controls");
-            const code = panelId
-                ? document.getElementById(panelId)?.querySelector("code")?.textContent
-                : "";
+            const code = group?.querySelector("pre code")?.textContent || "";
             const ok = await copyText(code || "");
             flashCopyResult(button, ok);
         });
@@ -420,21 +460,24 @@ function flashCopyResult(button, ok) {
     const status = document.getElementById("copyStatus");
     const originalLabel = button.getAttribute("aria-label");
     const originalText = button.textContent;
-    const glyph = button.querySelector(".copy-glyph");
+    const feedback = button.querySelector("[data-copy-feedback]");
+    const originalFeedback = feedback?.textContent;
     const message = ok ? "Copied to clipboard." : "Copy failed.";
 
-    if (glyph) {
-        glyph.classList.toggle("is-success", ok);
-        glyph.classList.toggle("is-error", !ok);
+    if (feedback) {
+        feedback.textContent = ok ? "copied ✓" : "copy failed";
+        feedback.classList.toggle("is-success", ok);
+        feedback.classList.toggle("is-error", !ok);
     } else {
-        button.textContent = ok ? "copied" : "copy failed";
+        button.textContent = ok ? "copied ✓" : "copy failed";
     }
     button.setAttribute("aria-label", message);
     if (status) status.textContent = message;
 
     window.setTimeout(() => {
-        if (glyph) {
-            glyph.classList.remove("is-success", "is-error");
+        if (feedback) {
+            feedback.textContent = originalFeedback;
+            feedback.classList.remove("is-success", "is-error");
         } else {
             button.textContent = originalText;
         }
@@ -503,14 +546,32 @@ function initFAQ() {
 
     const buttons = [...list.querySelectorAll("button[aria-controls]")];
 
-    function setExpanded(button, expanded) {
+    function setExpanded(button, expanded, immediate = false) {
         const panel = document.getElementById(button.getAttribute("aria-controls"));
         button.setAttribute("aria-expanded", String(expanded));
-        if (panel) panel.hidden = !expanded;
+        if (!panel) return;
+        window.clearTimeout(panel._hideTimer);
+        if (expanded) {
+            panel.hidden = false;
+            if (immediate) {
+                panel.classList.add("is-open");
+            } else {
+                window.requestAnimationFrame(() => panel.classList.add("is-open"));
+            }
+            return;
+        }
+        panel.classList.remove("is-open");
+        if (immediate) {
+            panel.hidden = true;
+        } else {
+            panel._hideTimer = window.setTimeout(() => {
+                panel.hidden = true;
+            }, 320);
+        }
     }
 
     buttons.forEach((button, index) => {
-        setExpanded(button, index === 0);
+        setExpanded(button, index === 0, true);
         button.addEventListener("click", () => {
             const shouldOpen = button.getAttribute("aria-expanded") !== "true";
             buttons.forEach(candidate => setExpanded(candidate, false));

@@ -287,6 +287,114 @@ def test_docs_consume_the_shared_system_and_repository_owned_fonts() -> None:
     assert "link[data-openmed-hreflang-rel]" in docs_script
 
 
+def test_published_theme_controls_offer_only_light_and_dark() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+    website_script = (DOCS / "website" / "assets" / "script.js").read_text(
+        encoding="utf-8"
+    )
+    standalone_script = (DOCS / "javascripts" / "openmed-standalone.js").read_text(
+        encoding="utf-8"
+    )
+    standalone_pages = [
+        (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8"),
+        (DOCS / "demo" / "rtl" / "index.html").read_text(encoding="utf-8"),
+        (DOCS / "eval" / "benchmark-leaderboard" / "index.html").read_text(
+            encoding="utf-8"
+        ),
+    ]
+
+    palette = config["theme"]["palette"]
+    assert [entry["scheme"] for entry in palette] == ["default", "slate"]
+    assert [entry["toggle"]["name"] for entry in palette] == [
+        "Switch to dark mode",
+        "Switch to light mode",
+    ]
+    assert 'const preferences = ["light", "dark"]' in website_script
+    assert 'const modes = ["light", "dark"]' in standalone_script
+    assert "Color theme: system" not in website
+    assert "OpenMed provides technical controls, not legal compliance." not in website
+    assert all("Theme: system" not in page for page in standalone_pages)
+
+
+def test_website_preserves_the_approved_head_to_head_matrix() -> None:
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+
+    expected_copy = (
+        "Every other option asks you to give something up.",
+        "What we don't claim",
+        "AWS Comprehend Medical · Azure Health · Google Healthcare NLP",
+        "Enterprise NLP suites, per-server subscription",
+        "medspaCy · MedCAT · cTAKES",
+        "Where inference runs",
+        "Patient data leaves the network",
+        "What it costs at 10M notes",
+        "Languages supported",
+        "Runs on iPhone and Android",
+        "Apple Silicon acceleration",
+        "Runs in the browser",
+        "CPU-optimised ONNX builds",
+        "Release cadence",
+        "Benchmarks you can rerun",
+        "Capability and cadence rows describe publicly documented positions",
+    )
+    for text in expected_copy:
+        assert text in website
+    assert website.count("<tr>") >= 11
+
+
+def test_website_preserves_every_approved_landing_view_and_interaction() -> None:
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+    script = (DOCS / "website" / "assets" / "script.js").read_text(encoding="utf-8")
+
+    approved_copy = (
+        "shipped this week",
+        "Your data. Your model. Your",
+        "pii.detect() · on-device",
+        "Live PHI detection · 33 model-backed languages",
+        "Model downloads · all-time",
+        "340<span>M</span>",
+        "30<span>M</span>",
+        "9.4<span>M</span>",
+        "2,000<span>+</span>",
+        "Counted, not claimed · Hugging Face + PyPI · July 2026",
+        "Four lines, no account.",
+        "No API key to provision, no procurement call",
+        "The one thing no cloud API can do: run in a pocket.",
+        "24–33× faster than CPU PyTorch",
+        "De-identification you can audit, not just trust.",
+        "Signed audit reports",
+        "Zero data movement",
+        "Pick the entity type, not the platform.",
+        "ElectraMed · 33M",
+        "117K</strong> downloads",
+        "Open at the core. Real products on top.",
+        "Terminal-native AI for clinical workflows",
+        "Benchmarks you can rerun on your own notes.",
+        "25+</strong><b>Curated datasets",
+        "Questions from ML, clinical and procurement.",
+        "How is this different from a cloud medical NLP API?",
+        "Are these generative models?",
+        "Next release is already in progress.",
+        "Built by Maziyar Panahi · Paris",
+    )
+    for text in approved_copy:
+        assert text in website
+
+    assert len(re.findall(r'<article class="faq-item">', website)) == 6
+    runtimes = website.split('<section id="runtimes"', 1)[1].split(
+        '<section id="privacy"', 1
+    )[0]
+    assert len(re.findall(r"<article>", runtimes)) == 3
+    assert 'const GITHUB_CACHE_KEY = "om_gh_repo"' in script
+    assert "6 * 60 * 60 * 1000" in script
+    assert "https://api.github.com/repos/maziyarpanahi/openmed" in script
+    assert "James Whitfield" in script
+    assert "Claire Moreau" in script
+    assert "Jonas Weber" in script
+    assert "Ayşe Yılmaz" in script
+
+
 def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() -> None:
     publication = _load_yaml(PUBLICATION)
     demo = (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8")
