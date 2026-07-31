@@ -14,6 +14,22 @@ from .assertion_grounding import (
     ground_with_context,
 )
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
+from .embeddings import (
+    AliasEncoder,
+    EncoderUnavailableError,
+    HashingAliasEncoder,
+    MLXSapBERTEncoder,
+    load_encoder,
+)
+from .index import (
+    AliasEmbeddingIndex,
+    DenseCandidateGenerator,
+    IndexBackendUnavailableError,
+    build_index,
+    build_or_load_index,
+    load_index,
+    query_index,
+)
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .provenance import (
     GROUNDING_ASSIST_ONLY_ADVISORY,
@@ -56,10 +72,14 @@ from .vocab import (
 
 __all__ = [
     "ASSERTION_GROUNDING_ADVISORY",
+    "AliasEmbeddingIndex",
+    "AliasEncoder",
     "AssertedGroundedSpan",
     "AssertionGroundingStatus",
     "Candidate",
     "ConceptMatch",
+    "DenseCandidateGenerator",
+    "EncoderUnavailableError",
     "FREE_VOCAB_SYSTEMS",
     "GROUNDING_ASSERTION_STATUSES",
     "GROUNDING_ASSIST_ONLY_ADVISORY",
@@ -67,9 +87,12 @@ __all__ = [
     "GROUNDING_POLICIES",
     "GroundingAlternative",
     "GroundingProvenance",
+    "HashingAliasEncoder",
+    "IndexBackendUnavailableError",
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
+    "MLXSapBERTEncoder",
     "POLICY_DROP",
     "POLICY_STATUS",
     "POLICY_SUPPRESS",
@@ -90,15 +113,20 @@ __all__ = [
     "assertion_grounding_status",
     "available_linkers",
     "available_loaders",
+    "build_index",
+    "build_or_load_index",
     "generate_candidates",
     "ground_with_context",
     "get_index",
     "get_linker",
     "get_loader",
     "grounding_provenance",
+    "load_encoder",
+    "load_index",
     "normalize_language",
     "normalize_term",
     "provenance_version_pins",
+    "query_index",
     "register_linker",
     "register_loader",
     "scan_provenance_for_raw_text",
