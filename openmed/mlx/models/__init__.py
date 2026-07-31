@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -143,15 +144,25 @@ def normalize_model_config(
             normalized.get("encoder_hidden_size", normalized.get("hidden_size", 768)),
         )
         normalized.setdefault("dropout", normalized.get("hidden_dropout_prob", 0.1))
-        normalized.setdefault("embed_ent_token", normalized.get("embed_ent_token", True))
-        normalized.setdefault("embed_class_token", normalized.get("embed_class_token", True))
-        normalized.setdefault("num_rnn_layers", normalized.get("num_rnn_layers", 0) or 0)
+        normalized.setdefault(
+            "embed_ent_token", normalized.get("embed_ent_token", True)
+        )
+        normalized.setdefault(
+            "embed_class_token", normalized.get("embed_class_token", True)
+        )
+        normalized.setdefault(
+            "num_rnn_layers", normalized.get("num_rnn_layers", 0) or 0
+        )
         normalized.setdefault("class_token_index", normalized.get("class_token_index"))
         normalized.setdefault("rel_token_index", normalized.get("rel_token_index"))
         normalized.setdefault("text_token_index", normalized.get("text_token_index"))
-        normalized.setdefault("example_token_index", normalized.get("example_token_index"))
+        normalized.setdefault(
+            "example_token_index", normalized.get("example_token_index")
+        )
         normalized.setdefault("max_width", normalized.get("max_width", 12))
-        normalized.setdefault("pooling_strategy", normalized.get("pooling_strategy", "first"))
+        normalized.setdefault(
+            "pooling_strategy", normalized.get("pooling_strategy", "first")
+        )
         normalized.setdefault(
             "class_token_pooling",
             normalized.get("class_token_pooling", "first"),
@@ -187,10 +198,14 @@ def normalize_model_config(
         normalized.setdefault("_mlx_position_offset", 0)
     elif source_model_type in {"roberta", "xlm-roberta"}:
         normalized.setdefault("type_vocab_size", 1)
-        normalized.setdefault("_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1)
+        normalized.setdefault(
+            "_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1
+        )
     elif family == "openai-privacy-filter":
         normalized.setdefault("num_experts", normalized.get("num_local_experts", 128))
-        normalized.setdefault("experts_per_token", normalized.get("num_experts_per_tok", 4))
+        normalized.setdefault(
+            "experts_per_token", normalized.get("num_experts_per_tok", 4)
+        )
         normalized.setdefault("swiglu_limit", normalized.get("swiglu_limit", 7.0))
         normalized.setdefault("rms_norm_eps", normalized.get("rms_norm_eps", 1e-5))
         rope_parameters = normalized.get("rope_parameters") or {}
@@ -239,13 +254,18 @@ def build_model(
 
         return BertForTokenClassification(config)
 
-    if family == "deberta-v2" and resolve_artifact_task(config, manifest=manifest) == "token-classification":
+    if (
+        family == "deberta-v2"
+        and resolve_artifact_task(config, manifest=manifest) == "token-classification"
+    ):
         from openmed.mlx.models.deberta_v2_tc import DebertaV2ForTokenClassification
 
         return DebertaV2ForTokenClassification(config)
 
     if family == "openai-privacy-filter":
-        from openmed.mlx.models.privacy_filter import OpenAIPrivacyFilterForTokenClassification
+        from openmed.mlx.models.privacy_filter import (
+            OpenAIPrivacyFilterForTokenClassification,
+        )
 
         return OpenAIPrivacyFilterForTokenClassification(config)
 
@@ -317,14 +337,53 @@ def _quantize_model_for_weights(
     return build_model(config, manifest=manifest)
 
 
+_MLX_MMAP_ENV = "OPENMED_MLX_MMAP"
+
+
+def _mlx_mmap_enabled() -> bool:
+    """Whether MLX weights use the memory-mapped (lazy) read path.
+
+    Controlled by the ``OPENMED_MLX_MMAP`` environment variable. Memory-mapped
+    loading is the default; set ``OPENMED_MLX_MMAP=0`` (or ``false``/``no``/
+    ``off``) to force the eager path, which materializes every tensor up front
+    — useful for debugging or deterministic memory profiling.
+    """
+    value = os.environ.get(_MLX_MMAP_ENV)
+    if value is None or not value.strip():
+        return True
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _load_mlx_weights(mx: Any, weights_path: Path) -> dict[str, Any]:
+    """Read MLX weights from *weights_path*, honoring the mmap toggle.
+
+    MLX reads ``.safetensors`` lazily and memory-mapped: tensors stay backed by
+    the file and are not resident until evaluated, which keeps cold-start peak
+    RSS low on the phone/laptop tiers. This is the default path. When mmap is
+    disabled via :func:`_mlx_mmap_enabled`, every tensor is eagerly evaluated
+    up front, reproducing the fully-materialized behavior as a documented
+    fallback.
+
+    Args:
+        mx: The imported ``mlx.core`` module.
+        weights_path: Path to a ``.safetensors`` or ``.npz`` weight file.
+
+    Returns:
+        Mapping of parameter name to MLX array.
+    """
+    weights = dict(mx.load(str(weights_path)))
+    if not _mlx_mmap_enabled() and weights:
+        mx.eval(*weights.values())
+    return weights
+
+
 def load_model(model_path: str | Path):
     """Load a converted MLX model from *model_path*."""
     try:
         import mlx.core as mx
     except ImportError:
         raise ImportError(
-            "MLX is required for this module. "
-            "Install with: pip install openmed[mlx]"
+            "MLX is required for this module. Install with: pip install openmed[mlx]"
         )
 
     model_path = Path(model_path)
@@ -332,7 +391,9 @@ def load_model(model_path: str | Path):
     manifest, config = load_artifact_config(model_path)
     config = normalize_model_config(config, manifest=manifest)
 
-    candidate_paths = resolve_weight_candidates(model_path, config=config, manifest=manifest)
+    candidate_paths = resolve_weight_candidates(
+        model_path, config=config, manifest=manifest
+    )
     weights_path = next((path for path in candidate_paths if path.exists()), None)
     if weights_path is None:
         raise FileNotFoundError(
@@ -341,7 +402,7 @@ def load_model(model_path: str | Path):
         )
 
     if weights_path.suffix in {".safetensors", ".npz"}:
-        weights = dict(mx.load(str(weights_path)))
+        weights = _load_mlx_weights(mx, weights_path)
     else:
         raise FileNotFoundError(
             f"Unsupported MLX weight file: {weights_path}. "

@@ -1,0 +1,206 @@
+"""Dependency license policy tests."""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = ROOT / "scripts" / "release" / "check_license_policy.py"
+
+spec = importlib.util.spec_from_file_location("check_license_policy", SCRIPT)
+assert spec is not None
+policy = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+sys.modules[spec.name] = policy
+spec.loader.exec_module(policy)
+
+
+def write_pyproject(path: Path, body: str) -> Path:
+    target = path / "pyproject.toml"
+    target.write_text(body, encoding="utf-8")
+    return target
+
+
+def test_current_non_dev_dependencies_are_permissive():
+    results = policy.audit_pyproject(ROOT / "pyproject.toml")
+
+    assert results
+    assert not [result for result in results if not result.allowed]
+    assert {
+        result.entry.name for result in results if result.entry.group == "dev"
+    } == set()
+
+
+def test_zh_and_indic_dependencies_have_reviewed_permissive_licenses():
+    results = policy.audit_pyproject(ROOT / "pyproject.toml")
+    language_results = {
+        result.entry.name: result
+        for result in results
+        if result.entry.group in {"zh", "indic"}
+    }
+
+    assert {name: result.license_text for name, result in language_results.items()} == {
+        "indic-nlp-library": "MIT",
+        "jieba": "MIT",
+        "opencc": "Apache-2.0",
+        "pypinyin": "MIT",
+    }
+    assert all(result.allowed for result in language_results.values())
+    assert not any(
+        policy.contains_marker(
+            result.license_text,
+            policy.DISALLOWED_LICENSE_MARKERS,
+        )
+        for result in language_results.values()
+    )
+
+
+def test_cryptography_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("cryptography")
+    allowed, reason = policy.is_allowed_license("cryptography", license_text)
+
+    assert license_text == "Apache-2.0 OR BSD-3-Clause"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_current_package_data_has_no_restricted_vocab_dumps():
+    assert policy.audit_restricted_vocab_data(ROOT) == []
+
+
+def test_current_bundled_resources_preserve_required_license_notices():
+    assert policy.audit_bundled_license_notices(ROOT) == []
+
+
+def test_missing_bundled_icu_license_fails_policy(tmp_path):
+    rules_target = tmp_path / policy.ICU_RULES_PATH
+    rules_target.parent.mkdir(parents=True)
+    rules_target.write_bytes((ROOT / policy.ICU_RULES_PATH).read_bytes())
+    (tmp_path / "NOTICE").write_bytes((ROOT / "NOTICE").read_bytes())
+
+    findings = policy.audit_bundled_license_notices(tmp_path)
+
+    assert findings == [f"missing bundled ICU license: {policy.ICU_LICENSE_PATH}"]
+
+
+def test_gpl_dependency_fails_policy(tmp_path):
+    pyproject = write_pyproject(
+        tmp_path,
+        """
+[project]
+name = "sample"
+version = "0.0.1"
+dependencies = ["example-gpl>=1"]
+""",
+    )
+
+    results = policy.audit_pyproject(
+        pyproject,
+        reviewed_licenses={"example-gpl": "GPL-3.0-only"},
+    )
+
+    assert len(results) == 1
+    assert results[0].allowed is False
+    assert "not allowed" in results[0].reason
+
+
+def test_elastic_dependency_fails_policy(tmp_path):
+    pyproject = write_pyproject(
+        tmp_path,
+        """
+[project]
+name = "sample"
+version = "0.0.1"
+dependencies = ["source-available-package>=1"]
+""",
+    )
+
+    results = policy.audit_pyproject(
+        pyproject,
+        reviewed_licenses={"source-available-package": "Elastic-2.0"},
+    )
+
+    assert len(results) == 1
+    assert results[0].allowed is False
+    assert "not allowed" in results[0].reason
+
+
+def test_isc_dependency_passes_policy(tmp_path):
+    pyproject = write_pyproject(
+        tmp_path,
+        """
+[project]
+name = "sample"
+version = "0.0.1"
+dependencies = ["permissive-package>=1"]
+""",
+    )
+
+    results = policy.audit_pyproject(
+        pyproject,
+        reviewed_licenses={"permissive-package": "ISC"},
+    )
+
+    assert len(results) == 1
+    assert results[0].allowed is True
+
+
+def test_restricted_vocab_data_marker_fails_policy(tmp_path):
+    restricted_dir = tmp_path / "openmed" / "clinical" / "grounding" / "data"
+    restricted_dir.mkdir(parents=True)
+    restricted_file = restricted_dir / "sct2_Concept_Full.txt"
+    restricted_file.write_text("restricted fixture placeholder\n", encoding="utf-8")
+
+    assert policy.audit_restricted_vocab_data(tmp_path) == [
+        Path("openmed/clinical/grounding/data/sct2_Concept_Full.txt")
+    ]
+
+
+def test_dev_optional_dependencies_are_not_audited(tmp_path):
+    pyproject = write_pyproject(
+        tmp_path,
+        """
+[project]
+name = "sample"
+version = "0.0.1"
+dependencies = ["runtime-package>=1"]
+
+[project.optional-dependencies]
+dev = ["dev-only-gpl>=1"]
+cli = ["cli-package>=1"]
+""",
+    )
+
+    results = policy.audit_pyproject(
+        pyproject,
+        reviewed_licenses={
+            "cli-package": "BSD-3-Clause",
+            "dev-only-gpl": "GPL-3.0-only",
+            "runtime-package": "MIT",
+        },
+    )
+
+    assert {result.entry.name for result in results} == {
+        "runtime-package",
+        "cli-package",
+    }
+    assert all(result.allowed for result in results)
+
+
+def test_main_returns_nonzero_for_disallowed_dependency(tmp_path, monkeypatch):
+    pyproject = write_pyproject(
+        tmp_path,
+        """
+[project]
+name = "sample"
+version = "0.0.1"
+dependencies = ["example-gpl>=1"]
+""",
+    )
+    monkeypatch.setattr(policy, "REVIEWED_LICENSES", {"example-gpl": "GPL-3.0-only"})
+
+    assert policy.main(["--pyproject", str(pyproject)]) == 1

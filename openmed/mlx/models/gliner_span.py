@@ -7,8 +7,7 @@ try:
     import mlx.nn as nn
 except ImportError:
     raise ImportError(
-        "MLX is required for this module. "
-        "Install with: pip install openmed[mlx]"
+        "MLX is required for this module. Install with: pip install openmed[mlx]"
     )
 
 from openmed.mlx.models.deberta_v2_tc import DebertaV2Model
@@ -135,7 +134,9 @@ class GLiNERSpanModel(nn.Module):
             "logits": logits,
             "span_rep": span_rep,
             "span_idx": span_idx,
-            "span_mask": span_mask if span_mask is not None else mx.ones(logits.shape[:2], dtype=mx.bool_),
+            "span_mask": span_mask
+            if span_mask is not None
+            else mx.ones(logits.shape[:2], dtype=mx.bool_),
             "prompt_mask": encoded["prompt_mask"],
             "word_mask": encoded["word_mask"],
         }

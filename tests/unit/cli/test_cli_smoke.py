@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import io
 import subprocess
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -13,7 +11,6 @@ import pytest
 import openmed
 from openmed.cli import main as cli_entry
 from openmed.cli import main_module
-
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -46,45 +43,49 @@ def test_argparse_cli_prints_version() -> None:
     assert openmed.__version__ in result.stdout
 
 
-def test_tui_entry_invokes_openmed_tui(monkeypatch: pytest.MonkeyPatch) -> None:
-    launched: dict[str, object] = {}
+def test_argparse_cli_parses_benchmark_pii_modes() -> None:
+    parser = main_module.build_parser()
 
-    class FakeTUI:
-        def __init__(self, **kwargs: object) -> None:
-            launched["kwargs"] = kwargs
-
-        def run(self) -> None:
-            launched["ran"] = True
-
-    fake_tui = types.ModuleType("openmed.tui")
-    fake_tui.OpenMedTUI = FakeTUI
-    monkeypatch.setitem(sys.modules, "openmed.tui", fake_tui)
-
-    result = main_module.main(
-        ["tui", "--model", "disease_detection_superclinical", "--confidence-threshold", "0.6"]
+    suite_args = parser.parse_args(
+        ["benchmark", "pii", "--suite", "shield", "--models", "fixture-model"]
     )
+    assert suite_args.command == "benchmark"
+    assert suite_args.benchmark_command == "pii"
+    assert suite_args.attack is None
+    assert suite_args.models == ["fixture-model"]
 
-    assert result == 0
-    assert launched == {
-        "kwargs": {
-            "model_name": "disease_detection_superclinical",
-            "confidence_threshold": 0.6,
-        },
-        "ran": True,
-    }
+    attack_args = parser.parse_args(
+        [
+            "benchmark",
+            "pii",
+            "--attack",
+            "reid",
+            "--suite",
+            "golden",
+            "--model",
+            "unit-model",
+        ]
+    )
+    assert attack_args.command == "benchmark"
+    assert attack_args.benchmark_command == "pii"
+    assert attack_args.attack == "reid"
+    assert attack_args.model == "unit-model"
 
 
-def test_tui_entry_has_base_install_fallback(
-    monkeypatch: pytest.MonkeyPatch,
+def test_argparse_cli_without_command_prints_help(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.delitem(sys.modules, "openmed.tui", raising=False)
-    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
-
-    result = main_module.main(["tui"])
+    result = main_module.main([])
 
     assert result == 0
-    assert "OpenMed TUI entry is installed" in capsys.readouterr().out
+    assert "Command-line utilities for OpenMed" in capsys.readouterr().out
+
+
+def test_tui_command_is_not_registered() -> None:
+    result = _run_module("openmed.cli.main", "tui")
+
+    assert result.returncode == 2
+    assert "invalid choice: 'tui'" in result.stderr
 
 
 def test_typer_surface_is_importable() -> None:

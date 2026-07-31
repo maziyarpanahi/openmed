@@ -19,10 +19,23 @@ except ImportError:  # pragma: no cover - exercised in minimal test envs
 
 DEFAULT_ORG = "OpenMed"
 DEFAULT_OUTPUT = Path("models.jsonl")
+PRESERVED_ENRICHMENT_FIELDS = (
+    "disk_mb",
+    "download_mb",
+    "download_sizes",
+    "latency_ms",
+    "peak_ram_mb",
+    "recommended_tier",
+    "script_coverage",
+    "script_eval",
+    "training_provenance",
+)
 
 LANGUAGE_TAGS = {
     "ar": "ar",
     "arabic": "ar",
+    "bn": "bn",
+    "bengali": "bn",
     "de": "de",
     "german": "de",
     "en": "en",
@@ -37,25 +50,35 @@ LANGUAGE_TAGS = {
     "italian": "it",
     "ja": "ja",
     "japanese": "ja",
+    "ko": "ko",
+    "korean": "ko",
     "nl": "nl",
     "dutch": "nl",
     "pt": "pt",
     "portuguese": "pt",
+    "ta": "ta",
+    "tamil": "ta",
     "te": "te",
     "telugu": "te",
     "tr": "tr",
     "turkish": "tr",
+    "zh": "zh",
+    "chinese": "zh",
 }
 LANGUAGE_NAMES = {
     "arabic": "ar",
+    "bengali": "bn",
+    "chinese": "zh",
     "dutch": "nl",
     "french": "fr",
     "german": "de",
     "hindi": "hi",
     "italian": "it",
     "japanese": "ja",
+    "korean": "ko",
     "portuguese": "pt",
     "spanish": "es",
+    "tamil": "ta",
     "telugu": "te",
     "turkish": "tr",
 }
@@ -146,7 +169,9 @@ DOMAIN_LABELS = {
 }
 
 PARAM_RE = re.compile(r"(?P<value>\d+(?:\.\d+)?)(?P<unit>[mMbB])")
-TIER_RE = re.compile(r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])")
+TIER_RE = re.compile(
+    r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])"
+)
 
 
 def _repo_name(repo_id: str) -> str:
@@ -166,6 +191,14 @@ def _siblings(model: Any) -> list[str]:
 
 
 def _family(repo_id: str, tags: list[str], task: str) -> str:
+    repo_lower = _repo_name(repo_id).lower()
+    if "openmed-pii-" in repo_lower or "privacy-filter" in repo_lower:
+        return "PII"
+    if "zero-shot" in repo_lower or "zeroshot" in repo_lower:
+        return "ZeroShot"
+    if "openmed-ner-" in repo_lower:
+        return "NER"
+
     lowered = " ".join([repo_id, *tags]).lower()
     if "pii" in lowered or "privacy-filter" in lowered:
         return "PII"
@@ -180,9 +213,7 @@ def _family(repo_id: str, tags: list[str], task: str) -> str:
 
 def _languages(repo_id: str, tags: list[str]) -> list[str]:
     name = _repo_name(repo_id).lower()
-    name_languages = {
-        code for token, code in LANGUAGE_NAMES.items() if token in name
-    }
+    name_languages = {code for token, code in LANGUAGE_NAMES.items() if token in name}
     if name_languages:
         return sorted(name_languages)
 
@@ -274,7 +305,10 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
     if (
         "safetensors" in lowered_tags
         or "transformers" in lowered_tags
-        or any(name.endswith((".safetensors", "pytorch_model.bin")) for name in lowered_names)
+        or any(
+            name.endswith((".safetensors", "pytorch_model.bin"))
+            for name in lowered_names
+        )
     ):
         formats.add("pytorch")
     if (
@@ -294,6 +328,13 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
         formats.discard("mlx-fp")
     if any(name.endswith(".onnx") for name in lowered_names):
         formats.add("onnx")
+    if (
+        "transformers.js" in lowered_tags
+        or "transformersjs" in lowered_tags
+        or any(name == "onnx/model_quantized.onnx" for name in lowered_names)
+        or ("tokenizer.json" in lowered_names and "onnx/model.onnx" in lowered_names)
+    ):
+        formats.add("transformersjs")
     if any(name.endswith(".gguf") for name in lowered_names):
         formats.add("gguf")
     return sorted(formats) or ["unknown"]
@@ -304,6 +345,9 @@ def _canonical_labels(family: str, repo_id: str, tags: list[str]) -> list[str]:
         return list(PII_CANONICAL_LABELS)
 
     lowered = " ".join([repo_id, *tags]).lower()
+    if "openmed-ner-pharmadetect-" in lowered:
+        return ["CHEM"]
+
     labels: list[str] = []
     for token, token_labels in DOMAIN_LABELS.items():
         if token in lowered:
@@ -319,7 +363,7 @@ def _benchmark(tags: list[str]) -> dict[str, Any]:
         if tag.startswith("dataset:"):
             dataset = tag.split(":", 1)[1]
             break
-    return {"dataset": dataset, "micro_f1": None, "recall": None}
+    return {"dataset": dataset, "micro_f1": None, "recall": None, "leakage": None}
 
 
 def _arxiv(tags: list[str]) -> Optional[str]:
@@ -347,7 +391,9 @@ def _date(value: Any) -> Optional[str]:
         return str(value)[:10] or None
 
 
-def _reproducibility_hash(repo_id: str, sha: Optional[str], released: Optional[str], siblings: list[str]) -> str:
+def _reproducibility_hash(
+    repo_id: str, sha: Optional[str], released: Optional[str], siblings: list[str]
+) -> str:
     payload = json.dumps(
         {
             "repo_id": repo_id,
@@ -367,7 +413,9 @@ def model_to_manifest_row(model: Any) -> dict[str, Any]:
     siblings = _siblings(model)
     task = getattr(model, "pipeline_tag", None) or "unknown"
     family = _family(repo_id, tags, task)
-    released = _date(getattr(model, "lastModified", None) or getattr(model, "createdAt", None))
+    released = _date(
+        getattr(model, "lastModified", None) or getattr(model, "createdAt", None)
+    )
 
     return {
         "repo_id": repo_id,
@@ -414,6 +462,37 @@ def write_jsonl(rows: Iterable[dict[str, Any]], output: Path) -> None:
             handle.write("\n")
 
 
+def preserve_existing_enrichment(
+    rows: Iterable[dict[str, Any]],
+    output: Path,
+) -> list[dict[str, Any]]:
+    """Carry audited and measured metadata across a live manifest refresh."""
+    generated = [dict(row) for row in rows]
+    if not output.exists():
+        return generated
+
+    existing: dict[str, dict[str, Any]] = {}
+    with output.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            repo_id = row.get("repo_id")
+            if isinstance(repo_id, str):
+                existing[repo_id] = row
+
+    for row in generated:
+        previous = existing.get(row.get("repo_id"))
+        if previous is None:
+            continue
+        for field in PRESERVED_ENRICHMENT_FIELDS:
+            if field == "script_coverage" and row.get("family") != "PII":
+                continue
+            if field in previous:
+                row[field] = previous[field]
+    return generated
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate models.jsonl from the OpenMed HF org API."
@@ -426,6 +505,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     rows = fetch_manifest_rows(args.org)
+    rows = preserve_existing_enrichment(rows, args.output)
     write_jsonl(rows, args.output)
     print(f"Wrote {len(rows)} rows to {args.output}")
 

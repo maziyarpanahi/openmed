@@ -3,12 +3,16 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 import os
+from collections import defaultdict
 
-from openmed import extract_pii, find_semantic_units, get_default_pii_model, get_pii_models_by_language
+from openmed import (
+    extract_pii,
+    find_semantic_units,
+    get_default_pii_model,
+    get_pii_models_by_language,
+)
 from openmed.core.pii_i18n import get_patterns_for_language
-
 
 RUN_LIVE_EXTRACTION = os.getenv("OPENMED_RUN_LIVE_EXAMPLES") == "1"
 
@@ -91,7 +95,9 @@ def summarize_patterns(lang: str, text: str) -> None:
 
     print(f"Regex/semantic-unit matches for {lang}:")
     for entity_type in sorted(grouped):
-        preview = ", ".join(f"{value!r} ({score:.2f})" for value, score in grouped[entity_type][:3])
+        preview = ", ".join(
+            f"{value!r} ({score:.2f})" for value, score in grouped[entity_type][:3]
+        )
         print(f"  - {entity_type}: {preview}")
 
 
@@ -133,7 +139,9 @@ def main() -> None:
         if RUN_LIVE_EXTRACTION:
             run_live_extraction(lang, text)
         else:
-            print("Live extraction skipped (set OPENMED_RUN_LIVE_EXAMPLES=1 to run HF models).")
+            print(
+                "Live extraction skipped (set OPENMED_RUN_LIVE_EXAMPLES=1 to run HF models)."
+            )
 
 
 if __name__ == "__main__":

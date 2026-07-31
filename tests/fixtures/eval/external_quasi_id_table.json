@@ -1,0 +1,20 @@
+[
+  {
+    "record_id": "external-unique",
+    "age": "42 years old",
+    "zip": "02139",
+    "city": "Cambridge"
+  },
+  {
+    "record_id": "external-ambiguous-a",
+    "age": 71,
+    "zip": "60612",
+    "city": "Chicago"
+  },
+  {
+    "record_id": "external-ambiguous-b",
+    "age": "71",
+    "zip": "60612",
+    "city": "Chicago"
+  }
+]

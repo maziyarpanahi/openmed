@@ -12,7 +12,181 @@ PII entities:
 | `shift_dates` | Dates only — shifted by N days          | You want to preserve relative time.      |
 
 This document focuses on `replace`, which was upgraded in v1.3.0 to a full
-Faker-backed obfuscation engine.
+Faker-backed obfuscation engine. If you just want to compare all five
+methods side by side, start with the quickstart below.
+
+## Quickstart: choosing a method
+
+### `mask` — clear placeholders
+
+```python
+from openmed import deidentify
+
+result = deidentify(
+    "Patient John Doe (DOB: 01/15/1970) called from 555-1234",
+    method="mask",
+)
+print(result.deidentified_text)
+# Patient [first_name] [last_name] (DOB: [date]) called from [phone_number]
+```
+
+Placeholder names come from the model's own entity labels, so they vary by
+model (the default `OpenMed-PII-SuperClinical-Small-44M-v1` model used here
+splits names into `first_name`/`last_name` rather than a single `NAME`).
+
+Not reversible by itself — pass `keep_mapping=True` and use `reidentify()`
+(see below) if you need to restore the original text later.
+
+### `remove` — delete PII entirely
+
+```python
+result = deidentify("Call 555-1234", method="remove")
+print(repr(result.deidentified_text))
+# 'Call '
+```
+
+Use this when you don't need positional alignment with the original text
+(e.g. exporting de-identified text for search indexing).
+
+### `replace` — realistic fake surrogates
+
+```python
+result = deidentify(
+    "Email: test@example.com",
+    method="replace",
+    consistent=True,
+    seed=42,
+)
+print(result.deidentified_text)
+# Email: asnyder@example.com
+```
+
+Best for sharing data with downstream tools that expect well-formed values
+(e.g. an email field that should still look like an email). See
+[The new `replace` engine](#the-new-replace-engine) below for locale and
+determinism options.
+
+### `hash` — consistent, irreversible digests
+
+```python
+result = deidentify("Patient John Doe", method="hash")
+print(result.deidentified_text)
+# Patient first_name_a8cfcd74 last_name_fd53ef83
+```
+
+The same input always hashes to the same digest, so repeated mentions of
+the same value link together across documents — without storing the
+original anywhere.
+
+### `shift_dates` — preserve intervals, hide absolute dates
+
+```python
+result = deidentify(
+    "Admit 01/15/2020, follow-up 01/25/2020",
+    method="shift_dates",
+    date_shift_days=30,
+)
+print(result.deidentified_text)
+# Admit 02/14/2020, follow-up 02/24/2020
+```
+
+The intent is for every date in a document to shift by the same offset, so
+durations between dates (e.g. "3 days after admission") stay correct.
+`date_shift_days=30` is a fixed offset when no patient key is supplied.
+
+For longitudinal research, pass a stable `patient_key` so every document for
+that patient receives the same HMAC-derived offset across sessions:
+
+```python
+patient_token = load_patient_key_from_vault()
+hmac_key_material = load_date_shift_hmac_key()
+
+shared_kwargs = {
+    "method": "shift_dates",
+    "patient_key": patient_token,
+    "date_shift_max_days": 365,
+    "date_shift_secret": hmac_key_material,
+}
+
+first = deidentify("Visit 01/15/2020", **shared_kwargs)
+second = deidentify("Visit 03/15/2020", **shared_kwargs)
+```
+
+Equal patient keys and the same secret yield identical offsets, preserving
+intervals across documents. Different patient keys generally produce different
+offsets within `date_shift_max_days`. The raw patient key is used only as HMAC
+input and is not returned in shifted text, mappings, logs, or audit artifacts.
+Patient-keyed offsets require caller-supplied `date_shift_secret`; do not use
+PHI as that key material.
+If `patient_key` is supplied with the older `date_shift_days` option, that
+value is treated as the maximum absolute offset bound; prefer
+`date_shift_max_days` for new code.
+
+### Reversing a de-identification: `reidentify()`
+
+Pass `keep_mapping=True` to get back a `mapping` you can hand to
+`reidentify()` later:
+
+```python
+from openmed import deidentify, reidentify
+
+text = "Dr. Alice Smith met Bob Jones today"
+result = deidentify(text, method="mask", keep_mapping=True)
+print(result.deidentified_text)
+# Dr. [first_name] [last_name] met [first_name_2] [last_name_2] today
+
+restored = reidentify(result.deidentified_text, result.mapping)
+assert restored == text
+```
+
+Repeated entities of the same type (two `first_name`s above) get a numbered
+placeholder (`[first_name]`, `[first_name_2]`, ...) so each one maps back to
+its own original value — this was a known limitation (#204) fixed by #222;
+`reidentify()` now round-trips correctly even when a type repeats.
+
+## Custom deny-list and allow-list recognizer
+
+Use `custom_recognizer` when your site has identifiers the model does not
+know, or benign values that must never be redacted. The argument accepts a
+plain mapping, a `CustomRecognizer` instance, or a `.json`/`.yaml` path.
+
+```python
+from openmed import deidentify, extract_pii
+
+custom_recognizer = {
+    "case_sensitive": False,
+    "deny": {
+        "terms": [
+            {"term": "Ward Phoenix", "label": "LOCATION"},
+        ],
+        "patterns": [
+            {"pattern": r"\bSTUDY-\d+\b", "label": "ID_NUM"},
+        ],
+    },
+    "allow": {
+        "terms": ["Mercy Trial"],
+        "patterns": [r"\bPUBLIC-\d+\b"],
+    },
+}
+
+entities = extract_pii(text, custom_recognizer=custom_recognizer)
+result = deidentify(text, method="mask", custom_recognizer=custom_recognizer)
+```
+
+Deny-list terms are literal strings. Deny-list patterns are regular
+expressions. Each deny entry needs a `label`; OpenMed keeps that label on the
+returned entity and normalizes it into the canonical label taxonomy for
+policy and audit handling. Matches are emitted with `custom:deny`
+provenance.
+
+Allow-list terms and patterns suppress any overlapping span from any detector,
+including model detections, deterministic rules, and custom deny-list matches.
+Allow-list precedence always wins over deny-list and model detections, so an
+allowed value is left untouched in `deidentify()` output.
+
+Recognizer metadata stores hashes and rule ids, not raw matched surfaces. In
+the staged pipeline, custom matching runs on normalized text and spans are
+remapped back to original offsets before redaction.
 
 ## The new `replace` engine
 
@@ -55,6 +229,20 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+Country-aware African French and Portuguese surrogates are available through
+conceptual locale overrides. `fr_SN`, `fr_CI`, and `fr_CM` use curated names,
+cities, addresses, and country-code phone formats while keeping the French PII
+model; `pt_MZ` and `pt_AO` do the same with the Portuguese model. Unsupported
+Faker methods delegate to `fr_FR` or `pt_PT`, so these overrides do not alter
+the default `fr` and `pt` output. Arabic also accepts `ar-DZ` and `ar-MA`; if
+the installed Faker release lacks the requested regional backend, OpenMed
+falls back to `ar_EG` and emits the same one-time warning used by the other
+Arabic regional overrides.
+
+For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
+default PII model, Faker locale, and a before/after example — see
+[Per-Language De-identification](languages.md).
+
 ### Determinism
 
 Three modes:
@@ -70,6 +258,68 @@ Three modes:
 
 Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
+
+### Cross-document surrogate vaults
+
+Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
+calls need stable pseudonyms for the same identifier:
+
+```python
+from openmed import SurrogateVault, deidentify
+
+vault = SurrogateVault.from_file(
+    "surrogate-vault.json",
+    hmac_secret="rotate-and-store-this-secret-outside-the-vault",
+)
+
+first = deidentify(
+    "Patient John Doe was admitted.",
+    method="replace",
+    surrogate_vault=vault,
+)
+second = deidentify(
+    "John Doe returned for follow-up.",
+    method="replace",
+    surrogate_vault=vault,
+)
+```
+
+The vault file stores `(canonical_label, lang, HMAC text_hash) -> surrogate`
+entries plus `schema_version` and `hmac_scheme`; it does not store raw source
+surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
+data anyway: it can connect records across documents even without plaintext.
+
+For person names, the vault derives that HMAC input from a deterministic ISO
+15919 pivot. Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu,
+Kannada, Malayalam, and ISO 15919 inputs can therefore share one in-memory join
+key and one surrogate without storing the romanized name. The same engine can
+normalize explicit ITRANS and Harvard-Kyoto input before conversion:
+
+```python
+from openmed.processing import from_latin, to_latin, transliteration_key
+
+result = to_latin("राम ராம rāma")
+assert result.text == "rāma rāma rāma"
+assert result.remap_span(0, 4) == (0, 3)
+assert transliteration_key("राम") == transliteration_key("ராம")
+assert transliteration_key("rAma", "ITRANS") == transliteration_key("rāma")
+assert from_latin("lakShmI", "Devanagari", scheme="itrans") == "लक्ष्मी"
+```
+
+The default `schwa_policy="preserve"` and `anusvara_policy="marker"` form the
+round-trip-safe subset. `schwa_policy="source"` applies northern word-final
+schwa deletion, while `anusvara_policy="homorganic"` expands a nasal according
+to the following consonant; both are intentionally lossy. The public
+`LOSSY_CASES` tuple also lists nukta and extended letters, Tamil distinctions
+that its orthography does not encode, Gurmukhi addak, and Malayalam chillu
+letters. The stdlib-only tables are a clean-room Unicode/ISO implementation
+interoperable with the conventions of Aksharamukha (AGPL-3.0) and the Indic NLP
+Library (MIT). No code, data, copyleft component, neural weights, or third-party
+mapping bundle from either project is included.
+
+Perso-Arabic Urdu is intentionally an unsupported stub. The built-in API fails
+closed with `ValueError`; deployments that need it must supply a separately
+licensed, out-of-process adapter.
 
 ### Format preservation
 
@@ -125,6 +375,48 @@ def my_first_name(faker, original, *, locale):
 register_label_generator("FIRST_NAME", my_first_name)
 ```
 
+## Chinese word segmentation
+
+Chinese routing uses a pluggable word segmenter that preserves exact Python
+string offsets. The default `jieba` backend and the small synthetic clinical
+dictionary ship with OpenMed; no model download is required:
+
+```python
+from openmed.core.config import OpenMedConfig
+from openmed.processing import create_chinese_segmenter_from_config
+
+config = OpenMedConfig(
+    chinese_segmentation_backend="jieba",
+    chinese_user_dict_path="/srv/openmed/zh_terms.txt",
+)
+segmenter = create_chinese_segmenter_from_config(config)
+tokens = segmenter.segment("患者王芳因心房颤动入院")
+
+assert all(token.text == "患者王芳因心房颤动入院"[token.start:token.end]
+           for token in tokens)
+```
+
+An additional dictionary is a UTF-8 text file with one entry per line in
+`term`, `term frequency`, or `term frequency POS` form. For example:
+
+```text
+心脏超声 90000 nz
+临床路径
+```
+
+Keep organization-specific dictionaries outside the package and point
+`chinese_user_dict_path` or `OPENMED_CHINESE_USER_DICT` at the local file. This
+avoids bundling private terminology or restricted lexicons.
+
+The optional `pkuseg` (MIT) and HanLP (Apache-2.0) adapters are installed with
+`openmed[zh-pkuseg]` and `openmed[zh-hanlp]`, respectively. Set
+`chinese_segmentation_backend` or `OPENMED_CHINESE_SEGMENTATION_BACKEND` to
+select one. `pkuseg` defaults to the `medicine` domain, configurable through
+`chinese_pkuseg_domain`; HanLP accepts a preloaded tokenizer or a local model
+path through `create_chinese_segmenter(..., hanlp_model=...)`. OpenMed never
+downloads optional model files implicitly, so provision those assets before
+selecting either backend.
+
 ## Privacy-filter family
 
 OpenMed ships three privacy-filter families, all **the same OpenAI
@@ -132,11 +424,30 @@ Privacy Filter architecture** (gpt-oss-style sparse-MoE transformer with
 local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
+The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
+as its source of truth and supports **34 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
+`it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`.
+Russian routing currently uses a documented multilingual default-model
+placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
+The optional Indic NER adapter adds four user-configured routes (`gu`, `kn`,
+`ml`, and `pa`) and can also serve Assamese, Bengali, Hindi, Marathi, Odia,
+Tamil, and Telugu. It loads only an explicit path or repository from
+`OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
+Additional validator-backed national-ID providers cover ID-only locales such as
+Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
+default PII models for those language codes. Urdu's conceptual `ur_PK` locale
+uses Faker's installed `en_PK` backend for general surrogate data while CNIC
+generation remains provider-backed and format-valid.
+The multilingual privacy-filter family is a checkpoint family; it does not
+expand the per-language API allow-list.
+
 | Variant                              | Trained on                                      | PyTorch artifact                         | MLX (full)                                      | MLX (8-bit)                                           |
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus, 16 languages   | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; shared fallback for multilingual routes, including the documented `ru` placeholder | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

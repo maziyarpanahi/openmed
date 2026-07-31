@@ -62,14 +62,23 @@ def demo_random_vs_consistent() -> None:
 
     text = "Dr. Smith met John Doe. John Doe later called Dr. Smith."
     entities = [
-        EntityPrediction(text="Dr. Smith", label="name", start=0, end=9, confidence=0.9),
-        EntityPrediction(text="John Doe", label="name", start=14, end=22, confidence=0.95),
-        EntityPrediction(text="John Doe", label="name", start=24, end=32, confidence=0.95),
-        EntityPrediction(text="Dr. Smith", label="name", start=46, end=55, confidence=0.9),
+        EntityPrediction(
+            text="Dr. Smith", label="name", start=0, end=9, confidence=0.9
+        ),
+        EntityPrediction(
+            text="John Doe", label="name", start=14, end=22, confidence=0.95
+        ),
+        EntityPrediction(
+            text="John Doe", label="name", start=24, end=32, confidence=0.95
+        ),
+        EntityPrediction(
+            text="Dr. Smith", label="name", start=46, end=55, confidence=0.9
+        ),
     ]
 
-    with patch("openmed.core.pii.extract_pii",
-               return_value=_mock_extraction(text, entities)):
+    with patch(
+        "openmed.core.pii.extract_pii", return_value=_mock_extraction(text, entities)
+    ):
         rand = deidentify(text, method="replace", lang="en")
         cons = deidentify(text, method="replace", lang="en", consistent=True, seed=99)
 
@@ -103,13 +112,25 @@ def demo_locales() -> None:
         date_end = date_start + len(date_token)
 
         entities = [
-            EntityPrediction(text=text[name_start:name_end], label="name",
-                             start=name_start, end=name_end, confidence=0.95),
-            EntityPrediction(text=text[date_start:date_end], label="date_of_birth",
-                             start=date_start, end=date_end, confidence=0.95),
+            EntityPrediction(
+                text=text[name_start:name_end],
+                label="name",
+                start=name_start,
+                end=name_end,
+                confidence=0.95,
+            ),
+            EntityPrediction(
+                text=text[date_start:date_end],
+                label="date_of_birth",
+                start=date_start,
+                end=date_end,
+                confidence=0.95,
+            ),
         ]
-        with patch("openmed.core.pii.extract_pii",
-                   return_value=_mock_extraction(text, entities)):
+        with patch(
+            "openmed.core.pii.extract_pii",
+            return_value=_mock_extraction(text, entities),
+        ):
             r = deidentify(text, method="replace", lang=lang, consistent=True, seed=7)
         print(f"  [{lang}] {r.deidentified_text}")
 
@@ -119,18 +140,27 @@ def demo_brazilian_portuguese_cpf() -> None:
 
     text = "Paciente João Silva, CPF: 123.456.789-09"
     entities = [
-        EntityPrediction(text="João Silva", label="name", start=9, end=19, confidence=0.95),
-        EntityPrediction(text="123.456.789-09", label="ID_NUM", start=27, end=41, confidence=0.95),
+        EntityPrediction(
+            text="João Silva", label="name", start=9, end=19, confidence=0.95
+        ),
+        EntityPrediction(
+            text="123.456.789-09", label="ID_NUM", start=27, end=41, confidence=0.95
+        ),
     ]
-    with patch("openmed.core.pii.extract_pii",
-               return_value=_mock_extraction(text, entities)):
-        r = deidentify(text, method="replace", lang="pt", locale="pt_BR",
-                       consistent=True, seed=42)
+    with patch(
+        "openmed.core.pii.extract_pii", return_value=_mock_extraction(text, entities)
+    ):
+        r = deidentify(
+            text, method="replace", lang="pt", locale="pt_BR", consistent=True, seed=42
+        )
 
     print(f"  Original: {text}")
     print(f"  Surrogate: {r.deidentified_text}")
-    surrogate_cpf = next(e.redacted_text for e in r.pii_entities if e.entity_type == "ID_NUM")
+    surrogate_cpf = next(
+        e.redacted_text for e in r.pii_entities if e.entity_type == "ID_NUM"
+    )
     from openmed.core.pii_i18n import validate_portuguese_cpf
+
     valid = validate_portuguese_cpf(surrogate_cpf)
     print(f"  Surrogate CPF {surrogate_cpf!r} passes checksum: {valid}")
 
@@ -140,11 +170,24 @@ def demo_format_preservation() -> None:
 
     text = "Call +1 (415) 555-1234 or +33 6 12 34 56 78"
     entities = [
-        EntityPrediction(text="+1 (415) 555-1234", label="phone_number", start=5, end=22, confidence=0.95),
-        EntityPrediction(text="+33 6 12 34 56 78", label="phone_number", start=26, end=43, confidence=0.95),
+        EntityPrediction(
+            text="+1 (415) 555-1234",
+            label="phone_number",
+            start=5,
+            end=22,
+            confidence=0.95,
+        ),
+        EntityPrediction(
+            text="+33 6 12 34 56 78",
+            label="phone_number",
+            start=26,
+            end=43,
+            confidence=0.95,
+        ),
     ]
-    with patch("openmed.core.pii.extract_pii",
-               return_value=_mock_extraction(text, entities)):
+    with patch(
+        "openmed.core.pii.extract_pii", return_value=_mock_extraction(text, entities)
+    ):
         r = deidentify(text, method="replace", lang="en", consistent=True, seed=42)
 
     print(f"  Original  : {text}")

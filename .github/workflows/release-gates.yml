@@ -1,0 +1,216 @@
+name: Release Gates
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Path to the candidate benchmark report JSON.
+        required: false
+        default: artifacts/release-candidate.json
+      api_base_ref:
+        description: Git ref used as the public API compatibility baseline.
+        required: false
+        default: v1.9.1
+      migration_guide:
+        description: Migration guide required for the release.
+        required: false
+        default: docs/migration/1.9-to-2.0.md
+      release_version:
+        description: Version recorded in the readiness report.
+        required: false
+        default: 2.0.0
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-latest
+    env:
+      CANDIDATE_REPORT: ${{ github.event.inputs.candidate || 'artifacts/release-candidate.json' }}
+      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v1.9.1' }}
+      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/1.9-to-2.0.md' }}
+      RELEASE_VERSION: ${{ github.event.inputs.release_version || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[zh,indic]" pytest
+
+      - name: Run Chinese and Indic throughput benchmark
+        id: i18n_benchmark
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.i18n_throughput \
+            --output i18n-throughput-report.json
+
+      - name: Enforce Chinese and Indic throughput gates
+        if: steps.i18n_benchmark.outcome == 'success'
+        id: i18n_throughput
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_gates \
+            --throughput-candidate i18n-throughput-report.json \
+            --baseline-store gates/baseline.json \
+            --output i18n-throughput-gate.json
+
+      - name: Upload Chinese and Indic throughput evidence
+        if: always() && hashFiles('i18n-throughput-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: i18n-throughput
+          path: |
+            i18n-throughput-report.json
+            i18n-throughput-gate.json
+
+      - name: Run grounding accuracy gate
+        id: grounding
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_gates \
+            --grounding \
+            --output grounding-accuracy-gate.json
+
+      - name: Upload grounding accuracy gate report
+        if: always() && hashFiles('grounding-accuracy-gate.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: grounding-accuracy-gate
+          path: grounding-accuracy-gate.json
+
+      - name: Check API migration guide completeness
+        if: startsWith(github.ref, 'refs/tags/v1.9.')
+        run: |
+          python scripts/release/api_surface_diff.py \
+            v1.8.0 "$GITHUB_SHA" \
+            --json "$RUNNER_TEMP/api-surface-diff.json" \
+            --check docs/migration/1.8-to-1.9.md
+          echo "API migration guide completeness gate passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check for candidate report
+        id: check-candidate
+        run: |
+          if [ -f "$CANDIDATE_REPORT" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No candidate report found at $CANDIDATE_REPORT — skipping release gates."
+          fi
+
+      - name: Run release gates
+        if: steps.check-candidate.outputs.exists == 'true'
+        id: gates
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m openmed.eval.release_gates \
+            --candidate "$CANDIDATE_REPORT" \
+            --output release-gate-report.json \
+            --issue-on-failure \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload gate report
+        if: always() && steps.check-candidate.outputs.exists == 'true' && hashFiles('release-gate-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-gate-report
+          path: release-gate-report.json
+
+      - name: Generate API compatibility evidence
+        if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome == 'success'
+        id: api_compat
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-readiness"
+          python scripts/release/api_surface_diff.py \
+            "$API_BASE_REF" "$GITHUB_SHA" \
+            --json "$RUNNER_TEMP/release-readiness/api-compat-report.json"
+
+      - name: Run end-to-end golden suite
+        if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome == 'success'
+        id: e2e_golden
+        continue-on-error: true
+        run: |
+          python -m pytest \
+            tests/integration/test_end_to_end.py \
+            tests/unit/eval/test_golden_fixtures.py \
+            tests/unit/eval/test_i18n_golden_fixtures.py \
+            -q
+          printf '%s\n' \
+            '{"passed":true,"suite":"golden_v2"}' \
+            > "$RUNNER_TEMP/release-readiness/e2e-golden-report.json"
+
+      - name: Run release-readiness gate
+        if: >-
+          steps.check-candidate.outputs.exists == 'true' &&
+          steps.gates.outcome == 'success' &&
+          steps.api_compat.outcome == 'success' &&
+          steps.e2e_golden.outcome == 'success'
+        id: readiness
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_readiness \
+            --gate-report release-gate-report.json \
+            --migration-guide "$MIGRATION_GUIDE" \
+            --api-compat-report "$RUNNER_TEMP/release-readiness/api-compat-report.json" \
+            --e2e-report "$RUNNER_TEMP/release-readiness/e2e-golden-report.json" \
+            --version "${RELEASE_VERSION#v}" \
+            --output release-readiness-report.json \
+            --json
+
+      - name: Upload release-readiness report
+        if: always() && hashFiles('release-readiness-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-readiness-report
+          path: release-readiness-report.json
+
+      - name: Publish candidate
+        if: >-
+          steps.i18n_benchmark.outcome == 'success' &&
+          steps.i18n_throughput.outcome == 'success' &&
+          steps.grounding.outcome == 'success' &&
+          steps.check-candidate.outputs.exists == 'true' &&
+          steps.gates.outcome == 'success' &&
+          steps.api_compat.outcome == 'success' &&
+          steps.e2e_golden.outcome == 'success' &&
+          steps.readiness.outcome == 'success'
+        run: |
+          echo "Release readiness passed; publish step is unblocked."
+
+      - name: Fail closed
+        if: >-
+          always() &&
+          (
+            steps.i18n_benchmark.outcome != 'success' ||
+            steps.i18n_throughput.outcome != 'success' ||
+            steps.grounding.outcome != 'success' ||
+            (
+              steps.check-candidate.outputs.exists == 'true' &&
+              (
+                steps.gates.outcome != 'success' ||
+                steps.api_compat.outcome != 'success' ||
+                steps.e2e_golden.outcome != 'success' ||
+                steps.readiness.outcome != 'success'
+              )
+            )
+          )
+        run: |
+          exit 1

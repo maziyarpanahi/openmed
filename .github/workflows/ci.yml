@@ -9,20 +9,151 @@ on:
 jobs:
   repo-policy:
     runs-on: ubuntu-latest
+    outputs:
+      run-i18n-cjk-indic: ${{ steps.i18n_changes.outputs.should_run }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
+
+    - name: Detect CJK and Indic test changes
+      id: i18n_changes
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" HEAD -- \
+          openmed/core/pii_i18n.py \
+          openmed/core/script_detect.py \
+          openmed/core/decoding \
+          openmed/interop/zh.py \
+          openmed/interop/indic.py \
+          openmed/processing/zh_pinyin.py \
+          tests/unit/core/test_script_detect.py \
+          tests/unit/core/test_chinese_pinyin_surrogates.py \
+          tests/unit/test_pii_i18n.py \
+          tests/unit/interop/test_language_adapters.py \
+          tests/unit/interop/test_i18n_cjk_indic_fixtures.py \
+          tests/unit/processing/test_zh_pinyin.py \
+          tests/fixtures/i18n; then
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "No CJK or Indic test paths changed."
+        else
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Enforce repo file policy
       run: |
         python scripts/release/check_repo_policy.py
 
-  test:
+    - name: Enforce dependency license policy
+      run: |
+        python scripts/release/check_license_policy.py
+
+    - name: Validate GitHub Actions references
+      run: |
+        python scripts/release/check_github_actions_refs.py
+
+  readme-i18n-drift:
     needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Detect README changes
+      id: readme_changes
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" HEAD -- 'README*'; then
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "No README files changed; translation drift check is not needed."
+        else
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Check README translation drift
+      if: steps.readme_changes.outputs.should_run == 'true'
+      run: |
+        if ! python scripts/i18n/check_readme_drift.py; then
+          echo "::error title=README translation drift::One or more README translations are stale. Review them using docs/i18n/glossary.md, then refresh the committed section manifest."
+          exit 1
+        fi
+
+  lockfile-drift:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Check uv.lock matches pyproject.toml
+      run: |
+        if ! uv lock --check; then
+          echo "::error title=uv.lock is out of date::Run 'uv lock' and commit the updated uv.lock."
+          exit 1
+        fi
+
+  lint:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install lint dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Lint with Ruff
+      run: |
+        uv run ruff check --output-format=github .
+
+    - name: Check Ruff formatting
+      run: |
+        uv run ruff format --check .
+
+    - name: Type-check annotated public modules
+      run: |
+        uv run mypy
+
+  test:
+    needs: [repo-policy, lint]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -36,41 +167,41 @@ jobs:
             python-version: "3.10"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip packages
-      uses: actions/cache@v4
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python ${{ matrix.python-version }}
 
-    - name: Lint with flake8
+    - name: Validate model manifest schema
       run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 openmed --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 openmed --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        uv run python -m scripts.manifest.validate_manifest
+
+    - name: Trust-CI no-raw-PHI logging guard
+      run: |
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
     - name: Test with pytest
       run: |
-        pytest --cov=openmed --cov-report=xml --cov-report=term-missing
+        uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
@@ -79,59 +210,204 @@ jobs:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install bandit[toml] safety
+        uv sync --frozen --extra dev --python 3.11
 
-    - name: Run security check with bandit
+    - name: Run Bandit report
       run: |
-        bandit -r openmed -f json -o bandit-report.json
-      continue-on-error: true
+        uv run --with 'bandit[toml]' bandit -r openmed -f json -o bandit-report.json --exit-zero
 
-    - name: Run safety check
+    - name: Enforce high-severity Bandit findings
       run: |
-        safety check --json --output safety-report.json
-      continue-on-error: true
+        uv run --with 'bandit[toml]' bandit -r openmed --severity-level high --confidence-level medium
+
+    - name: Run pip-audit dependency gate
+      run: |
+        uv run \
+          --with pip-audit \
+          --with 'requests>=2.33.0' \
+          --with 'urllib3>=2.7.0' \
+          python scripts/security/pip_audit_gate.py
 
     - name: Upload security reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: security-reports
         path: |
           bandit-report.json
-          safety-report.json
+          pip-audit-report.json
       if: always()
 
-  build:
-    needs: [repo-policy, test, security]
+  sbom:
+    needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
-    - name: Install build dependencies
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Sync runtime environment
+      run: |
+        uv sync --frozen --python 3.11
+
+    - name: Generate CycloneDX SBOM
+      run: |
+        uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: sbom
+        path: sbom.cdx.json
+      if: always()
+
+  spacy-integration:
+    needs: [repo-policy, lint]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-spacy-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-spacy-
+          ${{ runner.os }}-pip-
+
+    - name: Install spaCy test dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build
+        pip install -e ".[dev,spacy]"
+
+    - name: Run spaCy adapter tests
+      run: |
+        pytest tests/unit/interop/test_spacy_component.py -q
+
+  i18n-cjk-indic:
+    needs: [repo-policy, lint]
+    if: needs.repo-policy.outputs.run-i18n-cjk-indic == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-i18n-cjk-indic-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-i18n-cjk-indic-
+          ${{ runner.os }}-pip-
+
+    - name: Install CJK and Indic test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,zh,indic]"
+
+    - name: Run CJK and Indic fixture tests
+      run: |
+        pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
+
+    - name: Trust-CI no-raw-PHI logging guard
+      run: |
+        pytest tests/unit/test_no_raw_text_logging.py -q
+
+  build:
+    needs:
+    - repo-policy
+    - lint
+    - test
+    - security
+    - spacy-integration
+    - i18n-cjk-indic
+    if: >-
+      always() &&
+      needs.repo-policy.result == 'success' &&
+      needs.lint.result == 'success' &&
+      needs.test.result == 'success' &&
+      needs.security.result == 'success' &&
+      needs.spacy-integration.result == 'success' &&
+      (
+        needs.i18n-cjk-indic.result == 'success' ||
+        needs.i18n-cjk-indic.result == 'skipped'
+      )
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Build package
       run: |
-        python -m build
+        uv run --with build python -m build
+
+    - name: Verify PEP 561 marker in built artifacts
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import tarfile
+        import zipfile
+
+        wheel = next(Path("dist").glob("*.whl"))
+        sdist = next(Path("dist").glob("*.tar.gz"))
+        with zipfile.ZipFile(wheel) as archive:
+            assert "openmed/py.typed" in archive.namelist()
+        with tarfile.open(sdist, "r:gz") as archive:
+            assert any(name.endswith("/openmed/py.typed") for name in archive.getnames())
+        PY
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: dist-packages
         path: dist/

@@ -1,14 +1,22 @@
-from importlib import resources
 import json
+from importlib import resources
+
+import pytest
 
 from openmed.core.arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION, arbitrate
 from openmed.core.cascade import R2_BASE, CascadeRouter
 from openmed.core.pipeline import Pipeline
 from openmed.core.schemas.span import ACTION_VALUES, OpenMedSpan, hmac_text_hash
+from openmed.core.script_detect import INDIC_SCRIPTS
 from openmed.core.thresholds import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     fit_thresholds,
     load_thresholds,
     lookup_threshold,
+    membership_defense_for_profile,
+    profile_recall_floor,
+    profile_script_leakage_ceiling,
+    profile_script_recall_floors,
     recall_floor_guard,
     update_thresholds,
     validate_threshold_matrix,
@@ -69,6 +77,26 @@ def test_thresholds_json_has_schema_version_and_valid_actions():
                 assert entry["action"] in ACTION_VALUES
 
 
+def test_profiles_define_configurable_strict_cjk_and_indic_floors():
+    matrix = load_thresholds()
+    floors = profile_script_recall_floors("balanced", matrix=matrix)
+
+    assert INDIC_SCRIPTS <= floors.keys()
+    assert floors["Han"] >= 0.99
+    assert floors["Devanagari"] >= 0.99
+    assert floors["Telugu"] >= 0.99
+    assert (
+        profile_recall_floor("balanced", matrix=matrix, script="Han") == (floors["Han"])
+    )
+    assert profile_script_leakage_ceiling("balanced", matrix=matrix) <= 0.01
+
+    matrix["profiles"]["balanced"]["script_recall_floors"]["Han"] = 0.997
+    matrix["profiles"]["balanced"]["script_leakage_ceiling"] = 0.003
+    validate_threshold_matrix(matrix)
+    assert profile_recall_floor("balanced", matrix=matrix, script="Han") == 0.997
+    assert profile_script_leakage_ceiling("balanced", matrix=matrix) == 0.003
+
+
 def test_recall_floor_guard_blocks_drop_below_profile_floor():
     result = recall_floor_guard(
         {"ID_NUM": 0.996},
@@ -111,9 +139,48 @@ def test_fit_and_update_thresholds_return_valid_versioned_matrix():
     validate_threshold_matrix(updated)
     assert updated["schema_version"] == matrix["schema_version"] + 1
     assert (
-        lookup_threshold("EMAIL", "en", "balanced", matrix=updated)["keep_floor"]
-        == 0.4
+        lookup_threshold("EMAIL", "en", "balanced", matrix=updated)["keep_floor"] == 0.4
     )
+
+
+def test_membership_defense_resolves_from_policy_profile():
+    matrix = load_thresholds()
+    matrix["profiles"]["balanced"]["membership_defense"] = {
+        "enabled": True,
+        "clip_min": 0.4,
+        "clip_max": 0.6,
+        "temperature": 2.0,
+        "smoothing": 0.5,
+    }
+
+    policy = membership_defense_for_profile("balanced", matrix=matrix)
+
+    assert policy.enabled is True
+    assert policy.recall_floor == matrix["profiles"]["balanced"]["recall_floor"]
+    assert policy.advantage_ceiling == DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING
+    assert 0.5 <= policy.apply_score(0.99) <= 0.6
+
+
+def test_threshold_matrix_rejects_malformed_membership_defense():
+    matrix = load_thresholds()
+    matrix["profiles"]["balanced"]["membership_defense"] = {
+        "enabled": True,
+        "clip_min": 0.8,
+        "clip_max": 0.2,
+    }
+
+    with pytest.raises(ValueError, match="clip_min"):
+        validate_threshold_matrix(matrix)
+
+
+def test_load_thresholds_rejects_malformed_json(tmp_path):
+    path = tmp_path / "thresholds.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in threshold file") as exc_info:
+        load_thresholds(path)
+
+    assert str(path) in str(exc_info.value)
 
 
 def test_arbitration_reads_matrix_keep_floor_by_mode():

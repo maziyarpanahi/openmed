@@ -1,0 +1,14 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//OpenMed//Synthetic Calendar//EN
+BEGIN:VEVENT
+UID:appointment-safe-001
+DTSTART:20260401T090000Z
+SUMMARY:Visit for Jane Roe
+DESCRIPTION:Jane Roe reported symptoms and asked that the reminder include jane.roe@
+ example.com before the visit. This folded description should be unfolded before redaction.
+LOCATION:123 Main St\, Boston MA
+ATTENDEE;CN=Jane Roe;ROLE=REQ-PARTICIPANT:mailto:jane.roe@example.com
+ORGANIZER;CN="Dr Alice Smith":mailto:alice.smith@clinic.example
+END:VEVENT
+END:VCALENDAR

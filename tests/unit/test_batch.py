@@ -1,20 +1,21 @@
 """Unit tests for batch processing functionality."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from datetime import datetime
+from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
+from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.processing.batch import (
-    BatchProcessor,
     BatchItem,
     BatchItemResult,
+    BatchProcessor,
     BatchResult,
     process_batch,
 )
-from openmed.processing.outputs import PredictionResult, EntityPrediction
-from openmed.core.pii import DeidentificationResult, PIIEntity
+from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
 def _prediction_result(text="Sample text", label="NAME", entity_text="John Doe"):
@@ -289,7 +290,9 @@ class TestBatchProcessor:
     @patch("openmed.processing.batch.BatchProcessor._get_analyze_text")
     def test_process_texts_with_error(self, mock_get_analyze):
         """Test error handling during processing."""
-        mock_analyze = Mock(side_effect=[Mock(spec=PredictionResult), Exception("Error")])
+        mock_analyze = Mock(
+            side_effect=[Mock(spec=PredictionResult), Exception("Error")]
+        )
         mock_get_analyze.return_value = mock_analyze
 
         processor = BatchProcessor(model_name="test-model", continue_on_error=True)
@@ -367,7 +370,9 @@ class TestBatchProcessor:
             (subdir / "test2.txt").write_text("Content two", encoding="utf-8")
 
             processor = BatchProcessor(model_name="test-model")
-            result = processor.process_directory(tmp_dir, pattern="*.txt", recursive=True)
+            result = processor.process_directory(
+                tmp_dir, pattern="*.txt", recursive=True
+            )
 
             assert result.total_items == 2
 
@@ -475,7 +480,10 @@ class TestBatchProcessor:
 
         def fake_deidentify_batch(texts, **kwargs):
             calls.append((list(texts), kwargs))
-            return [_deidentification_result(text=text, method=kwargs["method"]) for text in texts]
+            return [
+                _deidentification_result(text=text, method=kwargs["method"])
+                for text in texts
+            ]
 
         monkeypatch.setattr(
             "openmed.core.pii._deidentify_batch",
@@ -553,7 +561,9 @@ class TestBatchProcessor:
         """Test directory processing works for de-identification."""
         monkeypatch.setattr(
             "openmed.core.pii._deidentify_batch",
-            lambda texts, **kwargs: [_deidentification_result(text=text) for text in texts],
+            lambda texts, **kwargs: [
+                _deidentification_result(text=text) for text in texts
+            ],
         )
 
         with TemporaryDirectory() as tmp_dir:
@@ -569,6 +579,7 @@ class TestBatchProcessor:
 
     def test_batch_failure_falls_back_to_item_errors(self, monkeypatch):
         """Test batch failures fall back to per-item handling when allowed."""
+
         def fail_batch(*args, **kwargs):
             raise RuntimeError("batch boom")
 
@@ -592,6 +603,7 @@ class TestBatchProcessor:
 
     def test_batch_failure_raises_when_continue_on_error_false(self, monkeypatch):
         """Test batch failures raise when continue_on_error is disabled."""
+
         def fail_batch(*args, **kwargs):
             raise RuntimeError("batch boom")
 
@@ -657,9 +669,10 @@ class TestPIIBatchHelpers:
             for text in texts
         ]
 
-        assert [(result.text, [e.to_dict() for e in result.entities]) for result in batched] == [
-            (result.text, [e.to_dict() for e in result.entities])
-            for result in singles
+        assert [
+            (result.text, [e.to_dict() for e in result.entities]) for result in batched
+        ] == [
+            (result.text, [e.to_dict() for e in result.entities]) for result in singles
         ]
 
     def test_deidentify_batch_matches_single_deidentify(self, monkeypatch):

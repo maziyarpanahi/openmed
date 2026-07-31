@@ -7,8 +7,7 @@ try:
     import mlx.nn as nn
 except ImportError:
     raise ImportError(
-        "MLX is required for this module. "
-        "Install with: pip install openmed[mlx]"
+        "MLX is required for this module. Install with: pip install openmed[mlx]"
     )
 
 from openmed.mlx.models.deberta_v2_tc import DebertaV2Model
@@ -17,7 +16,9 @@ from openmed.mlx.models.deberta_v2_tc import DebertaV2Model
 class GLiClassFeaturesProjector(nn.Module):
     """Feature projector matching the official GLiClass layout."""
 
-    def __init__(self, encoder_hidden_size: int, hidden_size: int, dropout: float) -> None:
+    def __init__(
+        self, encoder_hidden_size: int, hidden_size: int, dropout: float
+    ) -> None:
         super().__init__()
         self.linear1 = nn.Linear(encoder_hidden_size, hidden_size)
         self.dropout = nn.Dropout(p=dropout)
@@ -41,7 +42,9 @@ class GLiClassMLPScorer(nn.Module):
 
     def __call__(self, text_rep: mx.array, label_rep: mx.array) -> mx.array:
         batch_size, num_labels, dim = label_rep.shape
-        expanded_text = mx.broadcast_to(text_rep[:, None, :], (batch_size, num_labels, dim))
+        expanded_text = mx.broadcast_to(
+            text_rep[:, None, :], (batch_size, num_labels, dim)
+        )
         combined = mx.concatenate([expanded_text, label_rep], axis=-1)
         hidden = nn.relu(self.linear1(combined))
         hidden = nn.relu(self.linear2(hidden))
@@ -79,11 +82,16 @@ class GLiClassUniEncoderModel(nn.Module):
         for batch_index in range(batch_size):
             row = [0] * seq_length
             tokens = input_ids[batch_index].tolist()
-            text_positions = [idx for idx, token_id in enumerate(tokens) if token_id == self.config["text_token_index"]]
+            text_positions = [
+                idx
+                for idx, token_id in enumerate(tokens)
+                if token_id == self.config["text_token_index"]
+            ]
             if text_positions:
                 text_start = text_positions[0]
                 example_positions = [
-                    idx for idx, token_id in enumerate(tokens)
+                    idx
+                    for idx, token_id in enumerate(tokens)
                     if token_id == self.config["example_token_index"]
                 ]
                 if example_positions:
@@ -100,7 +108,9 @@ class GLiClassUniEncoderModel(nn.Module):
 
     def _pad_rows(self, rows: list[mx.array], width: int) -> mx.array:
         if not rows:
-            return mx.zeros((0, width, self.config["encoder_hidden_size"]), dtype=mx.float32)
+            return mx.zeros(
+                (0, width, self.config["encoder_hidden_size"]), dtype=mx.float32
+            )
 
         padded: list[mx.array] = []
         for row in rows:
@@ -112,7 +122,9 @@ class GLiClassUniEncoderModel(nn.Module):
         return mx.stack(padded, axis=0)
 
     def _pad_mask_rows(self, rows: list[list[int]], width: int) -> mx.array:
-        return mx.array([row + [0] * (width - len(row)) for row in rows], dtype=mx.bool_)
+        return mx.array(
+            [row + [0] * (width - len(row)) for row in rows], dtype=mx.bool_
+        )
 
     def _extract_class_features(
         self,
@@ -128,18 +140,24 @@ class GLiClassUniEncoderModel(nn.Module):
         for batch_index in range(batch_size):
             token_ids = input_ids[batch_index].tolist()
             class_positions = [
-                idx for idx, token_id in enumerate(token_ids)
+                idx
+                for idx, token_id in enumerate(token_ids)
                 if token_id == self.config["class_token_index"]
             ]
             text_positions = [
-                idx for idx, token_id in enumerate(token_ids)
+                idx
+                for idx, token_id in enumerate(token_ids)
                 if token_id == self.config["text_token_index"]
             ]
             text_start = text_positions[0] if text_positions else seq_length
             row_embeddings: list[mx.array] = []
 
             for class_index, class_pos in enumerate(class_positions):
-                start_pos = class_pos if self.config.get("embed_class_token", True) else min(class_pos + 1, seq_length - 1)
+                start_pos = (
+                    class_pos
+                    if self.config.get("embed_class_token", True)
+                    else min(class_pos + 1, seq_length - 1)
+                )
                 end_pos = (
                     class_positions[class_index + 1]
                     if class_index + 1 < len(class_positions)
@@ -150,10 +168,14 @@ class GLiClassUniEncoderModel(nn.Module):
                     continue
 
                 class_tokens = encoder_layer[batch_index][start_pos:end_pos]
-                class_attention = attention_mask[batch_index][start_pos:end_pos].astype(class_tokens.dtype)
+                class_attention = attention_mask[batch_index][start_pos:end_pos].astype(
+                    class_tokens.dtype
+                )
                 denom = mx.sum(class_attention)
                 if float(denom.item()) > 0:
-                    pooled = mx.sum(class_tokens * class_attention[:, None], axis=0) / denom
+                    pooled = (
+                        mx.sum(class_tokens * class_attention[:, None], axis=0) / denom
+                    )
                 else:
                     pooled = mx.mean(class_tokens, axis=0)
                 row_embeddings.append(pooled)
@@ -208,10 +230,12 @@ class GLiClassUniEncoderModel(nn.Module):
 
         hidden_states = self.deberta.encoder(embedded, attention_mask)
 
-        classes_embedding, classes_mask, text_embeddings, text_mask = self._extract_class_features(
-            hidden_states,
-            input_ids,
-            attention_mask,
+        classes_embedding, classes_mask, text_embeddings, text_mask = (
+            self._extract_class_features(
+                hidden_states,
+                input_ids,
+                attention_mask,
+            )
         )
         pooled_output = self._pool_text(text_embeddings, text_mask)
         pooled_output = self.text_projector(pooled_output)

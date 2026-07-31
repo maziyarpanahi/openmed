@@ -3,11 +3,13 @@
 import pytest
 
 from openmed.core.anonymizer import (
+    LABEL_GENERATORS,
+    LANG_TO_LOCALE,
     Anonymizer,
     AnonymizerConfig,
-    LANG_TO_LOCALE,
     register_label_generator,
 )
+from openmed.core.anonymizer import locales as locale_module
 from openmed.core.anonymizer.format_preserve import (
     extract_digit_groups,
     preserve_email_pattern,
@@ -15,11 +17,12 @@ from openmed.core.anonymizer.format_preserve import (
     preserve_phone_format,
 )
 from openmed.core.labels import normalize_label
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 
 
 class TestLocaleResolution:
     def test_lang_to_locale_covers_all_supported_languages(self):
-        for lang in ("en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"):
+        for lang in sorted(SUPPORTED_LANGUAGES):
             assert lang in LANG_TO_LOCALE
 
     def test_locale_override_per_call(self):
@@ -31,6 +34,7 @@ class TestLocaleResolution:
 
     def test_telugu_falls_back_to_indian_english(self):
         # Should not raise — just emits a warning the first time.
+        locale_module._warned.clear()
         with pytest.warns(UserWarning, match="te"):
             a = Anonymizer(lang="te")
             out = a.surrogate("Sita", "FIRSTNAME")
@@ -38,7 +42,9 @@ class TestLocaleResolution:
 
 
 class TestDeterminism:
-    @pytest.mark.parametrize("label", ["FIRSTNAME", "LASTNAME", "EMAIL", "DATE", "PHONE"])
+    @pytest.mark.parametrize(
+        "label", ["FIRSTNAME", "LASTNAME", "EMAIL", "DATE", "PHONE"]
+    )
     def test_same_seed_same_surrogate(self, label):
         a1 = Anonymizer(lang="en", consistent=True, seed=42)
         a2 = Anonymizer(lang="en", consistent=True, seed=42)
@@ -78,12 +84,13 @@ class TestDeterminism:
 
 class TestClinicalIDChecksums:
     """Faker built-ins (CPF, CNPJ, BSN, NIR, NIE, Codice Fiscale) and our
-    custom providers (Aadhaar, German Steuer-ID) must produce values that
-    pass the corresponding validators."""
+    custom providers (Aadhaar, German Steuer-ID, Teudat Zehut) must produce
+    values that pass the corresponding validators."""
 
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_pt_br_cpf_validates(self, seed):
         from openmed.core.pii_i18n import validate_portuguese_cpf
+
         a = Anonymizer(lang="pt", locale="pt_BR", consistent=True, seed=seed)
         cpf = a.surrogate("123.456.789-09", "CPF")
         assert validate_portuguese_cpf(cpf), f"Invalid CPF generated: {cpf!r}"
@@ -91,6 +98,7 @@ class TestClinicalIDChecksums:
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_nl_bsn_validates(self, seed):
         from openmed.core.pii_i18n import validate_dutch_bsn
+
         a = Anonymizer(lang="nl", consistent=True, seed=seed)
         bsn = a.surrogate("123456789", "SSN")
         assert validate_dutch_bsn(bsn), f"Invalid BSN: {bsn!r}"
@@ -98,6 +106,7 @@ class TestClinicalIDChecksums:
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_fr_nir_validates(self, seed):
         from openmed.core.pii_i18n import validate_french_nir
+
         a = Anonymizer(lang="fr", consistent=True, seed=seed)
         nir = a.surrogate("1 85 05 78 006 084 36", "SSN")
         assert validate_french_nir(nir), f"Invalid NIR: {nir!r}"
@@ -105,6 +114,7 @@ class TestClinicalIDChecksums:
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_it_codice_fiscale_validates(self, seed):
         from openmed.core.pii_i18n import validate_italian_codice_fiscale
+
         a = Anonymizer(lang="it", consistent=True, seed=seed)
         cf = a.surrogate("RSSMRA85M01H501Z", "SSN")
         assert validate_italian_codice_fiscale(cf), f"Invalid Codice Fiscale: {cf!r}"
@@ -112,6 +122,7 @@ class TestClinicalIDChecksums:
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_es_nie_validates(self, seed):
         from openmed.core.pii_i18n import validate_spanish_nie
+
         a = Anonymizer(lang="es", consistent=True, seed=seed)
         nie = a.surrogate("X1234567L", "ID_NUM")
         assert validate_spanish_nie(nie), f"Invalid NIE: {nie!r}"
@@ -119,12 +130,14 @@ class TestClinicalIDChecksums:
     @pytest.mark.parametrize("seed", list(range(10)))
     def test_aadhaar_provider_validates_via_verhoeff(self, seed):
         """Custom AadhaarProvider must produce Verhoeff-valid Aadhaar."""
-        from openmed.core.pii_i18n import validate_aadhaar
         # Use the underlying Faker provider directly
         from faker import Faker
+
         from openmed.core.anonymizer.providers.clinical_ids import (
             register_clinical_providers,
         )
+        from openmed.core.pii_i18n import validate_aadhaar
+
         fk = Faker("en_IN")
         register_clinical_providers(fk)
         fk.seed_instance(seed)
@@ -134,17 +147,37 @@ class TestClinicalIDChecksums:
 
     @pytest.mark.parametrize("seed", list(range(5)))
     def test_german_steuer_id_provider_validates(self, seed):
-        from openmed.core.pii_i18n import validate_german_steuer_id
         from faker import Faker
+
         from openmed.core.anonymizer.providers.clinical_ids import (
             register_clinical_providers,
         )
+        from openmed.core.pii_i18n import validate_german_steuer_id
+
         fk = Faker("de_DE")
         register_clinical_providers(fk)
         fk.seed_instance(seed)
         for _ in range(5):
             sid = fk.german_steuer_id()
             assert validate_german_steuer_id(sid), f"Invalid Steuer-ID: {sid!r}"
+
+    @pytest.mark.parametrize("seed", list(range(10)))
+    def test_teudat_zehut_provider_validates(self, seed):
+        from faker import Faker
+
+        from openmed.core.anonymizer.providers.clinical_ids import (
+            register_clinical_providers,
+        )
+        from openmed.core.pii_i18n import validate_israeli_teudat_zehut
+
+        fk = Faker("he_IL")
+        register_clinical_providers(fk)
+        fk.seed_instance(seed)
+        for _ in range(20):
+            identifier = fk.teudat_zehut()
+            assert validate_israeli_teudat_zehut(identifier), (
+                f"Invalid Teudat Zehut: {identifier!r}"
+            )
 
 
 class TestFormatPreservation:
@@ -190,16 +223,37 @@ class TestLabelCoverage:
     @pytest.mark.parametrize(
         "label",
         [
-            "FIRSTNAME", "LASTNAME", "name", "patient",
-            "EMAIL", "PHONE", "URL",
-            "CITY", "STATE", "STREET",
-            "DATE", "DATEOFBIRTH", "TIME", "AGE",
-            "ID_NUM", "SSN",
-            "CREDITCARD", "IBAN", "BIC",
-            "GENDER", "ORGANIZATION", "JOBTITLE",
-            "IPADDRESS", "MACADDRESS", "USERAGENT",
-            "BITCOINADDRESS", "ETHEREUMADDRESS",
-            "USERNAME", "ZIPCODE", "PASSWORD", "PIN",
+            "FIRSTNAME",
+            "LASTNAME",
+            "name",
+            "patient",
+            "EMAIL",
+            "PHONE",
+            "URL",
+            "CITY",
+            "STATE",
+            "STREET",
+            "DATE",
+            "DATEOFBIRTH",
+            "TIME",
+            "AGE",
+            "ID_NUM",
+            "SSN",
+            "CREDITCARD",
+            "IBAN",
+            "BIC",
+            "GENDER",
+            "ORGANIZATION",
+            "JOBTITLE",
+            "IPADDRESS",
+            "MACADDRESS",
+            "USERAGENT",
+            "BITCOINADDRESS",
+            "ETHEREUMADDRESS",
+            "USERNAME",
+            "ZIPCODE",
+            "PASSWORD",
+            "PIN",
         ],
     )
     def test_every_label_yields_non_empty_surrogate(self, label):
@@ -213,6 +267,7 @@ class TestCustomGenerator:
     def test_register_label_generator_overrides_default(self):
         """Users can override per-label generators."""
         marker = "CUSTOM-MRN-GENERATOR"
+        previous = LABEL_GENERATORS["ID_NUM"]
 
         def my_gen(faker, original, *, locale):
             return marker
@@ -223,9 +278,7 @@ class TestCustomGenerator:
             a = Anonymizer(lang="en")
             assert a.surrogate("12345", "id_num") == marker
         finally:
-            # Restore default
-            from openmed.core.anonymizer.registry import _gen_id_num
-            register_label_generator("ID_NUM", _gen_id_num)
+            register_label_generator("ID_NUM", previous)
 
 
 class TestAnonymizerConfig:
@@ -242,37 +295,61 @@ class TestIntegrationWithDeidentify:
     """End-to-end: deidentify(method='replace', consistent=True, seed=...) is stable."""
 
     def test_deidentify_consistent_repeatable(self):
-        from unittest.mock import patch
-        from openmed.processing.outputs import EntityPrediction, PredictionResult
-        from openmed.core.pii import deidentify
         from datetime import datetime as _dt
+        from unittest.mock import patch
+
+        from openmed.core.pii import deidentify
+        from openmed.processing.outputs import EntityPrediction, PredictionResult
+
         text = "Patient John Doe born on 01/15/1970"
         entities = [
-            EntityPrediction(text="John Doe", label="name", start=8, end=16, confidence=0.95),
-            EntityPrediction(text="01/15/1970", label="date_of_birth", start=25, end=35, confidence=0.95),
+            EntityPrediction(
+                text="John Doe", label="name", start=8, end=16, confidence=0.95
+            ),
+            EntityPrediction(
+                text="01/15/1970",
+                label="date_of_birth",
+                start=25,
+                end=35,
+                confidence=0.95,
+            ),
         ]
         with patch("openmed.core.pii.extract_pii") as mock:
             mock.return_value = PredictionResult(
-                text=text, entities=entities, model_name="test",
+                text=text,
+                entities=entities,
+                model_name="test",
                 timestamp=_dt.now().isoformat(),
             )
-            r1 = deidentify(text, method="replace", lang="en", consistent=True, seed=123)
-            r2 = deidentify(text, method="replace", lang="en", consistent=True, seed=123)
+            r1 = deidentify(
+                text, method="replace", lang="en", consistent=True, seed=123
+            )
+            r2 = deidentify(
+                text, method="replace", lang="en", consistent=True, seed=123
+            )
             assert r1.deidentified_text == r2.deidentified_text
             assert "John Doe" not in r1.deidentified_text
             assert "01/15/1970" not in r1.deidentified_text
 
     def test_deidentify_seed_implies_consistent(self):
         """Passing seed= alone should produce repeatable output."""
-        from unittest.mock import patch
-        from openmed.processing.outputs import EntityPrediction, PredictionResult
-        from openmed.core.pii import deidentify
         from datetime import datetime as _dt
+        from unittest.mock import patch
+
+        from openmed.core.pii import deidentify
+        from openmed.processing.outputs import EntityPrediction, PredictionResult
+
         text = "Maria Silva"
-        entities = [EntityPrediction(text="Maria Silva", label="name", start=0, end=11, confidence=0.95)]
+        entities = [
+            EntityPrediction(
+                text="Maria Silva", label="name", start=0, end=11, confidence=0.95
+            )
+        ]
         with patch("openmed.core.pii.extract_pii") as mock:
             mock.return_value = PredictionResult(
-                text=text, entities=entities, model_name="test",
+                text=text,
+                entities=entities,
+                model_name="test",
                 timestamp=_dt.now().isoformat(),
             )
             r1 = deidentify(text, method="replace", lang="pt", seed=7)
@@ -303,7 +380,9 @@ class TestNormalizeLabelIntegration:
     def test_normalize_label_is_consistent_with_engine_routing(self):
         """The engine's behavior must match what normalize_label predicts."""
         # If two source labels normalize to the same canonical, engine must agree.
-        for label_pair in [("first_name", "FIRSTNAME"),
-                           ("date_of_birth", "DATEOFBIRTH"),
-                           ("phone_number", "PHONE")]:
+        for label_pair in [
+            ("first_name", "FIRSTNAME"),
+            ("date_of_birth", "DATEOFBIRTH"),
+            ("phone_number", "PHONE"),
+        ]:
             assert normalize_label(label_pair[0]) == normalize_label(label_pair[1])

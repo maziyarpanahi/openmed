@@ -58,6 +58,7 @@ ALLOW_DOWNLOAD_ENV = os.getenv("OPENMED_PRIVACY_FILTER_DOWNLOAD", "").lower() in
 # Pre-defined examples (medical-themed, varying difficulty)
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class StudioExample:
     id: str
@@ -66,7 +67,12 @@ class StudioExample:
     text: str
 
     def to_public_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "title": self.title, "blurb": self.blurb, "text": self.text}
+        return {
+            "id": self.id,
+            "title": self.title,
+            "blurb": self.blurb,
+            "text": self.text,
+        }
 
 
 EXAMPLES: tuple[StudioExample, ...] = (
@@ -149,13 +155,16 @@ EXAMPLES: tuple[StudioExample, ...] = (
 # Pydantic request models
 # ---------------------------------------------------------------------------
 
+
 class RunRequest(BaseModel):
     text: str = Field(..., description="Free-form text to deidentify.")
     mode: Literal["mask", "randomize"] = Field(
         default="mask",
         description="``mask`` uses placeholder labels; ``randomize`` uses Faker surrogates.",
     )
-    seed: int = Field(default=42, description="Seed for randomize/consistent surrogates.")
+    seed: int = Field(
+        default=42, description="Seed for randomize/consistent surrogates."
+    )
     locale: str | None = Field(
         default=None,
         description="Optional Faker locale override (e.g. ``pt_BR``, ``fr_FR``).",
@@ -169,6 +178,7 @@ class RunRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Pipeline lifecycle
 # ---------------------------------------------------------------------------
+
 
 @lru_cache(maxsize=1)
 def _load_pipeline(download: bool) -> tuple[Any, float, str]:
@@ -213,6 +223,7 @@ def _load_pipeline(download: bool) -> tuple[Any, float, str]:
 # Inference + deidentification
 # ---------------------------------------------------------------------------
 
+
 def _entities_from_pipeline(pipeline: Any, text: str) -> list[dict[str, Any]]:
     raw = pipeline(text)
     entities: list[dict[str, Any]] = []
@@ -242,7 +253,7 @@ def _mask_text(text: str, entities: list[dict[str, Any]]) -> str:
     for ent in entities:
         if ent["start"] < cursor:
             continue  # skip overlapping entries (shouldn't happen with Viterbi)
-        parts.append(text[cursor:ent["start"]])
+        parts.append(text[cursor : ent["start"]])
         parts.append(f"[{ent['label'].upper()}]")
         cursor = ent["end"]
     parts.append(text[cursor:])
@@ -277,7 +288,7 @@ def _randomize_text(
     for ent in entities:
         if ent["start"] < cursor:
             continue
-        parts.append(text[cursor:ent["start"]])
+        parts.append(text[cursor : ent["start"]])
         parts.append(surrogate_for(ent["label"], ent["text"]))
         cursor = ent["end"]
     parts.append(text[cursor:])
@@ -369,7 +380,10 @@ def api_run(payload: RunRequest) -> dict[str, Any]:
 
     masked = _mask_text(text, entities)
     randomized, surrogate_map = _randomize_text(
-        text, entities, seed=payload.seed, locale=payload.locale,
+        text,
+        entities,
+        seed=payload.seed,
+        locale=payload.locale,
     )
     annotated = _entities_with_surrogates(entities, surrogate_map)
 

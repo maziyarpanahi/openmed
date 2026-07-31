@@ -1,20 +1,21 @@
 """Unit tests for configuration profiles functionality."""
 
 import os
-import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import pytest
+
 from openmed.core.config import (
-    OpenMedConfig,
     PROFILE_PRESETS,
     PROFILES_DIR,
-    list_profiles,
-    get_profile,
-    save_profile,
+    OpenMedConfig,
     delete_profile,
+    get_profile,
+    list_profiles,
     load_config_with_profile,
+    save_profile,
 )
 
 
@@ -177,7 +178,9 @@ class TestGetProfile:
 
             # Create custom profile
             custom_profile = profiles_dir / "myprofile.toml"
-            custom_profile.write_text("timeout = 999\nlog_level = \"ERROR\"", encoding="utf-8")
+            custom_profile.write_text(
+                'timeout = 999\nlog_level = "ERROR"', encoding="utf-8"
+            )
 
             with patch("openmed.core.config.PROFILES_DIR", profiles_dir):
                 settings = get_profile("myprofile")

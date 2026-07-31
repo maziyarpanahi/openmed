@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -49,7 +51,15 @@ from openmed.core.labels import (
     normalize_label,
 )
 
-
+_DEFAULT_LONGITUDINAL_HMAC_KEY = "openmed-longitudinal-linkage-local-key"
+_PATIENT_KEY_FIELDS = (
+    "patient_id",
+    "patient_key",
+    "source_patient_id",
+    "source_patient_key",
+    "subject_id",
+    "person_id",
+)
 _TEXT_KEYS = (
     "text",
     "note",
@@ -60,6 +70,7 @@ _TEXT_KEYS = (
 )
 _SPAN_KEYS = ("entities", "spans", "pii", "predictions")
 _CONTAINER_KEYS = ("records", "rows", "items", "documents")
+_LONGITUDINAL_CONTAINER_KEYS = _CONTAINER_KEYS + ("notes", "encounters")
 _ID_KEYS = ("id", "record_id", "doc_id", "document_id")
 _RESERVED_KEYS = set(_TEXT_KEYS + _SPAN_KEYS + _CONTAINER_KEYS + _ID_KEYS)
 
@@ -169,6 +180,108 @@ class _Profile:
     key: tuple[tuple[str, tuple[str, ...]], ...]
 
 
+@dataclass(frozen=True)
+class LongitudinalEvidence:
+    """Hashed cross-document linkage evidence for one note.
+
+    ``value_hash`` is an HMAC digest of the normalized quasi-identifier or
+    surrogate value. It intentionally does not expose the raw value.
+    """
+
+    note_index: int
+    note_hash: str
+    category: str
+    value_hash: str
+    source: str
+    start: int | None = None
+    end: int | None = None
+    section: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "note_index": self.note_index,
+            "note_hash": self.note_hash,
+            "category": self.category,
+            "value_hash": self.value_hash,
+            "source": self.source,
+            "start": self.start,
+            "end": self.end,
+        }
+        if self.section is not None:
+            payload["section"] = self.section
+        return payload
+
+
+@dataclass(frozen=True)
+class LongitudinalNote:
+    """One de-identified note inside a longitudinal corpus."""
+
+    note_index: int
+    note_hash: str
+    patient_pseudonym: str
+    evidence: tuple[LongitudinalEvidence, ...]
+    direct_identifier_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "note_index": self.note_index,
+            "note_hash": self.note_hash,
+            "patient_pseudonym": self.patient_pseudonym,
+            "direct_identifier_count": int(self.direct_identifier_count),
+            "evidence": [item.to_dict() for item in self.evidence],
+        }
+
+
+@dataclass(frozen=True)
+class LongitudinalPatient:
+    """A privacy-safe patient cluster built from hashed source keys."""
+
+    patient_pseudonym: str
+    notes: tuple[LongitudinalNote, ...]
+
+    @property
+    def document_count(self) -> int:
+        return len(self.notes)
+
+    @property
+    def evidence(self) -> tuple[LongitudinalEvidence, ...]:
+        return tuple(item for note in self.notes for item in note.evidence)
+
+    @property
+    def direct_identifier_count(self) -> int:
+        return sum(note.direct_identifier_count for note in self.notes)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "patient_pseudonym": self.patient_pseudonym,
+            "document_count": self.document_count,
+            "direct_identifier_count": self.direct_identifier_count,
+            "notes": [note.to_dict() for note in self.notes],
+        }
+
+
+@dataclass(frozen=True)
+class LongitudinalCorpus:
+    """Privacy-safe longitudinal corpus for cross-document risk scoring."""
+
+    patients: tuple[LongitudinalPatient, ...]
+
+    @property
+    def patient_count(self) -> int:
+        return len(self.patients)
+
+    @property
+    def document_count(self) -> int:
+        return sum(patient.document_count for patient in self.patients)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "patient_count": self.patient_count,
+            "document_count": self.document_count,
+            "patients": [patient.to_dict() for patient in self.patients],
+        }
+
+
 def risk_report(
     deidentified: Any,
     original: Any | None = None,
@@ -186,7 +299,9 @@ def risk_report(
     """
 
     deidentified_records = _coerce_records(deidentified, source="deidentified")
-    original_records = _coerce_records(original, source="original") if original is not None else []
+    original_records = (
+        _coerce_records(original, source="original") if original is not None else []
+    )
     aux_records = _coerce_records(aux, source="aux") if aux is not None else []
 
     deidentified_profiles = [_profile_record(record) for record in deidentified_records]
@@ -217,6 +332,440 @@ def risk_report(
     }
 
 
+def quasi_identifier_key(
+    record: Any,
+    *,
+    fields: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the ``risk_report`` quasi-identifier key for one row or record.
+
+    ``fields`` narrows table-like mappings to a candidate quasi-identifier set
+    before the standard record profiler runs. The serialized key shape is the
+    same shape emitted in ``risk_report()["singleton_records"][*]
+    ["quasi_identifier_key"]`` so callers can compare keys without duplicating
+    the normalization rules.
+    """
+
+    records = _coerce_records(_record_subset(record, fields), source="deidentified")
+    if not records:
+        return []
+    if len(records) != 1:
+        raise ValueError("quasi_identifier_key expects exactly one record")
+    return _serialized_profile_key(_profile_record(records[0]).key)
+
+
+def build_longitudinal_corpus(
+    records: Any,
+    *,
+    hmac_key: bytes | str = _DEFAULT_LONGITUDINAL_HMAC_KEY,
+    patient_key_fields: Sequence[str] = _PATIENT_KEY_FIELDS,
+) -> LongitudinalCorpus:
+    """Build a privacy-safe longitudinal corpus from de-identified notes.
+
+    Patient source keys are never stored directly: each key is converted into
+    an HMAC pseudonym, and note ids plus quasi-identifier evidence values are
+    stored as HMAC digests. The resulting object is safe to serialize for audit
+    evidence because it contains hashes, offsets, categories, and counts only.
+    """
+
+    grouped_notes: dict[str, list[LongitudinalNote]] = {}
+    note_index = 0
+    for item in _flatten_longitudinal_items(records, patient_key_fields):
+        mapping = item if isinstance(item, Mapping) else None
+        source_patient_key = _source_patient_key(mapping, patient_key_fields)
+        sanitized = (
+            _strip_patient_keys(mapping, patient_key_fields) if mapping else item
+        )
+
+        for record in _coerce_records(sanitized, source="deidentified"):
+            record = _Record(
+                note_index,
+                record.record_id,
+                record.text,
+                record.fields,
+                record.spans,
+                record.source,
+            )
+            source_key = source_patient_key or record.record_id or f"note:{note_index}"
+            patient_pseudonym = _hmac_digest(hmac_key, f"patient:{source_key}")
+            note_hash = _hmac_digest(
+                hmac_key,
+                f"note:{record.record_id or note_index}",
+            )
+            evidence = tuple(_longitudinal_evidence(record, note_hash, hmac_key))
+            note = LongitudinalNote(
+                note_index=note_index,
+                note_hash=note_hash,
+                patient_pseudonym=patient_pseudonym,
+                evidence=evidence,
+                direct_identifier_count=_direct_identifier_count(record),
+            )
+            grouped_notes.setdefault(patient_pseudonym, []).append(note)
+            note_index += 1
+
+    patients = tuple(
+        LongitudinalPatient(patient_pseudonym, tuple(notes))
+        for patient_pseudonym, notes in sorted(grouped_notes.items())
+    )
+    return LongitudinalCorpus(patients)
+
+
+def longitudinal_risk_report(
+    records: Any,
+    *,
+    hmac_key: bytes | str = _DEFAULT_LONGITUDINAL_HMAC_KEY,
+    patient_key_fields: Sequence[str] = _PATIENT_KEY_FIELDS,
+) -> dict[str, Any]:
+    """Score same-patient linkage risk across a longitudinal note corpus.
+
+    The report's ``linkage_success_upper_bound`` is a conservative patient-level
+    upper bound: if any patient has a stable longitudinal attack fingerprint,
+    the highest-risk patient bound is 1.0. The realized attack rate produced by
+    :func:`openmed.eval.attacks.longitudinal_linkage_attack` is therefore never
+    higher than this bound, while the per-patient breakdown explains which
+    hashed features created the bound.
+    """
+
+    corpus = build_longitudinal_corpus(
+        records,
+        hmac_key=hmac_key,
+        patient_key_fields=patient_key_fields,
+    )
+    patient_risks = [
+        _longitudinal_patient_breakdown(patient) for patient in corpus.patients
+    ]
+    patient_count = corpus.patient_count
+    document_count = corpus.document_count
+    direct_note_count = sum(
+        1
+        for patient in corpus.patients
+        for note in patient.notes
+        if note.direct_identifier_count > 0
+    )
+    direct_identifier_count = sum(
+        patient.direct_identifier_count for patient in corpus.patients
+    )
+    upper_bound = max(
+        (float(patient["linkage_upper_bound"]) for patient in patient_risks),
+        default=0.0,
+    )
+    mean_bound = _rate(
+        sum(float(patient["linkage_upper_bound"]) for patient in patient_risks),
+        patient_count,
+    )
+    linkable_patient_count = sum(
+        1 for patient in patient_risks if patient["linkage_upper_bound"] > 0.0
+    )
+
+    return {
+        "schema_version": 1,
+        "patient_count": patient_count,
+        "document_count": document_count,
+        "linkage_success_upper_bound": upper_bound,
+        "mean_patient_linkage_upper_bound": mean_bound,
+        "linkable_patient_count": linkable_patient_count,
+        "residual_direct_identifier_leakage": _rate(
+            direct_note_count,
+            document_count,
+        ),
+        "residual_direct_identifier_leakage_count": direct_identifier_count,
+        "patient_risks": patient_risks,
+        "high_risk_patients": [
+            patient
+            for patient in patient_risks
+            if upper_bound > 0.0
+            and float(patient["linkage_upper_bound"]) == upper_bound
+        ],
+    }
+
+
+def longitudinal_attack_fingerprint(
+    patient: LongitudinalPatient,
+) -> tuple[tuple[str, str], ...]:
+    """Return the hashed evidence an adversary can use to cluster notes."""
+
+    if patient.document_count < 2:
+        return ()
+
+    evidence = patient.evidence
+    fingerprint: list[tuple[str, str]] = []
+
+    surrogate_notes: dict[str, set[int]] = {}
+    for item in evidence:
+        if item.category != "stable_surrogate":
+            continue
+        surrogate_notes.setdefault(item.value_hash, set()).add(item.note_index)
+    for value_hash, note_indexes in sorted(surrogate_notes.items()):
+        if len(note_indexes) >= 2:
+            fingerprint.append(("stable_surrogate", value_hash))
+
+    age_notes = {item.note_index for item in evidence if item.category == "age"}
+    if len(age_notes) >= 2:
+        for value_hash in sorted(
+            {item.value_hash for item in evidence if item.category == "age"}
+        ):
+            fingerprint.append(("age_trajectory", value_hash))
+
+    rare_hashes = sorted(
+        {item.value_hash for item in evidence if item.category == "rare_condition"}
+    )
+    for value_hash in rare_hashes:
+        fingerprint.append(("rare_attribute", value_hash))
+    if len(rare_hashes) >= 2:
+        fingerprint.append(
+            ("rare_attribute_cooccurrence", _fingerprint_hash(rare_hashes))
+        )
+
+    return tuple(fingerprint)
+
+
+def _flatten_longitudinal_items(
+    data: Any,
+    patient_key_fields: Sequence[str],
+    inherited_patient_key: str | None = None,
+) -> list[Any]:
+    dataframe_records = _maybe_dataframe_records(data)
+    if dataframe_records is not None:
+        data = dataframe_records
+
+    if isinstance(data, Mapping):
+        source_patient_key = (
+            _source_patient_key(data, patient_key_fields) or inherited_patient_key
+        )
+        container = _first_longitudinal_container(data)
+        if container is not None and not _looks_like_single_record(data):
+            return _flatten_longitudinal_items(
+                container,
+                patient_key_fields,
+                source_patient_key,
+            )
+        if (
+            source_patient_key is not None
+            and patient_key_fields
+            and not any(key in data for key in patient_key_fields)
+        ):
+            item = dict(data)
+            item[str(patient_key_fields[0])] = source_patient_key
+            return [item]
+        return [data]
+
+    if _is_sequence(data):
+        items: list[Any] = []
+        for item in data:
+            items.extend(
+                _flatten_longitudinal_items(
+                    item,
+                    patient_key_fields,
+                    inherited_patient_key,
+                )
+            )
+        return items
+
+    return [data]
+
+
+def _first_longitudinal_container(data: Mapping[str, Any]) -> Any | None:
+    for key in _LONGITUDINAL_CONTAINER_KEYS:
+        value = data.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _source_patient_key(
+    data: Mapping[str, Any] | None,
+    patient_key_fields: Sequence[str],
+) -> str | None:
+    if data is None:
+        return None
+    for key in patient_key_fields:
+        value = data.get(key)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _strip_patient_keys(
+    data: Mapping[str, Any],
+    patient_key_fields: Sequence[str],
+) -> dict[str, Any]:
+    blocked = set(patient_key_fields)
+    sanitized = {key: value for key, value in data.items() if key not in blocked}
+    audit_spans = data.get("audit_spans")
+    if audit_spans is None:
+        return sanitized
+
+    existing_spans: list[Mapping[str, Any]] = []
+    for key in _SPAN_KEYS:
+        existing_spans.extend(_coerce_spans(sanitized.get(key)))
+    audit_span_items = list(_coerce_spans(audit_spans))
+    if audit_span_items:
+        sanitized["spans"] = [*existing_spans, *audit_span_items]
+    return sanitized
+
+
+def _longitudinal_evidence(
+    record: _Record,
+    note_hash: str,
+    hmac_key: bytes | str,
+) -> list[LongitudinalEvidence]:
+    evidence: list[LongitudinalEvidence] = []
+    for qi in _profile_record(record).quasi_identifiers:
+        evidence.append(
+            LongitudinalEvidence(
+                note_index=record.index,
+                note_hash=note_hash,
+                category=qi.category,
+                value_hash=_hmac_digest(
+                    hmac_key,
+                    f"qi:{qi.category}:{qi.normalized_value}",
+                ),
+                source=f"quasi_identifier:{qi.source}",
+                start=qi.start,
+                end=qi.end,
+                section=qi.section,
+            )
+        )
+    evidence.extend(_stable_surrogate_evidence(record, note_hash, hmac_key))
+    return _dedupe_longitudinal_evidence(evidence)
+
+
+def _stable_surrogate_evidence(
+    record: _Record,
+    note_hash: str,
+    hmac_key: bytes | str,
+) -> list[LongitudinalEvidence]:
+    evidence: list[LongitudinalEvidence] = []
+    for span in record.spans:
+        surrogate = span.get("surrogate")
+        if surrogate is None:
+            continue
+        normalized = _normalize_qi_value("surrogate", surrogate)
+        if not normalized or _is_generic_placeholder(surrogate):
+            continue
+        evidence.append(
+            LongitudinalEvidence(
+                note_index=record.index,
+                note_hash=note_hash,
+                category="stable_surrogate",
+                value_hash=_hmac_digest(
+                    hmac_key,
+                    f"surrogate:{_span_label(span)}:{normalized}",
+                ),
+                source="surrogate:span",
+                start=_optional_int(span.get("start")),
+                end=_optional_int(span.get("end")),
+                section=_span_section(span),
+            )
+        )
+
+    for name, value in record.fields.items():
+        if "surrogate" not in _name_key(name) or value is None:
+            continue
+        normalized = _normalize_qi_value("surrogate", value)
+        if not normalized or _is_generic_placeholder(value):
+            continue
+        evidence.append(
+            LongitudinalEvidence(
+                note_index=record.index,
+                note_hash=note_hash,
+                category="stable_surrogate",
+                value_hash=_hmac_digest(hmac_key, f"surrogate:{name}:{normalized}"),
+                source="surrogate:field",
+            )
+        )
+    return evidence
+
+
+def _dedupe_longitudinal_evidence(
+    evidence: list[LongitudinalEvidence],
+) -> list[LongitudinalEvidence]:
+    seen: set[tuple[str, str, int, int | None, int | None]] = set()
+    deduped: list[LongitudinalEvidence] = []
+    for item in evidence:
+        key = (
+            item.category,
+            item.value_hash,
+            item.note_index,
+            item.start,
+            item.end,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _direct_identifier_count(record: _Record) -> int:
+    return sum(
+        1
+        for value in _direct_identifier_values(record)
+        if value and not _is_generic_placeholder(value)
+    )
+
+
+def _longitudinal_patient_breakdown(
+    patient: LongitudinalPatient,
+) -> dict[str, Any]:
+    evidence = patient.evidence
+    by_category = Counter(item.category for item in evidence)
+    unique_hashes_by_category: dict[str, set[str]] = {}
+    for item in evidence:
+        unique_hashes_by_category.setdefault(item.category, set()).add(item.value_hash)
+
+    surrogate_reuse = _reused_value_count(evidence, "stable_surrogate")
+    age_note_count = len(
+        {item.note_index for item in evidence if item.category == "age"}
+    )
+    rare_attribute_count = len(unique_hashes_by_category.get("rare_condition", set()))
+    fingerprint = longitudinal_attack_fingerprint(patient)
+    upper_bound = 1.0 if fingerprint else 0.0
+
+    return {
+        "patient_pseudonym": patient.patient_pseudonym,
+        "document_count": patient.document_count,
+        "evidence_count": len(evidence),
+        "direct_identifier_count": patient.direct_identifier_count,
+        "linkage_upper_bound": upper_bound,
+        "stable_surrogate_reuse_count": surrogate_reuse,
+        "age_observation_count": age_note_count,
+        "rare_attribute_count": rare_attribute_count,
+        "categories": dict(sorted(by_category.items())),
+        "attack_fingerprint": [
+            {"category": category, "value_hash": value_hash}
+            for category, value_hash in fingerprint
+        ],
+        "evidence": [item.to_dict() for item in evidence],
+    }
+
+
+def _reused_value_count(
+    evidence: tuple[LongitudinalEvidence, ...],
+    category: str,
+) -> int:
+    note_indexes: dict[str, set[int]] = {}
+    for item in evidence:
+        if item.category == category:
+            note_indexes.setdefault(item.value_hash, set()).add(item.note_index)
+    return sum(1 for indexes in note_indexes.values() if len(indexes) >= 2)
+
+
+def _fingerprint_hash(values: Sequence[str]) -> str:
+    payload = "\0".join(sorted(values)).encode("utf-8")
+    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
+def _hmac_digest(key: bytes | str, value: str) -> str:
+    key_bytes = key if isinstance(key, bytes) else str(key).encode("utf-8")
+    digest = hmac.new(key_bytes, value.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"hmac-sha256:{digest}"
+
+
+def _rate(numerator: float, denominator: int) -> float:
+    return float(numerator / denominator) if denominator else 0.0
+
+
 def _coerce_records(data: Any, *, source: str) -> list[_Record]:
     if data is None:
         return []
@@ -239,7 +788,14 @@ def _coerce_records(data: Any, *, source: str) -> list[_Record]:
         for item in data:
             records.extend(_coerce_records(item, source=source))
         return [
-            _Record(index, record.record_id, record.text, record.fields, record.spans, record.source)
+            _Record(
+                index,
+                record.record_id,
+                record.text,
+                record.fields,
+                record.spans,
+                record.source,
+            )
             for index, record in enumerate(records)
         ]
 
@@ -314,7 +870,9 @@ def _coerce_spans(value: Any) -> tuple[Mapping[str, Any], ...]:
 
 
 def _is_sequence(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+    return isinstance(value, Sequence) and not isinstance(
+        value, (str, bytes, bytearray)
+    )
 
 
 def _is_scalar(value: Any) -> bool:
@@ -370,24 +928,58 @@ def _span_category(span: Mapping[str, Any]) -> str | None:
     normalized = _name_key(label)
     if any(hint in normalized for hint in ("age", "date", "dob", "birthdate")):
         return "age" if "age" in normalized else "date"
-    if any(hint in normalized for hint in ("city", "state", "county", "zip", "postal", "location", "geography")):
+    if any(
+        hint in normalized
+        for hint in (
+            "city",
+            "state",
+            "county",
+            "zip",
+            "postal",
+            "location",
+            "geography",
+        )
+    ):
         return "geography"
-    if any(hint in normalized for hint in ("provider", "doctor", "physician", "hospital", "clinic", "facility", "institution")):
+    if any(
+        hint in normalized
+        for hint in (
+            "provider",
+            "doctor",
+            "physician",
+            "hospital",
+            "clinic",
+            "facility",
+            "institution",
+        )
+    ):
         return "provider_institution"
-    if any(hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")):
+    if any(
+        hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")
+    ):
         return "rare_condition"
     return None
 
 
 def _span_label(span: Mapping[str, Any]) -> str:
-    for key in ("canonical_label", "policy_label", "label", "entity_group", "entity", "entity_type", "type"):
+    for key in (
+        "canonical_label",
+        "policy_label",
+        "label",
+        "entity_group",
+        "entity",
+        "entity_type",
+        "type",
+    ):
         value = span.get(key)
         if value:
             return str(value)
     return ""
 
 
-def _span_value(record: _Record, span: Mapping[str, Any]) -> tuple[str, int | None, int | None]:
+def _span_value(
+    record: _Record, span: Mapping[str, Any]
+) -> tuple[str, int | None, int | None]:
     start = _optional_int(span.get("start"))
     end = _optional_int(span.get("end"))
     if start is not None and end is not None and record.text:
@@ -432,13 +1024,43 @@ def _field_category(name: str) -> str | None:
     normalized = _name_key(name)
     if "age" in normalized:
         return "age"
-    if any(hint in normalized for hint in ("date", "dob", "birth", "visit", "admission", "discharge")):
+    if any(
+        hint in normalized
+        for hint in ("date", "dob", "birth", "visit", "admission", "discharge")
+    ):
         return "date"
-    if any(hint in normalized for hint in ("city", "state", "county", "zip", "postal", "country", "region", "location", "geography")):
+    if any(
+        hint in normalized
+        for hint in (
+            "city",
+            "state",
+            "county",
+            "zip",
+            "postal",
+            "country",
+            "region",
+            "location",
+            "geography",
+        )
+    ):
         return "geography"
-    if any(hint in normalized for hint in ("provider", "doctor", "physician", "hospital", "clinic", "facility", "institution", "organization")):
+    if any(
+        hint in normalized
+        for hint in (
+            "provider",
+            "doctor",
+            "physician",
+            "hospital",
+            "clinic",
+            "facility",
+            "institution",
+            "organization",
+        )
+    ):
         return "provider_institution"
-    if any(hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")):
+    if any(
+        hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")
+    ):
         return "rare_condition"
     return None
 
@@ -530,7 +1152,9 @@ def _dedupe_qis(qis: list[_QuasiIdentifier]) -> list[_QuasiIdentifier]:
     return deduped
 
 
-def _profile_key(qis: list[_QuasiIdentifier]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+def _profile_key(
+    qis: list[_QuasiIdentifier],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
     by_category: dict[str, set[str]] = {}
     for qi in qis:
         by_category.setdefault(qi.category, set()).add(qi.normalized_value)
@@ -546,11 +1170,20 @@ def _singleton_record(profile: _Profile, effective_k: int) -> dict[str, Any]:
         "record_index": profile.record.index,
         "record_id": profile.record.record_id,
         "effective_k": effective_k,
-        "quasi_identifier_key": [
-            {"category": category, "values": list(values)}
-            for category, values in profile.key
-        ],
+        "quasi_identifier_key": _serialized_profile_key(profile.key),
     }
+
+
+def _serialized_profile_key(
+    key: tuple[tuple[str, tuple[str, ...]], ...],
+) -> list[dict[str, Any]]:
+    return [{"category": category, "values": list(values)} for category, values in key]
+
+
+def _record_subset(record: Any, fields: Sequence[str] | None) -> Any:
+    if fields is None or not isinstance(record, Mapping):
+        return record
+    return {field: record.get(field) for field in fields if field in record}
 
 
 def _reid_rate(
@@ -561,7 +1194,9 @@ def _reid_rate(
     if not deidentified_profiles:
         return 0.0
 
-    original_counts = Counter(profile.key for profile in original_profiles if profile.key)
+    original_counts = Counter(
+        profile.key for profile in original_profiles if profile.key
+    )
     aux_counts = Counter(profile.key for profile in aux_profiles if profile.key)
 
     linked = 0
@@ -573,7 +1208,9 @@ def _reid_rate(
     return linked / len(deidentified_profiles)
 
 
-def _leakage_rate(deidentified_records: list[_Record], original_records: list[_Record]) -> float:
+def _leakage_rate(
+    deidentified_records: list[_Record], original_records: list[_Record]
+) -> float:
     if not deidentified_records:
         return 0.0
 
@@ -597,8 +1234,12 @@ def _leakage_rate(deidentified_records: list[_Record], original_records: list[_R
             leaked_records += 1
             continue
 
-        blob = _normalize_direct_value(" ".join([record.text, *map(str, record.fields.values())]))
-        if original_values and any(value in blob for value in original_values if len(value) > 1):
+        blob = _normalize_direct_value(
+            " ".join([record.text, *map(str, record.fields.values())])
+        )
+        if original_values and any(
+            value in blob for value in original_values if len(value) > 1
+        ):
             leaked_records += 1
 
     return leaked_records / len(deidentified_records)
@@ -643,23 +1284,302 @@ def _span_is_direct_identifier(span: Mapping[str, Any]) -> bool:
 
 
 def _field_is_direct_identifier(name: str) -> bool:
-    normalized = _name_key(name)
-    if any(safe_hint in normalized for safe_hint in ("date", "age", "diagnosis", "condition")):
+    """Return whether a field name strongly signals a direct identifier.
+
+    Identifier hints are matched as semantic tokens or reviewed compound
+    names.  Substring matching is intentionally avoided: ordinary fields such
+    as ``validity_score``, ``fluid_balance``, and ``candidate_score`` contain
+    the letters ``id`` but are not identifiers.
+    """
+
+    tokens = _field_name_tokens(name)
+    normalized = "".join(tokens)
+    if any(token in {"id", "identifier"} for token in tokens):
+        return True
+
+    direct_tokens = {
+        "email",
+        "emailaddress",
+        "phone",
+        "telephone",
+        "ssn",
+        "mrn",
+        "address",
+        "fax",
+        "passport",
+        "fingerprint",
+        "voiceprint",
+        "photo",
+        "photograph",
+        "imei",
+        "imsi",
+        "uuid",
+        "guid",
+        "npi",
+        "password",
+        "apikey",
+    }
+    if any(token in direct_tokens for token in tokens):
+        return True
+
+    if normalized in {
+        "id",
+        "identifier",
+        "medicalrecordnumber",
+        "socialsecuritynumber",
+        "emailaddress",
+        "phonenumber",
+        "telephonenumber",
+        "streetaddress",
+        "postaladdress",
+        "bankaccount",
+        "accountnumber",
+        "bankaccountnumber",
+        "financialaccountnumber",
+        "healthplanbeneficiarynumber",
+        "passportnumber",
+        "driverslicensenumber",
+        "driverlicense",
+        "driverslicense",
+        "licensenumber",
+        "certificatenumber",
+        "vehicleserialnumber",
+        "vin",
+        "deviceserialnumber",
+        "url",
+        "ipaddress",
+        "biometricidentifier",
+        "fullfacephoto",
+        "apikey",
+        "secretkey",
+        "firstname",
+        "givenname",
+        "lastname",
+        "familyname",
+        "middlename",
+        "fullname",
+        "surname",
+        "forename",
+        "legalname",
+        "birthname",
+        "nickname",
+        "alias",
+        "patientname",
+        "personname",
+        "membername",
+        "providername",
+        "clinicianname",
+        "physicianname",
+        "doctorname",
+        "employeename",
+        "mothermaidenname",
+        "emergencycontactname",
+        "emergencycontact",
+        "nextofkinname",
+        "nextofkin",
+        "guardianname",
+        "spousename",
+        "username",
+        "loginname",
+        "screenname",
+        "accountname",
+        "account",
+        "uuid",
+        "guid",
+        "npi",
+        "nhsnumber",
+        "abhanumber",
+        "medicarenumber",
+        "medicaidnumber",
+        "healthplannumber",
+        "healthinsurancenumber",
+        "medicalrecordno",
+        "patientnumber",
+        "patientnum",
+        "subjectnumber",
+        "subjectnum",
+        "membernumber",
+        "membernum",
+        "recordnumber",
+        "recordnum",
+        "chartnumber",
+        "chartnum",
+        "claimnumber",
+        "claimnum",
+        "beneficiarynumber",
+        "beneficiarynum",
+        "subscribernumber",
+        "subscribernum",
+        "policynumber",
+        "policynum",
+        "insurancenumber",
+        "insurancenum",
+        "hospitalnumber",
+        "hospitalnum",
+        "admissionnumber",
+        "admissionnum",
+        "encounternumber",
+        "encounternum",
+        "visitnumber",
+        "visitnum",
+        "patientkey",
+        "subjectkey",
+        "memberkey",
+        "recordkey",
+        "userkey",
+        "accountkey",
+        "deviceserial",
+        "serialnumber",
+        "licenseplate",
+        "weburl",
+        "ip",
+        "mobile",
+        "imei",
+        "imsi",
+        "photo",
+        "photograph",
+    }:
+        return True
+    if "name" in tokens and any(
+        token
+        in {
+            "diagnosis",
+            "condition",
+            "procedure",
+            "medication",
+            "facility",
+            "test",
+            "code",
+        }
+        for token in tokens
+    ):
         return False
-    return any(
-        hint in normalized
-        for hint in (
-            "name",
-            "email",
-            "phone",
-            "ssn",
-            "mrn",
-            "id",
-            "address",
+    if "name" in tokens and any(
+        token
+        in {
+            "middle",
+            "legal",
+            "birth",
+            "patient",
+            "person",
+            "member",
+            "provider",
+            "clinician",
+            "physician",
+            "doctor",
+            "employee",
+            "mother",
+            "maiden",
+            "emergency",
+            "contact",
+            "guardian",
+            "spouse",
+            "kin",
+            "beneficiary",
+        }
+        for token in tokens
+    ):
+        return True
+    if any(token in {"number", "num", "no"} for token in tokens) and any(
+        token
+        in {
+            "patient",
+            "person",
+            "subject",
+            "member",
+            "record",
+            "medical",
+            "chart",
+            "claim",
+            "beneficiary",
+            "subscriber",
+            "policy",
+            "insurance",
+            "medicare",
+            "medicaid",
+            "nhs",
+            "abha",
+            "hospital",
+            "admission",
+            "encounter",
+            "visit",
             "account",
-            "password",
-            "apikey",
+            "provider",
+            "clinician",
+            "physician",
+            "employee",
+            "user",
+        }
+        for token in tokens
+    ):
+        return True
+    if "key" in tokens and any(
+        token
+        in {
+            "patient",
+            "person",
+            "subject",
+            "member",
+            "record",
+            "account",
+            "user",
+            "provider",
+            "employee",
+        }
+        for token in tokens
+    ):
+        return True
+    if "serial" in tokens and any(
+        token in {"device", "vehicle", "equipment", "serial", "number"}
+        for token in tokens
+    ):
+        return True
+    if "plate" in tokens and any(
+        token in {"license", "vehicle", "registration"} for token in tokens
+    ):
+        return True
+    if any(token in {"mobile", "cell"} for token in tokens) and any(
+        token in {"phone", "telephone", "number", "num", "no"} for token in tokens
+    ):
+        return True
+    if any(token in {"photo", "photograph"} for token in tokens) and any(
+        token in {"patient", "person", "member", "employee", "face", "full"}
+        for token in tokens
+    ):
+        return True
+    if "url" in tokens or "ip" in tokens:
+        return True
+    if normalized.endswith(
+        (
+            "patientid",
+            "personid",
+            "subjectid",
+            "recordid",
+            "memberid",
+            "accountid",
+            "userid",
+            "encounterid",
+            "documentid",
+            "providerid",
         )
+    ):
+        return True
+    if any(
+        safe_hint in tokens for safe_hint in ("date", "age", "diagnosis", "condition")
+    ):
+        return False
+    return len(tokens) == 1 and tokens[0] == "name"
+
+
+def _field_name_tokens(name: str) -> tuple[str, ...]:
+    """Split snake, kebab, spaced, and camel-case field names safely."""
+
+    separated = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", str(name))
+    separated = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", separated)
+    return tuple(
+        token.casefold()
+        for token in re.findall(r"[^\W_]+", separated, flags=re.UNICODE)
+        if token
     )
 
 
@@ -682,4 +1602,14 @@ def _name_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]", "", str(value).casefold())
 
 
-__all__ = ["risk_report"]
+__all__ = [
+    "LongitudinalCorpus",
+    "LongitudinalEvidence",
+    "LongitudinalNote",
+    "LongitudinalPatient",
+    "build_longitudinal_corpus",
+    "longitudinal_attack_fingerprint",
+    "longitudinal_risk_report",
+    "quasi_identifier_key",
+    "risk_report",
+]

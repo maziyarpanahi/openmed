@@ -28,6 +28,8 @@ keywords = [
 dependencies = [
   "pysbd>=0.3.4,<0.4",
   "faker>=22.0",
+  "jieba>=0.42.1,<0.43",
+  "pyyaml>=6.0",
 ]
 
 authors = [
@@ -36,13 +38,35 @@ authors = [
 
 [project.optional-dependencies]
 dev = [
-  "flake8>=7.0",
+  "pre-commit>=4.0",
+  "cryptography>=42,<50",
+  "rich>=13.0",
+  "typer>=0.12",
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "pytest-timeout>=2.3",
+  "huggingface-hub>=0.30",
   "jsonschema>=4.0",
-  "PyYAML>=6.0",
+  "mypy==2.3.0",
+  "opencc>=1.4.1,<2",
+  "duckdb>=1.0,<2",
+  "numpy>=1.26",
   "fastapi>=0.110",
   "httpx>=0.27",
+  "dask[dataframe]>=2024.8",
+  "opentelemetry-api>=1.26,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
+  "opentelemetry-sdk>=1.26,<2",
+  "pandas>=2.0",
+  "polars>=0.20",
+  "python-dateutil>=2.8",
+  "hypothesis>=6.100",
+  "fsspec>=2025.9.0",
+  "grpcio>=1.64",
+  "grpcio-tools>=1.64",
+  "protobuf>=5.26,<7",
+  "ruff==0.15.22",
+  "tomli>=2.0; python_version < '3.11'",
 ]
 
 cli = [
@@ -50,8 +74,158 @@ cli = [
   "typer>=0.12",
 ]
 
+integrity = [
+  "cryptography>=42,<50",
+]
+
 mcp = [
-  "mcp>=1.9",
+  "mcp>=1.27,<2",
+]
+
+lid = [
+  "pycld2>=0.41,<1",
+]
+
+openmrs = [
+  "httpx>=0.27",
+]
+
+presidio = [
+  "presidio-analyzer>=2.2.354,<3",
+]
+
+philter = [
+  "philter-ucsf>=1.0.3,<2",
+]
+
+pydeid = [
+  "pyDeid>=0.0.1",
+]
+
+scrubadub = [
+  "scrubadub>=2.0,<3",
+]
+
+pandas = [
+  "pandas>=2.0",
+]
+
+polars = [
+  "polars>=0.20",
+]
+
+columnar = [
+  "pyarrow>=16",
+]
+
+dask = [
+  "dask[dataframe]>=2024.8",
+]
+
+spacy = [
+  "click>=8.0",
+  "spacy>=3.8.9",
+]
+
+zh = [
+  "jieba>=0.42",
+  "opencc>=1.4.1,<2",
+  "pypinyin>=0.51",
+]
+
+indic = [
+  "indic-nlp-library>=0.92",
+]
+
+scispacy = [
+  "scispacy>=0.5.4,<1",
+]
+
+quickumls = [
+  "quickumls>=1.4,<2",
+]
+
+multimodal = [
+  "numpy>=1.26",
+  "onnx>=1.21",
+  "pdfplumber>=0.11",
+  "python-docx>=1.1",
+  "Pillow>=10.0",
+  "python-doctr>=1.0",
+  "piexif>=1.1",
+  "pikepdf>=9.0",
+  "pydicom>=3.0",
+  "pytesseract>=0.3.10",
+  "markdown-it-py>=3.0,<5",
+  "easyocr>=1.7",
+]
+
+# PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
+# it is opt-in rather than bundled into the general multimodal extra.
+ocr-paddle = [
+  "paddleocr>=2.7",
+]
+
+zh-pkuseg = [
+  "pkuseg>=0.0.25,<0.1",
+]
+
+zh-hanlp = [
+  "hanlp>=2.1,<3",
+]
+
+awq = [
+  "autoawq==0.2.9; sys_platform == 'linux'",
+  "transformers==5.5.0; sys_platform == 'linux'",
+]
+
+gptq = [
+  "auto-gptq>=0.7.1",
+]
+
+grounding = [
+  "rapidfuzz>=3.9,<4",
+  "hnswlib>=0.8,<1",
+  "numpy>=1.26",
+]
+
+langchain = [
+  "langchain-core>=0.2,<2",
+]
+
+llamaindex = [
+  "llama-index-core>=0.10,<1",
+]
+
+agents = [
+  "langchain-core>=0.2,<2",
+  "llama-index-core>=0.10,<1",
+]
+
+duckdb = [
+  "duckdb>=1.0,<2",
+  "numpy>=1.26",
+]
+
+kafka = [
+  "confluent-kafka>=2.3",
+]
+
+prefect = [
+  "prefect>=3.7,<4",
+]
+
+cloud = [
+  "fsspec>=2025.9.0",
+  "s3fs>=2025.9.0",
+  "gcsfs>=2025.9.0",
+  "adlfs>=2025.8.0",
+]
+
+spark = [
+  "pyspark>=3.5,<4",
+  "pandas>=2.0",
+  "pyarrow>=16",
 ]
 
 hf = [
@@ -64,6 +238,12 @@ hf = [
 
 service = [
   "fastapi>=0.110",
+  "grpcio>=1.64",
+  "httpx>=0.27",
+  "opentelemetry-api>=1.26,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
+  "opentelemetry-sdk>=1.26,<2",
+  "protobuf>=5.26,<7",
   "uvicorn[standard]>=0.29",
 ]
 
@@ -74,6 +254,7 @@ gliner = [
 
 mlx = [
   "mlx>=0.22",
+  "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
   "transformers>=4.50",
   "tokenizers>=0.15",
@@ -88,28 +269,80 @@ coreml = [
   "transformers>=4.50",
 ]
 
+onnx = [
+  "onnx>=1.21",
+  "onnxruntime>=1.16",
+  "onnxscript>=0.1.0",
+  "torch>=2.0",
+  "transformers>=4.50",
+]
+
+onnx-runtime = [
+  "huggingface-hub>=0.30",
+  "numpy>=1.26",
+  "onnxruntime>=1.16",
+  "tokenizers>=0.15",
+]
+
+openvino = [
+  "openvino>=2024.0",
+  "nncf>=2.10",
+  "onnxruntime>=1.16",
+  "transformers>=4.50",
+]
+
 docs = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",
   "mkdocs-git-revision-date-localized-plugin>=1.2.6",
+  "mkdocs-llmstxt>=0.5.0,<1",
   "mkdocs-minify-plugin>=0.8.0",
+  "mkdocs-static-i18n>=1.3,<2",
   "pymdown-extensions>=10.8",
+  "mkdocstrings[python]",
+  "griffe",
 ]
 
 [project.scripts]
 openmed = "openmed.cli:main"
+openmed-mcp = "openmed.mcp.server:main"
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "awq" },
+    { extra = "gliner" },
+  ],
+  [
+    { extra = "onnx" },
+    { extra = "scispacy" },
+  ],
+  [
+    { extra = "multimodal" },
+    { extra = "scispacy" },
+  ],
+]
 
 [tool.hatch.build]
 include = [
-  "openmed/**",
-  "openmed/core/thresholds.json",
-  "openmed/core/policies/*.json",
-  "openmed/core/schemas/json/*.json",
-  "gates/baseline.json",
-  "models.jsonl",
-  "README.md",
-  "pyproject.toml"
+  "/openmed/**",
+  "/openmed/py.typed",
+  "/openmed/core/thresholds.json",
+  "/openmed/core/policies/*.json",
+  "/openmed/core/schemas/json/*.json",
+  "/openmed/risk/data/*.json",
+  "/eval/redteam/corpus/adversarial_phi.jsonl",
+  "/gates/baseline.json",
+  "/models.jsonl",
+  "/models.jsonl.sigstore.json",
+  "/LICENSE",
+  "/NOTICE",
+  "/README.md",
+  "/pyproject.toml"
 ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"eval/redteam/corpus/adversarial_phi.jsonl" = "openmed/eval/data/adversarial_phi.jsonl"
 
 [tool.hatch.version]
 path = "openmed/__about__.py"
@@ -123,7 +356,9 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 [tool.pytest.ini_options]
 markers = [
   "integration: marks end-to-end or external integration tests",
-  "slow: marks tests that are expected to run slowly"
+  "slow: marks tests that are expected to run slowly",
+  "fuzz: marks property-based (Hypothesis) fuzz tests",
+  "doctest_examples: runs doctest examples for targeted public modules"
 ]
 python_files = [
   "test_*.py",
@@ -132,3 +367,51 @@ python_files = [
 testpaths = [
   "tests",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+extend-exclude = [
+  "examples/notebooks",
+  "openmed/service/proto/generated",
+]
+
+[tool.ruff.lint]
+select = [
+  "E9",
+  "F63",
+  "F7",
+  "F82",
+  "I",
+]
+fixable = ["I"]
+unfixable = [
+  "E9",
+  "F63",
+  "F7",
+  "F82",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["openmed"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# Scoped type-checking configuration. This intentionally covers only the newer
+# v1.6 public surfaces that already ship precise annotations and a py.typed
+# marker; it is not a strict project-wide gate. The pinned development checker,
+# local Make target, regression test, and CI lint job all use this same scope.
+[tool.mypy]
+python_version = "3.10"
+files = [
+  "openmed/core/audit.py",
+  "openmed/core/pipeline.py",
+  "openmed/clinical/context.py",
+  "openmed/clinical/exporters/fhir/bundle.py",
+]
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false

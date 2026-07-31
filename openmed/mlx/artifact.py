@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+
+from openmed.processing.tokenization import validate_segmenter_resources
 
 MANIFEST_FILENAME = "openmed-mlx.json"
 MANIFEST_FORMAT = "openmed-mlx"
@@ -20,6 +22,12 @@ _KNOWN_TOKENIZER_FILES = (
     "spm.model",
     "sentencepiece.bpe.model",
     "added_tokens.json",
+)
+
+_KNOWN_SEGMENTER_FILES = (
+    "segmenter/han_words.txt",
+    "segmenter/indic_rules.json",
+    "segmenter/ICU.txt",
 )
 
 _NON_TOKENIZER_FILENAMES = {
@@ -67,23 +75,32 @@ def has_local_tokenizer(model_dir: str | Path) -> bool:
     return bool(find_tokenizer_files(model_dir))
 
 
+def find_segmenter_files(model_dir: str | Path) -> list[str]:
+    """Return known compact segmenter resources present in *model_dir*."""
+
+    root = Path(model_dir)
+    return [name for name in _KNOWN_SEGMENTER_FILES if (root / name).is_file()]
+
+
 def read_manifest(model_dir: str | Path) -> dict[str, Any] | None:
     """Load ``openmed-mlx.json`` if present."""
     manifest_path = Path(model_dir) / MANIFEST_FILENAME
     if not manifest_path.exists():
         return None
-    with open(manifest_path) as f:
+    with open(manifest_path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def load_artifact_config(model_dir: str | Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+def load_artifact_config(
+    model_dir: str | Path,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """Return ``(manifest, config)`` for a converted MLX artifact."""
     model_dir = Path(model_dir)
     manifest = read_manifest(model_dir)
     config_name = "config.json"
     if manifest is not None:
         config_name = manifest.get("config_path", config_name)
-    with open(model_dir / config_name) as f:
+    with open(model_dir / config_name, encoding="utf-8") as f:
         config = json.load(f)
     return manifest, config
 
@@ -149,13 +166,24 @@ def write_manifest(
     source_model_id: str,
     config: dict[str, Any],
     tokenizer_files: list[str] | None = None,
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write ``openmed-mlx.json`` for a converted artifact."""
     model_dir = Path(model_dir)
     preferred_format = config.get("_mlx_weights_format", "safetensors")
-    preferred_weights = "weights.safetensors" if preferred_format == "safetensors" else "weights.npz"
-    fallback_weights = ["weights.npz"] if preferred_weights == "weights.safetensors" else ["weights.safetensors"]
-    available_weights = [name for name in (preferred_weights, *fallback_weights) if (model_dir / name).exists()]
+    preferred_weights = (
+        "weights.safetensors" if preferred_format == "safetensors" else "weights.npz"
+    )
+    fallback_weights = (
+        ["weights.npz"]
+        if preferred_weights == "weights.safetensors"
+        else ["weights.safetensors"]
+    )
+    available_weights = [
+        name
+        for name in (preferred_weights, *fallback_weights)
+        if (model_dir / name).exists()
+    ]
 
     tokenizer_files = tokenizer_files or find_tokenizer_files(model_dir)
     family = (
@@ -165,26 +193,47 @@ def write_manifest(
         or "unknown"
     )
     task = config.get("_mlx_task", "token-classification")
+    quantization = config.get("_mlx_quantization")
+    quant_bits = quantization.get("bits") if isinstance(quantization, dict) else None
+    format_name = f"mlx-{quant_bits}bit" if quant_bits in {4, 8} else "mlx-fp"
 
     manifest = {
         "format": MANIFEST_FORMAT,
+        "formats": [format_name],
         "format_version": MANIFEST_VERSION,
         "task": task,
         "family": family,
         "source_model_id": source_model_id,
         "config_path": "config.json",
-        "label_map_path": "id2label.json" if (model_dir / "id2label.json").exists() else None,
+        "label_map_path": "id2label.json"
+        if (model_dir / "id2label.json").exists()
+        else None,
         "preferred_weights": preferred_weights,
         "fallback_weights": fallback_weights,
         "available_weights": available_weights,
         "weights_format": preferred_format,
-        "quantization": config.get("_mlx_quantization"),
+        "quantization": quantization,
         "max_sequence_length": config.get("max_position_embeddings", 512),
         "tokenizer": {
             "path": ".",
             "files": tokenizer_files,
         },
     }
+
+    if isinstance(quantization, dict):
+        if "quant_recall_delta" in quantization:
+            manifest["quant_recall_delta"] = quantization["quant_recall_delta"]
+        if "certified" in quantization:
+            manifest["certified"] = quantization["certified"]
+        if "recall_delta_path" in quantization:
+            manifest["recall_delta_path"] = quantization["recall_delta_path"]
+        if "certification_limit" in quantization:
+            manifest["certification"] = {
+                "gate": "G4",
+                "limit": quantization["certification_limit"],
+                "metric": "character_recall",
+                "report_path": quantization.get("recall_delta_path"),
+            }
 
     prompt_spec = config.get("_mlx_prompt_spec")
     if prompt_spec:
@@ -194,7 +243,26 @@ def write_manifest(
     if runtime:
         manifest["runtime"] = runtime
 
+    if segmenter is not None:
+        manifest["segmenter"] = dict(segmenter)
+
     manifest_path = model_dir / MANIFEST_FILENAME
-    with open(manifest_path, "w") as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
+    validate_mlx_bundle(model_dir)
     return manifest_path
+
+
+def validate_mlx_bundle(model_dir: str | Path) -> dict[str, Any]:
+    """Validate manifest-declared optional resources in an MLX artifact bundle."""
+
+    root = Path(model_dir)
+    manifest = read_manifest(root)
+    if manifest is None:
+        raise ValueError(f"MLX artifact is missing {MANIFEST_FILENAME}: {root}")
+    segmenter = manifest.get("segmenter")
+    if segmenter is not None:
+        if not isinstance(segmenter, Mapping):
+            raise ValueError("MLX segmenter descriptor must be an object")
+        validate_segmenter_resources(root, segmenter)
+    return manifest

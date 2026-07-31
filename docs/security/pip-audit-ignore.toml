@@ -1,0 +1,11 @@
+# Time-boxed pip-audit ignores.
+#
+# Keep this list empty by default. If an advisory has no usable fix, add an
+# entry with a reason and review_by date, then remove it as soon as possible.
+#
+# Example:
+# [[ignore]]
+# id = "PYSEC-0000-000"
+# package = "example"
+# reason = "No fixed version is available; feature is not reachable in CI."
+# review_by = "2026-09-30"
