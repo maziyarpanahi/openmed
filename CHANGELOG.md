@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed the PySpark batch de-identification adapter so
+  `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
+  UDF construction instead of failing with an unsupported `Any` signature
+  (#1942).
 - Fixed `openmed risk discover`, `risk assess`, and `risk anonymize` handling
   of UTF-8 BOM-prefixed CSV and TSV schemas so the first column is classified
   consistently, and added bounded validation causes to structured-release CLI

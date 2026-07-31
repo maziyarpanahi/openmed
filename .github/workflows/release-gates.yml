@@ -79,6 +79,21 @@ jobs:
             i18n-throughput-report.json
             i18n-throughput-gate.json
 
+      - name: Run grounding accuracy gate
+        id: grounding
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_gates \
+            --grounding \
+            --output grounding-accuracy-gate.json
+
+      - name: Upload grounding accuracy gate report
+        if: always() && hashFiles('grounding-accuracy-gate.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: grounding-accuracy-gate
+          path: grounding-accuracy-gate.json
+
       - name: Check API migration guide completeness
         if: startsWith(github.ref, 'refs/tags/v1.9.')
         run: |
@@ -171,6 +186,7 @@ jobs:
         if: >-
           steps.i18n_benchmark.outcome == 'success' &&
           steps.i18n_throughput.outcome == 'success' &&
+          steps.grounding.outcome == 'success' &&
           steps.check-candidate.outputs.exists == 'true' &&
           steps.gates.outcome == 'success' &&
           steps.api_compat.outcome == 'success' &&
@@ -185,6 +201,7 @@ jobs:
           (
             steps.i18n_benchmark.outcome != 'success' ||
             steps.i18n_throughput.outcome != 'success' ||
+            steps.grounding.outcome != 'success' ||
             (
               steps.check-candidate.outputs.exists == 'true' &&
               (

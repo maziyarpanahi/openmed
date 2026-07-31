@@ -669,6 +669,193 @@ def test_g11_quarantines_single_missed_drug_allergy(tmp_path: Path) -> None:
     )
 
 
+def test_g14_passes_when_extraction_fairness_metric_absent(tmp_path: Path) -> None:
+    result = _gate().preview(_report(tmp_path), _baseline())
+
+    check = _check(result, "G14")
+    assert check.passed is True
+    assert check.reason == "not provided"
+    assert check.details["ceiling"] == release_gates.G14_EXTRACTION_DISPARITY_CEILING
+
+
+def test_g14_passes_on_balanced_extraction_corpus(tmp_path: Path) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": 0.01,
+                    "worst_group": "site=site_beta",
+                    "best_group": "site=site_alpha",
+                    "per_group": {
+                        "site=site_alpha": {"entity_f1": 0.99},
+                        "site=site_beta": {"entity_f1": 0.98},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert check.passed is True
+    assert check.details["extraction_f1_gap"] == pytest.approx(0.01)
+
+
+def test_g14_quarantines_when_injected_group_exceeds_ceiling(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": 0.42,
+                    "recall_gap": 0.5,
+                    "critical_finding_recall_gap": 0.6,
+                    "worst_group": "demographic_group=surrogate_b",
+                    "best_group": "demographic_group=surrogate_a",
+                    "worst_group_by_metric": {
+                        "entity_f1": "demographic_group=surrogate_b",
+                        "recall": "demographic_group=surrogate_b",
+                        "critical_finding_recall": "demographic_group=surrogate_b",
+                    },
+                    "per_group": {
+                        "demographic_group=surrogate_a": {"entity_f1": 0.95},
+                        "demographic_group=surrogate_b": {"entity_f1": 0.53},
+                    },
+                    "assistive": True,
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["ceiling"] == release_gates.G14_EXTRACTION_DISPARITY_CEILING
+    assert check.details["extraction_f1_gap"] == pytest.approx(0.42)
+    assert check.details["worst_group"] == "demographic_group=surrogate_b"
+    assert check.details["worst_group_by_metric"]["recall"] == (
+        "demographic_group=surrogate_b"
+    )
+
+
+def test_g14_computes_gap_from_per_group_when_gap_missing(tmp_path: Path) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "per_group": {
+                        "note_type=discharge_summary": {"entity_f1": 0.9},
+                        "note_type=progress_note": {"entity_f1": 0.2},
+                    }
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert check.passed is False
+    assert check.details["extraction_f1_gap"] == pytest.approx(0.7)
+    assert check.details["worst_group"] == "note_type=progress_note"
+
+
+@pytest.mark.parametrize("reported_gap", (-0.1, 0.0, 1.1))
+def test_g14_rejects_invalid_or_inconsistent_reported_gap(
+    tmp_path: Path,
+    reported_gap: float,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": reported_gap,
+                    "per_group": {
+                        "site=site_alpha": {"entity_f1": 0.95},
+                        "site=site_beta": {"entity_f1": 0.45},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "extraction-fairness metric is malformed"
+    assert check.details["computed_gap"] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    "per_group",
+    (
+        {"site=only": {"entity_f1": 0.9}},
+        {
+            "site=alpha": {"entity_f1": 0.9},
+            "site=beta": {"entity_f1": -0.1},
+        },
+        {
+            "site=alpha": {"entity_f1": 0.9},
+            "site=beta": {"entity_f1": "unknown"},
+        },
+    ),
+)
+def test_g14_rejects_malformed_group_evidence(
+    tmp_path: Path,
+    per_group: dict[str, object],
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"extraction_fairness": {"per_group": per_group}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "extraction-fairness metric is malformed"
+
+
+def test_g14_quarantines_from_extraction_fairness_report(tmp_path: Path) -> None:
+    from openmed.eval import (
+        extraction_fairness_report,
+        load_extraction_fairness_fixtures,
+    )
+
+    fixtures = load_extraction_fairness_fixtures()
+
+    def runner(fixture, model_name, device):
+        if fixture.metadata.get("demographic_group") == "surrogate_b":
+            return []
+        return [
+            {
+                "start": span.start,
+                "end": span.end,
+                "label": span.label,
+                "text": span.text,
+            }
+            for span in fixture.gold_spans
+        ]
+
+    audit = extraction_fairness_report("extract-model", fixtures, runner=runner)
+
+    result = _gate().evaluate(
+        _report(tmp_path, metric_updates={"extraction_fairness": audit.gate_metric()}),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["worst_group"] == "demographic_group=surrogate_b"
+
+
 def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
     tmp_path: Path,
 ) -> None:
@@ -1354,6 +1541,108 @@ def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
     assert len(rows) == 1_520
     assert derived_count == 752
     assert len(rows) + derived_count >= 2_000
+
+
+def _export_variant_manifest() -> dict[str, object]:
+    return {
+        "parent_format": "pytorch",
+        "parent_recall": {"PERSON": 0.995, "DATE": 0.995, "ID_NUM": 0.995},
+        "required_variants": ["onnx", "onnx-int8", "webgpu"],
+        "variants": [
+            {
+                "format": "onnx",
+                "tier": "base",
+                "p50_ms": 90.0,
+                "p95_ms": 280.0,
+                "ram_mb": 700.0,
+            },
+            {
+                "format": "onnx-int8",
+                "tier": "tiny",
+                "recall": {"PERSON": 0.992, "DATE": 0.993, "ID_NUM": 0.994},
+                "p50_ms": 40.0,
+                "p95_ms": 120.0,
+                "ram_mb": 300.0,
+            },
+            {
+                "format": "webgpu",
+                "tier": "base",
+                "p50_ms": 90.0,
+                "p95_ms": 280.0,
+                "ram_mb": 700.0,
+            },
+        ],
+    }
+
+
+def test_export_variant_gate_releases_passing_onnx_and_webgpu(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "export_variant_manifest": _export_variant_manifest(),
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert result.blocked_formats == ()
+    assert _check(result, "export_variants").passed is True
+    assert _check(result, "export_variants:onnx-int8").passed is True
+    assert _check(result, "export_variants:webgpu").passed is True
+
+
+def test_export_variant_gate_blocks_degraded_variant_and_reports_format(
+    tmp_path: Path,
+) -> None:
+    manifest = _export_variant_manifest()
+    manifest["variants"][1]["recall"] = {
+        "PERSON": 0.985,
+        "DATE": 0.993,
+        "ID_NUM": 0.994,
+    }
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"export_variant_manifest": manifest},
+        ),
+        _baseline(),
+    )
+
+    blocked = _check(result, "export_variants:onnx-int8")
+    assert result.decision == QUARANTINED
+    assert blocked.passed is False
+    assert blocked.blocking_format == "onnx-int8"
+    assert result.blocked_formats == ("onnx-int8",)
+    # Unrelated passing variants stay releasable within the same report.
+    assert _check(result, "export_variants:onnx").passed is True
+    assert _check(result, "export_variants:webgpu").passed is True
+
+
+def test_export_variant_gate_fails_closed_when_required_variant_missing(
+    tmp_path: Path,
+) -> None:
+    manifest = _export_variant_manifest()
+    manifest["variants"] = [
+        variant for variant in manifest["variants"] if variant["format"] != "webgpu"
+    ]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"export_variant_manifest": manifest},
+        ),
+        _baseline(),
+    )
+
+    coverage = _check(result, "export_variants")
+    assert result.decision == QUARANTINED
+    assert coverage.passed is False
+    assert coverage.details["missing_required"] == ["webgpu"]
 
 
 def _coreml_manifest() -> dict[str, object]:

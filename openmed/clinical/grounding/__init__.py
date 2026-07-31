@@ -1,7 +1,46 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
+from .assertion_grounding import (
+    ASSERTION_GROUNDING_ADVISORY,
+    GROUNDING_ASSERTION_STATUSES,
+    GROUNDING_POLICIES,
+    POLICY_DROP,
+    POLICY_STATUS,
+    POLICY_SUPPRESS,
+    AssertedGroundedSpan,
+    AssertionGroundingStatus,
+    assertion_grounding_status,
+    ground_with_context,
+)
+from .candidate_generator import SparseCandidateGenerator, generate_candidates
+from .embeddings import (
+    AliasEncoder,
+    EncoderUnavailableError,
+    HashingAliasEncoder,
+    MLXSapBERTEncoder,
+    load_encoder,
+)
+from .index import (
+    AliasEmbeddingIndex,
+    DenseCandidateGenerator,
+    IndexBackendUnavailableError,
+    build_index,
+    build_or_load_index,
+    load_index,
+    query_index,
+)
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
+from .provenance import (
+    GROUNDING_ASSIST_ONLY_ADVISORY,
+    GROUNDING_METHODS,
+    GroundingAlternative,
+    GroundingProvenance,
+    grounding_provenance,
+    provenance_version_pins,
+    scan_provenance_for_raw_text,
+)
+from .ranker import CandidateRankingStage, RankingConfig, rank_mention
 from .registry import (
     InvalidVocabularyLoaderError,
     RestrictedVocabularyLoaderError,
@@ -16,6 +55,7 @@ from .registry import (
     register_loader,
     validate_vocabulary_loader,
 )
+from .retrieval import TwoStageRetriever, retrieve_candidates
 from .types import Candidate
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -33,15 +73,38 @@ from .vocab import (
 )
 
 __all__ = [
+    "ASSERTION_GROUNDING_ADVISORY",
+    "AliasEmbeddingIndex",
+    "AliasEncoder",
+    "AssertedGroundedSpan",
+    "AssertionGroundingStatus",
     "Candidate",
+    "CandidateRankingStage",
     "ConceptMatch",
+    "DenseCandidateGenerator",
+    "EncoderUnavailableError",
     "FREE_VOCAB_SYSTEMS",
+    "GROUNDING_ASSERTION_STATUSES",
+    "GROUNDING_ASSIST_ONLY_ADVISORY",
+    "GROUNDING_METHODS",
+    "GROUNDING_POLICIES",
+    "GroundingAlternative",
+    "GroundingProvenance",
+    "HashingAliasEncoder",
+    "IndexBackendUnavailableError",
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
+    "MLXSapBERTEncoder",
+    "POLICY_DROP",
+    "POLICY_STATUS",
+    "POLICY_SUPPRESS",
     "RESTRICTED_VOCAB_SYSTEMS",
+    "RankingConfig",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
+    "SparseCandidateGenerator",
+    "TwoStageRetriever",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
@@ -52,14 +115,27 @@ __all__ = [
     "VocabularyLoaderRegistry",
     "VocabularyNotFoundError",
     "VocabularyRegistryError",
+    "assertion_grounding_status",
     "available_linkers",
     "available_loaders",
+    "build_index",
+    "build_or_load_index",
+    "generate_candidates",
+    "ground_with_context",
     "get_index",
     "get_linker",
     "get_loader",
+    "grounding_provenance",
+    "load_encoder",
+    "load_index",
     "normalize_language",
     "normalize_term",
+    "provenance_version_pins",
+    "query_index",
+    "rank_mention",
     "register_linker",
     "register_loader",
+    "retrieve_candidates",
+    "scan_provenance_for_raw_text",
     "validate_vocabulary_loader",
 ]

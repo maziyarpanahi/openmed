@@ -140,6 +140,7 @@ COMPLIANCE_CAVEAT = (
     "Validate locally before any production or clinical use."
 )
 _FHIR_BUNDLE_TYPES = frozenset({"transaction", "batch"})
+_OMOP_WRITERS = ("duckdb", "sqlite", "parquet")
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DEID_METHODS = ("mask", "remove", "replace", "hash", "shift_dates")
@@ -338,10 +339,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
+    _add_omop_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
+    _add_release_command(subparsers)
     _add_config_command(subparsers)
     add_airgap_command(subparsers)
     add_active_learning_command(subparsers)
@@ -1442,6 +1445,54 @@ def _add_icd11_command(subparsers: argparse._SubParsersAction) -> None:
     build_parser.set_defaults(handler=_handle_icd11_build_snapshot)
 
 
+def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add OMOP CDM load commands over the existing local-first loader."""
+    omop_parser = subparsers.add_parser(
+        "omop",
+        help="Load grounded clinical spans into a local OMOP CDM target.",
+    )
+    omop_sub = omop_parser.add_subparsers(dest="omop_command")
+
+    load_parser = omop_sub.add_parser(
+        "load",
+        help="Load a grounded-results JSONL file into a local OMOP CDM target.",
+    )
+    load_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="JSONL file of grounded note records to load.",
+    )
+    load_parser.add_argument(
+        "--target",
+        type=Path,
+        default=None,
+        help=(
+            "Local target DSN to persist into (a file for duckdb/sqlite, a "
+            "directory for parquet). Omit to only report the load summary."
+        ),
+    )
+    load_parser.add_argument(
+        "--writer",
+        choices=_OMOP_WRITERS,
+        default="sqlite",
+        help="On-device writer used when --target is set (default: sqlite).",
+    )
+    load_parser.add_argument(
+        "--vocabulary-version",
+        dest="vocabulary_version",
+        default=None,
+        help="Optional vocabulary version recorded in SOURCE_TO_CONCEPT_MAP rows.",
+    )
+    load_parser.add_argument(
+        "--validate",
+        dest="validate",
+        action="store_true",
+        help="Validate CDM constraints and report PHI-free violation counts.",
+    )
+    load_parser.set_defaults(handler=_handle_omop_load)
+
+
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
@@ -1694,6 +1745,12 @@ def _add_doctor_command(
     doctor_parser.set_defaults(
         handler=_handle_doctor,
     )
+
+
+def _add_release_command(subparsers: argparse._SubParsersAction) -> None:
+    from .release import add_release_command
+
+    add_release_command(subparsers)
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
@@ -3780,6 +3837,93 @@ def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
         + "\n"
     )
     return 0
+
+
+def _handle_omop_load(args: argparse.Namespace) -> int:
+    """Load a grounded-results JSONL file into a local OMOP CDM target."""
+    from ..interop.omop import (
+        load_grounded_jsonl,
+        validate_omop_tables,
+        write_omop_duckdb,
+        write_omop_parquet,
+        write_omop_sqlite,
+    )
+
+    try:
+        tables = load_grounded_jsonl(
+            args.input,
+            vocabulary_version=args.vocabulary_version,
+        )
+    except FileNotFoundError:
+        raise CliError(
+            f"Input file not found: {args.input}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
+    except (OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to load grounded notes: {exc}",
+            code="load_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    if args.target is not None:
+        writers = {
+            "duckdb": write_omop_duckdb,
+            "sqlite": write_omop_sqlite,
+            "parquet": write_omop_parquet,
+        }
+        try:
+            connection = writers[args.writer](tables, str(args.target))
+            if hasattr(connection, "close"):
+                connection.close()
+        except ImportError as exc:
+            raise CliError(
+                str(exc),
+                code="missing_dependency",
+                exit_code=EXIT_ERROR,
+            )
+        except (OSError, ValueError) as exc:
+            raise CliError(
+                f"Failed to write OMOP target: {exc}",
+                code="write_failed",
+                exit_code=EXIT_ERROR,
+            )
+
+    summary = tables.summary
+    payload: dict[str, Any] = {
+        "input": str(args.input),
+        "target": str(args.target) if args.target is not None else None,
+        "writer": args.writer if args.target is not None else None,
+        "vocabulary_version": args.vocabulary_version,
+        "row_counts": dict(summary.row_counts),
+        "rejection_counts": dict(summary.rejection_counts),
+        "rejected_spans": [span.to_dict() for span in summary.rejected_spans],
+        "source_note_hashes": list(summary.source_note_hashes),
+    }
+
+    if args.validate:
+        violations = validate_omop_tables(tables)
+        by_reason: dict[str, int] = {}
+        for violation in violations:
+            by_reason[violation.reason] = by_reason.get(violation.reason, 0) + 1
+        payload["constraint_violations"] = {
+            "count": len(violations),
+            "by_reason": by_reason,
+        }
+
+    counts = ", ".join(
+        f"{table}={count}" for table, count in payload["row_counts"].items() if count
+    )
+    rejected_total = sum(payload["rejection_counts"].values())
+    human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
+    return emit(args, payload, human=human)
 
 
 def _extract_fhir_doc_id(payload: Any) -> str:

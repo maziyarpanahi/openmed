@@ -383,6 +383,59 @@ class ClinicalAssertion:
 
 
 @dataclass(frozen=True)
+class RerankContext:
+    """Section and assertion context consumed by grounding candidate reranking.
+
+    This payload carries the surrounding-note signals a sparse+dense reranker
+    folds into a fused score without re-running retrieval. ``section`` is the
+    raw section header the mention was found under; :attr:`canonical_section`
+    normalizes it through the same OM-086 section vocabulary as
+    ``apply_section_context``. ``assertion`` is the advisory
+    :class:`ClinicalAssertion` for the span. ``preferred_concepts`` is the set
+    of ``(system, code)`` concept keys the section makes salient (e.g. the
+    section's active problem list); a candidate whose key is in that set earns
+    a section-match adjustment, which is how a same-surface collision resolves
+    to the section-appropriate sense.
+
+    The object is deliberately advisory: it records provenance-friendly context
+    features and never constructs a FHIR, OMOP, or other grounded record.
+    """
+
+    section: str | None = None
+    assertion: ClinicalAssertion | None = None
+    preferred_concepts: frozenset[tuple[str, str]] = frozenset()
+
+    @property
+    def canonical_section(self) -> str | None:
+        """Return the canonical section key for :attr:`section`, or ``None``."""
+
+        return canonical_section_label(self.section)
+
+    def section_match(self, system: str, code: str) -> float:
+        """Return ``1.0`` when ``(system, code)`` is preferred in this section."""
+
+        if not self.preferred_concepts:
+            return 0.0
+        return 1.0 if (system, code) in self.preferred_concepts else 0.0
+
+    def assertion_present(self) -> float:
+        """Return ``1.0`` unless the span is negated or hypothetical.
+
+        A missing assertion is treated as present so the feature never penalizes
+        spans that were not assertion-analyzed.
+        """
+
+        assertion = self.assertion
+        if assertion is None:
+            return 1.0
+        if assertion.negation == NEGATED:
+            return 0.0
+        if assertion.temporality == HYPOTHETICAL:
+            return 0.0
+        return 1.0
+
+
+@dataclass(frozen=True)
 class ModifierHit:
     """Scoped ConText cue matched around a target clinical span.
 
@@ -1295,6 +1348,7 @@ __all__ = [
     "PSEUDO_NEGATION_CUES",
     "ClinicalContextResult",
     "ClinicalAssertion",
+    "RerankContext",
     "ContextCueCategory",
     "ContextCueDirection",
     "INDIA_CLINICAL_NER_DISCLAIMER",
