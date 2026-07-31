@@ -242,7 +242,7 @@ def render_leaderboard_html(rows: Iterable[LeaderboardRow]) -> str:
         '<a href="https://github.com/maziyarpanahi/openmed/tree/master/'
         'docs/benchmarks">Reports</a>'
         '<button class="om-theme-toggle" type="button" '
-        "data-openmed-theme>Theme: system</button>"
+        "data-openmed-theme>Theme: light</button>"
         "</nav></div></header>\n"
         '<main id="main" class="om-page">\n'
         '<section class="om-hero" aria-labelledby="page-title">'

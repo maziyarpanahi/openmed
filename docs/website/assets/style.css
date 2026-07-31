@@ -507,12 +507,6 @@ pre {
     content: "";
 }
 
-.theme-icon[data-theme-state="system"]::after {
-    inset: 0 50% 0 0;
-    border-radius: 999px 0 0 999px;
-    background: currentcolor;
-}
-
 .theme-icon[data-theme-state="light"]::after {
     inset: 4px;
     border-radius: 50%;

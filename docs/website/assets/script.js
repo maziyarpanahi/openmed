@@ -22,26 +22,16 @@ function initTheme() {
     const button = document.getElementById("themeToggle");
     const themeColors = [...document.querySelectorAll("[data-theme-color]")];
     const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
-    const preferences = ["system", "light", "dark"];
-    let preference = readThemePreference();
+    const preferences = ["light", "dark"];
+    let preference = readThemePreference()
+        || (systemDark.matches ? "dark" : "light");
 
     if (!preferences.includes(preference)) {
-        preference = "system";
-    }
-
-    function resolvedTheme() {
-        if (preference === "system") {
-            return systemDark.matches ? "dark" : "light";
-        }
-        return preference;
+        preference = systemDark.matches ? "dark" : "light";
     }
 
     function applyTheme() {
-        if (preference === "system") {
-            root.removeAttribute("data-theme");
-        } else {
-            root.setAttribute("data-theme", preference);
-        }
+        root.setAttribute("data-theme", preference);
         root.dataset.themePreference = preference;
 
         const currentIndex = preferences.indexOf(preference);
@@ -57,7 +47,7 @@ function initTheme() {
                 `Color theme: ${preference}. Activate for ${next}.`,
             );
         }
-        const selectedColor = resolvedTheme() === "dark" ? "#0B0E13" : "#F4F7F8";
+        const selectedColor = preference === "dark" ? "#0B0E13" : "#F4F7F8";
         themeColors.forEach(meta => {
             meta.content = selectedColor;
         });
@@ -74,18 +64,15 @@ function initTheme() {
         applyTheme();
     });
 
-    const onSystemThemeChange = () => {
-        if (preference === "system") applyTheme();
-    };
-    addMediaListener(systemDark, onSystemThemeChange);
     applyTheme();
 }
 
 function readThemePreference() {
     try {
-        return localStorage.getItem("openmed-theme") || "system";
+        const value = localStorage.getItem("openmed-theme");
+        return value === "light" || value === "dark" ? value : null;
     } catch {
-        return "system";
+        return null;
     }
 }
 
