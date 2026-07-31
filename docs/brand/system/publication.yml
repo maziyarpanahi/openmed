@@ -185,6 +185,7 @@ classification:
     - openmrs-adapter.md
     - fhir-smart-guidelines.md
     - icd11-grounding.md
+    - export-matrix.md
     - mlx-backend.md
     - performance-mps.md
     - export-mlx-quant.md
