@@ -95,6 +95,27 @@ def test_approximate_surrogate_locale_is_explicit_and_never_silently_empty():
     assert row["surrogate_locale"]["status"] == APPROXIMATED
     assert row["coverage"]["approximated"] == 1
     assert row["coverage"]["missing"] == 0
+    assert row["coverage"]["populated"] == 5
+
+
+def test_pack_declares_approximation_without_an_internal_locale_map_edit():
+    registry = _registry(
+        _pack(
+            "xx",
+            surrogate_locale="en_US",
+            surrogate_locale_approximation="No native Faker locale is available",
+            national_id_providers={},
+        )
+    )
+    row = _row_for("xx", registry)
+
+    assert row["coherent"] is True
+    assert row["surrogate_locale"]["status"] == APPROXIMATED
+    assert row["surrogate_locale"]["approximation"] == (
+        "No native Faker locale is available"
+    )
+    assert row["coverage"]["populated"] == 5
+    assert row["coverage"]["missing"] == 0
 
 
 def test_approximate_language_with_invalid_locale_fails_loudly():
