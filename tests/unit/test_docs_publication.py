@@ -287,6 +287,36 @@ def test_docs_consume_the_shared_system_and_repository_owned_fonts() -> None:
     assert "link[data-openmed-hreflang-rel]" in docs_script
 
 
+def test_published_theme_controls_offer_only_light_and_dark() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+    website_script = (DOCS / "website" / "assets" / "script.js").read_text(
+        encoding="utf-8"
+    )
+    standalone_script = (DOCS / "javascripts" / "openmed-standalone.js").read_text(
+        encoding="utf-8"
+    )
+    standalone_pages = [
+        (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8"),
+        (DOCS / "demo" / "rtl" / "index.html").read_text(encoding="utf-8"),
+        (DOCS / "eval" / "benchmark-leaderboard" / "index.html").read_text(
+            encoding="utf-8"
+        ),
+    ]
+
+    palette = config["theme"]["palette"]
+    assert [entry["scheme"] for entry in palette] == ["default", "slate"]
+    assert [entry["toggle"]["name"] for entry in palette] == [
+        "Switch to dark mode",
+        "Switch to light mode",
+    ]
+    assert 'const preferences = ["light", "dark"]' in website_script
+    assert 'const modes = ["light", "dark"]' in standalone_script
+    assert "Color theme: system" not in website
+    assert "OpenMed provides technical controls, not legal compliance." not in website
+    assert all("Theme: system" not in page for page in standalone_pages)
+
+
 def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() -> None:
     publication = _load_yaml(PUBLICATION)
     demo = (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8")

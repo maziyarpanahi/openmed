@@ -239,7 +239,7 @@ async function prepareTheme(page: Page, theme: Theme): Promise<void> {
               primary: "custom",
               scheme: dark ? "slate" : "default",
             },
-            index: dark ? 2 : 1,
+            index: dark ? 1 : 0,
           }),
         );
       }
@@ -254,7 +254,6 @@ async function expectThemeInitialized(
   surface: Surface,
   theme: Theme,
 ): Promise<void> {
-  const mode = theme.startsWith("system") ? "system" : theme;
   const resolved = theme === "dark" || theme === "system-dark" ? "dark" : "light";
   if (surface.engine === "material") {
     await expect(page.locator("body")).toHaveAttribute(
@@ -278,18 +277,15 @@ async function expectThemeInitialized(
     );
   } else if (surface.engine === "standalone") {
     await expect(page.locator("html")).toHaveAttribute("data-theme", resolved);
-    await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
-  } else if (mode === "system") {
-    await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
     await expect(page.locator("html")).toHaveAttribute(
-      "data-theme-preference",
-      "system",
+      "data-theme-mode",
+      resolved,
     );
   } else {
-    await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", resolved);
     await expect(page.locator("html")).toHaveAttribute(
       "data-theme-preference",
-      mode,
+      resolved,
     );
   }
 
@@ -808,9 +804,9 @@ test("website interactions persist and expose states", async ({
 
   const theme = page.locator("#themeToggle");
   await theme.click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
   const menu = page.locator("#navToggle");
   await menu.click();
@@ -1122,13 +1118,10 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
 
-  const palette = page.locator('form[data-md-component="palette"] label:visible');
+  const paletteForm = page.locator('form[data-md-component="palette"]');
+  await expect(paletteForm.locator('input[type="radio"]')).toHaveCount(2);
+  const palette = paletteForm.locator("label:visible");
   await palette.click();
-  await expect(page.locator("body")).toHaveAttribute(
-    "data-md-color-scheme",
-    "default",
-  );
-  await page.locator('form[data-md-component="palette"] label:visible').click();
   await expect(page.locator("body")).toHaveAttribute(
     "data-md-color-scheme",
     "slate",
