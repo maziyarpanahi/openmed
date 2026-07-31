@@ -94,6 +94,7 @@
 
           devPythonPackages =
             (with python.pkgs; [
+              brotli
               cryptography
               dask
               duckdb
