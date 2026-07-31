@@ -21,6 +21,10 @@ LOCALES = ("hi", "zh")
 
 
 def _load_docs_hooks() -> Any:
+    pytest.importorskip(
+        "mkdocs",
+        reason="documentation hooks require the optional docs dependency set",
+    )
     spec = importlib.util.spec_from_file_location(
         "openmed_docs_hooks", DOCS / "_hooks.py"
     )

@@ -5,14 +5,26 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+from copy import deepcopy
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "scripts/brand/validate_system.py"
+SOCIAL_RENDERER = REPO_ROOT / "scripts/brand/render_social_assets.py"
 
 
 def _load_validator():
     spec = importlib.util.spec_from_file_location("validate_brand_system", VALIDATOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_social_renderer():
+    spec = importlib.util.spec_from_file_location(
+        "render_social_assets", SOCIAL_RENDERER
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -46,6 +58,28 @@ def test_social_masters_are_exact_approved_handoff_exports() -> None:
             == approved_hashes[approved.name]
         )
         assert master.read_bytes() == approved.read_bytes()
+
+
+def test_social_manifest_portability_ignores_only_derivative_encoding_bytes() -> None:
+    renderer = _load_social_renderer()
+    manifest = json.loads(
+        (REPO_ROOT / "docs/brand/social/manifest.json").read_text(encoding="utf-8")
+    )
+    platform_variant = deepcopy(manifest)
+    platform_variant["assets"][0]["native_sha256"] = "platform-specific-png"
+    platform_variant["assets"][1]["safe_zone_preview_sha256"] = (
+        "platform-specific-preview"
+    )
+    platform_variant["derived_assets"][0]["sha256"] = "platform-specific-encoding"
+
+    assert renderer._manifest_without_derivative_byte_hashes(
+        platform_variant
+    ) == renderer._manifest_without_derivative_byte_hashes(manifest)
+
+    platform_variant["assets"][0]["native_pixel_sha256"] = "pixel-drift"
+    assert renderer._manifest_without_derivative_byte_hashes(
+        platform_variant
+    ) != renderer._manifest_without_derivative_byte_hashes(manifest)
 
 
 def test_faq_parity_rejects_visible_answer_drift() -> None:

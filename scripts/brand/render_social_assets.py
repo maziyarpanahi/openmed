@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import hashlib
 import json
 import re
@@ -313,16 +314,130 @@ def _network_blocked() -> Iterator[None]:
         socket.create_connection = original_connection  # type: ignore[assignment]
 
 
-def _iter_output_paths(manifest: dict[str, Any]) -> Iterator[str]:
+def _manifest_without_derivative_byte_hashes(
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """Return the portable manifest contract used by cross-platform checks.
+
+    Pillow produces identical RGBA pixels for these derivatives on supported
+    platforms, but its PNG/ICO compression bytes can differ with the native
+    codec build. The committed manifest still records canonical repository
+    byte hashes; cross-platform reproduction compares those derivatives by
+    decoded pixels and keeps byte equality for approved master exports.
+    """
+
+    portable = copy.deepcopy(manifest)
+    for asset in portable["assets"]:
+        asset.pop("native_sha256", None)
+        asset.pop("safe_zone_preview_sha256", None)
+    for asset in portable["derived_assets"]:
+        asset.pop("sha256", None)
+    return portable
+
+
+def _image_pixel_state(path: Path) -> tuple[tuple[int, int], str]:
+    with Image.open(path) as image:
+        rgba = image.convert("RGBA")
+        return rgba.size, _pixel_sha256(rgba)
+
+
+def _ico_pixel_state(path: Path) -> dict[str, str]:
+    with Image.open(path) as image:
+        sizes = sorted(image.ico.sizes())  # type: ignore[attr-defined]
+        return {
+            f"{width}x{height}": _pixel_sha256(
+                image.ico.getimage((width, height))  # type: ignore[attr-defined]
+            )
+            for width, height in sizes
+        }
+
+
+def _same_rendered_pixels(actual: Path, expected: Path) -> bool:
+    if actual.suffix.lower() == ".ico":
+        return _ico_pixel_state(actual) == _ico_pixel_state(expected)
+    return _image_pixel_state(actual) == _image_pixel_state(expected)
+
+
+def _validate_committed_output_hashes(
+    manifest: dict[str, Any],
+) -> list[str]:
+    mismatches: list[str] = []
     for asset in manifest["assets"]:
-        yield asset["master"]
-        yield asset["native"]
-        yield from asset["copy_to"]
-        if "safe_zone_preview" in asset:
-            yield asset["safe_zone_preview"]
+        for field, key in (
+            ("master", "master_sha256"),
+            ("native", "native_sha256"),
+            ("safe_zone_preview", "safe_zone_preview_sha256"),
+        ):
+            relative = asset.get(field)
+            expected_hash = asset.get(key)
+            if relative is None or expected_hash is None:
+                continue
+            path = REPO_ROOT / relative
+            if not path.is_file() or _sha256(path) != expected_hash:
+                mismatches.append(relative)
     for asset in manifest["derived_assets"]:
-        yield asset["output"]
-        yield from asset["copy_to"]
+        relative = asset["output"]
+        path = REPO_ROOT / relative
+        if not path.is_file() or _sha256(path) != asset["sha256"]:
+            mismatches.append(relative)
+    return mismatches
+
+
+def _validate_rendered_outputs(
+    rendered_manifest: dict[str, Any],
+    temp_root: Path,
+) -> list[str]:
+    mismatches: list[str] = []
+    for asset in rendered_manifest["assets"]:
+        master = asset["master"]
+        actual_master = REPO_ROOT / master
+        expected_master = temp_root / master
+        if (
+            not actual_master.is_file()
+            or actual_master.read_bytes() != expected_master.read_bytes()
+        ):
+            mismatches.append(master)
+
+        native = asset["native"]
+        actual_native = REPO_ROOT / native
+        expected_native = temp_root / native
+        if not actual_native.is_file() or not _same_rendered_pixels(
+            actual_native, expected_native
+        ):
+            mismatches.append(native)
+        for relative in asset["copy_to"]:
+            consumer = REPO_ROOT / relative
+            if (
+                not consumer.is_file()
+                or consumer.read_bytes() != actual_native.read_bytes()
+            ):
+                mismatches.append(relative)
+
+        preview = asset.get("safe_zone_preview")
+        if preview is not None:
+            actual_preview = REPO_ROOT / preview
+            expected_preview = temp_root / preview
+            if not actual_preview.is_file() or not _same_rendered_pixels(
+                actual_preview, expected_preview
+            ):
+                mismatches.append(preview)
+
+    for asset in rendered_manifest["derived_assets"]:
+        output = asset["output"]
+        actual_output = REPO_ROOT / output
+        expected_output = temp_root / output
+        if not actual_output.is_file() or not _same_rendered_pixels(
+            actual_output, expected_output
+        ):
+            mismatches.append(output)
+        for relative in asset["copy_to"]:
+            consumer = REPO_ROOT / relative
+            if (
+                not consumer.is_file()
+                or consumer.read_bytes() != actual_output.read_bytes()
+            ):
+                mismatches.append(relative)
+    return mismatches
 
 
 def _check() -> int:
@@ -334,22 +449,23 @@ def _check() -> int:
         root = Path(temp)
         with _network_blocked():
             rendered_manifest = render_all(root)
-        if committed_manifest != rendered_manifest:
+        if _manifest_without_derivative_byte_hashes(
+            committed_manifest
+        ) != _manifest_without_derivative_byte_hashes(rendered_manifest):
             print("social manifest is stale; synchronize with --write", file=sys.stderr)
             return 1
-        mismatches = []
-        for relative in _iter_output_paths(rendered_manifest):
-            expected = root / relative
-            actual = REPO_ROOT / relative
-            if not actual.exists() or actual.read_bytes() != expected.read_bytes():
-                mismatches.append(relative)
+        mismatches = _validate_committed_output_hashes(committed_manifest)
+        mismatches.extend(_validate_rendered_outputs(rendered_manifest, root))
         if mismatches:
             print(
-                "stale social outputs: " + ", ".join(mismatches),
+                "stale social outputs: " + ", ".join(sorted(set(mismatches))),
                 file=sys.stderr,
             )
             return 1
-    print("approved social exports and derivatives reproduce exactly offline")
+    print(
+        "approved social exports reproduce byte-exactly and derivatives "
+        "reproduce pixel-exactly offline"
+    )
     return 0
 
 
