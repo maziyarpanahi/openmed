@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -68,3 +70,78 @@ def test_import_budget_accepts_fast_isolated_core_import():
     )
 
     assert import_budget.import_budget_failures(measurement, budget) == []
+
+
+def test_core_import_keeps_top_level_exports_lazy():
+    code = "\n".join(
+        [
+            "import json",
+            "import sys",
+            "import openmed",
+            "before = sorted(",
+            "    name for name in (",
+            "        'openmed.core',",
+            "        'openmed.mlx.lm',",
+            "        'openmed.onnx.inference',",
+            "        'openmed.processing',",
+            "    )",
+            "    if name in sys.modules",
+            ")",
+            "loader = openmed.ModelLoader",
+            "from openmed.core import ModelLoader",
+            "print(json.dumps({",
+            "    'before': before,",
+            "    'cached': openmed.__dict__['ModelLoader'] is loader,",
+            "    'identity': loader is ModelLoader,",
+            "}))",
+        ]
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "before": [],
+        "cached": True,
+        "identity": True,
+    }
+
+
+def test_multilingual_export_resolves_without_eager_optional_modules():
+    code = "\n".join(
+        [
+            "import json",
+            "import sys",
+            "from openmed import SUPPORTED_LANGUAGES",
+            "loaded = sorted(",
+            "    name for name in ('indicnlp', 'jieba', 'opencc', 'pypinyin')",
+            "    if name in sys.modules",
+            ")",
+            "print(json.dumps({",
+            "    'has_english': 'en' in SUPPORTED_LANGUAGES,",
+            "    'loaded': loaded,",
+            "}))",
+        ]
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "has_english": True,
+        "loaded": [],
+    }
