@@ -72,12 +72,19 @@ from .drugprot import (
     map_drugprot_entity_label,
 )
 from .dua_stubs import (
+    DEFAULT_SYNTHETIC_RADIOLOGY_PATH,
     DUA_GATED_CORPORA,
+    RADGRAPH,
+    RADGRAPH_STYLE_SCHEMA_VERSION,
     DUACorpusStub,
     DUACredentialRequired,
+    RadGraphFixture,
+    RadiologyEntityRelationFixture,
     all_dua_stubs,
     dua_stub_for,
     load_dua_corpus,
+    load_radgraph_fixtures,
+    load_synthetic_radiology_fixtures,
 )
 from .i2b2 import (
     I2B2,
@@ -185,6 +192,7 @@ from .public import (
 )
 
 __all__ = [
+    "DEFAULT_SYNTHETIC_RADIOLOGY_PATH",
     "DUA_GATED_CORPORA",
     "BC2GM",
     "BC5CDR",
@@ -199,6 +207,10 @@ __all__ = [
     "DEFT",
     "DUACorpusStub",
     "DUACredentialRequired",
+    "RADGRAPH",
+    "RADGRAPH_STYLE_SCHEMA_VERSION",
+    "RadGraphFixture",
+    "RadiologyEntityRelationFixture",
     "DatasetLicense",
     "EncoderLicense",
     "DatasetLoadResult",
@@ -313,6 +325,8 @@ __all__ = [
     "load_drugprot_ner_fixtures",
     "load_drugprot_relation_fixtures",
     "load_dua_corpus",
+    "load_radgraph_fixtures",
+    "load_synthetic_radiology_fixtures",
     "load_i2b2_deid",
     "load_cmeee",
     "load_cmeee_fixtures",

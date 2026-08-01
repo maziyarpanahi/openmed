@@ -62,6 +62,16 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         redistribution="committed synthetic fixtures only",
         notes="Synthetic-only fixtures; no real PHI and no DUA content.",
     ),
+    "radgraph": DatasetLicense(
+        dataset="radgraph",
+        license_id="PhysioNet-Credentialed-Health-Data-License",
+        source_url="https://physionet.org/content/radgraph/",
+        redistribution="user-supplied DUA/eval-only",
+        notes=(
+            "Credentialed local loading only. OpenMed never downloads, caches, "
+            "logs, commits, or redistributes RadGraph or source radiology rows."
+        ),
+    ),
     "naamapadam": DatasetLicense(
         dataset="naamapadam",
         license_id="CC0-1.0",

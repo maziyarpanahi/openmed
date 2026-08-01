@@ -169,6 +169,14 @@ from openmed.eval.suites.policy_compliance import (
     load_policy_compliance_fixtures,
     policy_compliance_metadata,
 )
+from openmed.eval.suites.radiology_relations import (
+    RADIOLOGY_ENTITY_RELATION,
+    RADIOLOGY_MEDICAL_DEVICE_DISCLAIMER,
+    build_radiology_entity_relation_report,
+    radiology_entity_relation_suite_metadata,
+    run_synthetic_radiology_entity_relation_eval,
+    score_radiology_entity_relation_fixtures,
+)
 from openmed.eval.suites.relations import (
     DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS,
     RELATIONS,
@@ -407,6 +415,8 @@ __all__ = [
     "INDIC_NAME_CONSISTENCY",
     "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
+    "RADIOLOGY_ENTITY_RELATION",
+    "RADIOLOGY_MEDICAL_DEVICE_DISCLAIMER",
     "DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS",
     "RelationFixture",
     "RelationTrap",
@@ -462,6 +472,10 @@ __all__ = [
     "relation_suite_metadata",
     "relation_trap_summary",
     "score_relation_fixtures",
+    "build_radiology_entity_relation_report",
+    "radiology_entity_relation_suite_metadata",
+    "run_synthetic_radiology_entity_relation_eval",
+    "score_radiology_entity_relation_fixtures",
     "run_biomedical_ner_benchmark",
     "run_masakhaner_benchmark",
     "load_naamapadam_fixtures",
