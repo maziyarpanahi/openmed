@@ -35,6 +35,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "indic": AdapterSpec(
+        name="indic",
+        module="openmed.interop.indic",
+        extra="indic",
+        description="Indic segmentation and transliteration helpers",
+    ),
+    "icd11_api": AdapterSpec(
+        name="icd11_api",
+        module="openmed.interop.icd11_api",
+        extra="",
+        description="Offline ICD-11 MMS snapshot grounding and builder",
+    ),
     "duckdb": AdapterSpec(
         name="duckdb",
         module="openmed.interop.duckdb_udf",
@@ -57,7 +69,7 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         name="llamaindex",
         module="openmed.interop.llamaindex",
         extra="llamaindex",
-        description="LlamaIndex FunctionTool adapter",
+        description="LlamaIndex node redaction and FunctionTool adapters",
     ),
     "pandas": AdapterSpec(
         name="pandas",
@@ -71,6 +83,18 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="presidio",
         description="Presidio RecognizerResult adapter",
     ),
+    "quickumls": AdapterSpec(
+        name="quickumls",
+        module="openmed.interop.quickumls",
+        extra="quickumls",
+        description="QuickUMLS licensed-resource linker adapter",
+    ),
+    "scispacy_linker": AdapterSpec(
+        name="scispacy_linker",
+        module="openmed.interop.scispacy_linker",
+        extra="scispacy",
+        description="scispaCy UMLS entity-linker adapter",
+    ),
     "philter": AdapterSpec(
         name="philter",
         module="openmed.interop.philter",
@@ -83,11 +107,29 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="polars",
         description="Polars DataFrame de-identification helpers",
     ),
+    "prefect": AdapterSpec(
+        name="prefect",
+        module="openmed.interop.prefect_tasks",
+        extra="prefect",
+        description="Prefect task and flow for batch de-identification",
+    ),
     "pydeid": AdapterSpec(
         name="pydeid",
         module="openmed.interop.pydeid",
         extra="pydeid",
         description="pyDeid PHI span adapter",
+    ),
+    "scrubadub": AdapterSpec(
+        name="scrubadub",
+        module="openmed.interop.scrubadub",
+        extra="scrubadub",
+        description="scrubadub Filth span adapter",
+    ),
+    "spark": AdapterSpec(
+        name="spark",
+        module="openmed.interop.spark_udf",
+        extra="spark",
+        description="PySpark pandas_udf for batch column de-identification",
     ),
     "gliner_biomed": AdapterSpec(
         name="gliner_biomed",
@@ -101,11 +143,29 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="spacy",
         description="spaCy pipeline component for OpenMed PII spans",
     ),
+    "zh": AdapterSpec(
+        name="zh",
+        module="openmed.interop.zh",
+        extra="zh",
+        description="Chinese segmentation, script conversion, and pinyin helpers",
+    ),
     "cdm_etl": AdapterSpec(
         name="cdm_etl",
         module="openmed.interop.cdm_etl",
         extra="",
         description="Deterministic clinical note to CDM-style ETL helpers",
+    ),
+    "omop": AdapterSpec(
+        name="omop",
+        module="openmed.interop.omop",
+        extra="",
+        description="OMOP CDM loader for grounded clinical note spans",
+    ),
+    "openmrs": AdapterSpec(
+        name="openmrs",
+        module="openmed.interop.openmrs",
+        extra="openmrs",
+        description="Local-first OpenMRS REST and FHIR2 de-identification adapter",
     ),
 }
 
@@ -139,7 +199,11 @@ def get_adapter(name: str) -> ModuleType:
     """Import and return an adapter module by name."""
 
     spec = adapter_spec(name)
-    return import_module(spec.module)
+    module = import_module(spec.module)
+    ensure_registered = getattr(module, "ensure_registered", None)
+    if ensure_registered is not None:
+        ensure_registered()
+    return module
 
 
 def adapter_tool_definitions(name: str) -> tuple[dict[str, Any], ...]:

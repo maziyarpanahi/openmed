@@ -2,13 +2,15 @@
 
 OpenMed MLX exports can emit INT4 artifacts, but an INT4 artifact is only
 marked certified when it holds recall against its full-precision parent on the
-same synthetic or approved eval fixtures.
+same synthetic or approved eval fixtures. For which architectures reach the
+MLX INT4/INT8/fp paths in the first place, see the
+[Export Format Support Matrix](export-matrix.md).
 
 ## INT4 Export
 
 ```bash
 python -m openmed.mlx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-mlx-4bit \
   --quantize 4 \
   --quantize-group-size 64 \

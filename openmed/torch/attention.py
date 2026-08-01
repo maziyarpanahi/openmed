@@ -22,25 +22,28 @@ def select_attn_implementation(
     prefer: str | None = "auto",
     *,
     log: logging.Logger | None = None,
-) -> str:
-    """Return a safe Transformers ``attn_implementation`` value.
+) -> str | None:
+    """Return a safe Transformers ``attn_implementation`` override.
 
     Args:
         prefer: ``"auto"``, ``"flash_attention_2"``, ``"sdpa"``, or
             ``"eager"``. Unavailable accelerated preferences downgrade with a
-            warning instead of raising.
+            warning instead of raising. Transformers performs the final model,
+            dtype, and device compatibility validation for explicit accelerated
+            backends.
         log: Optional logger used for downgrade warnings and one-time selection
             messages.
 
     Returns:
-        The attention implementation string to pass to
-        ``from_pretrained(..., attn_implementation=...)``.
+        The explicit attention implementation string to pass to
+        ``from_pretrained(..., attn_implementation=...)``, or ``None`` to let
+        Transformers choose a backend supported by the model architecture.
     """
     selected_logger = log or logger
     requested = _normalize_attn_preference(prefer)
 
     if requested in _AUTO_VALUES:
-        return _log_selected(_best_available_backend(), selected_logger)
+        return _log_transformers_auto(selected_logger)
 
     if requested == _ATTN_EAGER:
         return _log_selected(_ATTN_EAGER, selected_logger)
@@ -48,7 +51,10 @@ def select_attn_implementation(
     if requested == _ATTN_FLASH:
         if _flash_attention_2_is_available():
             return _log_selected(_ATTN_FLASH, selected_logger)
-        fallback = _best_available_backend(allow_flash=False)
+        # Eager is the only architecture-independent fallback. Selecting SDPA
+        # from Torch capability alone can force an unsupported implementation
+        # on models such as DeBERTa-v2.
+        fallback = _ATTN_EAGER
         _warn_downgrade(_ATTN_FLASH, fallback, selected_logger)
         return _log_selected(fallback, selected_logger)
 
@@ -58,21 +64,13 @@ def select_attn_implementation(
         _warn_downgrade(_ATTN_SDPA, _ATTN_EAGER, selected_logger)
         return _log_selected(_ATTN_EAGER, selected_logger)
 
-    fallback = _best_available_backend()
+    fallback = _ATTN_EAGER
     selected_logger.warning(
         "Unknown PyTorch attention backend %r; using %s instead.",
         prefer,
         fallback,
     )
     return _log_selected(fallback, selected_logger)
-
-
-def _best_available_backend(*, allow_flash: bool = True) -> str:
-    if allow_flash and _flash_attention_2_is_available():
-        return _ATTN_FLASH
-    if _sdpa_is_available():
-        return _ATTN_SDPA
-    return _ATTN_EAGER
 
 
 def _normalize_attn_preference(prefer: str | None) -> str:
@@ -133,6 +131,13 @@ def _log_selected(backend: str, selected_logger: logging.Logger) -> str:
         selected_logger.info("Using PyTorch attention backend: %s", backend)
         _LOGGED_BACKENDS.add(backend)
     return backend
+
+
+def _log_transformers_auto(selected_logger: logging.Logger) -> None:
+    if "auto" not in _LOGGED_BACKENDS:
+        selected_logger.info("Using Transformers automatic attention backend selection")
+        _LOGGED_BACKENDS.add("auto")
+    return None
 
 
 __all__ = [

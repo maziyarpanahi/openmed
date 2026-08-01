@@ -56,74 +56,76 @@ final class PolicyTests: XCTestCase {
         XCTAssertEqual(clinical.action(for: "condition"), .keep)
     }
 
-    func testPolicyProfileTransformPreservesOriginalOffsets() throws {
-        let text = "Name Ada DOB 04/01/2026"
-        let policy = try Policy(named: "gdpr")
-        let entities = [
-            entity(label: "first_name", value: "Ada", in: text),
-            entity(label: "date_of_birth", value: "04/01/2026", in: text),
-        ]
-
-        let result: PolicyDeidentificationResult = OpenMed.deidentify(
-            text,
-            entities: entities,
-            policy: policy
-        )
-
-        XCTAssertEqual(
-            result.redactedText,
-            "Name [FIRST_NAME_REPLACED] DOB [DATE_OF_BIRTH_REPLACED]"
-        )
-        XCTAssertEqual(result.policyName, "gdpr_pseudonymization")
-        XCTAssertEqual(result.actions.map(\.canonicalLabel), ["FIRST_NAME", "DATE_OF_BIRTH"])
-        XCTAssertEqual(result.actions.map(\.action), [.replace, .replace])
-        XCTAssertEqual(result.actions[0].start, 5)
-        XCTAssertEqual(result.actions[0].end, 8)
-        XCTAssertEqual(result.actions[1].start, 13)
-        XCTAssertEqual(result.actions[1].end, 23)
-    }
-
-    func testSyntheticActionToTextTransformMapping() {
-        let text =
-            "Name Ada Phone 555-0100 SSN 123-45-6789 ID MRN-123 penicillin"
-        let policy = Policy(
-            name: "synthetic",
-            defaultAction: .keep,
-            actions: [
-                "FIRST_NAME": .mask,
-                "PHONE": .replace,
-                "SSN": .hash,
-                "ID_NUM": .remove,
-                "ANTIBIOTIC": .keep,
+    #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        func testPolicyProfileTransformPreservesOriginalOffsets() throws {
+            let text = "Name Ada DOB 04/01/2026"
+            let policy = try Policy(named: "gdpr")
+            let entities = [
+                entity(label: "first_name", value: "Ada", in: text),
+                entity(label: "date_of_birth", value: "04/01/2026", in: text),
             ]
-        )
-        let entities = [
-            entity(label: "first_name", value: "Ada", in: text),
-            entity(label: "phone_number", value: "555-0100", in: text),
-            entity(label: "ssn", value: "123-45-6789", in: text),
-            entity(label: "medical_record_number", value: "MRN-123", in: text),
-            entity(label: "antibiotic", value: "penicillin", in: text),
-        ]
 
-        let result = OpenMed.deidentify(text, entities: entities, policy: policy)
-        let ssnReplacement = result.actions[2].replacement ?? ""
+            let result: PolicyDeidentificationResult = OpenMed.deidentify(
+                text,
+                entities: entities,
+                policy: policy
+            )
 
-        XCTAssertTrue(ssnReplacement.hasPrefix("SSN_"))
-        XCTAssertFalse(ssnReplacement.contains("123-45-6789"))
-        XCTAssertEqual(
-            result.redactedText,
-            "Name [FIRST_NAME] Phone [PHONE_REPLACED] SSN \(ssnReplacement) ID  penicillin"
-        )
-        XCTAssertEqual(
-            result.actions.map(\.action),
-            [.mask, .replace, .hash, .remove, .keep]
-        )
-        XCTAssertEqual(
-            result.actions.map(\.canonicalLabel),
-            ["FIRST_NAME", "PHONE", "SSN", "ID_NUM", "ANTIBIOTIC"]
-        )
-        XCTAssertNil(result.actions[4].replacement)
-    }
+            XCTAssertEqual(
+                result.redactedText,
+                "Name [FIRST_NAME_REPLACED] DOB [DATE_OF_BIRTH_REPLACED]"
+            )
+            XCTAssertEqual(result.policyName, "gdpr_pseudonymization")
+            XCTAssertEqual(result.actions.map(\.canonicalLabel), ["FIRST_NAME", "DATE_OF_BIRTH"])
+            XCTAssertEqual(result.actions.map(\.action), [.replace, .replace])
+            XCTAssertEqual(result.actions[0].start, 5)
+            XCTAssertEqual(result.actions[0].end, 8)
+            XCTAssertEqual(result.actions[1].start, 13)
+            XCTAssertEqual(result.actions[1].end, 23)
+        }
+
+        func testSyntheticActionToTextTransformMapping() {
+            let text =
+                "Name Ada Phone 555-0100 SSN 123-45-6789 ID MRN-123 penicillin"
+            let policy = Policy(
+                name: "synthetic",
+                defaultAction: .keep,
+                actions: [
+                    "FIRST_NAME": .mask,
+                    "PHONE": .replace,
+                    "SSN": .hash,
+                    "ID_NUM": .remove,
+                    "ANTIBIOTIC": .keep,
+                ]
+            )
+            let entities = [
+                entity(label: "first_name", value: "Ada", in: text),
+                entity(label: "phone_number", value: "555-0100", in: text),
+                entity(label: "ssn", value: "123-45-6789", in: text),
+                entity(label: "medical_record_number", value: "MRN-123", in: text),
+                entity(label: "antibiotic", value: "penicillin", in: text),
+            ]
+
+            let result = OpenMed.deidentify(text, entities: entities, policy: policy)
+            let ssnReplacement = result.actions[2].replacement ?? ""
+
+            XCTAssertTrue(ssnReplacement.hasPrefix("SSN_"))
+            XCTAssertFalse(ssnReplacement.contains("123-45-6789"))
+            XCTAssertEqual(
+                result.redactedText,
+                "Name [FIRST_NAME] Phone [PHONE_REPLACED] SSN \(ssnReplacement) ID  penicillin"
+            )
+            XCTAssertEqual(
+                result.actions.map(\.action),
+                [.mask, .replace, .hash, .remove, .keep]
+            )
+            XCTAssertEqual(
+                result.actions.map(\.canonicalLabel),
+                ["FIRST_NAME", "PHONE", "SSN", "ID_NUM", "ANTIBIOTIC"]
+            )
+            XCTAssertNil(result.actions[4].replacement)
+        }
+    #endif
 
     private func entity(
         label: String,
