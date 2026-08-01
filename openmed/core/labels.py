@@ -106,6 +106,44 @@ BODY_SITE: Final = "BODY_SITE"
 #: Procedure-record device concepts (issue #313)
 DEVICE: Final = "DEVICE"
 
+#: Relation-extraction head and attribute concepts (issue #252)
+PROBLEM: Final = "PROBLEM"
+SEVERITY: Final = "SEVERITY"
+DOSAGE: Final = "DOSAGE"
+ROUTE: Final = "ROUTE"
+FREQUENCY: Final = "FREQUENCY"
+DURATION: Final = "DURATION"
+FORM: Final = "FORM"
+STRENGTH: Final = "STRENGTH"
+INDICATION: Final = "INDICATION"
+LAB_VALUE: Final = "LAB_VALUE"
+UNIT: Final = "UNIT"
+REFERENCE_RANGE: Final = "REFERENCE_RANGE"
+ABNORMAL_FLAG: Final = "ABNORMAL_FLAG"
+
+#: Stable relation-extraction vocabulary for clinical heads and attributes.
+#: ``MEDICATION`` and ``BODY_SITE`` pre-date issue #252 but belong to the same
+#: public vocabulary as the labels introduced here.
+CLINICAL_CONCEPT_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        PROBLEM,
+        MEDICATION,
+        DOSAGE,
+        ROUTE,
+        FREQUENCY,
+        DURATION,
+        FORM,
+        STRENGTH,
+        INDICATION,
+        LAB_VALUE,
+        UNIT,
+        REFERENCE_RANGE,
+        ABNORMAL_FLAG,
+        BODY_SITE,
+        SEVERITY,
+    }
+)
+
 #: Anesthesia-record concepts (issue #952)
 ANESTHESIA_TYPE: Final = "ANESTHESIA_TYPE"
 ANESTHETIC_AGENT: Final = "ANESTHETIC_AGENT"
@@ -295,6 +333,19 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         PROCEDURE,
         BODY_SITE,
         DEVICE,
+        PROBLEM,
+        SEVERITY,
+        DOSAGE,
+        ROUTE,
+        FREQUENCY,
+        DURATION,
+        FORM,
+        STRENGTH,
+        INDICATION,
+        LAB_VALUE,
+        UNIT,
+        REFERENCE_RANGE,
+        ABNORMAL_FLAG,
         ANESTHESIA_TYPE,
         ANESTHETIC_AGENT,
         AIRWAY_MANAGEMENT,
@@ -500,6 +551,19 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             PROCEDURE,
             BODY_SITE,
             DEVICE,
+            PROBLEM,
+            SEVERITY,
+            DOSAGE,
+            ROUTE,
+            FREQUENCY,
+            DURATION,
+            FORM,
+            STRENGTH,
+            INDICATION,
+            LAB_VALUE,
+            UNIT,
+            REFERENCE_RANGE,
+            ABNORMAL_FLAG,
             ANESTHESIA_TYPE,
             ANESTHETIC_AGENT,
             AIRWAY_MANAGEMENT,
@@ -643,6 +707,39 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Relation-extraction heads and attributes (issue #252). Free-text
+    # problem/indication text and result values remain medium-risk so rare
+    # conditions and distinctive measurements are visible to risk tooling,
+    # while their policy class keeps them out of default PII redaction.
+    PROBLEM: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_MEDIUM,
+        (ICD_10_CM, SNOMED, HPO),
+    ),
+    SEVERITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DOSAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FREQUENCY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DURATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FORM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    STRENGTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    INDICATION: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_MEDIUM,
+        (ICD_10_CM, SNOMED, HPO),
+    ),
+    LAB_VALUE: _label_metadata(CLINICAL_CONCEPT, RISK_MEDIUM, (LOINC, SNOMED)),
+    UNIT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    REFERENCE_RANGE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (LOINC, SNOMED),
+    ),
+    ABNORMAL_FLAG: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_MEDIUM,
+        (LOINC, SNOMED),
+    ),
     # Anesthesia-record concepts (issue #952)
     ANESTHESIA_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     ANESTHETIC_AGENT: _label_metadata(
@@ -805,6 +902,19 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     DEVICE: HIPAA_UNIQUE_IDENTIFIER,
+    PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
+    SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
+    DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
+    ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    FREQUENCY: HIPAA_UNIQUE_IDENTIFIER,
+    DURATION: HIPAA_UNIQUE_IDENTIFIER,
+    FORM: HIPAA_UNIQUE_IDENTIFIER,
+    STRENGTH: HIPAA_UNIQUE_IDENTIFIER,
+    INDICATION: HIPAA_UNIQUE_IDENTIFIER,
+    LAB_VALUE: HIPAA_UNIQUE_IDENTIFIER,
+    UNIT: HIPAA_UNIQUE_IDENTIFIER,
+    REFERENCE_RANGE: HIPAA_UNIQUE_IDENTIFIER,
+    ABNORMAL_FLAG: HIPAA_UNIQUE_IDENTIFIER,
     # Anesthesia-record concepts
     ANESTHESIA_TYPE: HIPAA_UNIQUE_IDENTIFIER,
     ANESTHETIC_AGENT: HIPAA_UNIQUE_IDENTIFIER,
@@ -930,6 +1040,19 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
     DEVICE: POPIA_HEALTH_INFORMATION,
+    PROBLEM: POPIA_HEALTH_INFORMATION,
+    SEVERITY: POPIA_HEALTH_INFORMATION,
+    DOSAGE: POPIA_HEALTH_INFORMATION,
+    ROUTE: POPIA_HEALTH_INFORMATION,
+    FREQUENCY: POPIA_HEALTH_INFORMATION,
+    DURATION: POPIA_HEALTH_INFORMATION,
+    FORM: POPIA_HEALTH_INFORMATION,
+    STRENGTH: POPIA_HEALTH_INFORMATION,
+    INDICATION: POPIA_HEALTH_INFORMATION,
+    LAB_VALUE: POPIA_HEALTH_INFORMATION,
+    UNIT: POPIA_HEALTH_INFORMATION,
+    REFERENCE_RANGE: POPIA_HEALTH_INFORMATION,
+    ABNORMAL_FLAG: POPIA_HEALTH_INFORMATION,
     ANESTHESIA_TYPE: POPIA_HEALTH_INFORMATION,
     ANESTHETIC_AGENT: POPIA_HEALTH_INFORMATION,
     AIRWAY_MANAGEMENT: POPIA_HEALTH_INFORMATION,
@@ -1243,14 +1366,15 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # Clinical concepts
     "condition": CONDITION,
     "disease": CONDITION,
-    "diagnosis": CONDITION,
+    "diagnosis": PROBLEM,
     "ayushmorbidity": CONDITION,
     "namastemorbidity": CONDITION,
     "finding": CONDITION,
-    "problem": CONDITION,
+    "problem": PROBLEM,
     "disorder": CONDITION,
     "syndrome": CONDITION,
     "medication": MEDICATION,
+    "med": MEDICATION,
     "drug": MEDICATION,
     "indiandrug": MEDICATION,
     "indiandrugbrand": MEDICATION,
@@ -1306,7 +1430,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vaccinationname": VACCINE_NAME,
     "vaccination": VACCINE_NAME,
     "dosenumber": DOSE_NUMBER,
-    "dose": DOSE_NUMBER,
+    "dose": DOSAGE,
     "administrationroute": ADMINISTRATION_ROUTE,
     "vaccineroute": ADMINISTRATION_ROUTE,
     "vaccinelot": VACCINE_LOT,
@@ -1315,6 +1439,38 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vaccinationseries": VACCINE_SERIES,
     "administrationdate": DATE,
     "administrationsite": BODY_SITE,
+    # Relation-extraction heads and attributes (issue #252)
+    "dx": PROBLEM,
+    "problemlist": PROBLEM,
+    "problemlistitem": PROBLEM,
+    "activeproblem": PROBLEM,
+    "severity": SEVERITY,
+    "severitygrade": SEVERITY,
+    "dosage": DOSAGE,
+    "dosing": DOSAGE,
+    "route": ROUTE,
+    "routeofadministration": ROUTE,
+    "frequency": FREQUENCY,
+    "freq": FREQUENCY,
+    "duration": DURATION,
+    "form": FORM,
+    "doseform": FORM,
+    "dosageform": FORM,
+    "strength": STRENGTH,
+    "dosestrength": STRENGTH,
+    "indication": INDICATION,
+    "reasonfordrug": INDICATION,
+    "labvalue": LAB_VALUE,
+    "labresult": LAB_VALUE,
+    "resultvalue": LAB_VALUE,
+    "unit": UNIT,
+    "units": UNIT,
+    "uom": UNIT,
+    "referencerange": REFERENCE_RANGE,
+    "normalrange": REFERENCE_RANGE,
+    "refrange": REFERENCE_RANGE,
+    "abnormalflag": ABNORMAL_FLAG,
+    "abnormalityflag": ABNORMAL_FLAG,
     # Nursing-care observation concepts
     "intakeoutput": INTAKE_OUTPUT,
     "intakeandoutput": INTAKE_OUTPUT,
@@ -1659,6 +1815,7 @@ _validate_label_metadata()
 
 __all__ = [
     "CANONICAL_LABELS",
+    "CLINICAL_CONCEPT_LABELS",
     "NAME_BOUNDARY_REFINEMENT_LABELS",
     "normalize_label",
     "supports_name_boundary_refinement",
@@ -1777,6 +1934,19 @@ __all__ = [
     "PROCEDURE",
     "BODY_SITE",
     "DEVICE",
+    "PROBLEM",
+    "SEVERITY",
+    "DOSAGE",
+    "ROUTE",
+    "FREQUENCY",
+    "DURATION",
+    "FORM",
+    "STRENGTH",
+    "INDICATION",
+    "LAB_VALUE",
+    "UNIT",
+    "REFERENCE_RANGE",
+    "ABNORMAL_FLAG",
     "ANESTHESIA_TYPE",
     "ANESTHETIC_AGENT",
     "AIRWAY_MANAGEMENT",

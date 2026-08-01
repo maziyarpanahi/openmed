@@ -74,6 +74,9 @@ class GroundedSpan:
         start: Inclusive character offset in the source document.
         end: Exclusive character offset in the source document.
         candidates: At most one selected candidate per requested system.
+        calibrated_score: Optional post-calibration probability.
+        abstained: Whether calibrated grounding withheld the selected codes.
+        provenance: Optional grounding-calibration provenance.
         canonical_label: Optional canonical clinical label such as
             ``"CONDITION"`` or ``"MEDICATION"``.
         assertion: Optional composed clinical assertion consumed by FHIR and
@@ -91,6 +94,9 @@ class GroundedSpan:
     start: int
     end: int
     candidates: tuple[Candidate, ...] = ()
+    calibrated_score: float | None = None
+    abstained: bool = False
+    provenance: Mapping[str, Any] = field(default_factory=dict)
     canonical_label: str | None = None
     assertion: ClinicalAssertion | None = None
     source_language: str = "en"
@@ -112,7 +118,10 @@ class GroundedSpan:
             raise ValueError("source_language must be a non-empty string")
         if not isinstance(self.metadata, Mapping):
             raise TypeError("grounded span metadata must be a mapping")
+        if not isinstance(self.provenance, Mapping):
+            raise TypeError("grounded span provenance must be a mapping")
         object.__setattr__(self, "candidates", candidates)
+        object.__setattr__(self, "provenance", dict(self.provenance))
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     @property
@@ -154,6 +163,9 @@ class GroundedSpan:
             "cui": self.cui,
             "codes": self.codes,
             "score": self.score,
+            "calibrated_score": self.calibrated_score,
+            "abstained": self.abstained,
+            "provenance": dict(self.provenance),
             "canonical_label": self.canonical_label,
             "assertion": self.assertion.to_dict() if self.assertion else None,
             "source_language": self.source_language,

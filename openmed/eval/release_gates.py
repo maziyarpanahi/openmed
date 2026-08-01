@@ -83,6 +83,13 @@ G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+G13_STRICT_ENTITY_F1_FLOOR = 0.900
+G13_STRICT_RELATION_F1_FLOOR = 0.850
+G13_UNCERTAINTY_ACCURACY_FLOOR = 0.950
+# Explicit aliases make the gate's radiology scope clear in serialized configs.
+G13_RADIOLOGY_ENTITY_F1_FLOOR = G13_STRICT_ENTITY_F1_FLOOR
+G13_RADIOLOGY_RELATION_F1_FLOOR = G13_STRICT_RELATION_F1_FLOOR
+G13_RADIOLOGY_UNCERTAINTY_ACCURACY_FLOOR = G13_UNCERTAINTY_ACCURACY_FLOOR
 #: Maximum tolerated worst-group-vs-best-group extraction-F1 gap across
 #: synthetic site/note-type/demographic surrogate groups before G14 quarantines.
 G14_EXTRACTION_DISPARITY_CEILING = 0.050
@@ -722,6 +729,7 @@ class ReleaseGate:
         checks.append(_calibration_check(metadata, profile))
         checks.append(_abstention_advisory_check(metrics, metadata, target_leakage))
         checks.append(_conformal_coverage_check(metrics, metadata))
+        checks.append(_grounding_coverage_check(metrics, metadata))
         checks.append(
             self._g1a_check(
                 per_label_recall,
@@ -771,6 +779,7 @@ class ReleaseGate:
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
         checks.append(_g9_relation_extraction_check(metrics, metadata))
+        checks.append(_g13_radiology_entity_relation_check(metrics, metadata))
         coreml_manifest = _coreml_conversion_manifest(metadata)
         if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
             "coreml"
@@ -1905,6 +1914,109 @@ def _conformal_coverage_report(
     return dict(payload), "", True
 
 
+def _grounding_coverage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    report, error, explicit = _grounding_coverage_report(metrics, metadata)
+    required = bool(
+        _first_value(
+            metadata.get("require_grounding_coverage"),
+            metrics.get("require_grounding_coverage"),
+            False,
+        )
+    )
+    if error:
+        return GateCheck("grounding_coverage", False, reason=error)
+    if not report:
+        if required:
+            return GateCheck(
+                "grounding_coverage",
+                False,
+                reason="grounding calibration report is required",
+            )
+        return GateCheck(
+            "grounding_coverage",
+            True,
+            reason="not provided",
+            details={"required": False},
+        )
+
+    from openmed.clinical.grounding.calibration import (
+        evaluate_grounding_coverage_gate,
+    )
+
+    min_accuracy = _optional_float(
+        _first_value(
+            metadata.get("minimum_grounding_accuracy"),
+            metrics.get("minimum_grounding_accuracy"),
+            report.get("minimum_accuracy"),
+        )
+    )
+    if min_accuracy is None:
+        min_accuracy = 0.85
+    min_coverage = _optional_float(
+        _first_value(
+            metadata.get("minimum_grounding_coverage"),
+            metrics.get("minimum_grounding_coverage"),
+            report.get("minimum_coverage"),
+        )
+    )
+    if min_coverage is None:
+        min_coverage = 0.70
+
+    gate = evaluate_grounding_coverage_gate(
+        report,
+        min_accuracy=min_accuracy,
+        min_coverage=min_coverage,
+    )
+    return GateCheck(
+        "grounding_coverage",
+        bool(gate.get("passed")),
+        reason="ok"
+        if gate.get("passed")
+        else "grounded-span accuracy below required coverage",
+        details={**gate, "explicit": explicit, "required": required},
+    )
+
+
+def _grounding_coverage_report(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, Any], str, bool]:
+    inline = _first_mapping(
+        metadata.get("grounding_calibration"),
+        metadata.get("grounding_calibration_report"),
+        metadata.get("grounding_coverage"),
+        metrics.get("grounding_calibration"),
+        metrics.get("grounding_calibration_report"),
+        metrics.get("grounding_coverage"),
+    )
+    if inline:
+        return inline, "", True
+
+    path_value = _first_value(
+        metadata.get("grounding_calibration_report_path"),
+        metadata.get("grounding_coverage_report_path"),
+        metadata.get("grounding_coverage_path"),
+        metrics.get("grounding_calibration_report_path"),
+        metrics.get("grounding_coverage_report_path"),
+        metrics.get("grounding_coverage_path"),
+    )
+    if path_value is None:
+        return {}, "", False
+    path = Path(str(path_value))
+    if not path.is_file():
+        return {}, f"grounding calibration report not found: {path}", True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"could not read grounding calibration report: {exc}", True
+    if not isinstance(payload, Mapping):
+        return {}, "grounding calibration report must be a JSON object", True
+    return dict(payload), "", True
+
+
 def _recall_floor_check(
     gate: str,
     labels: frozenset[str],
@@ -3007,6 +3119,146 @@ def _relation_type_summary(value: Any) -> dict[str, Any]:
         summary[str(relation_type)] = {
             "relaxed_f1": _optional_float(relaxed.get("f1")),
             "strict_f1": _optional_float(strict.get("f1")),
+        }
+    return summary
+
+
+def evaluate_radiology_entity_relation_gate(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any] | None = None,
+) -> GateCheck:
+    """Evaluate the G13 radiology entity, relation, and uncertainty floors."""
+    return _g13_radiology_entity_relation_check(metrics, metadata or {})
+
+
+def _g13_radiology_entity_relation_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _radiology_entity_relation_evidence(metrics, metadata)
+    task = _normalise_dimension(str(metadata.get("task") or ""))
+    required = bool(
+        metadata.get("radiology_entity_relation_required")
+        or task in {"radiology-entity-relation", "radiology-relation"}
+    )
+    if not evidence:
+        return GateCheck(
+            "G13",
+            not required,
+            reason=(
+                "radiology entity-and-relation evidence is required"
+                if required
+                else "not applicable"
+            ),
+            details={"required": required},
+        )
+
+    entity = _mapping(evidence.get("entity"))
+    relation = _mapping(evidence.get("relation"))
+    uncertainty = _mapping(evidence.get("uncertainty"))
+    strict_entity_f1 = _metric_point(
+        _first_value(entity.get("strict"), evidence.get("strict_entity_f1"))
+    )
+    strict_relation_f1 = _metric_point(
+        _first_value(relation.get("strict"), evidence.get("strict_relation_f1"))
+    )
+    uncertainty_accuracy = _optional_float(
+        _first_value(
+            uncertainty.get("accuracy"),
+            evidence.get("uncertainty_accuracy"),
+        )
+    )
+
+    violations: dict[str, Any] = {}
+    _record_floor_violation(
+        violations,
+        "strict_entity_f1",
+        strict_entity_f1,
+        G13_STRICT_ENTITY_F1_FLOOR,
+    )
+    _record_floor_violation(
+        violations,
+        "strict_relation_f1",
+        strict_relation_f1,
+        G13_STRICT_RELATION_F1_FLOOR,
+    )
+    _record_floor_violation(
+        violations,
+        "uncertainty_accuracy",
+        uncertainty_accuracy,
+        G13_UNCERTAINTY_ACCURACY_FLOOR,
+    )
+    passed = not violations
+    return GateCheck(
+        "G13",
+        passed,
+        reason=(
+            "ok"
+            if passed
+            else "radiology entity, relation, or uncertainty metric below floor"
+        ),
+        details={
+            "per_relation_type": _relation_type_summary(
+                relation.get("per_relation_type")
+            ),
+            "per_uncertainty_class": _uncertainty_class_summary(
+                _first_value(
+                    uncertainty.get("per_class"),
+                    uncertainty.get("by_class"),
+                )
+            ),
+            "strict_entity_f1": strict_entity_f1,
+            "strict_entity_f1_floor": G13_STRICT_ENTITY_F1_FLOOR,
+            "strict_relation_f1": strict_relation_f1,
+            "strict_relation_f1_floor": G13_STRICT_RELATION_F1_FLOOR,
+            "uncertainty_accuracy": uncertainty_accuracy,
+            "uncertainty_accuracy_floor": G13_UNCERTAINTY_ACCURACY_FLOOR,
+            "violations": violations,
+        },
+    )
+
+
+def _radiology_entity_relation_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    return _first_mapping(
+        metrics.get("radiology_entity_relation"),
+        metrics.get("radiology_entity_relation_metrics"),
+        metadata.get("radiology_entity_relation"),
+        metadata.get("radiology_entity_relation_metrics"),
+    )
+
+
+def _metric_point(value: Any) -> float | None:
+    if isinstance(value, Mapping):
+        return _optional_float(value.get("f1"))
+    return _optional_float(value)
+
+
+def _record_floor_violation(
+    violations: dict[str, Any],
+    name: str,
+    value: float | None,
+    floor: float,
+) -> None:
+    if value is None:
+        violations[name] = {"floor": floor, "value": "missing"}
+    elif not 0.0 <= value <= 1.0:
+        violations[name] = {"floor": floor, "value": value, "error": "out of range"}
+    elif value < floor:
+        violations[name] = {"floor": floor, "value": value}
+
+
+def _uncertainty_class_summary(value: Any) -> dict[str, Any]:
+    per_class = _mapping(value)
+    summary: dict[str, Any] = {}
+    for uncertainty, payload in sorted(per_class.items()):
+        values = _mapping(payload)
+        summary[str(uncertainty)] = {
+            "accuracy": _optional_float(values.get("accuracy")),
+            "correct": _optional_int(values.get("correct")),
+            "total": _optional_int(values.get("total")),
         }
     return summary
 
@@ -4630,6 +4882,12 @@ __all__ = [
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
     "G11_CRITICAL_RECALL_FLOOR",
+    "G13_RADIOLOGY_ENTITY_F1_FLOOR",
+    "G13_RADIOLOGY_RELATION_F1_FLOOR",
+    "G13_RADIOLOGY_UNCERTAINTY_ACCURACY_FLOOR",
+    "G13_STRICT_ENTITY_F1_FLOOR",
+    "G13_STRICT_RELATION_F1_FLOOR",
+    "G13_UNCERTAINTY_ACCURACY_FLOOR",
     "G14_EXTRACTION_DISPARITY_CEILING",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
@@ -4653,6 +4911,7 @@ __all__ = [
     "build_arg_parser",
     "build_grounding_gate_report",
     "evaluate_federated_boundary_gate",
+    "evaluate_radiology_entity_relation_gate",
     "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",
