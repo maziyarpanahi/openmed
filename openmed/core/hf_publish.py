@@ -347,43 +347,44 @@ def publish_artifact(
             commit_message=f"Publish {format_name} artifact",
         )
 
-    if manifest_path is not None:
-        append_manifest_row(manifest_path, row)
-    if baseline_path is not None:
-        update_baseline_entry(
-            baseline_path,
-            family=str(row["family"]),
-            tier=row.get("tier"),
-            format_name=str(row["formats"][0]),
-            metrics=baseline_metrics
-            if baseline_metrics is not None
-            else row["benchmark"],
-            reproducibility_hash=str(row["reproducibility_hash"]),
-            repo_id=str(row["repo_id"]),
-            source_model_id=source_model_id,
-            released=str(row["released"]) if row.get("released") else None,
-            git_sha=resolved_git_sha,
-            metadata={
-                "architecture": row.get("architecture"),
-                "base_model": row.get("base_model"),
-                "task": row.get("task"),
-            },
-        )
-    if any((benchmarks_dir, leaderboard_dir, status_output_path)):
-        if manifest_path is None or baseline_path is None:
-            raise HfPublishError(
-                "manifest and baseline paths are required to refresh status outputs"
+    if not skipped:
+        if manifest_path is not None:
+            append_manifest_row(manifest_path, row)
+        if baseline_path is not None:
+            update_baseline_entry(
+                baseline_path,
+                family=str(row["family"]),
+                tier=row.get("tier"),
+                format_name=str(row["formats"][0]),
+                metrics=baseline_metrics
+                if baseline_metrics is not None
+                else row["benchmark"],
+                reproducibility_hash=str(row["reproducibility_hash"]),
+                repo_id=str(row["repo_id"]),
+                source_model_id=source_model_id,
+                released=str(row["released"]) if row.get("released") else None,
+                git_sha=resolved_git_sha,
+                metadata={
+                    "architecture": row.get("architecture"),
+                    "base_model": row.get("base_model"),
+                    "task": row.get("task"),
+                },
             )
-        _refresh_status_outputs(
-            manifest_path=manifest_path,
-            baseline_path=baseline_path,
-            benchmark_report_paths=benchmark_report_paths or [],
-            benchmarks_dir=benchmarks_dir,
-            leaderboard_dir=leaderboard_dir,
-            status_output_path=status_output_path,
-            smoke_status=smoke_status,
-            smoke_failure_reason=smoke_failure_reason,
-        )
+        if any((benchmarks_dir, leaderboard_dir, status_output_path)):
+            if manifest_path is None or baseline_path is None:
+                raise HfPublishError(
+                    "manifest and baseline paths are required to refresh status outputs"
+                )
+            _refresh_status_outputs(
+                manifest_path=manifest_path,
+                baseline_path=baseline_path,
+                benchmark_report_paths=benchmark_report_paths or [],
+                benchmarks_dir=benchmarks_dir,
+                leaderboard_dir=leaderboard_dir,
+                status_output_path=status_output_path,
+                smoke_status=smoke_status,
+                smoke_failure_reason=smoke_failure_reason,
+            )
 
     return PublishResult(
         repo_id=repo_id,
