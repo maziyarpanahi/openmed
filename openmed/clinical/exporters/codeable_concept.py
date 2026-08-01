@@ -108,6 +108,8 @@ def build_reverse_index(
     """
     index: dict[tuple[str, str], list[tuple[int, int]]] = {}
     for span in grounded_spans:
+        if span.abstained:
+            continue
         for candidate in span.candidates:
             key = (_uri_for(candidate.system), candidate.code)
             index.setdefault(key, []).append((span.start, span.end))

@@ -915,6 +915,28 @@ def test_grounding_coverage_gate_accepts_documented_operating_point(
     assert check.details["vocabularies"]["RXNORM"]["coverage"] == pytest.approx(0.72)
 
 
+def test_grounding_coverage_gate_reads_offline_report_artifact(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "grounding-calibration.json"
+    report_path.write_text(json.dumps(_grounding_report()), encoding="utf-8")
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "grounding_calibration_report_path": str(report_path),
+                "require_grounding_coverage": True,
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is True
+    assert check.details["explicit"] is True
+    assert check.details["required"] is True
+
+
 def test_grounding_coverage_gate_blocks_accuracy_below_coverage_target(
     tmp_path: Path,
 ) -> None:

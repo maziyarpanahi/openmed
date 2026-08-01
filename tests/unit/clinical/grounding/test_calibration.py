@@ -9,9 +9,10 @@ import pytest
 
 from openmed.clinical.exporters.codeable_concept import (
     GroundedSpan,
+    build_reverse_index,
     to_codeable_concept,
 )
-from openmed.clinical.grounding import Candidate
+from openmed.clinical.grounding import Candidate, grounding_provenance
 from openmed.clinical.grounding.calibration import (
     GroundingCalibrationRecord,
     apply_grounding_abstention,
@@ -21,6 +22,12 @@ from openmed.clinical.grounding.calibration import (
     grounding_calibration_report,
 )
 from openmed.eval.metrics import expected_calibration_error, reliability_bins
+from openmed.eval.suites import (
+    GROUNDING_CALIBRATION,
+    load_suite_fixtures,
+    suite_metadata,
+    validate_suite_name,
+)
 from openmed.eval.suites.grounding_calibration import (
     run_grounding_calibration_suite,
 )
@@ -90,6 +97,19 @@ def test_grounding_report_emits_per_vocabulary_reliability_and_coverage_gate() -
     assert evaluate_grounding_coverage_gate(report)["passed"] is True
 
 
+def test_record_inputs_remain_calibrated_per_system_and_label() -> None:
+    records = [
+        GroundingCalibrationRecord("rxnorm", "drug", 0.50, True),
+        GroundingCalibrationRecord("rxnorm", "problem", 0.50, False),
+    ]
+
+    calibrator = fit_grounding_calibrator(records)
+
+    assert calibrator.predict_many(records) == pytest.approx((1.0, 0.0))
+    assert ("RXNORM", "DRUG") in calibrator.groups
+    assert ("RXNORM", "PROBLEM") in calibrator.groups
+
+
 def test_abstained_spans_preserve_candidates_and_export_without_code() -> None:
     records = [
         GroundingCalibrationRecord("RXNORM", "DRUG", 0.20, False),
@@ -109,10 +129,16 @@ def test_abstained_spans_preserve_candidates_and_export_without_code() -> None:
         label="drug",
     )
     concept = to_codeable_concept(calibrated)
+    provenance = grounding_provenance([calibrated])[0]
 
     assert calibrated.abstained is True
     assert calibrated.candidates == candidates
     assert "coding" not in concept
+    assert build_reverse_index([calibrated]) == {}
+    assert provenance.abstained is True
+    assert provenance.code == ""
+    assert provenance.score == pytest.approx(calibrated.calibrated_score)
+    assert [candidate.code for candidate in provenance.alternatives] == ["1191", "161"]
     assert concept["_grounding"]["abstained"] is True
     assert concept["_grounding"]["candidate_count"] == 2
 
@@ -155,3 +181,10 @@ def test_grounding_calibration_suite_reads_local_gold_and_writes_report(
     assert payload["suite"] == "grounding_calibration"
     assert payload["vocabularies"]["HPO"]["reliability_diagram"]
     assert payload["vocabularies"]["HPO"]["coverage_accuracy_curve"]
+    assert validate_suite_name(GROUNDING_CALIBRATION) == GROUNDING_CALIBRATION
+    assert len(load_suite_fixtures(GROUNDING_CALIBRATION, path=gold_path)) == 2
+    assert suite_metadata(GROUNDING_CALIBRATION, gold_path=gold_path) == {
+        "suite": GROUNDING_CALIBRATION,
+        "offline": True,
+        "gold_path": str(gold_path),
+    }

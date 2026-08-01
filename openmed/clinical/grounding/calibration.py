@@ -303,29 +303,42 @@ def coerce_grounding_calibration_records(
     for index, (score_item, gold_item) in enumerate(zip(score_items, gold_items)):
         score_map = score_item if isinstance(score_item, Mapping) else {}
         gold_map = gold_item if isinstance(gold_item, Mapping) else {}
-        if isinstance(score_item, GroundingCalibrationRecord) and gold is None:
-            records.append(score_item)
-            continue
+        record_system = (
+            score_item.system
+            if isinstance(score_item, GroundingCalibrationRecord)
+            else None
+        )
+        record_label = (
+            score_item.label
+            if isinstance(score_item, GroundingCalibrationRecord)
+            else None
+        )
 
         score = _score_from_item(score_item)
         system = (
             systems[index]
             if systems is not None
-            else _first_text(
-                score_map,
-                gold_map,
-                keys=("system", "vocabulary", "vocab", "code_system"),
-                default="GROUNDING",
+            else _first_value(
+                record_system,
+                _first_text(
+                    score_map,
+                    gold_map,
+                    keys=("system", "vocabulary", "vocab", "code_system"),
+                    default="GROUNDING",
+                ),
             )
         )
         label = (
             labels[index]
             if labels is not None
-            else _first_text(
-                score_map,
-                gold_map,
-                keys=("label", "entity_type", "semantic_type", "kind"),
-                default=DEFAULT_GROUNDING_LABEL,
+            else _first_value(
+                record_label,
+                _first_text(
+                    score_map,
+                    gold_map,
+                    keys=("label", "entity_type", "semantic_type", "kind"),
+                    default=DEFAULT_GROUNDING_LABEL,
+                ),
             )
         )
         correct = _correct_from_items(score_item, gold_item)
@@ -766,7 +779,7 @@ def _probability_records(
 
 def _score_from_item(item: Any) -> float:
     if isinstance(item, GroundingCalibrationRecord):
-        return item.score
+        return _bounded_probability(item.score, "score")
     if isinstance(item, Mapping):
         value = _first_value(
             item.get("score"),
@@ -809,6 +822,9 @@ def _correct_from_items(score_item: Any, gold_item: Any) -> bool:
             )
             if predicted_code is not None and gold_code is not None:
                 return str(predicted_code) == str(gold_code)
+            raise ValueError(
+                "grounding gold mapping requires correctness or a gold code"
+            )
         return _bool_from_value(gold_item)
 
     if isinstance(score_item, GroundingCalibrationRecord):
