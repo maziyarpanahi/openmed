@@ -137,6 +137,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="gliner",
         description="GLiNER-BioMed zero-shot entity adapter",
     ),
+    "haystack": AdapterSpec(
+        name="haystack",
+        module="openmed.interop.haystack",
+        extra="haystack",
+        description="Haystack document redaction component",
+    ),
     "spacy": AdapterSpec(
         name="spacy",
         module="openmed.interop.spacy_component",
