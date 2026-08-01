@@ -73,6 +73,17 @@ def test_corpus_covers_every_required_adversarial_shape() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "corpus_path",
+    CORPUS_FILES,
+    ids=[f"{path.stem}-crlf" for path in CORPUS_FILES],
+)
+def test_corpus_directives_decode_identically_with_crlf(corpus_path: Path) -> None:
+    data = corpus_path.read_bytes()
+
+    assert decode_fuzz_case(data.replace(b"\n", b"\r\n")) == decode_fuzz_case(data)
+
+
 @pytest.mark.timeout(2)
 def test_ten_megabyte_case_rejects_before_pipeline_allocation() -> None:
     data = (CORPUS_DIRECTORY / "ten_megabytes.case").read_bytes()

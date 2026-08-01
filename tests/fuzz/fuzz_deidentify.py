@@ -49,7 +49,7 @@ else:
 logger = logging.getLogger(__name__)
 
 CORPUS_DIRECTORY = Path(__file__).with_name("corpus")
-_CORPUS_HEADER = b"OPENMED_FUZZ_V1\n"
+_CORPUS_HEADER = b"OPENMED_FUZZ_V1"
 _MAX_GENERATED_INPUT_BYTES = 10 * 1024 * 1024
 _MAX_GENERATED_CUSTOM_RULES = MAX_CUSTOM_RECOGNIZER_RULES + 1
 _MODEL_NAME = "synthetic-offline-fuzz-model"
@@ -87,11 +87,11 @@ def decode_fuzz_case(data: bytes) -> FuzzCase:
     production validation path.
     """
 
-    if not data.startswith(_CORPUS_HEADER):
+    header, separator, directive = _partition_line(data)
+    if not separator or header != _CORPUS_HEADER:
         return FuzzCase(text=data)
 
-    directive = data[len(_CORPUS_HEADER) :]
-    operation, separator, payload = directive.partition(b"\n")
+    operation, separator, payload = _partition_line(directive)
     if not separator:
         return FuzzCase(text=data)
 
@@ -105,7 +105,7 @@ def decode_fuzz_case(data: bytes) -> FuzzCase:
             return FuzzCase(text=data)
 
     if operation == b"repeat":
-        count_line, count_separator, unit_hex = payload.partition(b"\n")
+        count_line, count_separator, unit_hex = _partition_line(payload)
         if not count_separator:
             return FuzzCase(text=data)
         try:
@@ -135,6 +135,15 @@ def decode_fuzz_case(data: bytes) -> FuzzCase:
         )
 
     return FuzzCase(text=data)
+
+
+def _partition_line(data: bytes) -> tuple[bytes, bytes, bytes]:
+    """Partition one metadata line while accepting LF and CRLF checkouts."""
+
+    line, separator, remainder = data.partition(b"\n")
+    if separator and line.endswith(b"\r"):
+        line = line[:-1]
+    return line, separator, remainder
 
 
 def _empty_prediction(
