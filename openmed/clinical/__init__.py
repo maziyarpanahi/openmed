@@ -105,6 +105,17 @@ from .coreference import (
     SpanChainKey,
     resolve_coreference,
 )
+from .decision_support import (
+    CLINICAL_DECISION_SUPPORT_DISCLAIMER,
+    CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION,
+    CLINICIAN_REVIEW_REQUIRED_NOTE,
+    GuardedSuggestion,
+    GuardrailValidationError,
+    SourceSpan,
+    build_guarded_suggestion,
+    guarded_suggestion,
+    validate_guarded_suggestion,
+)
 from .document_linking import (
     DOCUMENT_LINKING_ADVISORY,
     DocumentCluster,
@@ -432,6 +443,15 @@ __all__ = [
     "canonicalize_text",
     "link_mentions",
     "score_mention_pair",
+    "CLINICAL_DECISION_SUPPORT_DISCLAIMER",
+    "CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION",
+    "CLINICIAN_REVIEW_REQUIRED_NOTE",
+    "GuardedSuggestion",
+    "GuardrailValidationError",
+    "SourceSpan",
+    "build_guarded_suggestion",
+    "guarded_suggestion",
+    "validate_guarded_suggestion",
     "COREFERENCE_FEATURES",
     "COREFERENCE_RESOLUTION_ADVISORY",
     "DEFAULT_COREFERENCE_THRESHOLD",
