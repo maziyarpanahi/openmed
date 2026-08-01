@@ -151,12 +151,67 @@ def test_renderer_emits_grouped_html_json_and_downloads(tmp_path: Path) -> None:
     assert payload["rows"][0]["run_date"] == "2026-07-17"
     assert payload["rows"][0]["reproducibility_hash"] == "sha256:" + "a" * 64
     assert 'role="tab"' in rendered
+    assert 'tabindex="0"' in rendered
+    assert "event.key === 'ArrowRight'" in rendered
+    assert "event.key === 'Home'" in rendered
+    assert 'role="search"' in rendered
+    assert 'for="leaderboard-filter"' in rendered
+    assert 'id="leaderboard-filter" type="search"' in rendered
+    assert 'aria-controls="leaderboard-results"' in rendered
+    assert 'id="leaderboard-filter-status"' in rendered
+    assert 'role="status"' in rendered
+    assert 'aria-live="polite"' in rendered
+    assert "Showing 2 of 2 benchmark rows." in rendered
+    assert 'aria-label="privacy, 1 benchmark row"' in rendered
+    assert 'aria-label="utility, 1 benchmark row"' in rendered
+    assert rendered.count("<tr data-leaderboard-row") == 2
+    assert rendered.count("<section data-leaderboard-group") == 2
+    assert "filter.addEventListener('input', applyFilter)" in rendered
+    assert "row.hidden = !matches" in rendered
+    assert "group.hidden = !group.querySelector" in rendered
+    assert "filterRegion.hidden = false" in rendered
+    assert "fetch(" not in rendered
+    assert "XMLHttpRequest" not in rendered
     assert ">PII</h2>" in rendered
     assert ">NER</h2>" in rendered
     assert 'href="reports/nested/privacy.json" download' in rendered
     assert 'href="leaderboard.json" download' in rendered
+    assert 'scope="col"' in rendered
+    assert 'scope="row"' in rendered
+    assert '<caption class="om-sr-only">' in rendered
+    assert "../../stylesheets/openmed-system.css" in rendered
+    assert "../../stylesheets/openmed-standalone.css" in rendered
+    assert 'rel="canonical"' in rendered
+    assert 'property="og:title"' in rendered
+    assert 'name="twitter:card"' in rendered
+    assert "<style>" not in rendered
     assert (output / "reports" / "nested" / "privacy.json").is_file()
     assert (output / "reports" / "utility.json").is_file()
+
+
+def test_renderer_filter_index_is_deterministic_and_escaped(tmp_path: Path) -> None:
+    reports = tmp_path / "reports"
+    _write_report(
+        reports / "nested" / "filter.json",
+        model_name='OpenMed/<script data-name="unsafe"> & model',
+        suite="privacy",
+        family="PII & NER",
+        leakage=0.0125,
+        recall=0.9875,
+        f1=0.95,
+    )
+
+    artifacts = write_leaderboard(reports, tmp_path / "output")
+    rendered = artifacts.html_path.read_text(encoding="utf-8")
+
+    assert (
+        'data-search="privacy PII &amp; NER '
+        "OpenMed/&lt;script data-name=&quot;unsafe&quot;&gt; &amp; model cpu "
+        "1.2500% 98.7500% 95.0000% v2.0.0 2026-07-17 "
+        f'sha256:{"a" * 64} nested/filter.json"'
+    ) in rendered
+    assert 'data-search="privacy PII & NER' not in rendered
+    assert '<script data-name="unsafe">' not in rendered
 
 
 def test_rerendering_same_archive_is_byte_identical(tmp_path: Path) -> None:
@@ -317,11 +372,10 @@ def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None
     pull_request = workflow["on"]["pull_request"]
     build = workflow["jobs"]["build"]
     deploy = workflow["jobs"]["deploy"]
-    steps = build["steps"]
-    render_step = next(
+    stage_step = next(
         step
-        for step in steps
-        if step.get("name") == "Render public benchmark leaderboard"
+        for step in build["steps"]
+        if step.get("name") == "Stage and verify the exact Pages artifact"
     )
 
     assert push["branches"] == ["master"]
@@ -335,10 +389,5 @@ def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None
     )
     assert deploy["needs"] == "build"
     assert deploy["if"] == "github.event_name != 'pull_request'"
-    assert "python -m openmed.eval.leaderboard" in render_step["run"]
-    assert "docs/eval/benchmark-leaderboard" in render_step["run"]
-    assert 'release_tag="$GITHUB_REF_NAME"' in render_step["run"]
-    assert "test -s site/docs/llms.txt" in workflow_text
-    assert "test -s site/docs/llms-full.txt" in workflow_text
-    assert "test -f site/docs/zh/index.html" in workflow_text
-    assert "test -f site/docs/hi/index.html" in workflow_text
+    assert "scripts/docs/stage_pages.py" in stage_step["run"]
+    assert '--release-tag "$GITHUB_REF_NAME"' in stage_step["run"]

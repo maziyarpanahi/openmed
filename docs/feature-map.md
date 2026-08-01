@@ -7,6 +7,8 @@ coverage, see
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
 [OpenMed v1.8.0 Release Notes](./release/v1.8.0.md), and the historical
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
+For the model families available by clinical specialty, use the
+[clinical-domain model guide](clinical-domains.md).
 
 ## Privacy And De-identification
 
@@ -84,7 +86,7 @@ coverage, see
 | --- | --- | --- |
 | Responsible disclosure | Private vulnerability reporting, security issue routing, breach notification runbook, and breach report template. | `SECURITY.md`, `docs/security/disclosure-policy.md`, `docs/compliance/breach-notification-runbook.md`, `docs/compliance/templates/breach-report-template.md` |
 | Dependency and release controls | License policy, pip-audit ignores, SBOM generation, container SBOMs, image signing, SLSA provenance, secret scanning, vulnerability scanning, reproducible locks, GitHub Actions ref validation, lockfile drift, repo policy, and doctest-backed examples. | `docs/security/`, `docs/supply-chain/`, `scripts/release/`, `scripts/security/`, `docs/contributing/reproducible-dependencies.md`, `tests/unit/release/` |
-| Privacy-safe diagnostics | PHI-safe progress callbacks, NDJSON errors, active-learning records, hashed examples, explain traces, dataset cards, metadata scrubbing, and no-raw-PHI guidance. | `openmed/multimodal/metadata_scrub.py`, `openmed/training/active_learning.py`, `openmed/eval/dataset_card.py`, `docs/compliance.md`, `docs/security/secret-handling.md` |
+| Privacy-safe diagnostics | PHI-safe progress callbacks, NDJSON errors, active-learning records, hashed examples, explain traces, dataset cards, metadata scrubbing, and no-raw-PHI guidance. | `openmed/multimodal/metadata_scrub.py`, `openmed/training/active_learning.py`, `openmed/eval/dataset_card.py`, [Compliance Posture](./compliance.md), [Secret Handling](./security/secret-handling.md) |
 
 ## Suggested Reading Order
 

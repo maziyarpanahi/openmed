@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check docs-serve docs-build docs-stage docs-deploy
+.PHONY: help build publish release clean install lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -72,16 +72,25 @@ docs-serve: ## Run the MkDocs dev server with live reload
 	@echo "📚 Serving docs at http://127.0.0.1:8008 ..."
 	uv run mkdocs serve -a 127.0.0.1:8008
 
-docs-build: ## Build the MkDocs site (strict mode)
-	@echo "🏗️ Building documentation..."
-	uv run mkdocs build --strict
-	@echo "🔎 Verifying LLM documentation feeds..."
-	test -s site/docs/llms.txt
-	test -s site/docs/llms-full.txt
+brand-check: ## Validate brand sources, claims, consumers, and generated art
+	@echo "🧭 Validating the repository-owned brand system..."
+	uv run --extra dev --extra docs --frozen python scripts/brand/validate_system.py
+	uv run --extra dev --extra docs --frozen python scripts/brand/update_claims.py --check
+	uv run --extra dev --extra docs --frozen python scripts/brand/sync_consumers.py --check
+	uv run --extra dev --extra docs --frozen python scripts/brand/render_social_assets.py --check
 
-docs-stage: docs-build ## Build docs and bundle them with the marketing site into site/
-	@echo "📦 Bundling marketing site with docs..."
-	rsync -av docs/website/ site/
+docs-build: docs-stage ## Build and verify the exact Pages artifact
+
+docs-stage: brand-check ## Build docs, generated surfaces, and marketing into site/
+	@echo "📦 Staging the verified GitHub Pages artifact..."
+	uv run --extra dev --extra docs --frozen python scripts/docs/stage_pages.py
+
+docs-browser-test: docs-stage ## Run the pinned Chromium, Firefox, and WebKit brand matrix
+	@echo "🌐 Installing pinned browser-test dependencies..."
+	npm ci --prefix tests/browser/brand
+	npm exec --prefix tests/browser/brand -- playwright install chromium firefox webkit
+	@echo "🧭 Running the cross-browser Pages matrix..."
+	npm --prefix tests/browser/brand test
 
 docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages (gh-pages branch)
 	@echo "🚀 Deploying documentation to GitHub Pages..."
