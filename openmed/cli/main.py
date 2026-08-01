@@ -337,6 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
     _add_policy_command(subparsers)
+    _add_export_command(subparsers)
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
@@ -1491,6 +1492,73 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         help="Validate CDM constraints and report PHI-free violation counts.",
     )
     load_parser.set_defaults(handler=_handle_omop_load)
+
+
+def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add clinical export commands."""
+
+    export_parser = subparsers.add_parser("export", help="Clinical export utilities.")
+    export_sub = export_parser.add_subparsers(dest="export_command")
+
+    openehr_parser = export_sub.add_parser(
+        "openehr",
+        help="Serialize grounded clinical entities into openEHR flat JSON.",
+    )
+    openehr_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="JSON result file containing grounded clinical entities.",
+    )
+    openehr_parser.add_argument(
+        "--template",
+        type=Path,
+        required=True,
+        help="EHRbase WebTemplate JSON or allowed-path template manifest.",
+    )
+    openehr_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path to write the openEHR flat COMPOSITION JSON.",
+    )
+    openehr_parser.add_argument(
+        "--doc-id",
+        default=None,
+        help="Stable source document id; defaults to the input payload id.",
+    )
+    openehr_parser.add_argument(
+        "--source-text-file",
+        type=Path,
+        default=None,
+        help="Optional de-identified note text file for offset validation.",
+    )
+    openehr_parser.add_argument(
+        "--composer",
+        default="OpenMed",
+        help="Composer name for openEHR context.",
+    )
+    openehr_parser.add_argument(
+        "--language",
+        default="en",
+        help="ISO language code for openEHR context.",
+    )
+    openehr_parser.add_argument(
+        "--territory",
+        default="US",
+        help="ISO territory code for openEHR context.",
+    )
+    openehr_parser.add_argument(
+        "--time",
+        default=None,
+        help="Composition timestamp; defaults to the current UTC time.",
+    )
+    openehr_parser.add_argument(
+        "--vocabulary-key",
+        default=None,
+        help="Enable caller-supplied terminology codings when present.",
+    )
+    openehr_parser.set_defaults(handler=_handle_export_openehr)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -3924,6 +3992,133 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
     return emit(args, payload, human=human)
+
+
+def _handle_export_openehr(args: argparse.Namespace) -> int:
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        entities = _extract_clinical_entities(payload)
+        source_text = _extract_openehr_source_text(payload)
+        if args.source_text_file is not None:
+            source_text = args.source_text_file.read_text(encoding="utf-8")
+        doc_id = args.doc_id or _extract_doc_id(payload)
+
+        from ..clinical.exporters.openehr import to_openehr_composition
+
+        composition = to_openehr_composition(
+            entities,
+            operational_template=args.template,
+            doc_id=doc_id,
+            source_text=source_text,
+            composer_name=args.composer,
+            language=args.language,
+            territory=args.territory,
+            time=args.time,
+            vocabulary_key=args.vocabulary_key,
+        )
+        args.output.write_text(
+            json.dumps(composition, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except FileNotFoundError as exc:
+        raise CliError(
+            f"Input file not found: {exc.filename}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
+    except OSError as exc:
+        raise CliError(
+            f"Failed to read or write openEHR COMPOSITION: {exc}",
+            code="io_error",
+            exit_code=EXIT_ERROR,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to assemble openEHR COMPOSITION: {exc}",
+            code="assemble_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    result = {
+        "output": str(args.output),
+        "entity_count": len(entities),
+        "coded_element_count": sum(path.endswith("|code") for path in composition),
+    }
+    return emit(
+        args,
+        result,
+        human=f"openEHR COMPOSITION written to: {args.output}",
+    )
+
+
+def _extract_doc_id(payload: Any) -> str:
+    """Return the stable source document id carried by a result payload."""
+
+    if isinstance(payload, MappingABC):
+        for key in ("doc_id", "document_id", "id"):
+            value = payload.get(key)
+            if isinstance(value, (str, int)) and str(value):
+                return str(value)
+    return "openmed-document"
+
+
+def _extract_clinical_entities(payload: Any) -> list[Any]:
+    entities = _find_clinical_entities_payload(payload)
+    if not isinstance(entities, list):
+        raise ValueError("clinical entities must be a JSON array")
+    normalized: list[Any] = []
+    for index, entity in enumerate(entities):
+        if not isinstance(entity, MappingABC):
+            raise ValueError(f"clinical entity at index {index} must be a JSON object")
+        normalized.append(dict(entity))
+    return normalized
+
+
+def _find_clinical_entities_payload(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, MappingABC):
+        raise ValueError(
+            "openEHR input must be a JSON array of clinical entities or a result object"
+        )
+
+    for key in ("entities", "clinical_entities", "clinicalEntities"):
+        if key in payload:
+            return payload[key]
+
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("entities", "clinical_entities", "clinicalEntities"):
+            if key in result_payload:
+                return result_payload[key]
+
+    raise ValueError(
+        "openEHR input must contain grounded clinical entities under "
+        "'entities' or 'clinical_entities'"
+    )
+
+
+def _extract_openehr_source_text(payload: Any) -> str | None:
+    if not isinstance(payload, MappingABC):
+        return None
+    for key in ("source_text", "text", "note", "narrative"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("source_text", "text", "note", "narrative"):
+            value = result_payload.get(key)
+            if isinstance(value, str):
+                return value
+    return None
 
 
 def _extract_fhir_doc_id(payload: Any) -> str:
