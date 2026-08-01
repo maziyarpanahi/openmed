@@ -12,7 +12,15 @@ from .__about__ import __version__
 
 if TYPE_CHECKING:
     from .core import ModelLoader, OpenMedConfig
+    from .core.pii import (
+        DeidentificationResult,
+        PIIEntity,
+        deidentify,
+        extract_pii,
+        reidentify,
+    )
     from .core.results import AnalyzeResult
+    from .processing import BatchProcessor
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {

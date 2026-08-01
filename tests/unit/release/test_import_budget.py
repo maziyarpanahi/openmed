@@ -145,3 +145,25 @@ def test_multilingual_export_resolves_without_eager_optional_modules():
         "has_english": True,
         "loaded": [],
     }
+
+
+def test_i18n_module_import_does_not_require_top_level_anonymizer_warmup():
+    code = "\n".join(
+        [
+            "import openmed.core.pii_i18n as pii_i18n",
+            "from openmed.core.anonymizer.providers import NationalIdSpec",
+            "assert callable(pii_i18n.validate_aadhaar)",
+            "assert NationalIdSpec.__name__ == 'NationalIdSpec'",
+        ]
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
