@@ -116,6 +116,7 @@ classification:
     - model-tokenizer-script-coverage.md
     - output-formatting.md
     - clinical/context-and-extraction.md
+    - clinical/concept-grounding.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md

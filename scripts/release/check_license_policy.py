@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import re
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -160,6 +161,7 @@ REVIEWED_LICENSES = {
 
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
 RESTRICTED_VOCAB_DATA_MARKERS = (
+    "cpt",
     "mrconso",
     "mrrel",
     "mrsty",
@@ -381,6 +383,29 @@ def audit_restricted_vocab_data(project_root: Path = ROOT) -> list[Path]:
     return findings
 
 
+def audit_restricted_vocab_wheel(wheel_path: Path) -> list[str]:
+    """Return restricted vocabulary data entries found in a built wheel.
+
+    Args:
+        wheel_path: Built wheel archive to inspect.
+
+    Returns:
+        Sorted archive entry paths that violate the restricted-data policy.
+    """
+
+    if not wheel_path.is_file():
+        raise FileNotFoundError(f"wheel does not exist: {wheel_path}")
+    findings: list[str] = []
+    with zipfile.ZipFile(wheel_path) as archive:
+        for name in archive.namelist():
+            normalized = name.lower().replace("\\", "/")
+            if Path(normalized).suffix not in RESTRICTED_VOCAB_DATA_SUFFIXES:
+                continue
+            if any(marker in normalized for marker in RESTRICTED_VOCAB_DATA_MARKERS):
+                findings.append(name)
+    return sorted(findings)
+
+
 def audit_bundled_license_notices(project_root: Path = ROOT) -> list[str]:
     """Return failures for bundled resources whose required notices are incomplete."""
 
@@ -473,6 +498,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=ROOT,
         help="Project root to scan for restricted bundled vocabulary data.",
     )
+    parser.add_argument(
+        "--wheel",
+        action="append",
+        type=Path,
+        default=[],
+        help="Built wheel to scan for UMLS, SNOMED CT, or CPT data entries.",
+    )
     return parser.parse_args(argv)
 
 
@@ -487,6 +519,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Restricted vocabulary data policy failed:", file=sys.stderr)
         for path in restricted_data:
             print(f"- {path}", file=sys.stderr)
+    restricted_wheel_data: list[tuple[Path, str]] = []
+    for wheel in args.wheel:
+        restricted_wheel_data.extend(
+            (wheel, entry) for entry in audit_restricted_vocab_wheel(wheel)
+        )
+    if restricted_wheel_data:
+        print("Restricted vocabulary wheel policy failed:", file=sys.stderr)
+        for wheel, entry in restricted_wheel_data:
+            print(f"- {wheel}: {entry}", file=sys.stderr)
     bundled_notice_failures = audit_bundled_license_notices(args.project_root)
     if bundled_notice_failures:
         print("Bundled license notice policy failed:", file=sys.stderr)
@@ -496,6 +537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         1
         if any(not result.allowed for result in results)
         or restricted_data
+        or restricted_wheel_data
         or bundled_notice_failures
         else 0
     )

@@ -14,10 +14,9 @@ id -> HL7 system URI); this module maps the grounding linker system tokens
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Iterable
 
-from openmed.clinical.grounding import Candidate
+from openmed.clinical.grounding.types import GroundedSpan
 
 from .code_provenance import stamp_coding_provenance
 from .codeable_concept_simple import codeable_concept as _build_codeable_concept
@@ -32,25 +31,11 @@ SYSTEM_URI: dict[str, str] = {
     "LOINC": _system_uri("loinc"),
     "SNOMED": _system_uri("snomed"),
     "HPO": _system_uri("hpo"),
+    "MESH": _system_uri("mesh"),
     "UMLS": "http://terminology.hl7.org/CodeSystem/umls",
 }
 
 __all__ = ["SYSTEM_URI", "GroundedSpan", "to_codeable_concept", "build_reverse_index"]
-
-
-@dataclass(frozen=True)
-class GroundedSpan:
-    """A source span with its grounding candidates.
-
-    ``text`` is the source surface (used as ``CodeableConcept.text``),
-    ``start``/``end`` are character offsets into the source document, and
-    ``candidates`` are the per-system linker results.
-    """
-
-    text: str
-    start: int
-    end: int
-    candidates: tuple[Candidate, ...] = ()
 
 
 def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
