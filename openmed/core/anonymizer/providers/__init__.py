@@ -6,6 +6,11 @@ and produce values that pass the existing checksum validators in
 :mod:`openmed.core.pii_i18n`.
 """
 
+from __future__ import annotations
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
 from .clinical_ids import (
     KENYA_MFL_SYNTHETIC_MAX,
     KENYA_MFL_SYNTHETIC_MIN,
@@ -100,14 +105,6 @@ from .clinical_ids import (
     validate_indian_pin,
     validate_pan,
 )
-from .registry_ids import (
-    AUXILIARY_FAKER_PROVIDER_CLASSES,
-    ID_PROVIDER_REGISTRY,
-    NationalIdSpec,
-    clinical_faker_provider_classes,
-    get_national_id,
-    register_national_id,
-)
 from .script_names import (
     DEVANAGARI_LANGUAGE_PACK,
     HAN_LANGUAGE_PACK,
@@ -117,6 +114,44 @@ from .script_names import (
     generate_han_name,
     generate_telugu_name,
 )
+
+if TYPE_CHECKING:
+    from .registry_ids import (
+        AUXILIARY_FAKER_PROVIDER_CLASSES,
+        ID_PROVIDER_REGISTRY,
+        NationalIdSpec,
+        clinical_faker_provider_classes,
+        get_national_id,
+        register_national_id,
+    )
+
+_LAZY_REGISTRY_EXPORTS = frozenset(
+    {
+        "AUXILIARY_FAKER_PROVIDER_CLASSES",
+        "ID_PROVIDER_REGISTRY",
+        "NationalIdSpec",
+        "clinical_faker_provider_classes",
+        "get_national_id",
+        "register_national_id",
+    }
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve registry-backed provider exports without creating an import cycle."""
+
+    if name not in _LAZY_REGISTRY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(".registry_ids", __name__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Return eager and lazy provider exports for interactive discovery."""
+
+    return sorted(set(globals()) | set(_LAZY_REGISTRY_EXPORTS))
+
 
 __all__ = [
     "ABDMProvider",

@@ -1,6 +1,6 @@
 """Docstring and export-inventory gates for OpenMed's public API surface.
 
-The stdlib-only static checker resolves every name in the source
+The stdlib-only static checker resolves every eager or lazy name in the source
 ``openmed.__all__`` without importing the package. Runtime parity tests import
 ``openmed`` separately to prove that the live export order matches the static
 inventory. Exported functions/classes require meaningful docstrings; data

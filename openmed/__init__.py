@@ -5,161 +5,192 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from .__about__ import __version__
-from .core import ModelLoader, OpenMedConfig, load_model
-from .core.anonymizer import (
-    LANG_TO_LOCALE,
-    Anonymizer,
-    AnonymizerConfig,
-    IndiaSurrogateProvider,
-    register_clinical_provider,
-    register_label_generator,
-)
-from .core.attestation import (
-    AttestationReport,
-    AttestationTemplateError,
-    generate_attestation,
-    list_attestation_profiles,
-    load_attestation_template,
-)
-from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
-from .core.custom_recognizer import CustomRecognizer
-from .core.explain import ExplainReport, explain
-from .core.hf_hub import (
-    CachedModel,
-    clear_cached_model,
-    list_cached_models,
-    prefetch_model,
-    resolve_repo_id,
-)
-from .core.indic_name_match import (
-    IndicNameNormalizer,
-    canonical_indic_name_key,
-    detect_name_script,
-    indic_names_match,
-)
-from .core.labels import CANONICAL_LABELS, normalize_label
-from .core.model_registry import (
-    get_all_models,
-    get_default_pii_model,
-    get_model_info,
-    get_model_suggestions,
-    get_models_by_category,
-    get_pii_models_by_language,
-    list_model_categories,
-)
-from .core.model_search import ModelQuery, ModelSearchResult, search_models
-from .core.offline import network_blocked_if_offline
-from .core.pii import (
-    DeidentificationResult,
-    PIIEntity,
-    deidentify,
-    extract_pii,
-    reidentify,
-)
-from .core.pii_entity_merger import (
-    PII_PATTERNS,
-    PIIPattern,
-    calculate_dominant_label,
-    find_semantic_units,
-    merge_entities_with_semantic_units,
-    merge_india_code_mixed_spans,
-)
-from .core.pii_i18n import (
-    DEFAULT_PII_MODELS,
-    LANGUAGE_PII_PATTERNS,
-    SUPPORTED_LANGUAGES,
-    get_india_clinical_model_route,
-    get_patterns_for_language,
-    india_clinical_route_active,
-)
-from .core.redaction_preview import redaction_preview, render_redaction_preview
-from .core.result_cache import (
-    get_result_cache,
-    make_cache_key,
-)
-from .core.results import AnalyzeResult
-from .core.streaming import (
-    StreamingBufferError,
-    StreamingDeidentificationEvent,
-    StreamingDeidentifier,
-    deidentify_stream,
-)
-from .core.surrogate_vault import (
-    ENCRYPTION_SCHEME,
-    InMemorySurrogateStore,
-    JsonFileSurrogateStore,
-    SurrogateEntry,
-    SurrogateKey,
-    SurrogateSource,
-    SurrogateVault,
-    VaultConsistencyReport,
-    VaultRotationResult,
-)
-from .mlx.lm import (
-    OpenMedMLXLanguageModel,
-    OpenMedPagedKVCache,
-    PagedKVCacheConfig,
-    PagedKVCachePlan,
-    PagedKVCacheStats,
-    TokenRange,
-    generate_text,
-)
-from .onnx.inference import OnnxEntity, OnnxModel, load_onnx_model
-from .processing import (
-    BatchItem,
-    BatchItemResult,
-    BatchProcessor,
-    BatchProgress,
-    BatchResult,
-    DatasetRedactionResult,
-    DatasetRedactionSummary,
-    IndicNormalization,
-    IndicNormalizer,
-    OutputFormatter,
-    TextProcessor,
-    TokenizationHelper,
-    format_predictions,
-    postprocess_text,
-    preprocess_text,
-    process_batch,
-    redact_dataset,
-)
-from .processing import sentences as sentence_utils
-from .processing.advanced_ner import (
-    AdvancedNERProcessor,
-    StreamingReplayResult,
-    StreamingTokenClassifier,
-    create_advanced_processor,
-    replay_token_classifier,
-    stream_token_classifier,
-)
-from .processing.outputs import PredictionResult
-from .utils import (
-    PeakRSSMeasurement,
-    Profiler,
-    ProfileReport,
-    Timer,
-    disable_profiling,
-    enable_profiling,
-    get_logger,
-    get_peak_rss_bytes,
-    get_profile_report,
-    measure_peak_rss,
-    profile,
-    setup_logging,
-    timed,
-    validate_input,
-    validate_model_name,
-)
-from .utils.validation import (
-    sanitize_filename,
-    validate_batch_size,
-    validate_confidence_threshold,
-    validate_output_format,
-)
+
+if TYPE_CHECKING:
+    from .core import ModelLoader, OpenMedConfig
+    from .core.pii import (
+        DeidentificationResult,
+        PIIEntity,
+        deidentify,
+        extract_pii,
+        reidentify,
+    )
+    from .core.results import AnalyzeResult
+    from .processing import BatchProcessor
+    from .processing.sentences import SentenceSpan
+
+_LAZY_IMPORTS = {
+    "ModelLoader": ".core",
+    "OpenMedConfig": ".core",
+    "load_model": ".core",
+    "LANG_TO_LOCALE": ".core.anonymizer",
+    "Anonymizer": ".core.anonymizer",
+    "AnonymizerConfig": ".core.anonymizer",
+    "IndiaSurrogateProvider": ".core.anonymizer",
+    "register_clinical_provider": ".core.anonymizer",
+    "register_label_generator": ".core.anonymizer",
+    "AttestationReport": ".core.attestation",
+    "AttestationTemplateError": ".core.attestation",
+    "generate_attestation": ".core.attestation",
+    "list_attestation_profiles": ".core.attestation",
+    "load_attestation_template": ".core.attestation",
+    "AuditReport": ".core.audit",
+    "AuditSignature": ".core.audit",
+    "AuditSpan": ".core.audit",
+    "DetectorInfo": ".core.audit",
+    "CustomRecognizer": ".core.custom_recognizer",
+    "ExplainReport": ".core.explain",
+    "explain": ".core.explain",
+    "CachedModel": ".core.hf_hub",
+    "clear_cached_model": ".core.hf_hub",
+    "list_cached_models": ".core.hf_hub",
+    "prefetch_model": ".core.hf_hub",
+    "resolve_repo_id": ".core.hf_hub",
+    "IndicNameNormalizer": ".core.indic_name_match",
+    "canonical_indic_name_key": ".core.indic_name_match",
+    "detect_name_script": ".core.indic_name_match",
+    "indic_names_match": ".core.indic_name_match",
+    "CANONICAL_LABELS": ".core.labels",
+    "normalize_label": ".core.labels",
+    "get_all_models": ".core.model_registry",
+    "get_default_pii_model": ".core.model_registry",
+    "get_model_info": ".core.model_registry",
+    "get_model_suggestions": ".core.model_registry",
+    "get_models_by_category": ".core.model_registry",
+    "get_pii_models_by_language": ".core.model_registry",
+    "list_model_categories": ".core.model_registry",
+    "ModelQuery": ".core.model_search",
+    "ModelSearchResult": ".core.model_search",
+    "search_models": ".core.model_search",
+    "network_blocked_if_offline": ".core.offline",
+    "DeidentificationResult": ".core.pii",
+    "PIIEntity": ".core.pii",
+    "deidentify": ".core.pii",
+    "extract_pii": ".core.pii",
+    "reidentify": ".core.pii",
+    "PII_PATTERNS": ".core.pii_entity_merger",
+    "PIIPattern": ".core.pii_entity_merger",
+    "calculate_dominant_label": ".core.pii_entity_merger",
+    "find_semantic_units": ".core.pii_entity_merger",
+    "merge_entities_with_semantic_units": ".core.pii_entity_merger",
+    "merge_india_code_mixed_spans": ".core.pii_entity_merger",
+    "DEFAULT_PII_MODELS": ".core.pii_i18n",
+    "LANGUAGE_PII_PATTERNS": ".core.pii_i18n",
+    "SUPPORTED_LANGUAGES": ".core.pii_i18n",
+    "get_india_clinical_model_route": ".core.pii_i18n",
+    "get_patterns_for_language": ".core.pii_i18n",
+    "india_clinical_route_active": ".core.pii_i18n",
+    "redaction_preview": ".core.redaction_preview",
+    "render_redaction_preview": ".core.redaction_preview",
+    "get_result_cache": ".core.result_cache",
+    "make_cache_key": ".core.result_cache",
+    "AnalyzeResult": ".core.results",
+    "StreamingBufferError": ".core.streaming",
+    "StreamingDeidentificationEvent": ".core.streaming",
+    "StreamingDeidentifier": ".core.streaming",
+    "deidentify_stream": ".core.streaming",
+    "ENCRYPTION_SCHEME": ".core.surrogate_vault",
+    "InMemorySurrogateStore": ".core.surrogate_vault",
+    "JsonFileSurrogateStore": ".core.surrogate_vault",
+    "SurrogateEntry": ".core.surrogate_vault",
+    "SurrogateKey": ".core.surrogate_vault",
+    "SurrogateSource": ".core.surrogate_vault",
+    "SurrogateVault": ".core.surrogate_vault",
+    "VaultConsistencyReport": ".core.surrogate_vault",
+    "VaultRotationResult": ".core.surrogate_vault",
+    "OpenMedMLXLanguageModel": ".mlx.lm",
+    "OpenMedPagedKVCache": ".mlx.lm",
+    "PagedKVCacheConfig": ".mlx.lm",
+    "PagedKVCachePlan": ".mlx.lm",
+    "PagedKVCacheStats": ".mlx.lm",
+    "TokenRange": ".mlx.lm",
+    "generate_text": ".mlx.lm",
+    "OnnxEntity": ".onnx.inference",
+    "OnnxModel": ".onnx.inference",
+    "load_onnx_model": ".onnx.inference",
+    "BatchItem": ".processing",
+    "BatchItemResult": ".processing",
+    "BatchProcessor": ".processing",
+    "BatchProgress": ".processing",
+    "BatchResult": ".processing",
+    "DatasetRedactionResult": ".processing",
+    "DatasetRedactionSummary": ".processing",
+    "IndicNormalization": ".processing",
+    "IndicNormalizer": ".processing",
+    "OutputFormatter": ".processing",
+    "TextProcessor": ".processing",
+    "TokenizationHelper": ".processing",
+    "format_predictions": ".processing",
+    "postprocess_text": ".processing",
+    "preprocess_text": ".processing",
+    "process_batch": ".processing",
+    "redact_dataset": ".processing",
+    "sentence_utils": ".processing",
+    "AdvancedNERProcessor": ".processing.advanced_ner",
+    "StreamingReplayResult": ".processing.advanced_ner",
+    "StreamingTokenClassifier": ".processing.advanced_ner",
+    "create_advanced_processor": ".processing.advanced_ner",
+    "replay_token_classifier": ".processing.advanced_ner",
+    "stream_token_classifier": ".processing.advanced_ner",
+    "PredictionResult": ".processing.outputs",
+    "PeakRSSMeasurement": ".utils",
+    "Profiler": ".utils",
+    "ProfileReport": ".utils",
+    "Timer": ".utils",
+    "disable_profiling": ".utils",
+    "enable_profiling": ".utils",
+    "get_logger": ".utils",
+    "get_peak_rss_bytes": ".utils",
+    "get_profile_report": ".utils",
+    "measure_peak_rss": ".utils",
+    "profile": ".utils",
+    "setup_logging": ".utils",
+    "timed": ".utils",
+    "validate_input": ".utils",
+    "validate_model_name": ".utils",
+    "sanitize_filename": ".utils.validation",
+    "validate_batch_size": ".utils.validation",
+    "validate_confidence_threshold": ".utils.validation",
+    "validate_output_format": ".utils.validation",
+}
+_LAZY_ATTRIBUTE_NAMES = {"sentence_utils": "sentences"}
+_LAZY_IMPORT_PREREQUISITES = {
+    ".core.pii_i18n": (".core.anonymizer",),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve and cache a top-level public export on first access."""
+
+    module_name = _LAZY_IMPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    for prerequisite in _LAZY_IMPORT_PREREQUISITES.get(module_name, ()):
+        import_module(prerequisite, __name__)
+    attribute_name = _LAZY_ATTRIBUTE_NAMES.get(name, name)
+    value = getattr(import_module(module_name, __name__), attribute_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Return eager and lazy top-level attributes for interactive discovery."""
+
+    return sorted(set(globals()) | set(_LAZY_IMPORTS))
+
+
+def _resolve_export(name: str) -> Any:
+    """Return an overridden, cached, or newly loaded top-level export."""
+
+    try:
+        return globals()[name]
+    except KeyError:
+        return __getattr__(name)
+
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE)
 _HARD_LINE_BREAK_PATTERN = re.compile(r"\r\n|[\n\r\v\f\x85\u2028\u2029]")
@@ -282,7 +313,8 @@ def list_models(
         config: Optional custom configuration for model discovery.
     """
 
-    loader = ModelLoader(config)
+    model_loader = _resolve_export("ModelLoader")
+    loader = model_loader(config)
     return loader.list_available_models(
         include_registry=include_registry,
         include_remote=include_remote,
@@ -297,7 +329,8 @@ def get_model_max_length(
 ) -> Optional[int]:
     """Return the inferred maximum sequence length for ``model_name``."""
 
-    loader = loader or ModelLoader(config)
+    model_loader = _resolve_export("ModelLoader")
+    loader = loader or model_loader(config)
     return loader.get_max_sequence_length(model_name)
 
 
@@ -388,6 +421,19 @@ def analyze_text(
         ('asthma', 'CONDITION')
     """
 
+    model_loader = _resolve_export("ModelLoader")
+    network_blocked_if_offline = _resolve_export("network_blocked_if_offline")
+    get_result_cache = _resolve_export("get_result_cache")
+    make_cache_key = _resolve_export("make_cache_key")
+    analyze_result = _resolve_export("AnalyzeResult")
+    format_predictions = _resolve_export("format_predictions")
+    sentence_utils = _resolve_export("sentence_utils")
+    prediction_result = _resolve_export("PredictionResult")
+    validate_input = _resolve_export("validate_input")
+    validate_model_name = _resolve_export("validate_model_name")
+    validate_confidence_threshold = _resolve_export("validate_confidence_threshold")
+    validate_output_format = _resolve_export("validate_output_format")
+
     validated_text = validate_input(text)
     selected_model = model_id if model_id is not None else model_name
     if model_id is not None and model_name != "disease_detection_superclinical":
@@ -403,7 +449,7 @@ def analyze_text(
         if final_result is not None:
             return final_result
 
-    loader = loader or ModelLoader(config)
+    loader = loader or model_loader(config)
     runtime_config = getattr(loader, "config", config)
 
     pipeline_args = dict(
@@ -452,7 +498,7 @@ def analyze_text(
             except Exception:
                 pass
 
-    raw_segments: List[sentence_utils.SentenceSpan] = []
+    raw_segments: List[SentenceSpan] = []
     if sentence_detection:
         try:
             raw_segments = sentence_utils.segment_text(
@@ -710,8 +756,8 @@ def analyze_text(
         **fmt_kwargs,
     )
     final_result: Union[AnalyzeResult, str, List[Dict[str, Any]]]
-    if fmt_output == "dict" and isinstance(result, PredictionResult):
-        final_result = AnalyzeResult.from_prediction_result(result)
+    if fmt_output == "dict" and isinstance(result, prediction_result):
+        final_result = analyze_result.from_prediction_result(result)
     else:
         final_result = result
     if cache_results:
