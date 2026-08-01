@@ -13,7 +13,7 @@ from ..core.script_detect import is_han_dominant
 # Python 3.12 emits SyntaxWarnings for old-style regex escapes in pysbd.
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
-_SEGMENTER_CACHE: Dict[Tuple[str, bool], Any] = {}
+_SEGMENTER_CACHE: Dict[Tuple[str, str, bool], Any] = {}
 
 _CHINESE_TERMINATORS = frozenset({"。", "！", "？", "；", "．", "｡", "!", "?", ";"})
 _CHINESE_OPEN_TO_CLOSE = {
@@ -100,22 +100,32 @@ def _get_segmenter(
     language: str,
     clean: bool,
     segmenter: Optional[Any] = None,
+    backend: str = "auto",
 ) -> Any:
-    """Return a cached pySBD segmenter instance."""
+    """Return a cached segmenter instance for the selected backend."""
     if segmenter is not None:
         return segmenter
 
-    cache_key = (language, clean)
+    cache_key = (backend, language, clean)
     if cache_key in _SEGMENTER_CACHE:
         return _SEGMENTER_CACHE[cache_key]
 
-    try:
-        from pysbd import Segmenter  # type: ignore import
-    except ImportError as exc:  # pragma: no cover - depends on optional dependency
-        raise ImportError(
-            "pySBD is required for sentence detection. "
-            "Install it with `pip install pysbd` or add the `pysbd` dependency."
-        ) from exc
+    if backend == "yasbd":
+        try:
+            from yasbd.utils.pysbd_adapter import Segmenter  # type: ignore import
+        except ImportError as exc:  # pragma: no cover - depends on optional dependency
+            raise ImportError(
+                "yasbd-lib is required for sentence detection when `backend='yasbd'`. "
+                "Install it with `pip install yasbd-lib` or add the `yasbd-lib` dependency."
+            ) from exc
+    else:
+        try:
+            from pysbd import Segmenter  # type: ignore import
+        except ImportError as exc:  # pragma: no cover - depends on optional dependency
+            raise ImportError(
+                "pySBD is required for sentence detection. "
+                "Install it with `pip install pysbd` or add the `pysbd` dependency."
+            ) from exc
 
     segmenter = Segmenter(
         language=language,
@@ -297,7 +307,6 @@ def segment_indic_text(text: str) -> List[SentenceSpan]:
     Common Indic and Latin honorifics, initials, and decimal points are guarded
     so embedded punctuation does not create a false boundary.
     """
-
     if not text:
         return []
 
@@ -334,23 +343,40 @@ def segment_text(
     language: str = "en",
     clean: bool = False,
     segmenter: Optional[Any] = None,
+    backend: str = "auto",
 ) -> List[SentenceSpan]:
     """Split ``text`` into sentences and capture exact character spans.
 
     Indic text uses the built-in danda-aware path, while Chinese and
     Han-dominant text uses the built-in CJK-aware path. Other text retains the
     existing pySBD behavior.
+
+    ``backend`` selects the engine: ``"auto"`` keeps that routing (default),
+    and ``"yasbd"`` opts into the experimental yasbd-lib adapter for faster
+    segmentation.
+    See https://github.com/maziyarpanahi/openmed/issues/1848#issuecomment-5037658538
     """
     if not text:
         return []
 
-    if segmenter is None and is_indic_text(text):
-        return segment_indic_text(text)
+    if backend not in {"auto", "yasbd"}:
+        raise ValueError(
+            f"Unknown segmentation backend {backend!r}. Choose from 'auto' or 'yasbd'."
+        )
+    if segmenter is not None and backend == "yasbd":
+        raise ValueError(
+            "A preconstructed segmenter cannot be combined with the 'yasbd' backend."
+        )
 
-    if segmenter is None and _uses_chinese_segmenter(text, language):
-        return segment_chinese_text(text)
+    if backend == "auto" and segmenter is None:
+        if is_indic_text(text):
+            return segment_indic_text(text)
+        if _uses_chinese_segmenter(text, language):
+            return segment_chinese_text(text)
 
-    seg = _get_segmenter(language=language, clean=clean, segmenter=segmenter)
+    seg = _get_segmenter(
+        language=language, clean=clean, segmenter=segmenter, backend=backend
+    )
     sentences = seg.segment(text)
 
     spans: List[SentenceSpan] = []
