@@ -18,6 +18,50 @@ provision licensed assets outside the repository and pass an explicit local
 path to `load_cmeee`. Missing paths and repository-internal real-data paths fail
 with license-boundary guidance.
 
+## Clinical PHI flagship certification
+
+`build_clinical_privacy_release` certifies the named
+`OpenMed/OpenMed-ClinicalPrivacy-tier0` checkpoint from four inputs: its
+checkpoint manifest row, verified mode-C training provenance, a held-out
+clinical-PHI `BenchmarkReport`, and the manifest-linked SHIELD comparison
+report. It reuses the release harness's v1.6 G1a and G2 floors, requires
+explicit category coverage plus a reported zero critical-leakage count and
+zero residual leakage for G3, then signs a report containing exactly those
+three gate verdicts.
+
+The signed checks bind hashes and stable references for the checkpoint,
+clinical-PHI dataset manifest, held-out report, and SHIELD report. SHIELD stays
+comparison-only evidence and cannot be promoted to the high-recall gate. A
+quarantined candidate yields a signed failure report but no model card or model
+manifest entry.
+
+```python
+from openmed.eval.clinical_privacy_release import (
+    build_clinical_privacy_release,
+)
+
+release = build_clinical_privacy_release(
+    held_out_report,
+    shield_report,
+    checkpoint_manifest=checkpoint_row,
+    training_provenance=training_provenance,
+    checkpoint_manifest_ref="models.jsonl#clinical-privacy-tier0",
+    held_out_report_ref="release-evidence/held-out-report.json",
+    shield_report_ref="release-evidence/shield-report.json",
+    release_date="2026-08-01",
+    signing_key=release_signing_key,
+)
+paths = release.write("release-evidence/clinical-privacy-tier0")
+```
+
+The output directory contains `gate-report.json`, `README.md`,
+`model-datasheet.json`, `model-manifest-entry.json`, and
+`release-manifest.json`. These artifacts contain aggregate metrics, hashes,
+and provenance references only—never source notes, fixture identifiers, or raw
+PHI. The generated card marks the checkpoint as assistive de-identification,
+not diagnosis, treatment recommendation, or an automatic clinical-decision
+trigger.
+
 ## Metric Bundle
 
 | Metric | Path | Gating? | Description |
