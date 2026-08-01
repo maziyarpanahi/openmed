@@ -86,7 +86,9 @@ android {
             resources.srcDir("src/main/assets")
         }
         getByName("test") {
-            resources.srcDir(rootProject.file("../fixtures/parity"))
+            resources.srcDir(repoRoot.resolve("fixtures/parity"))
+            resources.srcDir(repoRoot.resolve("tests/fixtures/parity"))
+            resources.srcDir(repoRoot.resolve("tests/fixtures/processing"))
         }
     }
 
@@ -228,6 +230,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.icu4j)
     testImplementation("org.json:json:20240303")
     testImplementation(libs.robolectric)
 }

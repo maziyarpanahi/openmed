@@ -194,8 +194,9 @@ class GroundingProvenance:
         the remainder are recorded as alternatives. ``span_text`` is hashed and
         discarded so no raw note text is retained; pass ``text_hash`` directly to
         avoid handing the surface to this function at all. An empty candidate list
-        yields an abstention record. ``method`` must be one of
-        :data:`GROUNDING_METHODS`.
+        yields an abstention record. An explicit abstention emits no chosen code and
+        preserves every candidate as a review alternative. ``method`` must be one
+        of :data:`GROUNDING_METHODS`.
         """
         _validate_method(method)
         if text_hash is None:
@@ -204,7 +205,8 @@ class GroundingProvenance:
             text_hash = hash_text(span_text)
 
         ranked = list(candidates)
-        if not ranked:
+        should_abstain = not ranked or bool(abstained)
+        if should_abstain:
             return cls(
                 start=start,
                 end=end,
@@ -212,12 +214,15 @@ class GroundingProvenance:
                 system="",
                 code="",
                 display="",
-                score=0.0,
+                score=0.0 if calibrated_score is None else float(calibrated_score),
                 method=method,
                 vocab_version="",
                 encoder_index_key=encoder_index_key,
-                abstained=True if abstained is None else bool(abstained),
-                alternatives=(),
+                abstained=True,
+                alternatives=tuple(
+                    GroundingAlternative.from_candidate(candidate)
+                    for candidate in ranked
+                ),
             )
 
         chosen = ranked[0]
@@ -258,8 +263,9 @@ def grounding_provenance(
     :class:`GroundingProvenance` record. Spans with candidates produce a record
     for the emitted code; spans without candidates produce an abstention record,
     so the returned chain is complete. ``method`` must be one of
-    :data:`GROUNDING_METHODS`; when ``calibrated_scores`` is given it must align
-    positionally with ``grounded`` and overrides each chosen candidate's score.
+    :data:`GROUNDING_METHODS`; calibrated scores and abstention flags carried by
+    the spans are preserved. When ``calibrated_scores`` is given it must align
+    positionally with ``grounded`` and overrides each span's calibrated score.
 
     The span surface is hashed and never stored, so the returned chain is
     PHI-safe and, for identical input, byte-for-byte reproducible.
@@ -271,7 +277,11 @@ def grounding_provenance(
 
     records: list[GroundingProvenance] = []
     for index, span in enumerate(spans):
-        calibrated = None if calibrated_scores is None else calibrated_scores[index]
+        calibrated = (
+            getattr(span, "calibrated_score", None)
+            if calibrated_scores is None
+            else calibrated_scores[index]
+        )
         records.append(
             GroundingProvenance.from_candidates(
                 start=span.start,
@@ -281,6 +291,7 @@ def grounding_provenance(
                 method=method,
                 calibrated_score=calibrated,
                 encoder_index_key=encoder_index_key,
+                abstained=bool(getattr(span, "abstained", False)),
             )
         )
     return records

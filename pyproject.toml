@@ -195,6 +195,10 @@ langchain = [
   "langchain-core>=0.2,<2",
 ]
 
+haystack = [
+  "haystack-ai>=2,<3",
+]
+
 llamaindex = [
   "llama-index-core>=0.10,<1",
 ]
