@@ -371,7 +371,7 @@ def segment_text(
             "A preconstructed segmenter cannot be combined with the 'yasbd' backend."
         )
 
-    if backend == "auto" and segmenter is None:
+    if backend == "auto":
         if is_indic_text(text):
             return segment_indic_text(text)
         if _uses_chinese_segmenter(text, language):
