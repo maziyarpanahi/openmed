@@ -785,7 +785,7 @@
       },
       "EdgeKind": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "EntityCluster": {
         "kind": "class",
@@ -1703,7 +1703,7 @@
       },
       "DataUseAction": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "DataUseEvaluation": {
         "kind": "class",
@@ -1719,7 +1719,7 @@
       },
       "DataUseTag": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "DataUseViolation": {
         "kind": "class",
@@ -1977,7 +1977,7 @@
       },
       "ChineseScriptVariant": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "CustomRecognizer": {
         "kind": "class",
@@ -4887,7 +4887,7 @@
       },
       "ModelFamily": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "ModelIndex": {
         "kind": "class",
@@ -5037,7 +5037,7 @@
       },
       "ChineseTargetScript": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "ConsumerProtocol": {
         "kind": "class",
@@ -5185,7 +5185,7 @@
       },
       "OpenCCConfig": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "OpenCCUnavailableWarning": {
         "kind": "class",
@@ -5205,7 +5205,7 @@
       },
       "PinyinStyle": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "PinyinUnavailableError": {
         "kind": "class",
@@ -5825,7 +5825,7 @@
       },
       "ColumnRole": {
         "kind": "class",
-        "signature": "(value, names=..., kw:module=..., kw:qualname=..., kw:type=..., kw:start=..., kw:boundary=...)"
+        "signature": "(value)"
       },
       "DEFAULT_CHUNK_SIZE": {
         "kind": "constant",

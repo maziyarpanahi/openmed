@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import enum
 import importlib
 import inspect
 import json
@@ -133,6 +134,11 @@ def _member_signature(obj: Any, kind: str) -> str | None:
 
     if kind not in {"class", "function", "callable"}:
         return None
+    if kind == "class" and issubclass(obj, enum.Enum):
+        # ``inspect.signature`` exposes the Enum metaclass construction API on
+        # Python 3.10/3.11 and ``(*values)`` on Python 3.12.  Public enum
+        # subclasses have the stable lookup contract ``EnumType(value)``.
+        return "(value)"
     try:
         signature = inspect.signature(obj)
     except (TypeError, ValueError):

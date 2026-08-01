@@ -78,6 +78,13 @@ def test_baseline_is_deterministic():
     assert first == second
 
 
+def test_enum_signature_uses_stable_lookup_contract():
+    class Status(api.enum.Enum):
+        READY = "ready"
+
+    assert api._member_signature(Status, "class") == "(value)"
+
+
 def test_static_exports_capture_top_level_public_names():
     exports = api._static_exports("openmed")
     assert exports is not None
