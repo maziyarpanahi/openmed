@@ -12,6 +12,7 @@ from openmed.eval.suites import (
     NON_ENGLISH_LANGUAGES,
     NON_ENGLISH_TOP1_FLOOR,
     CrossLingualGroundingReport,
+    assert_cross_lingual_grounding_gate,
     build_fixture_grounder,
     cross_lingual_grounding_metadata,
     load_cross_lingual_grounding_fixtures,
@@ -76,6 +77,19 @@ def test_run_reports_perfect_per_language_top1_on_synthetic_gold():
     assert report.passed is True
 
 
+def test_capstone_gate_passes_bundled_cross_lingual_gold():
+    report = assert_cross_lingual_grounding_gate()
+
+    assert report.passed is True
+    assert report.english_baseline_intact is True
+    assert all(
+        report.per_language_top1[language] >= NON_ENGLISH_TOP1_FLOOR
+        for language in NON_ENGLISH_LANGUAGES
+    )
+    assert report.synthetic_provenance is True
+    assert report.restricted_markers == ()
+
+
 def test_english_baseline_reported_and_non_english_meets_floor():
     report = run_cross_lingual_grounding()
 
@@ -113,6 +127,24 @@ def test_floor_gate_fails_when_a_non_english_language_mis_grounds():
     # The English baseline is unaffected by the non-English regression.
     assert report.english_top1 == 1.0
     assert report.english_baseline_intact is True
+
+
+def test_capstone_gate_failure_diagnostics_do_not_include_raw_mentions():
+    cases = load_cross_lingual_grounding_fixtures()
+    reference = build_fixture_grounder()
+
+    def _broken(system: str, mention: str, language: str):
+        if language == "es":
+            return ["WRONG"]
+        return reference(system, mention, language)
+
+    with pytest.raises(AssertionError) as raised:
+        assert_cross_lingual_grounding_gate(cases=cases, grounder=_broken)
+
+    message = str(raised.value)
+    assert "es_top1=0.000<0.800" in message
+    for case in cases:
+        assert all(mention not in message for mention in case.gold_mentions.values())
 
 
 def test_leakage_scan_fails_on_restricted_markers_and_passes_on_fixture():
