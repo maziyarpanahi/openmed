@@ -5,6 +5,15 @@ from typing import Any
 
 __all__ = [
     "CONFIG_SCHEMA_VERSION",
+    "CLINICAL_PRIVACY_CHECKPOINT_NAME",
+    "CLINICAL_PRIVACY_CHECKPOINT_SCHEMA_VERSION",
+    "CLINICAL_PRIVACY_CONTRACT_REF",
+    "CLINICAL_PRIVACY_FAMILY",
+    "CLINICAL_PRIVACY_OBJECTIVE",
+    "CLINICAL_PRIVACY_RECIPE_REF",
+    "CLINICAL_PRIVACY_TIER0_CONTRACT",
+    "CLINICAL_PRIVACY_TRAINING_SCHEMA_VERSION",
+    "CLINICAL_PRIVACY_TRAINING_SOURCE_IDS",
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
     "MAX_LORA_TRAINABLE_RATIO",
@@ -19,6 +28,12 @@ __all__ = [
     "ActiveLearningQueue",
     "CRITICAL_LABELS",
     "CorpusManifestError",
+    "ClinicalPrivacyCheckpointManifest",
+    "ClinicalPrivacyGateThreshold",
+    "ClinicalPrivacySourceBinding",
+    "ClinicalPrivacyTrainingError",
+    "ClinicalPrivacyTrainingPlan",
+    "ClinicalPrivacyTier0Contract",
     "DaptCorpusAssemblyResult",
     "DryRunResult",
     "DIRECTID_CONTRACT_REF",
@@ -66,6 +81,7 @@ __all__ = [
     "assemble_dapt_corpus",
     "assert_manifest_has_no_raw_text",
     "build_distillation_report",
+    "build_clinical_privacy_checkpoint_manifest",
     "config_hash",
     "corpus_manifest_hash",
     "count_hard_negatives",
@@ -84,6 +100,7 @@ __all__ = [
     "pmc_abstract_source",
     "pubmed_abstract_source",
     "requires_hard_negative_sampler",
+    "resolve_clinical_privacy_training_plan",
     "run_recipe",
     "run_qlora_smoke",
     "runtime_dependencies",
@@ -93,13 +110,38 @@ __all__ = [
     "span_logits_from_repaired_spans",
     "student_backbone_from_tiny_distill_preset",
     "token_count",
+    "validate_clinical_privacy_checkpoint_manifest",
     "validate_directid_contract",
     "validate_directid_preset",
     "weak_label_document",
+    "write_clinical_privacy_checkpoint_manifest",
 ]
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "CLINICAL_PRIVACY_CHECKPOINT_NAME",
+        "CLINICAL_PRIVACY_CHECKPOINT_SCHEMA_VERSION",
+        "CLINICAL_PRIVACY_CONTRACT_REF",
+        "CLINICAL_PRIVACY_FAMILY",
+        "CLINICAL_PRIVACY_OBJECTIVE",
+        "CLINICAL_PRIVACY_RECIPE_REF",
+        "CLINICAL_PRIVACY_TIER0_CONTRACT",
+        "CLINICAL_PRIVACY_TRAINING_SCHEMA_VERSION",
+        "CLINICAL_PRIVACY_TRAINING_SOURCE_IDS",
+        "ClinicalPrivacyCheckpointManifest",
+        "ClinicalPrivacyGateThreshold",
+        "ClinicalPrivacySourceBinding",
+        "ClinicalPrivacyTrainingError",
+        "ClinicalPrivacyTrainingPlan",
+        "ClinicalPrivacyTier0Contract",
+        "build_clinical_privacy_checkpoint_manifest",
+        "resolve_clinical_privacy_training_plan",
+        "validate_clinical_privacy_checkpoint_manifest",
+        "write_clinical_privacy_checkpoint_manifest",
+    }:
+        clinical_privacy = import_module(".clinical_privacy", __name__)
+        return getattr(clinical_privacy, name)
     if name in {
         "CONFIG_SCHEMA_VERSION",
         "MAX_LORA_TRAINABLE_RATIO",
