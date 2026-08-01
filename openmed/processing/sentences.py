@@ -112,7 +112,10 @@ def _get_segmenter(
 
     if backend == "yasbd":
         try:
+            from yasbd.rules.zh import ZhRules  # type: ignore import
             from yasbd.utils.pysbd_adapter import Segmenter  # type: ignore import
+
+            ZhRules.TERMINATORS.add("；")
         except ImportError as exc:  # pragma: no cover - depends on optional dependency
             raise ImportError(
                 "yasbd-lib is required for sentence detection when `backend='yasbd'`. "
