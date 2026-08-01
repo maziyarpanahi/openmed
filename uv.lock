@@ -2270,6 +2270,18 @@ http = [
 ]
 
 [[package]]
+name = "ftfy"
+version = "6.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wcwidth" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/d3/8650919bc3c7c6e90ee3fa7fd618bf373cbbe55dff043bd67353dbb20cd8/ftfy-6.3.1.tar.gz", hash = "sha256:9b3c3d90f84fb267fe64d375a07b7f8912d817cf86009ae134aa03e1819506ec", size = 308927, upload-time = "2024-10-26T00:50:35.149Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/6e/81d47999aebc1b155f81eca4477a616a70f238a2549848c38983f3c22a82/ftfy-6.3.1-py3-none-any.whl", hash = "sha256:7c70eb532015cd2f9adb53f101fb6c7945988d023a085d127d1573dc49dd0083", size = 44821, upload-time = "2024-10-26T00:50:33.425Z" },
+]
+
+[[package]]
 name = "future"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3643,6 +3655,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/2f/83/97b29fe05cb6ae28d2dbd30b81e2e402a3eed5f460c26e9eaa5895ceacf5/locket-1.0.0.tar.gz", hash = "sha256:5c0d4c052a8bbbf750e056a8e65ccd309086f4f0f18a2eac306a8dfa4112a632", size = 4350, upload-time = "2022-04-20T22:04:44.312Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/db/bc/83e112abc66cd466c6b83f99118035867cecd41802f8d044638aa78a106e/locket-1.0.0-py2.py3-none-any.whl", hash = "sha256:b6c819a722f7b6bd955b80781788e4a66a55628b858d347536b7e81325a3a5e3", size = 4398, upload-time = "2022-04-20T22:04:42.23Z" },
+]
+
+[[package]]
+name = "loguru"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "win32-setctime", marker = "sys_platform == 'win32' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559, upload-time = "2024-12-06T11:20:56.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c", size = 61595, upload-time = "2024-12-06T11:20:54.538Z" },
 ]
 
 [[package]]
@@ -5586,6 +5611,9 @@ spark = [
     { name = "pyarrow" },
     { name = "pyspark" },
 ]
+yasbd = [
+    { name = "yasbd-lib" },
+]
 zh = [
     { name = "jieba" },
     { name = "opencc" },
@@ -5740,8 +5768,9 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
+    { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.13.1,<1.0" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "scispacy", "scrubadub", "service", "spacy", "spark", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "scispacy", "scrubadub", "service", "spacy", "spark", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "opentelemetry-api"
@@ -6962,6 +6991,19 @@ redis = [
 ]
 
 [[package]]
+name = "py3langid"
+version = "0.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/06/e4f29386ca954a234f597333ce8acece364c1ca7179def16aed84556d12f/py3langid-0.2.2.tar.gz", hash = "sha256:b4de01dad7e701f29d216a0935e85e096cc8675903d23ea8445b2bb5f090b96f", size = 749464, upload-time = "2022-06-14T13:30:04.416Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/e6/ff3e5902bc4c70b8a1f71a21386dd60b622ff1708163bf44b699d6516e4b/py3langid-0.2.2-py3-none-any.whl", hash = "sha256:a5460ccc565c7b6a7a0e72f42236900b810e73c065a1b769a69fa9d9cff13f00", size = 750603, upload-time = "2022-06-14T13:29:54.695Z" },
+]
+
+[[package]]
 name = "py4j"
 version = "0.10.9.9"
 source = { registry = "https://pypi.org/simple" }
@@ -8011,6 +8053,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0f/1b/3ff664369b713936a0f9282cbbd8ce7289f0b14d34971250a504485684a3/quickumls_simstring-1.1.5r1.tar.gz", hash = "sha256:e6c6d8ace730ef3d703e2e479694914e544762ee5d37e26536b95001b426666b", size = 68464, upload-time = "2019-06-18T04:02:37.562Z" }
 
 [[package]]
+name = "radicli"
+version = "0.0.26"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/98/c5/791d72624ec5474e5a1d4149098e41e3e3ca79a9ce9333e8c75076ea5888/radicli-0.0.26.tar.gz", hash = "sha256:81c8c186b4c5785f7504e13d7d524ccb86de604adf06131ca64b817f41c76a99", size = 49444, upload-time = "2025-09-09T11:18:38.89Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/46/8e99fbce511217eec4730a08824a200a073fd67d76ae7e3d985501c5268c/radicli-0.0.26-py3-none-any.whl", hash = "sha256:42faaa9fcd430653be72f64cdcf73c105e9b19eaa0cd5ffa2719d91144b52f96", size = 35233, upload-time = "2025-09-09T11:18:37.467Z" },
+]
+
+[[package]]
 name = "rapidfuzz"
 version = "3.14.5"
 source = { registry = "https://pypi.org/simple" }
@@ -8306,6 +8357,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f3/61/d7545dafb7ac2230c70d38d31cbfe4cc64f7144dc41f6e4e4b78ecd9f5bb/requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6", size = 206888, upload-time = "2023-05-01T04:11:33.229Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl", hash = "sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06", size = 54481, upload-time = "2023-05-01T04:11:28.427Z" },
+]
+
+[[package]]
+name = "retrie"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/bb/09905b04e64a992284d2e1b907be2f8ef293a3a0855a7db6948235493380/retrie-0.3.1.tar.gz", hash = "sha256:a18e7a3a75b2671e72a6ab5f76116ce8c2a7dabc61d683d796307d0909c122e3", size = 10409, upload-time = "2024-02-22T10:05:30.536Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bb/1a/0ab5362044d27c3639befa0ffb1c37bc6f1df0034cb7bd705aa4a8882264/retrie-0.3.1-py2.py3-none-any.whl", hash = "sha256:cb67a394f93e66d3ee35592c0c65192f8c1d7f36e6a98e73306e439e97bf8d9d", size = 9466, upload-time = "2024-02-22T10:05:28.149Z" },
 ]
 
 [[package]]
@@ -10686,6 +10746,15 @@ wheels = [
 ]
 
 [[package]]
+name = "win32-setctime"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/8f/705086c9d734d3b663af0e9bb3d4de6578d08f46b1b101c2442fd9aecaa2/win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0", size = 4867, upload-time = "2024-12-07T15:28:28.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390", size = 4083, upload-time = "2024-12-07T15:28:26.465Z" },
+]
+
+[[package]]
 name = "wrapt"
 version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -11049,6 +11118,24 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/be/f9f7594e23b5b93affff0318e4593c1920331bcaefda326cabcad94296a1/yarl-1.24.2-cp314-cp314t-win_amd64.whl", hash = "sha256:a7624b1ca46ca5d7b864ef0d2f8efe3091454085ee1855b4e992314529972215", size = 102980, upload-time = "2026-05-19T21:30:59.735Z" },
     { url = "https://files.pythonhosted.org/packages/65/a4/ba80dccd3593ff1f01051a818694d07b58cb8232677ee9a22a5a1f93a9fc/yarl-1.24.2-cp314-cp314t-win_arm64.whl", hash = "sha256:e434a45ce2e7a947f951fc5a8944c8cc080b7e59f9c50ae80fd39107cf88126d", size = 91219, upload-time = "2026-05-19T21:31:01.934Z" },
     { url = "https://files.pythonhosted.org/packages/fd/4d/4b880086bd0d3e034d25647be1d830afc3e3f610e98c4ab3490af6b1b6d5/yarl-1.24.2-py3-none-any.whl", hash = "sha256:2783d9226db8797636cd6896e4de81feed252d1db72265686c9558d97a4d94b9", size = 53576, upload-time = "2026-05-19T21:31:03.909Z" },
+]
+
+[[package]]
+name = "yasbd-lib"
+version = "0.13.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beartype" },
+    { name = "ftfy" },
+    { name = "loguru" },
+    { name = "py3langid" },
+    { name = "radicli" },
+    { name = "regex" },
+    { name = "retrie" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/92/33afac91267252505c6e8c0c3eaec73184cc194b5d914f1d74291fe5a890/yasbd_lib-0.13.1.tar.gz", hash = "sha256:117bf30364a4c0bed182ba9d4a8022f007607f8f4ec770daf7eea61276c2c849", size = 90416, upload-time = "2026-07-25T22:32:24.955Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/a9/8d0dc213bd3ef804afec711ce74d31941f82b69b3e3108c9c06442efa2bf/yasbd_lib-0.13.1-py3-none-any.whl", hash = "sha256:83fd619ae06fdf9adecb2f8daa22c4d3cd974dd12b314e5e56adfc0ba160ad73", size = 94645, upload-time = "2026-07-25T22:32:23.221Z" },
 ]
 
 [[package]]
