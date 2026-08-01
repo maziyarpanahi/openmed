@@ -1,6 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
+from .api import DEFAULT_GROUNDING_SYSTEMS, ground
 from .assertion_grounding import (
     ASSERTION_GROUNDING_ADVISORY,
     GROUNDING_ASSERTION_STATUSES,
@@ -55,8 +56,9 @@ from .registry import (
     register_loader,
     validate_vocabulary_loader,
 )
+from .restricted import RESTRICTED_SYSTEM_URIS, UserKeyVocabularyLoader
 from .retrieval import TwoStageRetriever, retrieve_candidates
-from .types import Candidate
+from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
@@ -82,6 +84,7 @@ __all__ = [
     "CandidateRankingStage",
     "ConceptMatch",
     "DenseCandidateGenerator",
+    "DEFAULT_GROUNDING_SYSTEMS",
     "EncoderUnavailableError",
     "FREE_VOCAB_SYSTEMS",
     "GROUNDING_ASSERTION_STATUSES",
@@ -90,6 +93,7 @@ __all__ = [
     "GROUNDING_POLICIES",
     "GroundingAlternative",
     "GroundingProvenance",
+    "GroundedSpan",
     "HashingAliasEncoder",
     "IndexBackendUnavailableError",
     "InvalidVocabularyLoaderError",
@@ -100,11 +104,13 @@ __all__ = [
     "POLICY_STATUS",
     "POLICY_SUPPRESS",
     "RESTRICTED_VOCAB_SYSTEMS",
+    "RESTRICTED_SYSTEM_URIS",
     "RankingConfig",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
     "TwoStageRetriever",
+    "UserKeyVocabularyLoader",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
@@ -121,6 +127,7 @@ __all__ = [
     "build_index",
     "build_or_load_index",
     "generate_candidates",
+    "ground",
     "ground_with_context",
     "get_index",
     "get_linker",

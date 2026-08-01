@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from openmed.core.audit import stable_hash
 
@@ -57,10 +57,7 @@ from ..context import (
     scan_context_cues,
 )
 from ..experiencer import resolve_experiencer
-from .types import Candidate
-
-if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an exporter import cycle
-    from ..exporters.codeable_concept import GroundedSpan
+from .types import Candidate, GroundedSpan
 
 __all__ = [
     "ASSERTION_GROUNDING_ADVISORY",
