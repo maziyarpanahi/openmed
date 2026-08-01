@@ -135,6 +135,11 @@ def _lazy_api():
 
 Handler = Callable[[argparse.Namespace], int]
 
+
+class _UnavailableCommandError(NotImplementedError):
+    """Signal that a recovered CLI command has no current implementation."""
+
+
 COMPLIANCE_CAVEAT = (
     "No de-identification tool can guarantee compliance or zero residual risk. "
     "Validate locally before any production or clinical use."
@@ -333,6 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_deid_command(subparsers)
     _add_redact_dataset_command(subparsers)
     _add_pii_command(subparsers)
+    _add_tui_command(subparsers)
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
@@ -558,6 +564,27 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         help="Commit progress after this many items (default: 10).",
     )
     batch_parser.set_defaults(handler=_handle_batch)
+
+
+def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
+    """Restore the historical TUI command without reviving its removed backend."""
+
+    tui_parser = subparsers.add_parser(
+        "tui",
+        help="Launch the historical interactive terminal UI.",
+    )
+    tui_parser.add_argument(
+        "--model",
+        default=None,
+        help="Model registry key or Hugging Face identifier.",
+    )
+    tui_parser.add_argument(
+        "--confidence-threshold",
+        type=_unit_interval_float,
+        default=0.5,
+        help="Minimum confidence score for predictions (default: 0.5).",
+    )
+    tui_parser.set_defaults(handler=_handle_tui)
 
 
 def _add_deid_command(subparsers: argparse._SubParsersAction) -> None:
@@ -2266,6 +2293,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         return handler(args)
+    except _UnavailableCommandError as exc:
+        error = CliError(
+            str(exc),
+            code="not_implemented",
+            exit_code=EXIT_ERROR,
+        )
+        return emit_error(args, error)
     except CliError as exc:
         return emit_error(args, exc)
     except Exception as exc:
@@ -2454,6 +2488,13 @@ def _handle_batch(args: argparse.Namespace) -> int:
 
     emit(args, payload, human=human)
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_tui(args: argparse.Namespace) -> int:
+    raise _UnavailableCommandError(
+        "The historical OpenMed TUI is not implemented because its backend "
+        "was removed; use 'openmed --help' for supported commands."
+    )
 
 
 def _handle_redact_dataset(args: argparse.Namespace) -> int:
