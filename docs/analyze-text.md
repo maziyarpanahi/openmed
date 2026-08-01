@@ -1,7 +1,7 @@
 # Analyze Text Helper
 
 `openmed.analyze_text` is the top-level orchestrator that most users start with. It validates input, spins up a
-token-classification pipeline, segments sentences with pySBD, and normalizes the output so you can copy dict/JSON/HTML/CSV
+token-classification pipeline, segments sentences with pySBD (or the experimental yasbd backend), and normalizes the output so you can copy dict/JSON/HTML/CSV
 payloads straight into downstream systems.
 
 ## Quick reference
@@ -34,7 +34,7 @@ payload = result.to_dict()
 - `include_confidence` & `confidence_threshold`: control the final payload; defaults keep all scores.
 - `group_entities`: merge adjacent spans of the same label after formatting.
 - `formatter_kwargs`: forwarded to `openmed.processing.format_predictions`.
-- Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`) wrap pySBD so each
+- Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`, `sentence_backend`) wrap the sentence engine so each
   prediction carries the sentence span; disable them if latency matters more than helper metadata.
 
 ## Chunking & truncation
@@ -46,7 +46,8 @@ result = analyze_text(
     aggregation_strategy=None,  # work with raw tokens
     max_length=512,             # forwarded to HF pipeline
     truncation=True,            # enforce length (default)
-    sentence_detection=False,   # skip pySBD to save ~2ms per note
+    sentence_detection=False,   # skip sentence detection to save ~2ms per note
+    sentence_backend="auto",    # "auto" (default) or "yasbd" (experimental, faster)
 )
 ```
 
@@ -135,7 +136,7 @@ Behind the scenes `analyze_text` calls:
 
 - `validate_input` — trims whitespace and enforces max lengths.
 - `validate_model_name` — normalizes registry aliases.
-- Sentence detection (`openmed.processing.sentences`) — optional pySBD segmentation with language hints.
+- Sentence detection (`openmed.processing.sentences`) — optional segmentation with language hints and a selectable backend.
 - `OutputFormatter` — see [Advanced NER & Output Formatting](./output-formatting.md) for available kwargs.
 
 If you need custom validation or logging, inject your own `OpenMedConfig` or reuse a configured `ModelLoader`.
