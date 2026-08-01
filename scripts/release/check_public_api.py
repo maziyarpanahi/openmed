@@ -36,7 +36,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence, get_origin
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = ROOT / "scripts" / "release" / "public_api_baseline.json"
@@ -111,6 +111,11 @@ class Change:
 def _member_kind(obj: Any) -> str:
     """Classify a member into a coarse, stable kind label."""
 
+    if get_origin(obj) is not None:
+        # PEP 585 aliases and ``typing`` aliases changed their answers to
+        # ``inspect.isclass`` across supported Python releases.  They are a
+        # distinct public-API construct, not runtime classes or callables.
+        return "type_alias"
     if inspect.isclass(obj):
         return "class"
     if inspect.isfunction(obj) or inspect.isbuiltin(obj) or inspect.ismethod(obj):

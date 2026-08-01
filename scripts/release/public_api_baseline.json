@@ -540,12 +540,12 @@
         "signature": "(short_form, long_form, semantic_type, source, score, alternatives=..., matched_features=...)"
       },
       "AbnormalFlag": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "AssertionAxis": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "AssertionConflict": {
         "kind": "class",
@@ -648,8 +648,8 @@
         "signature": "(document_id, source_index, text, start, end, normalized_text, canonical_text, semantic_type=..., section=..., canonical_section=..., negation=..., temporality=..., experiencer=..., system=..., code=..., coref_entity_id=...)"
       },
       "Certainty": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ChineseTerminologyDictionary": {
         "kind": "class",
@@ -700,16 +700,16 @@
         "signature": "(precision, recall, f1)"
       },
       "ContextCueCategory": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ContextCueDirection": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ConversionStatus": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "CoreferenceChain": {
         "kind": "class",
@@ -808,12 +808,12 @@
         "signature": "(event_type, roles)"
       },
       "EventType": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "Experiencer": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ExperiencerAssignment": {
         "kind": "class",
@@ -892,24 +892,24 @@
         "signature": null
       },
       "LabTrendDirection": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "LabValueAttributeMention": {
         "kind": "class",
         "signature": null
       },
       "LabValueAttributeRole": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "LabValueEventMention": {
         "kind": "class",
         "signature": null
       },
       "Laterality": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "MEASUREMENT_NORMALIZATION_ADVISORY": {
         "kind": "constant",
@@ -948,8 +948,8 @@
         "signature": null
       },
       "MedicationAttributeType": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "MedicationCandidate": {
         "kind": "class",
@@ -960,12 +960,12 @@
         "signature": "(name=..., confidence_threshold=..., source_labels=..., reject_observation_abbreviations=..., require_grounding=..., grounding_threshold=...)"
       },
       "MedicationChangeAction": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "MedicationGrounder": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "MedicationRelation": {
         "kind": "class",
@@ -980,12 +980,12 @@
         "signature": "(config)"
       },
       "MedicationRelationType": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "MedicationSigAttributeType": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ModifierAttachment": {
         "kind": "class",
@@ -996,8 +996,8 @@
         "signature": "(cue, category, start, end, direction)"
       },
       "ModifierKind": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "MultilingualRelation": {
         "kind": "class",
@@ -1020,8 +1020,8 @@
         "signature": null
       },
       "Negation": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "NegationScope": {
         "kind": "class",
@@ -1064,8 +1064,8 @@
         "signature": null
       },
       "ProblemClinicalStatus": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ProblemMention": {
         "kind": "class",
@@ -1108,7 +1108,7 @@
         "signature": null
       },
       "RadLexMappingSource": {
-        "kind": "constant",
+        "kind": "type_alias",
         "signature": null
       },
       "RadiologyFinding": {
@@ -1228,20 +1228,20 @@
         "signature": null
       },
       "SeverityScale": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "Sig": {
         "kind": "class",
         "signature": null
       },
       "SpanChainKey": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "SpanOffset": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "SpanReference": {
         "kind": "class",
@@ -1284,16 +1284,16 @@
         "signature": "(source_id, target_id, relation, evidence)"
       },
       "TnmBasis": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "TnmStage": {
         "kind": "class",
         "signature": null
       },
       "TrendDirection": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "UNCERTAIN": {
         "kind": "constant",
@@ -1308,8 +1308,8 @@
         "signature": null
       },
       "UnitParseStatus": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "UnitProvenance": {
         "kind": "class",
@@ -1324,19 +1324,19 @@
         "signature": null
       },
       "VitalKind": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "VitalSignComponent": {
         "kind": "class",
         "signature": null
       },
       "VitalSignComponentKind": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "VitalSignNumber": {
-        "kind": "constant",
+        "kind": "type_alias",
         "signature": null
       },
       "VitalSignResult": {
@@ -5104,8 +5104,8 @@
         "signature": null
       },
       "DocumentIdExtractor": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "DocumentShard": {
         "kind": "class",
@@ -5172,8 +5172,8 @@
         "signature": "(start, end, label, score=...)"
       },
       "ObjectProgressCallback": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ObjectStorageBatchResult": {
         "kind": "class",
@@ -5510,8 +5510,8 @@
         "signature": "(name, kind, values, probabilities, missing_probability, integral=...)"
       },
       "CompositionRule": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "DEFAULT_CORRELATION_TOLERANCE": {
         "kind": "constant",
@@ -5658,8 +5658,8 @@
         "signature": "(target_k, quasi_identifiers, source_record_count, row_indices, retained_count, achieved_k_after_suppression, feasible)"
       },
       "SurrogateDrawKind": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "TabularProfile": {
         "kind": "class",
@@ -5848,8 +5848,8 @@
         "signature": "(table, column, subject_column)"
       },
       "DischargeSlotName": {
-        "kind": "callable",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "DischargeSummary": {
         "kind": "class",

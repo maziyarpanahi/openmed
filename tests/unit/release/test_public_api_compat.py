@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
@@ -83,6 +84,12 @@ def test_enum_signature_uses_stable_lookup_contract():
         READY = "ready"
 
     assert api._member_signature(Status, "class") == "(value)"
+
+
+@pytest.mark.parametrize("alias", [tuple[int, int], Callable[[str], int]])
+def test_type_alias_kind_is_stable(alias):
+    assert api._member_kind(alias) == "type_alias"
+    assert api._member_signature(alias, "type_alias") is None
 
 
 def test_static_exports_capture_top_level_public_names():
