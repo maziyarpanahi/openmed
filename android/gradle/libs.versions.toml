@@ -5,6 +5,7 @@ kotlinx-coroutines = "1.8.1"
 kotlinx-serialization-json = "1.5.1"
 mlkit-text-recognition = "16.0.1"
 onnxruntime = "1.20.0"
+djl-tokenizers = "0.33.0"
 junit = "4.13.2"
 robolectric = "4.11.1"
 
@@ -16,6 +17,8 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-text-recognition" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
+djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djl-tokenizers" }
+djl-tokenizer-native-android = { module = "ai.djl.android:tokenizer-native", version.ref = "djl-tokenizers" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]

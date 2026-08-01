@@ -35,6 +35,10 @@ This model card is rendered from the OpenMed model manifest. Update `models.json
 |---|---:|---:|
 | openmed-golden-pii | 0.9823 | 0.9910 |
 
+## License
+
+Declared license: `apache-2.0`.
+
 ## Canonical Labels
 
 `PERSON`, `DATE`, `ID_NUM`

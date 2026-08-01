@@ -621,7 +621,7 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
         )
         return time.perf_counter() - start, deidentify_calls["count"], producer, store
 
-    _baseline_elapsed, baseline_calls, _baseline_producer, _baseline_store = min(
+    baseline_elapsed, baseline_calls, _baseline_producer, _baseline_store = min(
         (measure(False) for _ in range(2)),
         key=lambda result: result[0],
     )
@@ -629,7 +629,7 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
         (measure(True) for _ in range(2)),
         key=lambda result: result[0],
     )
-    checkpoint_rate = count / checkpoint_elapsed
+    max_checkpoint_overhead = 2.0
 
     assert baseline_calls == count
     assert checkpoint_calls == count
@@ -640,7 +640,10 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
     assert all(
         DEDUPE_HEADER in headers for _, _, headers in checkpoint_producer.produced
     )
-    assert checkpoint_rate >= 2_000
+    assert checkpoint_elapsed <= baseline_elapsed * max_checkpoint_overhead, (
+        f"checkpointing took {checkpoint_elapsed:.4f}s vs "
+        f"{baseline_elapsed:.4f}s baseline"
+    )
 
 
 def test_importing_openmed_processing_does_not_import_kafka_client(

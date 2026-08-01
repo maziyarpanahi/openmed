@@ -51,17 +51,51 @@ from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
 import logging
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from .labels import CANONICAL_LABELS, normalize_label
-from .schemas.span import OpenMedSpan
+from .labels import (
+    CANONICAL_LABELS,
+    ID_SUBTYPE_ABHA,
+    ID_SUBTYPE_GSTIN,
+    ID_SUBTYPE_IFSC,
+    ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    ID_SUBTYPE_INDIAN_PASSPORT,
+    ID_SUBTYPE_PAN,
+    ID_SUBTYPE_VOTER_ID_EPIC,
+    id_subtype_for,
+    normalize_label,
+)
+from .schemas.span import OpenMedSpan, hmac_text_hash
 
 DETECTOR_ENTRY_POINT_GROUP = "openmed.detectors"
 DETECTOR_STAGES = frozenset({"deterministic", "fast_pii", "clinical_phi"})
 LANGUAGE_WILDCARDS = frozenset({"*", "all", "any"})
+INDIAN_MULTI_ID_DETECTOR = "indian_multi_id"
+INDIAN_MULTI_ID_ENTITY_TYPES = frozenset(
+    {
+        "abha",
+        "gstin",
+        "ifsc",
+        "indian_driving_licence",
+        "indian_passport",
+        "indian_vehicle_registration",
+        "pan",
+        "voter_id_epic",
+    }
+)
+INDIAN_MULTI_ID_SUBTYPES = {
+    "abha": ID_SUBTYPE_ABHA,
+    "gstin": ID_SUBTYPE_GSTIN,
+    "ifsc": ID_SUBTYPE_IFSC,
+    "indian_driving_licence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indian_passport": ID_SUBTYPE_INDIAN_PASSPORT,
+    "pan": ID_SUBTYPE_PAN,
+    "voter_id_epic": ID_SUBTYPE_VOTER_ID_EPIC,
+}
 
 DetectCallable = Callable[..., Sequence[OpenMedSpan]]
 
@@ -184,6 +218,108 @@ def register_detector(spec: DetectorSpec) -> DetectorSpec:
     with _DISCOVERY_LOCK:
         DETECTOR_REGISTRY.setdefault(spec.stage, {})[spec.name] = spec
     return spec
+
+
+def detect_indian_identifiers(
+    text: str,
+    *,
+    lang: str = "en",
+    context: Any = None,
+) -> tuple[OpenMedSpan, ...]:
+    """Detect validator-backed Indian identifiers without registry lookups.
+
+    Returned records contain offsets, HMAC hashes, structural validator names,
+    and subtype metadata only. Raw identifier surfaces are never stored in
+    evidence or metadata.
+    """
+
+    del lang, context
+    from .pii_entity_merger import find_context_words
+    from .pii_i18n import INDIAN_MULTI_ID_PII_PATTERNS
+
+    candidates: list[tuple[int, int, int, OpenMedSpan]] = []
+    for pattern in sorted(
+        INDIAN_MULTI_ID_PII_PATTERNS,
+        key=lambda item: item.priority,
+        reverse=True,
+    ):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            surface = match.group(0)
+            if pattern.validator is not None and not pattern.validator(surface):
+                continue
+            has_context = find_context_words(
+                text,
+                match.start(),
+                match.end(),
+                pattern.context_words,
+            )
+            if pattern.safety_sweep_requires_context and not has_context:
+                continue
+
+            score = pattern.base_score
+            if has_context:
+                score = min(1.0, score + pattern.context_boost)
+            canonical = normalize_label(pattern.entity_type)
+            subtype = INDIAN_MULTI_ID_SUBTYPES.get(
+                pattern.entity_type,
+                id_subtype_for(pattern.entity_type),
+            )
+            validator_name = (
+                pattern.validator.__name__ if pattern.validator is not None else "none"
+            )
+            metadata: dict[str, Any] = {
+                "context_match": has_context,
+                "identifier_type": subtype or canonical.casefold(),
+                "validator": validator_name,
+            }
+            candidates.append(
+                (
+                    match.start(),
+                    match.end(),
+                    pattern.priority,
+                    OpenMedSpan(
+                        doc_id="builtin-indian-id-detector",
+                        start=match.start(),
+                        end=match.end(),
+                        text_hash=hmac_text_hash(
+                            surface,
+                            "builtin-indian-id-detector",
+                        ),
+                        entity_type=pattern.entity_type,
+                        canonical_label=canonical,
+                        score=score,
+                        detector="builtin",
+                        evidence={
+                            "structure_valid": True,
+                            "validator": validator_name,
+                        },
+                        metadata=metadata,
+                    ),
+                )
+            )
+
+    accepted: list[OpenMedSpan] = []
+    for start, end, _priority, span in sorted(
+        candidates,
+        key=lambda item: (item[0], -item[2], -(item[1] - item[0])),
+    ):
+        if any(start < existing.end and end > existing.start for existing in accepted):
+            continue
+        accepted.append(span)
+    return tuple(sorted(accepted, key=lambda span: (span.start, span.end)))
+
+
+def _register_builtin_detectors() -> None:
+    register_detector(
+        DetectorSpec(
+            name=INDIAN_MULTI_ID_DETECTOR,
+            stage="deterministic",
+            languages=("en", "hi", "te"),
+            detect=detect_indian_identifiers,
+            provenance_prefix="builtin",
+            covered_labels=("ID_NUM", "VEHICLE_REGISTRATION"),
+        )
+    )
 
 
 def iter_detectors(stage: str, lang: str | None = None) -> tuple[DetectorSpec, ...]:
@@ -382,16 +518,24 @@ def _reset_detector_registry_for_tests() -> None:
         DETECTOR_REGISTRY.clear()
         DETECTOR_REGISTRY.update({stage: {} for stage in DETECTOR_STAGES})
         _DISCOVERY_COMPLETE = False
+    _register_builtin_detectors()
+
+
+_register_builtin_detectors()
 
 
 __all__ = [
     "DETECTOR_ENTRY_POINT_GROUP",
     "DETECTOR_REGISTRY",
     "DETECTOR_STAGES",
+    "INDIAN_MULTI_ID_DETECTOR",
+    "INDIAN_MULTI_ID_ENTITY_TYPES",
+    "INDIAN_MULTI_ID_SUBTYPES",
     "DetectorCapability",
     "DetectorSpec",
     "DetectCallable",
     "default_detector_capabilities",
+    "detect_indian_identifiers",
     "detector_provenance",
     "discover_detectors",
     "iter_detector_capabilities",

@@ -35,7 +35,7 @@ def test_fixture_coverage_report_lists_committed_fixture_gaps() -> None:
         for category in GOLDEN_CATEGORIES
     }
     assert report.category_counts["multilingual"] >= len(SUPPORTED_LANGUAGES)
-    assert report.category_counts["policy_profile_actions"] == 2
+    assert report.category_counts["policy_profile_actions"] == 4
     assert report.category_counts[HARD_NEGATIVE_CATEGORY] >= 1
     assert report.hard_negative_fixture_count >= 1
     assert report.hard_negative_candidate_count >= report.hard_negative_fixture_count
@@ -95,7 +95,7 @@ def test_fixture_coverage_markdown_is_byte_stable_and_aggregate_only() -> None:
         f"| `multilingual` | {report.category_counts['multilingual']} | covered |"
         in markdown
     )
-    assert "| `policy_profile_actions` | 2 | covered |" in markdown
+    assert "| `policy_profile_actions` | 4 | covered |" in markdown
     assert "| Fixtures | " in markdown
     assert "| Candidates | " in markdown
     assert "| `0.75-1.00` | " in markdown

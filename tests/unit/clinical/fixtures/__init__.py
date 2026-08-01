@@ -1,0 +1,1 @@
+"""Synthetic clinical interoperability fixtures."""
