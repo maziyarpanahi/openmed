@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -27,7 +28,9 @@ __all__ = [
 
 _MISSING = object()
 _INDEX_RE = re.compile(r":\d+(?=/|\|)")
-_SPAN_POINTER_RE = re.compile(r"^(?P<doc_id>.*):(?P<start>\d+)-(?P<end>\d+)$")
+_SPAN_POINTER_RE = re.compile(
+    r"^sha256:(?P<doc_hash>[0-9a-f]{64}):(?P<start>\d+)-(?P<end>\d+)$"
+)
 
 _CONTEXT_PATHS = frozenset(
     {
@@ -42,10 +45,10 @@ _FEEDER_SUFFIXES = frozenset(
     {
         "originating_system_audit|system_id",
         "originating_system_audit|version_id",
-        "originating_system_item_id:0|id",
-        "originating_system_item_id:0|issuer",
-        "originating_system_item_id:0|assigner",
-        "originating_system_item_id:0|type",
+        "originating_system_item_ids:0|id",
+        "originating_system_item_ids:0|issuer",
+        "originating_system_item_ids:0|assigner",
+        "originating_system_item_ids:0|type",
     }
 )
 _TEXT_FIELDS = ("normalized_text", "text", "entity_text", "word", "surface")
@@ -58,6 +61,13 @@ _VALUE_FIELDS = (
 )
 _UNIT_FIELDS = ("unit", "units", "value_unit", "result_unit")
 _CANDIDATE_FIELDS = ("candidates", "grounding_candidates", "ranked_candidates")
+_CODING_SYSTEM_FIELDS = (
+    "system",
+    "code_system",
+    "coding_system",
+    "vocabulary_id",
+    "source_vocabulary_id",
+)
 _SYSTEM_TERMINOLOGY = {
     "HTTP://SNOMED.INFO/SCT": "SNOMED-CT",
     "SNOMED": "SNOMED-CT",
@@ -74,7 +84,14 @@ _SYSTEM_TERMINOLOGY = {
 
 @dataclass(frozen=True)
 class OpenEHRCoding:
-    """Terminology coding emitted into an openEHR coded-text flat element."""
+    """Terminology coding emitted into an openEHR coded-text flat element.
+
+    Args:
+        system: Source terminology identifier or URI.
+        code: Terminology code.
+        display: Human-readable coded value.
+        terminology: EHRbase flat-format terminology label.
+    """
 
     system: str
     code: str
@@ -95,12 +112,23 @@ class _EntitySpan:
 
 @dataclass(frozen=True)
 class OpenEHRTemplate:
-    """Allowed flat paths parsed from an EHRbase WebTemplate."""
+    """Allowed flat paths parsed from an EHRbase WebTemplate.
+
+    Args:
+        template_id: Operational Template identifier.
+        allowed_paths: Normalized flat paths that may be emitted.
+        element_paths: Normalized element bases eligible for FEEDER_AUDIT.
+        source: Description of the parsed template source.
+        root_id: WebTemplate tree id used as the flat path prefix.
+        archetype_path_constraints: Allowed ``(path, archetype_id)`` pairs.
+    """
 
     template_id: str
     allowed_paths: frozenset[str]
     element_paths: frozenset[str]
     source: str = "webtemplate"
+    root_id: str = ""
+    archetype_path_constraints: frozenset[tuple[str, str]] = frozenset()
 
     def allows_path(self, path: str) -> bool:
         """Return whether ``path`` is valid for this flat COMPOSITION."""
@@ -116,10 +144,29 @@ class OpenEHRTemplate:
             )
         return _normalize_flat_path(path) in self.allowed_paths
 
+    def allows_archetype(self, path: str, archetype_id: str) -> bool:
+        """Return whether ``path`` descends from ``archetype_id``.
+
+        Explicit allowed-path manifests cannot express archetype ancestry and
+        therefore rely on path validation alone. WebTemplates carry ``nodeId``
+        values, so their paths are checked against the declarative binding too.
+        """
+
+        if not self.archetype_path_constraints:
+            return True
+        normalized = _normalize_flat_path(path.split("|", 1)[0])
+        return (normalized, archetype_id) in self.archetype_path_constraints
+
 
 @dataclass(frozen=True)
 class OpenEHRValidationResult:
-    """Conformance and provenance findings for a flat COMPOSITION."""
+    """Conformance and provenance findings for a flat COMPOSITION.
+
+    Args:
+        out_of_template_paths: Emitted paths absent from the template.
+        missing_feeder_audit_paths: Non-empty elements without provenance.
+        unresolved_feeder_audit_paths: Provenance pointers with invalid offsets.
+    """
 
     out_of_template_paths: tuple[str, ...] = ()
     missing_feeder_audit_paths: tuple[str, ...] = ()
@@ -167,12 +214,22 @@ class OpenEHRValidationResult:
 def parse_operational_template(
     template: OpenEHRTemplate | Mapping[str, Any] | str | os.PathLike[str],
 ) -> OpenEHRTemplate:
-    """Parse a caller-supplied OPT/WebTemplate into allowed flat paths.
+    """Parse a caller-supplied OPT WebTemplate into allowed flat paths.
 
     EHRbase flat JSON is driven by the WebTemplate representation generated
     from an Operational Template. For tests and embedded deployments, callers
     may also provide a mapping with ``templateId`` and explicit
     ``allowed_paths``.
+
+    Args:
+        template: Parsed WebTemplate, mapping, inline JSON, or JSON file path.
+
+    Returns:
+        Parsed template constraints for flat export and validation.
+
+    Raises:
+        OSError: If a supplied template path cannot be read.
+        ValueError: If the template is malformed or lacks flat path metadata.
     """
 
     if isinstance(template, OpenEHRTemplate):
@@ -215,9 +272,31 @@ def to_openehr_composition(
     ``vocabulary_key`` is an explicit caller opt-in gate. When omitted, the
     exporter emits text and quantity values only, even if entity objects already
     carry terminology candidates.
+
+    Args:
+        entities: Grounded clinical entity mappings or objects.
+        operational_template: Caller-supplied WebTemplate constraints.
+        doc_id: Stable source document identifier; only its digest is emitted.
+        source_text: Optional de-identified note used to check span bounds.
+        composer_name: Composer name for the COMPOSITION context.
+        language: ISO language code for the COMPOSITION context.
+        territory: ISO territory code for the COMPOSITION context.
+        time: Composition timestamp, defaulting to the current UTC time.
+        vocabulary_key: Explicit opt-in for caller-supplied terminology codings.
+        bindings: Declarative entity-to-archetype bindings.
+        validate: Whether to enforce template and provenance validation.
+
+    Returns:
+        An EHRbase-compatible flat-JSON COMPOSITION mapping.
+
+    Raises:
+        OSError: If the template cannot be read.
+        TypeError: If an entity has an unsupported shape.
+        ValueError: If entity, template, binding, or provenance validation fails.
     """
 
     template = parse_operational_template(operational_template)
+    root_id = template.root_id or template.template_id
     composition: dict[str, Any] = {
         "ctx/language": language,
         "ctx/territory": territory,
@@ -234,24 +313,25 @@ def to_openehr_composition(
         index = counters.get(binding.kind, 0)
         counters[binding.kind] = index + 1
 
-        text_path = binding.flat_text_path(template.template_id, index)
+        text_path = binding.flat_text_path(root_id, index)
+        _require_binding_path(template, text_path, binding)
         composition[text_path] = span.text
         _add_feeder_audit(composition, text_path, doc_id=doc_id, span=span)
 
         if span.coding is not None:
-            code_path = binding.flat_code_path(template.template_id, index)
+            code_path = binding.flat_code_path(root_id, index)
             if code_path is not None:
+                _require_binding_path(template, code_path, binding)
                 composition[f"{code_path}|code"] = span.coding.code
                 composition[f"{code_path}|value"] = span.coding.display
                 composition[f"{code_path}|terminology"] = span.coding.terminology
                 _add_feeder_audit(composition, code_path, doc_id=doc_id, span=span)
 
-        quantity_path = binding.flat_quantity_path(template.template_id, index)
+        quantity_path = binding.flat_quantity_path(root_id, index)
         if span.value is not None and quantity_path is not None:
+            _require_binding_path(template, quantity_path, binding)
             if not span.unit:
-                raise ValueError(
-                    f"Entity {span.text!r} has a quantity value but no unit"
-                )
+                raise ValueError("openEHR quantity entity has a value but no unit")
             composition[f"{quantity_path}|magnitude"] = span.value
             composition[f"{quantity_path}|unit"] = span.unit
             _add_feeder_audit(composition, quantity_path, doc_id=doc_id, span=span)
@@ -271,7 +351,16 @@ def validate_openehr_composition(
     *,
     source_text: str | None = None,
 ) -> OpenEHRValidationResult:
-    """Validate template conformance and source-offset FEEDER_AUDIT coverage."""
+    """Validate template conformance and source-offset FEEDER_AUDIT coverage.
+
+    Args:
+        composition: Flat-JSON COMPOSITION to validate.
+        operational_template: Caller-supplied WebTemplate constraints.
+        source_text: Optional de-identified note used to check span bounds.
+
+    Returns:
+        All template and provenance findings without short-circuiting.
+    """
 
     template = parse_operational_template(operational_template)
     out_of_template = tuple(
@@ -282,7 +371,7 @@ def validate_openehr_composition(
     missing: list[str] = []
     unresolved: list[str] = []
     for base_path in element_bases:
-        pointer_path = f"{base_path}/_feeder_audit/originating_system_item_id:0|id"
+        pointer_path = f"{base_path}/_feeder_audit/originating_system_item_ids:0|id"
         pointer = composition.get(pointer_path)
         if not isinstance(pointer, str) or not pointer:
             missing.append(base_path)
@@ -300,7 +389,14 @@ def validate_openehr_composition(
 def extract_round_trip_coded_values(
     composition: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Extract coded-text and quantity values in deterministic flat-path order."""
+    """Extract coded-text and quantity values in deterministic flat-path order.
+
+    Args:
+        composition: Flat-JSON COMPOSITION returned by the exporter or validator.
+
+    Returns:
+        Coded text and quantity payloads sorted by their flat paths.
+    """
 
     bases = sorted(
         {
@@ -358,10 +454,12 @@ def _template_from_mapping(
             for path in allowed
             if not path.startswith("ctx/")
         }
+        root_id = _explicit_root_id(payload, allowed)
         return OpenEHRTemplate(
             template_id=template_id,
             allowed_paths=frozenset(allowed | _CONTEXT_PATHS),
             element_paths=frozenset(element_paths),
+            root_id=root_id,
             source=source,
         )
 
@@ -371,11 +469,16 @@ def _template_from_mapping(
             "openEHR template must contain a WebTemplate 'tree' or allowed_paths"
         )
 
-    allowed, element_paths = _allowed_paths_from_webtemplate(tree)
+    root_id = tree.get("id")
+    if not isinstance(root_id, str) or not root_id.strip():
+        raise ValueError("openEHR WebTemplate tree is missing its flat root id")
+    allowed, element_paths, archetype_paths = _allowed_paths_from_webtemplate(tree)
     return OpenEHRTemplate(
         template_id=template_id,
         allowed_paths=frozenset(allowed | _CONTEXT_PATHS),
         element_paths=frozenset(element_paths),
+        root_id=root_id.strip(),
+        archetype_path_constraints=frozenset(archetype_paths),
         source=source,
     )
 
@@ -395,15 +498,27 @@ def _template_id(payload: Mapping[str, Any]) -> str:
 
 def _allowed_paths_from_webtemplate(
     root: Mapping[str, Any],
-) -> tuple[set[str], set[str]]:
+) -> tuple[set[str], set[str], set[tuple[str, str]]]:
     allowed: set[str] = set()
     element_paths: set[str] = set()
+    archetype_paths: set[tuple[str, str]] = set()
 
-    def walk(node: Mapping[str, Any], prefix: str | None) -> None:
+    def walk(
+        node: Mapping[str, Any],
+        prefix: str | None,
+        archetype_lineage: tuple[str, ...],
+    ) -> None:
+        if node.get("excludeFromWebTemplate") is True:
+            return
         node_id = node.get("id")
         if not isinstance(node_id, str) or not node_id:
             return
         path = node_id if prefix is None else f"{prefix}/{node_id}"
+        node_archetype_id = node.get("nodeId")
+        if isinstance(node_archetype_id, str) and node_archetype_id.startswith(
+            "openEHR-"
+        ):
+            archetype_lineage = (*archetype_lineage, node_archetype_id)
         children = node.get("children")
         if not isinstance(children, Sequence) or isinstance(children, (str, bytes)):
             children = ()
@@ -414,20 +529,55 @@ def _allowed_paths_from_webtemplate(
                     continue
                 suffix = item.get("suffix")
                 if isinstance(suffix, str) and suffix:
-                    allowed.add(_normalize_flat_path(f"{path}|{suffix}"))
+                    normalized = _normalize_flat_path(f"{path}|{suffix}")
                 else:
-                    allowed.add(_normalize_flat_path(path))
-                element_paths.add(_normalize_flat_path(path))
+                    normalized = _normalize_flat_path(path)
+                allowed.add(normalized)
+                normalized_element = _normalize_flat_path(path)
+                element_paths.add(normalized_element)
+                archetype_paths.update(
+                    (normalized_element, archetype_id)
+                    for archetype_id in archetype_lineage
+                )
         elif not children and prefix is not None:
-            allowed.add(_normalize_flat_path(path))
-            element_paths.add(_normalize_flat_path(path))
+            normalized = _normalize_flat_path(path)
+            allowed.add(normalized)
+            element_paths.add(normalized)
+            archetype_paths.update(
+                (normalized, archetype_id) for archetype_id in archetype_lineage
+            )
 
         for child in children:
             if isinstance(child, Mapping):
-                walk(child, path)
+                walk(child, path, archetype_lineage)
 
-    walk(root, None)
-    return allowed, element_paths
+    walk(root, None, ())
+    return allowed, element_paths, archetype_paths
+
+
+def _explicit_root_id(payload: Mapping[str, Any], paths: set[str]) -> str:
+    for key in ("rootId", "root_id"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    roots = {
+        path.split("/", 1)[0] for path in paths if path and not path.startswith("ctx/")
+    }
+    if len(roots) == 1:
+        return roots.pop()
+    return _template_id(payload)
+
+
+def _require_binding_path(
+    template: OpenEHRTemplate,
+    path: str,
+    binding: OpenEHRBinding,
+) -> None:
+    if template.allows_archetype(path, binding.archetype_id):
+        return
+    raise ValueError(
+        f"openEHR path {path!r} is not constrained by {binding.archetype_id!r}"
+    )
 
 
 def _read_template_text(template: str | os.PathLike[str]) -> tuple[str, str]:
@@ -458,10 +608,10 @@ def _normalize_entity(
     text = str(row["normalized_text"] or row["display"] or _first_text(entity))
     if not text:
         raise ValueError(f"Entity {kind!r} is missing text")
-    start = _required_offset(row.get("start"), "start", text)
-    end = _required_offset(row.get("end"), "end", text)
-    if start > end:
-        raise ValueError(f"Entity {text!r} has start offset after end offset")
+    start = _required_offset(row.get("start"), "start")
+    end = _required_offset(row.get("end"), "end")
+    if start >= end:
+        raise ValueError("openEHR entity requires a non-empty source span")
 
     return _EntitySpan(
         kind=kind,
@@ -484,7 +634,9 @@ def _coding_for_entity(
     if not vocabulary_key:
         return None
 
-    system = str(row.get("system") or "")
+    system = str(
+        row.get("system") or _first_scalar(_sources(entity), _CODING_SYSTEM_FIELDS)
+    )
     code = str(row.get("code") or "")
     display = str(row.get("display") or row.get("normalized_text") or "")
     if system and code:
@@ -509,7 +661,7 @@ def _candidate_codings(entity: Any) -> list[OpenEHRCoding]:
             if value is _MISSING or value is None or isinstance(value, (str, bytes)):
                 continue
             for item in value:
-                system = _first_scalar((item,), ("system", "code_system"))
+                system = _first_scalar((item,), _CODING_SYSTEM_FIELDS)
                 code = _first_scalar((item,), ("code", "code_value"))
                 display = _first_scalar((item,), ("display", "label", "text"))
                 if system and code:
@@ -570,19 +722,15 @@ def _number_value(entity: Any) -> int | float | None:
     return None
 
 
-def _required_offset(value: Any, name: str, text: str) -> int:
+def _required_offset(value: Any, name: str) -> int:
     if value == "" or value is None:
-        raise ValueError(
-            f"Entity {text!r} is missing {name} offset required for FEEDER_AUDIT"
-        )
+        raise ValueError(f"openEHR entity is missing {name} offset for FEEDER_AUDIT")
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"Entity {text!r} has invalid {name} offset {value!r}"
-        ) from exc
+        raise ValueError(f"openEHR entity has an invalid {name} offset") from exc
     if parsed < 0:
-        raise ValueError(f"Entity {text!r} has negative {name} offset")
+        raise ValueError(f"openEHR entity has a negative {name} offset")
     return parsed
 
 
@@ -593,16 +741,18 @@ def _add_feeder_audit(
     doc_id: str,
     span: _EntitySpan,
 ) -> None:
-    pointer = f"{doc_id}:{span.start}-{span.end}"
+    document_digest = hashlib.sha256(str(doc_id).encode("utf-8")).hexdigest()
+    pointer = f"sha256:{document_digest}:{span.start}-{span.end}"
     audit_base = f"{base_path}/_feeder_audit"
     composition[f"{audit_base}/originating_system_audit|system_id"] = "openmed"
     composition[f"{audit_base}/originating_system_audit|version_id"] = (
         "source-offsets-v1"
     )
-    composition[f"{audit_base}/originating_system_item_id:0|id"] = pointer
-    composition[f"{audit_base}/originating_system_item_id:0|issuer"] = "openmed"
-    composition[f"{audit_base}/originating_system_item_id:0|assigner"] = doc_id
-    composition[f"{audit_base}/originating_system_item_id:0|type"] = "SOURCE_SPAN"
+    item_id_base = f"{audit_base}/originating_system_item_ids:0"
+    composition[f"{item_id_base}|id"] = pointer
+    composition[f"{item_id_base}|issuer"] = "openmed"
+    composition[f"{item_id_base}|assigner"] = "openmed"
+    composition[f"{item_id_base}|type"] = "SOURCE_SPAN"
 
 
 def _non_empty_element_bases(composition: Mapping[str, Any]) -> tuple[str, ...]:
@@ -620,7 +770,7 @@ def _pointer_resolves(pointer: str, source_text: str | None) -> bool:
         return False
     start = int(match.group("start"))
     end = int(match.group("end"))
-    if start > end:
+    if start >= end:
         return False
     return source_text is None or end <= len(source_text)
 

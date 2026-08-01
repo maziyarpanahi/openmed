@@ -19,6 +19,16 @@ class OpenEHRBinding:
     Paths are relative to the WebTemplate root id. ``{index}`` is replaced with
     the zero-based occurrence index for the binding family so repeated entities
     remain EHRbase-flat-compatible.
+
+    Args:
+        kind: Canonical OpenMed entity kind for this binding family.
+        aliases: Accepted normalized aliases for ``kind``.
+        archetype_id: Standard archetype identifier required in the template.
+        archetype_label: Human-readable archetype label.
+        text_path: Relative flat path for the source text element.
+        code_path: Optional relative flat path for coded terminology values.
+        quantity_path: Optional relative flat path for magnitude and unit values.
+        preferred_code_systems: Terminologies preferred during candidate selection.
     """
 
     kind: str
@@ -112,7 +122,18 @@ def binding_for_entity_kind(
     entity_kind: str,
     bindings: Sequence[OpenEHRBinding] = DEFAULT_OPENEHR_BINDINGS,
 ) -> OpenEHRBinding:
-    """Return the configured openEHR binding for a canonical entity label."""
+    """Return the configured openEHR binding for a canonical entity label.
+
+    Args:
+        entity_kind: Canonical entity label or configured alias.
+        bindings: Declarative binding set to search.
+
+    Returns:
+        The matching binding.
+
+    Raises:
+        ValueError: If no binding recognizes ``entity_kind``.
+    """
 
     normalized = _normalize_kind(entity_kind)
     for binding in bindings:
