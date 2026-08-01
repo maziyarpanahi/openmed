@@ -18,6 +18,20 @@ from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
 MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
+RADIOLOGY_ENTITY_ANATOMY = "ANATOMY"
+RADIOLOGY_ENTITY_OBSERVATION = "OBSERVATION"
+RADIOLOGY_ENTITY_TYPES: tuple[str, ...] = (
+    RADIOLOGY_ENTITY_ANATOMY,
+    RADIOLOGY_ENTITY_OBSERVATION,
+)
+RADIOLOGY_UNCERTAINTY_PRESENT = "present"
+RADIOLOGY_UNCERTAINTY_ABSENT = "absent"
+RADIOLOGY_UNCERTAINTY_UNCERTAIN = "uncertain"
+RADIOLOGY_UNCERTAINTY_CLASSES: tuple[str, ...] = (
+    RADIOLOGY_UNCERTAINTY_PRESENT,
+    RADIOLOGY_UNCERTAINTY_ABSENT,
+    RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+)
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -144,6 +158,32 @@ class F1Metrics:
         }
 
     def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class UncertaintyAccuracyMetrics:
+    """Finding-level uncertainty accuracy and per-class counts."""
+
+    accuracy: float
+    correct: int
+    total: int
+    per_class: Mapping[str, Mapping[str, int | float]]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a stable JSON-ready metric payload."""
+        per_class = {
+            uncertainty: dict(values)
+            for uncertainty, values in sorted(self.per_class.items())
+        }
+        return {
+            "accuracy": self.accuracy,
+            "correct": self.correct,
+            "total": self.total,
+            "per_class": per_class,
+        }
+
+    def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
 
 
@@ -681,6 +721,292 @@ def normalize_eval_spans(
         )
         for span in spans
     ]
+
+
+def normalize_radiology_uncertainty(value: Any) -> str:
+    """Normalize a RadGraph-style finding uncertainty label.
+
+    Args:
+        value: A present, absent, or uncertain assertion label. RadGraph's
+            ``definitely present`` and ``definitely absent`` spellings are also
+            accepted.
+
+    Returns:
+        One of :data:`RADIOLOGY_UNCERTAINTY_CLASSES`.
+
+    Raises:
+        ValueError: If *value* is missing or is not a supported uncertainty.
+    """
+    normalized = "_".join(str(value or "").strip().casefold().replace("-", " ").split())
+    aliases = {
+        "affirmed": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "definitely_present": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "positive": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "present": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "absent": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "definitely_absent": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "negated": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "negative": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "possible": RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+        "uncertain": RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+    }
+    try:
+        return aliases[normalized]
+    except KeyError as exc:
+        allowed = ", ".join(RADIOLOGY_UNCERTAINTY_CLASSES)
+        raise ValueError(
+            f"radiology uncertainty {value!r} must be one of: {allowed}"
+        ) from exc
+
+
+def normalize_radiology_entity(
+    entity: Any,
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> EvalSpan:
+    """Normalize an observation or anatomy entity without PHI-label coercion.
+
+    RadGraph entity labels are clinical evaluation labels rather than the
+    de-identification taxonomy used by :func:`normalize_eval_span`. Finding
+    uncertainty is retained in ``metadata["uncertainty"]``.
+    """
+    if isinstance(entity, EvalSpan):
+        data: Mapping[str, Any] = {
+            "start": entity.start,
+            "end": entity.end,
+            "label": entity.label,
+            "text": entity.text,
+            "language": entity.language,
+            "device": entity.device,
+            "metadata": entity.metadata,
+        }
+    else:
+        data = entity if isinstance(entity, Mapping) else vars(entity)
+
+    metadata_value = _read_mapping(data, "metadata") or {}
+    if not isinstance(metadata_value, Mapping):
+        raise ValueError("radiology entity metadata must be a mapping")
+    metadata = dict(metadata_value)
+
+    start = _read_int(data, "start")
+    end = _read_int(data, "end")
+    if start is None or end is None:
+        raise ValueError(f"radiology entity must include integer offsets: {entity!r}")
+    if start < 0 or end <= start:
+        raise ValueError(f"invalid radiology entity offsets: {start}:{end}")
+    if source_text is not None and end > len(source_text):
+        raise ValueError(
+            f"radiology entity offsets {start}:{end} exceed text length "
+            f"{len(source_text)}"
+        )
+
+    raw_label = str(
+        _read_value(data, "label")
+        or _read_value(data, "entity_type")
+        or _read_value(data, "type")
+        or ""
+    ).strip()
+    label_parts = raw_label.split("::", 1)
+    compact_label = label_parts[0].strip().upper().replace("_", "-")
+    radgraph_labels = {
+        "ANAT-DP": (RADIOLOGY_ENTITY_ANATOMY, RADIOLOGY_UNCERTAINTY_PRESENT),
+        "OBS-DA": (RADIOLOGY_ENTITY_OBSERVATION, RADIOLOGY_UNCERTAINTY_ABSENT),
+        "OBS-DP": (RADIOLOGY_ENTITY_OBSERVATION, RADIOLOGY_UNCERTAINTY_PRESENT),
+        "OBS-U": (RADIOLOGY_ENTITY_OBSERVATION, RADIOLOGY_UNCERTAINTY_UNCERTAIN),
+    }
+    label_uncertainty: str | None = None
+    if compact_label in radgraph_labels:
+        label, label_uncertainty = radgraph_labels[compact_label]
+    else:
+        label_key = "_".join(
+            label_parts[0].replace("-", " ").strip().casefold().split()
+        )
+        if label_key in {"anatomical", "anatomy", "body_site"}:
+            label = RADIOLOGY_ENTITY_ANATOMY
+        elif label_key in {"condition", "finding", "observation"}:
+            label = RADIOLOGY_ENTITY_OBSERVATION
+        else:
+            allowed = ", ".join(RADIOLOGY_ENTITY_TYPES)
+            raise ValueError(
+                f"radiology entity label {raw_label!r} must be one of: {allowed}"
+            )
+
+    raw_uncertainty = (
+        _read_value(data, "uncertainty")
+        or _read_value(data, "assertion")
+        or _read_value(data, "status")
+    )
+    if raw_uncertainty is None:
+        raw_uncertainty = metadata.get("uncertainty") or metadata.get("assertion")
+    if raw_uncertainty is None and len(label_parts) == 2:
+        raw_uncertainty = label_parts[1]
+    if raw_uncertainty is None:
+        raw_uncertainty = label_uncertainty
+    if raw_uncertainty is not None:
+        metadata["uncertainty"] = normalize_radiology_uncertainty(raw_uncertainty)
+
+    raw_language = (
+        _read_value(data, "language")
+        or _read_value(data, "lang")
+        or metadata.get("language")
+        or default_language
+    )
+    raw_device = _read_value(data, "device") or metadata.get("device") or default_device
+    raw_text = _read_value(data, "text") or _read_value(data, "tokens")
+    if raw_text is None and source_text is not None:
+        raw_text = source_text[start:end]
+    if source_text is not None and raw_text and source_text[start:end] != str(raw_text):
+        raise ValueError(f"radiology entity text mismatch at offsets {start}:{end}")
+
+    return EvalSpan(
+        start=start,
+        end=end,
+        label=label,
+        text=str(raw_text or ""),
+        language=str(raw_language),
+        device=str(raw_device),
+        metadata=metadata,
+    )
+
+
+def normalize_radiology_entities(
+    entities: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> list[EvalSpan]:
+    """Normalize radiology observation and anatomy entities for evaluation."""
+    return [
+        normalize_radiology_entity(
+            entity,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        )
+        for entity in entities
+    ]
+
+
+def compute_radiology_uncertainty_accuracy(
+    gold_entities: Iterable[Any],
+    predicted_entities: Iterable[Any],
+    *,
+    match: str = "relaxed",
+) -> UncertaintyAccuracyMetrics:
+    """Compute finding-level uncertainty accuracy with per-class breakdowns.
+
+    Missing or boundary-mismatched predicted findings count as incorrect. Extra
+    predictions are handled by entity F1 and do not change the gold-finding
+    denominator for this classification metric.
+    """
+    if match not in {"strict", "relaxed"}:
+        raise ValueError("radiology uncertainty match must be strict or relaxed")
+    gold = normalize_radiology_entities(gold_entities)
+    predicted = normalize_radiology_entities(predicted_entities)
+    gold_findings = [
+        entity for entity in gold if entity.label == RADIOLOGY_ENTITY_OBSERVATION
+    ]
+    predicted_findings = [
+        entity for entity in predicted if entity.label == RADIOLOGY_ENTITY_OBSERVATION
+    ]
+    matched_predictions: set[int] = set()
+    correct_by_class: defaultdict[str, int] = defaultdict(int)
+    total_by_class: defaultdict[str, int] = defaultdict(int)
+
+    for gold_entity in gold_findings:
+        raw_gold_uncertainty = gold_entity.metadata.get("uncertainty")
+        if raw_gold_uncertainty is None:
+            raise ValueError("gold observation must include radiology uncertainty")
+        gold_uncertainty = normalize_radiology_uncertainty(raw_gold_uncertainty)
+        total_by_class[gold_uncertainty] += 1
+        candidates = [
+            (index, prediction)
+            for index, prediction in enumerate(predicted_findings)
+            if index not in matched_predictions
+            and _radiology_entity_matches(gold_entity, prediction, match=match)
+        ]
+        if not candidates:
+            continue
+        best_index, best_prediction = max(
+            candidates,
+            key=lambda item: _overlap_len(gold_entity, item[1]),
+        )
+        matched_predictions.add(best_index)
+        raw_prediction_uncertainty = best_prediction.metadata.get("uncertainty")
+        if raw_prediction_uncertainty is None:
+            continue
+        if (
+            normalize_radiology_uncertainty(raw_prediction_uncertainty)
+            == gold_uncertainty
+        ):
+            correct_by_class[gold_uncertainty] += 1
+
+    total = sum(total_by_class.values())
+    correct = sum(correct_by_class.values())
+    per_class = {
+        uncertainty: {
+            "accuracy": _safe_rate(
+                correct_by_class[uncertainty],
+                total_by_class[uncertainty],
+                zero_denominator=1.0,
+            ),
+            "correct": correct_by_class[uncertainty],
+            "total": total_by_class[uncertainty],
+        }
+        for uncertainty in RADIOLOGY_UNCERTAINTY_CLASSES
+    }
+    return UncertaintyAccuracyMetrics(
+        accuracy=_safe_rate(correct, total, zero_denominator=1.0),
+        correct=correct,
+        total=total,
+        per_class=per_class,
+    )
+
+
+def compute_radiology_entity_relation_metrics(
+    gold_entities: Iterable[Any],
+    predicted_entities: Iterable[Any],
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+) -> dict[str, Any]:
+    """Score RadGraph-style entities, relations, and finding uncertainty."""
+    from openmed.eval.relation_metrics import compute_relation_metrics
+
+    gold = normalize_radiology_entities(gold_entities)
+    predicted = normalize_radiology_entities(predicted_entities)
+    relation_metrics = compute_relation_metrics(gold_relations, predicted_relations)
+    return {
+        "entity": {
+            "relaxed": compute_relaxed_span_f1(gold, predicted).to_dict(),
+            "strict": compute_exact_span_f1(gold, predicted).to_dict(),
+        },
+        "relation": {
+            "counts": relation_metrics["counts"],
+            "per_relation_type": relation_metrics["by_type"],
+            "relaxed": relation_metrics["relaxed"],
+            "strict": relation_metrics["strict"],
+        },
+        "uncertainty": compute_radiology_uncertainty_accuracy(
+            gold,
+            predicted,
+        ).to_dict(),
+    }
+
+
+def _radiology_entity_matches(
+    gold: EvalSpan,
+    predicted: EvalSpan,
+    *,
+    match: str,
+) -> bool:
+    if gold.label != predicted.label:
+        return False
+    if match == "strict":
+        return gold.start == predicted.start and gold.end == predicted.end
+    return _overlap_len(gold, predicted) > 0
 
 
 def compute_leakage_rate(
@@ -3199,6 +3525,13 @@ __all__ = [
     "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
+    "RADIOLOGY_ENTITY_ANATOMY",
+    "RADIOLOGY_ENTITY_OBSERVATION",
+    "RADIOLOGY_ENTITY_TYPES",
+    "RADIOLOGY_UNCERTAINTY_ABSENT",
+    "RADIOLOGY_UNCERTAINTY_CLASSES",
+    "RADIOLOGY_UNCERTAINTY_PRESENT",
+    "RADIOLOGY_UNCERTAINTY_UNCERTAIN",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
@@ -3206,6 +3539,7 @@ __all__ = [
     "EvalSpan",
     "RateMetric",
     "F1Metrics",
+    "UncertaintyAccuracyMetrics",
     "LeakageMetrics",
     "MixedScriptLeakageMetrics",
     "RecallSlices",
@@ -3218,6 +3552,9 @@ __all__ = [
     "CoverageGap",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "normalize_radiology_entity",
+    "normalize_radiology_entities",
+    "normalize_radiology_uncertainty",
     "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
     "compute_mixed_script_leakage",
@@ -3225,6 +3562,8 @@ __all__ = [
     "compute_critical_finding_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
+    "compute_radiology_entity_relation_metrics",
+    "compute_radiology_uncertainty_accuracy",
     "section_boundary_accuracy",
     "stated_category_accuracy",
     "radiology_finding_tuple_f1",
