@@ -179,13 +179,6 @@ theme:
   favicon: assets/openmed-favicon.svg
   font: false
   palette:
-    - media: "(prefers-color-scheme)"
-      scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-auto
-        name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: custom
@@ -199,7 +192,7 @@ theme:
       accent: custom
       toggle:
         icon: material/weather-night
-        name: Switch to system theme
+        name: Switch to light mode
   features:
     - navigation.sections
     - navigation.tabs

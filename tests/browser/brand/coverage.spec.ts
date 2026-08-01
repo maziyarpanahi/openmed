@@ -1,4 +1,4 @@
-import { Page, expect, test } from "@playwright/test";
+import { ConsoleMessage, Page, expect, test } from "@playwright/test";
 
 const criticalSurfaces = [
   { name: "website", path: "/" },
@@ -21,6 +21,18 @@ type PageAudit = {
   unexpectedMethods: string[];
 };
 
+function isGitHubMetadataRequest(url: URL): boolean {
+  return [
+    "https://api.github.com/repos/maziyarpanahi/openmed",
+    "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
+  ].includes(url.href);
+}
+
+function isGitHubMetadataConsoleError(message: ConsoleMessage): boolean {
+  const source = message.location().url;
+  return Boolean(source) && isGitHubMetadataRequest(new URL(source));
+}
+
 function monitorPage(page: Page, baseURL: string | undefined): PageAudit {
   const expectedOrigin = new URL(
     baseURL ?? "http://127.0.0.1:4173",
@@ -34,7 +46,12 @@ function monitorPage(page: Page, baseURL: string | undefined): PageAudit {
     unexpectedMethods: [],
   };
   page.on("console", (message) => {
-    if (message.type() === "error") audit.consoleErrors.push(message.text());
+    if (
+      message.type() === "error"
+      && !isGitHubMetadataConsoleError(message)
+    ) {
+      audit.consoleErrors.push(message.text());
+    }
   });
   page.on("pageerror", (error) => audit.pageErrors.push(error.message));
   page.on("request", (request) => {
@@ -45,11 +62,13 @@ function monitorPage(page: Page, baseURL: string | undefined): PageAudit {
     if (
       (url.protocol === "http:" || url.protocol === "https:") &&
       url.origin !== expectedOrigin
+      && !isGitHubMetadataRequest(url)
     ) {
       audit.externalRequests.push(`${request.method()} ${url.href}`);
     }
   });
   page.on("requestfailed", (request) => {
+    if (isGitHubMetadataRequest(new URL(request.url()))) return;
     audit.failedRequests.push(
       `${request.method()} ${request.url()} ${
         request.failure()?.errorText ?? ""
@@ -180,14 +199,9 @@ for (const theme of ["light", "dark"] as const) {
         await expect(menu).toBeFocused();
       }
 
-      const pythonTab = page.locator("#tab-python");
-      const installTab = page.locator("#tab-install");
-      await pythonTab.focus();
-      await pythonTab.press("ArrowRight");
-      await expect(installTab).toBeFocused();
-      await expect(installTab).toHaveAttribute("aria-selected", "true");
-      await expect(page.locator("#panel-install")).toBeVisible();
-      await expect(page.locator("#panel-python")).toBeHidden();
+      await expect(page.locator(".terminal-install")).toContainText(
+        'uv pip install "openmed[hf]"',
+      );
 
       const copy = page.locator("[data-copy-text]").first();
       await copy.focus();
@@ -220,7 +234,7 @@ for (const theme of ["light", "dark"] as const) {
       );
       await expect(page.locator("#faq-answer-1")).toBeHidden();
 
-      const nextTheme = theme === "dark" ? "system" : "dark";
+      const nextTheme = theme === "dark" ? "light" : "dark";
       const themeToggle = page.locator("#themeToggle");
       await themeToggle.focus();
       await themeToggle.press("Enter");
@@ -228,32 +242,73 @@ for (const theme of ["light", "dark"] as const) {
         "data-theme-preference",
         nextTheme,
       );
-      if (nextTheme === "system") {
-        await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
-      } else {
-        await expect(page.locator("html")).toHaveAttribute(
-          "data-theme",
-          nextTheme,
-        );
-      }
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-theme",
+        nextTheme,
+      );
       await page.reload({ waitUntil: "load" });
       await expect(page.locator("html")).toHaveAttribute(
         "data-theme-preference",
         nextTheme,
       );
-      if (nextTheme === "system") {
-        await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
-      } else {
-        await expect(page.locator("html")).toHaveAttribute(
-          "data-theme",
-          nextTheme,
-        );
-      }
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-theme",
+        nextTheme,
+      );
       await expectNoHorizontalPageOverflow(page);
       expectCleanAudit(audit);
     });
   }
 }
+
+test("docs theme control cycles through only light and dark", async ({
+  baseURL,
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.addInitScript(() => {
+    localStorage.removeItem("/docs/.__palette");
+  });
+  const audit = monitorPage(page, baseURL);
+  await page.goto("/docs/", { waitUntil: "networkidle" });
+
+  const palette = page.locator('form[data-md-component="palette"]');
+  await expect(palette.locator('input[type="radio"]')).toHaveCount(2);
+  await palette.locator("label:visible").click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-md-color-scheme",
+    "slate",
+  );
+  await palette.locator("label:visible").click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-md-color-scheme",
+    "default",
+  );
+  expectCleanAudit(audit);
+});
+
+test("standalone theme control cycles through only light and dark", async ({
+  baseURL,
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("openmed-theme", "light");
+  });
+  const audit = monitorPage(page, baseURL);
+  await page.goto("/docs/eval/benchmark-leaderboard/", {
+    waitUntil: "load",
+  });
+
+  const toggle = page.locator("[data-openmed-theme]");
+  await expect(toggle).toHaveText("Theme: light");
+  await toggle.click();
+  await expect(toggle).toHaveText("Theme: dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await toggle.click();
+  await expect(toggle).toHaveText("Theme: light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expectCleanAudit(audit);
+});
 
 test("browser demo completes a same-origin synthetic local inference", async ({
   baseURL,

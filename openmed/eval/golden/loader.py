@@ -61,6 +61,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         # must not be loaded as such by load_golden_fixtures().
         "radiology_finding.jsonl",
         "radiology_report.jsonl",
+        "radiology_entity_relations.jsonl",
         "hgvs_parse.jsonl",
         "measurement_trend.jsonl",
         "tnm_stage.jsonl",

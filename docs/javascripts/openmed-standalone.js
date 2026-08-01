@@ -2,7 +2,7 @@
   "use strict";
 
   const storageKey = "openmed-theme";
-  const modes = ["system", "light", "dark"];
+  const modes = ["light", "dark"];
   const media = window.matchMedia("(prefers-color-scheme: dark)");
   const root = document.documentElement;
   const button = document.querySelector("[data-openmed-theme]");
@@ -10,15 +10,14 @@
   function storedMode() {
     try {
       const value = localStorage.getItem(storageKey);
-      return modes.includes(value) ? value : "system";
+      return modes.includes(value) ? value : (media.matches ? "dark" : "light");
     } catch {
-      return "system";
+      return media.matches ? "dark" : "light";
     }
   }
 
   function applyMode(mode) {
-    const resolved = mode === "system" ? (media.matches ? "dark" : "light") : mode;
-    root.dataset.theme = resolved;
+    root.dataset.theme = mode;
     root.dataset.themeMode = mode;
 
     if (button) {
@@ -44,9 +43,4 @@
     applyMode(mode);
   });
 
-  media.addEventListener("change", () => {
-    if (mode === "system") {
-      applyMode(mode);
-    }
-  });
 })();
