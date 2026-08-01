@@ -36,6 +36,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
+from ..processing.text import InputError as InputError
+from ..processing.text import validate_pii_input
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -1295,7 +1297,7 @@ def _extract_pii_batch(
 
 
 def extract_pii(
-    text: str,
+    text: str | bytes | bytearray | memoryview,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.5,
     config: Optional[OpenMedConfig] = None,
@@ -1403,6 +1405,7 @@ def extract_pii(
         >>> next((entity.text, entity.label) for entity in result.entities)
         ('Casey Example', 'NAME')
     """
+    text = validate_pii_input(text)
     if cache_results:
         params = dict(locals())
         cache_key = make_cache_key("extract_pii", params)
@@ -2414,7 +2417,7 @@ def _deidentify_batch(
 
 
 def deidentify(
-    text: str,
+    text: str | bytes | bytearray | memoryview,
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
@@ -2593,6 +2596,7 @@ def deidentify(
         {'[NAME]': 'Casey Example'}
     """
 
+    text = validate_pii_input(text)
     if cache_results:
         params = dict(locals())
         cache_key = make_cache_key("deidentify", params)
