@@ -33,6 +33,7 @@ from .dhis2 import (
     OrgUnitHierarchy,
     export_dhis2,
 )
+from .fhir import to_fhir
 from .flat_table import (
     FLAT_TABLE_COLUMNS,
     flatten_clinical_entities,
@@ -40,6 +41,7 @@ from .flat_table import (
     to_csv,
     to_dataframe,
 )
+from .omop import CORE_OMOP_TABLES, achilles_smoke_check, to_omop
 from .openehr import (
     DEFAULT_OPENEHR_BINDINGS,
     OpenEHRBinding,
@@ -56,6 +58,7 @@ __all__ = [
     "USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER",
     "USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL",
     "CONCEPT_NORMALIZATION_PROVENANCE_EXTENSION_URL",
+    "CORE_OMOP_TABLES",
     "DEFAULT_GENERALIZATION_LEVEL",
     "DEFAULT_SMALL_CELL_THRESHOLD",
     "CodeableConceptFinding",
@@ -74,6 +77,7 @@ __all__ = [
     "OpenEHRTemplate",
     "OpenEHRValidationResult",
     "build_reverse_index",
+    "achilles_smoke_check",
     "check_codeable_concept",
     "codeable_concept_from_ranked_candidates",
     "extract_round_trip_coded_values",
@@ -86,6 +90,8 @@ __all__ = [
     "to_codeable_concept",
     "to_csv",
     "to_dataframe",
+    "to_fhir",
+    "to_omop",
     "to_openehr_composition",
     "validate_openehr_composition",
 ]

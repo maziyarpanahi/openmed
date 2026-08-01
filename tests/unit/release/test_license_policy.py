@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -158,6 +159,26 @@ def test_restricted_vocab_data_marker_fails_policy(tmp_path):
     assert policy.audit_restricted_vocab_data(tmp_path) == [
         Path("openmed/clinical/grounding/data/sct2_Concept_Full.txt")
     ]
+
+
+def test_built_wheel_rejects_restricted_vocabulary_data_entries(tmp_path):
+    wheel = tmp_path / "openmed-0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("openmed/clinical/grounding/data/umls_concepts.csv", "x")
+        archive.writestr("openmed/clinical/grounding/restricted.py", "# adapter")
+
+    assert policy.audit_restricted_vocab_wheel(wheel) == [
+        "openmed/clinical/grounding/data/umls_concepts.csv"
+    ]
+
+
+def test_built_wheel_allows_code_only_restricted_adapters(tmp_path):
+    wheel = tmp_path / "openmed-0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("openmed/clinical/grounding/restricted.py", "# adapter")
+        archive.writestr("openmed/eval/golden/synthetic.jsonl", '{"synthetic":true}')
+
+    assert policy.audit_restricted_vocab_wheel(wheel) == []
 
 
 def test_dev_optional_dependencies_are_not_audited(tmp_path):
