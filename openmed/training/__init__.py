@@ -7,6 +7,10 @@ __all__ = [
     "CONFIG_SCHEMA_VERSION",
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
+    "DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION",
+    "DOCTYPE_SECTION_LABELS",
+    "DOCTYPE_SECTION_LABEL_SET_REF",
+    "DOCTYPE_SECTION_PRESET",
     "MAX_LORA_TRAINABLE_RATIO",
     "PRESET_BY_MODE",
     "QLORA_CONFIG_SCHEMA_VERSION",
@@ -73,6 +77,7 @@ __all__ = [
     "compute_span_agreement_loss",
     "decode_repaired_spans",
     "dry_run_recipe",
+    "doctype_section_dry_run_manifest",
     "gate_requirements_by_code",
     "load_corpus_manifest",
     "load_preset",
@@ -87,6 +92,7 @@ __all__ = [
     "run_recipe",
     "run_qlora_smoke",
     "runtime_dependencies",
+    "resolve_doctype_section_head_contract",
     "sample_hard_negatives",
     "sampler_for_recipe",
     "soft_label_distributions",
@@ -102,6 +108,10 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     if name in {
         "CONFIG_SCHEMA_VERSION",
+        "DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION",
+        "DOCTYPE_SECTION_LABELS",
+        "DOCTYPE_SECTION_LABEL_SET_REF",
+        "DOCTYPE_SECTION_PRESET",
         "MAX_LORA_TRAINABLE_RATIO",
         "PRESET_BY_MODE",
         "QLORA_CONFIG_SCHEMA_VERSION",
@@ -121,11 +131,13 @@ def __getattr__(name: str) -> Any:
         "TrainingRecipeConfig",
         "config_hash",
         "dry_run_recipe",
+        "doctype_section_dry_run_manifest",
         "load_preset",
         "load_qlora_preset",
         "run_recipe",
         "run_qlora_smoke",
         "runtime_dependencies",
+        "resolve_doctype_section_head_contract",
     }:
         recipe = import_module(".recipe", __name__)
         return getattr(recipe, name)

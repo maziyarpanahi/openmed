@@ -27,9 +27,32 @@ from openmed.eval.metrics import compute_leakage_rate, compute_recall_slices
 CONFIG_SCHEMA_VERSION = "openmed.training.recipe.v1"
 QLORA_CONFIG_SCHEMA_VERSION = "openmed.training.qlora_recipe.v1"
 QLORA_SMOKE_RESULT_SCHEMA_VERSION = "openmed.training.qlora_smoke_result.v1"
+DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION = (
+    "openmed.training.doctype_section_dry_run.v1"
+)
 MAX_LORA_TRAINABLE_RATIO = 0.015
 CONFIG_DIR = Path(__file__).with_name("configs")
 QLORA_SMOKE_PRESET = "qlora_smoke"
+DOCTYPE_SECTION_PRESET = "doctype_section_lora"
+DOCTYPE_SECTION_LABEL_SET_REF = "openmed.training.recipe:DOCTYPE_SECTION_LABELS@v1"
+DOCTYPE_SECTION_LABELS = (
+    "O",
+    "B-history_of_present_illness",
+    "I-history_of_present_illness",
+    "B-past_medical_history",
+    "I-past_medical_history",
+    "B-family_history",
+    "I-family_history",
+    "B-social_history",
+    "I-social_history",
+    "B-assessment",
+    "I-assessment",
+    "B-plan",
+    "I-plan",
+    "clinical_note",
+    "discharge_summary",
+    "progress_note",
+)
 PRESET_BY_MODE = {
     "A": "tiny_distill",
     "B": "laptop_lora",
@@ -169,7 +192,7 @@ class TrainingRecipeConfig:
     output_tier: str
     quantization: QuantizationConfig
     seed: int
-    head_contract: str | None = None
+    head_contract: str | Mapping[str, Any] | None = None
 
     @classmethod
     def from_mapping(cls, raw_config: Mapping[str, Any]) -> "TrainingRecipeConfig":
@@ -188,7 +211,7 @@ class TrainingRecipeConfig:
 
         preset_name = _require_str(data, "preset_name")
         expected_preset = PRESET_BY_MODE[mode]
-        if preset_name != expected_preset:
+        if preset_name != expected_preset and preset_name != DOCTYPE_SECTION_PRESET:
             raise RecipeConfigError(
                 f"preset_name {preset_name!r} does not match mode {mode!r}"
             )
@@ -201,6 +224,7 @@ class TrainingRecipeConfig:
         if seed < 0:
             raise RecipeConfigError("seed must be a non-negative integer")
 
+        label_set_ref = _require_str(data, "label_set_ref")
         config = cls(
             schema_version=schema_version,
             preset_name=preset_name,
@@ -208,15 +232,19 @@ class TrainingRecipeConfig:
             backbone=_parse_backbone(_require_mapping(data, "backbone")),
             dapt=_parse_dapt(_require_mapping(data, "dapt")),
             lora=_parse_lora(_require_mapping(data, "lora")),
-            label_set_ref=_require_str(data, "label_set_ref"),
-            loss=_parse_loss(_require_mapping(data, "loss")),
+            label_set_ref=label_set_ref,
+            loss=_parse_loss(
+                _require_mapping(data, "loss"),
+                label_set_ref=label_set_ref,
+            ),
             hard_negatives_required=hard_negatives_required,
             output_tier=_require_str(data, "output_tier"),
             quantization=_parse_quantization(_require_mapping(data, "quantization")),
             seed=seed,
-            head_contract=_optional_str(data, "head_contract"),
+            head_contract=_optional_head_contract(data),
         )
         _validate_output_tier(config.output_tier)
+        _validate_recipe_contract(config)
         return config
 
     def to_dict(self) -> dict[str, Any]:
@@ -235,7 +263,7 @@ class TrainingRecipeConfig:
             "seed": self.seed,
         }
         if self.head_contract is not None:
-            payload["head_contract"] = self.head_contract
+            payload["head_contract"] = copy.deepcopy(self.head_contract)
         return payload
 
 
@@ -262,9 +290,11 @@ class DryRunResult:
     output_tier: str
     quant_default: str
     dependency_modules: Mapping[str, str]
+    reproducibility_hash: str | None = None
+    manifest: Mapping[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "config_hash": self.config_hash,
             "dependency_modules": dict(self.dependency_modules),
             "mode": self.mode,
@@ -273,6 +303,11 @@ class DryRunResult:
             "quant_default": self.quant_default,
             "seed": self.seed,
         }
+        if self.reproducibility_hash is not None:
+            payload["reproducibility_hash"] = self.reproducibility_hash
+        if self.manifest is not None:
+            payload["manifest"] = copy.deepcopy(dict(self.manifest))
+        return payload
 
 
 @dataclass(frozen=True)
@@ -509,8 +544,7 @@ class QloraSmokeResult:
 def load_preset(mode_or_preset: str) -> TrainingRecipeConfig:
     """Load and validate a committed preset by mode (A/B/C) or preset name."""
 
-    preset_name = _preset_name_for(mode_or_preset)
-    path = CONFIG_DIR / f"{preset_name}.yaml"
+    path = _preset_path_for(mode_or_preset)
     if not path.exists():
         raise FileNotFoundError(f"Training preset not found: {path}")
     return TrainingRecipeConfig.from_mapping(load_config_file(path))
@@ -541,6 +575,17 @@ def dry_run_recipe(config: TrainingRecipeConfig) -> DryRunResult:
     """Validate a recipe and return deterministic dry-run metadata."""
 
     dependencies = runtime_dependencies()
+    manifest: Mapping[str, Any] | None = None
+    reproducibility_hash: str | None = None
+    if config.preset_name == DOCTYPE_SECTION_PRESET:
+        manifest = doctype_section_dry_run_manifest(config)
+        reproducibility_hash = _hash_payload(
+            {
+                "config": config.to_dict(),
+                "manifest": manifest,
+                "seed": config.seed,
+            }
+        )
     return DryRunResult(
         preset_name=config.preset_name,
         mode=config.mode,
@@ -549,6 +594,8 @@ def dry_run_recipe(config: TrainingRecipeConfig) -> DryRunResult:
         output_tier=config.output_tier,
         quant_default=config.quantization.default,
         dependency_modules=dependencies.module_names(),
+        reproducibility_hash=reproducibility_hash,
+        manifest=manifest,
     )
 
 
@@ -643,13 +690,61 @@ def config_hash(config: TrainingRecipeConfig | Mapping[str, Any]) -> str:
         if isinstance(config, TrainingRecipeConfig)
         else _copy_mapping(config)
     )
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return _hash_payload(payload)
+
+
+def resolve_doctype_section_head_contract(
+    config: TrainingRecipeConfig,
+) -> dict[str, Any]:
+    """Return the validated dual section-BIO and doctype head contract."""
+
+    if not _is_doctype_section_recipe(config):
+        raise RecipeConfigError(
+            "doctype/section head_contract requires "
+            f"label_set_ref {DOCTYPE_SECTION_LABEL_SET_REF!r}"
+        )
+    if not isinstance(config.head_contract, Mapping):
+        raise RecipeConfigError(
+            "doctype/section head_contract must be a mapping with "
+            "section_head and doctype_head"
+        )
+    _validate_doctype_section_head_contract(config.head_contract)
+    return copy.deepcopy(dict(config.head_contract))
+
+
+def doctype_section_dry_run_manifest(
+    config: TrainingRecipeConfig,
+) -> dict[str, Any]:
+    """Build deterministic PHI-free dry-run evidence for the section fixtures."""
+
+    from openmed.eval.harness import load_section_multilingual_fixtures
+
+    contract = resolve_doctype_section_head_contract(config)
+    meta, rows = load_section_multilingual_fixtures()
+    section_labels = sorted(
+        {
+            str(section["label"])
+            for row in rows
+            for section in row.get("gold_sections", ())
+            if isinstance(section, Mapping) and section.get("label")
+        }
+    )
+    languages = sorted(str(row.get("language") or "") for row in rows)
+    tier_budget = _doctype_section_tier_budget(config.output_tier)
+    return {
+        "case_count": len(rows),
+        "doctype_labels": list(contract["doctype_head"]["labels"]),
+        "fixture_ids": [str(row["case_id"]) for row in rows],
+        "label_set_ref": config.label_set_ref,
+        "languages": languages,
+        "output_tier": config.output_tier,
+        "quantization": config.quantization.to_dict(),
+        "schema_version": DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION,
+        "section_bio_label_count": len(contract["section_head"]["labels"]),
+        "section_labels": section_labels,
+        "synthetic": bool(meta.get("synthetic")),
+        "tier_budget": tier_budget,
+    }
 
 
 def runtime_dependencies() -> RuntimeDependencies:
@@ -667,7 +762,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Validate an OpenMed training recipe preset."
     )
     parser.add_argument(
-        "mode", choices=tuple(PRESET_BY_MODE) + tuple(PRESET_BY_MODE.values())
+        "mode",
+        choices=tuple(PRESET_BY_MODE)
+        + tuple(PRESET_BY_MODE.values())
+        + (DOCTYPE_SECTION_PRESET,),
     )
     parser.add_argument("--dry-run", action="store_true", default=True)
     args = parser.parse_args(argv)
@@ -749,7 +847,11 @@ def _parse_lora(data: Mapping[str, Any]) -> LoraConfig:
     )
 
 
-def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
+def _parse_loss(
+    data: Mapping[str, Any],
+    *,
+    label_set_ref: str | None = None,
+) -> LossConfig:
     _require_exact_fields(
         data,
         "loss",
@@ -777,7 +879,10 @@ def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
     critical_labels = _require_str_tuple(data, "critical_labels")
     if not critical_labels:
         raise RecipeConfigError("loss.critical_labels must not be empty")
-    unknown_labels = sorted(set(critical_labels) - CANONICAL_LABELS)
+    allowed_labels: frozenset[str] | tuple[str, ...] = CANONICAL_LABELS
+    if label_set_ref == DOCTYPE_SECTION_LABEL_SET_REF:
+        allowed_labels = DOCTYPE_SECTION_LABELS
+    unknown_labels = sorted(set(critical_labels) - set(allowed_labels))
     if unknown_labels:
         raise RecipeConfigError(
             f"loss.critical_labels contains unknown label(s): {', '.join(unknown_labels)}"
@@ -926,8 +1031,81 @@ def _parse_qlora_evidence(data: Mapping[str, Any]) -> QloraEvidenceConfig:
 
 
 def _validate_output_tier(output_tier: str) -> None:
-    if output_tier not in {"tiny", "laptop", "teacher"}:
-        raise RecipeConfigError("output_tier must be one of tiny, laptop, or teacher")
+    if output_tier not in {"tiny", "laptop", "teacher", "G5", "G6"}:
+        raise RecipeConfigError(
+            "output_tier must be one of tiny, laptop, teacher, G5, or G6"
+        )
+
+
+def _validate_recipe_contract(config: TrainingRecipeConfig) -> None:
+    if not _is_doctype_section_recipe(config):
+        return
+    if config.preset_name != DOCTYPE_SECTION_PRESET:
+        raise RecipeConfigError(
+            "doctype/section label_set_ref requires preset_name "
+            f"{DOCTYPE_SECTION_PRESET!r}"
+        )
+    if config.label_set_ref != DOCTYPE_SECTION_LABEL_SET_REF:
+        raise RecipeConfigError(
+            "doctype/section preset label_set_ref must be "
+            f"{DOCTYPE_SECTION_LABEL_SET_REF!r}"
+        )
+    if not isinstance(config.head_contract, Mapping):
+        raise RecipeConfigError(
+            "doctype/section preset requires head_contract with "
+            "section_head and doctype_head"
+        )
+    if config.output_tier not in {"G5", "G6"}:
+        raise RecipeConfigError("doctype/section output_tier must be G5 or G6")
+    if config.quantization.default != "int8":
+        raise RecipeConfigError("doctype/section quantization.default must be int8")
+    if config.quantization.allow_fp32_fallback is not True:
+        raise RecipeConfigError(
+            "doctype/section quantization.allow_fp32_fallback must be true"
+        )
+    _validate_doctype_section_head_contract(config.head_contract)
+
+
+def _is_doctype_section_recipe(config: TrainingRecipeConfig) -> bool:
+    return (
+        config.preset_name == DOCTYPE_SECTION_PRESET
+        or config.label_set_ref == DOCTYPE_SECTION_LABEL_SET_REF
+    )
+
+
+def _validate_doctype_section_head_contract(contract: Mapping[str, Any]) -> None:
+    _require_exact_fields(contract, "head_contract", {"section_head", "doctype_head"})
+    section_head = _require_mapping(contract, "section_head")
+    doctype_head = _require_mapping(contract, "doctype_head")
+    _require_exact_fields(section_head, "head_contract.section_head", {"type", "scheme", "labels"})
+    _require_exact_fields(doctype_head, "head_contract.doctype_head", {"type", "labels"})
+    if _require_str(section_head, "type") != "token_classification":
+        raise RecipeConfigError("head_contract.section_head.type must be token_classification")
+    if _require_str(section_head, "scheme") != "BIO":
+        raise RecipeConfigError("head_contract.section_head.scheme must be BIO")
+    if _require_str(doctype_head, "type") != "sequence_classification":
+        raise RecipeConfigError("head_contract.doctype_head.type must be sequence_classification")
+    section_labels = _require_str_tuple(section_head, "labels")
+    doctype_labels = _require_str_tuple(doctype_head, "labels")
+    if "O" not in section_labels or not any(label.startswith("B-") for label in section_labels):
+        raise RecipeConfigError("head_contract.section_head.labels must include O and BIO labels")
+    if not doctype_labels:
+        raise RecipeConfigError("head_contract.doctype_head.labels must not be empty")
+    unknown = sorted(set(section_labels + doctype_labels) - set(DOCTYPE_SECTION_LABELS))
+    if unknown:
+        raise RecipeConfigError(
+            "head_contract labels not in DOCTYPE_SECTION_LABELS: "
+            + ", ".join(unknown)
+        )
+
+
+def _doctype_section_tier_budget(output_tier: str) -> Mapping[str, Any]:
+    from openmed.eval.tiers import TIERS
+
+    tier_name = {"G5": "Base", "G6": "Large"}.get(output_tier)
+    if tier_name is None:
+        raise RecipeConfigError("doctype/section output_tier must be G5 or G6")
+    return dict(TIERS[tier_name])
 
 
 def _validate_qlora_local_only(config: QloraRecipeConfig) -> None:
@@ -1237,6 +1415,19 @@ def _require_str_tuple(data: Mapping[str, Any], key: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _optional_head_contract(data: Mapping[str, Any]) -> str | Mapping[str, Any] | None:
+    if "head_contract" not in data:
+        return None
+    value = data["head_contract"]
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, Mapping):
+        return copy.deepcopy(dict(value))
+    raise RecipeConfigError(
+        "head_contract must be a non-empty string or a mapping when present"
+    )
+
+
 def _preset_name_for(mode_or_preset: str) -> str:
     key = mode_or_preset.strip()
     mode = key.upper()
@@ -1244,7 +1435,17 @@ def _preset_name_for(mode_or_preset: str) -> str:
         return PRESET_BY_MODE[mode]
     if key in MODE_BY_PRESET:
         return key
+    if key == DOCTYPE_SECTION_PRESET:
+        return key
     raise RecipeConfigError("preset must be mode A/B/C or a committed preset name")
+
+
+def _preset_path_for(mode_or_preset: str) -> Path:
+    key = mode_or_preset.strip()
+    path = Path(key)
+    if path.suffix:
+        return path
+    return CONFIG_DIR / f"{_preset_name_for(key)}.yaml"
 
 
 def _parse_yaml_subset(text: str) -> dict[str, Any]:

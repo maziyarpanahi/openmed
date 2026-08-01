@@ -1,0 +1,38 @@
+schema_version: openmed.training.recipe.v1
+preset_name: doctype_section_lora
+mode: B
+backbone:
+  model_ref: openmed/backbones/doctype-section-lora-base
+  revision: doctype-section-v1
+  family: encoder-dual-head
+dapt:
+  corpus_ref: openmed.eval.harness:load_section_multilingual_fixtures@synthetic-v1
+  sequence_length: 1024
+lora:
+  target_trainable_ratio: 0.012
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [query, key, value, output]
+label_set_ref: openmed.training.recipe:DOCTYPE_SECTION_LABELS@v1
+head_contract:
+  section_head:
+    type: token_classification
+    scheme: BIO
+    labels: [O, B-history_of_present_illness, I-history_of_present_illness, B-past_medical_history, I-past_medical_history, B-family_history, I-family_history, B-social_history, I-social_history, B-assessment, I-assessment, B-plan, I-plan]
+  doctype_head:
+    type: sequence_classification
+    labels: [clinical_note, discharge_summary, progress_note]
+loss:
+  name: focal_class_weighted
+  focal_gamma: 2.0
+  class_weighted: true
+  class_weighting: inverse_frequency
+  critical_label_weight: 3.0
+  critical_labels: [B-assessment, B-plan, clinical_note]
+hard_negatives_required: true
+output_tier: G5
+quantization:
+  default: int8
+  allow_fp32_fallback: true
+seed: 52052
