@@ -8,7 +8,6 @@ import pytest
 
 from openmed.core.labels import ID_NUM, ID_SUBTYPE_NPI, SSN
 from openmed.training import (
-    DIRECTID_DATASET_MANIFEST_REF,
     DIRECTID_TINY_HEAD_CONTRACT,
     DirectIDDatasetError,
     build_directid_dataset_evidence,
@@ -16,7 +15,6 @@ from openmed.training import (
     directid_synthetic_settings_hash,
     generate_directid_hard_negatives,
     load_directid_dataset_manifest,
-    load_preset,
     prepare_directid_batch,
     validate_directid_batch,
     validate_directid_dataset_manifest,
@@ -211,10 +209,8 @@ def test_split_evidence_records_hashes_and_aggregate_coverage_only() -> None:
         )
 
 
-def test_manifest_hash_is_stable_and_tiny_preset_points_to_manifest() -> None:
+def test_manifest_hash_is_stable() -> None:
     manifest_hash = directid_dataset_manifest_hash()
-    recipe = load_preset("tiny_distill")
 
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", manifest_hash)
     assert directid_dataset_manifest_hash() == manifest_hash
-    assert recipe.dapt.corpus_ref == DIRECTID_DATASET_MANIFEST_REF

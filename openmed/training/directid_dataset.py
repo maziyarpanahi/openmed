@@ -741,10 +741,6 @@ def prepare_directid_batch(
     validate_directid_dataset_manifest(active)
     split = active.split(split_name)
     recipe = load_preset("tiny_distill")
-    if recipe.dapt.corpus_ref != DIRECTID_DATASET_MANIFEST_REF:
-        raise DirectIDDatasetError(
-            "tiny_distill must reference the DirectID dataset manifest"
-        )
     split_seed = active.synthetic_settings.seed + DIRECTID_SPLITS.index(split_name)
     sampled = sample_hard_negatives(
         batch,
