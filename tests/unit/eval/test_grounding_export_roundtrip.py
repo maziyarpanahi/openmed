@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from openmed.clinical.grounding import Candidate
+from openmed.eval.golden.loader import list_fixture_paths
 from openmed.eval.medmentions_linking import (
     MEDMENTIONS_TOP1_FLOOR,
     MEDMENTIONS_TOP1_TARGET,
@@ -15,6 +16,10 @@ from openmed.eval.suites.grounding_export import (
     run_grounding_export_suite,
     validate_fhir_r4_shape,
 )
+
+
+def test_grounding_export_fixture_is_not_generic_deidentification_gold() -> None:
+    assert all(path.name != "grounding_export.jsonl" for path in list_fixture_paths())
 
 
 def test_synthetic_grounding_export_roundtrip_passes_offline_smoke() -> None:
