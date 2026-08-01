@@ -91,3 +91,36 @@ rxnorm_en = report.system("rxnorm").language("en")
 print(rxnorm_en.top1_accuracy, rxnorm_en.top5_accuracy)
 checks = evaluate_grounding_accuracy_gate(report)
 ```
+
+## Cross-lingual grounding capstone gate
+
+The standalone `cross_lingual_grounding` suite verifies the complete lexical
+grounding path for English, Spanish, French, German, and Chinese mentions. It
+uses the bundled synthetic/permissive alias fixture for ICD-10-CM, RxNorm, and
+HPO, requires top-1 accuracy of at least `0.80` in every non-English language,
+and requires the unchanged English baseline to remain at `1.00`.
+
+`assert_cross_lingual_grounding_gate` evaluates those accuracy requirements
+together with synthetic provenance and the restricted-corpus marker scan. Its
+report contains aggregate counts and scores, not raw mentions; failure
+diagnostics likewise contain only language codes, scores, and known
+restricted-marker names. Language-aware linkers accept the source-language code
+used by the suite and stamp it on every grounded candidate for downstream audit.
+
+```python
+from openmed.eval.suites import assert_cross_lingual_grounding_gate
+
+report = assert_cross_lingual_grounding_gate()
+print(report.per_language_top1)
+```
+
+The gate is deterministic and offline. The default grounding path stays
+lexical and does not import an embedding dependency. Applications may opt in to
+a separately provisioned local multilingual embedding backend for zero-alias
+fallback; remote model identifiers are rejected rather than downloaded.
+
+!!! warning "Synthetic/permissive data only"
+    The committed fixture must remain synthetic or permissively licensed.
+    UMLS, SNOMED CT, MIMIC, i2b2, n2c2, CPT, and other restricted or DUA-bound
+    assets must stay user supplied and out of process; do not copy their text
+    into alias tables, fixtures, logs, or gate diagnostics.
