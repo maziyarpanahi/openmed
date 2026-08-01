@@ -1988,6 +1988,23 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Use the approved-access full SHIELD corpus instead of the public sample.",
     )
+    pii_parser.add_argument(
+        "--checkpoint-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Checkpoint JSON or JSONL for the named clinical PHI flagship. "
+            "This enables manifest-linked SHIELD comparison evidence."
+        ),
+    )
+    pii_parser.add_argument(
+        "--checkpoint-manifest-ref",
+        default=None,
+        help=(
+            "Stable repository or publication link to --checkpoint-manifest, "
+            "recorded in the BenchmarkReport."
+        ),
+    )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
     clinical_parser = benchmark_sub.add_parser(
@@ -4227,8 +4244,14 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
 
+    from openmed.eval.datasets import CLINICAL_PRIVACY_MODEL_ID
     from openmed.eval.harness import run_benchmark
-    from openmed.eval.suites import SHIELD, load_suite_fixtures, suite_metadata
+    from openmed.eval.suites import (
+        SHIELD,
+        load_suite_fixtures,
+        run_clinical_phi_shield_benchmark,
+        suite_metadata,
+    )
 
     try:
         models = _parse_model_args(args.models or [])
@@ -4242,6 +4265,39 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
         )
 
     suite = str(args.suite or SHIELD)
+    if args.checkpoint_manifest_ref and args.checkpoint_manifest is None:
+        raise CliError(
+            "--checkpoint-manifest-ref requires --checkpoint-manifest.",
+            code="invalid_argument",
+            exit_code=EXIT_USAGE,
+        )
+    if args.checkpoint_manifest is not None:
+        if suite != SHIELD:
+            raise CliError(
+                "--checkpoint-manifest is supported only for the SHIELD suite.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
+        if args.full_shield:
+            raise CliError(
+                "The clinical PHI flagship report uses the public SHIELD sample; "
+                "do not combine --checkpoint-manifest with --full-shield.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
+        if len(models) != 1 or models[0] != CLINICAL_PRIVACY_MODEL_ID:
+            raise CliError(
+                "--checkpoint-manifest requires exactly the named model "
+                f"{CLINICAL_PRIVACY_MODEL_ID!r}.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
+        if not args.checkpoint_manifest_ref:
+            raise CliError(
+                "--checkpoint-manifest-ref is required for reproducible evidence.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
     try:
         if suite == SHIELD:
             use_sample = not bool(args.full_shield)
@@ -4261,16 +4317,33 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     metadata.setdefault("benchmark_domain", "pii")
     metadata.setdefault("source_suite", suite)
 
-    reports = [
-        run_benchmark(
-            fixtures,
-            suite=suite,
-            model_name=model,
-            device=args.device,
-            metadata=metadata,
-        )
-        for model in models
-    ]
+    if args.checkpoint_manifest is not None:
+        try:
+            reports = [
+                run_clinical_phi_shield_benchmark(
+                    fixtures,
+                    checkpoint_manifest=args.checkpoint_manifest,
+                    checkpoint_manifest_ref=args.checkpoint_manifest_ref,
+                    device=args.device,
+                )
+            ]
+        except ValueError as exc:
+            raise CliError(
+                f"Invalid clinical PHI checkpoint evidence: {exc}",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            ) from exc
+    else:
+        reports = [
+            run_benchmark(
+                fixtures,
+                suite=suite,
+                model_name=model,
+                device=args.device,
+                metadata=metadata,
+            )
+            for model in models
+        ]
     if len(reports) == 1:
         payload: Any = reports[0].to_dict()
     else:
