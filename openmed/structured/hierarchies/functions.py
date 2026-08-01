@@ -16,6 +16,8 @@ The families are:
   full suppression (also covers alphanumeric postcodes).
 * ``date`` -> a stable per-subject day shift, then truncation to month, then to
   year, then full suppression.
+* ``clinical_code`` -> exact code, caller-supplied parent chains, then full
+  suppression. No terminology content is bundled.
 
 Date shifting is routed through :func:`openmed.core.date_shift.stable_offset_for`
 so a subject's offset is HMAC-derived, deterministic across calls, and never
@@ -32,11 +34,12 @@ from typing import Any, Final
 
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS, stable_offset_for
 
-HIERARCHY_SCHEMA_VERSION: Final = "1.0.0"
+HIERARCHY_SCHEMA_VERSION: Final = "1.1.0"
 
 COLUMN_TYPE_AGE: Final = "age"
 COLUMN_TYPE_ZIP: Final = "zip"
 COLUMN_TYPE_DATE: Final = "date"
+COLUMN_TYPE_CLINICAL_CODE: Final = "clinical_code"
 
 #: Canonical token emitted when a value is fully suppressed (coarsest rung).
 SUPPRESSED: Final = "*"
@@ -135,6 +138,15 @@ def _coerce_date(value: object) -> date:
     )
 
 
+def _coerce_clinical_code(value: object) -> str:
+    """Return a non-empty clinical code without interpreting its terminology."""
+    if not isinstance(value, str):
+        raise HierarchyError(f"clinical code must be a str, got {type(value).__name__}")
+    if not value or value == SUPPRESSED:
+        raise HierarchyError("clinical code must be non-empty and not reserved")
+    return value
+
+
 def _shift_date(
     value: object,
     *,
@@ -220,6 +232,13 @@ def _year_transform() -> _Transform:
 def _suppress_transform() -> _Transform:
     def transform(value: object, **_: object) -> str:
         return SUPPRESSED
+
+    return transform
+
+
+def _clinical_code_transform() -> _Transform:
+    def transform(value: object, **_: object) -> str:
+        return _coerce_clinical_code(value)
 
     return transform
 
@@ -360,12 +379,31 @@ def _build_date_hierarchy() -> tuple[Hierarchy, tuple[_Transform, ...]]:
     return hierarchy, transforms
 
 
+def _build_clinical_code_hierarchy() -> tuple[Hierarchy, tuple[_Transform, ...]]:
+    levels = (
+        GeneralizationLevel(0, "clinical_code:exact", "exact clinical code"),
+        GeneralizationLevel(
+            1,
+            "clinical_code:suppressed",
+            "fully suppressed clinical code",
+        ),
+    )
+    transforms = (_clinical_code_transform(), _suppress_transform())
+    hierarchy = Hierarchy(
+        COLUMN_TYPE_CLINICAL_CODE,
+        HIERARCHY_SCHEMA_VERSION,
+        levels,
+    )
+    return hierarchy, transforms
+
+
 _REGISTRY: dict[str, Hierarchy] = {}
 _TRANSFORMS: dict[str, tuple[_Transform, ...]] = {}
 for _hierarchy, _transforms in (
     _build_age_hierarchy(),
     _build_zip_hierarchy(),
     _build_date_hierarchy(),
+    _build_clinical_code_hierarchy(),
 ):
     _REGISTRY[_hierarchy.column_type] = _hierarchy
     _TRANSFORMS[_hierarchy.column_type] = _transforms
@@ -449,12 +487,15 @@ _MERGING_LEVEL_INDICES: Final = {
     COLUMN_TYPE_AGE: (0, 1, 2, 3),
     COLUMN_TYPE_ZIP: (1, 2, 3, 4, 5, 6, 7),
     COLUMN_TYPE_DATE: (1, 2, 3),
+    COLUMN_TYPE_CLINICAL_CODE: (1,),
 }
 
 
 def to_enforce_kanon_hierarchy(
     column_type: str,
     values: Iterable[object] | None = None,
+    *,
+    clinical_code_parent_chains: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return an ``enforce_kanon``-compatible level-spec sequence for a column.
 
@@ -469,12 +510,19 @@ def to_enforce_kanon_hierarchy(
     full ``0..AGE_MAX`` domain is enumerated when ``values`` is omitted; ``zip``
     and ``date`` require ``values`` (their domains are unbounded). The
     per-subject date-shift rung is excluded because it is not a class-merging
-    generalization.
+    generalization. ``clinical_code`` requires a caller-supplied mapping from
+    each observed leaf code to its ordered immediate-parent-to-root chain; the
+    mapping is data, so no ICD, SNOMED CT, or other terminology is bundled.
 
     Raises :class:`HierarchyError` for an unknown ``column_type`` or when
     ``values`` are required but not supplied.
     """
     hierarchy = get_hierarchy(column_type)
+    if column_type == COLUMN_TYPE_CLINICAL_CODE:
+        return _clinical_code_enforcement_hierarchy(
+            values,
+            parent_chains=clinical_code_parent_chains,
+        )
     if values is None:
         if column_type == COLUMN_TYPE_AGE:
             domain: list[object] = list(range(AGE_MAX + 1))
@@ -528,24 +576,140 @@ def to_enforce_kanon_hierarchy(
     return spec
 
 
+def _clinical_code_enforcement_hierarchy(
+    values: Iterable[object] | None,
+    *,
+    parent_chains: Mapping[str, Sequence[str]] | None,
+) -> list[dict[str, Any]]:
+    """Materialize caller-supplied clinical-code parent chains for enforcement."""
+    if values is None:
+        raise HierarchyError(
+            "column_type 'clinical_code' requires observed values to materialize "
+            "an enforce_kanon hierarchy"
+        )
+    if not isinstance(parent_chains, Mapping) or not parent_chains:
+        raise HierarchyError(
+            "column_type 'clinical_code' requires clinical code parent-chain data"
+        )
+
+    normalized: dict[str, tuple[str, ...]] = {}
+    for code, chain in parent_chains.items():
+        leaf = _coerce_clinical_code(code)
+        if isinstance(chain, (str, bytes, bytearray)) or not isinstance(
+            chain, Sequence
+        ):
+            raise HierarchyError(
+                "each clinical code parent chain must be a sequence of codes"
+            )
+        parents = tuple(_coerce_clinical_code(parent) for parent in chain)
+        if not parents:
+            raise HierarchyError("each clinical code parent chain must be non-empty")
+        if leaf in parents or len(set(parents)) != len(parents):
+            raise HierarchyError(
+                "clinical code parent chains must be acyclic and contain no duplicates"
+            )
+        normalized[leaf] = parents
+
+    domain = [_coerce_clinical_code(value) for value in values]
+    missing_count = sum(code not in normalized for code in domain)
+    if missing_count:
+        raise HierarchyError(
+            f"clinical code hierarchy is missing {missing_count} observed value(s)"
+        )
+
+    max_depth = max(len(normalized[code]) for code in domain)
+
+    def roll_up(code: str, depth: int) -> str:
+        chain = normalized[code]
+        return chain[min(depth - 1, len(chain) - 1)]
+
+    _validate_clinical_code_partitions(normalized, max_depth=max_depth)
+
+    output_representatives: dict[str, str] = {}
+    for depth in range(1, max_depth + 1):
+        for code in domain:
+            output_representatives.setdefault(roll_up(code, depth), code)
+
+    spec: list[dict[str, Any]] = [{"name": "clinical_code:exact"}]
+    for depth in range(1, max_depth + 1):
+        value_map = {code: roll_up(code, depth) for code in domain}
+        for output, representative in output_representatives.items():
+            value_map.setdefault(output, roll_up(representative, depth))
+        spec.append(
+            {
+                "name": f"clinical_code:parent_{depth}",
+                "values": value_map,
+            }
+        )
+    spec.append({"name": "clinical_code:suppressed", "default": SUPPRESSED})
+    return spec
+
+
+def _validate_clinical_code_partitions(
+    parent_chains: Mapping[str, Sequence[str]],
+    *,
+    max_depth: int,
+) -> None:
+    """Reject parent data that splits a class after an earlier merge."""
+
+    def output(code: str, depth: int) -> str:
+        chain = parent_chains[code]
+        return chain[min(depth - 1, len(chain) - 1)]
+
+    for depth in range(1, max_depth):
+        groups: dict[str, list[str]] = {}
+        for code in parent_chains:
+            groups.setdefault(output(code, depth), []).append(code)
+        for group in groups.values():
+            if len({output(code, depth + 1) for code in group}) > 1:
+                raise HierarchyError(
+                    "clinical code parent chains split a class after an earlier merge"
+                )
+
+
 def build_enforcement_hierarchies(
     column_to_type: Mapping[str, str],
     records: Sequence[Mapping[str, Any]],
+    *,
+    clinical_code_hierarchies: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Build an ``enforce_kanon`` ``hierarchies=`` mapping from a declarative plan.
 
     ``column_to_type`` maps each quasi-identifier column name to one of the
-    supported column types (``age``/``zip``/``date``). Observed values are read
-    from ``records`` so the emitted value maps key exactly on the values the
-    engine will see. The returned mapping is ready to pass straight to
-    ``openmed.risk.kanon.enforce_kanon(..., hierarchies=<result>)``.
+    supported column types (``age``/``zip``/``date``/``clinical_code``).
+    Observed values are read from ``records`` so the emitted value maps key
+    exactly on the values the engine will see. Clinical-code columns additionally
+    require a ``column -> leaf -> parent chain`` mapping in
+    ``clinical_code_hierarchies``. The returned mapping is ready to pass straight
+    to ``openmed.risk.kanon.enforce_kanon(..., hierarchies=<result>)``.
 
     Raises :class:`HierarchyError` for an unknown column type.
     """
+    if clinical_code_hierarchies is not None and not isinstance(
+        clinical_code_hierarchies, Mapping
+    ):
+        raise HierarchyError("clinical_code_hierarchies must be a column mapping")
+    code_hierarchies = clinical_code_hierarchies or {}
+    unknown_code_columns = sorted(set(code_hierarchies) - set(column_to_type))
+    if unknown_code_columns:
+        raise HierarchyError(
+            "clinical code hierarchies target undeclared columns: "
+            f"{unknown_code_columns!r}"
+        )
+
     result: dict[str, list[dict[str, Any]]] = {}
     for column, column_type in column_to_type.items():
         observed = [record[column] for record in records if column in record]
-        result[column] = to_enforce_kanon_hierarchy(column_type, observed)
+        parent_chains = code_hierarchies.get(column)
+        if column_type != COLUMN_TYPE_CLINICAL_CODE and parent_chains is not None:
+            raise HierarchyError(
+                f"clinical code hierarchy was supplied for non-code column {column!r}"
+            )
+        result[column] = to_enforce_kanon_hierarchy(
+            column_type,
+            observed,
+            clinical_code_parent_chains=parent_chains,
+        )
     return result
 
 
@@ -556,6 +720,7 @@ __all__ = [
     "AGE_TOP_BAND",
     "AGE_TOP_THRESHOLD",
     "COLUMN_TYPE_AGE",
+    "COLUMN_TYPE_CLINICAL_CODE",
     "COLUMN_TYPE_DATE",
     "COLUMN_TYPE_ZIP",
     "GeneralizationLevel",
