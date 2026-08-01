@@ -1,9 +1,34 @@
+import sys
+import types
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
 
-from openmed.processing import SentenceSpan, segment_chinese_text, segment_text
+from openmed.processing import (
+    SentenceSpan,
+    segment_chinese_text,
+    segment_text,
+    sentences,
+)
+
+
+@pytest.fixture
+def fake_yasbd_segmenter():
+    segmenter_cls = Mock(name="Segmenter")
+
+    fake_yasbd = types.ModuleType("yasbd")
+    fake_yasbd_utils = types.ModuleType("yasbd.utils")
+    fake_adapter = types.ModuleType("yasbd.utils.pysbd_adapter")
+    fake_adapter.Segmenter = segmenter_cls
+
+    fake_modules = {
+        "yasbd": fake_yasbd,
+        "yasbd.utils": fake_yasbd_utils,
+        "yasbd.utils.pysbd_adapter": fake_adapter,
+    }
+    with patch.dict(sys.modules, fake_modules):
+        yield segmenter_cls
 
 
 def _assert_exact_round_trip(text: str, spans: list[SentenceSpan]) -> None:
@@ -147,3 +172,35 @@ def test_explicit_segmenter_override_is_preserved_for_han_text():
 
     explicit_segmenter.segment.assert_called_once_with(text)
     assert spans == [SentenceSpan(text, 0, len(text))]
+
+
+@pytest.mark.parametrize("backend", ["fast", "", None])
+def test_unknown_backend_raises_value_error(backend):
+    with pytest.raises(ValueError, match="Unknown segmentation backend"):
+        segment_text("Patient is stable.", backend=backend)
+
+
+def test_preconstructed_segmenter_with_yasbd_backend_raises():
+    with pytest.raises(ValueError, match="cannot be combined"):
+        segment_text("Patient is stable.", segmenter=Mock(), backend="yasbd")
+
+
+def test_yasbd_backend_routes_through_yasbd_adapter(fake_yasbd_segmenter):
+    text = "Patient is stable. Follow up tomorrow."
+    instance = fake_yasbd_segmenter.return_value
+    instance.segment.return_value = [
+        SimpleNamespace(sent="Patient is stable. ", start=0, end=19),
+        SimpleNamespace(sent="Follow up tomorrow.", start=19, end=len(text)),
+    ]
+
+    spans = segment_text(text, backend="yasbd")
+
+    fake_yasbd_segmenter.assert_called_once_with(
+        language="en", clean=False, char_span=True
+    )
+    instance.segment.assert_called_once_with(text)
+    assert spans == [
+        SentenceSpan("Patient is stable. ", 0, 19),
+        SentenceSpan("Follow up tomorrow.", 19, len(text)),
+    ]
+    assert ("yasbd", "en", False) in sentences._SEGMENTER_CACHE
