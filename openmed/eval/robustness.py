@@ -8,8 +8,13 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from openmed.core.decoding import remap_normalized_span
 from openmed.core.labels import normalize_label
-from openmed.core.script_detect import normalize_for_pii_detection
+from openmed.core.script_detect import (
+    confusable_skeleton,
+    detect_mixed_script,
+    normalize_for_pii_detection,
+)
 from openmed.eval.harness import (
     BenchmarkFixture,
     ModelRunner,
@@ -17,7 +22,13 @@ from openmed.eval.harness import (
     load_fixtures,
     run_benchmark,
 )
-from openmed.eval.metrics import EvalSpan, normalize_eval_spans
+from openmed.eval.metrics import (
+    MIXED_SCRIPT_LEAKAGE_CEILING,
+    EvalSpan,
+    MixedScriptLeakageMetrics,
+    compute_mixed_script_leakage,
+    normalize_eval_spans,
+)
 from openmed.eval.report import BenchmarkReport
 
 Edit = tuple[int, int, str]
@@ -60,6 +71,49 @@ DEFAULT_ATTACK_CLASSES: tuple[str, ...] = (
 DEFAULT_ATTACK_DISTANCE_BUDGET = 2
 DEFAULT_ATTACK_BEAM_WIDTH = 4
 DEFAULT_ADVERSARIAL_RECALL_FLOOR = 0.99
+DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR = 0.99
+
+_CYRILLIC_HOMOGLYPH_ATTACKS: Mapping[str, str] = {
+    "A": "\u0410",
+    "B": "\u0412",
+    "C": "\u0421",
+    "E": "\u0415",
+    "H": "\u041d",
+    "K": "\u041a",
+    "M": "\u041c",
+    "O": "\u041e",
+    "P": "\u0420",
+    "T": "\u0422",
+    "X": "\u0425",
+    "a": "\u0430",
+    "c": "\u0441",
+    "e": "\u0435",
+    "i": "\u0456",
+    "o": "\u043e",
+    "p": "\u0440",
+    "x": "\u0445",
+}
+_GREEK_HOMOGLYPH_ATTACKS: Mapping[str, str] = {
+    "A": "\u0391",
+    "B": "\u0392",
+    "E": "\u0395",
+    "H": "\u0397",
+    "I": "\u0399",
+    "K": "\u039a",
+    "M": "\u039c",
+    "N": "\u039d",
+    "O": "\u039f",
+    "P": "\u03a1",
+    "T": "\u03a4",
+    "X": "\u03a7",
+    "a": "\u03b1",
+    "e": "\u03b5",
+    "i": "\u03b9",
+    "o": "\u03bf",
+    "p": "\u03c1",
+    "x": "\u03c7",
+}
+_CJK_HOMOGLYPH_ATTACKS: Mapping[str, str] = {"O": "\u3007"}
 
 
 @dataclass(frozen=True)
@@ -212,6 +266,70 @@ class AdversarialRobustnessReport:
 
 
 @dataclass(frozen=True)
+class ConfusableAttackCase:
+    """One deterministic confusable attack against a synthetic PHI span."""
+
+    fixture: BenchmarkFixture
+    source_fixture_id: str
+    span_index: int
+    attack_class: str
+    script: str
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Return reproduction metadata without raw PHI text."""
+        return {
+            "attack_class": self.attack_class,
+            "fixture_id": self.fixture.fixture_id,
+            "script": self.script,
+            "source_fixture_id": self.source_fixture_id,
+            "span_index": self.span_index,
+        }
+
+
+class MixedScriptEvasionGateError(RuntimeError):
+    """Raised when the mixed-script attack corpus breaches a release gate."""
+
+
+@dataclass(frozen=True)
+class MixedScriptEvasionReport:
+    """Detection and leakage gates for confusable/mixed-script attacks."""
+
+    model_name: str
+    suite: str
+    device: str
+    seed: int
+    attack_count: int
+    detection_rate: float
+    detection_floor: float
+    pre_defense_leakage: MixedScriptLeakageMetrics
+    post_defense_leakage: MixedScriptLeakageMetrics
+    attack_counts: Mapping[str, int]
+    violations: tuple[str, ...]
+
+    @property
+    def passed(self) -> bool:
+        """Return whether both detection and post-defense leakage gates pass."""
+        return not self.violations
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe report without attacked PHI surfaces."""
+        return {
+            "attack_count": self.attack_count,
+            "attack_counts": dict(sorted(self.attack_counts.items())),
+            "detection_floor": self.detection_floor,
+            "detection_rate": self.detection_rate,
+            "device": self.device,
+            "model_name": self.model_name,
+            "passed": self.passed,
+            "post_defense_leakage": self.post_defense_leakage.to_dict(),
+            "pre_defense_leakage": self.pre_defense_leakage.to_dict(),
+            "seed": self.seed,
+            "suite": self.suite,
+            "violations": list(self.violations),
+        }
+
+
+@dataclass(frozen=True)
 class _AttackOperation:
     perturbation_class: str
     start: int
@@ -355,6 +473,109 @@ def perturb_fixture(
     return resolved(fixture, random.Random(seed))
 
 
+def generate_confusable_attack_corpus(
+    fixtures: Iterable[BenchmarkFixture],
+    *,
+    seed: int = 0,
+) -> tuple[ConfusableAttackCase, ...]:
+    """Generate deterministic homoglyph, full-width, and invisible PHI attacks."""
+
+    attack_specs: tuple[tuple[str, str, Mapping[str, str] | None], ...] = (
+        ("homoglyph_cyrillic", "Cyrillic", _CYRILLIC_HOMOGLYPH_ATTACKS),
+        ("homoglyph_greek", "Greek", _GREEK_HOMOGLYPH_ATTACKS),
+        ("homoglyph_cjk", "Han", _CJK_HOMOGLYPH_ATTACKS),
+        ("full_width", "Latin", None),
+        ("zero_width", "Inherited", None),
+    )
+    cases: list[ConfusableAttackCase] = []
+    for fixture_index, fixture in enumerate(fixtures):
+        for span_index, span in enumerate(fixture.gold_spans):
+            for attack_index, (attack_class, script, mapping) in enumerate(
+                attack_specs
+            ):
+                rng = random.Random(
+                    seed
+                    + (fixture_index * 1009)
+                    + (span_index * 9176)
+                    + (attack_index * 65537)
+                )
+                edit = _confusable_attack_edit(
+                    fixture.text,
+                    span,
+                    attack_class=attack_class,
+                    mapping=mapping,
+                    rng=rng,
+                )
+                if edit is None:
+                    continue
+                attacked = _perturb_fixture(fixture, [edit])
+                attacked = replace(
+                    attacked,
+                    fixture_id=(f"{fixture.fixture_id}--{span_index}--{attack_class}"),
+                    metadata={
+                        **dict(fixture.metadata),
+                        "confusable_attack": {
+                            "attack_class": attack_class,
+                            "script": script,
+                            "seed": seed,
+                            "source_fixture_id": fixture.fixture_id,
+                            "span_index": span_index,
+                        },
+                    },
+                )
+                cases.append(
+                    ConfusableAttackCase(
+                        fixture=attacked,
+                        source_fixture_id=fixture.fixture_id,
+                        span_index=span_index,
+                        attack_class=attack_class,
+                        script=script,
+                    )
+                )
+    return tuple(cases)
+
+
+def _confusable_attack_edit(
+    text: str,
+    span: EvalSpan,
+    *,
+    attack_class: str,
+    mapping: Mapping[str, str] | None,
+    rng: random.Random,
+) -> Edit | None:
+    positions = list(range(span.start, span.end))
+    if mapping is not None:
+        candidates = [index for index in positions if text[index] in mapping]
+        if not candidates:
+            return None
+        index = candidates[rng.randrange(len(candidates))]
+        return index, index + 1, mapping[text[index]]
+
+    if attack_class == "full_width":
+        candidates = [
+            index
+            for index in positions
+            if text[index].isascii() and text[index].isalnum()
+        ]
+        if not candidates:
+            return None
+        index = candidates[rng.randrange(len(candidates))]
+        return index, index + 1, chr(ord(text[index]) + 0xFEE0)
+
+    if attack_class == "zero_width":
+        candidates = [
+            index
+            for index in positions[:-1]
+            if text[index].isalnum() and text[index + 1].isalnum()
+        ]
+        if not candidates:
+            return None
+        index = candidates[rng.randrange(len(candidates))]
+        return index, index + 1, f"{text[index]}\u200b"
+
+    raise ValueError(f"unsupported confusable attack class: {attack_class}")
+
+
 def unicode_defended_runner(runner: ModelRunner | None = None) -> ModelRunner:
     """Wrap a runner with the Unicode defense used before PII detection."""
     base_runner = runner or default_model_runner
@@ -374,13 +595,18 @@ def unicode_defended_runner(runner: ModelRunner | None = None) -> ModelRunner:
         )
         remapped = []
         for prediction in predictions:
-            start, end = normalization.remap_span(prediction.start, prediction.end)
+            start, end, surface = remap_normalized_span(
+                prediction.start,
+                prediction.end,
+                fixture.text,
+                normalization,
+            )
             remapped.append(
                 replace(
                     prediction,
                     start=start,
                     end=end,
-                    text=fixture.text[start:end],
+                    text=surface,
                     metadata={
                         **dict(prediction.metadata),
                         "unicode_defense": normalization.to_metadata(),
@@ -390,6 +616,127 @@ def unicode_defended_runner(runner: ModelRunner | None = None) -> ModelRunner:
         return remapped
 
     return run
+
+
+def mixed_script_evasion_report(
+    model: str | ModelRunner,
+    suite: str | Path | Iterable[BenchmarkFixture],
+    *,
+    seed: int = 0,
+    detection_floor: float = DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR,
+    leakage_ceiling: float = MIXED_SCRIPT_LEAKAGE_CEILING,
+    suite_name: str | None = None,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    defended_runner: ModelRunner | None = None,
+    raise_on_violation: bool = False,
+) -> MixedScriptEvasionReport:
+    """Run the confusable attack corpus and enforce its detection/leakage gates."""
+
+    if not 0.0 <= detection_floor <= 1.0:
+        raise ValueError("mixed-script detection floor must be between 0 and 1")
+    if not 0.0 <= leakage_ceiling <= 1.0:
+        raise ValueError("mixed-script leakage ceiling must be between 0 and 1")
+
+    fixtures, resolved_suite_name = _resolve_suite(suite, suite_name=suite_name)
+    model_name, model_runner = _resolve_model_runner(model, runner)
+    base_runner = model_runner or default_model_runner
+    defense_runner = defended_runner or unicode_defended_runner(base_runner)
+    cases = generate_confusable_attack_corpus(fixtures, seed=seed)
+
+    detected = sum(_confusable_attack_detected(case) for case in cases)
+    detection_rate = _safe_rate(detected, len(cases), 0.0)
+    pre_defense = _mixed_script_attack_leakage(
+        cases,
+        model_name=model_name,
+        device=device,
+        runner=base_runner,
+        ceiling=leakage_ceiling,
+    )
+    post_defense = _mixed_script_attack_leakage(
+        cases,
+        model_name=model_name,
+        device=device,
+        runner=defense_runner,
+        ceiling=leakage_ceiling,
+        pre_defense_baseline=pre_defense.leakage.overall,
+    )
+
+    violations: list[str] = []
+    if not cases:
+        violations.append("attack_corpus_empty")
+    if detection_rate < detection_floor:
+        violations.append("confusable_detection_floor")
+    if not post_defense.passed:
+        violations.append("mixed_script_leakage_ceiling")
+
+    attack_counts: dict[str, int] = {}
+    for case in cases:
+        attack_counts[case.attack_class] = attack_counts.get(case.attack_class, 0) + 1
+    report = MixedScriptEvasionReport(
+        model_name=model_name,
+        suite=resolved_suite_name,
+        device=device,
+        seed=seed,
+        attack_count=len(cases),
+        detection_rate=detection_rate,
+        detection_floor=detection_floor,
+        pre_defense_leakage=pre_defense,
+        post_defense_leakage=post_defense,
+        attack_counts=attack_counts,
+        violations=tuple(violations),
+    )
+    if raise_on_violation and not report.passed:
+        joined = ", ".join(report.violations)
+        raise MixedScriptEvasionGateError(f"mixed-script evasion gate failed: {joined}")
+    return report
+
+
+def _confusable_attack_detected(case: ConfusableAttackCase) -> bool:
+    span = case.fixture.gold_spans[case.span_index]
+    surface = case.fixture.text[span.start : span.end]
+    return confusable_skeleton(surface) != surface or detect_mixed_script(surface)
+
+
+def _mixed_script_attack_leakage(
+    cases: Sequence[ConfusableAttackCase],
+    *,
+    model_name: str,
+    device: str,
+    runner: ModelRunner,
+    ceiling: float,
+    pre_defense_baseline: float | None = None,
+) -> MixedScriptLeakageMetrics:
+    gold: list[EvalSpan] = []
+    predicted: list[EvalSpan] = []
+    document_offset = 0
+    for case in cases:
+        fixture = case.fixture
+        target = fixture.gold_spans[case.span_index]
+        gold.append(
+            replace(
+                target,
+                start=document_offset + target.start,
+                end=document_offset + target.end,
+            )
+        )
+        for prediction in _run_predictions(fixture, runner, model_name, device):
+            predicted.append(
+                replace(
+                    prediction,
+                    start=document_offset + prediction.start,
+                    end=document_offset + prediction.end,
+                )
+            )
+        document_offset += len(fixture.text) + 1
+
+    return compute_mixed_script_leakage(
+        gold,
+        predicted,
+        ceiling=ceiling,
+        pre_defense_baseline=pre_defense_baseline,
+        default_device=device,
+    )
 
 
 def adversarial_robustness_report(
@@ -1210,10 +1557,14 @@ __all__ = [
     "DEFAULT_ATTACK_BEAM_WIDTH",
     "DEFAULT_ATTACK_CLASSES",
     "DEFAULT_ATTACK_DISTANCE_BUDGET",
+    "DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR",
     "DEFAULT_PERTURBATIONS",
     "DIRECT_IDENTIFIER_LABELS",
     "AdversarialAttackArtifact",
     "AdversarialRobustnessReport",
+    "ConfusableAttackCase",
+    "MixedScriptEvasionGateError",
+    "MixedScriptEvasionReport",
     "Perturbation",
     "RobustnessReport",
     "RobustnessVariant",
@@ -1221,6 +1572,8 @@ __all__ = [
     "case_flip_perturbation",
     "character_typo_perturbation",
     "identity_perturbation",
+    "generate_confusable_attack_corpus",
+    "mixed_script_evasion_report",
     "ocr_noise_perturbation",
     "perturb_fixture",
     "replay_adversarial_attack",
