@@ -4021,23 +4021,41 @@ def _handle_export_openehr(args: argparse.Namespace) -> int:
             encoding="utf-8",
         )
     except FileNotFoundError as exc:
-        sys.stderr.write(f"Input file not found: {exc.filename}\n")
-        return 1
-    except json.JSONDecodeError as exc:
-        sys.stderr.write(
-            f"Invalid JSON in {args.input}: {exc.msg} "
-            f"at line {exc.lineno} column {exc.colno}\n"
+        raise CliError(
+            f"Input file not found: {exc.filename}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
         )
-        return 1
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
     except OSError as exc:
-        sys.stderr.write(f"Failed to read or write openEHR COMPOSITION: {exc}\n")
-        return 1
+        raise CliError(
+            f"Failed to read or write openEHR COMPOSITION: {exc}",
+            code="io_error",
+            exit_code=EXIT_ERROR,
+        )
     except (TypeError, ValueError) as exc:
-        sys.stderr.write(f"Failed to assemble openEHR COMPOSITION: {exc}\n")
-        return 1
+        raise CliError(
+            f"Failed to assemble openEHR COMPOSITION: {exc}",
+            code="assemble_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-    sys.stdout.write(f"openEHR COMPOSITION written to: {args.output}\n")
-    return 0
+    result = {
+        "output": str(args.output),
+        "entity_count": len(entities),
+        "coded_element_count": sum(path.endswith("|code") for path in composition),
+    }
+    return emit(
+        args,
+        result,
+        human=f"openEHR COMPOSITION written to: {args.output}",
+    )
 
 
 def _extract_doc_id(payload: Any) -> str:
