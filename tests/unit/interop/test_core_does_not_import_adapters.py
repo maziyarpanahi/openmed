@@ -19,6 +19,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "pydeid",
     "pyspark",
     "gliner",
+    "haystack",
     "llama_index",
     "opencc",
     "pypinyin",
@@ -62,6 +63,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "duckdb",
         "function_tools",
         "gliner_biomed",
+        "haystack",
         "hl7v2",
         "icd11_api",
         "indic",
@@ -89,6 +91,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("icd11_api").extra == ""
     assert adapter_spec("indic").extra == "indic"
     assert adapter_spec("function_tools").extra == ""
+    assert adapter_spec("haystack").extra == "haystack"
     assert adapter_spec("langchain").extra == "langchain"
     assert adapter_spec("llamaindex").extra == "llamaindex"
     assert adapter_spec("omop").extra == ""
