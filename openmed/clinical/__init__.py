@@ -113,6 +113,17 @@ from .document_linking import (
     EdgeKind,
     link_documents,
 )
+from .dosing_check import (
+    DOSING_RANGE_CHECK_DISCLAIMER,
+    ClinicalSuggestion,
+    DoseCheckNote,
+    DoseCheckNoteReason,
+    DoseCheckStatus,
+    DoseRangeCheckResult,
+    DoseReferenceRange,
+    ExtractedDose,
+    check_dose_ranges,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -444,6 +455,15 @@ __all__ = [
     "DocumentProvenance",
     "EdgeKind",
     "link_documents",
+    "DOSING_RANGE_CHECK_DISCLAIMER",
+    "ClinicalSuggestion",
+    "DoseCheckNote",
+    "DoseCheckNoteReason",
+    "DoseCheckStatus",
+    "DoseRangeCheckResult",
+    "DoseReferenceRange",
+    "ExtractedDose",
+    "check_dose_ranges",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",

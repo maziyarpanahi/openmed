@@ -1,0 +1,17 @@
+{
+  "_note": "Synthetic test-only dosing ranges. Production ranges must be user-supplied from appropriate local formulary or jurisdictional sources.",
+  "democef": {
+    "oral": {
+      "low": 100,
+      "high": 500,
+      "unit": "mg"
+    }
+  },
+  "demodrip": {
+    "iv": {
+      "low": 1,
+      "high": 2,
+      "unit": "mg"
+    }
+  }
+}
