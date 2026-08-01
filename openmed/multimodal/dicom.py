@@ -330,6 +330,10 @@ _UID_REMAP_KEYWORDS = {
 }
 
 _DT_DATE_RE = re.compile(r"^(?P<date>\d{8})(?P<rest>.*)$")
+_SEEDED_PHI_SCRUB_VRS = frozenset(
+    {"AE", "AS", "CS", "LO", "LT", "SH", "ST", "UC", "UR", "UT"}
+)
+_SEEDED_PHI_SOURCE_VRS = _SEEDED_PHI_SCRUB_VRS | {"DA", "DT", "PN", "TM", "UI"}
 
 
 def deidentify_dicom_headers(
@@ -362,7 +366,14 @@ def deidentify_dicom_headers(
     )
 
     dataset = pydicom.dcmread(source, force=True)
+    seeded_phi_terms = _seeded_phi_scrub_terms(dataset)
     _deidentify_dataset(dataset, context, location="Dataset")
+    _clear_seeded_phi_copies(
+        dataset,
+        seeded_phi_terms,
+        context,
+        location="Dataset",
+    )
     _set_standard_deid_markers(dataset, context)
     _deidentify_file_meta(dataset, context)
     if hasattr(dataset, "preamble"):
@@ -436,6 +447,7 @@ def redact_dicom_pixels(
             residual_report=residual_report,
         )
 
+    _decompress_pixel_data(dataset)
     pixel_array = _copy_pixel_array(dataset)
     frame_views = tuple(_iter_pixel_frames(pixel_array, dataset))
     findings: list[DicomPixelFinding] = []
@@ -455,7 +467,6 @@ def redact_dicom_pixels(
         findings.extend(frame_findings)
 
     dataset.PixelData = _pixel_bytes(pixel_array)
-    _save_dataset(dataset, destination)
 
     residual_report = DicomResidualTextReport(frame_count=len(frame_views))
     if resolved_policy.verify_residual:
@@ -473,6 +484,7 @@ def redact_dicom_pixels(
                 f"{residual_report.residual_entity_count} residual findings"
             )
 
+    _save_dataset(dataset, destination)
     return DicomPixelRedactionResult(
         source_path=source,
         output_path=destination,
@@ -661,6 +673,23 @@ def _resolve_pixel_model_name(models: Any, policy_model_name: str | None) -> str
 def _copy_pixel_array(dataset: Any) -> Any:
     numpy = _import_numpy()
     return numpy.array(dataset.pixel_array, copy=True)
+
+
+def _decompress_pixel_data(dataset: Any) -> None:
+    """Normalize compressed Pixel Data before editing and writing raw bytes."""
+    file_meta = getattr(dataset, "file_meta", None)
+    transfer_syntax = getattr(file_meta, "TransferSyntaxUID", None)
+    if transfer_syntax is None or not bool(
+        getattr(transfer_syntax, "is_compressed", False)
+    ):
+        return
+    try:
+        dataset.decompress(generate_instance_uid=False)
+    except Exception:
+        raise ValueError(
+            "Compressed DICOM Pixel Data could not be decoded with the installed "
+            "pixel-data codecs"
+        ) from None
 
 
 def _iter_pixel_frames(pixel_array: Any, dataset: Any) -> Sequence[Any]:
@@ -1133,6 +1162,78 @@ def _deidentify_sequence(element: Any, context: _Context, *, location: str) -> N
     for index, item in enumerate(element.value or ()):
         child_location = f"{location}.{_keyword(element)}[{index}]"
         _deidentify_dataset(item, context, location=child_location)
+
+
+def _seeded_phi_scrub_terms(dataset: Any) -> tuple[str, ...]:
+    terms = {
+        _normalize_seeded_phi_text(term)
+        for _keyword_name, _label, term in _header_seed_terms(dataset)
+    }
+
+    def collect(source: Any) -> None:
+        for tag in list(source.keys()):
+            element = source[tag]
+            if element.VR == "SQ":
+                for item in element.value or ():
+                    collect(item)
+                continue
+            if str(element.VR) not in _SEEDED_PHI_SOURCE_VRS:
+                continue
+            tag_int = int(element.tag)
+            sensitive_source = (
+                element.tag.is_private
+                or tag_int in _REMOVE_TAGS
+                or tag_int in _ZERO_TAGS
+                or element.VR in {"DA", "DT", "PN", "TM"}
+                or _should_remap_uid(element)
+            )
+            if not sensitive_source:
+                continue
+            for raw in _dicom_value_strings(element.value):
+                for variant in _header_value_variants(raw, keyword=_keyword(element)):
+                    terms.add(_normalize_seeded_phi_text(variant))
+
+    collect(dataset)
+    return tuple(
+        sorted((term for term in terms if len(term) >= 3), key=len, reverse=True)
+    )
+
+
+def _clear_seeded_phi_copies(
+    dataset: Any,
+    terms: Sequence[str],
+    context: _Context,
+    *,
+    location: str,
+) -> None:
+    if not terms:
+        return
+    for tag in list(dataset.keys()):
+        element = dataset[tag]
+        if element.VR == "SQ":
+            for index, item in enumerate(element.value or ()):
+                child_location = f"{location}.{_keyword(element)}[{index}]"
+                _clear_seeded_phi_copies(
+                    item,
+                    terms,
+                    context,
+                    location=child_location,
+                )
+            continue
+        if str(element.VR) not in _SEEDED_PHI_SCRUB_VRS:
+            continue
+        values = _dicom_value_strings(element.value)
+        if any(
+            term in _normalize_seeded_phi_text(value)
+            for value in values
+            for term in terms
+        ):
+            _clear_element(element, context, ps315_action="Z", location=location)
+
+
+def _normalize_seeded_phi_text(value: Any) -> str:
+    text = re.sub(r"[\^=,_]+", " ", str(value))
+    return " ".join(text.casefold().split())
 
 
 def _set_standard_deid_markers(dataset: Any, context: _Context) -> None:

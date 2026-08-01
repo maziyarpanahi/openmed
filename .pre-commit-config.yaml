@@ -16,7 +16,7 @@ repos:
         args: ['--fix=lf']
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.22
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -34,4 +34,4 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
-        args: [--config=.gitleaks.toml]
+        args: [--config=.gitleaks.toml, --baseline-path=.secrets.baseline]

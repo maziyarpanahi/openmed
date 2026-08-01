@@ -6,6 +6,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 CHANGELOG_SCRIPT = ROOT / "scripts" / "release" / "changelog.py"
 
@@ -99,6 +101,30 @@ def test_bang_subject_computes_major_bump():
 
     assert notes.bump == "major"
     assert notes.next_version == "2.0.0"
+
+
+def test_release_version_accepts_intentional_major_bump_above_minimum():
+    release_changelog.validate_release_version("1.9.1", "1.10.0", "2.0.0")
+
+
+@pytest.mark.parametrize(
+    ("current_version", "minimum_version", "release_version"),
+    [
+        ("1.9.1", "1.10.0", "1.9.2"),
+        ("1.9.1", "1.9.2", "1.9.1"),
+    ],
+)
+def test_release_version_rejects_stale_or_insufficient_bump(
+    current_version,
+    minimum_version,
+    release_version,
+):
+    with pytest.raises(ValueError):
+        release_changelog.validate_release_version(
+            current_version,
+            minimum_version,
+            release_version,
+        )
 
 
 def test_writes_github_outputs(tmp_path):
