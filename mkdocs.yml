@@ -67,6 +67,7 @@ nav:
       - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
