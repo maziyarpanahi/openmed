@@ -65,6 +65,7 @@ from .reid import (
     longitudinal_attack_fingerprint,
     longitudinal_risk_report,
     quasi_identifier_key,
+    quasi_identifier_key_bytes,
     risk_report,
 )
 from .release import (
@@ -143,6 +144,7 @@ __all__ = [
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
     "quasi_identifier_key",
+    "quasi_identifier_key_bytes",
     "risk_report",
     "sample_synthetic_table",
     "tabular_fidelity_report",
