@@ -17,8 +17,40 @@ public class NERPipeline {
     ///   - modelURL: Path to the `.mlmodelc` or `.mlpackage` file.
     ///   - id2labelURL: Path to the `id2label.json` file mapping label IDs to names.
     ///   - maxSeqLength: Maximum input sequence length the model supports.
-    public init(modelURL: URL, id2labelURL: URL, maxSeqLength: Int = 512) throws {
-        self.model = try MLModel(contentsOf: try Self.resolveModelURL(modelURL))
+    @available(watchOS, unavailable, message: "Use PlatformModel for Nano budget enforcement.")
+    @available(visionOS, unavailable, message: "Use PlatformModel for Nano budget enforcement.")
+    public convenience init(
+        modelURL: URL,
+        id2labelURL: URL,
+        maxSeqLength: Int = 512
+    ) throws {
+        try self.init(
+            resolvedModelURL: Self.resolveModelURL(modelURL),
+            id2labelURL: id2labelURL,
+            maxSeqLength: maxSeqLength
+        )
+    }
+
+    convenience init(
+        validatedDescriptor descriptor: PlatformModelDescriptor,
+        configuration: PlatformModelConfiguration
+    ) throws {
+        guard configuration.allows(descriptor) else {
+            throw PlatformModelError.noCompatibleModel(configuration.platform)
+        }
+        try self.init(
+            resolvedModelURL: Self.resolveModelURL(descriptor.modelURL),
+            id2labelURL: descriptor.id2labelURL,
+            maxSeqLength: configuration.maximumSequenceLength
+        )
+    }
+
+    private init(
+        resolvedModelURL: URL,
+        id2labelURL: URL,
+        maxSeqLength: Int
+    ) throws {
+        self.model = try MLModel(contentsOf: resolvedModelURL)
         self.maxSeqLength = maxSeqLength
 
         let data = try Data(contentsOf: id2labelURL)
@@ -32,7 +64,11 @@ public class NERPipeline {
     private static func resolveModelURL(_ modelURL: URL) throws -> URL {
         switch modelURL.pathExtension.lowercased() {
         case "mlpackage", "mlmodel":
-            return try MLModel.compileModel(at: modelURL)
+            #if os(watchOS) || os(visionOS)
+                throw NERPipelineError.uncompiledModelUnsupported(modelURL)
+            #else
+                return try MLModel.compileModel(at: modelURL)
+            #endif
         default:
             return modelURL
         }
@@ -139,11 +175,14 @@ public class NERPipeline {
 /// Errors thrown by the NER pipeline.
 public enum NERPipelineError: Error, LocalizedError {
     case missingOutput(String)
+    case uncompiledModelUnsupported(URL)
 
     public var errorDescription: String? {
         switch self {
         case .missingOutput(let name):
             return "CoreML model output '\(name)' not found"
+        case .uncompiledModelUnsupported(let url):
+            return "\(url.lastPathComponent) must be compiled to .mlmodelc before bundling on watchOS or visionOS"
         }
     }
 }

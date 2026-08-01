@@ -1,0 +1,13 @@
+{
+  "@id": "http://id.who.int/icd/release/11/2026-01/mms/1000",
+  "child": [
+    "http://id.who.int/icd/release/11/2026-01/mms/2002",
+    "http://id.who.int/icd/release/11/2026-01/mms/2001"
+  ],
+  "classKind": "chapter",
+  "code": "05",
+  "title": {
+    "@language": "en",
+    "@value": "Synthetic endocrine chapter"
+  }
+}

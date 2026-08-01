@@ -11,11 +11,15 @@ all other columns are copied through unchanged.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import logging
+import os
+import tempfile
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
@@ -36,6 +40,8 @@ BatchOperation = Literal["analyze_text", "extract_pii", "deidentify"]
 DatasetFormat = Literal["csv", "jsonl", "parquet"]
 _VALID_OPERATIONS = {"analyze_text", "extract_pii", "deidentify"}
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+_BATCH_CHECKPOINT_SCHEMA_VERSION = 1
+_DEFAULT_CHECKPOINT_INTERVAL = 10
 
 
 @dataclass
@@ -65,10 +71,16 @@ class BatchItemResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
+        if self.result is None:
+            serialized_result = None
+        elif hasattr(self.result, "to_dict"):
+            serialized_result = self.result.to_dict()
+        else:
+            serialized_result = self.result
         return {
             "id": self.id,
             "success": self.success,
-            "result": self.result.to_dict() if self.result else None,
+            "result": serialized_result,
             "error": self.error,
             "processing_time": self.processing_time,
             "source": self.source,
@@ -222,6 +234,570 @@ ProgressCallback = Callable[[int, int, Optional[BatchItemResult]], None]
 BatchProgressCallback = Callable[[BatchProgress], None]
 
 
+class BatchCheckpointError(ValueError):
+    """Raised when a durable batch checkpoint cannot be resumed safely."""
+
+
+@dataclass(frozen=True)
+class _OutputArtifact:
+    size: int
+    sha256: str
+
+
+AtomicWriteHook = Callable[[str, Path], None]
+ArtifactWriter = Callable[[int, BatchItem, BatchItemResult], Optional[_OutputArtifact]]
+ArtifactPathResolver = Callable[[int, BatchItem], Optional[Path]]
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _stable_hash(*values: Any) -> str:
+    """Hash potentially sensitive values without persisting their plaintext."""
+    digest = hashlib.sha256()
+    for value in values:
+        if isinstance(value, bytes):
+            encoded = value
+        elif isinstance(value, str):
+            encoded = value.encode("utf-8")
+        else:
+            encoded = json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                default=repr,
+            ).encode("utf-8")
+        digest.update(str(len(encoded)).encode("ascii"))
+        digest.update(b":")
+        digest.update(encoded)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _checkpoint_integer(value: Any, field_name: str, *, minimum: int = 0) -> int:
+    """Return a strictly typed checkpoint integer or raise a safe error."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise BatchCheckpointError(f"Checkpoint {field_name} is invalid")
+    return value
+
+
+def _fsync_directory(path: Path) -> None:
+    """Best-effort fsync of a directory after an atomic rename."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        directory_fd = os.open(path, flags)
+    except OSError:  # pragma: no cover - platform/filesystem dependent
+        return
+    try:
+        os.fsync(directory_fd)
+    except OSError:  # pragma: no cover - platform/filesystem dependent
+        pass
+    finally:
+        os.close(directory_fd)
+
+
+def _atomic_write_bytes(
+    path: Path,
+    payload: bytes,
+    *,
+    hook: Optional[AtomicWriteHook] = None,
+) -> None:
+    """Durably replace ``path`` with ``payload`` using a same-directory temp."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            if hook:
+                hook("after_write", path)
+            os.fsync(handle.fileno())
+            if hook:
+                hook("after_fsync", path)
+        if hook:
+            hook("before_replace", path)
+        os.replace(temporary_path, path)
+        if hook:
+            hook("after_replace", path)
+        _fsync_directory(path.parent)
+        if hook:
+            hook("after_directory_fsync", path)
+    except BaseException:
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _serialize_result_record(result: BatchItemResult) -> bytes:
+    return (
+        json.dumps(
+            result.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _restore_result_record(record: Mapping[str, Any]) -> BatchItemResult:
+    return BatchItemResult(
+        id=str(record.get("id", "")),
+        result=record.get("result"),
+        error=(str(record["error"]) if record.get("error") is not None else None),
+        processing_time=float(record.get("processing_time", 0.0)),
+        source=(str(record["source"]) if record.get("source") is not None else None),
+    )
+
+
+class _BatchCheckpointSession:
+    """Coordinate a PHI-free checkpoint with a durable result journal."""
+
+    def __init__(
+        self,
+        *,
+        items: Sequence[BatchItem],
+        checkpoint_path: Path,
+        checkpoint_interval: int,
+        model_name: str,
+        operation: BatchOperation,
+        configuration: Mapping[str, Any],
+        final_output_path: Optional[Path],
+        output_format: str,
+        store_full_results: bool,
+        artifact_path_resolver: Optional[ArtifactPathResolver],
+        atomic_write_hook: Optional[AtomicWriteHook],
+    ) -> None:
+        self.items = list(items)
+        self.checkpoint_path = checkpoint_path
+        self.state_path = Path(f"{checkpoint_path}.part")
+        self.checkpoint_interval = checkpoint_interval
+        self.model_name = model_name
+        self.operation = operation
+        self.configuration_hash = _stable_hash(configuration)
+        self.final_output_path = final_output_path
+        self.store_full_results = store_full_results
+        self.output_format = output_format
+        self.artifact_path_resolver = artifact_path_resolver
+        self.atomic_write_hook = atomic_write_hook
+        self.input_hash = _stable_hash(
+            [
+                {
+                    "id": item.id,
+                    "source": item.source,
+                    "text": item.text,
+                    "metadata": item.metadata,
+                }
+                for item in self.items
+            ]
+        )
+        self.started_at = datetime.now().isoformat()
+        self.completed_at = ""
+        self.is_complete = False
+        self.artifacts: Dict[int, _OutputArtifact] = {}
+
+    def start(self) -> None:
+        """Create an empty durable journal and initial checkpoint."""
+        _atomic_write_bytes(
+            self.state_path,
+            b"",
+            hook=self.atomic_write_hook,
+        )
+        self._write_checkpoint([], status="in_progress")
+
+    def resume(self) -> List[BatchItemResult]:
+        """Load, validate, and return the checkpointed result prefix."""
+        try:
+            payload = json.loads(self.checkpoint_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise BatchCheckpointError(
+                f"Checkpoint not found: {self.checkpoint_path}"
+            ) from exc
+        except (OSError, json.JSONDecodeError) as exc:
+            raise BatchCheckpointError(
+                f"Checkpoint is not readable: {self.checkpoint_path}"
+            ) from exc
+
+        self._validate_checkpoint(payload)
+        self.checkpoint_interval = _checkpoint_integer(
+            payload.get("checkpoint_interval"),
+            "interval",
+            minimum=1,
+        )
+        self.started_at = str(payload.get("started_at") or self.started_at)
+        self.completed_at = str(payload.get("completed_at") or "")
+        self.is_complete = payload.get("status") == "complete"
+        committed_count = _checkpoint_integer(
+            payload.get("committed_count"),
+            "committed count",
+        )
+        committed_output = payload["committed_output"]
+        committed_offset = _checkpoint_integer(
+            committed_output.get("offset"),
+            "committed output offset",
+        )
+        expected_hash = str(committed_output["sha256"])
+
+        try:
+            durable_bytes = self.state_path.read_bytes()
+        except OSError as exc:
+            raise BatchCheckpointError(
+                f"Committed batch output is not readable: {self.state_path}"
+            ) from exc
+        if len(durable_bytes) < committed_offset:
+            raise BatchCheckpointError(
+                "Committed batch output is shorter than the checkpoint offset"
+            )
+
+        committed_bytes = durable_bytes[:committed_offset]
+        if _sha256_bytes(committed_bytes) != expected_hash:
+            raise BatchCheckpointError(
+                "Committed batch output does not match the checkpoint hash"
+            )
+
+        if len(durable_bytes) > committed_offset:
+            _atomic_write_bytes(
+                self.state_path,
+                committed_bytes,
+                hook=self.atomic_write_hook,
+            )
+
+        serialized_records: List[Mapping[str, Any]] = []
+        record_offsets: List[int] = []
+        record_offset = 0
+        try:
+            for line in committed_bytes.splitlines(keepends=True):
+                parsed = json.loads(line)
+                if not isinstance(parsed, Mapping):
+                    raise TypeError("result record is not an object")
+                serialized_records.append(parsed)
+                record_offset += len(line)
+                record_offsets.append(record_offset)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise BatchCheckpointError(
+                "Committed batch output contains an invalid result record"
+            ) from exc
+
+        if len(serialized_records) != committed_count:
+            raise BatchCheckpointError(
+                "Committed result count does not match the checkpoint"
+            )
+
+        checkpointed_items = payload.get("items", [])
+        if not isinstance(checkpointed_items, list) or len(checkpointed_items) != len(
+            serialized_records
+        ):
+            raise BatchCheckpointError("Checkpoint item metadata is incomplete")
+
+        records: List[BatchItemResult] = []
+        for index, (item, serialized_record, metadata, output_offset) in enumerate(
+            zip(self.items, serialized_records, checkpointed_items, record_offsets)
+        ):
+            if not isinstance(metadata, Mapping):
+                raise BatchCheckpointError("Checkpoint item metadata is invalid")
+            if _checkpoint_integer(metadata.get("index"), "item index") != index:
+                raise BatchCheckpointError("Checkpoint item order does not match input")
+            if str(metadata.get("item_id_sha256", "")) != _stable_hash(item.id):
+                raise BatchCheckpointError("Checkpoint item id does not match input")
+            if (
+                _checkpoint_integer(
+                    metadata.get("committed_output_offset"),
+                    "item output offset",
+                )
+                != output_offset
+            ):
+                raise BatchCheckpointError(
+                    "Checkpoint item output offset does not match the journal"
+                )
+            if self.store_full_results:
+                try:
+                    record = _restore_result_record(serialized_record)
+                except (TypeError, ValueError) as exc:
+                    raise BatchCheckpointError(
+                        "Committed batch output contains an invalid result record"
+                    ) from exc
+            else:
+                if (
+                    _checkpoint_integer(
+                        serialized_record.get("index"),
+                        "journal item index",
+                    )
+                    != index
+                ):
+                    raise BatchCheckpointError(
+                        "Committed journal item order does not match input"
+                    )
+                journal_status = serialized_record.get("status")
+                if journal_status not in {"success", "failed"}:
+                    raise BatchCheckpointError(
+                        "Committed journal item status is invalid"
+                    )
+                record_succeeded = journal_status == "success"
+                record = BatchItemResult(
+                    id=item.id,
+                    result={"checkpointed": True} if record_succeeded else None,
+                    error=None if record_succeeded else "Previously failed",
+                    source=item.source,
+                )
+            expected_status = "success" if record.success else "failed"
+            if metadata.get("status") != expected_status:
+                raise BatchCheckpointError("Checkpoint item status is inconsistent")
+            self._restore_and_verify_artifact(index, item, metadata)
+            records.append(record)
+
+        if payload.get("status") == "complete" and self.final_output_path is not None:
+            self._verify_final_output(payload)
+
+        return records
+
+    def commit(
+        self,
+        results: Sequence[BatchItemResult],
+        *,
+        status: str,
+        completed_at: str = "",
+        final_output: Optional[_OutputArtifact] = None,
+    ) -> None:
+        """Atomically publish a new result journal, then its checkpoint."""
+        journal = b"".join(
+            self._serialize_journal_record(index, result)
+            for index, result in enumerate(results)
+        )
+        _atomic_write_bytes(
+            self.state_path,
+            journal,
+            hook=self.atomic_write_hook,
+        )
+        self._write_checkpoint(
+            results,
+            status=status,
+            completed_at=completed_at,
+            final_output=final_output,
+        )
+
+    def record_artifact(self, index: int, artifact: _OutputArtifact) -> None:
+        self.artifacts[index] = artifact
+
+    def _write_checkpoint(
+        self,
+        results: Sequence[BatchItemResult],
+        *,
+        status: str,
+        completed_at: str = "",
+        final_output: Optional[_OutputArtifact] = None,
+    ) -> None:
+        serialized_records = [
+            self._serialize_journal_record(index, result)
+            for index, result in enumerate(results)
+        ]
+        journal = b"".join(serialized_records)
+        offsets: List[int] = []
+        offset = 0
+        for serialized_record in serialized_records:
+            offset += len(serialized_record)
+            offsets.append(offset)
+
+        item_metadata = []
+        for index, (item, result, output_offset) in enumerate(
+            zip(self.items, results, offsets)
+        ):
+            metadata: Dict[str, Any] = {
+                "index": index,
+                "item_id_sha256": _stable_hash(item.id),
+                "status": "success" if result.success else "failed",
+                "committed_output_offset": output_offset,
+            }
+            artifact = self.artifacts.get(index)
+            if artifact is not None:
+                metadata["artifact_size"] = artifact.size
+                metadata["artifact_sha256"] = artifact.sha256
+            item_metadata.append(metadata)
+
+        payload: Dict[str, Any] = {
+            "schema_version": _BATCH_CHECKPOINT_SCHEMA_VERSION,
+            "status": status,
+            "operation": self.operation,
+            "model_sha256": _stable_hash(self.model_name),
+            "configuration_sha256": self.configuration_hash,
+            "input_sha256": self.input_hash,
+            "total_items": len(self.items),
+            "committed_count": len(results),
+            "checkpoint_interval": self.checkpoint_interval,
+            "journal_format": (
+                "full_result" if self.store_full_results else "status_only"
+            ),
+            "output_format": self.output_format,
+            "committed_output": {
+                "offset": len(journal),
+                "sha256": _sha256_bytes(journal),
+            },
+            "items": item_metadata,
+            "started_at": self.started_at,
+            "completed_at": completed_at,
+            "contains_raw_input": False,
+            "contains_raw_output": False,
+        }
+        if final_output is not None:
+            payload["final_output"] = {
+                "size": final_output.size,
+                "sha256": final_output.sha256,
+                "format": self.output_format,
+            }
+        checkpoint_bytes = (
+            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        _atomic_write_bytes(
+            self.checkpoint_path,
+            checkpoint_bytes,
+            hook=self.atomic_write_hook,
+        )
+
+    def _serialize_journal_record(
+        self,
+        index: int,
+        result: BatchItemResult,
+    ) -> bytes:
+        if self.store_full_results:
+            return _serialize_result_record(result)
+        payload = {
+            "index": index,
+            "status": "success" if result.success else "failed",
+        }
+        return (
+            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+
+    def _validate_checkpoint(self, payload: Any) -> None:
+        if not isinstance(payload, Mapping):
+            raise BatchCheckpointError("Checkpoint must contain a JSON object")
+        if (
+            _checkpoint_integer(payload.get("schema_version"), "schema version")
+            != _BATCH_CHECKPOINT_SCHEMA_VERSION
+        ):
+            raise BatchCheckpointError("Unsupported batch checkpoint schema version")
+        if payload.get("status") not in {"in_progress", "complete"}:
+            raise BatchCheckpointError("Checkpoint status is invalid")
+        if payload.get("operation") != self.operation:
+            raise BatchCheckpointError("Checkpoint operation does not match this batch")
+        if payload.get("model_sha256") != _stable_hash(self.model_name):
+            raise BatchCheckpointError("Checkpoint model does not match this batch")
+        if payload.get("configuration_sha256") != self.configuration_hash:
+            raise BatchCheckpointError(
+                "Checkpoint configuration does not match this batch"
+            )
+        if payload.get("input_sha256") != self.input_hash:
+            raise BatchCheckpointError("Checkpoint input does not match this batch")
+        if _checkpoint_integer(payload.get("total_items"), "item count") != len(
+            self.items
+        ):
+            raise BatchCheckpointError("Checkpoint item count does not match input")
+        committed_count = _checkpoint_integer(
+            payload.get("committed_count"),
+            "committed count",
+        )
+        if committed_count > len(self.items):
+            raise BatchCheckpointError("Checkpoint committed count is invalid")
+        _checkpoint_integer(
+            payload.get("checkpoint_interval"),
+            "interval",
+            minimum=1,
+        )
+        expected_journal_format = (
+            "full_result" if self.store_full_results else "status_only"
+        )
+        if payload.get("journal_format") != expected_journal_format:
+            raise BatchCheckpointError(
+                "Checkpoint output mode does not match this batch"
+            )
+        if payload.get("output_format") != self.output_format:
+            raise BatchCheckpointError(
+                "Checkpoint output format does not match this batch"
+            )
+        committed_output = payload.get("committed_output")
+        if not isinstance(committed_output, Mapping):
+            raise BatchCheckpointError("Checkpoint output metadata is missing")
+        _checkpoint_integer(
+            committed_output.get("offset"),
+            "committed output offset",
+        )
+        committed_hash = committed_output.get("sha256")
+        if not isinstance(committed_hash, str) or len(committed_hash) != 64:
+            raise BatchCheckpointError("Checkpoint committed output hash is invalid")
+
+    def _restore_and_verify_artifact(
+        self,
+        index: int,
+        item: BatchItem,
+        metadata: Mapping[str, Any],
+    ) -> None:
+        size_value = metadata.get("artifact_size")
+        hash_value = metadata.get("artifact_sha256")
+        if size_value is None and hash_value is None:
+            if not self.store_full_results and metadata.get("status") == "success":
+                raise BatchCheckpointError("Checkpoint artifact metadata is incomplete")
+            return
+        if size_value is None or hash_value is None:
+            raise BatchCheckpointError("Checkpoint artifact metadata is incomplete")
+        if self.artifact_path_resolver is None:
+            raise BatchCheckpointError("Checkpoint artifact cannot be resolved")
+        artifact_path = self.artifact_path_resolver(index, item)
+        if artifact_path is None:
+            raise BatchCheckpointError("Checkpoint artifact path is unavailable")
+        try:
+            contents = artifact_path.read_bytes()
+        except OSError as exc:
+            raise BatchCheckpointError(
+                "Committed output artifact is missing or unreadable"
+            ) from exc
+        artifact = _OutputArtifact(size=len(contents), sha256=_sha256_bytes(contents))
+        expected_size = _checkpoint_integer(size_value, "artifact size")
+        if artifact.size != expected_size or artifact.sha256 != str(hash_value):
+            raise BatchCheckpointError(
+                "Committed output artifact does not match the checkpoint hash"
+            )
+        self.artifacts[index] = artifact
+
+    def _verify_final_output(self, payload: Mapping[str, Any]) -> None:
+        metadata = payload.get("final_output")
+        if not isinstance(metadata, Mapping):
+            raise BatchCheckpointError("Completed checkpoint has no final output hash")
+        try:
+            contents = self.final_output_path.read_bytes()
+        except OSError as exc:
+            raise BatchCheckpointError(
+                "Final batch output is missing or unreadable"
+            ) from exc
+        expected_size = _checkpoint_integer(
+            metadata.get("size"),
+            "final output size",
+        )
+        if len(contents) != expected_size or _sha256_bytes(contents) != str(
+            metadata.get("sha256", "")
+        ):
+            raise BatchCheckpointError(
+                "Final batch output does not match the checkpoint hash"
+            )
+
+
+def _serialize_batch_output(batch_result: BatchResult, output_format: str) -> bytes:
+    if output_format == "json":
+        rendered = json.dumps(batch_result.to_dict(), indent=2)
+    elif output_format == "summary":
+        rendered = batch_result.summary()
+    else:
+        raise ValueError("output_format must be 'json' or 'summary'")
+    return rendered.encode("utf-8")
+
+
 class BatchProcessor:
     """Process multiple texts efficiently with progress tracking.
 
@@ -244,6 +820,8 @@ class BatchProcessor:
         confidence_threshold: Optional[float] = None,
         group_entities: bool = False,
         continue_on_error: bool = True,
+        checkpoint_interval: int = _DEFAULT_CHECKPOINT_INTERVAL,
+        _atomic_write_hook: Optional[AtomicWriteHook] = None,
         **analyze_kwargs: Any,
     ):
         """Initialize batch processor.
@@ -266,6 +844,8 @@ class BatchProcessor:
             group_entities: Whether to group adjacent entities
                 (``analyze_text`` operation only).
             continue_on_error: Continue processing on individual item errors.
+            checkpoint_interval: Maximum number of items processed between
+                durable checkpoints.
             **analyze_kwargs: Additional arguments passed to the selected function.
         """
         if operation not in _VALID_OPERATIONS:
@@ -289,6 +869,10 @@ class BatchProcessor:
         )
         self.group_entities = group_entities
         self.continue_on_error = continue_on_error
+        if isinstance(checkpoint_interval, bool) or checkpoint_interval < 1:
+            raise ValueError("Checkpoint interval must be positive")
+        self.checkpoint_interval = int(checkpoint_interval)
+        self._atomic_write_hook = _atomic_write_hook
         self.analyze_kwargs = analyze_kwargs
 
         self._analyze_text = None
@@ -394,6 +978,11 @@ class BatchProcessor:
         progress_callback: Optional[ProgressCallback] = None,
         *,
         on_progress: Optional[BatchProgressCallback] = None,
+        output_path: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        resume_from_checkpoint: bool = False,
+        checkpoint_interval: Optional[int] = None,
+        output_format: str = "json",
     ) -> BatchResult:
         """Process multiple texts.
 
@@ -404,6 +993,12 @@ class BatchProcessor:
                 Signature: callback(completed_count, total_count, result)
             on_progress: Optional PHI-safe callback that receives a
                 BatchProgress record after each completed item.
+            output_path: Optional atomically written final result file.
+            checkpoint_path: Optional PHI-free durable checkpoint file.
+            resume_from_checkpoint: Resume the committed result prefix instead
+                of starting a new checkpoint.
+            checkpoint_interval: Per-run override for checkpoint frequency.
+            output_format: ``"json"`` or ``"summary"`` for ``output_path``.
 
         Returns:
             BatchResult with all processing results.
@@ -413,6 +1008,11 @@ class BatchProcessor:
             items,
             progress_callback=progress_callback,
             on_progress=on_progress,
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=resume_from_checkpoint,
+            checkpoint_interval=checkpoint_interval,
+            output_format=output_format,
         )
 
     def process_files(
@@ -422,6 +1022,11 @@ class BatchProcessor:
         progress_callback: Optional[ProgressCallback] = None,
         *,
         on_progress: Optional[BatchProgressCallback] = None,
+        output_path: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        resume_from_checkpoint: bool = False,
+        checkpoint_interval: Optional[int] = None,
+        output_format: str = "json",
     ) -> BatchResult:
         """Process multiple files.
 
@@ -431,6 +1036,11 @@ class BatchProcessor:
             progress_callback: Optional callback for progress updates.
             on_progress: Optional PHI-safe callback that receives a
                 BatchProgress record after each completed item.
+            output_path: Optional atomically written final result file.
+            checkpoint_path: Optional PHI-free durable checkpoint file.
+            resume_from_checkpoint: Resume the committed result prefix.
+            checkpoint_interval: Per-run override for checkpoint frequency.
+            output_format: ``"json"`` or ``"summary"`` for ``output_path``.
 
         Returns:
             BatchResult with all processing results.
@@ -466,6 +1076,11 @@ class BatchProcessor:
             items,
             progress_callback=progress_callback,
             on_progress=on_progress,
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=resume_from_checkpoint,
+            checkpoint_interval=checkpoint_interval,
+            output_format=output_format,
         )
 
     def process_directory(
@@ -477,6 +1092,11 @@ class BatchProcessor:
         progress_callback: Optional[ProgressCallback] = None,
         *,
         on_progress: Optional[BatchProgressCallback] = None,
+        output_path: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        resume_from_checkpoint: bool = False,
+        checkpoint_interval: Optional[int] = None,
+        output_format: str = "json",
     ) -> BatchResult:
         """Process all matching files in a directory.
 
@@ -488,6 +1108,11 @@ class BatchProcessor:
             progress_callback: Optional callback for progress updates.
             on_progress: Optional PHI-safe callback that receives a
                 BatchProgress record after each completed item.
+            output_path: Optional atomically written final result file.
+            checkpoint_path: Optional PHI-free durable checkpoint file.
+            resume_from_checkpoint: Resume the committed result prefix.
+            checkpoint_interval: Per-run override for checkpoint frequency.
+            output_format: ``"json"`` or ``"summary"`` for ``output_path``.
 
         Returns:
             BatchResult with all processing results.
@@ -504,6 +1129,11 @@ class BatchProcessor:
             encoding=encoding,
             progress_callback=progress_callback,
             on_progress=on_progress,
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=resume_from_checkpoint,
+            checkpoint_interval=checkpoint_interval,
+            output_format=output_format,
         )
 
     def process_items(
@@ -512,6 +1142,11 @@ class BatchProcessor:
         progress_callback: Optional[ProgressCallback] = None,
         *,
         on_progress: Optional[BatchProgressCallback] = None,
+        output_path: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        resume_from_checkpoint: bool = False,
+        checkpoint_interval: Optional[int] = None,
+        output_format: str = "json",
     ) -> BatchResult:
         """Process a sequence of BatchItem objects.
 
@@ -520,6 +1155,11 @@ class BatchProcessor:
             progress_callback: Optional callback for progress updates.
             on_progress: Optional PHI-safe callback that receives a
                 BatchProgress record after each completed item.
+            output_path: Optional atomically written final result file.
+            checkpoint_path: Optional PHI-free durable checkpoint file.
+            resume_from_checkpoint: Resume the committed result prefix.
+            checkpoint_interval: Per-run override for checkpoint frequency.
+            output_format: ``"json"`` or ``"summary"`` for ``output_path``.
 
         Returns:
             BatchResult with all processing results.
@@ -528,6 +1168,133 @@ class BatchProcessor:
             list(items),
             progress_callback=progress_callback,
             on_progress=on_progress,
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=resume_from_checkpoint,
+            checkpoint_interval=checkpoint_interval,
+            output_format=output_format,
+        )
+
+    def resume_from_checkpoint(
+        self,
+        items: Sequence[BatchItem],
+        *,
+        checkpoint_path: Union[str, Path],
+        output_path: Optional[Union[str, Path]] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        on_progress: Optional[BatchProgressCallback] = None,
+        output_format: str = "json",
+    ) -> BatchResult:
+        """Resume ``items`` from a previously committed batch checkpoint."""
+        return self.process_items(
+            items,
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+            output_path=output_path,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=True,
+            output_format=output_format,
+        )
+
+    def process_files_to_directory(
+        self,
+        file_paths: Sequence[Union[str, Path]],
+        *,
+        input_root: Union[str, Path],
+        output_dir: Union[str, Path],
+        encoding: str = "utf-8",
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        resume_from_checkpoint: bool = False,
+        checkpoint_interval: Optional[int] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        on_progress: Optional[BatchProgressCallback] = None,
+    ) -> BatchResult:
+        """De-identify files into an atomic, checkpointed output directory.
+
+        Output paths preserve each input's location relative to ``input_root``.
+        Committed files are hashed in the PHI-free checkpoint and verified
+        before a resumed run skips them.
+        """
+        if self.operation != "deidentify":
+            raise ValueError(
+                "process_files_to_directory requires operation='deidentify'"
+            )
+
+        resolved_input_root = Path(input_root).resolve()
+        resolved_output_dir = Path(output_dir)
+        resolved_output_dir.mkdir(parents=True, exist_ok=True)
+        items: List[BatchItem] = []
+        destinations: List[Path] = []
+
+        for raw_path in file_paths:
+            path = Path(raw_path)
+            relative_path = path.resolve().relative_to(resolved_input_root)
+            destinations.append(resolved_output_dir / relative_path)
+            try:
+                text = path.read_text(encoding=encoding)
+                items.append(
+                    BatchItem(id=str(relative_path), text=text, source=str(path))
+                )
+            except (OSError, IOError) as exc:
+                logger.warning(
+                    "Failed to read batch input file: error_type=%s",
+                    type(exc).__name__,
+                )
+                if not self.continue_on_error:
+                    raise
+                items.append(
+                    BatchItem(
+                        id=str(relative_path),
+                        text="",
+                        source=str(path),
+                        metadata={"read_error": str(exc)},
+                    )
+                )
+
+        def artifact_path_resolver(index: int, item: BatchItem) -> Path:
+            del item
+            return destinations[index]
+
+        def artifact_writer(
+            index: int,
+            item: BatchItem,
+            item_result: BatchItemResult,
+        ) -> Optional[_OutputArtifact]:
+            del item
+            if not item_result.success:
+                return None
+            if isinstance(item_result.result, Mapping):
+                deidentified_text = item_result.result.get("deidentified_text")
+            else:
+                deidentified_text = getattr(
+                    item_result.result,
+                    "deidentified_text",
+                    None,
+                )
+            if not isinstance(deidentified_text, str):
+                raise ValueError(
+                    "de-identification result does not contain deidentified_text"
+                )
+            output_bytes = deidentified_text.encode(encoding)
+            _atomic_write_bytes(
+                destinations[index],
+                output_bytes,
+                hook=self._atomic_write_hook,
+            )
+            return _OutputArtifact(
+                size=len(output_bytes),
+                sha256=_sha256_bytes(output_bytes),
+            )
+
+        return self._process_items(
+            items,
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+            checkpoint_path=checkpoint_path,
+            resume_from_checkpoint=resume_from_checkpoint,
+            checkpoint_interval=checkpoint_interval,
+            artifact_writer=artifact_writer,
+            artifact_path_resolver=artifact_path_resolver,
         )
 
     def _process_items(
@@ -536,21 +1303,99 @@ class BatchProcessor:
         progress_callback: Optional[ProgressCallback] = None,
         *,
         on_progress: Optional[BatchProgressCallback] = None,
+        output_path: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        resume_from_checkpoint: bool = False,
+        checkpoint_interval: Optional[int] = None,
+        output_format: str = "json",
+        artifact_writer: Optional[ArtifactWriter] = None,
+        artifact_path_resolver: Optional[ArtifactPathResolver] = None,
     ) -> BatchResult:
         """Internal method to process batch items."""
-        from datetime import datetime
+        if output_format not in {"json", "summary"}:
+            raise ValueError("output_format must be 'json' or 'summary'")
+        if resume_from_checkpoint and checkpoint_path is None:
+            raise ValueError("resume_from_checkpoint requires checkpoint_path")
+        resolved_interval = (
+            self.checkpoint_interval
+            if checkpoint_interval is None
+            else checkpoint_interval
+        )
+        if isinstance(resolved_interval, bool) or resolved_interval < 1:
+            raise ValueError("Checkpoint interval must be positive")
+
+        session: Optional[_BatchCheckpointSession] = None
+        restored_results: List[BatchItemResult] = []
+        if checkpoint_path is not None:
+            session = _BatchCheckpointSession(
+                items=items,
+                checkpoint_path=Path(checkpoint_path),
+                checkpoint_interval=int(resolved_interval),
+                model_name=self.model_name,
+                operation=self.operation,
+                configuration={
+                    "aggregation_strategy": self.aggregation_strategy,
+                    "confidence_threshold": self.confidence_threshold,
+                    "group_entities": self.group_entities,
+                    "continue_on_error": self.continue_on_error,
+                    "config": (
+                        self.config.to_dict()
+                        if callable(getattr(self.config, "to_dict", None))
+                        else self.config
+                    ),
+                    "analyze_kwargs": self.analyze_kwargs,
+                },
+                final_output_path=(
+                    Path(output_path) if output_path is not None else None
+                ),
+                output_format=output_format,
+                store_full_results=artifact_writer is None,
+                artifact_path_resolver=artifact_path_resolver,
+                atomic_write_hook=self._atomic_write_hook,
+            )
+            if resume_from_checkpoint:
+                restored_results = session.resume()
+                resolved_interval = session.checkpoint_interval
+            else:
+                session.start()
 
         batch_result = BatchResult(
+            items=list(restored_results),
             model_name=self.model_name,
-            started_at=datetime.now().isoformat(),
+            started_at=(session.started_at if session else datetime.now().isoformat()),
         )
+
+        if session is not None and session.is_complete:
+            batch_result.completed_at = session.completed_at
+            batch_result.total_processing_time = sum(
+                item.processing_time for item in batch_result.items
+            )
+            return batch_result
 
         total = len(items)
         batch_start = time.time()
 
-        for chunk in self._iter_chunks(items):
+        next_index = len(batch_result.items)
+        while next_index < total:
+            if session is not None:
+                until_checkpoint = int(resolved_interval) - (
+                    len(batch_result.items) % int(resolved_interval)
+                )
+                chunk_size = min(self.batch_size, until_checkpoint, total - next_index)
+            else:
+                chunk_size = min(self.batch_size, total - next_index)
+            chunk = items[next_index : next_index + chunk_size]
             chunk_results = self._process_batch_chunk(chunk)
             for item_result in chunk_results:
+                item_index = len(batch_result.items)
+                if artifact_writer is not None:
+                    artifact = artifact_writer(
+                        item_index,
+                        items[item_index],
+                        item_result,
+                    )
+                    if artifact is not None and session is not None:
+                        session.record_artifact(item_index, artifact)
                 batch_result.items.append(item_result)
                 self._emit_progress(
                     completed=len(batch_result.items),
@@ -560,9 +1405,38 @@ class BatchProcessor:
                     progress_callback=progress_callback,
                     on_progress=on_progress,
                 )
+                if session is not None and (
+                    len(batch_result.items) % int(resolved_interval) == 0
+                ):
+                    session.commit(batch_result.items, status="in_progress")
+            next_index += len(chunk)
 
         batch_result.total_processing_time = time.time() - batch_start
         batch_result.completed_at = datetime.now().isoformat()
+
+        if session is not None:
+            session.commit(batch_result.items, status="in_progress")
+
+        final_output: Optional[_OutputArtifact] = None
+        if output_path is not None:
+            output_bytes = _serialize_batch_output(batch_result, output_format)
+            _atomic_write_bytes(
+                Path(output_path),
+                output_bytes,
+                hook=self._atomic_write_hook,
+            )
+            final_output = _OutputArtifact(
+                size=len(output_bytes),
+                sha256=_sha256_bytes(output_bytes),
+            )
+
+        if session is not None:
+            session.commit(
+                batch_result.items,
+                status="complete",
+                completed_at=batch_result.completed_at,
+                final_output=final_output,
+            )
 
         return batch_result
 

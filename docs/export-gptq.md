@@ -36,7 +36,7 @@ from openmed.torch.quantize_gptq import quantize_gptq
 calib_texts = load_quantization_calibration_texts()
 
 result = quantize_gptq(
-    "OpenMed/example-token-classifier",
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
     calib_texts,
     "artifacts/example-gptq",
     bits=4,
