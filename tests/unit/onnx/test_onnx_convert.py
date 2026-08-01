@@ -190,7 +190,8 @@ def test_write_export_manifest_validates_optional_segmenter(tmp_path: Path) -> N
     )
 
     manifest = module.validate_onnx_bundle(tmp_path)
-    assert manifest["segmenter"]["license"] == "MIT AND ICU-1.8.1"
+    assert manifest["segmenter"]["license"] == "MIT AND ICU"
+    assert (tmp_path / "segmenter" / "ICU.txt").is_file()
 
 
 def test_convert_orchestrates_artifacts_and_multi_format_publish(

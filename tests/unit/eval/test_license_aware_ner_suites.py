@@ -12,13 +12,13 @@ import pytest
 from openmed.core.labels import (
     BODY_SITE,
     CONDITION,
+    DEVICE,
     JOB_DEPARTMENT,
     LAB_TEST,
     LOCATION,
     MEDICATION,
     MICROORGANISM,
     ORGANIZATION,
-    OTHER,
     PERSON,
     PROCEDURE,
 )
@@ -70,7 +70,7 @@ def test_cmeee_documents_all_nine_source_categories() -> None:
         "dep": JOB_DEPARTMENT,
         "dis": CONDITION,
         "dru": MEDICATION,
-        "equ": OTHER,
+        "equ": DEVICE,
         "ite": LAB_TEST,
         "mic": MICROORGANISM,
         "pro": PROCEDURE,

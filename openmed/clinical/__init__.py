@@ -35,6 +35,13 @@ from .assertion_graph import (
     ReconciledAssertion,
     reconcile_assertions,
 )
+from .cancer_staging import (
+    TNM_STAGING_ADVISORY,
+    TnmBasis,
+    TnmStage,
+    UnparsedToken,
+    parse_tnm,
+)
 from .context import (
     AFFIRMED,
     CANONICAL_SECTION_LABELS,
@@ -98,6 +105,14 @@ from .coreference import (
     SpanChainKey,
     resolve_coreference,
 )
+from .document_linking import (
+    DOCUMENT_LINKING_ADVISORY,
+    DocumentCluster,
+    DocumentEdge,
+    DocumentProvenance,
+    EdgeKind,
+    link_documents,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -128,6 +143,12 @@ from .experiencer import (
     RefinedExperiencerAssertion,
     refine_experiencer,
     resolve_experiencer,
+)
+from .genomics import (
+    COORDINATE_TYPES,
+    GENOMICS_ADVISORY,
+    HgvsMention,
+    parse_hgvs,
 )
 from .lab_values import (
     LAB_FLAG_ADVISORY,
@@ -291,6 +312,14 @@ from .timeline import (
     evaluate_timeline_gold,
     resolve_timeline,
 )
+from .trend import (
+    TREND_ADVISORY,
+    MeasurementTrend,
+    SerialMeasurementPoint,
+    TrendDirection,
+    build_measurement_trends,
+    extract_measurement_trends,
+)
 from .units import (
     MEASUREMENT_NORMALIZATION_ADVISORY,
     ROUND_TRIP_ABS_TOLERANCE,
@@ -319,6 +348,10 @@ from .vital_signs import (
 
 __all__ = [
     "OPENMED_CLINICAL_DISCLAIMER",
+    "COORDINATE_TYPES",
+    "GENOMICS_ADVISORY",
+    "HgvsMention",
+    "parse_hgvs",
     "ABBREVIATION_DISAMBIGUATION_ADVISORY",
     "DEFAULT_SENSE_INVENTORY_RESOURCE",
     "AbbreviationAnnotation",
@@ -405,6 +438,12 @@ __all__ = [
     "CoreferenceChain",
     "SpanChainKey",
     "resolve_coreference",
+    "DOCUMENT_LINKING_ADVISORY",
+    "DocumentCluster",
+    "DocumentEdge",
+    "DocumentProvenance",
+    "EdgeKind",
+    "link_documents",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",
@@ -444,6 +483,12 @@ __all__ = [
     "TimelineEvaluationResult",
     "evaluate_timeline_gold",
     "resolve_timeline",
+    "TREND_ADVISORY",
+    "TrendDirection",
+    "SerialMeasurementPoint",
+    "MeasurementTrend",
+    "build_measurement_trends",
+    "extract_measurement_trends",
     "ConversionStatus",
     "MeasurementNormalization",
     "MEASUREMENT_NORMALIZATION_ADVISORY",
@@ -472,6 +517,11 @@ __all__ = [
     "RadiologyReportTemplate",
     "extract_radiology_findings",
     "parse_radiology_report",
+    "TNM_STAGING_ADVISORY",
+    "TnmBasis",
+    "TnmStage",
+    "UnparsedToken",
+    "parse_tnm",
     "ProblemClinicalStatus",
     "ProblemMention",
     "ReconciledProblem",

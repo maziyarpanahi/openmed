@@ -2,12 +2,12 @@
 
 OpenMed 集成了精选的生物医学模型、高级去标识化、多模态输入、结构化健康数据工具以及单次调用编排，帮助你无需处理繁杂的基础设施即可交付临床自然语言处理工作流。本文档让可复制的代码片段和工作流触手可及：所有章节均以 Markdown 为基础，支持搜索，并针对快速浏览以及复制到笔记本进行了优化。
 
-OpenMed `1.9.1` 完成了 `1.9` 版本的跨平台交付：Python、浏览器、Node.js 和 Android 共用同一份 ONNX 词元分类模型契约，同时修正 Swift 软件包，扩展临床抽取能力和 22 种语言的 PII 覆盖，并强化发布证据：
+OpenMed `2.0.0` 为 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署界面建立了稳定的主版本契约，并整合策略感知的去标识化、扩展的临床与结构化数据工作流、广泛的多语言 PII 覆盖以及失败即关闭的发布证据：
 
 - **策略感知的去标识化**：提供签名审计报告、可复现性哈希、审查包、脱敏预览和发布门禁。
 - **多模态与结构化输入**：覆盖 OCR、图像、PDF、DOCX、EPUB、vCard/iCalendar、DICOM、CSV/TSV、JSONL 聊天记录、HL7 v2、CDA/C-CDA、FHIR 操作以及 FHIR Bulk NDJSON。
 - **Python、Swift、Kotlin/Android、REST、gRPC、React Native、TypeScript 和浏览器路径**：包括 OpenMedKit、类型化 REST 客户端、ONNX/WebGPU 和 Transformers.js 导出包。
-- **22 个受支持的 PII 语言代码：am、ar、de、en、es、fr、he、hi、id、it、ja、ko、nl、pt、ro、sw、te、th、tr、xh、zh 和 zu**：中文使用文档化的多语言默认模型占位符，并提供区域感知的验证与替代值生成。用户配置的 Indic NER 适配器还可添加 9 条可选路由，其中也可服务于印地语和泰卢固语。仅提供证件号验证的区域仍有额外覆盖。
+- **34 个受支持的 PII 语言代码：am、ar、as、bn、cs、da、de、el、en、es、fr、he、hi、id、it、ja、ko、mr、nl、no、or、pt、ro、ru、sv、sw、ta、te、th、tr、uk、xh、zh 和 zu**：俄语使用文档化的多语言默认模型占位符，孟加拉语、中文和泰米尔语使用专用注册表条目，并提供区域感知的验证与替代值生成。用户配置的 Indic NER 适配器还可添加四条可选路由，并可服务阿萨姆语、孟加拉语、印地语、马拉地语、奥里亚语、泰米尔语和泰卢固语。仅提供证件号验证的区域仍有额外覆盖。
 - **发布证据**：包括泄漏热力图、模型评分卡、阈值扫描、k-匿名性/l-多样性/t-接近性、效用损失、SBOM、签名镜像、SLSA 来源证明、密钥扫描和可复现依赖锁。
 
 ## 你将获得什么
@@ -51,36 +51,38 @@ uv run python examples/pii_model_comparison.py
 
 ## 最新版本亮点
 
-- [OpenMed 1.9.1 发布说明](./release/v1.9.1.md) — Swift 打包、Android 发布强化、当前模型示例，以及跨平台 1.9 版本的依赖安全修复。
-- [OpenMed 1.8.0 发布说明](./release/v1.8.0.md) — 历史跨平台运行时与服务版本清单。
-- [OpenMed v1.6-v1.7 功能覆盖](./release/v1.6-v1.7-feature-coverage.md) — 示例、文档、网站和源代码模块的历史覆盖清单。
-- [示例与复制即用的配方](./examples.md) — 面向 Python、PII、批处理作业、Apple 运行时、浏览器导出、多模态输入以及 FHIR/HL7 的发布级片段。
-- [Transformers.js 导出](./export-transformersjs.md) — 面向词元分类包的浏览器/WebGPU 打包。
-- [FHIR 互操作工具](./fhir-interop.md)、[HL7 v2 去标识化](./hl7v2-deidentification.md)和 [OMOP/lakehouse 集成](./integrations/lakehouse-redaction.md) — 结构化健康数据工作流。
-- [MLX 后端](./mlx-backend.md)、[OpenMedKit](./swift-openmedkit.md)、[Android span 一致性](./android-parity.md)和 [CoreML 打包](./coreml-export.md) — 本地移动端与运行时路径。
+- [OpenMed 2.0.0 发布说明](/docs/release/v2.0.0/) — 主版本安装坐标、兼容性指南、平台覆盖范围和验证要求。
+- [OpenMed 1.9.1 发布说明](/docs/release/v1.9.1/) — 最后一个 1.9 补丁版本的历史 Swift 打包、Android 发布强化和依赖安全修复。
+- [OpenMed 1.8.0 发布说明](/docs/release/v1.8.0/) — 历史跨平台运行时与服务版本清单。
+- [OpenMed v1.6-v1.7 功能覆盖](/docs/release/v1.6-v1.7-feature-coverage/) — 示例、文档、网站和源代码模块的历史覆盖清单。
+- [示例与复制即用的配方](/docs/examples/) — 面向 Python、PII、批处理作业、Apple 运行时、浏览器导出、多模态输入以及 FHIR/HL7 的发布级片段。
+- [ONNX 与 WebGPU 导出](/docs/export-onnx-webgpu/) — ONNX 浏览器制品的导出、清单、运行时加载和发布指南。
+- [Transformers.js 导出](/docs/export-transformersjs/) — 面向词元分类包的浏览器/WebGPU 打包。
+- [FHIR 互操作工具](/docs/fhir-interop/)、[HL7 v2 去标识化](/docs/hl7v2-deidentification/)和 [OMOP/lakehouse 集成](/docs/integrations/lakehouse-redaction/) — 结构化健康数据工作流。
+- [MLX 后端](/docs/mlx-backend/)、[OpenMedKit](/docs/swift-openmedkit/)、[Android span 一致性](/docs/android-parity/)和 [CoreML 打包](/docs/coreml-export/) — 本地移动端与运行时路径。
 
 ## 文档结构
 
-1. [快速开始](./getting-started.md) — 最快建立可用环境并运行可复制脚本的路径。
-2. [功能地图](./feature-map.md) — 查看每项能力如何映射到代码。
-3. [OpenMed 1.9.1 发布说明](./release/v1.9.1.md) — 查看当前补丁修复、安装坐标和验证证据。
+1. [快速开始](/docs/zh/getting-started/) — 最快建立可用环境并运行可复制脚本的路径。
+2. [功能地图](/docs/feature-map/) — 查看每项能力如何映射到代码。
+3. [OpenMed 2.0.0 发布说明](/docs/release/v2.0.0/) — 查看当前安装坐标、兼容性契约和验证要求。
 4. 核心指南：
-   - [文本分析辅助函数](./analyze-text.md)：单次调用推理。
-   - [REST 服务（MVP）](./rest-service.md)：容器化 HTTP 端点。
-   - [PII 检测与智能合并](./pii-smart-merging.md)：兼顾 HIPAA 要求的去标识化。
-   - [批处理](./batch-processing.md)：处理多个文本或文件。
-   - [ModelLoader 与流水线](./model-loader.md)：运行长时间任务。
-   - [模型注册表](./model-registry.md)：选择合适的检查点。
-   - [配置文件](./profiles.md)：在开发、生产和测试设置间切换。
-   - [高级 NER 与输出格式](./output-formatting.md)：完善实体范围。
-   - [医疗感知分词器](./medical-tokenizer.md)：改进临床词元边界。
-   - [配置与验证](./configuration.md)：保持部署可复现。
-   - [Zero-shot 工具包](./zero-shot-ner.md)：构建 GLiNER 工作流。
-   - [性能分析](./profiling.md)：计时与优化。
-   - [示例](./examples.md)和[测试与质量保证](./testing.md)：日常操作。
+    - [文本分析辅助函数](/docs/analyze-text/)：单次调用推理。
+    - [REST 服务（MVP）](/docs/rest-service/)：容器化 HTTP 端点。
+    - [PII 检测与智能合并](/docs/pii-smart-merging/)：兼顾 HIPAA 要求的去标识化。
+    - [批处理](/docs/batch-processing/)：处理多个文本或文件。
+    - [ModelLoader 与流水线](/docs/model-loader/)：运行长时间任务。
+    - [模型注册表](/docs/model-registry/)：选择合适的检查点。
+    - [配置文件](/docs/profiles/)：在开发、生产和测试设置间切换。
+    - [高级 NER 与输出格式](/docs/output-formatting/)：完善实体范围。
+    - [医疗感知分词器](/docs/medical-tokenizer/)：改进临床词元边界。
+    - [配置与验证](/docs/configuration/)：保持部署可复现。
+    - [Zero-shot 工具包](/docs/zero-shot-ner/)：构建 GLiNER 工作流。
+    - [性能分析](/docs/profiling/)：计时与优化。
+    - [示例](/docs/examples/)和[测试与质量保证](/docs/testing/)：日常操作。
 5. 项目运维：
-   - [贡献与发布](./contributing.md) — 如何发布版本和文档并保持 CI 通过。
-   - [发布流与渠道](./release/semver-and-channels.md) — 模型制品与软件库的发布策略。
-   - [生成式模型策略](./generative-model-policy.md) — 获准与禁止的模型辅助工作流。
+    - [贡献与发布](/docs/contributing/) — 如何发布版本和文档并保持 CI 通过。
+    - [发布流与渠道](/docs/release/semver-and-channels/) — 模型制品与软件库的发布策略。
+    - [生成式模型策略](/docs/generative-model-policy/) — 获准与禁止的模型辅助工作流。
 
 如果你需要的内容尚未覆盖，请在 GitHub 提交 issue 并说明缺少的配方。每项新增内容都可以从一个 Markdown 文件开始。

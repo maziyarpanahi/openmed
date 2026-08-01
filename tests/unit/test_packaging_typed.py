@@ -5,7 +5,7 @@ consumers:
 
 * the ``py.typed`` marker actually sits next to ``openmed/__init__.py`` (PEP 561
   requires the marker to live inside the installed package), and
-* the hatch build ``include`` list still declares ``openmed/py.typed`` so the
+* the hatch build ``include`` list still declares ``/openmed/py.typed`` so the
   marker ships in the built wheel and sdist, and
 * the newer v1.6 public surfaces expose resolvable type hints and type-check
   cleanly with the pinned development checker over just those modules.
@@ -32,7 +32,7 @@ import openmed
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOT = Path(openmed.__file__).resolve().parent
-PY_TYPED_INCLUDE = "openmed/py.typed"
+PY_TYPED_INCLUDE = "/openmed/py.typed"
 
 # The newer v1.6 public modules whose annotations this task hardened. Keeping
 # the list here means the type-check step and the "annotations resolve" spot
@@ -67,6 +67,17 @@ def test_py_typed_declared_in_hatch_build_include() -> None:
     assert PY_TYPED_INCLUDE in include, (
         f"{PY_TYPED_INCLUDE!r} must be in [tool.hatch.build].include so the "
         "typing marker is packaged"
+    )
+
+
+def test_hatch_build_includes_are_root_anchored() -> None:
+    """Build globs must not match nested workspace or worktree copies."""
+    config = _load_pyproject()
+    include = config["tool"]["hatch"]["build"]["include"]
+
+    assert all(pattern.startswith("/") for pattern in include), (
+        "Every [tool.hatch.build].include pattern must be root-anchored; "
+        "unanchored patterns can package nested worktrees such as .claude/worktrees"
     )
 
 

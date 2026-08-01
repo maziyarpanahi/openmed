@@ -103,6 +103,8 @@ MEDICATION: Final = "MEDICATION"
 LAB_TEST: Final = "LAB_TEST"
 PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
+#: Procedure-record device concepts (issue #313)
+DEVICE: Final = "DEVICE"
 
 #: Anesthesia-record concepts (issue #952)
 ANESTHESIA_TYPE: Final = "ANESTHESIA_TYPE"
@@ -122,6 +124,12 @@ DOSE_NUMBER: Final = "DOSE_NUMBER"
 ADMINISTRATION_ROUTE: Final = "ADMINISTRATION_ROUTE"
 VACCINE_LOT: Final = "VACCINE_LOT"
 VACCINE_SERIES: Final = "VACCINE_SERIES"
+
+#: Nursing-care observation concepts (issue #910)
+INTAKE_OUTPUT: Final = "INTAKE_OUTPUT"
+LINE_DRAIN_TUBE: Final = "LINE_DRAIN_TUBE"
+NURSING_RISK_SCORE: Final = "NURSING_RISK_SCORE"
+CARE_INTERVENTION: Final = "CARE_INTERVENTION"
 
 #: Clinical-genomics variant-mention concepts (issue #906)
 GENE_SYMBOL: Final = "GENE_SYMBOL"
@@ -286,6 +294,7 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         LAB_TEST,
         PROCEDURE,
         BODY_SITE,
+        DEVICE,
         ANESTHESIA_TYPE,
         ANESTHETIC_AGENT,
         AIRWAY_MANAGEMENT,
@@ -299,6 +308,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         ADMINISTRATION_ROUTE,
         VACCINE_LOT,
         VACCINE_SERIES,
+        INTAKE_OUTPUT,
+        LINE_DRAIN_TUBE,
+        NURSING_RISK_SCORE,
+        CARE_INTERVENTION,
         GENE_SYMBOL,
         CKD_STAGE,
         DIALYSIS_MODALITY,
@@ -486,6 +499,7 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             LAB_TEST,
             PROCEDURE,
             BODY_SITE,
+            DEVICE,
             ANESTHESIA_TYPE,
             ANESTHETIC_AGENT,
             AIRWAY_MANAGEMENT,
@@ -499,6 +513,10 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             ADMINISTRATION_ROUTE,
             VACCINE_LOT,
             VACCINE_SERIES,
+            INTAKE_OUTPUT,
+            LINE_DRAIN_TUBE,
+            NURSING_RISK_SCORE,
+            CARE_INTERVENTION,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -624,6 +642,7 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Anesthesia-record concepts (issue #952)
     ANESTHESIA_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     ANESTHETIC_AGENT: _label_metadata(
@@ -644,6 +663,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ADMINISTRATION_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VACCINE_LOT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VACCINE_SERIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Nursing-care observation concepts (issue #910)
+    INTAKE_OUTPUT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    LINE_DRAIN_TUBE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    NURSING_RISK_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    CARE_INTERVENTION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Clinical genomics
     GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -780,6 +804,7 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE: HIPAA_UNIQUE_IDENTIFIER,
     # Anesthesia-record concepts
     ANESTHESIA_TYPE: HIPAA_UNIQUE_IDENTIFIER,
     ANESTHETIC_AGENT: HIPAA_UNIQUE_IDENTIFIER,
@@ -796,6 +821,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     ADMINISTRATION_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     VACCINE_LOT: HIPAA_UNIQUE_IDENTIFIER,
     VACCINE_SERIES: HIPAA_UNIQUE_IDENTIFIER,
+    # Nursing-care observation concepts
+    INTAKE_OUTPUT: HIPAA_UNIQUE_IDENTIFIER,
+    LINE_DRAIN_TUBE: HIPAA_UNIQUE_IDENTIFIER,
+    NURSING_RISK_SCORE: HIPAA_UNIQUE_IDENTIFIER,
+    CARE_INTERVENTION: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical genomics
     GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
     VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
@@ -899,6 +929,7 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     LAB_TEST: POPIA_HEALTH_INFORMATION,
     PROCEDURE: POPIA_HEALTH_INFORMATION,
     BODY_SITE: POPIA_HEALTH_INFORMATION,
+    DEVICE: POPIA_HEALTH_INFORMATION,
     ANESTHESIA_TYPE: POPIA_HEALTH_INFORMATION,
     ANESTHETIC_AGENT: POPIA_HEALTH_INFORMATION,
     AIRWAY_MANAGEMENT: POPIA_HEALTH_INFORMATION,
@@ -912,6 +943,10 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     ADMINISTRATION_ROUTE: POPIA_HEALTH_INFORMATION,
     VACCINE_LOT: POPIA_HEALTH_INFORMATION,
     VACCINE_SERIES: POPIA_HEALTH_INFORMATION,
+    INTAKE_OUTPUT: POPIA_HEALTH_INFORMATION,
+    LINE_DRAIN_TUBE: POPIA_HEALTH_INFORMATION,
+    NURSING_RISK_SCORE: POPIA_HEALTH_INFORMATION,
+    CARE_INTERVENTION: POPIA_HEALTH_INFORMATION,
     GENE_SYMBOL: POPIA_HEALTH_INFORMATION,
     VARIANT_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
     PROTEIN_CHANGE: POPIA_HEALTH_INFORMATION,
@@ -1230,11 +1265,22 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "surgery": PROCEDURE,
     "operation": PROCEDURE,
     "intervention": PROCEDURE,
+    "diagnosticprocedure": PROCEDURE,
+    "resection": PROCEDURE,
+    "biopsy": PROCEDURE,
+    "endoscopicprocedure": PROCEDURE,
+    "laparoscopic": PROCEDURE,
+    "approach": OTHER,
     "bodysite": BODY_SITE,
     "bodypart": BODY_SITE,
     "anatomy": BODY_SITE,
     "anatomical": BODY_SITE,
     "organ": BODY_SITE,
+    # Procedure-record device concepts (issue #313)
+    "device": DEVICE,
+    "medicaldevice": DEVICE,
+    "implant": DEVICE,
+    "catheter": DEVICE,
     # Anesthesia-record concepts
     "anesthesiatype": ANESTHESIA_TYPE,
     "anesthesia": ANESTHESIA_TYPE,
@@ -1269,6 +1315,28 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vaccinationseries": VACCINE_SERIES,
     "administrationdate": DATE,
     "administrationsite": BODY_SITE,
+    # Nursing-care observation concepts
+    "intakeoutput": INTAKE_OUTPUT,
+    "intakeandoutput": INTAKE_OUTPUT,
+    "urineoutput": INTAKE_OUTPUT,
+    "foley": LINE_DRAIN_TUBE,
+    "foleycatheter": LINE_DRAIN_TUBE,
+    "centralline": LINE_DRAIN_TUBE,
+    "chesttube": LINE_DRAIN_TUBE,
+    "linedraintube": LINE_DRAIN_TUBE,
+    "nursingriskscore": NURSING_RISK_SCORE,
+    "riskscore": NURSING_RISK_SCORE,
+    "bradenscore": NURSING_RISK_SCORE,
+    "braden": NURSING_RISK_SCORE,
+    "morsefallscale": NURSING_RISK_SCORE,
+    "fallrisk": NURSING_RISK_SCORE,
+    "careintervention": CARE_INTERVENTION,
+    "wounddressing": CARE_INTERVENTION,
+    "dressingchange": CARE_INTERVENTION,
+    "repositioning": CARE_INTERVENTION,
+    "mobilitystatus": OTHER,
+    "painscore": OTHER,
+    "skinassessment": BODY_SITE,
     # Clinical genomics
     "gene": GENE_SYMBOL,
     "genesymbol": GENE_SYMBOL,
@@ -1378,8 +1446,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 # CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
-# clinical NER. Equipment remains an explicit ``OTHER`` mapping because the
-# current canonical taxonomy has no medical-device concept label.
+# clinical NER. Equipment maps to the canonical clinical device concept.
 CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "bod": BODY_SITE,
     "body": BODY_SITE,
@@ -1391,8 +1458,8 @@ CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "disease": CONDITION,
     "dru": MEDICATION,
     "drug": MEDICATION,
-    "equ": OTHER,
-    "equipment": OTHER,
+    "equ": DEVICE,
+    "equipment": DEVICE,
     "ite": LAB_TEST,
     "item": LAB_TEST,
     "lab_test": LAB_TEST,
@@ -1709,6 +1776,7 @@ __all__ = [
     "LAB_TEST",
     "PROCEDURE",
     "BODY_SITE",
+    "DEVICE",
     "ANESTHESIA_TYPE",
     "ANESTHETIC_AGENT",
     "AIRWAY_MANAGEMENT",
@@ -1722,6 +1790,10 @@ __all__ = [
     "ADMINISTRATION_ROUTE",
     "VACCINE_LOT",
     "VACCINE_SERIES",
+    "INTAKE_OUTPUT",
+    "LINE_DRAIN_TUBE",
+    "NURSING_RISK_SCORE",
+    "CARE_INTERVENTION",
     "GENE_SYMBOL",
     "VARIANT_DESCRIPTOR",
     "PROTEIN_CHANGE",

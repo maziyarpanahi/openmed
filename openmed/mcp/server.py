@@ -5,10 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import asdict
-from typing import Any, Callable, Dict, Optional
+from inspect import Signature
+from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
+from openmed.clinical.exporters.fhir import to_bundle
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -18,11 +22,14 @@ from openmed.core.pii_i18n import (
 )
 from openmed.mcp.tool_registry import (
     TOOL_REGISTRY,
+    ToolSchemaValidationError,
+    ToolSpec,
     render_mcp_tool,
     render_tool_registry_document,
     validate_registered_tool_output,
 )
 from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
+from openmed.risk.reid import risk_report
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
@@ -105,6 +112,141 @@ def _model_info_to_dict(key: str, model: ModelInfo) -> Dict[str, Any]:
 
 def _json_resource(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _error_envelope(error: BaseException) -> Dict[str, Any]:
+    """Return a PHI-safe structured tool error without echoing input or output."""
+
+    error_module = error.__class__.__module__
+    if isinstance(error, ToolSchemaValidationError):
+        code = "invalid_result"
+        message = "The tool returned an invalid structured result."
+    elif isinstance(error, KeyError):
+        code = "unknown_tool"
+        message = "The requested tool is not available."
+    elif isinstance(error, (TypeError, ValueError)) or error_module.startswith(
+        ("jsonschema", "pydantic")
+    ):
+        code = "invalid_arguments"
+        message = "The tool arguments are invalid."
+    else:
+        code = "execution_error"
+        message = "The tool could not complete the request."
+    return {"error": {"code": code, "message": message}, "is_error": True}
+
+
+def _call_tool_result(payload: Dict[str, Any], *, is_error: bool) -> Any:
+    """Return structured content plus a JSON text fallback for older clients."""
+
+    from mcp.types import CallToolResult, TextContent
+
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text=json.dumps(payload, sort_keys=True),
+            )
+        ],
+        structuredContent=payload,
+        isError=is_error,
+    )
+
+
+def _mcp_return_annotation(spec: ToolSpec) -> Any:
+    """Build a typed result annotation from the registry's output contract."""
+
+    try:
+        from mcp.types import CallToolResult
+        from pydantic import ConfigDict, RootModel
+    except ImportError:
+        return Dict[str, Any]
+
+    model_name = "".join(part.title() for part in spec.name.split("_")) + "Result"
+    output_model = type(
+        model_name,
+        (RootModel[Dict[str, Any]],),
+        {
+            "model_config": ConfigDict(
+                json_schema_extra=spec.mcp_output_schema(),
+            )
+        },
+    )
+    return Annotated[CallToolResult, output_model]
+
+
+def _render_structured_mcp_tool(
+    spec: ToolSpec,
+    handler: Callable[..., Dict[str, Any]],
+) -> Callable[..., Any]:
+    """Render one registry tool with structured success and error results."""
+
+    registry_tool = render_mcp_tool(spec, handler)
+    return_annotation = _mcp_return_annotation(spec)
+
+    def _tool(*args: Any, **kwargs: Any) -> Any:
+        try:
+            payload = registry_tool(*args, **kwargs)
+        except Exception as error:
+            return _call_tool_result(_error_envelope(error), is_error=True)
+        return _call_tool_result(payload, is_error=False)
+
+    _tool.__name__ = registry_tool.__name__
+    _tool.__doc__ = spec.description
+    _tool.__signature__ = Signature(  # type: ignore[attr-defined]
+        parameters=tuple(spec.signature.parameters.values()),
+        return_annotation=return_annotation,
+    )
+    _tool.__annotations__ = dict(registry_tool.__annotations__)
+    _tool.__annotations__["return"] = return_annotation
+    return _tool
+
+
+def _mcp_annotations(spec: ToolSpec) -> Any:
+    """Return SDK annotations when available, or the equivalent plain mapping."""
+
+    payload = spec.annotations()
+    try:
+        from mcp.types import ToolAnnotations
+    except ImportError:
+        return payload
+    return ToolAnnotations(**payload)
+
+
+def _synchronize_registered_schemas(server: Any, spec: ToolSpec) -> None:
+    """Make FastMCP advertise the registry schemas verbatim."""
+
+    manager = getattr(server, "_tool_manager", None)
+    if manager is None:
+        return
+    registered = manager.get_tool(spec.name)
+    if registered is None:
+        return
+    registered.parameters = deepcopy(dict(spec.input_schema))
+    registered.fn_metadata.output_schema = spec.mcp_output_schema()
+    registered.__dict__.pop("output_schema", None)
+
+
+def _structured_fastmcp(base_class: Any) -> Any:
+    """Return a FastMCP class that envelopes malformed calls without logging data."""
+
+    from jsonschema import validate
+
+    class _OpenMedFastMCP(base_class):
+        async def call_tool(
+            self,
+            name: str,
+            arguments: Dict[str, Any],
+        ) -> Any:
+            try:
+                tool = self._tool_manager.get_tool(name)
+                if tool is None:
+                    raise KeyError(name)
+                validate(instance=arguments, schema=tool.parameters)
+                return await super().call_tool(name, arguments)
+            except Exception as error:
+                return _call_tool_result(_error_envelope(error), is_error=True)
+
+    return _OpenMedFastMCP
 
 
 def openmed_analyze_text(
@@ -336,6 +478,113 @@ def openmed_loaded_models(
     return validate_registered_tool_output("openmed_loaded_models", response)
 
 
+def openmed_fhir_bundle(
+    resources: list[Dict[str, Any]],
+    doc_id: str = "openmed-document",
+    bundle_type: str = "transaction",
+) -> Dict[str, Any]:
+    """Assemble FHIR resources into a R4 bundle."""
+    bundle = to_bundle(resources, doc_id=doc_id, bundle_type=bundle_type)
+    return validate_registered_tool_output("openmed_fhir_bundle", bundle)
+
+
+def openmed_risk_report(
+    deidentified: Any,
+    original: Optional[Any] = None,
+    aux: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """residual re-identification risk for de-identified records."""
+    response = risk_report(deidentified, original, aux)
+    return validate_registered_tool_output("openmed_risk_report", response)
+
+
+def openmed_signed_audit_report(
+    text: str,
+    method: str = "mask",
+    model_name: str = DEFAULT_PII_MODELS["en"],
+    confidence_threshold: float = 0.7,
+    lang: str = "en",
+    signing_key: Optional[str] = None,
+    key_id: str = "release",
+    keep_alive: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """returns a signed PHI-sage audit report"""
+    if not signing_key:
+        raise ValueError("A signing key is required")
+    runtime = _runtime(runtime_provider)
+
+    def operation() -> Dict[str, Any]:
+        report = openmed.deidentify(
+            text,
+            method=method,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+            config=runtime.config,
+            lang=lang,
+            loader=runtime.get_loader(),
+            audit=True,
+        )
+        report.sign(signing_key, key_id=key_id)
+        return report.to_dict()
+
+    response = _run_model_request(runtime, model_name, keep_alive, operation)
+    return validate_registered_tool_output("openmed_signed_audit_report", response)
+
+
+def openmed_search_models(
+    category: Optional[str] = None,
+    language: Optional[str] = None,
+    max_size_mb: Optional[float] = None,
+    license: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """search openmed model by category, language, size, license"""
+    models = openmed.get_all_models()
+
+    def _matches(model: ModelInfo) -> bool:
+        if category and category.strip().lower() != model.category.strip().lower():
+            return False
+        if language:
+            languages = {str(code).strip().lower() for code in model.languages}
+            if language.strip().lower() not in languages:
+                return False
+        if max_size_mb is not None:
+            size_mb = model.size_mb
+            if size_mb is None or size_mb > max_size_mb:
+                return False
+        if license:
+            declared = (model.license or "").strip().lower()
+            if license.strip().lower() not in declared:
+                return False
+        return True
+
+    matched = sorted((key, model) for key, model in models.items() if _matches(model))
+    limited = matched[: max(limit, 0)]
+    response = {
+        "count": len(matched),
+        "returned": len(limited),
+        "models": [_model_info_to_dict(key, model) for key, model in limited],
+    }
+    return validate_registered_tool_output("openmed_search_models", response)
+
+
+def openmed_health(
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Return a PHI-free MCP health summary."""
+
+    loaded = _runtime(runtime_provider).loaded_models()
+    models = loaded.get("models")
+    loaded_model_count = len(models) if isinstance(models, Mapping) else 0
+    return {
+        "version": openmed.__version__,
+        "loaded_model_count": loaded_model_count,
+    }
+
+
 def openmed_unload_model(
     model_name: Optional[str] = None,
     all_models: bool = False,
@@ -463,6 +712,15 @@ def build_mcp_tool_handlers(
             **kwargs,
             runtime_provider=runtime_provider,
         ),
+        "openmed_fhir_bundle": lambda **kwargs: openmed_fhir_bundle(**kwargs),
+        "openmed_risk_report": lambda **kwargs: openmed_risk_report(**kwargs),
+        "openmed_signed_audit_report": (
+            lambda **kwargs: openmed_signed_audit_report(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
+        ),
+        "openmed_search_models": lambda **kwargs: openmed_search_models(**kwargs),
     }
 
 
@@ -477,10 +735,20 @@ def _register_tools(
 ) -> None:
     handlers = build_mcp_tool_handlers(runtime_provider)
     for spec in TOOL_REGISTRY.latest_specs():
-        server.tool(name=spec.name)(render_mcp_tool(spec, handlers[spec.name]))
+        server.tool(
+            name=spec.name,
+            title=spec.title,
+            description=spec.description,
+            annotations=_mcp_annotations(spec),
+            structured_output=True,
+        )(_render_structured_mcp_tool(spec, handlers[spec.name]))
+        _synchronize_registered_schemas(server, spec)
 
 
-def _register_resources(server: Any) -> None:
+def _register_resources(
+    server: Any,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> None:
     @server.resource(
         "openmed://models",
         name="OpenMed model registry",
@@ -521,6 +789,14 @@ def _register_resources(server: Any) -> None:
     def _tool_registry_resource() -> str:
         return _json_resource(render_tool_registry_document())
 
+    @server.resource(
+        "openmed://health",
+        name="OpenMed health",
+        mime_type="application/json",
+    )
+    def _health_resource() -> str:
+        return _json_resource(openmed_health(runtime_provider=runtime_provider))
+
 
 def _register_prompts(server: Any) -> None:
     @server.prompt(name="openmed-clinical-ner")
@@ -556,7 +832,7 @@ def create_mcp_server(
     streamable_http_path: str = "/mcp",
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
-    FastMCP = _load_fastmcp()
+    FastMCP = _structured_fastmcp(_load_fastmcp())
     server = FastMCP(
         "OpenMed",
         instructions=MCP_INSTRUCTIONS,
@@ -568,7 +844,7 @@ def create_mcp_server(
         json_response=True,
     )
     _register_tools(server, runtime_provider)
-    _register_resources(server)
+    _register_resources(server, runtime_provider)
     _register_prompts(server)
     return server
 

@@ -136,7 +136,12 @@
 
         func encode(_ text: String, maxTokens: Int) throws -> OpenMedPrivacyFilterEncodedText {
             var tokenIDs = [Int]()
-            tokenIDs.reserveCapacity(min(maxTokens, max(8, text.count / 3)))
+            tokenIDs.reserveCapacity(
+                min(
+                    maxTokens,
+                    max(8, PostProcessing.unicodeScalarCount(in: text) / 3)
+                )
+            )
 
             for piece in preTokenize(text) {
                 let byteLevelPiece = piece.utf8.map { byteEncoder[$0, default: ""] }.joined()
@@ -306,9 +311,9 @@
             var charByteStarts = [Int]()
             var charByteEnds = [Int]()
             var byteCursor = 0
-            for character in decodedText {
+            for scalar in decodedText.unicodeScalars {
                 charByteStarts.append(byteCursor)
-                byteCursor += String(character).utf8.count
+                byteCursor += String(scalar).utf8.count
                 charByteEnds.append(byteCursor)
             }
 
@@ -786,8 +791,14 @@
                 else {
                     continue
                 }
-                let lowerOffset = span.distance(from: span.startIndex, to: match.lowerBound)
-                let upperOffset = span.distance(from: span.startIndex, to: match.upperBound)
+                let lowerOffset = PostProcessing.scalarOffset(
+                    in: span,
+                    at: match.lowerBound
+                )
+                let upperOffset = PostProcessing.scalarOffset(
+                    in: span,
+                    at: match.upperBound
+                )
                 start += lowerOffset
                 end = start + (upperOffset - lowerOffset)
                 return
@@ -795,7 +806,7 @@
 
             let lowercasedSpan = span.lowercased()
             for suffix in [" and", " or"] where lowercasedSpan.hasSuffix(suffix) {
-                end -= suffix.count
+                end -= suffix.unicodeScalars.count
                 trimWhitespace(start: &start, end: &end, text: text)
                 return
             }
@@ -887,35 +898,17 @@
         }
 
         private func trimWhitespace(start: inout Int, end: inout Int, text: String) {
-            while start < end, character(at: start, in: text)?.isWhitespace == true {
-                start += 1
-            }
-            while end > start, character(at: end - 1, in: text)?.isWhitespace == true {
-                end -= 1
-            }
-        }
-
-        private func character(at offset: Int, in text: String) -> Character? {
-            guard offset >= 0,
-                let index = text.index(text.startIndex, offsetBy: offset, limitedBy: text.endIndex),
-                index < text.endIndex
-            else {
-                return nil
-            }
-            return text[index]
+            let trimmed = PostProcessing.trimScalarWhitespace(
+                start: start,
+                end: end,
+                in: text
+            )
+            start = trimmed.start
+            end = trimmed.end
         }
 
         private func substring(_ text: String, start: Int, end: Int) -> String {
-            let lower =
-                text.index(text.startIndex, offsetBy: max(0, start), limitedBy: text.endIndex)
-                ?? text.endIndex
-            let upper =
-                text.index(text.startIndex, offsetBy: max(start, end), limitedBy: text.endIndex)
-                ?? text.endIndex
-            guard lower <= upper else {
-                return ""
-            }
-            return String(text[lower..<upper])
+            PostProcessing.scalarSubstring(text, start: start, end: end)
         }
     }
 #endif

@@ -6,6 +6,7 @@ import copy
 import hashlib
 import hmac
 import json
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -22,12 +23,36 @@ _AUDIT_RAW_VALUE_KEYS = frozenset(
         "deidentified_text",
         "original",
         "original_text",
+        "normalized_value",
+        "path",
+        "record_id",
         "raw",
         "replacement",
+        "source_path",
         "surface",
         "text",
         "value",
         "word",
+    }
+)
+_AUDIT_RAW_COLLECTION_KEYS = frozenset(
+    {
+        "equivalence_classes",
+        "members",
+        "per_record",
+        "records",
+        "suppressed_records",
+    }
+)
+_AUDIT_DROPPED_DETAIL_KEYS = frozenset(
+    {
+        "normalized_value",
+        "path",
+        "quasi_identifier_key",
+        "record_hash",
+        "record_id",
+        "record_index",
+        "source_path",
     }
 )
 _AUDIT_ABHA_ADDRESS_RE = re.compile(
@@ -38,6 +63,17 @@ _AUDIT_PAN_RE = re.compile(
     r"(?<![A-Z0-9])[A-Z]{3}[ABCFGHLJPT][A-Z][0-9]{4}[A-Z](?![A-Z0-9])"
 )
 _AUDIT_LONG_INDIA_ID_RE = re.compile(r"(?<!\d)(?:\d[ -]?){11,13}\d(?!\d)")
+_AUDIT_METADATA_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+_AUDIT_RISK_CATEGORIES = frozenset(
+    {
+        "age",
+        "date",
+        "geography",
+        "provider_institution",
+        "rare_condition",
+        "stable_surrogate",
+    }
+)
 
 
 def _canonical_json(data: Any) -> str:
@@ -67,18 +103,592 @@ def _contains_sensitive_india_identifier(value: str) -> bool:
     )
 
 
+def _safe_number(value: Any) -> int | float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    return None
+
+
+def _safe_count(value: Any) -> int:
+    if isinstance(value, (list, tuple)):
+        return len(value)
+    return 0
+
+
+def _safe_string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [
+        item
+        for item in value
+        if isinstance(item, str) and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(item)
+    ]
+
+
+def _safe_size_distribution(value: Any) -> list[dict[str, int]]:
+    result: list[dict[str, int]] = []
+    if not isinstance(value, (list, tuple)):
+        return result
+    for item in value:
+        if isinstance(item, Mapping):
+            size = _safe_number(item.get("size"))
+            count = _safe_number(item.get("class_count"))
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            size = _safe_number(item[0])
+            count = _safe_number(item[1])
+        else:
+            continue
+        if isinstance(size, int) and isinstance(count, int):
+            result.append({"size": size, "class_count": count})
+    return result
+
+
+def _safe_numeric_mapping(
+    value: Any,
+    *,
+    allowed_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for key in allowed_keys:
+        item = value.get(key)
+        if isinstance(item, bool):
+            result[key] = item
+            continue
+        number = _safe_number(item)
+        if number is not None:
+            result[key] = number
+    return result
+
+
+def _safe_policy_mapping(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for key in (
+        "target_k",
+        "target_l",
+        "target_t",
+        "suppression_limit",
+        "suppression_rate",
+        "max_lattice_nodes",
+        "max_suppression_subsets",
+    ):
+        number = _safe_number(value.get(key))
+        if number is not None:
+            result[key] = number
+    l_metric = value.get("l_metric")
+    if l_metric in {"distinct", "entropy"}:
+        result["l_metric"] = l_metric
+    t_distance = value.get("t_distance")
+    if t_distance == "variational":
+        result["t_distance"] = t_distance
+    for key in (
+        "quasi_identifiers",
+        "sensitive_attributes",
+        "direct_identifiers",
+        "non_sensitive_attributes",
+        "excluded_attributes",
+    ):
+        result[key] = _safe_string_list(value.get(key))
+    privacy_unit = value.get("privacy_unit")
+    if privacy_unit is None or (
+        isinstance(privacy_unit, str)
+        and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(privacy_unit)
+    ):
+        result["privacy_unit"] = privacy_unit
+    return result
+
+
+def _safe_attribute_disclosure(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        entry: dict[str, Any] = {}
+        attribute = item.get("attribute")
+        if isinstance(attribute, str) and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(
+            attribute
+        ):
+            entry["attribute"] = attribute
+        for source_key, allowed_keys in (
+            (
+                "l_diversity",
+                ("achieved", "threshold", "violating_classes", "meets_target"),
+            ),
+            (
+                "t_closeness",
+                ("achieved", "target", "violating_classes", "meets_target"),
+            ),
+        ):
+            summary = _safe_numeric_mapping(
+                item.get(source_key),
+                allowed_keys=allowed_keys,
+            )
+            source = item.get(source_key)
+            if isinstance(source, Mapping):
+                metric = source.get("metric")
+                if metric in {"distinct", "entropy"}:
+                    summary["metric"] = metric
+                distance = source.get("distance")
+                if distance == "variational":
+                    summary["distance"] = distance
+            entry[source_key] = summary
+        result.append(entry)
+    return result
+
+
+def _sanitize_release_assessment(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Copy only the aggregate release-assessment evidence schema."""
+
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact": "deidentification_release_assessment",
+        "not_an_expert_determination": True,
+        "qualified_expert_review_required": True,
+    }
+    for key in ("row_count", "privacy_unit_count"):
+        number = _safe_number(value.get(key))
+        if number is not None:
+            result[key] = number
+    privacy_unit = value.get("privacy_unit_column")
+    if privacy_unit is None or (
+        isinstance(privacy_unit, str)
+        and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(privacy_unit)
+    ):
+        result["privacy_unit_column"] = privacy_unit
+    result["quasi_identifiers"] = _safe_string_list(value.get("quasi_identifiers"))
+    result["sensitive_attributes"] = _safe_string_list(
+        value.get("sensitive_attributes")
+    )
+    result["policy"] = _safe_policy_mapping(value.get("policy"))
+
+    k_anonymity = value.get("k_anonymity")
+    safe_k = _safe_numeric_mapping(
+        k_anonymity,
+        allowed_keys=(
+            "achieved_k",
+            "class_count",
+            "singleton_class_count",
+            "singleton_privacy_unit_count",
+            "k_violating_class_count",
+            "l_violating_class_count",
+            "t_violating_class_count",
+            "violating_class_count",
+            "violating_privacy_unit_count",
+            "meets_target",
+        ),
+    )
+    if isinstance(k_anonymity, Mapping):
+        safe_k["class_size_distribution"] = _safe_size_distribution(
+            k_anonymity.get("class_size_distribution")
+        )
+    result["k_anonymity"] = safe_k
+
+    identity_risk = _safe_numeric_mapping(
+        value.get("sample_identity_risk"),
+        allowed_keys=(
+            "max",
+            "mean",
+            "median",
+            "p95",
+            "population_risk_estimated",
+        ),
+    )
+    identity_risk["attacker_model"] = "prosecutor_exact_match_on_declared_qis"
+    result["sample_identity_risk"] = identity_risk
+    result["attribute_disclosure"] = _safe_attribute_disclosure(
+        value.get("attribute_disclosure")
+    )
+    if isinstance(value.get("meets_policy"), bool):
+        result["meets_policy"] = value["meets_policy"]
+    for key in ("dataset_digest", "policy_digest"):
+        digest = value.get(key)
+        if _is_sha256_hash(digest):
+            result[key] = digest
+    warnings = value.get("warnings")
+    result["warning_count"] = _safe_count(warnings)
+    return result
+
+
+def _safe_generalization_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    levels: list[dict[str, Any]] = []
+    raw_levels = value.get("levels")
+    if isinstance(raw_levels, (list, tuple)):
+        level_items = raw_levels
+    elif isinstance(raw_levels, Mapping):
+        level_items = [
+            {"attribute": attribute, **dict(level)}
+            for attribute, level in raw_levels.items()
+            if isinstance(attribute, str) and isinstance(level, Mapping)
+        ]
+    else:
+        level_items = []
+    for item in level_items:
+        if not isinstance(item, Mapping):
+            continue
+        level: dict[str, Any] = {}
+        attribute = item.get("attribute")
+        if isinstance(attribute, str) and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(
+            attribute
+        ):
+            level["attribute"] = attribute
+        for key in ("level", "loss", "affected_privacy_unit_count"):
+            number = _safe_number(item.get(key))
+            if number is not None:
+                level[key] = number
+        levels.append(level)
+
+    result: dict[str, Any] = {"levels": levels}
+    for key in (
+        "information_loss",
+        "generalization_loss",
+        "suppression_loss",
+        "suppressed_privacy_units",
+        "suppressed_rows",
+        "search_space_size",
+        "nodes_evaluated",
+        "max_lattice_nodes",
+        "suppression_subsets_evaluated",
+        "suppression_subsets_possible",
+        "max_suppression_subsets",
+    ):
+        number = _safe_number(value.get(key))
+        if number is not None:
+            result[key] = number
+    search = value.get("search")
+    if isinstance(search, Mapping):
+        safe_search: dict[str, Any] = _safe_numeric_mapping(
+            search,
+            allowed_keys=(
+                "search_space_size",
+                "nodes_evaluated",
+                "max_lattice_nodes",
+                "suppression_subsets_evaluated",
+                "suppression_subsets_possible",
+                "max_suppression_subsets",
+                "complete",
+                "optimum_proven",
+            ),
+        )
+        strategy = search.get("strategy")
+        if strategy in {"full-domain exhaustive lattice", "exhaustive_lattice"}:
+            safe_search["strategy"] = strategy
+        suppression_strategy = search.get("suppression_strategy")
+        if suppression_strategy == "exhaustive equivalence-class subsets":
+            safe_search["suppression_strategy"] = suppression_strategy
+        result["search"] = safe_search
+    elif isinstance(search, str):
+        if search == "full-domain exhaustive lattice":
+            result["search"] = search
+    return result
+
+
+def _sanitize_anonymization_summary(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Copy aggregate anonymization evidence while never traversing records."""
+
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact": "deidentification_anonymization_summary",
+        "not_an_expert_determination": True,
+        "qualified_expert_review_required": True,
+        "policy": _safe_policy_mapping(value.get("policy")),
+        "generalization": _safe_generalization_summary(value.get("generalization")),
+    }
+    for key in ("before", "after"):
+        assessment = value.get(key)
+        if isinstance(assessment, Mapping):
+            result[key] = _sanitize_release_assessment(assessment)
+    utility = value.get("utility")
+    if isinstance(utility, Mapping):
+        result["utility"] = _safe_numeric_mapping(
+            utility,
+            allowed_keys=(
+                "source_rows",
+                "released_rows",
+                "source_privacy_units",
+                "released_privacy_units",
+                "row_suppression_rate",
+                "privacy_unit_suppression_rate",
+                "quasi_identifier_cells_compared",
+                "quasi_identifier_cells_changed",
+                "quasi_identifier_cell_change_rate",
+                "direct_identifier_cells_removed",
+                "missing_qi_cells_before",
+                "missing_qi_cells_after",
+                "mean_qi_distribution_shift",
+            ),
+        )
+    for key in (
+        "source_dataset_digest",
+        "released_dataset_digest",
+        "released_schema_digest",
+        "hierarchy_digest",
+    ):
+        digest = value.get(key)
+        if _is_sha256_hash(digest):
+            result[key] = digest
+    return result
+
+
+def _looks_like_detailed_risk_report(value: Mapping[str, Any]) -> bool:
+    return (
+        "singleton_records" in value
+        and "quasi_identifiers" in value
+        and any(key in value for key in ("leakage_rate", "reid_rate", "k_min"))
+    )
+
+
+def _sanitize_detailed_risk_report(value: Mapping[str, Any]) -> dict[str, Any]:
+    singletons = value.get("singleton_records")
+    quasi_identifiers = value.get("quasi_identifiers")
+    if not singletons and not quasi_identifiers:
+        # Preserve the long-standing safe empty shape for signed-report
+        # compatibility while still dropping all unknown fields.
+        return {
+            "leakage_rate": _safe_number(value.get("leakage_rate")),
+            "reid_rate": _safe_number(value.get("reid_rate")),
+            "k_min": _safe_number(value.get("k_min")),
+            "singleton_records": [],
+            "quasi_identifiers": [],
+        }
+
+    category_counts: dict[str, int] = {}
+    if isinstance(quasi_identifiers, (list, tuple)):
+        for item in quasi_identifiers:
+            if not isinstance(item, Mapping):
+                continue
+            category = item.get("category")
+            name = (
+                category
+                if isinstance(category, str) and category in _AUDIT_RISK_CATEGORIES
+                else "unknown"
+            )
+            category_counts[name] = category_counts.get(name, 0) + 1
+    record_count = _safe_number(value.get("record_count"))
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact": "deidentification_risk_summary",
+        "detail_level": "aggregate_phi_safe",
+        "record_count": record_count if record_count is not None else 0,
+        "singleton_record_count": _safe_count(singletons),
+        "quasi_identifier_count": _safe_count(quasi_identifiers),
+        "quasi_identifier_categories": dict(sorted(category_counts.items())),
+    }
+    for source, target in (
+        ("leakage_rate", "leakage_rate"),
+        ("reid_rate", "reidentification_rate"),
+        ("k_min", "minimum_k"),
+    ):
+        number = _safe_number(value.get(source))
+        if number is not None:
+            result[target] = number
+    return result
+
+
+def _looks_like_kanon_report(value: Mapping[str, Any]) -> bool:
+    return (
+        "equivalence_classes" in value
+        and "class_size_distribution" in value
+        and any(key in value for key in ("k", "class_count", "record_count"))
+    )
+
+
+def _sanitize_kanon_report(value: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact": "deidentification_kanon_summary",
+        "detail_level": "aggregate_phi_safe",
+        "quasi_identifiers": _safe_string_list(value.get("quasi_identifiers")),
+        "sensitive_attributes": _safe_string_list(value.get("sensitive_attributes")),
+        "class_size_distribution": _safe_size_distribution(
+            value.get("class_size_distribution")
+        ),
+    }
+    for key in ("record_count", "k", "class_count"):
+        number = _safe_number(value.get(key))
+        if number is not None:
+            result[key] = number
+    for key in ("l_metric", "t_distance"):
+        item = value.get(key)
+        if isinstance(item, str):
+            result[key] = item
+    l_summary = value.get("l")
+    if isinstance(l_summary, Mapping):
+        result["l"] = {
+            str(attribute): number
+            for attribute, metric in l_summary.items()
+            if isinstance(attribute, str)
+            and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(attribute)
+            and (number := _safe_number(metric)) is not None
+        }
+    l_diversity = value.get("l_diversity")
+    if isinstance(l_diversity, Mapping):
+        result["l_diversity"] = {
+            str(attribute): _safe_numeric_mapping(
+                metrics,
+                allowed_keys=("min_distinct", "min_entropy"),
+            )
+            for attribute, metrics in l_diversity.items()
+            if isinstance(attribute, str)
+            and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(attribute)
+            and isinstance(metrics, Mapping)
+        }
+    t_closeness = value.get("t_closeness")
+    if isinstance(t_closeness, Mapping):
+        result["t_closeness"] = {
+            str(attribute): number
+            for attribute, metric in t_closeness.items()
+            if isinstance(attribute, str)
+            and _AUDIT_METADATA_IDENTIFIER_RE.fullmatch(attribute)
+            and (number := _safe_number(metric)) is not None
+        }
+    result["equivalence_class_detail_count"] = _safe_count(
+        value.get("equivalence_classes")
+    )
+    return result
+
+
+def _looks_like_kanon_enforcement(value: Mapping[str, Any]) -> bool:
+    return isinstance(value.get("kanon"), Mapping) and any(
+        key in value for key in ("target_k", "generalization", "records")
+    )
+
+
+def _sanitize_kanon_enforcement(value: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact": "deidentification_kanon_enforcement_summary",
+        "detail_level": "aggregate_phi_safe",
+        "quasi_identifiers": _safe_string_list(value.get("quasi_identifiers")),
+        "sensitive_attributes": _safe_string_list(value.get("sensitive_attributes")),
+    }
+    for key in (
+        "record_count",
+        "released_count",
+        "suppressed_count",
+        "suppression_limit",
+        "target_k",
+        "target_l",
+        "target_t",
+    ):
+        number = _safe_number(value.get(key))
+        if number is not None:
+            result[key] = number
+    l_metric = value.get("l_metric")
+    if isinstance(l_metric, str):
+        result["l_metric"] = l_metric
+    kanon = value.get("kanon")
+    if isinstance(kanon, Mapping):
+        result["kanon"] = _sanitize_kanon_report(kanon)
+    result["generalization"] = _safe_generalization_summary(value.get("generalization"))
+
+    bounds = value.get("bounds")
+    if isinstance(bounds, Mapping):
+        safe_bounds: dict[str, Any] = _safe_numeric_mapping(
+            bounds,
+            allowed_keys=(
+                "target_reidentification_upper_bound",
+                "max_reidentification_upper_bound",
+                "target_k",
+                "target_l",
+                "target_t",
+                "suppressed_count",
+            ),
+        )
+        self_check = bounds.get("numeric_self_check")
+        if isinstance(self_check, Mapping):
+            safe_check = _safe_numeric_mapping(
+                self_check,
+                allowed_keys=(
+                    "passed",
+                    "l_diversity_satisfied",
+                    "t_closeness_satisfied",
+                ),
+            )
+            safe_check["identity_bound_violation_count"] = _safe_count(
+                self_check.get("identity_bound_violations")
+            )
+            safe_bounds["numeric_self_check"] = safe_check
+        result["bounds"] = safe_bounds
+    return result
+
+
+def _safe_release_object(value: Any) -> dict[str, Any] | None:
+    value_type = type(value)
+    if value_type.__module__ != "openmed.risk.release":
+        return None
+    if value_type.__name__ == "ReleaseAssessment":
+        payload = value.to_dict()
+        return (
+            _sanitize_release_assessment(payload)
+            if isinstance(payload, Mapping)
+            else None
+        )
+    if value_type.__name__ == "AnonymizationResult":
+        payload = value.to_safe_dict()
+        return (
+            _sanitize_anonymization_summary(payload)
+            if isinstance(payload, Mapping)
+            else None
+        )
+    return None
+
+
 def _sanitize_audit_value(value: Any) -> Any:
-    """Hash raw text fields and opaque strings containing India identifiers."""
+    """Return a deterministic audit-safe value with risk details aggregated."""
+
+    safe_release = _safe_release_object(value)
+    if safe_release is not None:
+        return safe_release
 
     if isinstance(value, Mapping):
+        artifact = value.get("artifact")
+        if artifact == "deidentification_release_assessment":
+            return _sanitize_release_assessment(value)
+        if artifact == "deidentification_anonymization_summary":
+            return _sanitize_anonymization_summary(value)
+        if _looks_like_kanon_enforcement(value):
+            return _sanitize_kanon_enforcement(value)
+        if _looks_like_detailed_risk_report(value):
+            return _sanitize_detailed_risk_report(value)
+        if _looks_like_kanon_report(value):
+            return _sanitize_kanon_report(value)
+
         sanitized: dict[str, Any] = {}
         for key, item in value.items():
             name = str(key)
-            if name.strip().casefold() in _AUDIT_RAW_VALUE_KEYS:
+            normalized_name = name.strip().casefold()
+            if normalized_name in _AUDIT_DROPPED_DETAIL_KEYS:
+                continue
+            if normalized_name in _AUDIT_RAW_VALUE_KEYS:
                 if isinstance(item, str):
-                    sanitized[f"{name}_hash"] = hash_text(item)
+                    serialized = item
                 else:
-                    sanitized[name] = _sanitize_audit_value(item)
+                    try:
+                        serialized = _canonical_json(_sanitize_audit_value(item))
+                    except (TypeError, ValueError):
+                        serialized = str(item)
+                sanitized[f"{name}_hash"] = hash_text(serialized)
+                continue
+            if normalized_name in _AUDIT_RAW_COLLECTION_KEYS:
+                count_name = {
+                    "equivalence_classes": "equivalence_class_count",
+                    "members": "member_count",
+                    "per_record": "per_record_count",
+                    "records": "record_count",
+                    "suppressed_records": "suppressed_record_count",
+                }[normalized_name]
+                sanitized[count_name] = _safe_count(item)
                 continue
             sanitized[name] = _sanitize_audit_value(item)
         return sanitized
@@ -383,6 +993,7 @@ class AuditReport:
     document_length: int
     input_hash: str
     deidentified_text_hash: str
+    grounding: list[dict[str, Any]] = field(default_factory=list)
     repro_hash: str = ""
     signature: AuditSignature | None = None
 
@@ -392,8 +1003,27 @@ class AuditReport:
             span.context = span._serialized_context(
                 document_length=self.document_length
             )
+        self.grounding = self._normalized_grounding()
         if not self.repro_hash:
             self.repro_hash = self.recompute_repro_hash()
+
+    def _normalized_grounding(self) -> list[dict[str, Any]]:
+        """Return grounding provenance as sanitized, deterministically ordered dicts.
+
+        Grounding provenance records (see
+        :class:`openmed.clinical.grounding.GroundingProvenance`) are fed in as
+        PHI-safe mappings alongside detector provenance -- the no-raw-text
+        guarantee is a property of the record contract itself (it carries only
+        offsets, hashes, and code metadata). They are passed through the standard
+        audit sanitizer and sorted by canonical JSON so two logically identical
+        runs hash identically regardless of the order codes were emitted.
+        """
+        normalized = [
+            _sanitize_audit_value(dict(entry))
+            for entry in self.grounding
+            if isinstance(entry, Mapping)
+        ]
+        return sorted(normalized, key=_canonical_json)
 
     def _validate_structure(self) -> None:
         if type(self.document_length) is not int or self.document_length < 0:
@@ -458,6 +1088,8 @@ class AuditReport:
             "input_hash": self.input_hash,
             "deidentified_text_hash": self.deidentified_text_hash,
         }
+        if self.grounding:
+            payload["grounding"] = self.grounding
         if include_repro_hash:
             payload["repro_hash"] = self.repro_hash
         if include_signature:
@@ -555,6 +1187,11 @@ class AuditReport:
             document_length=data.get("document_length", 0),
             input_hash=str(data.get("input_hash", "")),
             deidentified_text_hash=str(data.get("deidentified_text_hash", "")),
+            grounding=[
+                dict(item)
+                for item in data.get("grounding", [])
+                if isinstance(item, Mapping)
+            ],
             repro_hash=str(data.get("repro_hash", "")),
             signature=(
                 AuditSignature.from_dict(signature_data)

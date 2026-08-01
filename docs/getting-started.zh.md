@@ -2,7 +2,9 @@
 
 本指南帮助你在几分钟内从空白工作站开始运行示例并复制文档中的结果。示例使用 [uv](https://github.com/astral-sh/uv) 管理依赖，但任何 Python 3.11+ 环境都可以使用。
 
-如果你面临间歇性网络连接、离线诊所、OpenMRS 或 DHIS2 环境，请使用[非洲开发者入门指南](africa-onboarding.md)，其中包含低带宽模型设置、纯本地推理、隐私配置提示和基于 FHIR 的集成示例。
+如果你面临间歇性网络连接、离线诊所、OpenMRS 或 DHIS2 环境，请使用[非洲开发者入门指南](/docs/africa-onboarding/)，其中包含低带宽模型设置、纯本地推理、隐私配置提示和基于 FHIR 的集成示例。
+
+如果需要通过机构代理或软件包镜像安装，或准备按流量计费/离线的部署，请参阅[低带宽、镜像与代理安装指南](/docs/low-bandwidth-install/)，其中介绍 pip、`HF_ENDPOINT`、共享模型缓存和诊断配置。
 
 ## 1. 初始化环境
 
@@ -101,7 +103,7 @@ print(result.deidentified_text)
 # Patient [first_name] [last_name], DOB [date]
 ```
 
-`deidentify()` 支持五种方法（`mask`、`remove`、`replace`、`hash`、`shift_dates`）。请参阅[匿名化快速入门](anonymization.md#quickstart-choosing-a-method)，其中包含每种方法的可运行示例以及使用 `reidentify()` 还原结果的方式。
+`deidentify()` 支持五种方法（`mask`、`remove`、`replace`、`hash`、`shift_dates`）。请参阅[匿名化快速入门](/docs/anonymization/#quickstart-choosing-a-method)，其中包含每种方法的可运行示例以及使用 `reidentify()` 还原结果的方式。
 
 ## 4. 可靠地拉取模型以供离线使用
 

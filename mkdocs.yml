@@ -1,20 +1,18 @@
 site_name: OpenMed
-site_description: "Open-source healthcare NLP toolkit with curated models, Apple Silicon MLX acceleration, OpenMedKit for Swift apps, advanced NER, and one-call orchestration."
+site_description: "Local-first OpenMed documentation for clinical NLP, de-identification, model discovery, and on-device or self-hosted healthcare workflows."
 site_url: https://openmed.life/docs/
 site_dir: site/docs
 repo_url: https://github.com/maziyarpanahi/openmed
 repo_name: maziyarpanahi/openmed
 edit_uri: edit/master/docs/
-copyright: "© {year} Maziyar Panahi — Apache-2.0"
+copyright: "© {year} Maziyar Panahi — OpenMed SDK: Apache-2.0"
 strict: true
 
 nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
-      - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
-      - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
-      - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
+      - OpenMed 2.0.0 Release Notes: release/v2.0.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - African Developer Onboarding: africa-onboarding.md
@@ -23,6 +21,7 @@ nav:
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Core Guides:
+      - Building with an Agent: agent-usage.md
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - MCP Client Connections: mcp-clients.md
@@ -36,6 +35,7 @@ nav:
       - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
+      - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
@@ -59,6 +59,7 @@ nav:
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
       - Low-resource Benchmark: benchmarks/low-resource.md
+      - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
@@ -77,6 +78,7 @@ nav:
       - GGUF Embedding Export: export-gguf.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
+      - Structured Release Risk & Expert Review: reidentification-risk.md
       - SMS Short-Text De-identification: sms-short-text-deid.md
       - PII Anonymization: anonymization.md
       - CHW Form Export De-identification: chw-form-deid.md
@@ -92,10 +94,12 @@ nav:
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
+      - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
       - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
       - Africa Attestation Review Template: compliance/templates/africa-data-residency-attestation.md
@@ -111,9 +115,11 @@ nav:
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
+      - Export Format Support Matrix: export-matrix.md
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
+      - ONNX and WebGPU Export: export-onnx-webgpu.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Low-RAM Sharded Weight Loading: runtimes/low-ram-loading.md
@@ -147,6 +153,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - Migrate from 1.9 to 2.0: migration/1.9-to-2.0.md
       - Migrate from 1.8 to 1.9: migration/1.8-to-1.9.md
       - PyPI Publishing: release/trusted-publishing.md
       - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
@@ -157,33 +164,40 @@ nav:
       - API Reference: api-reference.md
 
 extra_css:
+  - stylesheets/openmed-system.css
   - stylesheets/openmed-brand.css
+
+extra_javascript:
+  - javascripts/openmed-docs.js
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   logo: assets/openmed-mark.svg
   favicon: assets/openmed-favicon.svg
-  font:
-    text: Inter Tight
-    code: JetBrains Mono
+  font: false
   palette:
-    - scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - scheme: slate
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
       primary: custom
       accent: custom
       toggle:
         icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
         name: Switch to light mode
   features:
     - navigation.sections
     - navigation.tabs
     - navigation.tracking
+    - navigation.footer
+    - navigation.top
     - toc.integrate
     - content.action.edit
     - content.code.annotate
@@ -192,6 +206,7 @@ theme:
     - announce.dismiss
 
 extra:
+  social_image: https://openmed.life/og.png
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/maziyarpanahi/openmed
@@ -200,8 +215,8 @@ extra:
       link: https://huggingface.co/OpenMed
       name: Hugging Face
     - icon: fontawesome/brands/x-twitter
-      link: https://x.com/MaziyarPanahi
-      name: Maziyar on X
+      link: https://x.com/OpenMed_AI
+      name: OpenMed on X
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/openmed-ai/
       name: LinkedIn
@@ -210,7 +225,7 @@ plugins:
   - search
   - i18n:
       docs_structure: suffix
-      fallback_to_default: true
+      fallback_to_default: false
       reconfigure_material: true
       languages:
         - locale: en
@@ -220,6 +235,11 @@ plugins:
         - locale: zh
           name: 简体中文
           build: true
+          nav:
+            - Overview:
+                - Welcome: index.md
+                - Quick Start: getting-started.md
+                - China Onboarding: onboarding-china.md
           nav_translations:
             Overview: 概览
             Welcome: 欢迎
@@ -232,6 +252,11 @@ plugins:
         - locale: hi
           name: हिन्दी
           build: true
+          nav:
+            - Overview:
+                - Welcome: index.md
+                - Quick Start: getting-started.md
+                - India Onboarding: onboarding-india.md
           nav_translations:
             Overview: अवलोकन
             Welcome: स्वागत
@@ -258,6 +283,7 @@ plugins:
           - api/deidentification.md: De-identification API reference
           - output-formatting.md: Output formats and agent-facing tool schemas
         Agents and tool surfaces:
+          - agent-usage.md: Consumer API map, privacy invariants, and repository skills
           - mcp-clients.md: MCP client setup and transport guidance
           - rest-service.md: REST service endpoints and deployment
           - rest-recipes.md: Copy-ready REST API recipes
@@ -308,6 +334,9 @@ watch:
   - openmed/zero_shot
 
 exclude_docs: |
+  _hooks.py
+  __pycache__/**
+  overrides/**
   demo/web/README.md
   website/**
   brand/**

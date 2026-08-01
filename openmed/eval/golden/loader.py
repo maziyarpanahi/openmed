@@ -48,6 +48,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "context_multilingual.jsonl",
         "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
+        "grounding_vocab_synthetic.jsonl",
         "india_clinical.jsonl",
         "indic_name_variants.json",
         "relation_assertion.jsonl",
@@ -60,6 +61,9 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         # must not be loaded as such by load_golden_fixtures().
         "radiology_finding.jsonl",
         "radiology_report.jsonl",
+        "hgvs_parse.jsonl",
+        "measurement_trend.jsonl",
+        "tnm_stage.jsonl",
     }
 )
 

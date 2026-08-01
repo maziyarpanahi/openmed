@@ -33,6 +33,7 @@ class ModelScorecard:
     device_tiers: tuple[str, ...] = DEVICE_TIERS
     tier_budgets: Mapping[str, Mapping[str, Any]] = field(default_factory=lambda: TIERS)
     placeholder: str = PLACEHOLDER
+    extraction_fairness: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         reports = tuple(self.reports)
@@ -137,7 +138,7 @@ class ModelScorecard:
             else None
         )
         device_rows = [self._device_row(device) for device in self._devices()]
-        return {
+        payload: dict[str, Any] = {
             "covered_scripts": sorted(
                 {script for row in device_rows for script in row["per_script"]}
             ),
@@ -153,6 +154,21 @@ class ModelScorecard:
             "target_formats": list(self.target_formats),
             "tier_budget": tier_budget,
         }
+        extraction_fairness = self._extraction_fairness_section()
+        if extraction_fairness is not None:
+            payload["extraction_fairness"] = extraction_fairness
+        return payload
+
+    def _extraction_fairness_section(self) -> dict[str, Any] | None:
+        """Return the optional synthetic-surrogate extraction-fairness section."""
+        if self.extraction_fairness is None:
+            return None
+        source = self.extraction_fairness
+        if hasattr(source, "model_card_evidence") and callable(
+            source.model_card_evidence
+        ):
+            source = source.model_card_evidence()
+        return _plain(source)
 
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the scorecard to byte-stable JSON."""
@@ -266,7 +282,47 @@ class ModelScorecard:
                     f"{_format_grapheme_counts(values['covered_graphemes'], values['total_graphemes'], self.placeholder)} | "
                     f"{_format_grapheme_counts(values['leaked_graphemes'], values['total_graphemes'], self.placeholder)} |"
                 )
+        fairness = payload.get("extraction_fairness")
+        if fairness:
+            lines.extend(self._extraction_fairness_markdown(fairness))
         return "\n".join(lines) + "\n"
+
+    def _extraction_fairness_markdown(self, fairness: Mapping[str, Any]) -> list[str]:
+        note = str(
+            fairness.get("note")
+            or "Assistive audit over synthetic surrogate groups; not inferred "
+            "patient attributes."
+        )
+        lines = [
+            "",
+            "## Extraction Fairness (Synthetic Surrogates)",
+            "",
+            f"_{note}_",
+            "",
+            "| Metric | Value |",
+            "|---|---:|",
+            (
+                "| Worst-Group Extraction-F1 Gap | "
+                f"{_format_percent_or_placeholder(fairness.get('extraction_f1_gap'), self.placeholder)} |"
+            ),
+            (
+                "| Worst-Group Recall Gap | "
+                f"{_format_percent_or_placeholder(fairness.get('recall_gap'), self.placeholder)} |"
+            ),
+            (
+                "| Worst-Group Critical-Finding Recall Gap | "
+                f"{_format_percent_or_placeholder(fairness.get('critical_finding_recall_gap'), self.placeholder)} |"
+            ),
+            (
+                "| Worst Group (Extraction-F1) | "
+                f"`{_display_value(fairness.get('worst_group'))}` |"
+            ),
+            (
+                "| Best Group (Extraction-F1) | "
+                f"`{_display_value(fairness.get('best_group'))}` |"
+            ),
+        ]
+        return lines
 
     def write_markdown(self, path: str | Path) -> Path:
         """Write Markdown scorecard content to *path*."""

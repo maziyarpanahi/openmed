@@ -253,6 +253,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "arabic": "ar",
     "assamese": "as",
     "bengali": "bn",
+    "chinese": "zh",
     "dutch": "nl",
     "english": "en",
     "french": "fr",
@@ -437,6 +438,15 @@ _CATEGORY_ENTITY_TYPES = {
         "GI_SCORE",
         "POLYP_DESCRIPTOR",
         "BODY_SITE",
+    ],
+    # Forward metadata for future Procedures models; no such model is
+    # registered today (see issue #313).
+    "Procedures": [
+        "PROCEDURE",
+        "SURGERY",
+        "DIAGNOSTIC_PROCEDURE",
+        "DEVICE",
+        "APPROACH",
     ],
     "Privacy": _PII_ENTITY_TYPES,
 }
@@ -1160,6 +1170,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "gastroenterolog|endoscopy|endoscopic|colonoscopy|polyp|varices|bowel\\s*prep|bristol\\s*stool|mayo\\s*score|abdominal\\s*pain|cramping": (
         "Gastroenterology",
         "Contains gastroenterology/endoscopy terms",
+    ),
+    "surgery|resection|biopsy|endoscopy|catheter|implant|procedure|laparoscopic": (
+        "Procedures",
+        "Contains procedure/surgical terms",
     ),
 }
 

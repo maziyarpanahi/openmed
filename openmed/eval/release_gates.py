@@ -50,6 +50,7 @@ from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
     QuantRecallDeltaResult,
+    evaluate_export_variant_gate,
     evaluate_quant_recall_delta,
 )
 from openmed.eval.report import BenchmarkReport
@@ -58,7 +59,18 @@ RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
+GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
+EXPORT_VARIANT_GATE = "export_variants"
+I18N_THROUGHPUT_GATE = "i18n_throughput"
+I18N_THROUGHPUT_REGRESSION_THRESHOLD = 0.20
+I18N_THROUGHPUT_BASELINE_FAMILY = "i18n-throughput"
+I18N_THROUGHPUT_BASELINE_FORMAT = "pattern-only"
+I18N_THROUGHPUT_LANGUAGES = ("zh", "hi", "ta")
+I18N_THROUGHPUT_METRICS = (
+    "segmentation_chars_per_second",
+    "deidentify_spans_per_second",
+)
 
 G1A_V16_RECALL_FLOOR = 0.990
 G1A_V20_RECALL_FLOOR = 0.995
@@ -71,7 +83,16 @@ G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+#: Maximum tolerated worst-group-vs-best-group extraction-F1 gap across
+#: synthetic site/note-type/demographic surrogate groups before G14 quarantines.
+G14_EXTRACTION_DISPARITY_CEILING = 0.050
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
+PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
+    "as": 0.0,
+    "mr": 0.0,
+    "or": 0.0,
+    "ta": 0.0,
+}
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_SIGNING_KEY = "openmed-release-gate-local-key"
@@ -270,6 +291,122 @@ class GateCheck:
                 else None
             ),
         )
+
+
+def evaluate_i18n_throughput_gate(
+    report: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+) -> GateCheck:
+    """Compare zh/hi/ta steady-state throughput with committed baselines.
+
+    Cold-start metrics remain visible in the benchmark report but are not gated
+    because process and filesystem cache state makes them unsuitable for a
+    stable release threshold.
+    """
+
+    failures: list[str] = []
+    violations: dict[str, Any] = {}
+    try:
+        baseline_store.validate_baseline_store(baseline)
+    except Exception as exc:
+        return GateCheck(
+            I18N_THROUGHPUT_GATE,
+            False,
+            reason=f"invalid throughput baseline store: {exc}",
+        )
+
+    if report.get("artifact_type") != "openmed.eval.i18n_throughput":
+        return GateCheck(
+            I18N_THROUGHPUT_GATE,
+            False,
+            reason="candidate is not an i18n throughput report",
+        )
+    languages = report.get("languages")
+    if not isinstance(languages, Mapping):
+        return GateCheck(
+            I18N_THROUGHPUT_GATE,
+            False,
+            reason="candidate throughput report has no languages object",
+        )
+
+    for language in I18N_THROUGHPUT_LANGUAGES:
+        observed_metrics = languages.get(language)
+        if not isinstance(observed_metrics, Mapping):
+            failures.append(f"{language}.languages (missing)")
+            continue
+        key = baseline_store.baseline_key(
+            I18N_THROUGHPUT_BASELINE_FAMILY,
+            language,
+            I18N_THROUGHPUT_BASELINE_FORMAT,
+        )
+        entry = baseline["entries"].get(key)
+        if not isinstance(entry, Mapping):
+            failures.append(f"{language}.baseline (missing)")
+            continue
+        entry_metadata = entry.get("metadata")
+        threshold = (
+            entry_metadata.get("regression_threshold")
+            if isinstance(entry_metadata, Mapping)
+            else None
+        )
+        if (
+            not isinstance(threshold, (int, float))
+            or isinstance(threshold, bool)
+            or not math.isclose(
+                float(threshold),
+                I18N_THROUGHPUT_REGRESSION_THRESHOLD,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+        ):
+            failures.append(
+                f"{language}.regression_threshold "
+                f"(expected {I18N_THROUGHPUT_REGRESSION_THRESHOLD:.2f})"
+            )
+            continue
+
+        baseline_metrics = entry.get("metrics")
+        if not isinstance(baseline_metrics, Mapping):
+            failures.append(f"{language}.baseline.metrics (missing)")
+            continue
+        for metric in I18N_THROUGHPUT_METRICS:
+            baseline_value = _positive_finite_number(baseline_metrics.get(metric))
+            observed_value = _positive_finite_number(observed_metrics.get(metric))
+            metric_key = f"{language}.{metric}"
+            if baseline_value is None:
+                failures.append(f"{metric_key} (invalid baseline)")
+                continue
+            if observed_value is None:
+                failures.append(f"{metric_key} (invalid candidate)")
+                continue
+
+            minimum = baseline_value * (1.0 - I18N_THROUGHPUT_REGRESSION_THRESHOLD)
+            if observed_value < minimum:
+                drop = (baseline_value - observed_value) / baseline_value
+                failures.append(
+                    f"{metric_key} observed {observed_value:.3f}, minimum {minimum:.3f}"
+                )
+                violations[metric_key] = {
+                    "baseline": baseline_value,
+                    "observed": observed_value,
+                    "minimum": minimum,
+                    "drop_fraction": drop,
+                    "regression_threshold": I18N_THROUGHPUT_REGRESSION_THRESHOLD,
+                }
+
+    return GateCheck(
+        I18N_THROUGHPUT_GATE,
+        not failures,
+        reason="ok"
+        if not failures
+        else "throughput regression: " + "; ".join(failures),
+        details={
+            "languages": list(I18N_THROUGHPUT_LANGUAGES),
+            "metrics": list(I18N_THROUGHPUT_METRICS),
+            "regression_threshold": I18N_THROUGHPUT_REGRESSION_THRESHOLD,
+            "violations": violations,
+        },
+    )
 
 
 @dataclass
@@ -609,6 +746,7 @@ class ReleaseGate:
         checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g11_critical_finding_recall_check(metrics, metadata))
+        checks.append(_g14_extraction_fairness_check(metrics, metadata))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
             _g5_check(
@@ -628,6 +766,7 @@ class ReleaseGate:
                 target_leakage=target_leakage,
             )
         )
+        checks.append(_per_language_residual_leakage_check(metrics, metadata))
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
@@ -638,11 +777,15 @@ class ReleaseGate:
         ):
             checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
             checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
+        export_manifest = _export_variant_manifest(metadata)
+        if export_manifest:
+            checks.extend(_export_variant_checks(export_manifest, metrics, metadata))
         checks.append(_zero_shot_language_leakage_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
             checks.append(federated_check)
         checks.append(_k_floor_check(metrics, metadata))
+        checks.append(_structured_release_risk_check(metrics, metadata))
 
         blocked_formats = tuple(
             sorted(
@@ -864,25 +1007,30 @@ def evaluate_surrogate_quality_gate(
             ),
         )
     elif report is not None:
+        configured_fixture = (
+            report.get("fixture_path") if isinstance(report, Mapping) else None
+        )
+        resolved_fixture = (
+            fixture_path
+            if fixture_path is not None
+            else (
+                configured_fixture
+                if isinstance(configured_fixture, (str, Path))
+                else DEFAULT_SURROGATE_QUALITY_FIXTURE
+            )
+        )
         quality_report = evaluate_surrogate_quality(
             report.get("records") if isinstance(report, Mapping) else report,
-            fixture_path=(
-                fixture_path
-                if fixture_path is not None
-                else (
-                    report.get("fixture_path")
-                    if isinstance(report, Mapping)
-                    else DEFAULT_SURROGATE_QUALITY_FIXTURE
-                )
-            ),
+            fixture_path=resolved_fixture,
             min_pass_rate=(
                 min_pass_rate
                 if min_pass_rate is not None
                 else (
-                    float(report.get("min_pass_rate"))
-                    if isinstance(report, Mapping) and report.get("min_pass_rate")
-                    else DEFAULT_SURROGATE_QUALITY_PASS_RATE
+                    _optional_float(report.get("min_pass_rate"))
+                    if isinstance(report, Mapping)
+                    else None
                 )
+                or DEFAULT_SURROGATE_QUALITY_PASS_RATE
             ),
         )
     else:
@@ -1226,10 +1374,10 @@ def _is_android_onnx_source_row(row: Mapping[str, Any]) -> bool:
     repo_id = str(row.get("repo_id") or "").strip()
     if not repo_id or repo_id.startswith("OpenMed/privacy-filter-"):
         return False
-    if _normalise_dimension(row.get("task")) != "token-classification":
+    if _normalise_dimension(str(row.get("task") or "")) != "token-classification":
         return False
     if (
-        _normalise_dimension(row.get("architecture"))
+        _normalise_dimension(str(row.get("architecture") or ""))
         in _ANDROID_UNSUPPORTED_ARCHITECTURES
     ):
         return False
@@ -1602,17 +1750,9 @@ def _abstention_advisory_check(
                 "critical": _optional_float(residual_risk.get("critical")) or 0.0,
                 "by_label": _float_map(residual_risk.get("by_label")),
                 "by_language": _numeric_map(residual_risk.get("by_language")),
-                "bootstrap": dict(
-                    residual_risk.get("bootstrap")
-                    if isinstance(residual_risk.get("bootstrap"), Mapping)
-                    else {}
-                ),
+                "bootstrap": _mapping(residual_risk.get("bootstrap")),
             },
-            "route_counts": dict(
-                abstention.get("route_counts")
-                if isinstance(abstention.get("route_counts"), Mapping)
-                else {}
-            ),
+            "route_counts": _mapping(abstention.get("route_counts")),
         },
     )
 
@@ -1994,6 +2134,133 @@ def _critical_finding_misses(metric: Mapping[str, Any]) -> list[dict[str, Any]]:
     return misses
 
 
+def _g14_extraction_fairness_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Quarantine when extraction quality diverges too much across surrogate groups.
+
+    Reads a PHI-free extraction-fairness metric (``extraction_fairness``) and
+    fails when the worst-group-vs-best-group entity-F1 gap over synthetic
+    site/note-type/demographic surrogate groups exceeds
+    :data:`G14_EXTRACTION_DISPARITY_CEILING`. The metric is assistive and never
+    infers demographic attributes from clinical text; when absent the gate is a
+    no-op advisory pass.
+    """
+    ceiling = G14_EXTRACTION_DISPARITY_CEILING
+    metric = _first_mapping(
+        metadata.get("extraction_fairness"),
+        metrics.get("extraction_fairness"),
+        metadata.get("extraction_fairness_audit"),
+        metrics.get("extraction_fairness_audit"),
+    )
+    if not metric:
+        return GateCheck(
+            "G14",
+            True,
+            reason="not provided",
+            details={"ceiling": ceiling},
+        )
+
+    raw_per_group = metric.get("per_group")
+    per_group_f1 = _extraction_group_f1(raw_per_group)
+    if (
+        not isinstance(raw_per_group, Mapping)
+        or len(per_group_f1) != len(raw_per_group)
+        or len(per_group_f1) < 2
+        or any(not 0.0 <= score <= 1.0 for score in per_group_f1.values())
+    ):
+        return GateCheck(
+            "G14",
+            False,
+            reason="extraction-fairness metric is malformed",
+            details={
+                "ceiling": ceiling,
+                "error": (
+                    "per_group must contain at least two groups with finite "
+                    "entity_f1 values in [0, 1]"
+                ),
+            },
+        )
+
+    reported_gap = _optional_float(
+        _first_value(
+            metric.get("extraction_f1_gap"),
+            metric.get("f1_gap"),
+            metric.get("disparity"),
+            metric.get("gap"),
+        )
+    )
+    computed_gap = max(per_group_f1.values()) - min(per_group_f1.values())
+    if reported_gap is not None and (
+        not 0.0 <= reported_gap <= 1.0
+        or not math.isclose(reported_gap, computed_gap, abs_tol=1e-12)
+    ):
+        return GateCheck(
+            "G14",
+            False,
+            reason="extraction-fairness metric is malformed",
+            details={
+                "ceiling": ceiling,
+                "computed_gap": computed_gap,
+                "reported_gap": reported_gap,
+                "error": "reported extraction_f1_gap does not match per_group",
+            },
+        )
+    gap = computed_gap
+
+    worst_group = min(per_group_f1, key=lambda key: (per_group_f1[key], key))
+    best_group = max(per_group_f1, key=lambda key: (per_group_f1[key], key))
+
+    passed = gap <= ceiling
+    return GateCheck(
+        "G14",
+        passed,
+        reason=(
+            "ok"
+            if passed
+            else "extraction-F1 disparity across surrogate groups exceeds ceiling"
+        ),
+        details={
+            "ceiling": ceiling,
+            "extraction_f1_gap": gap,
+            "worst_group": (str(worst_group) if worst_group is not None else None),
+            "best_group": (str(best_group) if best_group is not None else None),
+            "per_group_f1": per_group_f1,
+            "worst_group_by_metric": _worst_group_by_metric(
+                metric.get("worst_group_by_metric")
+            ),
+            "assistive": True,
+        },
+    )
+
+
+def _extraction_group_f1(value: Any) -> dict[str, float]:
+    if not isinstance(value, Mapping):
+        return {}
+    scores: dict[str, float] = {}
+    for group, payload in value.items():
+        score: float | None
+        if isinstance(payload, Mapping):
+            score = _optional_float(
+                _first_value(payload.get("entity_f1"), payload.get("f1"))
+            )
+        else:
+            score = _optional_float(payload)
+        if score is not None:
+            scores[str(group)] = score
+    return scores
+
+
+def _worst_group_by_metric(value: Any) -> dict[str, str | None]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        str(metric): (str(group) if group is not None else None)
+        for metric, group in sorted(value.items(), key=lambda item: str(item[0]))
+    }
+
+
 def _adversarial_recall_under_attack_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -2165,6 +2432,113 @@ def _coreml_variant_parity_check(
     )
 
 
+def _export_variant_manifest(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    inline = _mapping(
+        metadata.get("export_variant_manifest")
+        or metadata.get("export_conversion_manifest")
+        or metadata.get("onnx_webgpu_manifest")
+        or metadata.get("export_manifest")
+    )
+    if inline:
+        return inline
+
+    variants = metadata.get("export_variants")
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        manifest: dict[str, Any] = {"variants": list(variants)}
+        required = metadata.get("required_export_variants")
+        if isinstance(required, Sequence) and not isinstance(required, (str, bytes)):
+            manifest["required_variants"] = list(required)
+        return manifest
+
+    manifest_path = _optional_path(
+        _first_value(
+            metadata.get("export_variant_manifest_path"),
+            metadata.get("export_manifest_path"),
+        )
+    )
+    if manifest_path is None or not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return _mapping(loaded)
+
+
+def _export_variant_checks(
+    manifest: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[GateCheck]:
+    variants_raw = manifest.get("variants")
+    variants = (
+        [_mapping(item) for item in variants_raw if isinstance(item, Mapping)]
+        if isinstance(variants_raw, Sequence)
+        and not isinstance(variants_raw, (str, bytes))
+        else []
+    )
+
+    parent_recall = _first_mapping(
+        manifest.get("parent_recall"),
+        manifest.get("fp_parent_per_label_recall"),
+    ) or _quant_parent_recall(metrics, metadata)
+
+    required = manifest.get("required_variants") or metadata.get(
+        "required_export_variants"
+    )
+    required_variants = (
+        [str(item) for item in required]
+        if isinstance(required, Sequence) and not isinstance(required, (str, bytes))
+        else []
+    )
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_TIER_BUDGETS,
+        parent_recall=parent_recall or None,
+        parent_format=str(manifest.get("parent_format") or ""),
+        required_variants=required_variants,
+        tier_aliases=_TIER_ALIASES,
+    )
+
+    coverage_passed = bool(result.variant_results) and not result.missing_required
+    if not result.variant_results:
+        coverage_reason = "no ONNX/WebGPU export variants declared"
+    elif result.missing_required:
+        coverage_reason = "required export variant missing"
+    else:
+        coverage_reason = "ok"
+
+    checks: list[GateCheck] = [
+        GateCheck(
+            EXPORT_VARIANT_GATE,
+            coverage_passed,
+            reason=coverage_reason,
+            details={
+                "parent_format": result.parent_format,
+                "evaluated_formats": list(result.evaluated_formats),
+                "missing_required": list(result.missing_required),
+                "blocked_formats": list(result.blocked_formats),
+            },
+            blocking_format=(
+                result.missing_required[0] if result.missing_required else None
+            ),
+        )
+    ]
+    for variant in result.variant_results:
+        checks.append(
+            GateCheck(
+                f"{EXPORT_VARIANT_GATE}:{variant.format}",
+                variant.passed,
+                reason=variant.reason,
+                details=variant.to_dict(),
+                blocking_format=variant.blocking_format,
+            )
+        )
+    return checks
+
+
 def _g5_check(
     tier: str,
     p50_ms: float | None,
@@ -2210,7 +2584,12 @@ def _g5_check(
             details={"missing": missing, "budget": budget},
         )
 
-    observed = {"p50_ms": p50_ms, "p95_ms": p95_ms, "ram_mb": ram_mb}
+    assert p50_ms is not None and p95_ms is not None and ram_mb is not None
+    observed = {
+        "p50_ms": float(p50_ms),
+        "p95_ms": float(p95_ms),
+        "ram_mb": float(ram_mb),
+    }
     violations = {
         key: {"observed": observed[key], "limit": budget[key]}
         for key in budget
@@ -2290,6 +2669,60 @@ def _g7_check(
                 baseline_entry.get("key") if baseline_entry is not None else None
             ),
             "target_leakage": target_leakage,
+            "violations": violations,
+        },
+    )
+
+
+def _per_language_residual_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Enforce language-pack-specific leakage ceilings when evidence is present."""
+
+    observed: dict[str, float] = {}
+    denominators: dict[str, int] = {}
+    denominator_languages: set[str] = set()
+    for payload in _leakage_payloads(metrics, metadata):
+        for language, raw_rate in _mapping(payload.get("by_language")).items():
+            rate = _optional_float(raw_rate)
+            if rate is not None:
+                key = str(language)
+                observed[key] = max(observed.get(key, 0.0), rate)
+        totals = _mapping(payload.get("total_chars_by_language"))
+        denominator_languages.update(str(language) for language in totals)
+        for language, raw_total in totals.items():
+            total = _optional_int(raw_total)
+            if total is not None:
+                key = str(language)
+                denominators[key] = max(denominators.get(key, 0), total)
+
+    evaluated = {
+        language: observed[language]
+        for language in PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS
+        if language in observed
+        and (language not in denominator_languages or denominators.get(language, 0) > 0)
+    }
+    violations = {
+        language: {
+            "observed": rate,
+            "limit": PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS[language],
+            "total_chars": denominators.get(language),
+        }
+        for language, rate in sorted(evaluated.items())
+        if rate > PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS[language]
+    }
+    return GateCheck(
+        "per_language_residual_leakage",
+        not violations,
+        reason=(
+            "not applicable"
+            if not evaluated
+            else ("ok" if not violations else "per-language leakage ceiling exceeded")
+        ),
+        details={
+            "ceilings": dict(PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS),
+            "evaluated": evaluated,
             "violations": violations,
         },
     )
@@ -2936,6 +3369,172 @@ def evaluate_federated_boundary_gate(
     )
 
 
+def evaluate_release_risk_evidence(
+    evidence: Any,
+) -> GateCheck:
+    """Verify one aggregate expert-review evidence bundle.
+
+    This is a technical integrity and configured-threshold check. Passing it
+    does not constitute an Expert Determination or authorize a data release.
+    """
+
+    if evidence is None:
+        return GateCheck(
+            "structured_release_risk",
+            False,
+            reason="release-risk evidence is required",
+            details={"integrity_verified": False},
+        )
+    return _structured_release_risk_check(
+        {"structured_release_risk_evidence": evidence},
+        {},
+    )
+
+
+def _structured_release_risk_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    raw_evidence = _first_value(
+        metadata.get("structured_release_risk_evidence"),
+        metrics.get("structured_release_risk_evidence"),
+        metadata.get("expert_review_evidence"),
+        metrics.get("expert_review_evidence"),
+    )
+    if raw_evidence is None:
+        return GateCheck(
+            "structured_release_risk",
+            True,
+            reason="not applicable",
+        )
+
+    if hasattr(raw_evidence, "to_dict") and callable(raw_evidence.to_dict):
+        raw_evidence = raw_evidence.to_dict()
+    if not isinstance(raw_evidence, Mapping):
+        return GateCheck(
+            "structured_release_risk",
+            False,
+            reason="release-risk evidence is malformed or fails integrity checks",
+            details={"integrity_verified": False},
+        )
+
+    try:
+        from openmed.compliance import ExpertReviewEvidenceReport
+
+        evidence = ExpertReviewEvidenceReport.from_dict(raw_evidence)
+    except (KeyError, TypeError, ValueError):
+        # Do not echo parser errors: an invalid payload may contain raw data.
+        return GateCheck(
+            "structured_release_risk",
+            False,
+            reason="release-risk evidence is malformed or fails integrity checks",
+            details={"integrity_verified": False},
+        )
+
+    model = evidence.privacy_models
+    post = evidence.post_metrics
+    violations: dict[str, Any] = {}
+    if not evidence.search.optimality_proven:
+        violations["search_optimality_proven"] = False
+    elif not evidence.search.complete and evidence.schema_version < 3:
+        violations["search_optimality_proof"] = (
+            "schema_version_3_required_for_pruned_proof"
+        )
+    if model.achieved_k < model.configured_k:
+        violations["k_anonymity"] = {
+            "configured": model.configured_k,
+            "achieved": model.achieved_k,
+        }
+    if evidence.sensitive_attributes and (
+        model.l_variant is None or model.t_variant is None
+    ):
+        violations["sensitive_attribute_models"] = {
+            "l_diversity_present": model.l_variant is not None,
+            "t_closeness_present": model.t_variant is not None,
+        }
+    if (
+        model.configured_l is not None
+        and model.achieved_l is not None
+        and model.achieved_l < model.configured_l
+    ):
+        violations["l_diversity"] = {
+            "variant": model.l_variant,
+            "configured": model.configured_l,
+            "achieved": model.achieved_l,
+        }
+    if (
+        model.configured_t is not None
+        and model.achieved_t is not None
+        and model.achieved_t > model.configured_t + 1e-12
+    ):
+        violations["t_closeness"] = {
+            "variant": model.t_variant,
+            "configured": model.configured_t,
+            "achieved": model.achieved_t,
+        }
+    post_violation_counts = {
+        "k_class_count": post.k_violating_class_count,
+        "l_class_count": post.l_violating_class_count,
+        "t_class_count": post.t_violating_class_count,
+        "any_class_count": post.any_violating_class_count,
+        "privacy_unit_count": post.violating_privacy_unit_count,
+    }
+    if any(post_violation_counts.values()):
+        violations["post_transform_violations"] = post_violation_counts
+    if evidence.composition.risk_status in {"increase_observed", "inconclusive"}:
+        violations["composition_risk_status"] = "no_material_increase_observed_required"
+    if evidence.composition.release_count == 1 and (
+        evidence.composition.longitudinal_linkage_assessed
+        or evidence.composition.prior_release_overlap_assessed
+        or evidence.composition.risk_status != "not_assessed"
+    ):
+        violations["composition_review"] = {
+            "single_release_requires_unassessed_status": True
+        }
+    elif evidence.composition.release_count > 1:
+        composition_violations: dict[str, Any] = {}
+        if not evidence.composition.longitudinal_linkage_assessed:
+            composition_violations["longitudinal_linkage_assessed"] = False
+        if not evidence.composition.prior_release_overlap_assessed:
+            composition_violations["prior_release_overlap_assessed"] = False
+        if evidence.composition.risk_status != "no_material_increase_observed":
+            composition_violations["risk_status"] = (
+                "no_material_increase_observed_required"
+            )
+        if composition_violations:
+            violations["composition_review"] = composition_violations
+
+    return GateCheck(
+        "structured_release_risk",
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "release-risk evidence violates its configured technical policy"
+        ),
+        details={
+            "integrity_verified": True,
+            "search_complete": evidence.search.complete,
+            "search_optimality_proven": evidence.search.optimality_proven,
+            "configured_k": model.configured_k,
+            "achieved_k": model.achieved_k,
+            "l_variant": model.l_variant,
+            "configured_l": model.configured_l,
+            "achieved_l": model.achieved_l,
+            "t_variant": model.t_variant,
+            "configured_t": model.configured_t,
+            "achieved_t": model.achieved_t,
+            "privacy_unit": evidence.assumptions.privacy_unit,
+            "released_dataset_digest": evidence.digests.dataset,
+            "policy_digest": evidence.digests.policy,
+            "evidence_integrity_hash": evidence.integrity_hash,
+            "composition_status": evidence.composition.risk_status,
+            "qualified_expert_review_required": True,
+            "violations": violations,
+        },
+    )
+
+
 def _k_floor_evidence(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -3472,6 +4071,163 @@ def _key_bytes(key: bytes | str) -> bytes:
     raise TypeError("signing key must be bytes or str")
 
 
+GROUNDING_TOP1_FLOOR = 0.90
+GROUNDING_TOP5_FLOOR = 0.97
+# Provisional multilingual floors: zh/hi grounding coverage is still maturing,
+# so these are documented as advisory-but-blocking placeholders below the
+# English strict floors.
+GROUNDING_MULTILINGUAL_TOP1_FLOOR = 0.80
+GROUNDING_MULTILINGUAL_TOP5_FLOOR = 0.90
+_GROUNDING_PERMISSIVE_SYSTEMS: tuple[str, ...] = ("rxnorm", "loinc", "icd10cm")
+_GROUNDING_MULTILINGUAL_LANGUAGES: tuple[str, ...] = ("zh", "hi")
+
+
+@dataclass(frozen=True)
+class GroundingGateConfig:
+    """Per-system top-k accuracy floors for the grounding release gate.
+
+    English gold is held to the strict ``top-1 >= 0.90`` / ``top-5 >= 0.97``
+    floors; ``zh``/``hi`` gold is held to lower, explicitly provisional floors
+    while multilingual grounding coverage matures.
+    """
+
+    permissive_systems: tuple[str, ...] = _GROUNDING_PERMISSIVE_SYSTEMS
+    english_top1_floor: float = GROUNDING_TOP1_FLOOR
+    english_top5_floor: float = GROUNDING_TOP5_FLOOR
+    multilingual_languages: tuple[str, ...] = _GROUNDING_MULTILINGUAL_LANGUAGES
+    multilingual_top1_floor: float = GROUNDING_MULTILINGUAL_TOP1_FLOOR
+    multilingual_top5_floor: float = GROUNDING_MULTILINGUAL_TOP5_FLOOR
+
+    def floors_for(self, language: str) -> tuple[float, float]:
+        """Return the ``(top1, top5)`` floors for a language."""
+
+        if language == "en":
+            return self.english_top1_floor, self.english_top5_floor
+        return self.multilingual_top1_floor, self.multilingual_top5_floor
+
+    def check(self, report: Any) -> tuple[GateCheck, ...]:
+        """Return one :class:`GateCheck` per permissive system in the report."""
+
+        checks: list[GateCheck] = []
+        for system in self.permissive_systems:
+            system_accuracy = report.system(system)
+            if system_accuracy is None:
+                checks.append(
+                    GateCheck(
+                        f"{GROUNDING_ACCURACY_GATE}:{system}",
+                        False,
+                        reason="grounding accuracy missing for system",
+                        details={"system": system},
+                    )
+                )
+                continue
+
+            breaches: list[str] = []
+            languages: dict[str, Any] = {}
+            evaluated = ["en", *self.multilingual_languages]
+            for language in evaluated:
+                metrics = system_accuracy.language(language)
+                if metrics is None:
+                    continue
+                top1_floor, top5_floor = self.floors_for(language)
+                languages[language] = {
+                    "support": metrics.support,
+                    "top1_accuracy": metrics.top1_accuracy,
+                    "top5_accuracy": metrics.top5_accuracy,
+                    "abstention_rate": metrics.abstention_rate,
+                    "top1_floor": top1_floor,
+                    "top5_floor": top5_floor,
+                }
+                if metrics.top1_accuracy < top1_floor:
+                    breaches.append(
+                        f"{language}.top1 {metrics.top1_accuracy:.4f} < {top1_floor:.2f}"
+                    )
+                if metrics.top5_accuracy < top5_floor:
+                    breaches.append(
+                        f"{language}.top5 {metrics.top5_accuracy:.4f} < {top5_floor:.2f}"
+                    )
+
+            if "en" not in languages:
+                breaches.append("en (missing English gold)")
+
+            checks.append(
+                GateCheck(
+                    f"{GROUNDING_ACCURACY_GATE}:{system}",
+                    not breaches,
+                    reason="ok"
+                    if not breaches
+                    else "grounding accuracy below floor: " + "; ".join(breaches),
+                    details={"system": system, "languages": languages},
+                )
+            )
+        return tuple(checks)
+
+
+def evaluate_grounding_accuracy_gate(
+    report: Any | None = None,
+    *,
+    config: GroundingGateConfig | None = None,
+    gold_dir: str | Path | None = None,
+) -> tuple[GateCheck, ...]:
+    """Score the grounding accuracy suite and return per-system gate checks.
+
+    When *report* is omitted the shipped synthetic gold is scored with the real
+    sparse candidate generator. Passing a precomputed report (or one produced by
+    a deliberately broken linker) lets callers exercise the floors directly.
+    """
+
+    from openmed.eval import grounding_accuracy as grounding_module
+
+    resolved_config = config or GroundingGateConfig()
+    if report is None:
+        if gold_dir is None:
+            report = grounding_module.evaluate_grounding_accuracy()
+        else:
+            report = grounding_module.evaluate_grounding_accuracy(gold_dir=gold_dir)
+    return resolved_config.check(report)
+
+
+def build_grounding_gate_report(
+    report: Any | None = None,
+    *,
+    config: GroundingGateConfig | None = None,
+    gold_dir: str | Path | None = None,
+) -> GateReport:
+    """Build an unsigned :class:`GateReport` carrying the grounding checks."""
+
+    from openmed.eval import grounding_accuracy as grounding_module
+
+    resolved_config = config or GroundingGateConfig()
+    if report is None:
+        if gold_dir is None:
+            report = grounding_module.evaluate_grounding_accuracy()
+        else:
+            report = grounding_module.evaluate_grounding_accuracy(gold_dir=gold_dir)
+
+    checks = resolved_config.check(report)
+    decision = RELEASABLE if all(check.passed for check in checks) else QUARANTINED
+    eval_set_hash = stable_hash(report.to_dict())
+    return GateReport(
+        repo_id="grounding-accuracy-suite",
+        family="grounding",
+        tier="suite",
+        param_count=None,
+        format="pattern-only",
+        per_label_recall={},
+        per_label_precision={},
+        critical_leakage_count=0,
+        residual_leakage_rate=0.0,
+        quant_recall_delta=None,
+        p50_ms=None,
+        p95_ms=None,
+        ram_mb=None,
+        eval_set_hash=eval_set_hash,
+        leakage_fixture_hash="",
+        decision=decision,
+        gate_results=checks,
+    )
+
+
 def preview(
     report: BenchmarkReport | Mapping[str, Any],
     baseline: Mapping[str, Any] | None = None,
@@ -3525,10 +4281,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "benchmark report and fail closed on any gate failure."
         )
     )
-    parser.add_argument(
+    candidate_group = parser.add_mutually_exclusive_group(required=True)
+    candidate_group.add_argument(
         "--candidate",
-        required=True,
         help="Path to a candidate BenchmarkReport JSON payload.",
+    )
+    candidate_group.add_argument(
+        "--throughput-candidate",
+        help="Path to a zh/hi/ta throughput benchmark JSON payload.",
+    )
+    candidate_group.add_argument(
+        "--grounding",
+        action="store_true",
+        help="Score the shipped grounding-accuracy gold and gate on top-k floors.",
     )
     parser.add_argument(
         "--baseline",
@@ -3588,6 +4353,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
+    if args.throughput_candidate:
+        return _run_i18n_throughput_gate_cli(args)
+
+    if args.grounding:
+        return _run_grounding_accuracy_gate_cli(args)
+
     candidate_path = Path(args.candidate)
     if not candidate_path.is_file():
         print(
@@ -3636,12 +4407,73 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _run_i18n_throughput_gate_cli(args: argparse.Namespace) -> int:
+    candidate_path = Path(args.throughput_candidate)
+    if not candidate_path.is_file():
+        print(
+            f"Throughput candidate report not found: {candidate_path}.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        candidate = _read_json_file(candidate_path)
+        baseline = baseline_store.load_baseline_store(args.baseline_store)
+        check = evaluate_i18n_throughput_gate(candidate, baseline)
+    except Exception as exc:
+        print(f"throughput gate evaluation failed: {exc}", file=sys.stderr)
+        return 2
+
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "openmed.eval.i18n_throughput_gate",
+        "decision": RELEASABLE if check.passed else QUARANTINED,
+        "gate_result": check.to_dict(),
+    }
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(payload, sort_keys=True))
+    return 0 if check.passed else 1
+
+
+def _run_grounding_accuracy_gate_cli(args: argparse.Namespace) -> int:
+    try:
+        report = build_grounding_gate_report()
+    except Exception as exc:
+        print(f"grounding accuracy gate evaluation failed: {exc}", file=sys.stderr)
+        return 2
+
+    signed = report.sign(
+        args.signing_key
+        or os.environ.get("OPENMED_RELEASE_GATE_KEY", _DEFAULT_SIGNING_KEY),
+        key_id=args.key_id,
+    )
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(signed.to_json() + "\n", encoding="utf-8")
+    print(signed.to_json())
+    return 0 if signed.decision == RELEASABLE else 1
+
+
 def _read_json_file(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     if not isinstance(payload, Mapping):
         raise ValueError(f"{path} must contain a JSON object")
     return dict(payload)
+
+
+def _positive_finite_number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if not math.isfinite(number) or number <= 0.0:
+        return None
+    return number
 
 
 def _open_or_update_tracking_issue(
@@ -3798,20 +4630,30 @@ __all__ = [
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
     "G11_CRITICAL_RECALL_FLOOR",
+    "G14_EXTRACTION_DISPARITY_CEILING",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
     "SURROGATE_QUALITY_GATE",
+    "EXPORT_VARIANT_GATE",
+    "GROUNDING_ACCURACY_GATE",
+    "GROUNDING_TOP1_FLOOR",
+    "GROUNDING_TOP5_FLOOR",
+    "GROUNDING_MULTILINGUAL_TOP1_FLOOR",
+    "GROUNDING_MULTILINGUAL_TOP5_FLOOR",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",
     "RELEASABLE",
     "GateCheck",
     "GateReport",
+    "GroundingGateConfig",
     "ModelStewardConfig",
     "ReleaseGate",
     "apply_flakiness_quarantine",
     "build_arg_parser",
+    "build_grounding_gate_report",
     "evaluate_federated_boundary_gate",
+    "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",
     "main",

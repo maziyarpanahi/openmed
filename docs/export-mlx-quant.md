@@ -2,7 +2,9 @@
 
 OpenMed MLX exports can emit INT4 artifacts, but an INT4 artifact is only
 marked certified when it holds recall against its full-precision parent on the
-same synthetic or approved eval fixtures.
+same synthetic or approved eval fixtures. For which architectures reach the
+MLX INT4/INT8/fp paths in the first place, see the
+[Export Format Support Matrix](export-matrix.md).
 
 ## INT4 Export
 

@@ -1,40 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed · AI ya kliniki kwenye kifaa · modeli 2,000+" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="Bango la README la OpenMed lenye kinyago cha paka, nembo ya maandishi yenye herufi ndogo, Open Cross, na maandishi AI ya huduma za afya ya chanzo huria, vipakuliwa milioni 340+ na usakinishaji milioni 10+" width="1280" />
 
 <h2>Data Yako. Modeli Yako. Maunzi Yako.</h2>
 
-<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
-
-<p><b>Badili matini ya kliniki kuwa maarifa yaliyopangwa na yasiyotambulisha mtu, bila kupakia chochote.</b><br/>
-OpenMed hutambua huluki za biomedicine na kuondoa aina 55+ za PHI kwenye
-maunzi unayodhibiti, hivyo data yako haiondoki kwenye kifaa. Modeli huria
-2,000+ zinaweza kufanya kazi nje ya mtandao kutoka simu hadi seva ya GPU:
-iOS, iPadOS na Android kupitia OpenMedKit, React Native, CPU za kawaida,
-Apple Silicon, GPU za NVIDIA, kivinjari na huduma za REST/gRPC. Hakuna wingu,
-hakuna kufungiwa kwa muuzaji, na hakuna data ya mgonjwa inayotoka kwenye
-mtandao wako.</p>
+<p><b>Badili matini ya kliniki kuwa maarifa yaliyopangwa na yasiyotambulisha mtu kwenye maunzi unayodhibiti.</b><br/>
+Runtime kuu ya ndani ya OpenMed hufanya uchimbaji na uondoaji utambulisho baada ya vipengee vya modeli vinavyohitajika kupatikana. Upakuaji wa modeli, adapta za watoa huduma wa mbali, njia zenye telemetria na miunganisho iliyosanidiwa na mtumiaji zinaweza kutumia mtandao; kagua masharti ya kila modeli na mkusanyiko wa data.</p>
 
 <p>
-  <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
-  <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Modeli" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
-  <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
-  <a href="LICENSE"><img alt="Leseni" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
-  <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Nyota" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
+  <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
+  <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
+  <a href="LICENSE">Apache-2.0 SDK source</a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/export-onnx-android.md"><img alt="Android: ONNX Runtime Mobile" src="https://img.shields.io/badge/Android-ONNX_Runtime_Mobile-128787?style=for-the-badge&logo=android&logoColor=white"></a>
-  <a href="docs/export-transformersjs.md"><img alt="Kivinjari: Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
-  <a href="docs/swift-openmedkit.md"><img alt="Majukwaa" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://openmed.life/docs"><img alt="Nyaraka" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
+  <a href="swift/OpenMedKit">OpenMedKit</a> ·
+  <a href="docs/mlx-backend.md">Apple Silicon / MLX</a> ·
+  <a href="docs/export-onnx-android.md">Android / ONNX Runtime Mobile</a> ·
+  <a href="docs/export-transformersjs.md">Browser / Transformers.js</a> ·
+  <a href="https://openmed.life/docs">Documentation</a>
 </p>
 
 <p>
-  <b>Modeli 2,000+</b> &nbsp;·&nbsp; <b>Lugha 27 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Checkpoint 600+ za PII</b> &nbsp;·&nbsp; <b>100% kwenye kifaa</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>Uendeshaji unaotanguliza matumizi ya ndani</b> &nbsp;·&nbsp; <b>Lugha 33 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -61,13 +51,12 @@ mtandao wako.</p>
 
 ## Ione ikifanya kazi
 
-OpenMed hufanya kazi **yote kwenye kifaa**; matini ya kliniki haiondoki humo.
-Hivi ndivyo inavyofanya kazi kwenye iPhone, nje kabisa ya mtandao:
+Mfano huu wa iPhone hutumia runtime ya ndani ya OpenMed baada ya vipengee vya modeli vinavyohitajika kupatikana:
 
 <div align="center">
   <img src="docs/brand/openmed-ios-scan.png" alt="OpenMed Scan kwenye iPhone · uondoaji wa utambulisho wa PII na uchambuzi wa kliniki kupitia OpenMedKit" width="840" />
   <br/>
-  <sub><b>Kwenye iPhone kupitia <a href="swift/OpenMedKit">OpenMedKit</a></b>: changanua dokezo la kliniki, ondoa utambulisho na utoe ishara za kliniki kwa Apple MLX kwenye kifaa. Hakuna kinachopakiwa.</sub>
+  <sub><b>Kwenye iPhone kupitia <a href="swift/OpenMedKit">OpenMedKit</a></b>: katika usanidi huu Apple MLX huchakata dokezo la kliniki ndani ya kifaa ili kuondoa utambulisho na kutoa ishara.</sub>
 </div>
 
 <br/>
@@ -75,7 +64,7 @@ Hivi ndivyo inavyofanya kazi kwenye iPhone, nje kabisa ya mtandao:
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed ikiondoa PII kwenye hati ya kuruhusiwa kutoka hospitalini kwa wakati halisi" width="760" />
   <br/>
-  <sub><b>Uondoaji wa utambulisho wa PII kwa wakati halisi</b>: Nemotron Privacy Filter huficha majina, anwani, vitambulisho na data ya malipo kwenye kifaa. <i>(Thamani zote zinazoonekana ni za kutengenezwa.)</i></sub>
+  <sub><b>Uondoaji wa utambulisho wa PII kwa wakati halisi</b>: katika mtiririko huu wa ndani uliosanidiwa, Nemotron Privacy Filter huficha majina, anwani, vitambulisho na data ya malipo kutoka hati sintetiki. <i>(Thamani zote zinazoonekana ni za kutengenezwa.)</i></sub>
 </div>
 
 ---
@@ -96,48 +85,47 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-Modeli ya kisasa ya NER ya kliniki hufanya kazi ndani ya mashine yako: hakuna
-ufunguo wa API wala ombi la mtandao.
+Modeli ya NER ya kliniki hutumia runtime ya ndani baada ya vipengee vinavyohitajika kupatikana.
+
+---
+
+## Unajenga kwa wakala?
+
+Anza na [mwongozo wa matumizi ya wakala](docs/agent-usage.md), au pakia
+faharasa ya nyaraka ya [llms.txt](https://openmed.life/docs/llms.txt). Kwa
+miingiliano ya ndani inayoweza kuitwa, tumia [seva ya MCP](docs/mcp-clients.md),
+[sajili ya zana](openmed/mcp/tool_registry.py), au
+[kiolesura cha mstari wa amri](docs/agent-usage.md#command-line-interface).
+Taratibu tayari za zana mbalimbali zipo kwenye
+[orodha ya ujuzi ya hazina](skills/README.md).
 
 ---
 
 ## Kwa nini OpenMed?
 
-|                                      |          **OpenMed**           | API za matibabu za wingu |
-| ------------------------------------ | :----------------------------: | :----------------------: |
-| Hufanya kazi kwenye kifaa/seva zako  |               ✅               |            ❌            |
-| Data ya mgonjwa hutoka mtandao wako  |          **Kamwe**             | Hutumwa kwa mtoa huduma  |
-| Gharama                              | Bure na chanzo huria            | Malipo kwa kila ombi     |
-| Modeli maalumu za matibabu           |            2,000+              | Chache                    |
-| Lugha za PII zinazotumia modeli      |              27                | Hutofautiana              |
-| Nje ya mtandao/air-gapped            |               ✅               |            ❌            |
-| Uharakishaji wa Apple Silicon (MLX)  |               ✅               | Haitumiki                 |
-| Programu asilia za iOS/macOS         | ✅ kupitia OpenMedKit           |            ❌            |
-| Uainishaji wa token kwenye WebGPU    | ✅ kupitia Transformers.js     | Hutofautiana              |
-| Kufungiwa kwa muuzaji                | Hakuna (Apache-2.0)             | Kupo                      |
+| Jambo la kuzingatia katika usambazaji | Mpaka wa OpenMed SDK |
+| --- | --- |
+| Runtime kuu | Huchakata ndani baada ya vipengee vinavyohitajika kupatikana |
+| Njia za hiari za mtandao | Upakuaji, adapta za mbali, telemetria na miunganisho zinaweza kutumia mtandao |
+| Uthibitishaji | Mmiliki hukagua masharti ya modeli na data, faragha na ufaafu wa kliniki |
+| Violesura | Python, Swift, Android, kivinjari na huduma pale zinapoungwa mkono |
 
-- **Modeli maalumu**: modeli 2,000+ za biomedicine na kliniki zilizochaguliwa.
-- **Uondoaji utambulisho unaozingatia HIPAA**: vitambulishi vyote 18 vya Safe
-  Harbor, uunganishaji makini wa huluki na vibadala vinavyohifadhi umbizo.
-- **Hufanya kazi kila mahali**: CPU, CUDA, Apple Silicon (MLX), iOS/macOS,
-  Android/Kotlin, React Native, REST/gRPC na vifurushi vya kivinjari/WebGPU.
-- **Usambazaji wa mstari mmoja**: Python API, huduma ya REST ya Docker au
-  michakato ya batch.
-- **Hakuna kufungiwa**: Apache-2.0, miundombinu yako na data yako.
+- **Katalogi ya modeli iliyochaguliwa**: thibitisha kila modeli, leseni na mkusanyiko wa data kwa matumizi yako.
+- **Usanidi unaolingana na Safe Harbor**: unaweza kulenga makundi 18 ya vitambulishi; ukaguzi wa kitaalamu wa utekelezaji bado unahitajika, na kutumia SDK pekee hakuthibitishi utiifu wa HIPAA.
+- **Njia za utekelezaji zinazotumika**: adapta za CPU, CUDA, MLX, simu, huduma na kivinjari hutegemea mazingira na kielelezo.
+- **Violesura vya uwekaji**: Python, kontena, huduma na michakato ya bechi huhitaji usanidi na uthibitishaji.
+- **Msimbo chanzo wa SDK**: umetolewa chini ya Apache-2.0 License; masharti ya modeli na mikusanyiko ya data hutofautiana.
 
 ---
 
 ## Kwenye kifaa cha Apple: Swift, MLX na iOS
 
-OpenMed imeundwa kufanya kazi mahali data yako ilipo. Kwenye maunzi ya Apple
-inaharakishwa na **MLX**, na kupitia **[OpenMedKit](swift/OpenMedKit)** inaingia
-moja kwa moja kwenye programu za iPhone, iPad na Mac. Utambuzi wa PII na
-uchambuzi wa kliniki hufanyika nje ya mtandao, kwenye kifaa.
+Kwenye maunzi ya Apple yanayoungwa mkono, OpenMed inaweza kutumia **MLX** na **[OpenMedKit](swift/OpenMedKit)** kwa uchakataji wa ndani baada ya vipengee vinavyohitajika kupatikana. Upatikanaji wa modeli na miunganisho ya mbali iliyosanidiwa na mtumiaji hubaki mipaka tofauti ya mtandao.
 
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
@@ -185,11 +173,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Kisha tumia toleo lisilobadilika la OpenMed `v1.9.1`:
+Kisha tumia toleo lisilobadilika la OpenMed `v2.0.0`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
@@ -244,7 +232,7 @@ const entities = await model("Patient Alice Nguyen was seen in cardiology.");
 
 ```mermaid
 flowchart LR
-    A["Matini ya kliniki"] --> B["OpenMed<br/>(100% kwenye kifaa)"]
+    A["Matini ya kliniki"] --> B["OpenMed<br/>(matumizi ya ndani kwanza)"]
     B --> C["Huluki za matibabu"]
     B --> D["PII iliyotambuliwa"]
     B --> E["Matini isiyotambulisha mtu"]
@@ -256,6 +244,23 @@ flowchart LR
 
 Matokeo: mchakato wa ndani unaorudisha huluki za matibabu, PII iliyopatikana na
 matini isiyotambulisha mtu bila kutuma data kwa API ya wingu.
+
+---
+
+## Agent Skills — jenga OpenMed kupitia wakala wako wa coding
+
+Katalogi ya [`skills/`](skills/) inatoa [Agent Skills](https://agentskills.io) zinazobebeka kwa uondoaji utambulisho kwenye kifaa, NER ya kliniki, usafirishaji wa FHIR, tathmini na mitiririko ya kazi ya afya inayohusiana. Folda zilezile za `SKILL.md` zinafanya kazi katika **Claude Code**, **OpenAI Codex**, **OpenCode** na mawakala wanaooana; kisakinishi hutumia saraka ya skills ya kila mteja pamoja na utaratibu wa pamoja wa `~/.agents/skills`.
+
+```bash
+git clone https://github.com/maziyarpanahi/openmed && cd openmed
+./install-skills.sh          # kwa Claude Code, Codex, OpenCode na ~/.agents/skills
+```
+
+Kisha mwombe wakala wako atengeneze mchakato kwa kutumia nafasi za mfano:
+
+> Tengeneza mchakato wa OpenMed wa ndani unaoondoa utambulisho kwenye dokezo sintetiki la kutoka hospitalini na kutoa huluki za dawa.
+
+Hupakia skills zinazofaa na kutengeneza mchakato wa kwenye kifaa (`openmed.deidentify(...)` → `openmed.analyze_text(...)`). Baada ya kupakua modeli mara moja, endesha mchakato huo ndani ya kifaa kwa madokezo halisi; usibandike PHI halisi kwenye prompt ya wakala wa wingu. Tazama **[katalogi ya skills na mfano wa sekunde 30](skills/README.md)**.
 
 ---
 
@@ -391,7 +396,7 @@ print(deidentify(text, method="shift_dates", date_shift_days=180).deidentified_t
 - **Michakato inayojua sera** huongeza wasifu wa HIPAA/GDPR/utafiti, vizingiti
   vilivyokalibishwa na ripoti za ukaguzi zilizotiwa sahihi.
 - **Vibadala vya Faker** huhifadhi umbizo la vitambulisho vya kliniki.
-- **HIPAA**: vitambulishi vyote 18 vya Safe Harbor na vizingiti vinavyosanidiwa.
+- **Mpaka wa HIPAA**: makundi yanayolingana na Safe Harbor na vizingiti vinavyosanidiwa ni vifaa vya utekelezaji; ukaguzi wa kitaalamu bado unahitajika na kutumia SDK pekee hakuthibitishi utiifu.
 - **PII ya batch na streaming**: tumia
   `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)`.
 
@@ -427,17 +432,17 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (lugha 29 zinazoungwa mkono)
+## PII ya lugha nyingi (njia 34 zinazotumika; 33 zikitumia modeli)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 29 ya lugha za PII**:
-`am`, `ar`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `nl`, `no`, `pt`, `ro`, `ru`, `sv`, `sw`, `te`, `th`, `tr`, `uk`,
-`xh`, `zh` na `zu`, pamoja na checkpoint
-600+ za PII. Uelekezaji wa Kirusi na Kichina kwa sasa hutumia vishikilia nafasi
-vya modeli chaguo-msingi ya lugha nyingi vilivyoelezwa kwenye nyaraka, huku
-uzito maalumu wa modeli ukiwa tofauti. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia tisa za ziada (`as`, `bn`, `gu`, `kn`,
-`ml`, `mr`, `or`, `pa` na `ta`) na inaweza pia kuhudumia Kihindi na Kitelugu.
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 34 ya lugha za PII**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
+`ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
+`th`, `tr`, `uk`, `xh`, `zh` na `zu`, pamoja na checkpoint
+katalogi iliyosajiliwa ya modeli za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
+chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
+na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
+iliyosanidiwa na mtumiaji hukubali njia nne za ziada (`gu`, `kn`, `ml`
+na `pa`) na inaweza pia kuhudumia Kiassam, Kibengali, Kihindi, Kimarathi, Kiodia, Kitamil na Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,
@@ -502,7 +507,7 @@ kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
 | [Maswali](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Wasifu wa Usanidi](https://openmed.life/docs/profiles) | [Huduma ya REST](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Maelezo ya Toleo la OpenMed 1.9.0](docs/release/v1.9.0.md) | [Mifano](docs/examples.md) |
+| [Maelezo ya Toleo la OpenMed 2.0.0](docs/release/v2.0.0.md) | [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Mifano](docs/examples.md) |
 | [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
 | [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Detector](docs/plugin-sdk.md) |
 | [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |
@@ -558,8 +563,7 @@ OpenMed hujengwa juu ya kazi bora ya chanzo huria: shukrani hasa kwa
 
 ## Leseni
 
-Imetolewa chini ya [Leseni ya Apache-2.0](LICENSE). Taarifa za mali za watu
-wengine zimeandikwa katika [NOTICE](NOTICE).
+Msimbo chanzo wa OpenMed SDK umetolewa chini ya [Apache-2.0 License](LICENSE). Taarifa za mali za watu wengine zimeandikwa katika [NOTICE](NOTICE).
 
 ## Nukuu
 
@@ -584,7 +588,7 @@ OpenMed katika makala, mabango na nyaraka zinazotokana nayo.
 
 Ikiwa OpenMed inakufaa, nyota huwasaidia wengine kuipata.
 
-[![Chati ya Historia ya Nyota](https://api.star-history.com/chart?repos=maziyarpanahi/openmed&type=date&legend=top-left&sealed_token=_HghchEkPCrucwFdVMULC2ufUwKUsFcTwheGjTM2VUvsTVevJ8xvrV-b5WyNkXCLDaOMTzk3vvsnzTR1rtTL7oxu90MGSTw8Eljuy0wrwEk_qEa1s83OV3hyz0-1mckZLCffMDc5Pot9Yx_MiZaQjsz4NxNnV7Pb_k-1KBWkf6gM9C9AZl3sgqRC-y2w)](https://www.star-history.com/?repos=maziyarpanahi%2Fopenmed&type=date&legend=top-left)
+[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

@@ -132,6 +132,8 @@ class TestConstants:
     def test_supported_languages(self):
         assert SUPPORTED_LANGUAGES == {
             "am",
+            "as",
+            "bn",
             "en",
             "fr",
             "de",
@@ -139,7 +141,10 @@ class TestConstants:
             "es",
             "nl",
             "hi",
+            "mr",
+            "or",
             "te",
+            "ta",
             "pt",
             "ar",
             "he",
@@ -154,6 +159,7 @@ class TestConstants:
             "da",
             "no",
             "sw",
+            "ta",
             "zu",
             "xh",
             "zh",
@@ -196,6 +202,8 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["es"] == "Spanish-"
         assert LANGUAGE_MODEL_PREFIX["nl"] == "Dutch-"
         assert LANGUAGE_MODEL_PREFIX["hi"] == "Hindi-"
+        assert LANGUAGE_MODEL_PREFIX["bn"] == "Bengali-"
+        assert LANGUAGE_MODEL_PREFIX["ta"] == "Tamil-"
         assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
         assert LANGUAGE_MODEL_PREFIX["pt"] == "Portuguese-"
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
@@ -219,17 +227,21 @@ class TestConstants:
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
-            INDIC_NER_LANGUAGES - {"hi", "te"}
+            INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}
         )
 
     def test_default_pii_models_naming(self):
         assert DEFAULT_PII_MODELS["am"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["as"] == "OpenMed/privacy-filter-multilingual"
         assert "French" in DEFAULT_PII_MODELS["fr"]
         assert "German" in DEFAULT_PII_MODELS["de"]
         assert "Italian" in DEFAULT_PII_MODELS["it"]
         assert "Spanish" in DEFAULT_PII_MODELS["es"]
         assert "Dutch" in DEFAULT_PII_MODELS["nl"]
         assert "Hindi" in DEFAULT_PII_MODELS["hi"]
+        assert "Bengali" in DEFAULT_PII_MODELS["bn"]
+        assert DEFAULT_PII_MODELS["or"] == "OpenMed/privacy-filter-multilingual"
+        assert "Tamil" in DEFAULT_PII_MODELS["ta"]
         assert "Telugu" in DEFAULT_PII_MODELS["te"]
         assert "Portuguese" in DEFAULT_PII_MODELS["pt"]
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
@@ -249,7 +261,7 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["sw"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["zu"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["xh"] == "OpenMed/privacy-filter-multilingual"
-        assert DEFAULT_PII_MODELS["zh"] == "OpenMed/privacy-filter-multilingual"
+        assert "Chinese" in DEFAULT_PII_MODELS["zh"]
         assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
@@ -2700,6 +2712,13 @@ class TestGetPatternsForLanguage:
         with pytest.raises(ValueError, match="Unsupported language"):
             get_patterns_for_language("xx")
 
+    @pytest.mark.parametrize("lang", ("bn", "ta", "zh"))
+    def test_v2_language_patterns_are_discoverable(self, lang):
+        patterns = get_patterns_for_language(lang)
+
+        assert patterns
+        assert all(isinstance(pattern, PIIPattern) for pattern in patterns)
+
     def test_all_returned_patterns_are_pii_pattern(self):
         for lang in SUPPORTED_LANGUAGES:
             patterns = get_patterns_for_language(lang)
@@ -2725,6 +2744,16 @@ class TestLanguageFakeData:
             data = LANGUAGE_FAKE_DATA[lang]
             for key in required_keys:
                 assert key in data, f"Missing '{key}' in LANGUAGE_FAKE_DATA['{lang}']"
+
+    @pytest.mark.parametrize("lang", ("bn", "ta", "zh"))
+    def test_v2_language_fake_data_is_synthetic_and_script_specific(self, lang):
+        data = LANGUAGE_FAKE_DATA[lang]
+
+        assert data["NAME"]
+        assert data["PHONE"]
+        assert data["DATE"]
+        assert data["LOCATION"]
+        assert all("example" in value for value in data["EMAIL"])
 
     def test_french_names_are_french(self):
         names = LANGUAGE_FAKE_DATA["fr"]["NAME"]
@@ -5996,9 +6025,9 @@ class TestSouthAfricanIdentifiers:
             )
             assert surrogate_national[:3] == source_national[:3]
 
-    def test_locale_aliases_match_fixture_phones_and_not_id_runs(self):
-        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["af"]
-        assert LOCALE_PII_PATTERNS["af"] is LOCALE_PII_PATTERNS["zu"]
+    def test_sa_locale_patterns_match_fixture_phones_and_not_id_runs(self):
+        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["zu"]
+        assert LOCALE_PII_PATTERNS["af"] is not LOCALE_PII_PATTERNS["zu"]
 
         rows = [
             json.loads(line)
@@ -6007,28 +6036,28 @@ class TestSouthAfricanIdentifiers:
             .splitlines()
             if line.strip()
         ]
-        phone_patterns = [
-            pattern
-            for pattern in LOCALE_PII_PATTERNS["en_za"]
-            if pattern.entity_type == "phone_number"
-        ]
-
         assert [row["entities"][1]["text"] for row in rows] == [
             "+27 82 123 4567",
             "0827654321",
             "27829999999",
         ]
-        for row in rows:
-            id_value, phone = (entity["text"] for entity in row["entities"])
-            assert validate_south_african_id(id_value)
-            assert any(
-                re.fullmatch(pattern.pattern, phone, pattern.flags)
-                for pattern in phone_patterns
-            )
-            assert not any(
-                re.search(pattern.pattern, id_value, pattern.flags)
-                for pattern in phone_patterns
-            )
+        for locale in ("en_za", "af"):
+            phone_patterns = [
+                pattern
+                for pattern in LOCALE_PII_PATTERNS[locale]
+                if pattern.entity_type == "phone_number"
+            ]
+            for row in rows:
+                id_value, phone = (entity["text"] for entity in row["entities"])
+                assert validate_south_african_id(id_value)
+                assert any(
+                    re.fullmatch(pattern.pattern, phone, pattern.flags)
+                    for pattern in phone_patterns
+                )
+                assert not any(
+                    re.search(pattern.pattern, id_value, pattern.flags)
+                    for pattern in phone_patterns
+                )
 
     def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
         from openmed.core.pii import (
