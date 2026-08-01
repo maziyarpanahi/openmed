@@ -126,9 +126,12 @@ def test_models_recommend_json_emits_single_document(
 
     assert result == 0
     payload = json.loads(captured.out)  # parses as a single JSON document
-    assert payload["tier"] == "phone"
-    assert payload["recommended"] == "OpenMed/small-en"
-    assert [model["repo_id"] for model in payload["models"]] == ["OpenMed/small-en"]
+    assert payload["ok"] is True
+    assert payload["command"] == "models recommend"
+    data = payload["data"]
+    assert data["tier"] == "phone"
+    assert data["recommended"] == "OpenMed/small-en"
+    assert [model["repo_id"] for model in data["models"]] == ["OpenMed/small-en"]
 
 
 def test_recommend_models_ranks_by_param_count_without_enrichment(

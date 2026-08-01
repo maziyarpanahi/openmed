@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "locale": "ta-IN",
+  "language": "ta",
+  "synthetic": true,
+  "contains_real_phi": false,
+  "provenance": "Invented name and seeded checksum-valid test identifier; no patient source was used.",
+  "text": "நோயாளி யாழினி அருள், ஆதார் Aadhaar 246778325484.",
+  "expected_script": "Tamil",
+  "expected_segments": [
+    {"start": 0, "end": 27, "script": "Tamil"},
+    {"start": 27, "end": 48, "script": "Latin"}
+  ],
+  "expected_entities": [
+    {"label": "national_id", "start": 35, "end": 47, "text": "246778325484"}
+  ],
+  "expected_tokens": [
+    {"start": 0, "end": 6, "text": "நோயாளி"},
+    {"start": 7, "end": 13, "text": "யாழினி"},
+    {"start": 14, "end": 19, "text": "அருள்"},
+    {"start": 19, "end": 20, "text": ","},
+    {"start": 21, "end": 26, "text": "ஆதார்"},
+    {"start": 27, "end": 34, "text": "Aadhaar"},
+    {"start": 35, "end": 47, "text": "246778325484"},
+    {"start": 47, "end": 48, "text": "."}
+  ]
+}

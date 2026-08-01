@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from openmed.compliance import (
+    CompositionEvidence,
+    ReleaseAssumptions,
+    build_release_expert_review_evidence,
+)
+from openmed.core.audit import stable_hash
 from openmed.eval import release_gates
+from openmed.eval.metrics import compute_metrics_bundle
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -13,6 +20,12 @@ from openmed.eval.release_gates import (
     ReleaseGate,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.surrogate_quality import load_surrogate_quality_records
+from openmed.risk import (
+    AnonymityPolicy,
+    anonymize_release,
+    validate_released_output,
+)
 
 SIGNING_KEY = "unit-release-key"
 
@@ -166,6 +179,94 @@ def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
 
+def _structured_release_evidence(
+    *,
+    composition: CompositionEvidence | None = None,
+):
+    rows = [
+        {
+            "patient_id": f"patient-{index}",
+            "patient_name": f"Canary Name {index}",
+            "age": 30 if index < 2 else 40,
+            "postal_code": "10001" if index < 2 else "20001",
+            "condition": "a" if index % 2 == 0 else "b",
+        }
+        for index in range(4)
+    ]
+    result = anonymize_release(
+        rows,
+        AnonymityPolicy(
+            quasi_identifiers=("age", "postal_code"),
+            sensitive_attributes=("condition",),
+            direct_identifiers=("patient_name",),
+            privacy_unit="patient_id",
+            target_k=2,
+            target_l=2,
+        ),
+    )
+    return build_release_expert_review_evidence(
+        result,
+        validation=validate_released_output(result.records, result),
+        assumptions=ReleaseAssumptions(
+            privacy_unit="patient",
+            population_scope="release_cohort",
+            release_model="restricted",
+            recipient_model="named_researchers",
+            auxiliary_data_model="reasonably_available",
+            notes_digest=stable_hash(
+                {
+                    "kind": "structured-release-gate-test",
+                    "review": "stored outside shareable evidence",
+                }
+            ),
+        ),
+        composition=composition,
+    )
+
+
+def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, object]:
+    strict = {
+        "confidence_interval": {
+            "lower": strict_lower,
+            "point": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+            "upper": 1.0,
+        },
+        "f1": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+        "true_positives": 10,
+    }
+    relaxed = {
+        "confidence_interval": {
+            "lower": relaxed_lower,
+            "point": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+            "upper": 1.0,
+        },
+        "f1": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+        "true_positives": 10,
+    }
+    return {
+        "relation_extraction": {
+            "gold_relation_count": 10,
+            "per_relation_type": {
+                "INHIBITOR": {
+                    "relaxed": relaxed,
+                    "strict": strict,
+                }
+            },
+            "predicted_relation_count": 10,
+            "relaxed": relaxed,
+            "strict": strict,
+        }
+    }
+
+
 def test_release_gate_passes_and_emits_signed_section_64_report(
     tmp_path: Path,
     monkeypatch,
@@ -206,6 +307,175 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     restored = GateReport.from_json(result.to_json())
     assert restored.verify(SIGNING_KEY)
     assert restored.to_json() == result.to_json()
+
+
+def test_cross_script_gate_blocks_telugu_drop_while_latin_stays_green(
+    tmp_path: Path,
+) -> None:
+    fixture_path = (
+        Path(__file__).parents[2] / "fixtures" / "eval" / "non_latin_script_phi.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    bundle = compute_metrics_bundle(
+        fixture["gold_spans"],
+        fixture["predicted_spans_telugu_drop"],
+        source_text=fixture["text"],
+    )
+    candidate = _report(
+        tmp_path,
+        metric_updates={
+            "leakage": bundle["leakage"],
+            "recall_slices": bundle["recall_slices"],
+        },
+    )
+
+    result = _gate().evaluate(candidate, _baseline())
+    check = _check(result, release_gates.CROSS_SCRIPT_GATE)
+
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["per_script_recall"]["Latin"] == 1.0
+    assert check.details["per_script_recall"]["Telugu"] == 0.0
+    assert check.details["recall_floors"]["Telugu"] >= 0.99
+    assert "Telugu recall" in check.reason
+    assert "Telugu leakage" in check.reason
+
+
+def test_cross_script_gate_passes_when_all_fixture_scripts_are_covered(
+    tmp_path: Path,
+) -> None:
+    fixture_path = (
+        Path(__file__).parents[2] / "fixtures" / "eval" / "non_latin_script_phi.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    bundle = compute_metrics_bundle(
+        fixture["gold_spans"],
+        fixture["predicted_spans_all_covered"],
+        source_text=fixture["text"],
+    )
+    candidate = _report(
+        tmp_path,
+        metric_updates={
+            "leakage": bundle["leakage"],
+            "recall_slices": bundle["recall_slices"],
+        },
+    )
+
+    result = _gate().evaluate(candidate, _baseline())
+    check = _check(result, release_gates.CROSS_SCRIPT_GATE)
+
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["applicable_scripts"] == (
+        "Devanagari",
+        "Han",
+        "Telugu",
+    )
+
+
+def test_surrogate_quality_gate_requires_evidence_when_applicable(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"surrogate_quality_required": True},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, release_gates.SURROGATE_QUALITY_GATE)
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "surrogate-quality evidence is required"
+
+
+def test_surrogate_quality_gate_quarantines_bad_release_evidence(
+    tmp_path: Path,
+) -> None:
+    records: list[object] = list(load_surrogate_quality_records())
+    records.append(
+        {
+            "record_id": "sq-zh-release-regression",
+            "language": "zh",
+            "locale": "zh_CN",
+            "surrogates": {
+                "name": "John Doe",
+                "date_of_birth": "04/12/1990",
+                "national_id": "110105199004123416",
+            },
+            "expected": {
+                "birth_date": "1990-04-12",
+                "gender": "female",
+                "region_code": "110105",
+            },
+            "metadata": {
+                "synthetic": True,
+                "contains_real_phi": False,
+                "synthetic_source": "release_gate_regression",
+            },
+        }
+    )
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"surrogate_quality_required": True},
+            metric_updates={"surrogate_quality": {"records": records}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, release_gates.SURROGATE_QUALITY_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["failing_locales"] == {"zh": 0.5}
+
+
+def test_g9_relation_gate_fails_when_strict_lower_ci_below_floor(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"task": "relation"},
+            metric_updates=_relation_metric(
+                strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR - 0.001,
+                relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+            ),
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["strict_floor"] == release_gates.G9_STRICT_RE_F1_FLOOR
+    assert "strict_relation_f1" in check.details["violations"]
+
+
+def test_g9_relation_gate_passes_at_configured_lower_ci_floor(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"task": "relation"},
+            metric_updates=_relation_metric(
+                strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR,
+                relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+            ),
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9")
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["per_relation_type"]["INHIBITOR"]["strict_f1"] == (
+        release_gates.G9_STRICT_RE_F1_FLOOR
+    )
 
 
 def test_gate_report_from_json_rejects_malformed_payload() -> None:
@@ -298,6 +568,292 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
 
     assert result.decision == QUARANTINED
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
+
+
+def test_extraction_reemission_critical_identifier_forces_quarantine(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_leakage_count": 0,
+                "extraction_reemission_leakage": {
+                    "overall": 1.0,
+                    "leaked_chars_by_label": {"SSN": 11},
+                    "total_chars_by_label": {"SSN": 11},
+                },
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == QUARANTINED
+    assert result.critical_leakage_count == 11
+    assert _check(result, "G3").passed is False
+
+
+def test_extraction_reemission_blocks_high_f1_at_zero_leakage_target(
+    tmp_path: Path,
+) -> None:
+    gate = ReleaseGate(
+        signing_key=SIGNING_KEY,
+        model_steward_config={"default_target_leakage": 0.0},
+    )
+    result = gate.evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_reemission_leakage": {
+                    "overall": 0.01,
+                    "leaked_chars_by_label": {"PERSON": 4},
+                    "total_chars_by_label": {"PERSON": 4},
+                },
+                "exact_span_f1": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+            },
+        ),
+        _baseline(),
+    )
+
+    g7 = _check(result, "G7")
+    assert result.decision == QUARANTINED
+    assert _check(result, "G3").passed is True
+    assert g7.passed is False
+    assert "target_leakage" in g7.details["violations"]
+
+
+def test_g11_quarantines_single_missed_drug_allergy(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_finding_recall": {
+                    "overall": 2 / 3,
+                    "by_category": {
+                        "critical_diagnosis": 1.0,
+                        "drug_allergy": 0.0,
+                        "critical_result": 1.0,
+                    },
+                    "covered": 2,
+                    "total": 3,
+                    "missed_findings": [
+                        {
+                            "category": "drug_allergy",
+                            "fixture_id": "golden-critical-findings-synthetic-en",
+                            "start": 71,
+                            "end": 81,
+                            "label": "MEDICATION",
+                        }
+                    ],
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G11")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["floor"] == release_gates.G11_CRITICAL_RECALL_FLOOR
+    assert check.details["missed_findings"] == [
+        {
+            "category": "drug_allergy",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert check.details["violations"]["must_not_miss_findings"][0]["fixture_id"] == (
+        "golden-critical-findings-synthetic-en"
+    )
+
+
+def test_g14_passes_when_extraction_fairness_metric_absent(tmp_path: Path) -> None:
+    result = _gate().preview(_report(tmp_path), _baseline())
+
+    check = _check(result, "G14")
+    assert check.passed is True
+    assert check.reason == "not provided"
+    assert check.details["ceiling"] == release_gates.G14_EXTRACTION_DISPARITY_CEILING
+
+
+def test_g14_passes_on_balanced_extraction_corpus(tmp_path: Path) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": 0.01,
+                    "worst_group": "site=site_beta",
+                    "best_group": "site=site_alpha",
+                    "per_group": {
+                        "site=site_alpha": {"entity_f1": 0.99},
+                        "site=site_beta": {"entity_f1": 0.98},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert check.passed is True
+    assert check.details["extraction_f1_gap"] == pytest.approx(0.01)
+
+
+def test_g14_quarantines_when_injected_group_exceeds_ceiling(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": 0.42,
+                    "recall_gap": 0.5,
+                    "critical_finding_recall_gap": 0.6,
+                    "worst_group": "demographic_group=surrogate_b",
+                    "best_group": "demographic_group=surrogate_a",
+                    "worst_group_by_metric": {
+                        "entity_f1": "demographic_group=surrogate_b",
+                        "recall": "demographic_group=surrogate_b",
+                        "critical_finding_recall": "demographic_group=surrogate_b",
+                    },
+                    "per_group": {
+                        "demographic_group=surrogate_a": {"entity_f1": 0.95},
+                        "demographic_group=surrogate_b": {"entity_f1": 0.53},
+                    },
+                    "assistive": True,
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["ceiling"] == release_gates.G14_EXTRACTION_DISPARITY_CEILING
+    assert check.details["extraction_f1_gap"] == pytest.approx(0.42)
+    assert check.details["worst_group"] == "demographic_group=surrogate_b"
+    assert check.details["worst_group_by_metric"]["recall"] == (
+        "demographic_group=surrogate_b"
+    )
+
+
+def test_g14_computes_gap_from_per_group_when_gap_missing(tmp_path: Path) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "per_group": {
+                        "note_type=discharge_summary": {"entity_f1": 0.9},
+                        "note_type=progress_note": {"entity_f1": 0.2},
+                    }
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert check.passed is False
+    assert check.details["extraction_f1_gap"] == pytest.approx(0.7)
+    assert check.details["worst_group"] == "note_type=progress_note"
+
+
+@pytest.mark.parametrize("reported_gap", (-0.1, 0.0, 1.1))
+def test_g14_rejects_invalid_or_inconsistent_reported_gap(
+    tmp_path: Path,
+    reported_gap: float,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_fairness": {
+                    "extraction_f1_gap": reported_gap,
+                    "per_group": {
+                        "site=site_alpha": {"entity_f1": 0.95},
+                        "site=site_beta": {"entity_f1": 0.45},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "extraction-fairness metric is malformed"
+    assert check.details["computed_gap"] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    "per_group",
+    (
+        {"site=only": {"entity_f1": 0.9}},
+        {
+            "site=alpha": {"entity_f1": 0.9},
+            "site=beta": {"entity_f1": -0.1},
+        },
+        {
+            "site=alpha": {"entity_f1": 0.9},
+            "site=beta": {"entity_f1": "unknown"},
+        },
+    ),
+)
+def test_g14_rejects_malformed_group_evidence(
+    tmp_path: Path,
+    per_group: dict[str, object],
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"extraction_fairness": {"per_group": per_group}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "extraction-fairness metric is malformed"
+
+
+def test_g14_quarantines_from_extraction_fairness_report(tmp_path: Path) -> None:
+    from openmed.eval import (
+        extraction_fairness_report,
+        load_extraction_fairness_fixtures,
+    )
+
+    fixtures = load_extraction_fairness_fixtures()
+
+    def runner(fixture, model_name, device):
+        if fixture.metadata.get("demographic_group") == "surrogate_b":
+            return []
+        return [
+            {
+                "start": span.start,
+                "end": span.end,
+                "label": span.label,
+                "text": span.text,
+            }
+            for span in fixture.gold_spans
+        ]
+
+    audit = extraction_fairness_report("extract-model", fixtures, runner=runner)
+
+    result = _gate().evaluate(
+        _report(tmp_path, metric_updates={"extraction_fairness": audit.gate_metric()}),
+        _baseline(),
+    )
+
+    check = _check(result, "G14")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["worst_group"] == "demographic_group=surrogate_b"
 
 
 def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
@@ -616,6 +1172,241 @@ def test_k_floor_release_gate_fails_realized_k_below_target(
     assert check.details["violations"]["measured_k"] == {"observed": 2, "target": 3}
 
 
+def test_structured_release_risk_gate_verifies_aggregate_evidence(
+    tmp_path: Path,
+) -> None:
+    evidence = _structured_release_evidence()
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "structured_release_risk_evidence": evidence.to_dict(),
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "structured_release_risk")
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["integrity_verified"] is True
+    assert check.details["search_complete"] is False
+    assert check.details["search_optimality_proven"] is True
+    assert check.details["qualified_expert_review_required"] is True
+    serialized = json.dumps(check.to_dict(), sort_keys=True)
+    assert "patient-0" not in serialized
+    assert "Canary Name" not in serialized
+    assert "10001" not in serialized
+    assert "condition" not in serialized
+
+
+def test_structured_release_risk_gate_rejects_tampered_evidence_without_echo(
+    tmp_path: Path,
+) -> None:
+    payload = _structured_release_evidence().to_dict()
+    payload["privacy_models"]["k_anonymity"]["achieved_k"] = 1
+    payload["unexpected_raw_value"] = "patient-canary"
+
+    standalone = release_gates.evaluate_release_risk_evidence(payload)
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"structured_release_risk_evidence": payload},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "structured_release_risk")
+    assert standalone.passed is False
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+    assert "patient-canary" not in json.dumps(check.to_dict(), sort_keys=True)
+
+
+def test_structured_release_risk_gate_rejects_missing_sensitive_models() -> None:
+    payload = _structured_release_evidence().to_dict()
+    payload["privacy_models"]["l_diversity"] = None
+    payload["privacy_models"]["t_closeness"] = None
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_rejects_nonzero_pruned_proof() -> None:
+    payload = _structured_release_evidence().to_dict()
+    information_loss = next(
+        item for item in payload["utility"] if item["metric"] == "information_loss"
+    )
+    information_loss["after"] = 0.14
+    information_loss["absolute_delta"] = 0.14
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_rejects_changed_pre_metrics_in_pruned_proof() -> (
+    None
+):
+    payload = _structured_release_evidence().to_dict()
+    payload["metrics"]["pre_transform"] = {
+        "privacy_unit_count": 4,
+        "equivalence_class_count": 4,
+        "class_sizes": {
+            "smallest": 1,
+            "largest": 1,
+            "mean": 1.0,
+            "histogram": [
+                {
+                    "lower_bound": 1,
+                    "upper_bound": 1,
+                    "class_count": 4,
+                    "privacy_unit_count": 4,
+                }
+            ],
+        },
+        "violations": {
+            "k_class_count": 4,
+            "l_class_count": 4,
+            "t_class_count": 4,
+            "any_class_count": 4,
+            "privacy_unit_count": 4,
+        },
+    }
+    payload["privacy_models"]["k_anonymity"]["pre_achieved_k"] = 1
+    payload["privacy_models"]["l_diversity"]["pre_achieved_l"] = 1
+    payload["privacy_models"]["t_closeness"]["pre_achieved_t"] = 1.0
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+def test_structured_release_risk_gate_requires_v3_for_pruned_proof() -> None:
+    payload = _structured_release_evidence().to_dict()
+    assert payload["search"]["complete"] is False
+    payload["schema_version"] = 2
+    payload["search"].pop("optimality_proven")
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details["integrity_verified"] is True
+    assert check.details["violations"]["search_optimality_proof"] == (
+        "schema_version_3_required_for_pruned_proof"
+    )
+
+
+def test_standalone_release_risk_verifier_requires_evidence() -> None:
+    check = release_gates.evaluate_release_risk_evidence(None)
+
+    assert check.passed is False
+    assert check.reason == "release-risk evidence is required"
+    assert check.details == {"integrity_verified": False}
+
+
+def test_multi_release_risk_gate_requires_complete_no_increase_review() -> None:
+    evidence = _structured_release_evidence(
+        composition=CompositionEvidence(
+            release_count=2,
+            longitudinal_linkage_assessed=True,
+            prior_release_overlap_assessed=True,
+            risk_status="no_material_increase_observed",
+            evidence_digest=stable_hash({"kind": "multi-release-review"}),
+        )
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(evidence)
+
+    assert check.passed is True
+    assert check.details["composition_status"] == "no_material_increase_observed"
+
+
+def test_release_gate_rejects_inconsistent_single_release_composition() -> None:
+    payload = _structured_release_evidence().to_dict()
+    payload["composition"].update(
+        {
+            "longitudinal_linkage_assessed": True,
+            "prior_release_overlap_assessed": True,
+            "risk_status": "increase_observed",
+        }
+    )
+    payload["integrity_hash"] = stable_hash(
+        {key: value for key, value in payload.items() if key != "integrity_hash"}
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(payload)
+
+    assert check.passed is False
+    assert check.details == {"integrity_verified": False}
+
+
+@pytest.mark.parametrize(
+    ("longitudinal_assessed", "overlap_assessed", "risk_status", "violation"),
+    [
+        (
+            False,
+            True,
+            "no_material_increase_observed",
+            "longitudinal_linkage_assessed",
+        ),
+        (
+            True,
+            False,
+            "no_material_increase_observed",
+            "prior_release_overlap_assessed",
+        ),
+        (True, True, "inconclusive", "risk_status"),
+    ],
+)
+def test_multi_release_risk_gate_rejects_incomplete_composition_review(
+    longitudinal_assessed: bool,
+    overlap_assessed: bool,
+    risk_status: str,
+    violation: str,
+) -> None:
+    evidence = _structured_release_evidence(
+        composition=CompositionEvidence(
+            release_count=2,
+            longitudinal_linkage_assessed=longitudinal_assessed,
+            prior_release_overlap_assessed=overlap_assessed,
+            risk_status=risk_status,
+            evidence_digest=stable_hash(
+                {
+                    "kind": "multi-release-review",
+                    "longitudinal": longitudinal_assessed,
+                    "overlap": overlap_assessed,
+                    "status": risk_status,
+                }
+            ),
+        )
+    )
+
+    check = release_gates.evaluate_release_risk_evidence(evidence)
+
+    assert check.passed is False
+    assert violation in check.details["violations"]["composition_review"]
+
+
 def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
     result = _gate().evaluate(
         _report(
@@ -740,6 +1531,118 @@ def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> No
     assert result.decision == QUARANTINED
     assert check.passed is False
     assert check.details["mismatches"]["readme"]["models"]["readme_floor"] == 2
+
+
+def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
+    rows = release_gates._load_manifest_rows(release_gates._DEFAULT_MANIFEST_PATH)
+
+    derived_count = release_gates._published_android_onnx_derivative_count(rows)
+
+    assert len(rows) == 1_520
+    assert derived_count == 752
+    assert len(rows) + derived_count >= 2_000
+
+
+def _export_variant_manifest() -> dict[str, object]:
+    return {
+        "parent_format": "pytorch",
+        "parent_recall": {"PERSON": 0.995, "DATE": 0.995, "ID_NUM": 0.995},
+        "required_variants": ["onnx", "onnx-int8", "webgpu"],
+        "variants": [
+            {
+                "format": "onnx",
+                "tier": "base",
+                "p50_ms": 90.0,
+                "p95_ms": 280.0,
+                "ram_mb": 700.0,
+            },
+            {
+                "format": "onnx-int8",
+                "tier": "tiny",
+                "recall": {"PERSON": 0.992, "DATE": 0.993, "ID_NUM": 0.994},
+                "p50_ms": 40.0,
+                "p95_ms": 120.0,
+                "ram_mb": 300.0,
+            },
+            {
+                "format": "webgpu",
+                "tier": "base",
+                "p50_ms": 90.0,
+                "p95_ms": 280.0,
+                "ram_mb": 700.0,
+            },
+        ],
+    }
+
+
+def test_export_variant_gate_releases_passing_onnx_and_webgpu(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "export_variant_manifest": _export_variant_manifest(),
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert result.blocked_formats == ()
+    assert _check(result, "export_variants").passed is True
+    assert _check(result, "export_variants:onnx-int8").passed is True
+    assert _check(result, "export_variants:webgpu").passed is True
+
+
+def test_export_variant_gate_blocks_degraded_variant_and_reports_format(
+    tmp_path: Path,
+) -> None:
+    manifest = _export_variant_manifest()
+    manifest["variants"][1]["recall"] = {
+        "PERSON": 0.985,
+        "DATE": 0.993,
+        "ID_NUM": 0.994,
+    }
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"export_variant_manifest": manifest},
+        ),
+        _baseline(),
+    )
+
+    blocked = _check(result, "export_variants:onnx-int8")
+    assert result.decision == QUARANTINED
+    assert blocked.passed is False
+    assert blocked.blocking_format == "onnx-int8"
+    assert result.blocked_formats == ("onnx-int8",)
+    # Unrelated passing variants stay releasable within the same report.
+    assert _check(result, "export_variants:onnx").passed is True
+    assert _check(result, "export_variants:webgpu").passed is True
+
+
+def test_export_variant_gate_fails_closed_when_required_variant_missing(
+    tmp_path: Path,
+) -> None:
+    manifest = _export_variant_manifest()
+    manifest["variants"] = [
+        variant for variant in manifest["variants"] if variant["format"] != "webgpu"
+    ]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"export_variant_manifest": manifest},
+        ),
+        _baseline(),
+    )
+
+    coverage = _check(result, "export_variants")
+    assert result.decision == QUARANTINED
+    assert coverage.passed is False
+    assert coverage.details["missing_required"] == ["webgpu"]
 
 
 def _coreml_manifest() -> dict[str, object]:

@@ -6,16 +6,25 @@ import pytest
 
 OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "duckdb",
+    "indicnlp",
+    "jieba",
     "langchain",
     "langchain_core",
     "pandas",
     "presidio",
     "philter_ucsf",
     "polars",
+    "prefect",
     "pyDeid",
     "pydeid",
+    "pyspark",
     "gliner",
     "llama_index",
+    "opencc",
+    "pypinyin",
+    "quickumls",
+    "scispacy",
+    "scrubadub",
     "spacy",
 )
 
@@ -43,6 +52,7 @@ def test_import_openmed_does_not_import_optional_adapter_dependencies():
 
 def test_import_interop_registry_does_not_import_optional_adapter_dependencies():
     _clear_optional_adapter_modules()
+    sys.modules.pop("openmed.interop.icd11_api", None)
 
     from openmed.interop import adapter_spec, available_adapters
 
@@ -53,29 +63,50 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "function_tools",
         "gliner_biomed",
         "hl7v2",
+        "icd11_api",
+        "indic",
         "langchain",
         "llamaindex",
+        "omop",
+        "openmrs",
         "pandas",
         "philter",
         "polars",
+        "prefect",
         "presidio",
         "pydeid",
+        "quickumls",
+        "scispacy_linker",
+        "scrubadub",
         "spacy",
+        "spark",
+        "zh",
     )
     assert adapter_spec("cda").extra == "core"
     assert adapter_spec("cdm_etl").extra == ""
     assert adapter_spec("duckdb").extra == "duckdb"
     assert adapter_spec("hl7v2").extra == ""
+    assert adapter_spec("icd11_api").extra == ""
+    assert adapter_spec("indic").extra == "indic"
     assert adapter_spec("function_tools").extra == ""
     assert adapter_spec("langchain").extra == "langchain"
     assert adapter_spec("llamaindex").extra == "llamaindex"
+    assert adapter_spec("omop").extra == ""
+    assert adapter_spec("openmrs").extra == "openmrs"
     assert adapter_spec("pandas").extra == "pandas"
     assert adapter_spec("presidio").extra == "presidio"
     assert adapter_spec("philter").extra == "philter"
     assert adapter_spec("polars").extra == "polars"
+    assert adapter_spec("prefect").extra == "prefect"
     assert adapter_spec("pydeid").extra == "pydeid"
+    assert adapter_spec("quickumls").extra == "quickumls"
+    assert adapter_spec("scispacy_linker").extra == "scispacy"
+    assert adapter_spec("scrubadub").extra == "scrubadub"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"
+    assert adapter_spec("spark").extra == "spark"
+    assert adapter_spec("zh").extra == "zh"
+    assert "openmed.interop.icd11_api" not in sys.modules
     assert not any(_is_optional_adapter_module(name) for name in sys.modules)
 
 
