@@ -145,3 +145,13 @@ and Hindi relation examples. They reuse canonical NER labels, carry registry
 version `1`, and are scored separately through the relation metric's
 `by_language`/`per_language` payloads. No CMeIE or other external corpus text is
 bundled.
+
+## Radiology Entity-and-Relation Fixtures
+
+`fixtures/radiology_entity_relations.jsonl` contains hand-authored synthetic
+radiology reports with `OBSERVATION` and `ANATOMY` spans, present/absent/uncertain
+finding labels, and `LOCATED_AT`, `MODIFY`, and `SUGGESTIVE_OF` relations. The
+dedicated loader rejects any committed row that is not explicitly marked
+synthetic or lacks the required not-a-medical-device disclaimer. These rows are
+offline evaluation probes for clinician-reviewed systems, not clinical ground
+truth, patient-care guidance, RadGraph/MIMIC-CXR content, or other DUA data.
