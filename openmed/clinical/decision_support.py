@@ -20,9 +20,9 @@ callable through the envelope, and a :func:`validate_guarded_suggestion` check
 that rejects any output lacking a disclaimer or source traceability.
 
 This module performs no clinical inference of its own; it wraps and validates the
-output of upstream producers. It is local-first and holds no plaintext
-identifiers -- only caller-supplied span text (synthetic in examples and tests),
-offsets, confidences, and provenance labels.
+output of upstream producers. It is local-first, makes no network calls, and
+does not generate or log plaintext identifiers. Suggestion payloads and optional
+span excerpts are caller-supplied (synthetic in examples and tests).
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import copy
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Literal
 
 CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION = 1
 
@@ -51,8 +51,6 @@ CLINICAL_DECISION_SUPPORT_DISCLAIMER = (
 CLINICIAN_REVIEW_REQUIRED_NOTE = "Clinician must review -- not an autonomous decision."
 
 _ConfidenceError = "confidence must be a real number in the closed interval [0, 1]"
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -83,8 +81,8 @@ class SourceSpan:
             raise TypeError("SourceSpan.end must be an integer offset")
         if self.start < 0 or self.end < 0:
             raise ValueError("SourceSpan offsets must be non-negative")
-        if self.end < self.start:
-            raise ValueError("SourceSpan.end must not precede SourceSpan.start")
+        if self.end <= self.start:
+            raise ValueError("SourceSpan.end must be greater than SourceSpan.start")
         if self.label is not None:
             object.__setattr__(self, "label", str(self.label))
         if self.text is not None:
@@ -130,8 +128,8 @@ class SourceSpan:
         if start is None or end is None:
             raise ValueError("source span requires integer start and end offsets")
         return cls(
-            start=int(start),
-            end=int(end),
+            start=start,
+            end=end,
             label=None if label is None else str(label),
             text=None if text is None else str(text),
         )
@@ -146,8 +144,9 @@ class GuardedSuggestion:
     """A single clinical suggestion wrapped with mandatory CDS safety metadata.
 
     Constructing an instance enforces the guardrail invariants, so a
-    ``GuardedSuggestion`` cannot exist without a disclaimer, at least one source
-    span, an in-range confidence, and an autonomous-decision flag of ``False``.
+    ``GuardedSuggestion`` cannot exist without the canonical disclaimer, at least
+    one non-empty source span, an in-range confidence, and an autonomous-decision
+    flag of ``False``.
 
     Attributes:
         suggestion: The clinician-facing suggestion payload (opaque to this
@@ -166,8 +165,8 @@ class GuardedSuggestion:
     source_spans: tuple[SourceSpan, ...]
     confidence: float
     disclaimer: str = CLINICAL_DECISION_SUPPORT_DISCLAIMER
-    requires_clinician_review: bool = True
-    autonomous_decision: bool = False
+    requires_clinician_review: Literal[True] = True
+    autonomous_decision: Literal[False] = False
     provenance: Mapping[str, Any] = field(default_factory=dict)
     schema_version: int = CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION
 
@@ -179,11 +178,7 @@ class GuardedSuggestion:
                 "for traceability; untraced suggestions are rejected"
             )
         confidence = _validate_confidence(self.confidence)
-        disclaimer = str(self.disclaimer).strip()
-        if not disclaimer:
-            raise GuardrailValidationError(
-                "a guarded clinical suggestion requires a non-empty disclaimer"
-            )
+        disclaimer = _validate_disclaimer(self.disclaimer)
         if self.autonomous_decision is not False:
             raise GuardrailValidationError(
                 "clinical suggestions are never autonomous decisions; "
@@ -229,13 +224,11 @@ class GuardedSuggestion:
             )
         return cls(
             suggestion=copy.deepcopy(data.get("suggestion")),
-            source_spans=tuple(
-                SourceSpan.from_obj(span) for span in data.get("source_spans", ())
-            ),
+            source_spans=_normalize_source_spans(data.get("source_spans")),
             confidence=_coerce_float(data.get("confidence")),
-            disclaimer=str(data.get("disclaimer", "")),
-            requires_clinician_review=bool(data.get("requires_clinician_review", True)),
-            autonomous_decision=bool(data.get("autonomous_decision", False)),
+            disclaimer=data.get("disclaimer", ""),
+            requires_clinician_review=data.get("requires_clinician_review", True),
+            autonomous_decision=data.get("autonomous_decision", False),
             provenance=dict(data.get("provenance") or {}),
             schema_version=int(
                 data.get("schema_version", CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION)
@@ -245,7 +238,7 @@ class GuardedSuggestion:
 
 def build_guarded_suggestion(
     suggestion: Any,
-    source_spans: Iterable[Any],
+    source_spans: Iterable[Any] | None,
     confidence: float,
     *,
     disclaimer: str = CLINICAL_DECISION_SUPPORT_DISCLAIMER,
@@ -262,8 +255,8 @@ def build_guarded_suggestion(
         source_spans: One or more spans (mappings or span-like objects) the
             suggestion derives from. At least one is required.
         confidence: Confidence in the closed interval ``[0, 1]``.
-        disclaimer: Optional override for the mandatory disclaimer text. Must be
-            non-empty; defaults to :data:`CLINICAL_DECISION_SUPPORT_DISCLAIMER`.
+        disclaimer: Mandatory disclaimer text. If supplied, it must match
+            :data:`CLINICAL_DECISION_SUPPORT_DISCLAIMER`.
         provenance: Optional PHI-free provenance metadata.
 
     Returns:
@@ -276,7 +269,7 @@ def build_guarded_suggestion(
 
     return GuardedSuggestion(
         suggestion=suggestion,
-        source_spans=tuple(SourceSpan.from_obj(span) for span in source_spans),
+        source_spans=_normalize_source_spans(source_spans),
         confidence=confidence,
         disclaimer=disclaimer,
         provenance=dict(provenance or {}),
@@ -315,8 +308,7 @@ def validate_guarded_suggestion(candidate: Any) -> GuardedSuggestion:
     # Invariants are enforced at construction, but re-check defensively so this
     # function is a hard gate even if the dataclass frozen guarantees are
     # bypassed by object.__setattr__ elsewhere.
-    if not str(suggestion.disclaimer).strip():
-        raise GuardrailValidationError("guarded suggestion is missing its disclaimer")
+    _validate_disclaimer(suggestion.disclaimer)
     if not suggestion.source_spans:
         raise GuardrailValidationError(
             "guarded suggestion is missing source-span traceability"
@@ -355,7 +347,9 @@ def guarded_suggestion(
 
     Args:
         func: The suggestion-producing callable (when used without parentheses).
-        disclaimer: Optional disclaimer override applied to tuple-style returns.
+        disclaimer: Mandatory disclaimer applied to tuple-style returns. If
+            supplied, it must match
+            :data:`CLINICAL_DECISION_SUPPORT_DISCLAIMER`.
 
     Returns:
         A wrapper that returns a validated :class:`GuardedSuggestion`, or a
@@ -439,6 +433,18 @@ def _validate_confidence(value: Any) -> float:
     if not 0.0 <= confidence <= 1.0:
         raise GuardrailValidationError(_ConfidenceError)
     return confidence
+
+
+def _validate_disclaimer(value: Any) -> str:
+    if (
+        not isinstance(value, str)
+        or value.strip() != CLINICAL_DECISION_SUPPORT_DISCLAIMER
+    ):
+        raise GuardrailValidationError(
+            "a guarded clinical suggestion requires the mandatory medical-device "
+            "disclaimer"
+        )
+    return CLINICAL_DECISION_SUPPORT_DISCLAIMER
 
 
 def _coerce_float(value: Any) -> float:

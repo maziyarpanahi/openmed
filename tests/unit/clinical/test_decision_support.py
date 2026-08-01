@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Literal, get_type_hints
 
 import pytest
 
@@ -52,19 +53,39 @@ def test_disclaimer_always_present_and_non_empty():
     assert guarded.to_dict()["disclaimer"] == CLINICAL_DECISION_SUPPORT_DISCLAIMER
 
 
-def test_blank_disclaimer_is_rejected():
+@pytest.mark.parametrize(
+    "disclaimer",
+    ["", "   ", None, "Clinician review required"],
+)
+def test_missing_or_noncanonical_disclaimer_is_rejected(disclaimer):
     with pytest.raises(GuardrailValidationError):
         build_guarded_suggestion(
             "x",
             [_synthetic_span()],
             0.5,
-            disclaimer="   ",
+            disclaimer=disclaimer,
         )
+
+
+def test_validate_rejects_mapping_with_noncanonical_disclaimer():
+    payload = build_guarded_suggestion("suggestion", [_synthetic_span()], 0.6).to_dict()
+    payload["disclaimer"] = "Clinician review required"
+    with pytest.raises(GuardrailValidationError):
+        validate_guarded_suggestion(payload)
+
+
+def test_validate_rejects_mapping_without_disclaimer():
+    payload = build_guarded_suggestion("suggestion", [_synthetic_span()], 0.6).to_dict()
+    del payload["disclaimer"]
+    with pytest.raises(GuardrailValidationError):
+        validate_guarded_suggestion(payload)
 
 
 def test_traceability_required_untraced_suggestion_is_rejected():
     with pytest.raises(GuardrailValidationError):
         build_guarded_suggestion("untraceable suggestion", [], 0.5)
+    with pytest.raises(GuardrailValidationError):
+        build_guarded_suggestion("untraceable suggestion", None, 0.5)
 
     with pytest.raises(GuardrailValidationError):
         GuardedSuggestion(
@@ -93,6 +114,12 @@ def test_autonomous_decision_flag_is_always_false():
     assert guarded.to_dict()["requires_clinician_review"] is True
 
 
+def test_autonomous_decision_flag_is_structurally_literal_false():
+    hints = get_type_hints(GuardedSuggestion)
+    assert hints["autonomous_decision"] == Literal[False]
+    assert hints["requires_clinician_review"] == Literal[True]
+
+
 def test_constructing_an_autonomous_decision_is_rejected():
     with pytest.raises(GuardrailValidationError):
         GuardedSuggestion(
@@ -106,6 +133,22 @@ def test_constructing_an_autonomous_decision_is_rejected():
 def test_validate_rejects_autonomous_decision_mapping():
     payload = build_guarded_suggestion("suggestion", [_synthetic_span()], 0.6).to_dict()
     payload["autonomous_decision"] = True
+    with pytest.raises(GuardrailValidationError):
+        validate_guarded_suggestion(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("autonomous_decision", 0),
+        ("autonomous_decision", "false"),
+        ("requires_clinician_review", 1),
+        ("requires_clinician_review", "true"),
+    ],
+)
+def test_validate_rejects_non_boolean_safety_flags(field, value):
+    payload = build_guarded_suggestion("suggestion", [_synthetic_span()], 0.6).to_dict()
+    payload[field] = value
     with pytest.raises(GuardrailValidationError):
         validate_guarded_suggestion(payload)
 
@@ -178,6 +221,20 @@ def test_invalid_source_span_offsets_are_rejected():
         SourceSpan(start=10, end=4)
     with pytest.raises(ValueError):
         SourceSpan(start=-1, end=2)
+    with pytest.raises(ValueError):
+        SourceSpan(start=4, end=4)
+
+
+@pytest.mark.parametrize(
+    "span",
+    [
+        {"start": "1", "end": 2},
+        {"start": 1.5, "end": 2},
+    ],
+)
+def test_source_span_mapping_requires_integer_offsets(span):
+    with pytest.raises(TypeError):
+        SourceSpan.from_obj(span)
 
 
 def test_decorator_wraps_tuple_producer_into_validated_envelope():
