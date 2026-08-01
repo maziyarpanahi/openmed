@@ -192,6 +192,7 @@ from openmed.eval.suites.relations import (
 from openmed.eval.suites.shield import (
     SHIELD,
     load_shield_fixtures,
+    run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
 )
 
@@ -483,6 +484,7 @@ __all__ = [
     "load_masakhaner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
+    "run_clinical_phi_shield_benchmark",
     "shield_suite_metadata",
     "load_policy_compliance_fixtures",
     "policy_compliance_metadata",
