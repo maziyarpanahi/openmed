@@ -320,6 +320,7 @@ def analyze_text(
     sentence_language: str = "en",
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
+    sentence_backend: str = "auto",
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
@@ -345,10 +346,14 @@ def analyze_text(
             :func:`openmed.processing.format_predictions`.
         metadata: Optional metadata to attach to the result.
         use_fast_tokenizer: Prefer fast tokenizers when available.
-        sentence_detection: Enable pySBD-powered sentence detection (default: True).
+        sentence_detection: Enable sentence detection (default: True). The
+            engine is selected by ``sentence_backend``.
         sentence_language: Language hint for the sentence detector.
         sentence_clean: Whether to enable pySBD's cleaning heuristics.
-        sentence_segmenter: Optional preconstructed pySBD segmenter to reuse.
+        sentence_segmenter: Optional preconstructed segmenter object to reuse.
+            It cannot be combined with ``sentence_backend="yasbd"``.
+        sentence_backend: Sentence segmentation engine to use.
+            It can be ``"auto"`` (default) or ``"yasbd"`` (experimental, faster).
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
@@ -460,6 +465,7 @@ def analyze_text(
                 language=sentence_language,
                 clean=sentence_clean,
                 segmenter=sentence_segmenter,
+                backend=sentence_backend,
             )
         except ImportError:
             sentence_detection = False
