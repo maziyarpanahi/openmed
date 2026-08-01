@@ -18,6 +18,35 @@ provision licensed assets outside the repository and pass an explicit local
 path to `load_cmeee`. Missing paths and repository-internal real-data paths fail
 with license-boundary guidance.
 
+## Clinical PHI flagship SHIELD comparison
+
+The `OpenMed/OpenMed-ClinicalPrivacy-tier0` SHIELD report is comparison
+evidence, not a high-recall release gate. Its explicit
+`metrics.shield_comparison` block contains aggregate recall, leakage, and exact
+span scores plus recall and leakage for every SHIELD-mapped canonical label.
+G1a, G2, and G3 certification remains a separate release-gate workflow.
+
+The flagship runner requires a checkpoint manifest and a stable link to that
+manifest. The report binds that checkpoint row to the committed clinical-PHI
+dataset manifest, the public SHIELD corpus coordinates, the normalized fixture
+set, and the eval code. It stores hashes instead of raw fixture identifiers and
+does not vendor SHIELD rows.
+
+```bash
+openmed benchmark pii \
+  --suite shield \
+  --models OpenMed/OpenMed-ClinicalPrivacy-tier0 \
+  --checkpoint-manifest models.jsonl \
+  --checkpoint-manifest-ref \
+    models.jsonl#OpenMed/OpenMed-ClinicalPrivacy-tier0 \
+  --output clinical-privacy-shield.report.json
+```
+
+The checkpoint input may be a JSON object, a list of model rows, or JSONL. Its
+flagship row must identify `OpenMed/OpenMed-ClinicalPrivacy-tier0`; when a
+`reproducibility_hash` is present, it must be a lowercase `sha256:` digest.
+Offline tests use only synthetic SHIELD-shaped rows.
+
 ## Clinical PHI flagship certification
 
 `build_clinical_privacy_release` certifies the named
