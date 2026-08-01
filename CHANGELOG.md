@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an experimental `yasbd` sentence-segmentation backend selectable via
+  `segment_text(..., backend="yasbd")` and
+  `analyze_text(..., sentence_backend="yasbd")`, backed by the optional
+  `yasbd-lib` extra for faster segmentation, with explicit `ValueError` guards
+  for unknown backends and preconstructed segmenters (#1848).
+
 ### Fixed
 
 - Fixed the PySpark batch de-identification adapter so

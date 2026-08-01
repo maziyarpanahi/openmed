@@ -349,7 +349,7 @@ def analyze_text(
         sentence_detection: Enable sentence detection (default: True). The
             engine is selected by ``sentence_backend``.
         sentence_language: Language hint for the sentence detector.
-        sentence_clean: Whether to enable pySBD's cleaning heuristics.
+        sentence_clean: Whether to enable the sentence detector's cleaning heuristics.
         sentence_segmenter: Optional preconstructed segmenter object to reuse.
             It cannot be combined with ``sentence_backend="yasbd"``.
         sentence_backend: Sentence segmentation engine to use.
