@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -232,13 +233,14 @@ def test_registry_model_ids_are_derived_from_manifest():
 
 def test_manifest_generator_uses_hub_api(monkeypatch):
     class FakeModel:
-        modelId = "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M"
+        id = "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M"
         pipeline_tag = "token-classification"
         tags = ["transformers", "safetensors", "distilbert", "license:apache-2.0"]
         siblings = []
+        safetensors = {"total": 134_987_654}
         sha = "abc123"
-        lastModified = None
-        createdAt = None
+        last_modified = datetime(2026, 8, 1, 12, 30, tzinfo=timezone.utc)
+        created_at = None
 
     class FakeApi:
         def list_models(self, *, author, full):
@@ -249,10 +251,39 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     monkeypatch.setattr(generate_manifest, "HfApi", lambda: FakeApi())
     rows = generate_manifest.fetch_manifest_rows("OpenMed")
 
-    assert rows[0]["repo_id"] == FakeModel.modelId
+    assert rows[0]["repo_id"] == FakeModel.id
     assert rows[0]["family"] == "NER"
-    assert rows[0]["param_count"] == 135_000_000
+    assert rows[0]["param_count"] == 134_987_654
+    assert rows[0]["released"] == "2026-08-01"
     assert "leakage" in rows[0]["benchmark"]
+    assert validate_manifest_row(rows[0], line_number=1) == []
+
+
+@pytest.mark.parametrize(
+    ("repo_id", "expected"),
+    (
+        ("OpenMed/privacy-filter-mlx-8bit", None),
+        ("OpenMed/model-135M-8bit", 135_000_000),
+        ("OpenMed/model-2B-int8", 2_000_000_000),
+    ),
+)
+def test_manifest_generator_keeps_quantization_width_out_of_param_count(
+    repo_id,
+    expected,
+):
+    assert generate_manifest._param_count(repo_id) == expected
+
+
+def test_committed_quantized_rows_do_not_claim_bit_width_as_param_count():
+    quantized_repo_ids = {
+        "OpenMed/privacy-filter-mlx-8bit",
+        "OpenMed/privacy-filter-multilingual-mlx-8bit",
+        "OpenMed/privacy-filter-nemotron-mlx-8bit",
+    }
+    rows = {row["repo_id"]: row for row in _rows()}
+
+    assert quantized_repo_ids <= rows.keys()
+    assert all(rows[repo_id]["param_count"] is None for repo_id in quantized_repo_ids)
 
 
 def test_explicit_ner_repo_name_wins_over_inherited_pii_tags():
@@ -444,6 +475,10 @@ def test_manifest_refresh_workflow_is_manual_only():
     assert "schedule:" not in text
     assert "cron:" not in text
     assert "scripts/manifest/generate_manifest.py --output models.jsonl" in text
+    assert "peter-evans/create-pull-request@" in text
+    assert "base: master" in text
+    assert "draft: true" not in text
+    assert "auto-merge" not in text
 
 
 def _manifest_row_fixture(**overrides):
