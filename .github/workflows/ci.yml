@@ -57,6 +57,13 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
+    - name: Assert built wheel contains no restricted vocabulary data
+      run: |
+        python -m pip install build
+        python -m build --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
+        python scripts/release/check_license_policy.py \
+          --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
+
     - name: Validate GitHub Actions references
       run: |
         python scripts/release/check_github_actions_refs.py
@@ -96,6 +103,56 @@ jobs:
           echo "::error title=README translation drift::One or more README translations are stale. Review them using docs/i18n/glossary.md, then refresh the committed section manifest."
           exit 1
         fi
+
+  grounding-export-validation:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install validation dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Fetch pinned HL7 FHIR validator
+      run: |
+        curl --fail --location --retry 3 \
+          https://github.com/hapifhir/org.hl7.fhir.core/releases/download/6.8.1/validator_cli.jar \
+          --output "$RUNNER_TEMP/validator_cli.jar"
+        echo "7d05b31196557a8ed2748d3c8a1646deba9b6600f5b6946be598949bd11eefe2  $RUNNER_TEMP/validator_cli.jar" \
+          | sha256sum --check --strict
+
+    - name: Validate synthetic FHIR and OMOP grounding exports
+      run: |
+        uv run python -m openmed.eval.suites.grounding_export \
+          --validator-jar "$RUNNER_TEMP/validator_cli.jar" \
+          --output grounding-export-validation.json
+
+    - name: Upload grounding export validation report
+      if: always() && hashFiles('grounding-export-validation.json') != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: grounding-export-validation
+        path: grounding-export-validation.json
 
   lockfile-drift:
     runs-on: ubuntu-latest
