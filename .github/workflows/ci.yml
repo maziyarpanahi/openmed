@@ -148,6 +148,10 @@ jobs:
       run: |
         uv run ruff format --check .
 
+    - name: Enforce public API backwards-compatibility policy
+      run: |
+        uv run python scripts/release/check_public_api.py
+
     - name: Type-check annotated public modules
       run: |
         uv run mypy
@@ -193,10 +197,6 @@ jobs:
     - name: Trust-CI no-raw-PHI logging guard
       run: |
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
-
-    - name: Enforce public API backwards-compatibility policy
-      run: |
-        uv run python scripts/release/check_public_api.py
 
     - name: Test with pytest
       run: |

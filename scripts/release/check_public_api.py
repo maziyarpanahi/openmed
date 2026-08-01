@@ -21,13 +21,14 @@ intentional breaks are recorded in ``scripts/release/public_api_allowlist.json``
 Regenerate the baseline with ``--update`` once a break has been announced and
 allowlisted, or when adding new public surface.
 
-The implementation is stdlib-only (``ast``/``inspect``) so it can run in the
-``repo-policy`` CI job without importing heavy optional dependencies.
+The implementation is stdlib-only (``ast``/``inspect``) so it can run as a
+lightweight CI policy gate without importing heavy optional dependencies.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib
 import inspect
 import json
@@ -39,6 +40,14 @@ from typing import Any, Iterable, Mapping, Sequence
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = ROOT / "scripts" / "release" / "public_api_baseline.json"
 DEFAULT_ALLOWLIST = ROOT / "scripts" / "release" / "public_api_allowlist.json"
+
+# A direct ``python scripts/release/check_public_api.py`` invocation otherwise
+# puts only ``scripts/release`` at the front of ``sys.path``.  Pin imports to
+# the checkout being checked instead of an unrelated editable installation.
+root_string = str(ROOT)
+if root_string in sys.path:
+    sys.path.remove(root_string)
+sys.path.insert(0, root_string)
 
 TOP_LEVEL_PACKAGE = "openmed"
 
@@ -146,6 +155,50 @@ def _member_signature(obj: Any, kind: str) -> str | None:
     return "(" + ", ".join(parts) + ")"
 
 
+def _static_exports(module_name: str) -> tuple[str, ...] | None:
+    """Read a package's literal ``__all__`` from its source with :mod:`ast`.
+
+    The supported namespaces use literal lists.  Returning ``None`` for a
+    missing or dynamic declaration lets :func:`capture_module` fall back to the
+    imported module without treating parser limitations as API removals.
+    """
+
+    init_path = ROOT.joinpath(*module_name.split("."), "__init__.py")
+    if not init_path.is_file():
+        return None
+    try:
+        tree = ast.parse(init_path.read_text(encoding="utf-8"), filename=str(init_path))
+    except (OSError, SyntaxError, TypeError, UnicodeError):
+        return None
+
+    exported: tuple[str, ...] | None = None
+    for statement in tree.body:
+        value: ast.expr | None = None
+        if isinstance(statement, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "__all__"
+            for target in statement.targets
+        ):
+            value = statement.value
+        elif (
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.target.id == "__all__"
+        ):
+            value = statement.value
+        if value is None:
+            continue
+        try:
+            candidate = ast.literal_eval(value)
+        except (SyntaxError, TypeError, ValueError):
+            return None
+        if not isinstance(candidate, (list, tuple)) or not all(
+            isinstance(name, str) for name in candidate
+        ):
+            return None
+        exported = tuple(candidate)
+    return exported
+
+
 def capture_module(module_name: str) -> SurfaceSnapshot | None:
     """Capture the public members of ``module_name`` via its ``__all__``.
 
@@ -159,17 +212,25 @@ def capture_module(module_name: str) -> SurfaceSnapshot | None:
     except Exception:  # pragma: no cover - depends on optional extras
         return None
 
-    exported = getattr(module, "__all__", None)
+    exported = _static_exports(module_name)
+    if exported is None:
+        exported = getattr(module, "__all__", None)
     if exported is None:
         return SurfaceSnapshot(module=module_name, members=())
 
     members: list[MemberSnapshot] = []
     for name in sorted(dict.fromkeys(exported)):
-        if not hasattr(module, name):
-            # Declared in ``__all__`` but not importable; skip rather than fail
-            # so the tool never masks a real removal with a capture error.
+        try:
+            obj = getattr(module, name)
+        except Exception:
+            # Keep declared exports in the snapshot even when an optional
+            # dependency makes the object unavailable in this environment.
+            # The differ ignores an unavailable current kind, but can still
+            # detect a future removal from ``__all__``.
+            members.append(
+                MemberSnapshot(name=name, kind="unavailable", signature=None)
+            )
             continue
-        obj = getattr(module, name)
         kind = _member_kind(obj)
         signature = _member_signature(obj, kind)
         members.append(MemberSnapshot(name=name, kind=kind, signature=signature))
@@ -242,27 +303,39 @@ def _signature_is_breaking(old: str | None, new: str | None) -> bool:
 
     old_params = _parse_signature(old)
     new_params = _parse_signature(new)
-    new_by_name = dict(new_params)
+    new_by_name = {name: (kind, has_default) for name, kind, has_default in new_params}
 
-    for name, had_default in old_params:
+    allowed_kind_transitions = {
+        "positional_only": {"positional_only", "positional_or_keyword"},
+        "positional_or_keyword": {"positional_or_keyword"},
+        "keyword_only": {"keyword_only", "positional_or_keyword"},
+        "var_positional": {"var_positional"},
+        "var_keyword": {"var_keyword"},
+    }
+
+    for name, old_kind, had_default in old_params:
         if name not in new_by_name:
             return True  # removed or renamed parameter
-        if had_default and not new_by_name[name]:
+        new_kind, has_default = new_by_name[name]
+        if new_kind not in allowed_kind_transitions[old_kind]:
+            return True  # parameter became less permissive
+        if had_default and not has_default:
             return True  # optional parameter became required
 
     # A brand-new *required* parameter (not var-args) breaks existing callers.
-    old_names = {name for name, _ in old_params}
-    for name, has_default in new_params:
+    old_names = {name for name, _, _ in old_params}
+    for name, kind, has_default in new_params:
         if name in old_names:
             continue
-        if name.startswith("*"):
+        if kind in {"var_positional", "var_keyword"}:
             continue  # widening with *args/**kwargs is compatible
         if not has_default:
             return True
 
     # Reordering of shared positional parameters breaks positional callers.
-    old_positional = [n for n, _ in old_params if not n.startswith("*")]
-    new_positional = [n for n, _ in new_params if not n.startswith("*")]
+    positional_kinds = {"positional_only", "positional_or_keyword"}
+    old_positional = [name for name, kind, _ in old_params if kind in positional_kinds]
+    new_positional = [name for name, kind, _ in new_params if kind in positional_kinds]
     new_positional_set = set(new_positional)
     old_positional_set = set(old_positional)
     shared_old_order = [n for n in old_positional if n in new_positional_set]
@@ -270,16 +343,28 @@ def _signature_is_breaking(old: str | None, new: str | None) -> bool:
     if shared_old_order != shared_new_order:
         return True
 
+    # An optional positional parameter inserted before a retained positional
+    # parameter changes what existing positional calls bind to.  Appending one
+    # is safe unless the old callable already accepted ``*args``.
+    old_has_varargs = any(kind == "var_positional" for _, kind, _ in old_params)
+    for index, name in enumerate(new_positional):
+        if name in old_positional_set:
+            continue
+        if old_has_varargs or any(
+            retained in old_positional_set for retained in new_positional[index + 1 :]
+        ):
+            return True
+
     return False
 
 
-def _parse_signature(signature: str) -> list[tuple[str, bool]]:
-    """Parse a captured signature string into ``(name, has_default)`` pairs."""
+def _parse_signature(signature: str) -> list[tuple[str, str, bool]]:
+    """Parse a signature into ``(name, kind, has_default)`` triples."""
 
     inner = signature.strip()
     if inner.startswith("(") and inner.endswith(")"):
         inner = inner[1:-1]
-    params: list[tuple[str, bool]] = []
+    params: list[tuple[str, str, bool]] = []
     for chunk in inner.split(","):
         token = chunk.strip()
         if not token:
@@ -287,11 +372,22 @@ def _parse_signature(signature: str) -> list[tuple[str, bool]]:
         has_default = token.endswith("=...")
         if has_default:
             token = token[: -len("=...")]
-        # Strip the kind prefixes used during capture.
-        for prefix in ("kw:", "po:"):
-            if token.startswith(prefix):
-                token = token[len(prefix) :]
-        params.append((token, has_default))
+        if token.startswith("**"):
+            name = token[2:]
+            kind = "var_keyword"
+        elif token.startswith("*"):
+            name = token[1:]
+            kind = "var_positional"
+        elif token.startswith("kw:"):
+            name = token[len("kw:") :]
+            kind = "keyword_only"
+        elif token.startswith("po:"):
+            name = token[len("po:") :]
+            kind = "positional_only"
+        else:
+            name = token
+            kind = "positional_or_keyword"
+        params.append((name, kind, has_default))
     return params
 
 
@@ -330,6 +426,11 @@ def diff_surface(
                         detail=f"public export {name!r} was removed",
                     )
                 )
+                continue
+            if "unavailable" in {old_member.kind, new_member.kind}:
+                # An optional dependency can make a declared export impossible
+                # to introspect.  Its continued presence in ``__all__`` proves
+                # it was not removed, so do not infer a break from availability.
                 continue
             if old_member.kind != new_member.kind:
                 changes.append(

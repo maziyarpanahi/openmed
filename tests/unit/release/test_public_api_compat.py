@@ -6,6 +6,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -75,6 +76,44 @@ def test_baseline_is_deterministic():
     first = api.surface_to_document(api.capture_surface())
     second = api.surface_to_document(api.capture_surface())
     assert first == second
+
+
+def test_static_exports_capture_top_level_public_names():
+    exports = api._static_exports("openmed")
+    assert exports is not None
+    assert "__version__" in exports
+    assert "deidentify" in exports
+
+
+def test_declared_unavailable_export_is_preserved(monkeypatch):
+    module = ModuleType("openmed.optional")
+
+    def available(value=1):
+        return value
+
+    def missing_optional(name):
+        raise ModuleNotFoundError(f"optional dependency unavailable for {name}")
+
+    module.available = available
+    module.__getattr__ = missing_optional
+    monkeypatch.setattr(
+        api, "_static_exports", lambda module_name: ("available", "optional_symbol")
+    )
+    monkeypatch.setattr(api.importlib, "import_module", lambda module_name: module)
+
+    snapshot = api.capture_module("openmed.optional")
+    assert snapshot is not None
+    members = {member.name: member for member in snapshot.members}
+    assert members["available"].kind == "function"
+    assert members["optional_symbol"].kind == "unavailable"
+
+
+def test_module_with_missing_optional_dependency_is_skipped(monkeypatch):
+    def missing_module(module_name):
+        raise ModuleNotFoundError(f"optional dependency unavailable for {module_name}")
+
+    monkeypatch.setattr(api.importlib, "import_module", missing_module)
+    assert api.capture_module("openmed.optional") is None
 
 
 # --- Removal is flagged as breaking ----------------------------------------
@@ -196,6 +235,43 @@ def test_widening_with_kwargs_is_not_breaking():
     assert changes[0].breaking is False
 
 
+def test_positional_parameter_becoming_keyword_only_is_breaking():
+    baseline = [_surface("openmed", _member("f", signature="(value)"))]
+    current = [_surface("openmed", _member("f", signature="(kw:value)"))]
+
+    changes = api.diff_surface(baseline, current)
+    assert changes[0].breaking is True
+
+
+def test_keyword_only_parameter_becoming_positional_is_not_breaking():
+    baseline = [_surface("openmed", _member("f", signature="(kw:value=...)"))]
+    current = [_surface("openmed", _member("f", signature="(value=...)"))]
+
+    changes = api.diff_surface(baseline, current)
+    assert changes[0].breaking is False
+
+
+def test_positional_parameter_becoming_positional_only_is_breaking():
+    baseline = [_surface("openmed", _member("f", signature="(value)"))]
+    current = [_surface("openmed", _member("f", signature="(po:value)"))]
+
+    changes = api.diff_surface(baseline, current)
+    assert changes[0].breaking is True
+
+
+def test_inserting_optional_positional_parameter_is_breaking():
+    baseline = [_surface("openmed", _member("f", signature="(first=..., second=...)"))]
+    current = [
+        _surface(
+            "openmed",
+            _member("f", signature="(first=..., inserted=..., second=...)"),
+        )
+    ]
+
+    changes = api.diff_surface(baseline, current)
+    assert changes[0].breaking is True
+
+
 def test_changing_default_value_is_not_breaking():
     # The capture format records only whether a default exists, so a changed
     # default value never even registers as a diff.
@@ -217,6 +293,18 @@ def test_module_absent_from_current_is_not_reported_removed():
 
     changes = api.diff_surface(baseline, current)
     assert changes == []
+
+
+def test_unavailable_current_export_is_not_reported_changed():
+    baseline = [_surface("openmed", _member("optional_symbol"))]
+    current = [
+        _surface(
+            "openmed",
+            _member("optional_symbol", kind="unavailable", signature=None),
+        )
+    ]
+
+    assert api.diff_surface(baseline, current) == []
 
 
 # --- CLI behaviour ----------------------------------------------------------
