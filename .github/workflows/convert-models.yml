@@ -157,6 +157,15 @@ jobs:
       url: https://huggingface.co/OpenMed
 
     steps:
+    - name: Require HF write token before publish
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        if [ -z "${HF_WRITE_TOKEN:-}" ]; then
+          echo "::error title=Missing HF_WRITE_TOKEN::Configure HF_WRITE_TOKEN in the hf-publish protected environment before enabling publish."
+          exit 1
+        fi
+
     - uses: actions/checkout@v7
 
     - name: Set up Python
@@ -168,15 +177,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[hf]"
-
-    - name: Require HF write token before publish
-      env:
-        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
-      run: |
-        if [ -z "${HF_WRITE_TOKEN:-}" ]; then
-          echo "::error title=Missing HF_WRITE_TOKEN::Configure HF_WRITE_TOKEN in the hf-publish protected environment before enabling publish."
-          exit 1
-        fi
 
     - name: Download MLX model
       if: contains(github.event.inputs.formats, 'mlx')
