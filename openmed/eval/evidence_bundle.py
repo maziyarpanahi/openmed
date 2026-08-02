@@ -17,6 +17,9 @@ SCHEMA_VERSION = "openmed.gate_evidence_bundle.v1"
 MANIFEST_FILENAME = "manifest.json"
 SUMMARY_FILENAME = "summary.txt"
 
+#: Artifact id for the gold-corpus quality report attached to the bundle.
+GOLD_QUALITY_REPORT_ARTIFACT = "gold_quality_report"
+
 G1_G8 = ("G1a", "G1b", "G2", "G3", "G4", "G5", "G6", "G7", "G8")
 G10 = ("G10",)
 _GATE_ORDER = (
@@ -37,6 +40,7 @@ _DEFAULT_GATES_BY_ARTIFACT: dict[str, tuple[str, ...]] = {
     "candidate_report": G1_G8,
     "model_manifest": ("manifest_coherence",),
     "model_card": ("manifest_coherence",),
+    "model_datasheet": ("manifest_coherence", *G1_G8),
     "readme": ("manifest_coherence",),
     "thresholds_matrix": ("thresholds_matrix", "G1a", "G2"),
     "policy_profile": ("policy_profile", "calibration_present"),
@@ -77,6 +81,7 @@ _PATH_ALIASES: dict[str, str] = {
     "leakage_fixtures_path": "leakage_fixtures",
     "manifest_path": "model_manifest",
     "model_card_path": "model_card",
+    "model_datasheet_path": "model_datasheet",
     "models_manifest_path": "model_manifest",
     "performance_report_path": "performance_report",
     "policy_path": "policy_profile",
@@ -84,6 +89,7 @@ _PATH_ALIASES: dict[str, str] = {
     "quant_delta_path": "quant_recall_delta",
     "quant_recall_delta_path": "quant_recall_delta",
     "quantization_report_path": "quant_recall_delta",
+    "datasheet_path": "model_datasheet",
     "readme_path": "readme",
     "resource_report_path": "resource_report",
     "span_fixture_path": "span_fixtures",
@@ -130,6 +136,7 @@ def bundle_gate_evidence(
     evidence_root: str | Path | None = None,
     extra_artifacts: Mapping[str, str | Path] | Sequence[Mapping[str, Any]] = (),
     manifest_name: str = MANIFEST_FILENAME,
+    extraction_fairness: Mapping[str, Any] | Any | None = None,
 ) -> EvidenceBundleResult:
     """Collect evidence referenced by *gate_report* into *output_dir*.
 
@@ -149,7 +156,11 @@ def bundle_gate_evidence(
     _add_inferred_required_specs(payload, specs)
 
     artifacts = _materialise_artifacts(specs, destination, root)
-    manifest = _build_manifest(payload, artifacts)
+    manifest = _build_manifest(
+        payload,
+        artifacts,
+        extraction_fairness=_extraction_fairness_section(extraction_fairness),
+    )
     summary = _render_summary(manifest)
 
     manifest_path = destination / manifest_name
@@ -534,9 +545,30 @@ def _copy_artifact(
     return relative
 
 
+def _extraction_fairness_section(
+    extraction_fairness: Mapping[str, Any] | Any | None,
+) -> dict[str, Any] | None:
+    """Return the optional, PHI-free extraction-fairness evidence section."""
+    if extraction_fairness is None:
+        return None
+    source = extraction_fairness
+    if hasattr(source, "model_card_evidence") and callable(source.model_card_evidence):
+        source = source.model_card_evidence()
+    elif hasattr(source, "to_dict") and callable(source.to_dict):
+        source = source.to_dict()
+    if not isinstance(source, Mapping):
+        raise TypeError(
+            "extraction_fairness must be a mapping or expose "
+            "model_card_evidence()/to_dict()"
+        )
+    return json.loads(json.dumps(source, sort_keys=True))
+
+
 def _build_manifest(
     payload: Mapping[str, Any],
     artifacts: Sequence[Mapping[str, Any]],
+    *,
+    extraction_fairness: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     gate_summary = _gate_summary(payload, artifacts)
     stability_summary = _stability_summary(payload)
@@ -551,7 +583,7 @@ def _build_manifest(
     missing_gates = [
         gate for gate, state in gate_summary.items() if state["status"] == "missing"
     ]
-    return {
+    manifest: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "gate_report": {
             "repo_id": payload.get("repo_id"),
@@ -559,6 +591,7 @@ def _build_manifest(
             "tier": payload.get("tier"),
             "format": payload.get("format"),
             "decision": payload.get("decision"),
+            "gate_results": [dict(check) for check in _gate_checks(payload)],
             "repro_hash": payload.get("repro_hash"),
             "stability_summary": stability_summary,
         },
@@ -581,6 +614,9 @@ def _build_manifest(
         "gates": gate_summary,
         "artifacts": [dict(entry) for entry in artifacts],
     }
+    if extraction_fairness is not None:
+        manifest["extraction_fairness"] = extraction_fairness
+    return manifest
 
 
 def _gate_summary(

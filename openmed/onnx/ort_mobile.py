@@ -25,6 +25,10 @@ ORT_CONVERSION_UNAVAILABLE_REASON = (
     "ONNX Runtime ORT mobile conversion tooling is unavailable; install the "
     "onnx extra with `pip install openmed[onnx]` to emit .ort artifacts."
 )
+ORT_CONVERSION_FAILED_REASON = (
+    "ONNX Runtime could not serialize this graph to ORT format; the ONNX "
+    "artifacts remain available for Android execution."
+)
 
 
 class OrtMobileConversionUnavailable(ImportError):
@@ -92,20 +96,35 @@ def convert_android_onnx_to_ort(
 
     validation = validation or validate_android_profile(source_path)
     fixed_style = getattr(ort_tools.OptimizationStyle, ORT_OPTIMIZATION_STYLE)
-    ort_tools.convert_onnx_models_to_ort(
-        source_path,
-        output_dir=artifact_dir,
-        optimization_styles=[fixed_style],
-        target_platform=ORT_TARGET_PLATFORM,
-        save_optimized_onnx_model=False,
-        allow_conversion_failures=False,
-        enable_type_reduction=True,
-    )
-
     ort_path = artifact_dir / source_path.with_suffix(".ort").name
     op_config_path = artifact_dir / (
         source_path.stem + ".required_operators_and_types.config"
     )
+    try:
+        ort_tools.convert_onnx_models_to_ort(
+            source_path,
+            output_dir=artifact_dir,
+            optimization_styles=[fixed_style],
+            target_platform=ORT_TARGET_PLATFORM,
+            save_optimized_onnx_model=False,
+            allow_conversion_failures=False,
+            enable_type_reduction=True,
+        )
+    except Exception as exc:
+        ort_path.unlink(missing_ok=True)
+        op_config_path.unlink(missing_ok=True)
+        logger.warning(
+            "Skipping Android ORT mobile conversion after %s; %s",
+            exc.__class__.__name__,
+            ORT_CONVERSION_FAILED_REASON,
+        )
+        return OrtMobileConversionResult(
+            source_onnx_path=source_path,
+            validation=validation,
+            skipped=True,
+            skip_reason=ORT_CONVERSION_FAILED_REASON,
+        )
+
     _require_generated_file(ort_path, "ORT mobile model")
     _require_generated_file(op_config_path, "ORT required-operators config")
 

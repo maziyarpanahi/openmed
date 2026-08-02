@@ -7,12 +7,16 @@ from openmed.core.arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION, arbi
 from openmed.core.cascade import R2_BASE, CascadeRouter
 from openmed.core.pipeline import Pipeline
 from openmed.core.schemas.span import ACTION_VALUES, OpenMedSpan, hmac_text_hash
+from openmed.core.script_detect import INDIC_SCRIPTS
 from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     fit_thresholds,
     load_thresholds,
     lookup_threshold,
     membership_defense_for_profile,
+    profile_recall_floor,
+    profile_script_leakage_ceiling,
+    profile_script_recall_floors,
     recall_floor_guard,
     update_thresholds,
     validate_threshold_matrix,
@@ -71,6 +75,26 @@ def test_thresholds_json_has_schema_version_and_valid_actions():
         for label_entries in profile["labels"].values():
             for entry in label_entries.values():
                 assert entry["action"] in ACTION_VALUES
+
+
+def test_profiles_define_configurable_strict_cjk_and_indic_floors():
+    matrix = load_thresholds()
+    floors = profile_script_recall_floors("balanced", matrix=matrix)
+
+    assert INDIC_SCRIPTS <= floors.keys()
+    assert floors["Han"] >= 0.99
+    assert floors["Devanagari"] >= 0.99
+    assert floors["Telugu"] >= 0.99
+    assert (
+        profile_recall_floor("balanced", matrix=matrix, script="Han") == (floors["Han"])
+    )
+    assert profile_script_leakage_ceiling("balanced", matrix=matrix) <= 0.01
+
+    matrix["profiles"]["balanced"]["script_recall_floors"]["Han"] = 0.997
+    matrix["profiles"]["balanced"]["script_leakage_ceiling"] = 0.003
+    validate_threshold_matrix(matrix)
+    assert profile_recall_floor("balanced", matrix=matrix, script="Han") == 0.997
+    assert profile_script_leakage_ceiling("balanced", matrix=matrix) == 0.003
 
 
 def test_recall_floor_guard_blocks_drop_below_profile_floor():

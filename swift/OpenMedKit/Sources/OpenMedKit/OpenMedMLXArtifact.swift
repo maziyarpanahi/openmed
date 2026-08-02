@@ -65,6 +65,7 @@ struct OpenMedMLXManifest: Decodable, Sendable {
     let maxSequenceLength: Int?
     let promptSpec: PromptSpec?
     let tokenizer: Tokenizer
+    let segmenter: OpenMedSegmenterDescriptor?
 
     enum CodingKeys: String, CodingKey {
         case format
@@ -82,6 +83,7 @@ struct OpenMedMLXManifest: Decodable, Sendable {
         case maxSequenceLength = "max_sequence_length"
         case promptSpec = "prompt_spec"
         case tokenizer
+        case segmenter
     }
 }
 
@@ -464,6 +466,7 @@ struct OpenMedMLXArtifact: Sendable {
     let id2label: [Int: String]
     let tokenizerDirectoryURL: URL?
     let tokenizerName: String?
+    let segmenter: OpenMedSegmenter?
     let task: OpenMedMLXTask
     let family: OpenMedMLXFamily
 
@@ -549,6 +552,9 @@ struct OpenMedMLXArtifact: Sendable {
         self.id2label = labelMap
         self.tokenizerDirectoryURL = resolvedTokenizerDirectoryURL
         self.tokenizerName = configuration.sourceModelName
+        self.segmenter = try manifest.segmenter.map {
+            try OpenMedSegmenter(bundleURL: modelDirectoryURL, descriptor: $0)
+        }
         self.task = task
         self.family = family
     }
@@ -646,7 +652,8 @@ struct OpenMedMLXArtifact: Sendable {
             tokenizer: .init(
                 path: ".",
                 files: discoverTokenizerFiles(in: modelDirectoryURL)
-            )
+            ),
+            segmenter: nil
         )
     }
 }
