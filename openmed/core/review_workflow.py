@@ -50,6 +50,7 @@ Example:
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -60,6 +61,7 @@ from .audit import hash_text
 from .labels import (
     DIRECT_IDENTIFIER,
     LABEL_METADATA,
+    OTHER,
     RISK_HIGH,
     normalize_label,
 )
@@ -90,6 +92,18 @@ REVIEW_DECISIONS = ("accept", "reject", "correct")
 
 _CONTEXT_WINDOW = 32
 _MASK = "[REDACTED]"
+_SAFE_ACTIONS = frozenset(
+    {
+        "aadhaar_mask",
+        "format_preserve",
+        "hash",
+        "keep",
+        "mask",
+        "remove",
+        "replace",
+        "shift_dates",
+    }
+)
 
 
 def critical_labels() -> frozenset[str]:
@@ -127,6 +141,7 @@ class ReviewItem:
             ``critical_label``); always sorted and non-empty unless
             ``include_all`` was requested.
         text_hash: SHA-256 hash of the original span text (never the plaintext).
+        provenance: PHI-safe hashes identifying the source result and document.
         context: A redacted context window ``{"before": ..., "after": ...,
             "span": "[REDACTED]"}`` around the span.
         action: The redaction action applied to the span, when known.
@@ -140,6 +155,7 @@ class ReviewItem:
     threshold: float
     reasons: tuple[str, ...]
     text_hash: str
+    provenance: dict[str, str] = field(default_factory=dict)
     context: dict[str, str] = field(default_factory=dict)
     action: Optional[str] = None
 
@@ -154,6 +170,7 @@ class ReviewItem:
             "threshold": float(self.threshold),
             "reasons": list(self.reasons),
             "text_hash": self.text_hash,
+            "provenance": dict(self.provenance),
             "context": dict(self.context),
         }
         if self.action is not None:
@@ -217,9 +234,11 @@ class ReviewFeedback:
         label: The label originally proposed by the detector.
         canonical_label: Normalized ``UPPER_SNAKE_CASE`` original label.
         confidence: The original model confidence.
+        threshold: The confidence threshold used when the item was queued.
         reasons: Why the span was queued for review.
         decision: The reviewer's decision (``accept``/``reject``/``correct``).
         text_hash: SHA-256 hash of the original span text.
+        provenance: PHI-safe hashes identifying the source result and document.
         corrected_label: For ``correct`` decisions, the reviewer's label (source
             form). ``None`` otherwise.
         corrected_canonical_label: Normalized corrected label. ``None`` when no
@@ -238,9 +257,11 @@ class ReviewFeedback:
     label: str
     canonical_label: str
     confidence: float
+    threshold: float
     reasons: tuple[str, ...]
     decision: str
     text_hash: str
+    provenance: dict[str, str] = field(default_factory=dict)
     corrected_label: Optional[str] = None
     corrected_canonical_label: Optional[str] = None
     corrected_start: Optional[int] = None
@@ -257,9 +278,11 @@ class ReviewFeedback:
             "label": self.label,
             "canonical_label": self.canonical_label,
             "confidence": float(self.confidence),
+            "threshold": float(self.threshold),
             "reasons": list(self.reasons),
             "decision": self.decision,
             "text_hash": self.text_hash,
+            "provenance": dict(self.provenance),
             "corrected_label": self.corrected_label,
             "corrected_canonical_label": self.corrected_canonical_label,
             "corrected_start": self.corrected_start,
@@ -271,7 +294,12 @@ class ReviewFeedback:
 
     def to_jsonl_line(self) -> str:
         """Return a single canonical JSON line (no trailing newline)."""
-        return json.dumps(self.to_dict(), separators=(",", ":"), sort_keys=True)
+        return json.dumps(
+            self.to_dict(),
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ReviewFeedback":
@@ -283,9 +311,11 @@ class ReviewFeedback:
             label=str(data.get("label", "")),
             canonical_label=str(data.get("canonical_label", "")),
             confidence=float(data.get("confidence", 0.0)),
+            threshold=float(data.get("threshold", 0.0)),
             reasons=tuple(str(reason) for reason in reasons),
             decision=str(data.get("decision", "")),
             text_hash=str(data.get("text_hash", "")),
+            provenance=_provenance_from_payload(data.get("provenance")),
             corrected_label=_optional_str(data.get("corrected_label")),
             corrected_canonical_label=_optional_str(
                 data.get("corrected_canonical_label")
@@ -340,7 +370,9 @@ def build_review_queue(
         TypeError: If ``result`` does not expose a span sequence.
         ValueError: If a span carries invalid offsets.
     """
+    threshold = _probability(confidence_threshold, name="confidence_threshold")
     text = _result_text(result)
+    document_hash = hash_text(text) if text is not None else None
     critical = (
         globals()["critical_labels"]()
         if critical_labels is None
@@ -364,12 +396,16 @@ def build_review_queue(
 
     items: list[ReviewItem] = []
     for entity, (start, end) in zip(entities, spans):
-        label = str(_get_value(entity, "label", default=""))
-        canonical = normalize_label(label, lang)
-        confidence = float(_get_value(entity, "confidence", default=0.0) or 0.0)
+        raw_label = str(_get_value(entity, "label", default=""))
+        canonical = normalize_label(raw_label, lang)
+        label = _safe_source_label(raw_label, canonical)
+        confidence = _probability(
+            _get_value(entity, "confidence", default=0.0) or 0.0,
+            name="entity confidence",
+        )
 
         reasons: list[str] = []
-        if confidence < confidence_threshold:
+        if confidence < threshold:
             reasons.append(REVIEW_REASON_LOW_CONFIDENCE)
         if canonical in critical:
             reasons.append(REVIEW_REASON_CRITICAL_LABEL)
@@ -377,7 +413,7 @@ def build_review_queue(
         if not reasons and not include_all:
             continue
 
-        span_text = text[start:end] if text is not None else ""
+        span_text = _entity_span_text(entity, text, start, end)
         items.append(
             ReviewItem(
                 start=start,
@@ -385,20 +421,21 @@ def build_review_queue(
                 label=label,
                 canonical_label=canonical,
                 confidence=confidence,
-                threshold=float(confidence_threshold),
+                threshold=threshold,
                 reasons=tuple(sorted(reasons)),
                 text_hash=hash_text(span_text),
+                provenance=_review_provenance(result, entity, document_hash),
                 context=_redacted_context(text, start, end, spans=spans),
-                action=_optional_str(_get_value(entity, "action", default=None)),
+                action=_safe_action(_get_value(entity, "action", default=None)),
             )
         )
 
     items.sort(key=lambda item: (item.start, item.end, item.canonical_label))
     return ReviewQueue(
         items=tuple(items),
-        confidence_threshold=float(confidence_threshold),
+        confidence_threshold=threshold,
         critical_labels=critical,
-        document_hash=hash_text(text) if text is not None else None,
+        document_hash=document_hash,
         total_spans=len(entities),
     )
 
@@ -483,10 +520,16 @@ def record_review_decision(
         label=item.label,
         canonical_label=item.canonical_label,
         confidence=item.confidence,
+        threshold=item.threshold,
         reasons=item.reasons,
         decision=decision,
         text_hash=item.text_hash,
-        corrected_label=(str(corrected_label) if corrected_label is not None else None),
+        provenance=dict(item.provenance),
+        corrected_label=(
+            _safe_source_label(str(corrected_label), corrected_canonical)
+            if corrected_label is not None and corrected_canonical is not None
+            else None
+        ),
         corrected_canonical_label=corrected_canonical,
         corrected_start=corrected_start,
         corrected_end=corrected_end,
@@ -507,13 +550,17 @@ def append_feedback(path: str | Path, record: ReviewFeedback) -> Path:
         record: The :class:`ReviewFeedback` record to append.
 
     Returns:
-        The resolved :class:`~pathlib.Path` that was written.
+        The :class:`~pathlib.Path` that was written.
+
+    Raises:
+        TypeError: If ``record`` is not a :class:`ReviewFeedback`.
     """
+    if not isinstance(record, ReviewFeedback):
+        raise TypeError("record must be a ReviewFeedback")
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("a", encoding="utf-8") as handle:
-        handle.write(record.to_jsonl_line())
-        handle.write("\n")
+        handle.write(record.to_jsonl_line() + "\n")
     return destination
 
 
@@ -563,12 +610,14 @@ def _mask_window(
 
     # Clip spans to the window, then mask each clipped region right-to-left so
     # earlier offsets stay valid while rebuilding the substring.
-    clipped = sorted(
-        {
-            (max(span_start, window_start), min(span_end, window_end))
-            for span_start, span_end in spans
-            if span_start < window_end and span_end > window_start
-        }
+    clipped = _merge_intervals(
+        sorted(
+            {
+                (max(span_start, window_start), min(span_end, window_end))
+                for span_start, span_end in spans
+                if span_start < window_end and span_end > window_start
+            }
+        )
     )
     window = text[window_start:window_end]
     for span_start, span_end in reversed(clipped):
@@ -576,6 +625,99 @@ def _mask_window(
         rel_end = span_end - window_start
         window = window[:rel_start] + _MASK + window[rel_end:]
     return window
+
+
+def _merge_intervals(
+    spans: Sequence[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """Coalesce overlapping spans so masking cannot expose nested-span tails."""
+    merged: list[tuple[int, int]] = []
+    for start, end in spans:
+        if not merged or start > merged[-1][1]:
+            merged.append((start, end))
+            continue
+        previous_start, previous_end = merged[-1]
+        merged[-1] = (previous_start, max(previous_end, end))
+    return merged
+
+
+def _review_provenance(
+    result: Any,
+    entity: Any,
+    document_hash: Optional[str],
+) -> dict[str, str]:
+    """Return allowlisted, raw-value-free provenance for one review item."""
+    provenance = {"result_kind": "mapping" if isinstance(result, Mapping) else "object"}
+    if document_hash is not None:
+        provenance["document_hash"] = document_hash
+
+    for source_key, output_key in (
+        ("model_name", "model_name_hash"),
+        ("method", "method_hash"),
+        ("timestamp", "source_timestamp_hash"),
+    ):
+        value = _get_value(result, source_key, default=None)
+        if value is not None:
+            provenance[output_key] = hash_text(str(value))
+
+    sources = _get_value(entity, "sources", default=None)
+    if isinstance(sources, Sequence) and not isinstance(sources, (str, bytes)):
+        encoded = json.dumps(
+            [str(source) for source in sources],
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        provenance["entity_sources_hash"] = hash_text(encoded)
+    return provenance
+
+
+def _provenance_from_payload(value: Any) -> dict[str, str]:
+    """Restore provenance from a serialized feedback payload."""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError("feedback provenance must be a mapping")
+    return {str(key): str(item) for key, item in value.items()}
+
+
+def _safe_source_label(label: str, canonical_label: str) -> str:
+    """Keep recognized model labels while replacing arbitrary text with OTHER."""
+    return label if canonical_label != OTHER else OTHER
+
+
+def _safe_action(value: Any) -> Optional[str]:
+    """Return a known de-identification action without persisting free text."""
+    if value is None:
+        return None
+    action = str(value).strip().casefold()
+    return action if action in _SAFE_ACTIONS else None
+
+
+def _probability(value: Any, *, name: str) -> float:
+    """Return a finite probability in the closed interval from zero to one."""
+    try:
+        probability = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a number between 0 and 1") from exc
+    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError(f"{name} must be a finite number between 0 and 1")
+    return probability
+
+
+def _entity_span_text(
+    entity: Any,
+    text: Optional[str],
+    start: int,
+    end: int,
+) -> str:
+    """Return span text for hashing without exposing it in review artifacts."""
+    if text is not None:
+        return text[start:end]
+    for key in ("original_text", "text"):
+        value = _get_value(entity, key, default=None)
+        if isinstance(value, str):
+            return value
+    return ""
 
 
 def _result_text(result: Any) -> Optional[str]:

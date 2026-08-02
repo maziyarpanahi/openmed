@@ -180,6 +180,111 @@ def test_invalid_offsets_raise():
         build_review_queue(result, confidence_threshold=0.7)
 
 
+@pytest.mark.parametrize("threshold", [-0.1, 1.1, float("nan")])
+def test_invalid_confidence_threshold_raises(threshold):
+    with pytest.raises(ValueError, match="confidence_threshold"):
+        build_review_queue(_deid_result(), confidence_threshold=threshold)
+
+
+def test_unknown_source_label_cannot_leak_span_text():
+    synthetic_identifier = "SYNTHETIC-998877"
+    result = {
+        "text": synthetic_identifier,
+        "entities": [
+            {
+                "text": synthetic_identifier,
+                "label": synthetic_identifier,
+                "start": 0,
+                "end": len(synthetic_identifier),
+                "confidence": 0.1,
+                "action": synthetic_identifier,
+            }
+        ],
+    }
+
+    queue = build_review_queue(result, confidence_threshold=0.7)
+
+    assert queue.items[0].label == "OTHER"
+    assert synthetic_identifier not in json.dumps(queue.to_dict())
+
+
+def test_entity_text_is_hashed_when_result_text_is_unavailable():
+    from openmed.core.audit import hash_text
+
+    synthetic_identifier = "SYNTHETIC-445566"
+    result = {
+        "entities": [
+            {
+                "text": synthetic_identifier,
+                "label": "ssn",
+                "start": 0,
+                "end": len(synthetic_identifier),
+                "confidence": 0.99,
+            }
+        ]
+    }
+
+    item = build_review_queue(result, confidence_threshold=0.7).items[0]
+
+    assert item.text_hash == hash_text(synthetic_identifier)
+    assert synthetic_identifier not in json.dumps(item.to_dict())
+
+
+def test_overlapping_spans_are_coalesced_before_context_masking():
+    synthetic_identifier = "123456789012345"
+    text = f"ID {synthetic_identifier} note"
+    result = PredictionResult(
+        text=text,
+        entities=[
+            EntityPrediction(
+                text=synthetic_identifier,
+                label="ssn",
+                start=3,
+                end=18,
+                confidence=0.99,
+            ),
+            EntityPrediction(
+                text=synthetic_identifier[5:10],
+                label="id_num",
+                start=8,
+                end=13,
+                confidence=0.99,
+            ),
+            EntityPrediction(
+                text="note",
+                label="condition",
+                start=19,
+                end=23,
+                confidence=0.1,
+            ),
+        ],
+        model_name="fixture",
+        timestamp="2026-07-05T00:00:00",
+    )
+
+    queue = build_review_queue(result, confidence_threshold=0.7)
+    note = next(item for item in queue if item.canonical_label == "CONDITION")
+
+    assert note.context["before"] == "ID [REDACTED] "
+    assert "12345" not in json.dumps(queue.to_dict())
+
+
+def test_public_exports_resolve_to_review_workflow_symbols():
+    import openmed
+    import openmed.core
+
+    for name in (
+        "ReviewFeedback",
+        "ReviewItem",
+        "ReviewQueue",
+        "append_feedback",
+        "build_review_queue",
+        "critical_labels",
+        "record_review_decision",
+    ):
+        assert getattr(openmed, name) is getattr(openmed.core, name)
+
+
 # ---------------------------------------------------------------------------
 # Decision capture / round-trip
 # ---------------------------------------------------------------------------
@@ -198,6 +303,10 @@ def test_accept_decision_round_trips():
     assert restored == feedback
     assert restored.reviewer_id == "reviewer-1"
     assert restored.corrected_label is None
+    assert restored.threshold == item.threshold
+    assert restored.provenance == item.provenance
+    assert restored.provenance["document_hash"].startswith("sha256:")
+    assert restored.provenance["method_hash"].startswith("sha256:")
 
 
 def test_reject_decision_round_trips():
@@ -262,6 +371,11 @@ def test_append_feedback_writes_jsonl(tmp_path):
     # Each line is valid standalone JSON (true JSONL).
     for line in lines:
         json.loads(line)
+
+
+def test_append_feedback_rejects_non_feedback_records(tmp_path):
+    with pytest.raises(TypeError, match="ReviewFeedback"):
+        append_feedback(tmp_path / "feedback.jsonl", {"text": "not allowed"})
 
 
 # ---------------------------------------------------------------------------
