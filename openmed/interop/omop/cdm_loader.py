@@ -27,6 +27,26 @@ LoadMode = Literal["append", "replace_by_note"]
 OmopDomain = Literal["Condition", "Drug", "Measurement", "Procedure", "Observation"]
 WriterKind = Literal["duckdb", "sqlite", "parquet"]
 
+
+class _VocabularyMapping(Protocol):
+    domain: OmopDomain | None
+    source_code: str
+    source_concept_id: int
+    source_code_description: str | None
+    source_vocabulary_id: str
+    target_concept_id: int
+    target_vocabulary_id: str
+    standard_concept: str | None
+
+    def to_source_to_concept_map_row(self) -> dict[str, Any]: ...
+
+
+class _VocabularyRouter(Protocol):
+    def route_span(self, span: Any) -> _VocabularyMapping: ...
+
+    def concept_record(self, concept_id: int) -> Mapping[str, Any] | None: ...
+
+
 _MISSING = object()
 
 _TABLE_ORDER: tuple[str, ...] = (
@@ -621,6 +641,7 @@ def load_grounded_notes(
     notes: Iterable[Any],
     *,
     vocabulary_version: str | None = None,
+    vocabulary_router: _VocabularyRouter | None = None,
     mode: LoadMode = "append",
 ) -> OmopCdmTables:
     """Build OMOP CDM tables from grounded clinical note records.
@@ -631,6 +652,9 @@ def load_grounded_notes(
             produce NOTE_NLP rows.
         vocabulary_version: Optional user-supplied vocabulary version string
             recorded in SOURCE_TO_CONCEPT_MAP rows.
+        vocabulary_router: Optional router backed by caller-supplied Athena and
+            Usagi artifacts. When provided, its standard-concept and domain
+            decisions are authoritative over concept fields in each span.
         mode: Load mode. ``append`` preserves existing rows and remains the
             default. ``replace_by_note`` marks each incoming source note hash
             as authoritative when the rows are persisted by a writer.
@@ -728,6 +752,7 @@ def load_grounded_notes(
                 note_text=note_text,
                 source_note_hash=source_note_hash,
                 vocabulary_version=vocabulary_version or "",
+                vocabulary_router=vocabulary_router,
             )
             if rejection is not None:
                 rejections.append(rejection)
@@ -755,6 +780,7 @@ def load_grounded_jsonl(
     path: str | Path,
     *,
     vocabulary_version: str | None = None,
+    vocabulary_router: _VocabularyRouter | None = None,
     mode: LoadMode = "append",
 ) -> OmopCdmTables:
     """Load grounded note records from JSONL into in-memory OMOP tables."""
@@ -772,6 +798,7 @@ def load_grounded_jsonl(
     return load_grounded_notes(
         records,
         vocabulary_version=vocabulary_version,
+        vocabulary_router=vocabulary_router,
         mode=mode,
     )
 
@@ -1126,8 +1153,12 @@ def _load_entity(
     note_text: str,
     source_note_hash: str,
     vocabulary_version: str,
+    vocabulary_router: _VocabularyRouter | None,
 ) -> RejectedSpan | None:
-    domain = _entity_domain(entity)
+    mapping = (
+        vocabulary_router.route_span(entity) if vocabulary_router is not None else None
+    )
+    domain = mapping.domain if mapping is not None else _entity_domain(entity)
     start = _optional_int(_first_value(_entity_sources(entity), ("start",)))
     end = _optional_int(_first_value(_entity_sources(entity), ("end",)))
 
@@ -1156,7 +1187,12 @@ def _load_entity(
             domain=domain,
         )
 
-    concept = _entity_concept(entity, domain)
+    concept = _entity_concept(
+        entity,
+        domain,
+        mapping=mapping,
+        vocabulary_router=vocabulary_router,
+    )
     _add_concept_row(table_rows, concept)
 
     lexical_variant = _entity_text(entity) or note_text[start:end]
@@ -1214,6 +1250,12 @@ def _load_entity(
             "idempotent_key": idempotent_key,
         },
     )
+    provenance = _entity_provenance(
+        concept,
+        mapping=mapping,
+        lexical_variant=lexical_variant,
+        vocabulary_version=vocabulary_version,
+    )
     _upsert_row(
         table_rows,
         "source_to_concept_map",
@@ -1222,16 +1264,7 @@ def _load_entity(
                 "source_to_concept_map",
                 idempotent_key,
             ),
-            "source_code": concept["concept_code"],
-            "source_concept_id": int(concept["source_concept_id"]),
-            "source_vocabulary_id": concept["vocabulary_id"],
-            "source_code_description": lexical_variant,
-            "target_concept_id": int(concept["concept_id"]),
-            "target_vocabulary_id": concept["vocabulary_id"],
-            "valid_start_date": None,
-            "valid_end_date": None,
-            "invalid_reason": None if int(concept["concept_id"]) else "UNMAPPED",
-            "vocabulary_version": vocabulary_version,
+            **provenance,
             "source_note_hash": source_note_hash,
             "note_nlp_id": note_nlp_id,
         },
@@ -1239,7 +1272,69 @@ def _load_entity(
     return None
 
 
-def _entity_concept(entity: Any, domain: OmopDomain) -> dict[str, Any]:
+def _entity_concept(
+    entity: Any,
+    domain: OmopDomain,
+    *,
+    mapping: _VocabularyMapping | None,
+    vocabulary_router: _VocabularyRouter | None,
+) -> dict[str, Any]:
+    if mapping is not None:
+        target_id = int(mapping.target_concept_id)
+        source_id = int(mapping.source_concept_id)
+        target_record = (
+            vocabulary_router.concept_record(target_id)
+            if vocabulary_router is not None and target_id
+            else None
+        )
+        source_record = (
+            vocabulary_router.concept_record(source_id)
+            if vocabulary_router is not None and source_id
+            else None
+        )
+        return {
+            "concept_id": target_id,
+            "source_concept_id": source_id,
+            "concept_name": _concept_value(
+                target_record,
+                "concept_name",
+                UNMAPPED_CONCEPT_NAME if not target_id else f"Concept {target_id}",
+            ),
+            "domain_id": _concept_value(target_record, "domain_id", domain),
+            "vocabulary_id": _concept_value(
+                target_record,
+                "vocabulary_id",
+                (mapping.target_vocabulary_id if target_id else UNMAPPED_VOCABULARY_ID),
+            ),
+            "concept_class_id": _concept_value(target_record, "concept_class_id", ""),
+            "standard_concept": (
+                _concept_value(
+                    target_record, "standard_concept", mapping.standard_concept
+                )
+                if target_id
+                else None
+            ),
+            "concept_code": _concept_value(target_record, "concept_code", ""),
+            "source_concept_name": _concept_value(
+                source_record,
+                "concept_name",
+                mapping.source_code_description or mapping.source_code,
+            ),
+            "source_domain_id": _concept_value(source_record, "domain_id", domain),
+            "source_vocabulary_id": _concept_value(
+                source_record, "vocabulary_id", mapping.source_vocabulary_id
+            ),
+            "source_concept_class_id": _concept_value(
+                source_record, "concept_class_id", ""
+            ),
+            "source_standard_concept": _concept_value(
+                source_record, "standard_concept", None
+            ),
+            "source_concept_code": _concept_value(
+                source_record, "concept_code", mapping.source_code
+            ),
+        }
+
     concept_id = _optional_int(
         _first_value(_entity_sources(entity), _CONCEPT_ID_FIELDS)
     )
@@ -1279,34 +1374,95 @@ def _add_concept_row(
     concept: Mapping[str, Any],
 ) -> None:
     concept_id = int(concept["concept_id"])
+    target_concept = (
+        _unmapped_concept_row() if concept_id == UNMAPPED_CONCEPT_ID else concept
+    )
+    target_vocabulary_id = target_concept.get("vocabulary_id")
+    if target_vocabulary_id is None:
+        target_vocabulary_id = (
+            UNMAPPED_VOCABULARY_ID if concept_id == UNMAPPED_CONCEPT_ID else ""
+        )
     _upsert_row(
         table_rows,
         "concept",
         {
             "concept_id": concept_id,
-            "concept_name": concept.get("concept_name") or UNMAPPED_CONCEPT_NAME,
-            "domain_id": concept.get("domain_id") or "",
-            "vocabulary_id": concept.get("vocabulary_id") or UNMAPPED_VOCABULARY_ID,
-            "concept_class_id": concept.get("concept_class_id") or "",
-            "standard_concept": concept.get("standard_concept"),
-            "concept_code": concept.get("concept_code") or "",
+            "concept_name": target_concept.get("concept_name") or UNMAPPED_CONCEPT_NAME,
+            "domain_id": target_concept.get("domain_id") or "",
+            "vocabulary_id": target_vocabulary_id,
+            "concept_class_id": target_concept.get("concept_class_id") or "",
+            "standard_concept": target_concept.get("standard_concept"),
+            "concept_code": target_concept.get("concept_code") or "",
         },
     )
-    source_concept_id = int(concept.get("source_concept_id") or concept_id)
-    if source_concept_id != concept_id:
+    raw_source_concept_id = concept.get("source_concept_id")
+    source_concept_id = (
+        concept_id if raw_source_concept_id is None else int(raw_source_concept_id)
+    )
+    if source_concept_id not in {UNMAPPED_CONCEPT_ID, concept_id}:
         _upsert_row(
             table_rows,
             "concept",
             {
                 "concept_id": source_concept_id,
-                "concept_name": concept.get("concept_name") or "",
-                "domain_id": concept.get("domain_id") or "",
-                "vocabulary_id": concept.get("vocabulary_id") or "",
-                "concept_class_id": concept.get("concept_class_id") or "",
-                "standard_concept": concept.get("standard_concept"),
-                "concept_code": concept.get("concept_code") or "",
+                "concept_name": concept.get("source_concept_name")
+                or concept.get("concept_name")
+                or "",
+                "domain_id": concept.get("source_domain_id")
+                or concept.get("domain_id")
+                or "",
+                "vocabulary_id": concept.get("source_vocabulary_id")
+                or concept.get("vocabulary_id")
+                or "",
+                "concept_class_id": concept.get("source_concept_class_id")
+                or concept.get("concept_class_id")
+                or "",
+                "standard_concept": concept.get(
+                    "source_standard_concept", concept.get("standard_concept")
+                ),
+                "concept_code": concept.get("source_concept_code")
+                or concept.get("concept_code")
+                or "",
             },
         )
+
+
+def _entity_provenance(
+    concept: Mapping[str, Any],
+    *,
+    mapping: _VocabularyMapping | None,
+    lexical_variant: str,
+    vocabulary_version: str,
+) -> dict[str, Any]:
+    if mapping is not None:
+        provenance = mapping.to_source_to_concept_map_row()
+        if provenance["vocabulary_version"] is None:
+            provenance["vocabulary_version"] = vocabulary_version
+        return provenance
+    concept_id = int(concept["concept_id"])
+    return {
+        "source_code": concept["concept_code"],
+        "source_concept_id": int(concept["source_concept_id"]),
+        "source_vocabulary_id": concept["vocabulary_id"],
+        "source_code_description": lexical_variant,
+        "target_concept_id": concept_id,
+        "target_vocabulary_id": concept["vocabulary_id"],
+        "valid_start_date": None,
+        "valid_end_date": None,
+        "invalid_reason": None if concept_id else "UNMAPPED",
+        "vocabulary_version": vocabulary_version,
+    }
+
+
+def _concept_value(
+    record: Mapping[str, Any] | None,
+    field_name: str,
+    fallback: Any,
+) -> Any:
+    if record is None:
+        return fallback
+    value = record.get(field_name)
+    return fallback if value is None or value == "" else value
 
 
 def _unmapped_concept_row() -> dict[str, Any]:
