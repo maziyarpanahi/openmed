@@ -18,9 +18,13 @@ from typing import Protocol, runtime_checkable
 from .language_pack import LanguagePack
 from .language_pack_catalog import LANGUAGE_PACK_ADAPTERS
 from .script_detect import (
+    ASCII_NUMERAL_SET,
+    DEFAULT_NORMALIZER,
     UNKNOWN_SCRIPT,
     candidate_languages_for_script,
     candidate_languages_for_text,
+    normalizer_for_script,
+    numeral_set_for_script,
     segment_by_script,
 )
 
@@ -113,7 +117,21 @@ class PyCLD2LanguageIdentifier:
 
 @dataclass(frozen=True, slots=True)
 class LanguageRun:
-    """Exact-offset routing decision for one contiguous script run."""
+    """Exact-offset routing decision for one contiguous script run.
+
+    ``start`` and ``end`` are half-open code-point offsets that always fall on
+    extended grapheme-cluster boundaries.
+
+    ``candidates`` is the ordered routing hint list for the run's script. It is
+    advisory, not a closed set: ``language`` may fall outside it when a
+    neighbouring script, a routing marker, or the optional language-ID backend
+    selects a pack that the script hints did not rank. ``source`` records which
+    of those paths decided the run.
+
+    ``normalizer`` and ``tokenizer`` name the components the run must be
+    processed with. ``numeral_set`` names the native decimal digits the script
+    writes numbers with, which is ``"ascii"`` for scripts that use ASCII digits.
+    """
 
     start: int
     end: int
@@ -121,6 +139,10 @@ class LanguageRun:
     language: str
     confidence: float
     source: str
+    candidates: tuple[str, ...] = ()
+    normalizer: str = DEFAULT_NORMALIZER
+    tokenizer: str = ""
+    numeral_set: str = ASCII_NUMERAL_SET
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,10 +231,13 @@ class LanguageRouter:
                 for neighbor in (index - 1, index + 1)
                 if 0 <= neighbor < len(script_runs)
             }
+            run_text = text[start:end]
+            candidates = candidate_languages_for_text(run_text, script)
             pack, confidence, source = self._select_pack(
-                text[start:end],
+                run_text,
                 script,
                 neighboring_scripts,
+                candidates,
             )
             routed.append(
                 LanguageRun(
@@ -222,6 +247,10 @@ class LanguageRouter:
                     language=pack.code,
                     confidence=confidence,
                     source=source,
+                    candidates=candidates,
+                    normalizer=normalizer_for_script(script),
+                    tokenizer=pack.segmenter_id,
+                    numeral_set=numeral_set_for_script(script),
                 )
             )
 
@@ -282,6 +311,7 @@ class LanguageRouter:
         text: str,
         script: str,
         neighboring_scripts: set[str],
+        text_hints: tuple[str, ...] | None = None,
     ) -> tuple[LanguagePack, float, str]:
         candidates = self._packs_by_script.get(script, ())
         if not candidates:
@@ -296,7 +326,8 @@ class LanguageRouter:
         if context_matches:
             return context_matches[0], 0.99, "stdlib:context-script"
 
-        text_hints = candidate_languages_for_text(text, script)
+        if text_hints is None:
+            text_hints = candidate_languages_for_text(text, script)
         if text_hints != candidate_languages_for_script(script):
             candidates_by_code = {pack.code: pack for pack in candidates}
             for code in text_hints:
