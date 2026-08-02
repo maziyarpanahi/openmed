@@ -143,9 +143,17 @@ def test_input_length_guard_allows_within_limit():
     RequestBudget(max_input_chars=8).check_input_length(8)  # exactly at limit is OK
 
 
-def test_wall_time_clock_raises_after_deadline():
+def test_wall_time_clock_raises_after_deadline(monkeypatch):
+    monotonic_time = [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return monotonic_time[0]
+
+    monkeypatch.setattr("openmed.core.budget.time", FakeTime)
     clock = RequestBudget(max_wall_time=0.001).start()
-    time.sleep(0.01)
+    monotonic_time[0] = 0.01
     with pytest.raises(BudgetExceededError) as excinfo:
         clock.check("unit_stage")
     assert excinfo.value.kind == "wall_time"
