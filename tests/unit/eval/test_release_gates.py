@@ -11,6 +11,7 @@ from openmed.compliance import (
     build_release_expert_review_evidence,
 )
 from openmed.core.audit import stable_hash
+from openmed.core.baseline import relation_baseline_key
 from openmed.eval import release_gates
 from openmed.eval.metrics import (
     compute_metrics_bundle,
@@ -322,6 +323,53 @@ def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, 
     }
 
 
+def _relation_golden_metric(
+    *,
+    strict_by_type: dict[str, float] | None = None,
+    assertion_leaks: int = 0,
+    temporal_leaks: int = 0,
+) -> dict[str, object]:
+    strict_by_type = strict_by_type or {
+        "ASSERTED_ABSENT": 1.0,
+        "TEMPORALLY_BEFORE": 1.0,
+        "TREATS": 1.0,
+    }
+    return {
+        "relation_golden": {
+            "by_type": {
+                relation_type: {"strict": {"f1": strict_f1}}
+                for relation_type, strict_f1 in strict_by_type.items()
+            },
+            "trap_leaks": {
+                "assertion": assertion_leaks,
+                "temporal": temporal_leaks,
+            },
+        }
+    }
+
+
+def _relation_golden_baseline_store() -> dict[str, object]:
+    fixture_hash = (
+        "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187"
+    )
+    entries: dict[str, object] = {}
+    for relation_type in ("ASSERTED_ABSENT", "TEMPORALLY_BEFORE", "TREATS"):
+        key = relation_baseline_key("Relation", relation_type)
+        entries[key] = {
+            "family": "Relation",
+            "fixture_hash": fixture_hash,
+            "key": key,
+            "relation_type": relation_type,
+            "strict_f1": 1.0,
+            "tolerance": 0.01,
+        }
+    return {
+        "entries": {},
+        "relation_golden": {"entries": entries, "schema_version": 1},
+        "schema_version": 1,
+    }
+
+
 def test_release_gate_passes_and_emits_signed_section_64_report(
     tmp_path: Path,
     monkeypatch,
@@ -531,6 +579,122 @@ def test_g9_relation_gate_passes_at_configured_lower_ci_floor(
     assert check.details["per_relation_type"]["INHIBITOR"]["strict_f1"] == (
         release_gates.G9_STRICT_RE_F1_FLOOR
     )
+
+
+def test_relation_golden_gate_passes_at_pinned_tolerance_and_is_signed(
+    tmp_path: Path,
+) -> None:
+    metrics = _relation_golden_metric(
+        strict_by_type={
+            "ASSERTED_ABSENT": 0.99,
+            "TEMPORALLY_BEFORE": 0.99,
+            "TREATS": 0.99,
+        }
+    )
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=metrics,
+        )
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["comparisons"]["TREATS"]["minimum"] == 0.99
+    assert check.details["trap_tolerance"] == {"assertion": 0, "temporal": 0}
+
+    restored = GateReport.from_json(result.to_json())
+    restored_check = _check(restored, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert restored.verify(SIGNING_KEY)
+    assert restored_check.details == check.details
+
+
+def test_relation_golden_gate_quarantines_strict_f1_regression(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(
+                strict_by_type={
+                    "ASSERTED_ABSENT": 1.0,
+                    "TEMPORALLY_BEFORE": 1.0,
+                    "TREATS": 0.989,
+                }
+            ),
+        ),
+        _relation_golden_baseline_store(),
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    regression = check.details["violations"]["strict_f1_regressions"]["TREATS"]
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert regression["candidate"] == 0.989
+    assert regression["minimum"] == 0.99
+
+
+def test_relation_golden_gate_quarantines_missing_type_baseline(
+    tmp_path: Path,
+) -> None:
+    baseline = _relation_golden_baseline_store()
+    del baseline["relation_golden"]["entries"]["relation::treats"]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(),
+        ),
+        baseline,
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["violations"]["missing_baselines"] == ["TREATS"]
+
+
+@pytest.mark.parametrize("trap_kind", release_gates.RELATION_GOLDEN_TRAP_KINDS)
+def test_relation_golden_gate_hard_fails_on_any_trap_leak(
+    tmp_path: Path,
+    trap_kind: str,
+) -> None:
+    trap_counts = {"assertion_leaks": 0, "temporal_leaks": 0}
+    trap_counts[f"{trap_kind}_leaks"] = 1
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(**trap_counts),
+        ),
+        _relation_golden_baseline_store(),
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.reason == "zero-tolerance assertion or temporal trap leak"
+    assert check.details["violations"]["trap_leaks"] == {trap_kind: 1}
 
 
 def test_gate_report_from_json_rejects_malformed_payload() -> None:

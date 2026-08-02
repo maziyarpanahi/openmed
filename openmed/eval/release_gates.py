@@ -85,6 +85,8 @@ G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+RELATION_GOLDEN_REGRESSION_GATE = "relation_golden_regression"
+RELATION_GOLDEN_TRAP_KINDS = ("assertion", "temporal")
 G13_STRICT_ENTITY_F1_FLOOR = 0.900
 G13_STRICT_RELATION_F1_FLOOR = 0.850
 G13_UNCERTAINTY_ACCURACY_FLOOR = 0.950
@@ -793,6 +795,24 @@ class ReleaseGate:
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
         checks.append(_g9_relation_extraction_check(metrics, metadata))
+        relation_baseline = baseline
+        if relation_baseline is None and _relation_golden_gate_is_applicable(
+            metrics, metadata
+        ):
+            try:
+                relation_baseline = baseline_store.load_baseline_store(
+                    self.baseline_path
+                )
+            except OSError:
+                relation_baseline = {}
+        checks.append(
+            evaluate_relation_golden_regression_gate(
+                metrics,
+                relation_baseline or {},
+                family=identity["family"],
+                metadata=metadata,
+            )
+        )
         checks.append(_g13_radiology_entity_relation_check(metrics, metadata))
         coreml_manifest = _coreml_conversion_manifest(metadata)
         if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
@@ -3352,6 +3372,303 @@ def _relation_type_summary(value: Any) -> dict[str, Any]:
     return summary
 
 
+def evaluate_relation_golden_regression_gate(
+    metrics: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+    *,
+    family: str,
+    metadata: Mapping[str, Any] | None = None,
+) -> GateCheck:
+    """Gate per-type strict relation F1 and zero-tolerance trap leaks.
+
+    Candidate evidence uses ``relation_golden.by_type`` with the same strict
+    metric payload produced by :func:`compute_relation_metrics`, plus integer
+    ``trap_leaks`` counts for ``assertion`` and ``temporal``. Baselines come
+    from the committed ``relation_golden`` baseline-store section.
+    """
+
+    metadata = metadata or {}
+    evidence = _relation_golden_evidence(metrics, metadata)
+    required = _relation_golden_gate_required(metadata)
+    if not evidence:
+        return GateCheck(
+            RELATION_GOLDEN_REGRESSION_GATE,
+            not required,
+            reason=(
+                "relation golden evidence is required" if required else "not applicable"
+            ),
+            details={"family": family, "required": required},
+        )
+
+    candidate_f1, invalid_candidates = _candidate_relation_strict_f1(evidence)
+    family_baselines, invalid_baselines = _relation_golden_baselines(
+        baseline, family=family
+    )
+    comparisons: dict[str, Any] = {}
+    missing_baselines: list[str] = []
+    missing_candidates: list[str] = []
+    regressions: dict[str, Any] = {}
+
+    relation_types = sorted(
+        set(candidate_f1)
+        | set(invalid_candidates)
+        | set(family_baselines)
+        | set(invalid_baselines)
+    )
+    for relation_type in relation_types:
+        candidate = candidate_f1.get(relation_type)
+        pinned = family_baselines.get(relation_type)
+        if pinned is None:
+            if relation_type in candidate_f1 or relation_type in invalid_candidates:
+                missing_baselines.append(relation_type)
+            continue
+        if candidate is None:
+            if relation_type not in invalid_candidates:
+                missing_candidates.append(relation_type)
+            continue
+
+        baseline_f1 = float(pinned["strict_f1"])
+        tolerance = float(pinned["tolerance"])
+        minimum = max(0.0, baseline_f1 - tolerance)
+        drop = baseline_f1 - candidate
+        comparison = {
+            "baseline": baseline_f1,
+            "baseline_key": pinned["key"],
+            "candidate": candidate,
+            "drop": drop,
+            "fixture_hash": pinned["fixture_hash"],
+            "minimum": minimum,
+            "tolerance": tolerance,
+        }
+        comparisons[relation_type] = comparison
+        if candidate + 1e-12 < minimum:
+            regressions[relation_type] = comparison
+
+    trap_leaks, invalid_traps = _relation_trap_leaks(evidence, metadata)
+    missing_traps = [
+        kind
+        for kind in RELATION_GOLDEN_TRAP_KINDS
+        if kind not in trap_leaks and kind not in invalid_traps
+    ]
+    leaked_traps = {kind: count for kind, count in trap_leaks.items() if count > 0}
+
+    violations: dict[str, Any] = {}
+    if missing_baselines:
+        violations["missing_baselines"] = missing_baselines
+    if invalid_baselines:
+        violations["invalid_baselines"] = invalid_baselines
+    if missing_candidates:
+        violations["missing_candidate_relation_types"] = missing_candidates
+    if invalid_candidates:
+        violations["invalid_candidate_strict_f1"] = invalid_candidates
+    if regressions:
+        violations["strict_f1_regressions"] = regressions
+    if missing_traps:
+        violations["missing_trap_leak_counts"] = missing_traps
+    if invalid_traps:
+        violations["invalid_trap_leak_counts"] = invalid_traps
+    if leaked_traps:
+        violations["trap_leaks"] = leaked_traps
+
+    passed = not violations
+    if passed:
+        reason = "ok"
+    elif leaked_traps:
+        reason = "zero-tolerance assertion or temporal trap leak"
+    elif missing_baselines or invalid_baselines:
+        reason = "relation golden baseline is missing or invalid"
+    elif regressions:
+        reason = "strict relation F1 regressed beyond pinned tolerance"
+    else:
+        reason = "relation golden evidence is incomplete or invalid"
+
+    return GateCheck(
+        RELATION_GOLDEN_REGRESSION_GATE,
+        passed,
+        reason=reason,
+        details={
+            "comparisons": comparisons,
+            "family": family,
+            "required": required,
+            "trap_leaks": trap_leaks,
+            "trap_tolerance": {kind: 0 for kind in RELATION_GOLDEN_TRAP_KINDS},
+            "violations": violations,
+        },
+    )
+
+
+def _relation_golden_gate_required(metadata: Mapping[str, Any]) -> bool:
+    return bool(
+        metadata.get("relation_golden_required")
+        or metadata.get("relation_golden_regression_required")
+    )
+
+
+def _relation_golden_gate_is_applicable(
+    metrics: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> bool:
+    return bool(_relation_golden_evidence(metrics, metadata)) or (
+        _relation_golden_gate_required(metadata)
+    )
+
+
+def _relation_golden_evidence(
+    metrics: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> dict[str, Any]:
+    explicit = _first_mapping(
+        metrics.get("relation_golden"),
+        metrics.get("relation_golden_regression"),
+        metadata.get("relation_golden"),
+        metadata.get("relation_golden_regression"),
+    )
+    if explicit:
+        return explicit
+
+    relation_evidence = _relation_extraction_evidence(metrics, metadata)
+    if relation_evidence and any(
+        key in relation_evidence for key in ("by_type", "trap_leaks", "traps")
+    ):
+        return relation_evidence
+    if _relation_golden_gate_required(metadata) and isinstance(
+        metrics.get("by_type"), Mapping
+    ):
+        return dict(metrics)
+    return {}
+
+
+def _candidate_relation_strict_f1(
+    evidence: Mapping[str, Any],
+) -> tuple[dict[str, float], dict[str, str]]:
+    nested_metrics = _mapping(evidence.get("metrics"))
+    by_type = _first_mapping(
+        evidence.get("by_type"),
+        evidence.get("per_relation_type"),
+        nested_metrics.get("by_type"),
+        nested_metrics.get("per_relation_type"),
+    )
+    values: dict[str, float] = {}
+    invalid: dict[str, str] = {}
+    if not by_type:
+        invalid["*"] = "missing by_type relation metrics"
+        return values, invalid
+
+    for raw_type, raw_metric in sorted(by_type.items(), key=lambda item: str(item[0])):
+        relation_type = _canonical_relation_type(raw_type)
+        if not relation_type:
+            invalid[str(raw_type)] = "relation type is empty"
+            continue
+        if relation_type in values or relation_type in invalid:
+            invalid[relation_type] = "duplicate normalized relation type"
+            values.pop(relation_type, None)
+            continue
+
+        metric = _mapping(raw_metric)
+        strict = _first_value(metric.get("strict"), metric.get("strict_f1"))
+        if isinstance(strict, Mapping):
+            raw_f1 = _first_value(strict.get("f1"), strict.get("point"))
+        else:
+            raw_f1 = strict
+        parsed = _strict_probability(raw_f1)
+        if parsed is None:
+            invalid[relation_type] = "strict F1 must be between 0 and 1"
+            continue
+        values[relation_type] = parsed
+    return values, invalid
+
+
+def _relation_golden_baselines(
+    baseline: Mapping[str, Any], *, family: str
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    section = _mapping(baseline.get("relation_golden"))
+    entries = _mapping(section.get("entries"))
+    normalized_family = _normalise_dimension(family)
+    values: dict[str, dict[str, Any]] = {}
+    invalid: dict[str, str] = {}
+    for raw_key, raw_entry in sorted(entries.items(), key=lambda item: str(item[0])):
+        entry = _mapping(raw_entry)
+        if _normalise_dimension(str(entry.get("family") or "")) != normalized_family:
+            continue
+        relation_type = _canonical_relation_type(entry.get("relation_type"))
+        key = str(raw_key)
+        if not relation_type:
+            invalid[key] = "relation type is empty"
+            continue
+        expected_key = baseline_store.relation_baseline_key(family, relation_type)
+        strict_f1 = _strict_probability(entry.get("strict_f1"))
+        tolerance = _strict_probability(entry.get("tolerance"))
+        if entry.get("key") != key or key != expected_key:
+            invalid[relation_type] = "baseline key does not match family and type"
+        elif strict_f1 is None:
+            invalid[relation_type] = "baseline strict F1 must be between 0 and 1"
+        elif tolerance is None:
+            invalid[relation_type] = "baseline tolerance must be between 0 and 1"
+        elif relation_type in values:
+            invalid[relation_type] = "duplicate normalized relation baseline"
+            values.pop(relation_type, None)
+        else:
+            values[relation_type] = {
+                "fixture_hash": str(entry.get("fixture_hash") or ""),
+                "key": key,
+                "strict_f1": strict_f1,
+                "tolerance": tolerance,
+            }
+    return values, invalid
+
+
+def _relation_trap_leaks(
+    evidence: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> tuple[dict[str, int], dict[str, str]]:
+    nested_metrics = _mapping(evidence.get("metrics"))
+    nested_metadata = _mapping(evidence.get("metadata"))
+    trap_leaks = _first_mapping(
+        evidence.get("trap_leaks"),
+        nested_metrics.get("trap_leaks"),
+        nested_metadata.get("trap_leaks"),
+        metadata.get("relation_trap_leaks"),
+    )
+    if not trap_leaks:
+        traps = _first_mapping(
+            evidence.get("traps"),
+            nested_metadata.get("traps"),
+            metadata.get("relation_traps"),
+        )
+        trap_leaks = _mapping(traps.get("by_kind"))
+
+    values: dict[str, int] = {}
+    invalid: dict[str, str] = {}
+    for kind in RELATION_GOLDEN_TRAP_KINDS:
+        if kind not in trap_leaks:
+            continue
+        count = _relation_trap_leak_count(trap_leaks[kind])
+        if count is None:
+            invalid[kind] = "trap leak count must be a non-negative integer"
+        else:
+            values[kind] = count
+    return values, invalid
+
+
+def _relation_trap_leak_count(value: Any) -> int | None:
+    direct = _strict_nonnegative_int(value)
+    if direct is not None:
+        return direct
+    payload = _mapping(value)
+    for field in ("leak_count", "leaked_count", "failure_count"):
+        if field in payload:
+            return _strict_nonnegative_int(payload[field])
+    for field in ("leaked_relation_ids", "leaks"):
+        leaked = payload.get(field)
+        if isinstance(leaked, Sequence) and not isinstance(
+            leaked, (str, bytes, bytearray)
+        ):
+            return len(leaked)
+    return None
+
+
+def _canonical_relation_type(value: Any) -> str:
+    normalized = _normalise_dimension(str(value or ""))
+    return normalized.upper().replace("-", "_")
+
+
 def evaluate_radiology_entity_relation_gate(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any] | None = None,
@@ -5622,6 +5939,8 @@ __all__ = [
     "G15_E2E_FACT_F1_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
+    "RELATION_GOLDEN_REGRESSION_GATE",
+    "RELATION_GOLDEN_TRAP_KINDS",
     "FLAKINESS_GATE",
     "SURROGATE_QUALITY_GATE",
     "EXPORT_VARIANT_GATE",
@@ -5645,6 +5964,7 @@ __all__ = [
     "evaluate_end_to_end_pipeline_gate",
     "evaluate_federated_boundary_gate",
     "evaluate_radiology_entity_relation_gate",
+    "evaluate_relation_golden_regression_gate",
     "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",
