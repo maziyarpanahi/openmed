@@ -35,9 +35,10 @@ _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 KeepAliveValue = Union[int, float, str]
 
-# Languages accepted by the PII endpoints. This MUST include both built-in
-# ``SUPPORTED_LANGUAGES`` and the explicitly configured optional Indic NER
-# routes so the REST/MCP layer does not reject a route accepted by the core.
+# Languages accepted by the PII endpoints. This MUST include built-in
+# ``SUPPORTED_LANGUAGES``, the explicitly configured optional Indic NER routes,
+# and the ``USER_SUPPLIED_MODEL_LANGUAGES`` routes that ship no bundled weights,
+# so the REST/MCP layer does not reject a route accepted by the core.
 # The parity is guarded by
 # ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
 PIILanguage = Literal[
@@ -55,10 +56,12 @@ PIILanguage = Literal[
     "kn",
     "ml",
     "mr",
+    "ne",
     "or",
     "pa",
     "ta",
     "te",
+    "ur",
     "pt",
     "ar",
     "he",

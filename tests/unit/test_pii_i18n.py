@@ -59,6 +59,7 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     AfricanMobilePlan,
     build_african_mobile_pattern,
     get_patterns_for_language,
@@ -191,7 +192,9 @@ class TestConstants:
         }
 
     def test_language_names_keys(self):
-        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        assert set(LANGUAGE_NAMES.keys()) == (
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+        )
 
     def test_language_model_prefix(self):
         assert LANGUAGE_MODEL_PREFIX["am"] == "Amharic-"
@@ -226,8 +229,10 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["el"] == "Greek-"
 
     def test_default_pii_models_all_languages(self):
-        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
-            INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}
+        assert set(DEFAULT_PII_MODELS.keys()) == (
+            SUPPORTED_LANGUAGES
+            | (INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"})
+            | USER_SUPPLIED_MODEL_LANGUAGES
         )
 
     def test_default_pii_models_naming(self):
