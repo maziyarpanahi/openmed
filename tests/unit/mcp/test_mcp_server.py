@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("mcp")
 
 from openmed.mcp.server import create_mcp_server
-from openmed.mcp.tool_registry import TOOL_REGISTRY
+from openmed.mcp.tool_registry import CLINICAL_WORKFLOW_SPEC, TOOL_REGISTRY
 
 
 class _Runtime:
@@ -100,3 +100,28 @@ def test_health_resource_reports_only_version_and_loaded_model_count() -> None:
     assert payload["loaded_model_count"] == 2
     assert payload["version"]
     assert not set(model_names) & set(payload)
+
+
+def test_clinical_workflow_prompt_and_resources_are_exposed_over_mcp() -> None:
+    server = _server()
+    prompts = asyncio.run(server.list_prompts())
+    resources = asyncio.run(server.list_resources())
+
+    assert CLINICAL_WORKFLOW_SPEC.prompt_name in {prompt.name for prompt in prompts}
+    resource_uris = {str(resource.uri) for resource in resources}
+    assert CLINICAL_WORKFLOW_SPEC.resource_uri in resource_uris
+    assert CLINICAL_WORKFLOW_SPEC.fixture_uri in resource_uris
+
+    workflow_contents = asyncio.run(
+        server.read_resource(CLINICAL_WORKFLOW_SPEC.resource_uri)
+    )
+    fixture_contents = asyncio.run(
+        server.read_resource(CLINICAL_WORKFLOW_SPEC.fixture_uri)
+    )
+    workflow = json.loads(workflow_contents[0].content)
+    fixture = json.loads(fixture_contents[0].content)
+
+    assert workflow["execution"]["default"] == "local"
+    assert workflow["execution"]["network_egress"] is False
+    assert fixture["synthetic"] is True
+    assert fixture["artifacts"]["export"]["bundle"]["resourceType"] == "Bundle"
