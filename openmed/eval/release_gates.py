@@ -41,6 +41,7 @@ from openmed.eval.fairness import DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR
 from openmed.eval.metrics import (
     CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
     CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    PIPELINE_EVAL_STAGES,
     normalize_critical_finding_category,
     normalize_eval_spans,
 )
@@ -94,6 +95,8 @@ G13_RADIOLOGY_UNCERTAINTY_ACCURACY_FLOOR = G13_UNCERTAINTY_ACCURACY_FLOOR
 #: Maximum tolerated worst-group-vs-best-group extraction-F1 gap across
 #: synthetic site/note-type/demographic surrogate groups before G14 quarantines.
 G14_EXTRACTION_DISPARITY_CEILING = 0.050
+#: Minimum exact fact-level F1 from raw note through FHIR export.
+G15_E2E_FACT_F1_FLOOR = 0.900
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
 G10_UNGROUNDED_FACT_CEILING = 0.0
 DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING = 0.0
@@ -765,6 +768,7 @@ class ReleaseGate:
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g11_critical_finding_recall_check(metrics, metadata))
         checks.append(_g14_extraction_fairness_check(metrics, metadata))
+        checks.append(_g15_end_to_end_pipeline_check(metrics, metadata, baseline_entry))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
             _g5_check(
@@ -2389,6 +2393,213 @@ def _worst_group_by_metric(value: Any) -> dict[str, str | None]:
         str(metric): (str(group) if group is not None else None)
         for metric, group in sorted(value.items(), key=lambda item: str(item[0]))
     }
+
+
+def evaluate_end_to_end_pipeline_gate(
+    report: Mapping[str, Any] | Any,
+    baseline: Mapping[str, Any] | Any | None = None,
+) -> GateCheck:
+    """Evaluate end-to-end fact F1 and per-stage errors against G15.
+
+    ``report`` may be a full benchmark report, a
+    :class:`~openmed.eval.harness.PipelineEvalReport`, or its compact metric
+    payload. A baseline is optional; when supplied, no stage bucket may grow.
+    """
+
+    if hasattr(report, "to_metric") and callable(report.to_metric):
+        payload = _mapping(report.to_metric())
+    else:
+        payload = _report_payload(report)
+    if "metrics" in payload or "metadata" in payload:
+        metrics = _mapping(payload.get("metrics"))
+        metadata = _mapping(payload.get("metadata"))
+    else:
+        metrics = {"end_to_end_pipeline": payload}
+        metadata = {}
+
+    baseline_entry: Mapping[str, Any] | None = None
+    if baseline is not None:
+        if hasattr(baseline, "to_metric") and callable(baseline.to_metric):
+            baseline_payload = _mapping(baseline.to_metric())
+        else:
+            baseline_payload = _report_payload(baseline)
+        baseline_entry = (
+            baseline_payload
+            if "metrics" in baseline_payload
+            else {"metrics": {"end_to_end_pipeline": baseline_payload}}
+        )
+    return _g15_end_to_end_pipeline_check(metrics, metadata, baseline_entry)
+
+
+def _g15_end_to_end_pipeline_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    baseline_entry: Mapping[str, Any] | None,
+) -> GateCheck:
+    evidence = _end_to_end_pipeline_evidence(metrics, metadata)
+    if not evidence:
+        return GateCheck(
+            "G15",
+            True,
+            reason="not provided",
+            details={
+                "fact_f1_floor": G15_E2E_FACT_F1_FLOOR,
+                "pipeline_metric_present": False,
+            },
+        )
+
+    fact_level = _mapping(evidence.get("fact_level"))
+    fact_f1 = _optional_float(
+        _first_value(
+            evidence.get("fact_f1"),
+            evidence.get("end_to_end_fact_f1"),
+            fact_level.get("f1"),
+        )
+    )
+    raw_stage_counts = _first_mapping(
+        evidence.get("stage_error_counts"),
+        _nested(_mapping(evidence.get("attribution")), "stage_error_counts"),
+        evidence.get("per_stage_errors"),
+    )
+    stage_counts, count_error = _pipeline_stage_error_counts(raw_stage_counts)
+    reported_total = _optional_int(
+        _first_value(
+            evidence.get("total_end_to_end_errors"),
+            _nested(
+                _mapping(evidence.get("attribution")),
+                "total_end_to_end_errors",
+            ),
+        )
+    )
+    computed_total = sum(stage_counts.values())
+
+    violations: dict[str, Any] = {}
+    if fact_f1 is None or not 0.0 <= fact_f1 <= 1.0:
+        violations["fact_f1"] = {
+            "floor": G15_E2E_FACT_F1_FLOOR,
+            "observed": "missing_or_invalid" if fact_f1 is None else fact_f1,
+        }
+    elif fact_f1 < G15_E2E_FACT_F1_FLOOR:
+        violations["fact_f1"] = {
+            "floor": G15_E2E_FACT_F1_FLOOR,
+            "observed": fact_f1,
+        }
+    if count_error:
+        violations["stage_error_counts"] = count_error
+    if reported_total is not None and reported_total != computed_total:
+        violations["attribution_total"] = {
+            "computed": computed_total,
+            "reported": reported_total,
+        }
+
+    baseline_evidence = _baseline_end_to_end_pipeline_evidence(
+        evidence,
+        baseline_entry,
+    )
+    baseline_counts: dict[str, int] = {}
+    if baseline_evidence:
+        baseline_raw = _first_mapping(
+            baseline_evidence.get("stage_error_counts"),
+            _nested(
+                _mapping(baseline_evidence.get("attribution")),
+                "stage_error_counts",
+            ),
+            baseline_evidence.get("per_stage_errors"),
+        )
+        baseline_counts, baseline_error = _pipeline_stage_error_counts(baseline_raw)
+        if baseline_error:
+            violations["baseline_stage_error_counts"] = baseline_error
+        else:
+            regressions = {
+                stage: {
+                    "baseline": baseline_counts[stage],
+                    "observed": stage_counts[stage],
+                }
+                for stage in PIPELINE_EVAL_STAGES
+                if stage_counts[stage] > baseline_counts[stage]
+            }
+            if regressions:
+                violations["stage_regressions"] = regressions
+
+    passed = not violations
+    details: dict[str, Any] = {
+        "baseline_present": bool(baseline_evidence),
+        "baseline_stage_error_counts": baseline_counts,
+        "fact_f1": fact_f1,
+        "fact_f1_floor": G15_E2E_FACT_F1_FLOOR,
+        "pipeline_metric_present": True,
+        "stage_error_counts": stage_counts,
+        "total_end_to_end_errors": computed_total,
+        "violations": violations,
+    }
+    for path_key in (
+        "pipeline_attribution_path",
+        "pipeline_attribution_report_path",
+        "pipeline_eval_report_path",
+    ):
+        if evidence.get(path_key):
+            details[path_key] = str(evidence[path_key])
+    return GateCheck(
+        "G15",
+        passed,
+        reason=(
+            "ok" if passed else "end-to-end fact F1 or per-stage regression gate failed"
+        ),
+        details=details,
+    )
+
+
+def _end_to_end_pipeline_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    evidence = _first_mapping(
+        metrics.get("end_to_end_pipeline"),
+        metrics.get("pipeline_eval"),
+        metrics.get("pipeline_e2e"),
+        metadata.get("end_to_end_pipeline"),
+        metadata.get("pipeline_eval"),
+        metadata.get("pipeline_e2e"),
+    )
+    if evidence:
+        return evidence
+    if (
+        "fact_f1" in metrics
+        or "fact_level" in metrics
+        or "stage_error_counts" in metrics
+    ):
+        return dict(metrics)
+    return {}
+
+
+def _baseline_end_to_end_pipeline_evidence(
+    candidate: Mapping[str, Any],
+    baseline_entry: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    embedded = _mapping(candidate.get("baseline"))
+    if embedded:
+        return embedded
+    if baseline_entry is None:
+        return {}
+    baseline_metrics = _mapping(baseline_entry.get("metrics"))
+    baseline_metadata = _mapping(baseline_entry.get("metadata"))
+    return _end_to_end_pipeline_evidence(baseline_metrics, baseline_metadata)
+
+
+def _pipeline_stage_error_counts(
+    value: Mapping[str, Any],
+) -> tuple[dict[str, int], str]:
+    counts = {stage: 0 for stage in PIPELINE_EVAL_STAGES}
+    if not value:
+        return counts, "stage_error_counts is required"
+    unknown = sorted(set(value) - set(PIPELINE_EVAL_STAGES))
+    if unknown:
+        return counts, "unknown stage bucket(s): " + ", ".join(unknown)
+    for stage, raw in value.items():
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+            return counts, f"{stage} must be a non-negative integer"
+        counts[stage] = raw
+    return counts, ""
 
 
 def _adversarial_recall_under_attack_check(
@@ -5408,6 +5619,7 @@ __all__ = [
     "G13_STRICT_RELATION_F1_FLOOR",
     "G13_UNCERTAINTY_ACCURACY_FLOOR",
     "G14_EXTRACTION_DISPARITY_CEILING",
+    "G15_E2E_FACT_F1_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
@@ -5430,6 +5642,7 @@ __all__ = [
     "build_arg_parser",
     "build_grounding_gate_report",
     "evaluate_cross_document_linkage_gate",
+    "evaluate_end_to_end_pipeline_gate",
     "evaluate_federated_boundary_gate",
     "evaluate_radiology_entity_relation_gate",
     "evaluate_grounding_accuracy_gate",
