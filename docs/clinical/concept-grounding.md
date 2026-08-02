@@ -111,6 +111,27 @@ restricted UMLS, SNOMED, or CPT vocabulary data paths.
 
 ## Run incremental OMOP loads
 
+Use a caller-supplied Athena export and optional Usagi mapping when source spans
+still need standard-concept and domain resolution. The router's decision is
+authoritative, so an unverified `concept_id` carried by an input span cannot
+bypass the local vocabulary lookup:
+
+```python
+from openmed.interop.omop import VocabularyRouter, load_grounded_jsonl
+
+router = VocabularyRouter.from_athena(
+    "/local/athena-export",
+    "/local/usagi-mapping.csv",
+    vocabulary_version="caller-supplied-release",
+)
+tables = load_grounded_jsonl("grounded.jsonl", vocabulary_router=router)
+```
+
+Mapped target and source concepts are copied from the supplied Athena index into
+the loader-owned CONCEPT subset. Each SOURCE_TO_CONCEPT_MAP row retains its
+source code, source concept, target concept, target vocabulary, and vocabulary
+version. A missing match remains source-only with target `concept_id=0`.
+
 The OMOP writers use idempotent append mode by default. A rerun with the same
 deterministic rows does not create duplicates and does not remove data already
 in the target. Use replace-by-note mode when the incoming batch is the complete,
