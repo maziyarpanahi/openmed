@@ -417,6 +417,11 @@ path through `create_chinese_segmenter(..., hanlp_model=...)`. OpenMed never
 downloads optional model files implicitly, so provision those assets before
 selecting either backend.
 
+For the cache and storage layout of locally provisioned pkuseg and HanLP
+assets, deployment and upgrade/rollback procedures, institutional dictionary
+governance, and segmentation regression checks, see
+[Chinese Segmentation Operations](chinese-segmentation-operations.md).
+
 ## Privacy-filter family
 
 OpenMed ships three privacy-filter families, all **the same OpenAI
