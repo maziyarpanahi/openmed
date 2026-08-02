@@ -14,15 +14,17 @@ import threading
 
 import pytest
 
-from tests.unit.processing.fixtures.distributed_backend_fakes import (
+from openmed.processing.shard_executor import (
     DriverOnlyStateError,
+    find_driver_only_state,
+)
+from tests.unit.processing.fixtures.distributed_backend_fakes import (
     FakeRayModule,
     FakeRayTaskError,
     FakeSparkContext,
     FakeSparkSession,
     FakeSparkTaskError,
     SerializationError,
-    find_driver_only_state,
     round_trip,
     synthetic_shard_payloads,
 )
@@ -126,6 +128,9 @@ class _StandInManifestStore:
     def __init__(self) -> None:
         self.manifest: dict[str, str] = {}
 
+    def load(self) -> dict[str, str]:
+        return dict(self.manifest)
+
     def save(self, manifest: dict[str, str]) -> None:
         self.manifest = dict(manifest)
 
@@ -151,19 +156,19 @@ def test_a_manifest_store_pickles_without_error_but_yields_a_copy():
 def test_find_driver_only_state_reports_nested_capture_paths():
     payload = {"shard_id": 0, "context": {"store": _StandInManifestStore()}}
 
-    found = find_driver_only_state(payload, (_StandInManifestStore,))
+    found = find_driver_only_state(payload)
 
-    assert found == ("payload['context']['store']: _StandInManifestStore",)
+    assert found == ("task['context']['store'] (_StandInManifestStore)",)
 
 
 def test_find_driver_only_state_accepts_a_clean_payload():
     payloads = synthetic_shard_payloads(3)
 
-    assert find_driver_only_state(payloads, (_StandInManifestStore,)) == ()
+    assert find_driver_only_state(payloads) == ()
 
 
 def test_ray_submission_rejects_a_captured_manifest_store():
-    ray = FakeRayModule(forbidden_types=(_StandInManifestStore,))
+    ray = FakeRayModule()
     remote_function = ray.remote(_shard_summary)
 
     with pytest.raises(DriverOnlyStateError, match="_StandInManifestStore"):
@@ -173,7 +178,7 @@ def test_ray_submission_rejects_a_captured_manifest_store():
 
 
 def test_spark_submission_rejects_a_captured_manifest_store():
-    session = FakeSparkSession(forbidden_types=(_StandInManifestStore,))
+    session = FakeSparkSession()
 
     with pytest.raises(DriverOnlyStateError, match="_StandInManifestStore"):
         session.sparkContext.parallelize(

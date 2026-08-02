@@ -33,10 +33,15 @@ Every value produced here is synthetic and generated algorithmically.
 from __future__ import annotations
 
 import pickle
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, is_dataclass
-from dataclasses import fields as dataclass_fields
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
 from typing import Any
+
+from openmed.processing.shard_executor import (
+    DRIVER_ONLY_TYPES,
+    DriverOnlyStateError,
+    find_driver_only_state,
+)
 
 __all__ = [
     "DriverOnlyStateError",
@@ -47,6 +52,7 @@ __all__ = [
     "FakeSparkContext",
     "FakeSparkSession",
     "FakeSparkTaskError",
+    "make_ray_task_error",
     "SerializationError",
     "TaskOutcome",
     "find_driver_only_state",
@@ -59,67 +65,59 @@ class SerializationError(TypeError):
     """Raised when a task payload cannot cross the driver/worker boundary."""
 
 
-class DriverOnlyStateError(AssertionError):
-    """Raised when driver-only state is captured in a worker task payload.
-
-    A manifest store is picklable, so shipping one to a worker raises nothing:
-    each worker silently receives a *copy*, mutates it, and the driver's
-    manifest never observes the update. That divergence is invisible to the
-    serializer, so the fakes reject driver-only state structurally instead.
-    """
-
-
-def find_driver_only_state(
-    payload: Any,
-    forbidden_types: tuple[type, ...],
-    *,
-    _path: str = "payload",
-    _seen: set[int] | None = None,
-) -> tuple[str, ...]:
-    """Return the paths at which *payload* holds any of *forbidden_types*."""
-
-    if not forbidden_types:
-        return ()
-    seen = set() if _seen is None else _seen
-    if id(payload) in seen:
-        return ()
-    seen.add(id(payload))
-
-    if isinstance(payload, forbidden_types):
-        return (f"{_path}: {type(payload).__name__}",)
-
-    found: list[str] = []
-    children: list[tuple[str, Any]] = []
-    if isinstance(payload, Mapping):
-        children = [(f"{_path}[{key!r}]", value) for key, value in payload.items()]
-    elif isinstance(payload, (list, tuple, set, frozenset)):
-        children = [(f"{_path}[{index}]", item) for index, item in enumerate(payload)]
-    elif is_dataclass(payload) and not isinstance(payload, type):
-        children = [
-            (f"{_path}.{f.name}", getattr(payload, f.name, None))
-            for f in dataclass_fields(payload)
-        ]
-    elif hasattr(payload, "__dict__"):
-        children = [(f"{_path}.{name}", value) for name, value in vars(payload).items()]
-
-    for child_path, child in children:
-        found.extend(
-            find_driver_only_state(child, forbidden_types, _path=child_path, _seen=seen)
-        )
-    return tuple(found)
-
-
 class FakeRayTaskError(RuntimeError):
     """PHI-free analogue of ``ray.exceptions.RayTaskError``.
 
     Carries only the failing exception's *type name*; the originating message
     is dropped on purpose so no test can accidentally depend on it and no
     payload text can reach a driver-side log.
+
+    This is **not** the shape Ray raises to a driver -- see
+    :func:`make_ray_task_error` for that. Use this one only where a task
+    failure just needs to be signalled.
     """
 
     def __init__(self, error_type: str) -> None:
         super().__init__(f"worker task failed with {error_type}")
         self.error_type = error_type
+
+
+def make_ray_task_error(cause: BaseException) -> BaseException:
+    """Return an exception shaped like the one Ray raises to a driver.
+
+    Modelled on ``ray.exceptions.RayTaskError.as_instanceof_cause`` in
+    ray 2.56.1, which is what ``ray.get`` re-raises. Three properties matter,
+    and an adapter that assumes ordinary chaining gets all three wrong:
+
+    * the class is built dynamically and named ``RayTaskError(<Cause>)``, which
+      is **not** a bare identifier, so a manifest sanitizer maps it to
+      ``UnknownError``;
+    * the original exception is stored in a plain ``cause`` **attribute**, not
+      in ``__cause__``;
+    * ``__cause__`` and ``__context__`` are both ``None``. ``__cause__`` is a
+      ``BaseException`` getset descriptor, so it resolves normally and never
+      falls through the class's ``__getattr__``, and the raise site is not
+      inside an ``except`` block so nothing chains implicitly.
+
+    Building the real shape here rather than hand-assigning ``__cause__`` is
+    the point: a fake that encodes what we believe Ray does can only ever
+    confirm that belief.
+    """
+
+    cause_cls = type(cause)
+    name = f"RayTaskError({cause_cls.__name__})"
+
+    class _RayTaskError(RuntimeError):
+        def __init__(self, inner: BaseException) -> None:
+            super().__init__("ray worker task failed")
+            self.cause = inner
+
+        def __getattr__(self, attribute: str) -> Any:
+            return getattr(self.cause, attribute)
+
+    _RayTaskError.__name__ = name
+    _RayTaskError.__qualname__ = name
+    return _RayTaskError(cause)
 
 
 class FakeSparkTaskError(RuntimeError):
@@ -214,7 +212,10 @@ class FakeRayModule:
 
     completion_order: Sequence[int] | None = None
     function_serializer: Any = None
-    forbidden_types: tuple[type, ...] = ()
+    forbidden_types: tuple[type, ...] = DRIVER_ONLY_TYPES
+    #: shard_id -> exception ``ray.get`` should raise instead of returning a
+    #: result, standing in for a worker death or a lost object.
+    remote_failures: dict[int, BaseException] = field(default_factory=dict)
     outcomes: list[TaskOutcome] = field(default_factory=list)
     submitted_payloads: list[tuple[tuple[Any, ...], dict[str, Any]]] = field(
         default_factory=list
@@ -262,17 +263,34 @@ class FakeRayModule:
         num_returns: int = 1,
         timeout: float | None = None,
     ) -> tuple[list[FakeObjectRef], list[FakeObjectRef]]:
-        """Split *refs* into (ready, pending) following ``completion_order``."""
+        """Split *refs* into (ready, pending) following ``completion_order``.
+
+        ``completion_order`` is a *priority hint* over whatever is currently in
+        flight, not a required permutation of the whole plan. With a bounded
+        ``max_in_flight`` only a window of tasks has been submitted when this is
+        first called, so demanding a full permutation would make the one
+        realistic Ray configuration -- a bounded window completing out of order
+        -- impossible to express. Indices absent from the hint sort last, by id.
+        """
 
         pending = list(refs)
-        order = _ordered(self.completion_order, len(self.outcomes))
-        ranked = sorted(pending, key=lambda ref: order.index(ref.index))
+        hint = list(self.completion_order or ())
+
+        def rank(ref: FakeObjectRef) -> tuple[int, int]:
+            if ref.index in hint:
+                return (0, hint.index(ref.index))
+            return (1, ref.index)
+
+        ranked = sorted(pending, key=rank)
         ready = ranked[:num_returns]
         remaining = [ref for ref in pending if ref not in ready]
         return ready, remaining
 
     def _resolve(self, ref: FakeObjectRef) -> Any:
         outcome = self.outcomes[ref.index]
+        shard_id = getattr(outcome.value, "shard_id", None)
+        if shard_id in self.remote_failures:
+            raise self.remote_failures[shard_id]
         if outcome.error_type is not None:
             raise FakeRayTaskError(outcome.error_type)
         return outcome.value
@@ -289,7 +307,9 @@ class _FakeRemoteFunction:
     def remote(self, *args: Any, **kwargs: Any) -> FakeObjectRef:
         """Submit one task, crossing the serialization boundary first."""
 
-        captured = find_driver_only_state((args, kwargs), self.module.forbidden_types)
+        captured = find_driver_only_state(
+            (args, kwargs), forbidden_types=self.module.forbidden_types
+        )
         if captured:
             raise DriverOnlyStateError(
                 "driver-only state captured in a Ray task payload: "
@@ -357,16 +377,23 @@ class FakeRDD:
         completion order to attribute a result to its shard.
         """
 
+        if self.context.job_error is not None:
+            raise self.context.job_error
         if self._transform is None:
             return list(self.elements)
 
+        transform = self._transform
+        if self.context.function_serializer is not None:
+            transform = round_trip(
+                transform, serializer=self.context.function_serializer
+            )
         total = len(self.elements)
         order = _ordered(self.context.execution_order, total)
         results: dict[int, Any] = {}
         for index in order:
             self.context.invocation_order.append(index)
             try:
-                results[index] = self._transform(self.elements[index])
+                results[index] = transform(self.elements[index])
             except Exception as exc:  # noqa: BLE001 - reduced to a type name
                 raise FakeSparkTaskError(type(exc).__name__) from None
         return [results[index] for index in range(total)]
@@ -378,7 +405,15 @@ class FakeSparkContext:
 
     execution_order: Sequence[int] | None = None
     num_slices: int | None = None
-    forbidden_types: tuple[type, ...] = ()
+    forbidden_types: tuple[type, ...] = DRIVER_ONLY_TYPES
+    #: Serializer applied to the mapped function, mirroring
+    #: ``FakeRayModule.function_serializer``. PySpark ships the function with
+    #: ``CloudPickleSerializer`` while ``parallelize`` ships the *elements* with
+    #: ``CPickleSerializer`` (stdlib pickle), so the two are configured apart.
+    function_serializer: Any = None
+    #: Exception ``collect`` should raise instead of returning results, standing
+    #: in for a job-level failure such as a lost executor.
+    job_error: BaseException | None = None
     invocation_order: list[int] = field(default_factory=list)
 
     def parallelize(
@@ -389,7 +424,9 @@ class FakeSparkContext:
         self.num_slices = numSlices
         materialized: list[Any] = []
         for element in elements:
-            captured = find_driver_only_state(element, self.forbidden_types)
+            captured = find_driver_only_state(
+                element, forbidden_types=self.forbidden_types
+            )
             if captured:
                 raise DriverOnlyStateError(
                     "driver-only state captured in a Spark task payload: "
@@ -404,7 +441,9 @@ class FakeSparkSession:
     """Minimal stand-in for ``SparkSession``."""
 
     execution_order: Sequence[int] | None = None
-    forbidden_types: tuple[type, ...] = ()
+    forbidden_types: tuple[type, ...] = DRIVER_ONLY_TYPES
+    function_serializer: Any = None
+    job_error: BaseException | None = None
     _context: FakeSparkContext | None = None
 
     @property
@@ -415,5 +454,7 @@ class FakeSparkSession:
             self._context = FakeSparkContext(
                 execution_order=self.execution_order,
                 forbidden_types=self.forbidden_types,
+                function_serializer=self.function_serializer,
+                job_error=self.job_error,
             )
         return self._context

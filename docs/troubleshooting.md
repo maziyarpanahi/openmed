@@ -122,6 +122,7 @@ published OpenMed installation.
 | Grounding (rapidfuzz) | `grounding` | `pip install "openmed[grounding]"` |
 | LangChain / LlamaIndex | `langchain` / `llamaindex` | `pip install "openmed[langchain]"` / `pip install "openmed[llamaindex]"` |
 | Kafka / cloud object storage | `kafka` / `cloud` | `pip install "openmed[kafka]"` / `pip install "openmed[cloud]"` |
+| Distributed batch shard execution (`RayShardExecutor` / `SparkShardExecutor`) | `ray` / `spark` | `pip install "openmed[ray]"` / `pip install "openmed[spark]"` |
 | AWQ / GPTQ export | `awq` / `gptq` | `pip install "openmed[awq]"` / `pip install "openmed[gptq]"` |
 
 You can stack extras: `pip install "openmed[hf,service]"` or `pip install "openmed[hf,mlx,docs]"`.
