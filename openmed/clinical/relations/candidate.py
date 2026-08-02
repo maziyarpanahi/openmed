@@ -137,6 +137,13 @@ class RelationCandidateBatch:
     spans_by_node_id: Mapping[str, SpanReference]
 
 
+@dataclass(frozen=True)
+class _MatchedCue:
+    cue: str
+    start: int
+    end: int
+
+
 _SENTENCE_BOUNDARY_RE = re.compile(r"[.!?。！？；;\n]")
 
 
@@ -192,7 +199,8 @@ def build_relation_candidates(
             between = _text_between(text, head, tail)
             if _SENTENCE_BOUNDARY_RE.search(between):
                 continue
-            window = text[min(head.start, tail.start) : max(head.end, tail.end)]
+            window_start = min(head.start, tail.start)
+            window = text[window_start : max(head.end, tail.end)]
             for rule in ordered_rules:
                 if head_node.label not in rule.head_labels:
                     continue
@@ -211,8 +219,10 @@ def build_relation_candidates(
                         score=_candidate_score(head, tail, distance),
                         metadata={
                             "character_distance": distance,
+                            "cue_end": window_start + matched_cue.end,
+                            "cue_start": window_start + matched_cue.start,
                             "language": language,
-                            "matched_cue": matched_cue,
+                            "matched_cue": matched_cue.cue,
                             "source_relation": rule.source_relation,
                         },
                     )
@@ -308,11 +318,11 @@ def _character_distance(left: SpanReference, right: SpanReference) -> int:
     return 0
 
 
-def _matched_cue(window: str, cues: tuple[str, ...]) -> str | None:
-    normalized_window = window.casefold()
+def _matched_cue(window: str, cues: tuple[str, ...]) -> _MatchedCue | None:
     for cue in sorted(cues, key=lambda value: (-len(value), value)):
-        if cue.casefold() in normalized_window:
-            return cue
+        match = re.search(re.escape(cue), window, flags=re.IGNORECASE)
+        if match is not None:
+            return _MatchedCue(cue=cue, start=match.start(), end=match.end())
     return None
 
 
