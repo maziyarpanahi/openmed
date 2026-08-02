@@ -226,6 +226,11 @@ if PYDANTIC_V2:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @field_validator("lang", mode="before")
+        @classmethod
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
+
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -250,6 +255,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("lang", mode="before")
+        @classmethod
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
@@ -518,6 +528,10 @@ else:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @validator("lang", pre=True)
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
+
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
@@ -541,6 +555,10 @@ else:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("lang", pre=True)
+        def _validate_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:

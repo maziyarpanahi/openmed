@@ -585,7 +585,8 @@ def list_models(
 
     import openmed
 
-    return openmed.list_models(
+    public_list_models = openmed.list_models
+    return public_list_models(
         include_registry=include_registry,
         include_remote=include_remote,
         config=_get_model_loader().config,
