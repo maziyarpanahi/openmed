@@ -308,6 +308,10 @@ docs = [
   "griffe",
 ]
 
+yasbd = [
+  "yasbd-lib>=0.13.1,<0.14",
+]
+
 [project.scripts]
 openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"

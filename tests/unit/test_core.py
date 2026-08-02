@@ -439,6 +439,84 @@ class TestAnalyzeTextBehaviour:
         assert result.metadata["sentence_detection"] is True
         assert pipeline.tokenizer.model_max_length == 384
 
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_forwards_explicit_sentence_backend(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.return_value = [SentenceSpan("sample text", 0, 11)]
+
+        from openmed import analyze_text
+
+        analyze_text(
+            "sample text",
+            model_name="model",
+            sentence_backend="yasbd",
+        )
+
+        mock_segment_text.assert_called_once_with(
+            "sample text",
+            language="en",
+            clean=False,
+            segmenter=None,
+            backend="yasbd",
+        )
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_explicit_yasbd_missing_dependency_fails_clearly(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.side_effect = ImportError(
+            "Install the optional extra with `pip install 'openmed[yasbd]'`."
+        )
+
+        from openmed import analyze_text
+
+        with pytest.raises(ImportError, match=r"openmed\[yasbd\]"):
+            analyze_text(
+                "sample text",
+                model_name="model",
+                sentence_backend="yasbd",
+            )
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_auto_keeps_optional_sentence_fallback(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.side_effect = ImportError("pySBD unavailable")
+
+        from openmed import analyze_text
+
+        result = analyze_text("sample text", model_name="model")
+
+        assert result.metadata["sentence_detection"] is False
+
     @pytest.mark.parametrize("use_medical_tokenizer", [False, True])
     @patch("openmed.processing.sentences.segment_text")
     def test_aggregated_entity_is_split_at_sentence_and_line_boundaries(

@@ -1,7 +1,9 @@
-"""Lazy interoperability adapter registry.
+"""Interoperability package for section 4.2.
 
-Adapters live behind explicit imports so importing :mod:`openmed` or
-``openmed.interop`` never imports optional third-party detector dependencies.
+Intended contents include optional lazily-imported adapters that emit canonical
+spans, plus bridges/ for subprocess-only integrations. Adapters live behind
+explicit imports so importing :mod:`openmed` or ``openmed.interop`` never imports
+optional third-party detector dependencies.
 """
 
 from __future__ import annotations
@@ -182,6 +184,9 @@ _GATEWAY_EXPORTS: Final[dict[str, str]] = {
     "assert_redacted": "assert_redacted",
     "restore_text": "restore_text",
 }
+_TOOL_EXPORTS: Final[frozenset[str]] = frozenset(
+    {"TOOLS", "ToolDefinition", "get_tool", "list_tools"}
+)
 
 
 def available_adapters() -> tuple[str, ...]:
@@ -265,6 +270,9 @@ def __getattr__(name: str) -> Any:
     if name in _GATEWAY_EXPORTS:
         module = import_module("openmed.interop.gateway")
         return getattr(module, _GATEWAY_EXPORTS[name])
+    if name in _TOOL_EXPORTS:
+        module = import_module("openmed.interop.tools")
+        return getattr(module, name)
     raise AttributeError(name)
 
 
@@ -273,6 +281,8 @@ __all__ = [
     "PrivacyGateway",
     "PrivacyGatewayConfig",
     "RedactionMapping",
+    "TOOLS",
+    "ToolDefinition",
     "adapter_tool_definitions",
     "adapter_spec",
     "assert_redacted",
@@ -281,6 +291,8 @@ __all__ = [
     "get_adapter",
     "get_langchain_tools",
     "get_llamaindex_tools",
+    "get_tool",
+    "list_tools",
     "restore_text",
     "to_function_tools",
     "to_tool_use_tools",

@@ -44,8 +44,10 @@ from openmed.mcp.tool_registry import (
     validate_registered_tool_output,
 )
 from openmed.mcp.workflow import (
+    ClinicalPipelineArtifact,
     WorkflowRunner,
     builtin_workflow_step_executors,
+    execute_clinical_pipeline,
     plan_clinical_pipeline,
 )
 from openmed.risk import safe_risk_summary
@@ -55,6 +57,7 @@ from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
 
 RuntimeProvider = Callable[[], ServiceRuntime]
+PrivacyGatewayProvider = Callable[[], Any]
 
 
 def _safe_int_env(name: str, default: int) -> int:
@@ -838,12 +841,300 @@ def openmed_clinical_pipeline(
     allow_external_llm: bool = False,
     session_id: Optional[str] = None,
     workflow_id: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+    privacy_gateway_provider: Optional[PrivacyGatewayProvider] = None,
 ) -> Dict[str, Any]:
-    """Plan and validate the registered clinical pipeline contract."""
+    """Execute a validated clinical pipeline with text-free artifact egress."""
 
-    del text, spans, options, allow_external_llm, session_id, workflow_id
-    response = plan_clinical_pipeline(stages)
+    if text is None and spans is None:
+        response = plan_clinical_pipeline(stages)
+    else:
+        preflight = plan_clinical_pipeline(stages)
+        if preflight["status"] == "rejected":
+            response = preflight
+        else:
+            normalized_text = normalize_text(text) if text is not None else None
+            gateway = _clinical_external_stage_gateway(privacy_gateway_provider)
+            response = execute_clinical_pipeline(
+                stages,
+                text=normalized_text,
+                spans=spans,
+                stage_handlers=_clinical_pipeline_stage_handlers(runtime_provider),
+                options=options,
+                allow_external_llm=allow_external_llm,
+                external_stage_gateway=gateway,
+                session_id=session_id,
+                workflow_id=workflow_id,
+            )
     return validate_registered_tool_output("openmed_clinical_pipeline", response)
+
+
+def _clinical_pipeline_stage_handlers(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Dict[str, Callable[..., Mapping[str, Any]]]:
+    """Return local adapters for every declarative clinical pipeline stage."""
+
+    return {
+        "detect": lambda artifact, stage_options: _clinical_detect_stage(
+            artifact,
+            stage_options,
+            runtime_provider=runtime_provider,
+        ),
+        "context": _clinical_context_stage,
+        "sections": _clinical_sections_stage,
+        "relations": _clinical_relations_stage,
+        "ground": _clinical_ground_stage,
+        "export": _clinical_export_stage,
+        "risk": _clinical_risk_stage,
+    }
+
+
+def _clinical_detect_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+    *,
+    runtime_provider: Optional[RuntimeProvider],
+) -> Mapping[str, Any]:
+    """Run local detection and convert results to canonical text-free spans."""
+
+    if artifact.spans:
+        return {"spans": artifact.public_spans()}
+    if artifact.text is None:
+        raise ValueError("the detect stage requires text or canonical spans")
+
+    from openmed.core.labels import normalize_label, policy_label_for
+    from openmed.core.pipeline import DEFAULT_HASH_SECRET
+    from openmed.core.schemas import OpenMedSpan, hmac_text_hash
+
+    options = dict(stage_options)
+    doc_id = str(options.pop("doc_id", "clinical-pipeline"))
+    language = str(options.pop("language", "en"))
+    response = openmed_analyze_text(
+        text=artifact.text,
+        runtime_provider=runtime_provider,
+        **options,
+    )
+    canonical_spans: list[dict[str, Any]] = []
+    for entity in response.get("entities", []):
+        if not isinstance(entity, Mapping):
+            continue
+        start = entity.get("start")
+        end = entity.get("end")
+        if (
+            type(start) is not int
+            or type(end) is not int
+            or start < 0
+            or end < start
+            or end > len(artifact.text)
+        ):
+            continue
+        label = str(entity.get("label") or "OTHER")
+        canonical_label = normalize_label(label, language)
+        surface = artifact.text[start:end]
+        canonical_spans.append(
+            OpenMedSpan(
+                doc_id=doc_id,
+                start=start,
+                end=end,
+                text_hash=hmac_text_hash(surface, DEFAULT_HASH_SECRET),
+                entity_type=label,
+                canonical_label=canonical_label,
+                policy_label=policy_label_for(canonical_label, language),
+                score=float(entity.get("confidence") or 0.0),
+                detector=str(response.get("model_name") or "openmed"),
+                evidence={"pipeline_stage": "detect"},
+                metadata={"pipeline_stage": "detect"},
+            ).to_dict()
+        )
+    return {
+        "spans": canonical_spans,
+        "model_name": str(response.get("model_name") or "openmed"),
+        "entity_count": len(canonical_spans),
+    }
+
+
+def _clinical_context_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Attach deterministic ConText axes without exposing source surfaces."""
+
+    from openmed.clinical.context import resolve_span_context
+
+    options = dict(stage_options)
+    language = options.pop("language", None)
+    if options:
+        raise ValueError("the context stage received unsupported options")
+
+    spans: list[dict[str, Any]] = []
+    for span in artifact.public_spans():
+        view: dict[str, Any] = {
+            "start": span["start"],
+            "end": span["end"],
+        }
+        if artifact.text is not None:
+            view["document_text"] = artifact.text
+        context = resolve_span_context(view, language=language)
+        metadata = dict(span.get("metadata") or {})
+        metadata["clinical_context"] = {
+            "temporality": context.temporality,
+            "certainty": context.certainty,
+            "negation": context.negation,
+        }
+        span["metadata"] = metadata
+        spans.append(span)
+    return {"spans": spans, "context_count": len(spans)}
+
+
+def _clinical_sections_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Detect local sections and attach canonical labels to span artifacts."""
+
+    from openmed.clinical.sections import detect_sections
+
+    if artifact.text is None:
+        raise ValueError("the sections stage requires source text")
+    options = dict(stage_options)
+    sections = detect_sections(artifact.text, **options)
+    safe_sections = [
+        {key: deepcopy(value) for key, value in section.items() if key != "header"}
+        for section in sections
+    ]
+    spans: list[dict[str, Any]] = []
+    for span in artifact.public_spans():
+        containing = next(
+            (
+                section
+                for section in sections
+                if section["start"] <= span["start"] < section["end"]
+            ),
+            None,
+        )
+        if containing is not None:
+            span["section"] = str(containing["label"])
+        spans.append(span)
+    return {"spans": spans, "sections": safe_sections}
+
+
+def _clinical_relations_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Run deterministic local relation extraction with surface-free output."""
+
+    from openmed.clinical.relations import (
+        available_multilingual_relation_languages,
+        extract_relations,
+    )
+
+    if artifact.text is None:
+        raise ValueError("the relations stage requires source text")
+    options = dict(stage_options)
+    language = str(options.pop("language", "en")).lower()
+    relations: list[dict[str, Any]] = []
+    if language in available_multilingual_relation_languages():
+        relation_spans = [
+            {
+                "text": artifact.text[span["start"] : span["end"]],
+                "label": span["canonical_label"],
+                "start": span["start"],
+                "end": span["end"],
+                "score": span["score"] or 0.0,
+                "section": span["section"],
+            }
+            for span in artifact.spans
+        ]
+        extracted = extract_relations(
+            artifact.text,
+            relation_spans,
+            language=language,
+            **options,
+        )
+        relations = [
+            _safe_relation_payload(relation.to_dict()) for relation in extracted
+        ]
+    elif options:
+        raise ValueError("relation options require a supported relation language")
+    return {"spans": artifact.public_spans(), "relations": relations}
+
+
+def _safe_relation_payload(relation: Mapping[str, Any]) -> dict[str, Any]:
+    """Remove source surfaces from a relation result."""
+
+    payload = deepcopy(dict(relation))
+    for endpoint_name in ("head", "tail"):
+        endpoint = payload.get(endpoint_name)
+        if isinstance(endpoint, Mapping):
+            payload[endpoint_name] = {
+                key: deepcopy(value) for key, value in endpoint.items() if key != "text"
+            }
+    return payload
+
+
+def _clinical_ground_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    options = dict(stage_options)
+    options.pop("allow_external_llm", None)
+    return openmed_ground(
+        spans=artifact.public_spans(),
+        allow_external_llm=False,
+        **options,
+    )
+
+
+def _clinical_export_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    return openmed_export_fhir(
+        spans=artifact.public_spans(),
+        **dict(stage_options),
+    )
+
+
+def _clinical_risk_stage(
+    artifact: ClinicalPipelineArtifact,
+    stage_options: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    return openmed_risk_score(
+        spans=artifact.public_spans(),
+        **dict(stage_options),
+    )
+
+
+def _clinical_external_stage_gateway(
+    gateway_provider: Optional[PrivacyGatewayProvider],
+) -> Callable[[str, Mapping[str, Any]], Mapping[str, Any]]:
+    """Build a fail-closed external stage route over the privacy gateway."""
+
+    def route(stage: str, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        from openmed.service.privacy_gateway import (
+            HttpExternalLLMTransport,
+            PrivacyGateway,
+        )
+
+        gateway = (
+            gateway_provider()
+            if gateway_provider is not None
+            else PrivacyGateway(transport=HttpExternalLLMTransport.from_env())
+        )
+        result = gateway.complete(json.dumps(dict(request), sort_keys=True))
+        response_text = getattr(result, "reidentified_text", None)
+        if not isinstance(response_text, str):
+            raise TypeError("privacy gateway returned no structured stage response")
+        response = json.loads(response_text)
+        if not isinstance(response, Mapping):
+            raise TypeError("privacy gateway stage response must be an object")
+        if stage != "ground":
+            raise ValueError("unsupported external clinical stage")
+        return dict(response)
+
+    return route
 
 
 _INPUT_ONLY_TEXT_KEYS = frozenset(
@@ -1125,7 +1416,10 @@ def build_mcp_tool_handlers(
         "openmed_export_fhir": lambda **kwargs: openmed_export_fhir(**kwargs),
         "openmed_risk_score": lambda **kwargs: openmed_risk_score(**kwargs),
         "openmed_clinical_pipeline": (
-            lambda **kwargs: openmed_clinical_pipeline(**kwargs)
+            lambda **kwargs: openmed_clinical_pipeline(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
         ),
         "openmed_fhir_bundle": lambda **kwargs: openmed_fhir_bundle(**kwargs),
         "openmed_risk_report": lambda **kwargs: openmed_risk_report(**kwargs),
