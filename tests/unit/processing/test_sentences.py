@@ -21,11 +21,16 @@ def fake_yasbd_segmenter():
     fake_yasbd_utils = types.ModuleType("yasbd.utils")
     fake_adapter = types.ModuleType("yasbd.utils.pysbd_adapter")
     fake_adapter.Segmenter = segmenter_cls
+    fake_rules = types.ModuleType("yasbd.rules")
+    fake_zh = types.ModuleType("yasbd.rules.zh")
+    fake_zh.ZhRules = SimpleNamespace(TERMINATORS=set())
 
     fake_modules = {
         "yasbd": fake_yasbd,
         "yasbd.utils": fake_yasbd_utils,
         "yasbd.utils.pysbd_adapter": fake_adapter,
+        "yasbd.rules": fake_rules,
+        "yasbd.rules.zh": fake_zh,
     }
     with patch.dict(sys.modules, fake_modules):
         yield segmenter_cls
