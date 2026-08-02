@@ -93,8 +93,11 @@ from .script_detect import (
 )
 from .surrogate_vault import (
     ENCRYPTION_SCHEME,
+    SUBJECT_SURROGATE_LABEL,
+    SUBJECT_SURROGATE_LANG,
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
+    SubjectResolutionError,
     SurrogateEntry,
     SurrogateKey,
     SurrogateSource,
@@ -141,6 +144,9 @@ __all__ = [
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "ENCRYPTION_SCHEME",
+    "SUBJECT_SURROGATE_LABEL",
+    "SUBJECT_SURROGATE_LANG",
+    "SubjectResolutionError",
     "IndicNameNormalizer",
     "canonical_indic_name_key",
     "indic_names_match",

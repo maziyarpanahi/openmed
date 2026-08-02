@@ -357,6 +357,62 @@ def risk_report(
     }
 
 
+def cross_modal_linkage_risk_report(
+    note_output: Any,
+    table_output: Any,
+    *,
+    source_identifier_groups: Sequence[str | Sequence[str]],
+) -> dict[str, Any]:
+    """Gate raw-identifier linkage risk across released notes and tables.
+
+    Each item in ``source_identifier_groups`` represents one subject and may be
+    either one source identifier or a sequence of confirmed aliases such as a
+    name and MRN. The identifiers are used only for an in-memory exact leakage
+    probe and are never included in the report. Matching pseudonymous
+    surrogates are intentionally not counted as re-identification: the attack
+    succeeds only when a released modality still exposes a source identifier.
+
+    The combined attack rate is the fraction of subjects exposed by either
+    modality. It passes when that union does not exceed the higher standalone
+    modality rate, preventing complementary note and table leaks from being
+    hidden by separate assessments.
+    """
+
+    identifier_groups = _validated_source_identifier_groups(source_identifier_groups)
+    note_blob = _published_output_blob(note_output)
+    table_blob = _published_output_blob(table_output)
+
+    note_hits = {
+        index
+        for index, identifiers in enumerate(identifier_groups)
+        if _contains_source_identifier(note_blob, identifiers)
+    }
+    table_hits = {
+        index
+        for index, identifiers in enumerate(identifier_groups)
+        if _contains_source_identifier(table_blob, identifiers)
+    }
+    combined_hits = note_hits | table_hits
+    subject_count = len(identifier_groups)
+    note_rate = _rate(len(note_hits), subject_count)
+    table_rate = _rate(len(table_hits), subject_count)
+    combined_rate = _rate(len(combined_hits), subject_count)
+    single_modality_bound = max(note_rate, table_rate)
+
+    return {
+        "schema_version": 1,
+        "subject_count": subject_count,
+        "note_attack_success_count": len(note_hits),
+        "note_attack_rate": note_rate,
+        "table_attack_success_count": len(table_hits),
+        "table_attack_rate": table_rate,
+        "combined_attack_success_count": len(combined_hits),
+        "combined_attack_rate": combined_rate,
+        "single_modality_risk_bound": single_modality_bound,
+        "passed": combined_rate <= single_modality_bound,
+    }
+
+
 def quasi_identifier_key(
     record: Any,
     *,
@@ -1397,6 +1453,58 @@ def _leakage_rate(
             leaked_records += 1
 
     return leaked_records / len(deidentified_records)
+
+
+def _validated_source_identifier_groups(
+    groups: Sequence[str | Sequence[str]],
+) -> tuple[tuple[str, ...], ...]:
+    if isinstance(groups, (str, bytes, bytearray)) or not isinstance(groups, Sequence):
+        raise TypeError("source_identifier_groups must be a sequence")
+    if not groups:
+        raise ValueError("source_identifier_groups must not be empty")
+
+    validated: list[tuple[str, ...]] = []
+    for index, group in enumerate(groups):
+        identifiers = (group,) if isinstance(group, str) else group
+        if isinstance(identifiers, (bytes, bytearray)) or not isinstance(
+            identifiers, Sequence
+        ):
+            raise TypeError(f"source identifier group is invalid at index {index}")
+        normalized = tuple(
+            dict.fromkeys(_normalize_direct_value(value) for value in identifiers)
+        )
+        if not normalized or any(not value for value in normalized):
+            raise ValueError(f"source identifier group is empty at index {index}")
+        validated.append(normalized)
+    return tuple(validated)
+
+
+def _published_output_blob(output: Any) -> str:
+    deidentified_text = getattr(output, "deidentified_text", None)
+    if isinstance(deidentified_text, str):
+        output = deidentified_text
+    elif isinstance(output, Mapping) and isinstance(
+        output.get("deidentified_text"), str
+    ):
+        output = output["deidentified_text"]
+    elif hasattr(output, "records"):
+        output = getattr(output, "records")
+
+    if isinstance(output, str):
+        serialized = output
+    else:
+        serialized = json.dumps(
+            output,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+            default=str,
+        )
+    return _normalize_direct_value(serialized)
+
+
+def _contains_source_identifier(blob: str, identifiers: Sequence[str]) -> bool:
+    return any(identifier in blob for identifier in identifiers)
 
 
 def _direct_identifier_values(record: _Record) -> list[str]:
