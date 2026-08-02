@@ -264,10 +264,15 @@ def test_no_real_benchmark_payload_filenames_are_committed() -> None:
                 or benchmark_name.search(path.name) is None
             ):
                 continue
-            scanned.append(str(path.relative_to(repo_root)))
+            # as_posix() so the comparison below holds on Windows, where
+            # str(Path) is backslash-separated. Without it this guard fails on
+            # that platform whether or not the invariant holds, which would
+            # make it report a state it never actually checked.
+            relative = path.relative_to(repo_root).as_posix()
+            scanned.append(relative)
             if _is_synthetic_payload(path):
                 continue
-            offenders.append(str(path.relative_to(repo_root)))
+            offenders.append(relative)
 
     assert offenders == []
     # A no-vendor guard that matches nothing proves nothing. Every committed
