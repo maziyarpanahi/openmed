@@ -76,6 +76,7 @@ from .qi_detect import (
     DiscoveryConfigurationError,
     scan_table,
 )
+from .reid_report import reid_report
 from .relational import (
     RELATIONAL_ADVISORY,
     ColumnRef,
@@ -194,6 +195,7 @@ __all__ = [
     "max_level",
     "parse_lab_report",
     "read_table",
+    "reid_report",
     "scan_column_roles",
     "scan_table",
     "stream_deidentify_table",
