@@ -11,8 +11,13 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from mcp.server.auth.middleware.auth_context import auth_context_var
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
+from mcp.server.auth.provider import AccessToken
+
 from openmed.mcp.server import create_mcp_server
 from openmed.mcp.tool_registry import TOOL_REGISTRY
+from openmed.service.security import MCPAuthorizationConfig
 
 
 class _Runtime:
@@ -100,3 +105,40 @@ def test_health_resource_reports_only_version_and_loaded_model_count() -> None:
     assert payload["loaded_model_count"] == 2
     assert payload["version"]
     assert not set(model_names) & set(payload)
+
+
+def test_remote_server_wires_protected_resource_auth_and_per_tool_scope() -> None:
+    resource_url = "https://mcp.synthetic.test/mcp"
+    config = MCPAuthorizationConfig(
+        enabled=True,
+        resource_url=resource_url,
+        authorization_server_url="https://issuer.synthetic.test",
+    )
+    server = create_mcp_server(
+        runtime_provider=lambda: _Runtime(models={}),
+        authorization_config=config,
+    )
+
+    unauthorized = asyncio.run(server.call_tool("openmed_loaded_models", {}))
+    assert unauthorized.isError is True
+    assert unauthorized.structuredContent["error"]["code"] == "invalid_token"
+
+    access_token = AccessToken(
+        token="synthetic-access-token",
+        client_id="synthetic-client",
+        scopes=["mcp:tool:openmed_loaded_models"],
+        resource=resource_url,
+        claims={"aud": resource_url},
+    )
+    context_token = auth_context_var.set(AuthenticatedUser(access_token))
+    try:
+        authorized = asyncio.run(server.call_tool("openmed_loaded_models", {}))
+    finally:
+        auth_context_var.reset(context_token)
+    assert authorized.isError is False
+
+    routes = {
+        getattr(route, "path", "") for route in server.streamable_http_app().routes
+    }
+    assert "/mcp" in routes
+    assert "/.well-known/oauth-protected-resource/mcp" in routes

@@ -283,6 +283,22 @@ def validate_registered_tool_output(name: str, payload: Any) -> JsonObject:
     return validate_tool_output(TOOL_REGISTRY.get(name), payload)
 
 
+def validate_registered_tool_input(name: str, payload: Any) -> JsonObject:
+    """Validate an input payload against the latest registered spec for *name*."""
+
+    spec = TOOL_REGISTRY.get(name)
+    errors: list[str] = []
+    _validate_schema(payload, spec.input_schema, "$", errors)
+    if errors:
+        preview = "; ".join(errors[:4])
+        raise ToolSchemaValidationError(
+            f"{spec.name} input failed schema {spec.version}: {preview}"
+        )
+    if not isinstance(payload, Mapping):
+        raise ToolSchemaValidationError(f"{spec.name} input must be an object")
+    return dict(payload)
+
+
 def validate_tool_output(spec: ToolSpec, payload: Any) -> JsonObject:
     """Validate a tool output payload against its declared schema."""
 
@@ -1557,5 +1573,6 @@ __all__ = [
     "render_presidio_tool_definitions",
     "render_tool_registry_document",
     "validate_registered_tool_output",
+    "validate_registered_tool_input",
     "validate_tool_output",
 ]
