@@ -174,7 +174,11 @@ def test_relation_suite_emits_signed_scorecard_and_model_card_evidence(
 
 def test_relation_suite_fixture_hash_is_stable_for_crlf_checkouts(tmp_path) -> None:
     fixture_path = tmp_path / "relation-gold-crlf.jsonl"
-    fixture_bytes = DEFAULT_RELATION_GOLD_PATH.read_bytes()
+    fixture_bytes = (
+        DEFAULT_RELATION_GOLD_PATH.read_bytes()
+        .replace(b"\r\n", b"\n")
+        .replace(b"\r", b"\n")
+    )
     fixture_path.write_bytes(fixture_bytes.replace(b"\n", b"\r\n"))
 
     scorecard = run_relation_suite(
