@@ -52,6 +52,7 @@ from openmed.eval.relation_metrics import (
 from openmed.eval.report import BenchmarkReport
 
 if TYPE_CHECKING:
+    from openmed.clinical.lexicons import ClinicalCueLexicon
     from openmed.eval.attacks.reid import SideChannelProbeResult
     from openmed.eval.error_analysis import PipelineAttributionReport
 
@@ -511,22 +512,25 @@ class RelationScorecard:
         trap_summary = _mapping_value(self.provenance.get("trap_summary"))
         configured_traps = _mapping_value(trap_summary.get("by_kind"))
         trap_leaks = _mapping_value(self.metrics.get("trap_leaks"))
+        consistency = _mapping_value(self.metrics.get("consistency"))
         lines.extend(
             [
                 "",
                 "## Zero-Tolerance Trap Summary",
                 "",
-                "| Trap kind | Configured | Leaks | Zero tolerance |",
-                "|---|---:|---:|---|",
+                "| Trap kind | Configured | Leaks | Consistency | Zero tolerance |",
+                "|---|---:|---:|---:|---|",
             ]
         )
-        for kind in sorted(set(configured_traps) | set(trap_leaks)):
+        for kind in sorted(set(configured_traps) | set(trap_leaks) | set(consistency)):
             configured = _mapping_value(configured_traps.get(kind))
             leaks = _mapping_value(trap_leaks.get(kind))
+            consistency_metric = _mapping_value(consistency.get(kind))
             lines.append(
                 "| "
                 f"`{kind}` | {int(configured.get('count') or 0)} | "
                 f"{int(leaks.get('leak_count') or 0)} | "
+                f"{_relation_percent(consistency_metric.get('score'))} | "
                 f"{'yes' if configured.get('zero_tolerance') else 'no'} |"
             )
 
@@ -568,8 +572,10 @@ class RelationScorecard:
         by_type = _mapping_value(self.metrics.get("by_type"))
         by_language = _mapping_value(self.metrics.get("by_language"))
         counts = _mapping_value(self.metrics.get("counts"))
+        consistency = _mapping_value(self.metrics.get("consistency"))
         relation_metrics = {
             "by_scope": _mapping_value(self.metrics.get("by_scope")),
+            "consistency": consistency,
             "gold_relation_count": int(counts.get("gold") or 0),
             "per_language": by_language,
             "per_relation_type": by_type,
@@ -586,8 +592,10 @@ class RelationScorecard:
                 "relation_extraction": relation_metrics,
                 "relation_golden": {
                     "by_type": by_type,
+                    "consistency": consistency,
                     "trap_leaks": _mapping_value(self.metrics.get("trap_leaks")),
                 },
+                "relation_consistency": consistency,
                 "relaxed_relation_f1": relaxed,
                 "strict_relation_f1": strict,
                 "per_language_relation_f1": by_language,
@@ -1085,7 +1093,14 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
 def load_context_multilingual_fixtures(
     path: str | Path = DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
 ) -> tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]:
-    """Load synthetic multilingual ConText assertion fixtures."""
+    """Load synthetic multilingual ConText assertion fixtures.
+
+    Args:
+        path: JSONL fixture path whose first row contains suite metadata.
+
+    Returns:
+        The metadata row and ordered synthetic fixture rows.
+    """
 
     fixture_path = Path(path)
     rows = [
@@ -1107,7 +1122,20 @@ def run_context_multilingual_eval(
     *,
     generated_at: str | None = None,
 ) -> BenchmarkReport:
-    """Score deterministic multilingual ConText axes on synthetic fixtures."""
+    """Score deterministic multilingual ConText axes on synthetic fixtures.
+
+    The report preserves the original metric keys and adds a compact language
+    summary with assertion-axis scores, effective lexicon language, and unique
+    axis cue counts. Declared languages without fixtures retain coverage data
+    but do not make the evaluation gate pass.
+
+    Args:
+        path: Synthetic multilingual ConText JSONL fixture path.
+        generated_at: Optional report timestamp supplied by the caller.
+
+    Returns:
+        A local ``BenchmarkReport`` containing detailed and summary metrics.
+    """
 
     from openmed.clinical.context import (
         CERTAINTY_VALUES,
@@ -1116,6 +1144,7 @@ def run_context_multilingual_eval(
         clinical_context_lexicon_stats,
         resolve_span_context,
     )
+    from openmed.clinical.lexicons import get_clinical_cue_lexicon
 
     meta, fixtures = load_context_multilingual_fixtures(path)
     labels_by_axis = {
@@ -1125,9 +1154,13 @@ def run_context_multilingual_eval(
     }
     expected_by_language: dict[str, dict[str, list[str]]] = {}
     predicted_by_language: dict[str, dict[str, list[str]]] = {}
+    fixture_count_by_language: dict[str, int] = {}
 
     for row in fixtures:
         language = str(row.get("language") or "en")
+        fixture_count_by_language[language] = (
+            fixture_count_by_language.get(language, 0) + 1
+        )
         span = _context_fixture_span(row)
         context = resolve_span_context(span, language=language)
         expected = row.get("expected")
@@ -1164,15 +1197,26 @@ def run_context_multilingual_eval(
         for language in sorted(expected_by_language)
     }
     thresholds = {"negation": 0.90, "temporality": 0.85, "uncertainty": 0.85}
-    gate_passed = all(
+    gate_passed = bool(macro_f1) and all(
         macro_f1[language][axis] >= thresholds[axis]
         for language in macro_f1
         for axis in thresholds
     )
+    reported_languages = _context_report_languages(meta, fixture_count_by_language)
+    language_summary = {}
+    for language in reported_languages:
+        lexicon = get_clinical_cue_lexicon(language)
+        language_summary[language] = {
+            "assertion_axis_scores": macro_f1.get(language, {}),
+            "fixture_count": fixture_count_by_language.get(language, 0),
+            "lexicon_coverage": _context_axis_lexicon_coverage(lexicon),
+            "lexicon_language": lexicon.language,
+        }
     metrics = {
         "context_macro_f1": macro_f1,
         "context_thresholds": thresholds,
         "context_gate_passed": gate_passed,
+        "context_language_summary": language_summary,
         "context_lexicon_coverage": clinical_context_lexicon_stats(),
     }
     return BenchmarkReport(
@@ -1184,11 +1228,40 @@ def run_context_multilingual_eval(
         generated_at=generated_at,
         metadata={
             "fixture_ids": [str(row["case_id"]) for row in fixtures],
-            "languages": sorted(expected_by_language),
+            "languages": reported_languages,
             "parent_issue": "OM-724",
             "synthetic": bool(meta.get("synthetic")),
         },
     )
+
+
+def _context_report_languages(
+    meta: Mapping[str, Any],
+    fixture_count_by_language: Mapping[str, int],
+) -> list[str]:
+    declared = meta.get("languages")
+    languages = set(fixture_count_by_language)
+    if isinstance(declared, Sequence) and not isinstance(declared, (str, bytes)):
+        languages.update(
+            code
+            for language in declared
+            if language is not None and (code := str(language).strip())
+        )
+    return sorted(languages)
+
+
+def _context_axis_lexicon_coverage(
+    lexicon: ClinicalCueLexicon,
+) -> dict[str, int]:
+    """Return unique cue counts for each reported ConText assertion axis."""
+
+    return {
+        "negation": len({*lexicon.negation, *lexicon.pseudo_negation}),
+        "temporality": len(
+            {*lexicon.historical, *lexicon.hypothetical, *lexicon.recent}
+        ),
+        "uncertainty": len(set(lexicon.uncertainty)),
+    }
 
 
 def load_section_multilingual_fixtures(
@@ -1872,10 +1945,12 @@ def run_relation_suite(
     fixture_hashes = _relation_fixture_hashes(fixtures)
     trap_summary = relation_trap_summary(fixtures)
     trap_leaks = _relation_trap_leak_summary(fixtures, results)
+    consistency = _relation_consistency_scores(trap_leaks)
     relation_metrics = _mapping_value(report.metrics.get("relation_extraction"))
     by_type = _mapping_value(relation_metrics.get("per_relation_type"))
     relation_golden = {
         "by_type": by_type,
+        "consistency": consistency,
         "fixture_set_hash": fixture_set_hash,
         "trap_leaks": trap_leaks,
     }
@@ -1911,6 +1986,7 @@ def run_relation_suite(
         "by_language": _mapping_value(relation_metrics.get("per_language")),
         "by_scope": _mapping_value(relation_metrics.get("by_scope")),
         "by_type": by_type,
+        "consistency": consistency,
         "counts": {
             "gold": int(relation_metrics.get("gold_relation_count") or 0),
             "predicted": int(relation_metrics.get("predicted_relation_count") or 0),
@@ -3565,6 +3641,7 @@ def _relation_trap_leak_summary(
         "temporal": set(),
     }
     trap_count = {"assertion": 0, "temporal": 0}
+    evaluated_relation_count = {"assertion": 0, "temporal": 0}
     for fixture in fixtures:
         fixture_id = str(getattr(fixture, "fixture_id"))
         predicted = result_by_id.get(fixture_id)
@@ -3586,7 +3663,10 @@ def _relation_trap_leak_summary(
             trap_count[kind] += 1
             for relation_id in getattr(trap, "relation_ids", ()):
                 gold = gold_by_id.get(str(relation_id))
-                if gold is None or not _relation_trap_conflict(
+                if gold is None:
+                    continue
+                evaluated_relation_count[kind] += 1
+                if not _relation_trap_conflict(
                     gold,
                     predictions,
                     kind=kind,
@@ -3604,12 +3684,35 @@ def _relation_trap_leak_summary(
 
     return {
         kind: {
+            "evaluated_relation_count": evaluated_relation_count[kind],
             "leak_count": len(leaked_by_kind[kind]),
             "leaked_relation_hashes": sorted(leaked_by_kind[kind]),
             "trap_count": trap_count[kind],
         }
         for kind in ("assertion", "temporal")
     }
+
+
+def _relation_consistency_scores(
+    trap_leaks: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Return assertion and temporal consistency over trapped relations."""
+
+    scores: dict[str, dict[str, Any]] = {}
+    for kind in ("assertion", "temporal"):
+        leak_evidence = _mapping_value(trap_leaks.get(kind))
+        evaluated_relation_count = int(
+            leak_evidence.get("evaluated_relation_count") or 0
+        )
+        leak_count = int(leak_evidence.get("leak_count") or 0)
+        denominator = max(evaluated_relation_count, 1)
+        score = max(0.0, 1.0 - (leak_count / denominator))
+        scores[kind] = {
+            "evaluated_relation_count": evaluated_relation_count,
+            "leak_count": leak_count,
+            "score": score,
+        }
+    return scores
 
 
 def _relation_trap_conflict(
@@ -3680,7 +3783,10 @@ def _is_relation_suite(suite: str) -> bool:
 
 
 def _sha256_path(path: Path) -> str:
-    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    """Hash fixture bytes with platform line endings normalized to LF."""
+
+    fixture_bytes = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return f"sha256:{hashlib.sha256(fixture_bytes).hexdigest()}"
 
 
 def _mapping_value(value: Any) -> dict[str, Any]:
@@ -3786,6 +3892,7 @@ __all__ = [
     "PipelineStageRunner",
     "RelationModelRunner",
     "BenchmarkFixture",
+    "DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE",
     "DEFAULT_PIPELINE_EVAL_FIXTURE",
     "PIPELINE_EVAL_SCHEMA_VERSION",
     "BoundaryLeakageFinding",
@@ -3805,10 +3912,12 @@ __all__ = [
     "SandboxViolation",
     "TrainingEvalOverlapFinding",
     "check_training_manifest_overlap",
+    "load_context_multilingual_fixtures",
     "load_fixtures",
     "load_pipeline_eval_fixtures",
     "default_model_runner",
     "run_federated_leakage_eval",
+    "run_context_multilingual_eval",
     "run_pipeline_eval",
     "run_pipeline_eval_fixture",
     "run_benchmark",

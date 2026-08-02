@@ -9,11 +9,13 @@ from dataclasses import dataclass
 from inspect import Parameter, Signature
 from typing import Any, Optional
 
+from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.core.schemas import load_schema
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -23,6 +25,15 @@ _SEMVER_RE = re.compile(
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
 _STABILITY_VALUES = frozenset({"experimental", "stable", "deprecated"})
+CLINICAL_STAGE_ORDER = (
+    "detect",
+    "context",
+    "sections",
+    "relations",
+    "ground",
+    "export",
+    "risk",
+)
 
 
 class ToolSchemaValidationError(ValueError):
@@ -580,6 +591,16 @@ def _array(items: Mapping[str, Any]) -> JsonSchema:
     return {"type": "array", "items": dict(items)}
 
 
+def _openmed_span_schema() -> JsonSchema:
+    """Return the canonical span schema for a nested tool contract."""
+
+    schema = load_schema("span")
+    for metadata_key in ("$id", "$schema", "schema_version", "title"):
+        schema.pop(metadata_key, None)
+    schema["properties"]["canonical_label"]["enum"] = sorted(CANONICAL_LABELS)
+    return schema
+
+
 def _parameter(
     name: str,
     schema: Mapping[str, Any],
@@ -831,6 +852,133 @@ _WORKFLOW_RESULT_OUTPUT = _object(
         "outputs",
         "trace",
     ),
+)
+_OPENMED_SPAN_OUTPUT = _openmed_span_schema()
+_CLINICAL_STAGE_SCHEMA = _schema(
+    "string",
+    enum=list(CLINICAL_STAGE_ORDER),
+)
+_CLINICAL_CONTRACT_ERROR_OUTPUT = _object(
+    properties={
+        "code": _schema("string"),
+        "message": _schema("string"),
+        "stage": _nullable(
+            "string",
+            enum=[*CLINICAL_STAGE_ORDER, None],
+        ),
+        "details": _object(),
+    },
+    required=("code", "message", "stage", "details"),
+    additional=False,
+)
+_CLINICAL_ERROR_OR_NULL = {"anyOf": [_CLINICAL_CONTRACT_ERROR_OUTPUT, _schema("null")]}
+_CLINICAL_TRACE_OUTPUT = _object(
+    properties={
+        "stage": _CLINICAL_STAGE_SCHEMA,
+        "status": _schema("string", enum=["planned", "completed"]),
+    },
+    required=("stage", "status"),
+    additional=False,
+)
+_GROUND_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.ground.v1"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "grounded_concepts": _array(_object()),
+        "error": _CLINICAL_ERROR_OR_NULL,
+    },
+    required=("schema_version", "status", "spans", "grounded_concepts", "error"),
+    additional=False,
+)
+_EXPORT_FHIR_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.export_fhir.v1"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "bundle": _object(),
+        "resource_count": _schema("integer", minimum=0),
+        "error": _CLINICAL_ERROR_OR_NULL,
+    },
+    required=(
+        "schema_version",
+        "status",
+        "spans",
+        "bundle",
+        "resource_count",
+        "error",
+    ),
+    additional=False,
+)
+_RISK_SCORE_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.risk_score.v1"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "risk_report": _object(),
+        "error": _CLINICAL_ERROR_OR_NULL,
+    },
+    required=("schema_version", "status", "spans", "risk_report", "error"),
+    additional=False,
+)
+_CLINICAL_PIPELINE_OUTPUT = _object(
+    properties={
+        "schema_version": _schema(
+            "string",
+            enum=["openmed.clinical_pipeline.v1"],
+        ),
+        "status": _schema(
+            "string",
+            enum=["planned", "completed", "rejected", "failed"],
+        ),
+        "stages": _array(_CLINICAL_STAGE_SCHEMA),
+        "artifacts": _object(),
+        "final_output": {},
+        "error": _CLINICAL_ERROR_OR_NULL,
+        "trace": _array(_CLINICAL_TRACE_OUTPUT),
+    },
+    required=(
+        "schema_version",
+        "status",
+        "stages",
+        "artifacts",
+        "final_output",
+        "error",
+        "trace",
+    ),
+    additional=False,
+)
+_SPAN_ARRAY_OR_NULL = {"anyOf": [_array(_OPENMED_SPAN_OUTPUT), _schema("null")]}
+_STRING_ARRAY_OR_NULL = {"anyOf": [_array(_schema("string")), _schema("null")]}
+_OBJECT_ARRAY_OR_NULL = {"anyOf": [_array(_object()), _schema("null")]}
+_CLINICAL_STAGES_PARAMETER = _parameter(
+    "stages",
+    {
+        "type": "array",
+        "items": _CLINICAL_STAGE_SCHEMA,
+        "minItems": 1,
+        "uniqueItems": True,
+    },
+    list[str],
+    description=(
+        "Clinical workflow stages in canonical order: detect, context, sections, "
+        "relations, ground, export, risk."
+    ),
+)
+_CLINICAL_SPANS_PARAMETER = _parameter(
+    "spans",
+    _array(_OPENMED_SPAN_OUTPUT),
+    list[dict[str, Any]],
+    description="Canonical, text-free OpenMedSpan artifacts to process.",
 )
 _FHIR_RESOURCE_SCHEMA = _object(
     properties={"resourceType": _schema("string")},
@@ -1132,6 +1280,142 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         output_schema=_WORKFLOW_RESULT_OUTPUT,
     ),
     _tool_spec(
+        name="openmed_ground",
+        title="Ground Clinical Spans",
+        description=(
+            "Ground canonical OpenMedSpan artifacts to clinical coding systems."
+        ),
+        read_only_hint=True,
+        open_world_hint=True,
+        parameters=(
+            _CLINICAL_SPANS_PARAMETER,
+            _parameter(
+                "vocabularies",
+                _STRING_ARRAY_OR_NULL,
+                Optional[list[str]],
+                None,
+                "Optional grounding vocabularies to constrain.",
+            ),
+            _parameter(
+                "max_candidates",
+                _schema("integer", minimum=1),
+                int,
+                5,
+                "Maximum grounding candidates per span.",
+            ),
+            _parameter(
+                "allow_external_llm",
+                _schema("boolean"),
+                bool,
+                False,
+                "Reserve privacy-gateway-mediated external LLM grounding.",
+            ),
+        ),
+        output_schema=_GROUND_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_export_fhir",
+        title="Export Clinical Spans to FHIR",
+        description="Export canonical OpenMedSpan artifacts to a FHIR Bundle.",
+        read_only_hint=True,
+        parameters=(
+            _CLINICAL_SPANS_PARAMETER,
+            _parameter(
+                "resources",
+                _OBJECT_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional prebuilt standalone FHIR resources.",
+            ),
+            _parameter("doc_id", _schema("string"), str, "workflow"),
+            _parameter(
+                "bundle_type",
+                _schema("string", enum=["collection", "transaction", "batch"]),
+                str,
+                "collection",
+            ),
+        ),
+        output_schema=_EXPORT_FHIR_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_risk_score",
+        title="Score Clinical Re-identification Risk",
+        description=(
+            "Score residual re-identification risk over de-identified clinical "
+            "artifacts."
+        ),
+        read_only_hint=True,
+        parameters=(
+            _CLINICAL_SPANS_PARAMETER,
+            _parameter(
+                "deidentified_text",
+                _nullable("string"),
+                Optional[str],
+                None,
+                "Optional de-identified text for residual-risk scoring.",
+            ),
+            _parameter(
+                "records",
+                _OBJECT_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional structured records for residual-risk scoring.",
+            ),
+            _parameter(
+                "quasi_identifiers",
+                _STRING_ARRAY_OR_NULL,
+                Optional[list[str]],
+                None,
+                "Optional quasi-identifier field names.",
+            ),
+        ),
+        output_schema=_RISK_SCORE_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_clinical_pipeline",
+        title="Plan Clinical Pipeline",
+        description=(
+            "Plan and validate declarative clinical stages without silently "
+            "reordering them."
+        ),
+        read_only_hint=True,
+        open_world_hint=True,
+        parameters=(
+            _CLINICAL_STAGES_PARAMETER,
+            _parameter(
+                "text",
+                _nullable("string"),
+                Optional[str],
+                None,
+                "Optional clinical text reserved for later pipeline execution.",
+            ),
+            _parameter(
+                "spans",
+                _SPAN_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional canonical OpenMedSpan artifacts.",
+            ),
+            _parameter(
+                "options",
+                _nullable("object"),
+                Optional[dict[str, Any]],
+                None,
+                "Execution options reserved for later pipeline handlers.",
+            ),
+            _parameter(
+                "allow_external_llm",
+                _schema("boolean"),
+                bool,
+                False,
+                "Reserve external LLM routing through the privacy gateway.",
+            ),
+            _parameter("session_id", _nullable("string"), Optional[str], None),
+            _parameter("workflow_id", _nullable("string"), Optional[str], None),
+        ),
+        output_schema=_CLINICAL_PIPELINE_OUTPUT,
+    ),
+    _tool_spec(
         name="openmed_fhir_bundle",
         title="Assemble FHIR Bundle",
         description="Assemble FHIR resources into a R4 bundle. ",
@@ -1256,6 +1540,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
 TOOL_REGISTRY = ToolRegistry(TOOL_SPECS)
 
 __all__ = [
+    "CLINICAL_STAGE_ORDER",
     "TOOL_REGISTRY",
     "TOOL_SPECS",
     "ToolCompatibilityError",
