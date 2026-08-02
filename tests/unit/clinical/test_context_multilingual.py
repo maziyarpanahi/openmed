@@ -1,4 +1,4 @@
-"""Multilingual ConText cue lexicon tests for OM-724-1."""
+"""Multilingual ConText cue lexicon tests for OM-724."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from openmed.eval import (
 )
 
 FORBIDDEN_FIXTURE_MARKERS = ("cpt", "dua", "i2b2", "mimic", "n2c2", "snomed", "umls")
-REQUIRED_LANGUAGES = {"en", "es", "fr", "de", "zh", "hi"}
+REQUIRED_LANGUAGES = {"en", "es", "fr", "de", "zh", "hi", "ja"}
 CONTEXT_GUIDE = (
     Path(__file__).resolve().parents[3]
     / "docs"
@@ -48,6 +48,7 @@ def test_context_multilingual_fixture_is_synthetic_and_complete() -> None:
     meta, rows = load_context_multilingual_fixtures()
 
     assert meta["synthetic"] is True
+    assert REQUIRED_LANGUAGES <= set(meta["languages"])
     assert REQUIRED_LANGUAGES <= {row["language"] for row in rows}
     assert all(row.get("synthetic") is True for row in rows)
     for language in REQUIRED_LANGUAGES:
@@ -124,6 +125,35 @@ def test_scanner_uses_language_specific_conjunction_terminators() -> None:
     assert hits[span] == ()
 
 
+def test_japanese_script_matching_and_scope_termination() -> None:
+    negated_text = "肺炎は認められない。"
+    negated_span = _span(negated_text, "肺炎")
+
+    negated_hits = scan_context_cues(
+        negated_text,
+        [negated_span],
+        sentences=[negated_text],
+        language="ja",
+    )
+
+    assert [
+        (hit.cue, hit.category, hit.direction) for hit in negated_hits[negated_span]
+    ] == [("認められない", "negation", "backward")]
+
+    terminated_text = "既往歴に肺炎あり、しかし発熱を確認した。"
+    terminated_span = _span(terminated_text, "発熱")
+
+    terminated_hits = scan_context_cues(
+        terminated_text,
+        [terminated_span],
+        sentences=[terminated_text],
+        language="ja",
+    )
+
+    assert terminated_hits[terminated_span] == ()
+    assert resolve_temporality(terminated_span, language="ja") == RECENT
+
+
 def test_assert_context_axes_uses_language_pack() -> None:
     assertion = assert_context_axes(
         _span("Si la neumonía regresa, llamar a la clínica.", "neumonía"),
@@ -182,6 +212,18 @@ def test_context_multilingual_eval_gate_and_coverage_stats() -> None:
     for language in REQUIRED_LANGUAGES:
         assert coverage[language]["negation"] > 0
         assert coverage[language]["uncertainty"] > 0
+    assert coverage["ja"] == {
+        "negation": 8,
+        "pseudo_negation": 4,
+        "historical": 6,
+        "hypothetical": 5,
+        "recent": 6,
+        "uncertainty": 13,
+        "backward": 20,
+        "scope_terminators": 4,
+        "conjunction_terminators": 3,
+    }
+    assert report.metrics["context_lexicon_coverage"]["ja"] == coverage["ja"]
 
     markdown = report.to_markdown()
     assert "`context_language_summary.en.assertion_axis_scores.negation`" in markdown
