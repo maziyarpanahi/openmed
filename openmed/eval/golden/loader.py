@@ -65,6 +65,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "radiology_entity_relations.jsonl",
         "hgvs_parse.jsonl",
         "measurement_trend.jsonl",
+        "temporal_tlinks.jsonl",
         "tnm_stage.jsonl",
     }
 )
