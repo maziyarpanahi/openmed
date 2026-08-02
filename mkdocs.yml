@@ -117,6 +117,7 @@ nav:
       - De-identified DHIS2 Export: dhis2-export.md
       - OpenMRS Adapter: openmrs-adapter.md
       - WHO SMART Guidelines Profiles: fhir-smart-guidelines.md
+      - FHIR Clinical Exchange Workbench: interop/fhir-profiles.md
       - ICD-11 Offline Grounding: icd11-grounding.md
   - Apple Silicon & Mobile:
       - Export Format Support Matrix: export-matrix.md
