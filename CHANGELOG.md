@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an experimental `yasbd` sentence-segmentation backend selectable via
+  `segment_text(..., backend="yasbd")` and
+  `analyze_text(..., sentence_backend="yasbd")`, backed by the optional
+  `yasbd-lib` extra. The default routing and core dependency set remain
+  unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
+  contract, with explicit errors for missing dependencies, unknown backends,
+  and conflicting preconstructed segmenters (#1848).
+
 ### Fixed
 
 - Fixed the PySpark batch de-identification adapter so

@@ -16,6 +16,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from importlib import import_module
 from pathlib import Path
+from textwrap import dedent
 from typing import Any, Literal, Protocol
 
 UNMAPPED_CONCEPT_ID = 0
@@ -25,6 +26,26 @@ UNMAPPED_VOCABULARY_ID = "UNMAPPED"
 LoadMode = Literal["append", "replace_by_note"]
 OmopDomain = Literal["Condition", "Drug", "Measurement", "Procedure", "Observation"]
 WriterKind = Literal["duckdb", "sqlite", "parquet"]
+
+
+class _VocabularyMapping(Protocol):
+    domain: OmopDomain | None
+    source_code: str
+    source_concept_id: int
+    source_code_description: str | None
+    source_vocabulary_id: str
+    target_concept_id: int
+    target_vocabulary_id: str
+    standard_concept: str | None
+
+    def to_source_to_concept_map_row(self) -> dict[str, Any]: ...
+
+
+class _VocabularyRouter(Protocol):
+    def route_span(self, span: Any) -> _VocabularyMapping: ...
+
+    def concept_record(self, concept_id: int) -> Mapping[str, Any] | None: ...
+
 
 _MISSING = object()
 
@@ -427,6 +448,18 @@ _SQL_DDL: Mapping[str, str] = {
     """,
 }
 
+_POSTGRES_DATE_COLUMNS: Mapping[str, tuple[str, ...]] = {
+    "visit_occurrence": ("visit_start_date",),
+    "note": ("note_date",),
+    "note_nlp": ("nlp_date",),
+    "condition_occurrence": ("condition_start_date",),
+    "drug_exposure": ("drug_exposure_start_date",),
+    "measurement": ("measurement_date",),
+    "procedure_occurrence": ("procedure_date",),
+    "observation": ("observation_date",),
+    "source_to_concept_map": ("valid_start_date", "valid_end_date"),
+}
+
 _NOTE_ID_FIELDS = ("note_id", "document_id", "doc_id", "source_document_id")
 _NOTE_TEXT_FIELDS = ("note_text", "text", "document_text", "source_text")
 _NOTE_DATE_FIELDS = ("note_date", "document_date", "date")
@@ -544,6 +577,30 @@ class OmopConstraintViolation:
 
 
 @dataclass(frozen=True)
+class OmopValidationReport:
+    """PHI-free aggregate diagnostics for OMOP constraint validation."""
+
+    violation_count: int
+    by_table: Mapping[str, int]
+    by_reason: Mapping[str, int]
+
+    @property
+    def is_valid(self) -> bool:
+        """Return whether validation found no constraint violations."""
+
+        return self.violation_count == 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return count-only diagnostics without row or source identifiers."""
+
+        return {
+            "count": self.violation_count,
+            "by_table": dict(self.by_table),
+            "by_reason": dict(self.by_reason),
+        }
+
+
+@dataclass(frozen=True)
 class OmopCdmTables:
     """In-memory OMOP CDM tables and PHI-free load summary."""
 
@@ -584,6 +641,7 @@ def load_grounded_notes(
     notes: Iterable[Any],
     *,
     vocabulary_version: str | None = None,
+    vocabulary_router: _VocabularyRouter | None = None,
     mode: LoadMode = "append",
 ) -> OmopCdmTables:
     """Build OMOP CDM tables from grounded clinical note records.
@@ -594,6 +652,9 @@ def load_grounded_notes(
             produce NOTE_NLP rows.
         vocabulary_version: Optional user-supplied vocabulary version string
             recorded in SOURCE_TO_CONCEPT_MAP rows.
+        vocabulary_router: Optional router backed by caller-supplied Athena and
+            Usagi artifacts. When provided, its standard-concept and domain
+            decisions are authoritative over concept fields in each span.
         mode: Load mode. ``append`` preserves existing rows and remains the
             default. ``replace_by_note`` marks each incoming source note hash
             as authoritative when the rows are persisted by a writer.
@@ -691,6 +752,7 @@ def load_grounded_notes(
                 note_text=note_text,
                 source_note_hash=source_note_hash,
                 vocabulary_version=vocabulary_version or "",
+                vocabulary_router=vocabulary_router,
             )
             if rejection is not None:
                 rejections.append(rejection)
@@ -718,6 +780,7 @@ def load_grounded_jsonl(
     path: str | Path,
     *,
     vocabulary_version: str | None = None,
+    vocabulary_router: _VocabularyRouter | None = None,
     mode: LoadMode = "append",
 ) -> OmopCdmTables:
     """Load grounded note records from JSONL into in-memory OMOP tables."""
@@ -735,6 +798,7 @@ def load_grounded_jsonl(
     return load_grounded_notes(
         records,
         vocabulary_version=vocabulary_version,
+        vocabulary_router=vocabulary_router,
         mode=mode,
     )
 
@@ -871,10 +935,29 @@ def create_omop_schema(con: Any) -> Any:
     return con
 
 
+def emit_postgres_ddl() -> str:
+    """Return stable PostgreSQL DDL for every loader-owned OMOP CDM table.
+
+    The script uses the loader's dependency-safe table order and PostgreSQL
+    ``DATE`` columns while retaining the same keys and relationships as the
+    local DuckDB and SQLite schemas. It contains no vocabulary data and needs
+    no OHDSI or Java runtime.
+    """
+
+    statements = []
+    for table in _TABLE_ORDER:
+        statement = dedent(_SQL_DDL[table]).strip()
+        for column in _POSTGRES_DATE_COLUMNS.get(table, ()):
+            statement = statement.replace(f"{column} TEXT", f"{column} DATE")
+        statements.append(statement)
+    header = "-- OpenMed OMOP CDM v5.4 loader-owned table subset"
+    return f"{header}\n\n" + ";\n\n".join(statements) + ";\n"
+
+
 def validate_omop_tables(
     tables: OmopCdmTables,
 ) -> tuple[OmopConstraintViolation, ...]:
-    """Validate CDM concept references, NOTE_NLP offsets, and row reachability."""
+    """Validate concept references, NOTE_NLP offsets, and domain reachability."""
 
     violations: list[OmopConstraintViolation] = []
     concept_ids = {int(row["concept_id"]) for row in tables.table("concept")}
@@ -930,10 +1013,13 @@ def validate_omop_tables(
                 )
             )
 
+    domain_rows_by_event_id: dict[int, list[tuple[str, Mapping[str, Any]]]] = {}
     for table in _DOMAIN_SOURCE_CONCEPT_COLUMNS:
         for row in tables.table(table):
             row_id = int(row[_PRIMARY_KEYS[table]])
-            if int(row["note_nlp_id"]) not in note_nlp_rows:
+            domain_rows_by_event_id.setdefault(row_id, []).append((table, row))
+            note_nlp = note_nlp_rows.get(int(row["note_nlp_id"]))
+            if note_nlp is None:
                 violations.append(
                     OmopConstraintViolation(
                         table=table,
@@ -942,8 +1028,75 @@ def validate_omop_tables(
                         row_id=row_id,
                     )
                 )
+            elif _optional_int(note_nlp.get("note_nlp_event_id")) != row_id:
+                violations.append(
+                    OmopConstraintViolation(
+                        table=table,
+                        column="note_nlp_id",
+                        reason="unreachable_from_note_nlp",
+                        row_id=row_id,
+                    )
+                )
+
+    for row_id, row in note_nlp_rows.items():
+        event_id = _optional_int(row.get("note_nlp_event_id"))
+        event_rows = domain_rows_by_event_id.get(event_id or -1, ())
+        if not event_rows:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="missing_domain_event",
+                    row_id=row_id,
+                )
+            )
+            continue
+        matching_rows = [
+            event_row
+            for _, event_row in event_rows
+            if _optional_int(event_row.get("note_nlp_id")) == row_id
+        ]
+        if not matching_rows:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="mismatched_domain_event",
+                    row_id=row_id,
+                )
+            )
+        elif len(matching_rows) > 1:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="ambiguous_domain_event",
+                    row_id=row_id,
+                )
+            )
 
     return tuple(violations)
+
+
+def summarize_omop_violations(
+    violations: Iterable[OmopConstraintViolation],
+) -> OmopValidationReport:
+    """Aggregate detailed violations into PHI-free table/count diagnostics."""
+
+    items = tuple(violations)
+    by_table = Counter(item.table for item in items)
+    by_reason = Counter(item.reason for item in items)
+    return OmopValidationReport(
+        violation_count=len(items),
+        by_table=dict(sorted(by_table.items())),
+        by_reason=dict(sorted(by_reason.items())),
+    )
+
+
+def validate_omop_tables_report(tables: OmopCdmTables) -> OmopValidationReport:
+    """Validate in-memory tables and return PHI-free aggregate diagnostics."""
+
+    return summarize_omop_violations(validate_omop_tables(tables))
 
 
 def validate_omop_database(con: Any) -> tuple[OmopConstraintViolation, ...]:
@@ -965,6 +1118,12 @@ def validate_omop_database(con: Any) -> tuple[OmopConstraintViolation, ...]:
             ),
         )
     )
+
+
+def validate_omop_database_report(con: Any) -> OmopValidationReport:
+    """Validate persisted tables and return PHI-free aggregate diagnostics."""
+
+    return summarize_omop_violations(validate_omop_database(con))
 
 
 def deterministic_omop_id(*parts: Any) -> int:
@@ -994,8 +1153,12 @@ def _load_entity(
     note_text: str,
     source_note_hash: str,
     vocabulary_version: str,
+    vocabulary_router: _VocabularyRouter | None,
 ) -> RejectedSpan | None:
-    domain = _entity_domain(entity)
+    mapping = (
+        vocabulary_router.route_span(entity) if vocabulary_router is not None else None
+    )
+    domain = mapping.domain if mapping is not None else _entity_domain(entity)
     start = _optional_int(_first_value(_entity_sources(entity), ("start",)))
     end = _optional_int(_first_value(_entity_sources(entity), ("end",)))
 
@@ -1024,7 +1187,12 @@ def _load_entity(
             domain=domain,
         )
 
-    concept = _entity_concept(entity, domain)
+    concept = _entity_concept(
+        entity,
+        domain,
+        mapping=mapping,
+        vocabulary_router=vocabulary_router,
+    )
     _add_concept_row(table_rows, concept)
 
     lexical_variant = _entity_text(entity) or note_text[start:end]
@@ -1082,6 +1250,12 @@ def _load_entity(
             "idempotent_key": idempotent_key,
         },
     )
+    provenance = _entity_provenance(
+        concept,
+        mapping=mapping,
+        lexical_variant=lexical_variant,
+        vocabulary_version=vocabulary_version,
+    )
     _upsert_row(
         table_rows,
         "source_to_concept_map",
@@ -1090,16 +1264,7 @@ def _load_entity(
                 "source_to_concept_map",
                 idempotent_key,
             ),
-            "source_code": concept["concept_code"],
-            "source_concept_id": int(concept["source_concept_id"]),
-            "source_vocabulary_id": concept["vocabulary_id"],
-            "source_code_description": lexical_variant,
-            "target_concept_id": int(concept["concept_id"]),
-            "target_vocabulary_id": concept["vocabulary_id"],
-            "valid_start_date": None,
-            "valid_end_date": None,
-            "invalid_reason": None if int(concept["concept_id"]) else "UNMAPPED",
-            "vocabulary_version": vocabulary_version,
+            **provenance,
             "source_note_hash": source_note_hash,
             "note_nlp_id": note_nlp_id,
         },
@@ -1107,7 +1272,69 @@ def _load_entity(
     return None
 
 
-def _entity_concept(entity: Any, domain: OmopDomain) -> dict[str, Any]:
+def _entity_concept(
+    entity: Any,
+    domain: OmopDomain,
+    *,
+    mapping: _VocabularyMapping | None,
+    vocabulary_router: _VocabularyRouter | None,
+) -> dict[str, Any]:
+    if mapping is not None:
+        target_id = int(mapping.target_concept_id)
+        source_id = int(mapping.source_concept_id)
+        target_record = (
+            vocabulary_router.concept_record(target_id)
+            if vocabulary_router is not None and target_id
+            else None
+        )
+        source_record = (
+            vocabulary_router.concept_record(source_id)
+            if vocabulary_router is not None and source_id
+            else None
+        )
+        return {
+            "concept_id": target_id,
+            "source_concept_id": source_id,
+            "concept_name": _concept_value(
+                target_record,
+                "concept_name",
+                UNMAPPED_CONCEPT_NAME if not target_id else f"Concept {target_id}",
+            ),
+            "domain_id": _concept_value(target_record, "domain_id", domain),
+            "vocabulary_id": _concept_value(
+                target_record,
+                "vocabulary_id",
+                (mapping.target_vocabulary_id if target_id else UNMAPPED_VOCABULARY_ID),
+            ),
+            "concept_class_id": _concept_value(target_record, "concept_class_id", ""),
+            "standard_concept": (
+                _concept_value(
+                    target_record, "standard_concept", mapping.standard_concept
+                )
+                if target_id
+                else None
+            ),
+            "concept_code": _concept_value(target_record, "concept_code", ""),
+            "source_concept_name": _concept_value(
+                source_record,
+                "concept_name",
+                mapping.source_code_description or mapping.source_code,
+            ),
+            "source_domain_id": _concept_value(source_record, "domain_id", domain),
+            "source_vocabulary_id": _concept_value(
+                source_record, "vocabulary_id", mapping.source_vocabulary_id
+            ),
+            "source_concept_class_id": _concept_value(
+                source_record, "concept_class_id", ""
+            ),
+            "source_standard_concept": _concept_value(
+                source_record, "standard_concept", None
+            ),
+            "source_concept_code": _concept_value(
+                source_record, "concept_code", mapping.source_code
+            ),
+        }
+
     concept_id = _optional_int(
         _first_value(_entity_sources(entity), _CONCEPT_ID_FIELDS)
     )
@@ -1147,34 +1374,95 @@ def _add_concept_row(
     concept: Mapping[str, Any],
 ) -> None:
     concept_id = int(concept["concept_id"])
+    target_concept = (
+        _unmapped_concept_row() if concept_id == UNMAPPED_CONCEPT_ID else concept
+    )
+    target_vocabulary_id = target_concept.get("vocabulary_id")
+    if target_vocabulary_id is None:
+        target_vocabulary_id = (
+            UNMAPPED_VOCABULARY_ID if concept_id == UNMAPPED_CONCEPT_ID else ""
+        )
     _upsert_row(
         table_rows,
         "concept",
         {
             "concept_id": concept_id,
-            "concept_name": concept.get("concept_name") or UNMAPPED_CONCEPT_NAME,
-            "domain_id": concept.get("domain_id") or "",
-            "vocabulary_id": concept.get("vocabulary_id") or UNMAPPED_VOCABULARY_ID,
-            "concept_class_id": concept.get("concept_class_id") or "",
-            "standard_concept": concept.get("standard_concept"),
-            "concept_code": concept.get("concept_code") or "",
+            "concept_name": target_concept.get("concept_name") or UNMAPPED_CONCEPT_NAME,
+            "domain_id": target_concept.get("domain_id") or "",
+            "vocabulary_id": target_vocabulary_id,
+            "concept_class_id": target_concept.get("concept_class_id") or "",
+            "standard_concept": target_concept.get("standard_concept"),
+            "concept_code": target_concept.get("concept_code") or "",
         },
     )
-    source_concept_id = int(concept.get("source_concept_id") or concept_id)
-    if source_concept_id != concept_id:
+    raw_source_concept_id = concept.get("source_concept_id")
+    source_concept_id = (
+        concept_id if raw_source_concept_id is None else int(raw_source_concept_id)
+    )
+    if source_concept_id not in {UNMAPPED_CONCEPT_ID, concept_id}:
         _upsert_row(
             table_rows,
             "concept",
             {
                 "concept_id": source_concept_id,
-                "concept_name": concept.get("concept_name") or "",
-                "domain_id": concept.get("domain_id") or "",
-                "vocabulary_id": concept.get("vocabulary_id") or "",
-                "concept_class_id": concept.get("concept_class_id") or "",
-                "standard_concept": concept.get("standard_concept"),
-                "concept_code": concept.get("concept_code") or "",
+                "concept_name": concept.get("source_concept_name")
+                or concept.get("concept_name")
+                or "",
+                "domain_id": concept.get("source_domain_id")
+                or concept.get("domain_id")
+                or "",
+                "vocabulary_id": concept.get("source_vocabulary_id")
+                or concept.get("vocabulary_id")
+                or "",
+                "concept_class_id": concept.get("source_concept_class_id")
+                or concept.get("concept_class_id")
+                or "",
+                "standard_concept": concept.get(
+                    "source_standard_concept", concept.get("standard_concept")
+                ),
+                "concept_code": concept.get("source_concept_code")
+                or concept.get("concept_code")
+                or "",
             },
         )
+
+
+def _entity_provenance(
+    concept: Mapping[str, Any],
+    *,
+    mapping: _VocabularyMapping | None,
+    lexical_variant: str,
+    vocabulary_version: str,
+) -> dict[str, Any]:
+    if mapping is not None:
+        provenance = mapping.to_source_to_concept_map_row()
+        if provenance["vocabulary_version"] is None:
+            provenance["vocabulary_version"] = vocabulary_version
+        return provenance
+    concept_id = int(concept["concept_id"])
+    return {
+        "source_code": concept["concept_code"],
+        "source_concept_id": int(concept["source_concept_id"]),
+        "source_vocabulary_id": concept["vocabulary_id"],
+        "source_code_description": lexical_variant,
+        "target_concept_id": concept_id,
+        "target_vocabulary_id": concept["vocabulary_id"],
+        "valid_start_date": None,
+        "valid_end_date": None,
+        "invalid_reason": None if concept_id else "UNMAPPED",
+        "vocabulary_version": vocabulary_version,
+    }
+
+
+def _concept_value(
+    record: Mapping[str, Any] | None,
+    field_name: str,
+    fallback: Any,
+) -> Any:
+    if record is None:
+        return fallback
+    value = record.get(field_name)
+    return fallback if value is None or value == "" else value
 
 
 def _unmapped_concept_row() -> dict[str, Any]:
@@ -1541,6 +1829,7 @@ __all__ = [
     "OmopDomain",
     "OmopLoadEvent",
     "OmopLoadSummary",
+    "OmopValidationReport",
     "RejectedSpan",
     "UNMAPPED_CONCEPT_ID",
     "UNMAPPED_CONCEPT_NAME",
@@ -1549,10 +1838,14 @@ __all__ = [
     "create_omop_schema",
     "deterministic_note_hash",
     "deterministic_omop_id",
+    "emit_postgres_ddl",
     "load_grounded_jsonl",
     "load_grounded_notes",
+    "summarize_omop_violations",
     "validate_omop_database",
+    "validate_omop_database_report",
     "validate_omop_tables",
+    "validate_omop_tables_report",
     "write_omop_duckdb",
     "write_omop_parquet",
     "write_omop_sqlite",

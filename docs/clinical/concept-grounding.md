@@ -111,6 +111,27 @@ restricted UMLS, SNOMED, or CPT vocabulary data paths.
 
 ## Run incremental OMOP loads
 
+Use a caller-supplied Athena export and optional Usagi mapping when source spans
+still need standard-concept and domain resolution. The router's decision is
+authoritative, so an unverified `concept_id` carried by an input span cannot
+bypass the local vocabulary lookup:
+
+```python
+from openmed.interop.omop import VocabularyRouter, load_grounded_jsonl
+
+router = VocabularyRouter.from_athena(
+    "/local/athena-export",
+    "/local/usagi-mapping.csv",
+    vocabulary_version="caller-supplied-release",
+)
+tables = load_grounded_jsonl("grounded.jsonl", vocabulary_router=router)
+```
+
+Mapped target and source concepts are copied from the supplied Athena index into
+the loader-owned CONCEPT subset. Each SOURCE_TO_CONCEPT_MAP row retains its
+source code, source concept, target concept, target vocabulary, and vocabulary
+version. A missing match remains source-only with target `concept_id=0`.
+
 The OMOP writers use idempotent append mode by default. A rerun with the same
 deterministic rows does not create duplicates and does not remove data already
 in the target. Use replace-by-note mode when the incoming batch is the complete,
@@ -152,6 +173,35 @@ after its writer succeeds and receives an `OmopLoadEvent` containing the mode,
 changed hashes, and incoming row counts. It receives no note text, lexical
 variants, document identifiers, or patient identifiers. Callback failures occur
 after persistence and should be retried independently by the integration.
+
+## Deploy and validate the Postgres table subset
+
+`emit_postgres_ddl()` returns one deterministic PostgreSQL script covering every
+table owned by the grounded-note loader. The script contains schema only: it
+does not bundle vocabulary rows or require a Java or OHDSI runtime. Apply it
+with the PostgreSQL deployment mechanism used by your environment before
+loading rows:
+
+```python
+from pathlib import Path
+
+from openmed.interop.omop import emit_postgres_ddl
+
+Path("openmed-omop-v5.4.sql").write_text(emit_postgres_ddl(), encoding="utf-8")
+```
+
+After loading, `validate_omop_database_report(connection)` checks concept
+references, NOTE_NLP offsets, and reciprocal NOTE_NLP-to-domain reachability.
+Its serializable form contains only a total plus counts by table and reason, so
+it is suitable for logs and deployment diagnostics without exposing note text,
+lexical variants, document identifiers, patient identifiers, or row keys:
+
+```python
+from openmed.interop.omop import validate_omop_database_report
+
+report = validate_omop_database_report(connection)
+assert report.is_valid, report.to_dict()
+```
 
 ## Linking evaluation
 
