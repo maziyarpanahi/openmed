@@ -118,6 +118,7 @@ from .run_report import (
     RunReportPrivacyError,
     assert_no_raw_text,
     build_run_report,
+    is_publishable_token,
 )
 from .sentences import SentenceSpan, segment_chinese_text, segment_text
 from .shard_executor import (
@@ -353,6 +354,7 @@ __all__ = [
     "RunReportPrivacyError",
     "assert_no_raw_text",
     "build_run_report",
+    "is_publishable_token",
     "ObjectStorageBatchResult",
     "ObjectStorageItemResult",
     "ObjectProgressCallback",

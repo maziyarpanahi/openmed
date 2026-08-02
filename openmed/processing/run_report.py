@@ -14,10 +14,27 @@ serves -- so this module publishes only
 filename is chosen by whoever configured the run and is not worth publishing, so
 no path reaches a report at all.
 
-Every payload is validated against an allowlist before it is returned, and the
+Every payload is validated against an allowlist before it is *returned*, and the
 check covers mapping keys as well as values: a sentence lifted out of a record
 reaches a payload just as easily as a key as it does as a value, and a check that
 inspects only values reads as thorough while missing half the surface.
+
+Two limits are worth stating plainly rather than leaving to be discovered.
+
+First, "before it is returned" is a claim about publication, not about storage.
+This module sees a manifest only once it exists, so it cannot prevent a bad value
+being written; it can only refuse to publish one. Callers that accept an
+operator-supplied value must reject it at that point --
+:func:`is_publishable_token` exists for exactly that -- because a value that
+reaches a manifest cannot be withdrawn and poisons every later read of it.
+
+Second, the allowlist admits any single token, so it catches free text but not a
+short plausible-looking string. Fields with a known shape are checked against it,
+which is what lets a coerced ``"None"`` be caught in a digest. ``algorithm`` and
+``openmed_version`` have no such shape and the manifest only checks their type,
+so a caller that fabricates them can publish them; ``error_type`` is normalised
+to a constant when it is not an identifier, but an identifier-shaped value passes
+unchanged.
 """
 
 from __future__ import annotations
@@ -85,6 +102,18 @@ _FORBIDDEN_KEYS = frozenset(
 )
 
 
+def is_publishable_token(value: Any) -> bool:
+    """Whether ``value`` is a string this module would allow into a report.
+
+    Exposed so that callers can reject an operator-supplied value at the point
+    it is accepted rather than at the point it is rendered. A value that reaches
+    durable storage and only then fails cannot be withdrawn, and every later
+    read of that storage fails the same way.
+    """
+
+    return isinstance(value, str) and _SAFE_TOKEN.fullmatch(value) is not None
+
+
 class RunReportError(ValueError):
     """Base error raised when a run report cannot be produced safely."""
 
@@ -105,6 +134,14 @@ def assert_no_raw_text(payload: Any, *, where: str = "batch run report") -> None
     An error message is itself an operator-visible surface, and the CLI renders
     :class:`~openmed.cli._output.CliError` text verbatim, so echoing the value
     here would reintroduce the leak the check exists to prevent.
+
+    The walk deliberately memoizes nothing. Recording visited nodes by ``id()``
+    is the obvious optimisation and it is unsound here: the walk frees each
+    temporary as it advances, the interpreter is free to reissue that address,
+    and the next node inherits a memoized id and is skipped without ever being
+    inspected. For a guard whose job is to find record content, a node skipped
+    in silence means that content is published. Re-inspecting a shared subtree
+    costs a repeat visit; skipping one costs the guarantee.
     """
 
     _walk(payload, where=where, path="<root>")
@@ -488,7 +525,11 @@ def build_run_report(
 
     return BatchRunReport(
         run_id=manifest.run_id,
-        plan_fingerprint=manifest.plan_fingerprint,
+        plan_fingerprint=_checked_digest(
+            manifest.plan_fingerprint,
+            field_name="plan_fingerprint",
+            pattern=_HEX_DIGEST,
+        ),
         algorithm=manifest.algorithm,
         openmed_version=manifest.openmed_version,
         generated_at=generated_at,
@@ -518,4 +559,5 @@ __all__ = [
     "RunReportPrivacyError",
     "assert_no_raw_text",
     "build_run_report",
+    "is_publishable_token",
 ]

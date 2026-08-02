@@ -164,11 +164,14 @@ openmed batch-run start \
   --workers 4
 
 # Resume after an interruption. Only shards that failed, went missing, or no
-# longer match their recorded digest are recomputed.
+# longer match their recorded digest are recomputed. Set --max-attempts so a
+# shard that fails every time eventually makes the run exhausted; without it a
+# scripted retry loop never terminates.
 openmed batch-run resume \
   --run-dir runs/nightly-2026-08-02 \
   --input-dir /data/notes \
-  --workers 4
+  --workers 4 \
+  --max-attempts 3
 
 # Inspect a run without changing it.
 openmed batch-run report --run-dir runs/nightly-2026-08-02 --format markdown
@@ -178,6 +181,27 @@ Exit codes follow the repository's gate convention: `0` when every shard
 finished with a usable output, `1` when shards remain outstanding or have spent
 their attempt budget, and `2` for a usage error. A run that produced nothing
 never exits `0`. All three commands accept `--json` and emit a single envelope.
+
+`--max-attempts` is unset by default, which means unbounded: shards stay merely
+outstanding no matter how often they fail, and the run reports `in_progress`
+rather than `exhausted`. Pass it whenever a resume runs unattended.
+
+`--run-id` must be a single token — letters, digits and `._:+/-`, no spaces, at
+most 128 characters — and is rejected before anything is written. The manifest
+stores it verbatim and every later `report` and `resume` reads it back, so a run
+id that a report could not publish would leave the run unreadable with no
+recovery short of editing the manifest by hand.
+
+Note file stems are the document ids, so they must be unique across
+`--input-dir`; a collision is reported with the two offending positions.
+
+`--pattern` follows the platform's own glob semantics, which are case-sensitive
+on Linux and macOS and case-insensitive on Windows. `--pattern '*.txt'`
+therefore matches `NOTE.TXT` on Windows and not elsewhere, so the same directory
+can yield a different document set — and hence a different `plan_fingerprint` —
+on different platforms. Fingerprints are comparable across runs on one platform,
+not across platforms. Give the pattern an explicit case (`--pattern '*.TXT'`) or
+normalise extensions beforehand if a run has to reproduce on both.
 
 ### What a report contains, and what it deliberately omits
 
@@ -191,7 +215,7 @@ exception messages.
 | `plan_fingerprint`, per-shard `fingerprint` | sha256 over document hashes. |
 | `output_digest`, `output_bytes` | Digest and size of a shard's output. |
 | `status`, `attempts`, `document_count` | Enum values and counters. |
-| `duration_seconds`, `started_at`/`completed_at` | Timings. |
+| `duration_seconds` per shard; `created_at`, `updated_at`, `generated_at` at the top level | Timings. |
 | `worker_ref` | Hashed worker reference; the raw worker id is never published. |
 | `error_type` | Exception class name only, never its message. |
 
@@ -204,6 +228,14 @@ reports carry `worker_ref` instead. The same worker yields the same reference
 on every path of a report, so "which shards is this worker running" is still
 answerable.
 
+Shard output lines carry only de-identified text. They deliberately carry no
+per-record identifier or hash of one: an unsalted digest over a fixed namespace
+is reversible by enumeration across a low-entropy id space such as medical
+record numbers, so it would be a pseudonym rather than a protection. Records
+stay joinable because sharding is deterministic — replanning the same corpus
+with the same shard count reproduces each shard's document order, so line `n` of
+a shard output is document `n` of that shard.
+
 A zero-document shard that reports as `completed` is normal. Empty shards
 publish an empty output so that they settle rather than being re-queued by every
 later run.
@@ -211,6 +243,105 @@ later run.
 An empty straggler list means two different things, and the report says which:
 `straggler_detection_enabled` is `false` when too few shards had finished to
 establish a baseline, and `true` when detection ran and found nothing lagging.
+
+The CLI runs shards on local worker threads. To drive the same manifest from a
+process pool, a Ray cluster or a Spark cluster, see the next section.
+
+## Distributed shard execution
+
+For corpora too large for a single process, a run can be split into
+deterministic shards and executed across worker processes, a Ray cluster, or a
+Spark cluster. All three backends sit behind one `ShardExecutor` protocol, so
+the surrounding code is identical and only the executor changes.
+
+Importing `openmed.processing` imports neither Ray nor PySpark. Each adapter
+imports its backend only when it runs.
+
+```python
+from openmed.processing import (
+    LocalShardExecutor,
+    build_run_manifest,
+    plan_document_shards,
+    run_shard_plan,
+)
+
+def handler(shard):
+    # Return the bytes this shard publishes. Must be deterministic.
+    return b"".join(redact(doc) for doc in load(shard.document_ids))
+
+plan = plan_document_shards(documents, shard_count=64)
+manifest = build_run_manifest(run_id="corpus-2026-08", plan=plan)
+
+result = run_shard_plan(
+    plan, handler,
+    manifest=manifest,
+    root="/data/runs/corpus-2026-08",
+    executor=LocalShardExecutor(max_workers=8, use_processes=True),
+)
+```
+
+### Ray
+
+```bash
+pip install "openmed[ray]"
+```
+
+```python
+from openmed.processing import RayShardExecutor
+
+executor = RayShardExecutor(num_cpus=1, max_in_flight=32)
+executor.ensure_available()          # see "Failing before the manifest" below
+result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
+```
+
+`max_in_flight` bounds how many shards are submitted at once; leave it unset to
+submit the whole plan. Extra keyword arguments are forwarded to `ray.remote`.
+A runtime is started or attached to automatically unless `auto_init=False`.
+
+### Spark
+
+```bash
+pip install "openmed[spark]"
+```
+
+```python
+from openmed.processing import SparkShardExecutor
+
+executor = SparkShardExecutor(session=spark)
+executor.ensure_available()
+result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
+```
+
+The plan is parallelized with one slice per shard by default. A session is
+never created implicitly: pass `session=`, or leave it unset to reuse the
+active session.
+
+### Failing before the manifest
+
+`run_shard_plan` marks every shard `RUNNING` and increments its attempt counter
+*before* it calls the executor. A backend that turns out to be missing or
+unreachable at that point has already cost each shard an attempt. Calling
+`ensure_available()` first — it imports the backend, and for Ray also starts or
+attaches to the runtime — fails before any of that bookkeeping happens.
+
+### Retries and duplicate execution
+
+Neither adapter configures retry policy. Ray retries a task on worker death by
+default, and Spark may run speculative duplicates, so a shard can execute more
+than once. This is safe because the write path is idempotent: a worker
+publishes through a temporary file and an atomic replace, and a re-executed
+shard is compared against the digest it published earlier before its output is
+replaced.
+
+The one case this does not cover is a handler that is not deterministic. Such a
+shard is reported as a digest mismatch and its existing output is left
+untouched, rather than being silently overwritten — so make `handler` a pure
+function of the shard it is given.
+
+### Errors
+
+Workers return PHI-free metadata only: a shard failure is recorded as an
+exception *type* name, never a message, since messages can quote document text.
 
 ## Operations
 
@@ -468,99 +599,3 @@ with open("results.json", "w") as f:
 # Export summary only
 summary = result.summary()
 ```
-
-## Distributed shard execution
-
-For corpora too large for a single process, a run can be split into
-deterministic shards and executed across worker processes, a Ray cluster, or a
-Spark cluster. All three backends sit behind one `ShardExecutor` protocol, so
-the surrounding code is identical and only the executor changes.
-
-Importing `openmed.processing` imports neither Ray nor PySpark. Each adapter
-imports its backend only when it runs.
-
-```python
-from openmed.processing import (
-    LocalShardExecutor,
-    build_run_manifest,
-    plan_document_shards,
-    run_shard_plan,
-)
-
-def handler(shard):
-    # Return the bytes this shard publishes. Must be deterministic.
-    return b"".join(redact(doc) for doc in load(shard.document_ids))
-
-plan = plan_document_shards(documents, shard_count=64)
-manifest = build_run_manifest(run_id="corpus-2026-08", plan=plan)
-
-result = run_shard_plan(
-    plan, handler,
-    manifest=manifest,
-    root="/data/runs/corpus-2026-08",
-    executor=LocalShardExecutor(max_workers=8, use_processes=True),
-)
-```
-
-### Ray
-
-```bash
-pip install "openmed[ray]"
-```
-
-```python
-from openmed.processing import RayShardExecutor
-
-executor = RayShardExecutor(num_cpus=1, max_in_flight=32)
-executor.ensure_available()          # see "Failing before the manifest" below
-result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
-```
-
-`max_in_flight` bounds how many shards are submitted at once; leave it unset to
-submit the whole plan. Extra keyword arguments are forwarded to `ray.remote`.
-A runtime is started or attached to automatically unless `auto_init=False`.
-
-### Spark
-
-```bash
-pip install "openmed[spark]"
-```
-
-```python
-from openmed.processing import SparkShardExecutor
-
-executor = SparkShardExecutor(session=spark)
-executor.ensure_available()
-result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
-```
-
-The plan is parallelized with one slice per shard by default. A session is
-never created implicitly: pass `session=`, or leave it unset to reuse the
-active session.
-
-### Failing before the manifest
-
-`run_shard_plan` marks every shard `RUNNING` and increments its attempt counter
-*before* it calls the executor. A backend that turns out to be missing or
-unreachable at that point has already cost each shard an attempt. Calling
-`ensure_available()` first — it imports the backend, and for Ray also starts or
-attaches to the runtime — fails before any of that bookkeeping happens.
-
-### Retries and duplicate execution
-
-Neither adapter configures retry policy. Ray retries a task on worker death by
-default, and Spark may run speculative duplicates, so a shard can execute more
-than once. This is safe because the write path is idempotent: a worker
-publishes through a temporary file and an atomic replace, and a re-executed
-shard is compared against the digest it published earlier before its output is
-replaced.
-
-The one case this does not cover is a handler that is not deterministic. Such a
-shard is reported as a digest mismatch and its existing output is left
-untouched, rather than being silently overwritten — so make `handler` a pure
-function of the shard it is given.
-
-### Errors
-
-Workers return PHI-free metadata only: a shard failure is recorded as an
-exception *type* name, never a message, since messages can quote document text.

@@ -248,6 +248,48 @@ def test_guard_rejects_phi_as_a_mapping_key() -> None:
         assert_no_raw_text(payload)
 
 
+def test_guard_inspects_every_node_when_temporaries_are_freed_as_it_walks() -> None:
+    """A node skipped in silence means published record content.
+
+    Memoizing visited nodes by ``id()`` is unsound for a walker that frees each
+    temporary as it advances: the interpreter reissues the address and the next
+    node inherits a memoized id. This payload builds every member on access, so
+    each is collectable the moment the walk moves on, and the planted value sits
+    in a late node rather than a shallow one.
+    """
+
+    from collections.abc import Mapping as _Mapping
+
+    class _Ephemeral(_Mapping):
+        def __init__(self, depth: int, phi_at: int) -> None:
+            self.depth, self.phi_at = depth, phi_at
+
+        def __getitem__(self, key):
+            if key != "child":
+                raise KeyError(key)
+            if self.depth == self.phi_at:
+                return {PHI_TEXT: 1}
+            if self.depth == 0:
+                return {"leaf": 1}
+            return _Ephemeral(self.depth - 1, self.phi_at)
+
+        def __iter__(self):
+            yield "child"
+
+        def __len__(self) -> int:
+            return 1
+
+    for depth, phi_at in ((100, 1), (200, 3), (60, 0)):
+        with pytest.raises(RunReportPrivacyError):
+            assert_no_raw_text({"root": _Ephemeral(depth, phi_at)})
+
+    # Wide rather than deep: many short-lived siblings, planted value last.
+    rows = [{f"k{index}": index} for index in range(500)]
+    rows.append({PHI_TEXT: 1})
+    with pytest.raises(RunReportPrivacyError):
+        assert_no_raw_text({"rows": rows})
+
+
 def test_guard_rejects_phi_as_a_value_under_a_benign_key() -> None:
     with pytest.raises(RunReportPrivacyError, match="string value"):
         assert_no_raw_text({"run_id": PHI_TEXT})
@@ -335,6 +377,57 @@ def test_a_coerced_none_is_caught_on_digest_fields() -> None:
 
     with pytest.raises(RunReportPrivacyError, match="not a sha256 digest"):
         build_run_report(manifest, generated_at=3000.0).to_dict()
+
+
+def test_plan_fingerprint_is_shape_checked_like_every_other_digest() -> None:
+    """The most prominent digest must not be the one route that skips the check.
+
+    A shard fingerprint and a plan fingerprint are the same kind of value, so a
+    value blocked in one and published in the other is an inconsistency, not a
+    policy.
+    """
+
+    manifest = _finished_manifest()
+    forged = BatchRunManifest.__new__(BatchRunManifest)
+    for name, value in (
+        ("run_id", manifest.run_id),
+        ("created_at", manifest.created_at),
+        ("updated_at", manifest.updated_at),
+        ("algorithm", manifest.algorithm),
+        ("shard_count", manifest.shard_count),
+        ("document_count", manifest.document_count),
+        ("plan_fingerprint", "MRN-ZQ7391-Evelyn-Quantum-DOB-1972-04-17"),
+        ("openmed_version", manifest.openmed_version),
+        ("shards", manifest.shards),
+        ("schema_version", manifest.schema_version),
+    ):
+        object.__setattr__(forged, name, value)
+
+    with pytest.raises(RunReportPrivacyError, match="plan_fingerprint"):
+        build_run_report(forged, generated_at=3000.0)
+
+    # The same value in a shard fingerprint was already blocked; both now agree.
+    object.__setattr__(forged, "plan_fingerprint", "None")
+    with pytest.raises(RunReportPrivacyError, match="plan_fingerprint"):
+        build_run_report(forged, generated_at=3000.0)
+
+
+def test_is_publishable_token_matches_what_the_guard_accepts() -> None:
+    """The pre-flight check and the publication check must not disagree."""
+
+    from openmed.processing.run_report import is_publishable_token
+
+    for value in ("run-0001", "run_2026-08-02", "w-0123456789ab", "sha256:" + "a" * 64):
+        assert is_publishable_token(value) is True
+        assert_no_raw_text({"run_id": value})
+
+    for value in ("nightly run", "run#42", PHI_TEXT, "x" * 129, "", "run\n"):
+        assert is_publishable_token(value) is False
+        with pytest.raises(RunReportPrivacyError):
+            assert_no_raw_text({"run_id": value})
+
+    assert is_publishable_token(None) is False
+    assert is_publishable_token(7) is False
 
 
 def test_a_malformed_error_type_renders_as_a_constant() -> None:

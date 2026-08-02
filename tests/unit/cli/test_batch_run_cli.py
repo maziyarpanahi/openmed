@@ -283,6 +283,208 @@ def test_starting_over_an_existing_run_is_refused(
     assert payload["error"]["code"] == "run_exists"
 
 
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "nightly run 2026-08-02",  # a space: the first thing an operator types
+        "run#42",
+        "Patient Evelyn Quantum MRN ZQ-7391",
+        "x" * 129,
+    ],
+)
+def test_unpublishable_run_id_is_refused_before_anything_is_written(
+    tmp_path: Path, notes: Path, capsys, run_id: str
+) -> None:
+    """The check must precede the run, not follow it.
+
+    A run id only the manifest accepts is written durably, the whole corpus is
+    processed, and then every later ``report`` and ``resume`` re-reads it and
+    fails identically -- an unrecoverable run created by a single space.
+    """
+
+    run_dir = tmp_path / "run"
+    code, out = _run(
+        [
+            "batch-run",
+            "start",
+            "--run-dir",
+            str(run_dir),
+            "--input-dir",
+            str(notes),
+            "--run-id",
+            run_id,
+            "--shards",
+            "4",
+            "--json",
+        ],
+        capsys,
+    )
+    payload = json.loads(out)
+
+    assert code == 2
+    assert payload["error"]["code"] == "invalid_run_id"
+    assert "--run-id" in payload["error"]["message"]
+    assert all(needle not in out for needle in PHI_SUBSTRINGS)
+    # Nothing durable was created, so the run remains startable.
+    assert not (run_dir / "manifest.json").exists()
+    assert list(run_dir.glob("shard-*.jsonl")) == []
+
+
+def test_a_rejected_run_id_leaves_the_run_startable(
+    tmp_path: Path, notes: Path, capsys
+) -> None:
+    run_dir = tmp_path / "run"
+    _run(
+        [
+            "batch-run",
+            "start",
+            "--run-dir",
+            str(run_dir),
+            "--input-dir",
+            str(notes),
+            "--run-id",
+            "bad id",
+            "--shards",
+            "4",
+            "--json",
+        ],
+        capsys,
+    )
+    code, out = _run(_start(run_dir, notes), capsys)
+
+    assert code == 0, out
+    assert json.loads(out)["data"]["run_state"] == "complete"
+
+
+def test_shard_output_carries_no_per_record_identifier(
+    tmp_path: Path, notes: Path, capsys
+) -> None:
+    """An unsalted per-record digest is a reversible pseudonym, not protection."""
+
+    from openmed.processing.distributed import stable_document_hash
+
+    run_dir = tmp_path / "run"
+    _run(_start(run_dir, notes), capsys)
+
+    outputs = sorted(run_dir.glob("shard-*.jsonl"))
+    assert outputs
+    for path in outputs:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            record = json.loads(line)
+            assert set(record) == {"text"}
+    blob = "\n".join(path.read_text(encoding="utf-8") for path in outputs)
+    assert stable_document_hash("note-00000") not in blob
+    assert "note-00000" not in blob
+
+
+def test_max_attempts_makes_a_run_reachably_exhausted(
+    tmp_path: Path, notes: Path, capsys
+) -> None:
+    """Without a budget a retry loop never terminates; with one it does."""
+
+    run_dir = tmp_path / "run"
+    poisoned = notes / "note-00003.txt"
+    poisoned.write_text(
+        f"{poisoned.read_text(encoding='utf-8')} {FAILING_MARKER}", encoding="utf-8"
+    )
+
+    code, out = _run(_start(run_dir, notes), capsys)
+    assert code == 1
+    assert json.loads(out)["data"]["run_state"] == "in_progress"
+
+    resume = [
+        "batch-run",
+        "resume",
+        "--run-dir",
+        str(run_dir),
+        "--input-dir",
+        str(notes),
+        "--max-attempts",
+        "2",
+        "--json",
+    ]
+    code, out = _run(resume, capsys)
+    payload = json.loads(out)
+
+    assert code == 1
+    assert payload["data"]["run_state"] == "exhausted"
+    assert payload["data"]["resume"]["is_exhausted"] is True
+
+
+def test_duplicate_file_stems_are_diagnosable(tmp_path: Path, capsys) -> None:
+    corpus = tmp_path / "notes"
+    (corpus / "a").mkdir(parents=True)
+    (corpus / "b").mkdir(parents=True)
+    (corpus / "a" / "note.txt").write_text("first", encoding="utf-8")
+    (corpus / "b" / "note.txt").write_text("second", encoding="utf-8")
+
+    code, out = _run(
+        [
+            "batch-run",
+            "start",
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--input-dir",
+            str(corpus),
+            "--recursive",
+            "--run-id",
+            "run-dupe",
+            "--shards",
+            "2",
+            "--json",
+        ],
+        capsys,
+    )
+    payload = json.loads(out)
+
+    assert code == 2
+    assert payload["error"]["code"] == "duplicate_document_id"
+    # The positions must be named, and only the positions.
+    assert "index 1" in payload["error"]["message"]
+    assert "note" not in payload["error"]["message"].replace("note files", "")
+
+
+def test_unusable_pattern_is_a_usage_error(tmp_path: Path, notes: Path, capsys) -> None:
+    code, out = _run(
+        [
+            "batch-run",
+            "start",
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--input-dir",
+            str(notes),
+            "--pattern",
+            "",
+            "--run-id",
+            "run-pattern",
+            "--shards",
+            "2",
+            "--json",
+        ],
+        capsys,
+    )
+    payload = json.loads(out)
+
+    assert code == 2
+    assert payload["error"]["code"] in {"invalid_pattern", "no_input"}
+
+
+def test_report_path_pointing_at_a_directory_is_refused_up_front(
+    tmp_path: Path, notes: Path, capsys
+) -> None:
+    run_dir = tmp_path / "run"
+    target = tmp_path / "already-a-directory"
+    target.mkdir()
+
+    code, out = _run(_start(run_dir, notes) + ["--report", str(target)], capsys)
+    payload = json.loads(out)
+
+    assert code == 2
+    assert payload["error"]["code"] == "invalid_report_path"
+    # Refused before the corpus was consumed.
+    assert not (run_dir / "manifest.json").exists()
+
+
 def test_handler_exception_text_never_reaches_the_error_envelope(
     tmp_path: Path, notes: Path, capsys
 ) -> None:

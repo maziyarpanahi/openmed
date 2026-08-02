@@ -615,6 +615,17 @@ def _add_batch_run_command(subparsers: argparse._SubParsersAction) -> None:
             help="Local worker threads (default: 1).",
         )
         command.add_argument(
+            "--max-attempts",
+            dest="max_attempts",
+            type=int,
+            default=None,
+            help=(
+                "Attempt budget per shard. A shard that spends it makes the run "
+                "exhausted, so a resume loop terminates instead of retrying a "
+                "deterministically failing shard forever (default: unbounded)."
+            ),
+        )
+        command.add_argument(
             "--report",
             type=Path,
             default=None,
@@ -660,6 +671,13 @@ def _add_batch_run_command(subparsers: argparse._SubParsersAction) -> None:
         choices=["json", "markdown"],
         default="json",
         help="Rendering used for the human-readable output (default: json).",
+    )
+    report_parser.add_argument(
+        "--max-attempts",
+        dest="max_attempts",
+        type=int,
+        default=None,
+        help="Attempt budget used when classifying shards as exhausted.",
     )
     report_parser.set_defaults(handler=_handle_batch_run_report)
 
@@ -2747,6 +2765,63 @@ def _batch_run_store(run_dir: Path):
     return LocalFileRunManifestStore(run_dir / _BATCH_RUN_MANIFEST_NAME)
 
 
+def _validated_run_id(value: str) -> str:
+    """Reject a run id the report layer could not publish, before any work.
+
+    The manifest accepts any bounded, control-character-free string and writes
+    it verbatim, but a report may only carry a publishable token. Checking that
+    here rather than at render time is what keeps the failure recoverable: a run
+    id that survives to disk poisons the manifest, and every later ``report`` and
+    ``resume`` re-reads it and fails the same way, with no way out but editing
+    the manifest by hand.
+    """
+
+    from ..processing.run_report import is_publishable_token
+
+    if not is_publishable_token(value):
+        raise CliError(
+            "--run-id must be a single token of letters, digits, and "
+            "._:+/- characters (no spaces), at most 128 characters.",
+            code="invalid_run_id",
+            exit_code=EXIT_USAGE,
+        )
+    return value
+
+
+def _validated_max_attempts(args: argparse.Namespace) -> int | None:
+    """Return the attempt budget that makes an exhausted run reachable.
+
+    Without a budget every failing shard stays merely outstanding, so a scripted
+    ``until openmed batch-run resume`` never terminates against a shard that
+    fails deterministically.
+    """
+
+    value = getattr(args, "max_attempts", None)
+    if value is None:
+        return None
+    if value < 1:
+        raise CliError(
+            "--max-attempts must be at least 1.",
+            code="invalid_max_attempts",
+            exit_code=EXIT_USAGE,
+        )
+    return value
+
+
+def _validated_report_path(path: Path | None) -> Path | None:
+    """Reject an unwritable --report target before the run consumes a corpus."""
+
+    if path is None:
+        return None
+    if path.is_dir():
+        raise CliError(
+            f"--report must name a file, not a directory: {path}",
+            code="invalid_report_path",
+            exit_code=EXIT_USAGE,
+        )
+    return path
+
+
 def _batch_run_documents(args: argparse.Namespace) -> list[dict[str, str]]:
     """Map note files to shardable records keyed by their file stem."""
 
@@ -2757,7 +2832,14 @@ def _batch_run_documents(args: argparse.Namespace) -> list[dict[str, str]]:
             exit_code=EXIT_USAGE,
         )
     finder = args.input_dir.rglob if args.recursive else args.input_dir.glob
-    paths = sorted(path for path in finder(args.pattern) if path.is_file())
+    try:
+        paths = sorted(path for path in finder(args.pattern) if path.is_file())
+    except (ValueError, NotImplementedError) as exc:
+        raise CliError(
+            f"--pattern is not a usable glob ({type(exc).__name__}).",
+            code="invalid_pattern",
+            exit_code=EXIT_USAGE,
+        )
     if not paths:
         raise CliError(
             "No input files matched the pattern.",
@@ -2767,18 +2849,58 @@ def _batch_run_documents(args: argparse.Namespace) -> list[dict[str, str]]:
     return [{"id": path.stem, "path": str(path)} for path in paths]
 
 
+def _batch_run_plan(documents: list[dict[str, str]], shard_count: int):
+    """Plan shards, translating sharding errors into diagnosable usage errors.
+
+    The underlying messages carry only positional indices and field names, never
+    a document id, so they are safe to surface -- and without them a stem
+    collision is undiagnosable.
+    """
+
+    from ..processing.distributed import (
+        DuplicateDocumentIDError,
+        MissingDocumentIDError,
+        plan_document_shards,
+    )
+
+    try:
+        return plan_document_shards(documents, shard_count=shard_count)
+    except DuplicateDocumentIDError as exc:
+        raise CliError(
+            f"Input files collide on their stem: {exc}. File stems are the "
+            "document ids, so they must be unique across --input-dir.",
+            code="duplicate_document_id",
+            exit_code=EXIT_USAGE,
+        )
+    except MissingDocumentIDError as exc:
+        raise CliError(
+            f"Input could not be sharded: {exc}",
+            code="missing_document_id",
+            exit_code=EXIT_USAGE,
+        )
+
+
 def _batch_run_handler(documents: list[dict[str, str]], model: str | None):
     """Build a shard handler that de-identifies a shard's notes.
 
     The handler receives only shard membership, so it resolves each document id
-    back to its path here. Output lines carry the document hash rather than the
-    document id: the hash is what the manifest already records, and it keeps the
-    shard output joinable without republishing the identifier.
+    back to its path here.
+
+    Output lines carry the de-identified text and nothing else. An earlier
+    revision wrote a per-record ``stable_document_hash``; that is an unsalted
+    digest over a fixed namespace, so against a low-entropy id space -- medical
+    record numbers, accession numbers -- anyone holding an output file recovers
+    the source id by enumeration. It is a reversible pseudonym, not a
+    protection, and it was new exposure: the run manifest stores a set
+    fingerprint over document hashes and never the per-document values, so
+    nothing else persists a per-record token.
+
+    Records stay joinable without it. Sharding is deterministic, so replanning
+    the same corpus with the same shard count reproduces each shard's document
+    order, and line ``n`` of a shard output is document ``n`` of that shard.
     """
 
     import openmed
-
-    from ..processing.distributed import stable_document_hash
 
     by_id = {document["id"]: document["path"] for document in documents}
 
@@ -2787,15 +2909,7 @@ def _batch_run_handler(documents: list[dict[str, str]], model: str | None):
         for document_id in shard.document_ids:
             text = Path(by_id[document_id]).read_text(encoding="utf-8")
             result = openmed.deidentify(text, model_name=model)
-            lines.append(
-                json.dumps(
-                    {
-                        "document_hash": stable_document_hash(document_id),
-                        "text": result.deidentified_text,
-                    },
-                    sort_keys=True,
-                )
-            )
+            lines.append(json.dumps({"text": result.deidentified_text}))
         return ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
 
     return handle
@@ -2850,7 +2964,6 @@ def _handle_batch_run_start(args: argparse.Namespace) -> int:
 
     import time
 
-    from ..processing.distributed import plan_document_shards
     from ..processing.run_manifest import build_run_manifest, validate_shard_outputs
     from ..processing.run_report import build_run_report
     from ..processing.shard_executor import LocalShardExecutor, run_shard_plan
@@ -2867,6 +2980,10 @@ def _handle_batch_run_start(args: argparse.Namespace) -> int:
             code="invalid_workers",
             exit_code=EXIT_USAGE,
         )
+    # Before anything is written: a run id that reaches the manifest cannot be
+    # withdrawn, and every later command re-reads it.
+    run_id = _validated_run_id(args.run_id)
+    _validated_report_path(getattr(args, "report", None))
 
     documents = _batch_run_documents(args)
     args.run_dir.mkdir(parents=True, exist_ok=True)
@@ -2878,9 +2995,9 @@ def _handle_batch_run_start(args: argparse.Namespace) -> int:
             exit_code=EXIT_USAGE,
         )
 
+    plan = _batch_run_plan(documents, args.shards)
     try:
-        plan = plan_document_shards(documents, shard_count=args.shards)
-        manifest = build_run_manifest(plan, run_id=args.run_id)
+        manifest = build_run_manifest(plan, run_id=run_id)
         store.save(manifest)
         result = run_shard_plan(
             plan,
@@ -2912,7 +3029,6 @@ def _handle_batch_run_resume(args: argparse.Namespace) -> int:
 
     import time
 
-    from ..processing.distributed import plan_document_shards
     from ..processing.resume import prepare_resume, resume_plan
     from ..processing.run_manifest import validate_shard_outputs
     from ..processing.run_report import build_run_report
@@ -2924,14 +3040,21 @@ def _handle_batch_run_resume(args: argparse.Namespace) -> int:
             code="invalid_workers",
             exit_code=EXIT_USAGE,
         )
+    max_attempts = _validated_max_attempts(args)
+    _validated_report_path(getattr(args, "report", None))
 
     manifest = _load_batch_run_manifest(args.run_dir)
     documents = _batch_run_documents(args)
     store = _batch_run_store(args.run_dir)
+    plan = _batch_run_plan(documents, manifest.shard_count)
 
     try:
-        plan = plan_document_shards(documents, shard_count=manifest.shard_count)
-        recovery = resume_plan(manifest, root=args.run_dir, expected_plan=plan)
+        recovery = resume_plan(
+            manifest,
+            root=args.run_dir,
+            expected_plan=plan,
+            max_attempts=max_attempts,
+        )
         manifest = prepare_resume(manifest, recovery)
         store.save(manifest)
         result = run_shard_plan(
@@ -2942,7 +3065,12 @@ def _handle_batch_run_resume(args: argparse.Namespace) -> int:
             store=store,
             executor=LocalShardExecutor(max_workers=args.workers),
         )
-        final = resume_plan(result.manifest, root=args.run_dir, expected_plan=plan)
+        final = resume_plan(
+            result.manifest,
+            root=args.run_dir,
+            expected_plan=plan,
+            max_attempts=max_attempts,
+        )
     except CliError:
         raise
     except Exception as exc:
@@ -2970,12 +3098,13 @@ def _handle_batch_run_report(args: argparse.Namespace) -> int:
     from ..processing.run_manifest import validate_shard_outputs
     from ..processing.run_report import build_run_report
 
+    max_attempts = _validated_max_attempts(args)
     manifest = _load_batch_run_manifest(args.run_dir)
     try:
         report = build_run_report(
             manifest,
             generated_at=time.time(),
-            resume=resume_plan(manifest, root=args.run_dir),
+            resume=resume_plan(manifest, root=args.run_dir, max_attempts=max_attempts),
             validation=validate_shard_outputs(manifest, root=args.run_dir),
         )
     except CliError:
