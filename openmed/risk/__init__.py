@@ -1,5 +1,16 @@
 """Re-identification risk package for section 4.2."""
 
+from .aggregate_dp import (
+    AggregateDPBudgetLedger,
+    AggregateDPRelease,
+    DPAggregateBudgetExceeded,
+    DPBudgetComposition,
+    DPBudgetExhausted,
+    DPBudgetLedger,
+    DPBudgetSpend,
+    laplace_aggregate,
+    release_aggregate,
+)
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
     CURRENT_EPSILON_POLICY_SCHEMA_VERSION,
@@ -55,6 +66,13 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
+from .membership import (
+    MembershipSelfTestError,
+    MembershipSelfTestResult,
+    bounded_membership_inference_self_test,
+    membership_inference_self_test,
+    run_membership_inference_self_test,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
@@ -96,6 +114,13 @@ from .synthetic_tabular import (
 
 __all__ = [
     "CURRENT_EPSILON_POLICY_SCHEMA_VERSION",
+    "AggregateDPBudgetLedger",
+    "AggregateDPRelease",
+    "DPBudgetExhausted",
+    "DPBudgetComposition",
+    "DPBudgetLedger",
+    "DPBudgetSpend",
+    "DPAggregateBudgetExceeded",
     "CompositionRule",
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_CORRELATION_TOLERANCE",
@@ -129,6 +154,8 @@ __all__ = [
     "LongitudinalEvidence",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "MembershipSelfTestError",
+    "MembershipSelfTestResult",
     "PopulationRiskAssessment",
     "SurrogateDrawKind",
     "SuppressionProposal",
@@ -138,16 +165,21 @@ __all__ = [
     "assess_population_risk",
     "budget_for_policy",
     "build_longitudinal_corpus",
+    "bounded_membership_inference_self_test",
     "cross_modal_linkage_risk_report",
     "epsilon_policy_for",
     "evaluate_budget",
     "load_epsilon_policies",
+    "laplace_aggregate",
+    "membership_inference_self_test",
     "fit_tabular_profile",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
     "quasi_identifier_key",
     "quasi_identifier_key_bytes",
     "risk_report",
+    "release_aggregate",
+    "run_membership_inference_self_test",
     "sample_synthetic_table",
     "tabular_fidelity_report",
     "MemoryCeilingError",
