@@ -24,17 +24,23 @@ from openmed.core.safety_sweep import hashed_span_surface
 from openmed.eval.cache import build_report_key, hash_fixture_set, load_or_compute
 from openmed.eval.calibrate import load_calibration_thresholds
 from openmed.eval.metrics import (
+    PIPELINE_EVAL_STAGES,
     EvalSpan,
+    F1Metrics,
+    PipelineFact,
     compute_confidence_intervals,
     compute_exact_span_f1,
+    compute_fact_level_f1,
     compute_latency_summary,
     compute_metrics_bundle,
     compute_relaxed_span_f1,
     compute_resource_metrics,
     compute_span_grounded_faithfulness,
     expected_calibration_error,
+    merge_fact_level_f1,
     merge_faithfulness_metrics,
     normalize_eval_spans,
+    normalize_pipeline_facts,
     reliability_bins,
 )
 from openmed.eval.relation_metrics import (
@@ -47,9 +53,14 @@ from openmed.eval.report import BenchmarkReport
 
 if TYPE_CHECKING:
     from openmed.eval.attacks.reid import SideChannelProbeResult
+    from openmed.eval.error_analysis import PipelineAttributionReport
 
 ModelRunner = Callable[["BenchmarkFixture", str, str], Iterable[Any]]
 RelationModelRunner = Callable[[Any, str, str], Iterable[Any]]
+PipelineStageRunner = Callable[
+    ["PipelineEvalFixture", Mapping[str, "PipelineStageOutput"]],
+    "PipelineStageOutput | Mapping[str, Any] | Iterable[Any]",
+]
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
 DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
@@ -60,6 +71,20 @@ DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
 )
 DEFAULT_SECTION_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "section_multilingual.jsonl"
+)
+DEFAULT_PIPELINE_EVAL_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "pipeline_e2e_synthetic.jsonl"
+)
+PIPELINE_EVAL_SCHEMA_VERSION = "openmed.eval.pipeline_e2e.v1"
+_PIPELINE_RAW_METADATA_KEYS = frozenset(
+    {
+        "deidentified_text",
+        "mention_text",
+        "raw_text",
+        "source_text",
+        "span_text",
+        "text",
+    }
 )
 
 
@@ -105,6 +130,158 @@ class FixtureResult:
     fixture_id: str
     predicted_spans: tuple[EvalSpan, ...]
     latency_ms: float
+
+
+@dataclass(frozen=True)
+class PipelineEvalFixture:
+    """One raw-note fixture with exact gold facts for all pipeline stages."""
+
+    fixture_id: str
+    text: str
+    gold_facts: tuple[PipelineFact, ...]
+    language: str = "en"
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> "PipelineEvalFixture":
+        """Build a pipeline fixture from a JSON-ready synthetic mapping."""
+
+        fixture_id = str(data.get("fixture_id") or data.get("id") or "fixture")
+        text = str(data.get("text") or "")
+        if not fixture_id:
+            raise ValueError("pipeline fixtures require a non-empty fixture_id")
+        if not text:
+            raise ValueError("pipeline fixtures require non-empty text")
+        metadata = data.get("metadata") or {}
+        if not isinstance(metadata, Mapping):
+            raise TypeError("pipeline fixture metadata must be a mapping")
+        return cls(
+            fixture_id=fixture_id,
+            text=text,
+            gold_facts=normalize_pipeline_facts(data.get("gold_facts") or ()),
+            language=str(data.get("language") or data.get("lang") or "en"),
+            metadata=dict(metadata),
+        )
+
+
+@dataclass(frozen=True)
+class PipelineStageOutput:
+    """Raw-text-free fact snapshots emitted by one evaluated pipeline stage."""
+
+    stage: str
+    facts: tuple[PipelineFact, ...]
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.stage not in PIPELINE_EVAL_STAGES:
+            allowed = ", ".join(PIPELINE_EVAL_STAGES)
+            raise ValueError(
+                f"unknown pipeline stage {self.stage!r}; expected one of {allowed}"
+            )
+        object.__setattr__(self, "facts", normalize_pipeline_facts(self.facts))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the intermediate output without raw clinical text."""
+
+        return {
+            "facts": [fact.to_dict() for fact in self.facts],
+            "metadata": _privacy_safe_pipeline_metadata(self.metadata),
+            "stage": self.stage,
+        }
+
+
+@dataclass(frozen=True)
+class PipelineFixtureEvalResult:
+    """Intermediate outputs, final F1, and attribution for one fixture."""
+
+    fixture_id: str
+    source_hash: str
+    stage_outputs: tuple[PipelineStageOutput, ...]
+    fact_level: F1Metrics
+    attribution: "PipelineAttributionReport"
+
+    def stage(self, name: str) -> PipelineStageOutput:
+        """Return one captured stage output by canonical name."""
+
+        for output in self.stage_outputs:
+            if output.stage == name:
+                return output
+        raise KeyError(name)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return deterministic, raw-text-free fixture evidence."""
+
+        return {
+            "attribution": self.attribution.to_dict(),
+            "fact_level": self.fact_level.to_dict(),
+            "fixture_id": self.fixture_id,
+            "source_hash": self.source_hash,
+            "stages": [output.to_dict() for output in self.stage_outputs],
+        }
+
+
+@dataclass(frozen=True)
+class PipelineEvalReport:
+    """Aggregate end-to-end fact scoring with first-defect attribution."""
+
+    suite: str
+    fixture_results: tuple[PipelineFixtureEvalResult, ...]
+    fact_level: F1Metrics
+    attribution: "PipelineAttributionReport"
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    schema_version: str = PIPELINE_EVAL_SCHEMA_VERSION
+
+    @property
+    def fixture_count(self) -> int:
+        """Return the number of evaluated fixtures."""
+
+        return len(self.fixture_results)
+
+    def to_metric(self) -> dict[str, Any]:
+        """Return the compact metric payload consumed by release gate G15."""
+
+        attribution = self.attribution.to_dict()
+        return {
+            "artifact_type": PIPELINE_EVAL_SCHEMA_VERSION,
+            "attribution": attribution,
+            "fact_f1": self.fact_level.f1,
+            "fact_level": self.fact_level.to_dict(),
+            "fixture_count": self.fixture_count,
+            "stage_error_counts": attribution["stage_error_counts"],
+            "total_end_to_end_errors": attribution["total_end_to_end_errors"],
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the full report with every captured intermediate output."""
+
+        return {
+            "attribution": self.attribution.to_dict(),
+            "fact_level": self.fact_level.to_dict(),
+            "fixture_count": self.fixture_count,
+            "fixtures": [result.to_dict() for result in self.fixture_results],
+            "metadata": _privacy_safe_pipeline_metadata(self.metadata),
+            "schema_version": self.schema_version,
+            "stage_order": list(PIPELINE_EVAL_STAGES),
+            "suite": self.suite,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize deterministic, privacy-safe end-to-end evidence."""
+
+        return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write the complete pipeline evaluation report."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return output_path
+
+    def write_attribution_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write the standalone per-stage attribution report for evidence bundles."""
+
+        return self.attribution.write_json(path, indent=indent)
 
 
 @dataclass(frozen=True)
@@ -374,6 +551,195 @@ class _FederatedFixtureRun:
     sandbox_violations: tuple[SandboxViolation, ...]
     elapsed_ms: float
     exit_code: int
+
+
+def load_pipeline_eval_fixtures(
+    path: str | Path = DEFAULT_PIPELINE_EVAL_FIXTURE,
+) -> list[PipelineEvalFixture]:
+    """Load committed synthetic end-to-end fixtures from JSON or JSONL."""
+
+    source = Path(path)
+    raw = source.read_text(encoding="utf-8")
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        payload = [
+            json.loads(line)
+            for line in raw.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+    if isinstance(payload, Mapping):
+        rows: Sequence[Any] = (payload,)
+    elif isinstance(payload, Sequence) and not isinstance(
+        payload, (str, bytes, bytearray)
+    ):
+        rows = payload
+    else:
+        raise ValueError("pipeline fixture file must contain an object or array")
+    fixtures = [
+        PipelineEvalFixture.from_mapping(row)
+        for row in rows
+        if isinstance(row, Mapping)
+    ]
+    if len(fixtures) != len(rows):
+        raise ValueError("every pipeline fixture must be a JSON object")
+    _validate_unique_pipeline_fixture_ids(fixtures)
+    return fixtures
+
+
+def run_pipeline_eval_fixture(
+    fixture: PipelineEvalFixture | Mapping[str, Any],
+    stage_runners: Mapping[str, PipelineStageRunner],
+) -> PipelineFixtureEvalResult:
+    """Run one fixture through de-id, NER, assertion, grounding, and FHIR.
+
+    Each injected runner receives the fixture plus an immutable-by-convention
+    mapping of prior outputs. This keeps component adapters offline and makes
+    every intermediate fact snapshot explicit without replacing runtime stages.
+    """
+
+    resolved_fixture = (
+        fixture
+        if isinstance(fixture, PipelineEvalFixture)
+        else PipelineEvalFixture.from_mapping(fixture)
+    )
+    missing = [stage for stage in PIPELINE_EVAL_STAGES if stage not in stage_runners]
+    unknown = sorted(set(stage_runners) - set(PIPELINE_EVAL_STAGES))
+    if missing or unknown:
+        problems: list[str] = []
+        if missing:
+            problems.append("missing: " + ", ".join(missing))
+        if unknown:
+            problems.append("unknown: " + ", ".join(unknown))
+        raise ValueError("invalid pipeline stage runners (" + "; ".join(problems) + ")")
+
+    outputs: dict[str, PipelineStageOutput] = {}
+    for stage in PIPELINE_EVAL_STAGES:
+        raw_output = stage_runners[stage](resolved_fixture, dict(outputs))
+        outputs[stage] = _coerce_pipeline_stage_output(stage, raw_output)
+
+    from openmed.eval.error_analysis import attribute_pipeline_errors
+
+    final_facts = outputs["fhir"].facts
+    fact_level = compute_fact_level_f1(resolved_fixture.gold_facts, final_facts)
+    attribution = attribute_pipeline_errors(
+        fixture_id=resolved_fixture.fixture_id,
+        gold_facts=resolved_fixture.gold_facts,
+        stage_outputs=outputs,
+    )
+    return PipelineFixtureEvalResult(
+        fixture_id=resolved_fixture.fixture_id,
+        source_hash=stable_hash(
+            {
+                "fixture_id": resolved_fixture.fixture_id,
+                "text": resolved_fixture.text,
+            }
+        ),
+        stage_outputs=tuple(outputs[stage] for stage in PIPELINE_EVAL_STAGES),
+        fact_level=fact_level,
+        attribution=attribution,
+    )
+
+
+def run_pipeline_eval(
+    fixtures: (
+        str
+        | Path
+        | PipelineEvalFixture
+        | Mapping[str, Any]
+        | Sequence[PipelineEvalFixture | Mapping[str, Any]]
+    ),
+    stage_runners: Mapping[str, PipelineStageRunner],
+    *,
+    suite: str = "pipeline-e2e",
+    metadata: Mapping[str, Any] | None = None,
+) -> PipelineEvalReport:
+    """Run and aggregate an offline end-to-end pipeline fixture suite."""
+
+    if isinstance(fixtures, (str, Path)):
+        resolved = load_pipeline_eval_fixtures(fixtures)
+    elif isinstance(fixtures, PipelineEvalFixture) or isinstance(fixtures, Mapping):
+        resolved = [
+            fixtures
+            if isinstance(fixtures, PipelineEvalFixture)
+            else PipelineEvalFixture.from_mapping(fixtures)
+        ]
+    else:
+        resolved = [
+            fixture
+            if isinstance(fixture, PipelineEvalFixture)
+            else PipelineEvalFixture.from_mapping(fixture)
+            for fixture in fixtures
+        ]
+    _validate_unique_pipeline_fixture_ids(resolved)
+    fixture_results = tuple(
+        run_pipeline_eval_fixture(fixture, stage_runners) for fixture in resolved
+    )
+
+    from openmed.eval.error_analysis import merge_pipeline_attribution_reports
+
+    attribution = merge_pipeline_attribution_reports(
+        (result.attribution for result in fixture_results),
+        suite=suite,
+    )
+    return PipelineEvalReport(
+        suite=suite,
+        fixture_results=fixture_results,
+        fact_level=merge_fact_level_f1(result.fact_level for result in fixture_results),
+        attribution=attribution,
+        metadata=dict(metadata or {}),
+    )
+
+
+def _coerce_pipeline_stage_output(
+    stage: str,
+    value: PipelineStageOutput | Mapping[str, Any] | Iterable[Any],
+) -> PipelineStageOutput:
+    if isinstance(value, PipelineStageOutput):
+        if value.stage != stage:
+            raise ValueError(
+                f"runner for {stage!r} returned output for {value.stage!r}"
+            )
+        return value
+    metadata: Mapping[str, Any] = {}
+    raw_facts: Iterable[Any]
+    if isinstance(value, Mapping) and "facts" in value:
+        returned_stage = str(value.get("stage") or stage)
+        if returned_stage != stage:
+            raise ValueError(
+                f"runner for {stage!r} returned output for {returned_stage!r}"
+            )
+        raw_facts = value.get("facts") or ()
+        raw_metadata = value.get("metadata") or {}
+        if not isinstance(raw_metadata, Mapping):
+            raise TypeError("pipeline stage metadata must be a mapping")
+        metadata = raw_metadata
+    elif isinstance(value, Mapping):
+        raw_facts = (value,)
+    elif isinstance(value, (str, bytes, bytearray)):
+        raise TypeError("pipeline stage runners must return fact records")
+    else:
+        raw_facts = value
+    return PipelineStageOutput(
+        stage=stage,
+        facts=normalize_pipeline_facts(raw_facts),
+        metadata=dict(metadata),
+    )
+
+
+def _validate_unique_pipeline_fixture_ids(
+    fixtures: Sequence[PipelineEvalFixture],
+) -> None:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for fixture in fixtures:
+        if fixture.fixture_id in seen:
+            duplicates.add(fixture.fixture_id)
+        seen.add(fixture.fixture_id)
+    if duplicates:
+        raise ValueError(
+            "duplicate pipeline fixture id(s): " + ", ".join(sorted(duplicates))
+        )
 
 
 def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
@@ -2717,6 +3083,22 @@ def _peak_rss_bytes() -> int | None:
     return rss * 1024
 
 
+def _privacy_safe_pipeline_metadata(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        safe: dict[str, Any] = {}
+        for raw_key in sorted(value, key=str):
+            key = str(raw_key)
+            item = value[raw_key]
+            if key.lower() in _PIPELINE_RAW_METADATA_KEYS:
+                safe[f"{key}_hash"] = stable_hash({"value": str(item)})
+            else:
+                safe[key] = _privacy_safe_pipeline_metadata(item)
+        return safe
+    if isinstance(value, (list, tuple)):
+        return [_privacy_safe_pipeline_metadata(item) for item in value]
+    return value
+
+
 def _plain(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {str(key): _plain(value[key]) for key in sorted(value, key=str)}
@@ -2749,20 +3131,30 @@ def _key_bytes(key: bytes | str) -> bytes:
 
 __all__ = [
     "ModelRunner",
+    "PipelineStageRunner",
     "RelationModelRunner",
     "BenchmarkFixture",
+    "DEFAULT_PIPELINE_EVAL_FIXTURE",
+    "PIPELINE_EVAL_SCHEMA_VERSION",
     "BoundaryLeakageFinding",
     "BoundaryLeakageResult",
     "FederatedDetectorSpec",
     "FederatedEvalReport",
     "FixtureResult",
+    "PipelineEvalFixture",
+    "PipelineEvalReport",
+    "PipelineFixtureEvalResult",
+    "PipelineStageOutput",
     "RelationFixtureResult",
     "SandboxViolation",
     "TrainingEvalOverlapFinding",
     "check_training_manifest_overlap",
     "load_fixtures",
+    "load_pipeline_eval_fixtures",
     "default_model_runner",
     "run_federated_leakage_eval",
+    "run_pipeline_eval",
+    "run_pipeline_eval_fixture",
     "run_benchmark",
     "run_relation_benchmark",
     "run_cross_lingual_transfer",

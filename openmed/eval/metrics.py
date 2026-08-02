@@ -6,7 +6,7 @@ import hashlib
 import random
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from math import ceil, isfinite
@@ -20,6 +20,35 @@ from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+PIPELINE_EVAL_STAGES: tuple[str, ...] = (
+    "deid",
+    "ner",
+    "assertion",
+    "grounding",
+    "fhir",
+)
+PIPELINE_STAGE_FACT_FIELDS: Mapping[str, tuple[str, ...]] = {
+    "deid": (),
+    "ner": ("start", "end", "label"),
+    "assertion": ("start", "end", "label", "assertion"),
+    "grounding": (
+        "start",
+        "end",
+        "label",
+        "assertion",
+        "code_system",
+        "code",
+    ),
+    "fhir": (
+        "start",
+        "end",
+        "label",
+        "assertion",
+        "code_system",
+        "code",
+        "resource_type",
+    ),
+}
 FAITHFULNESS_SCHEMA_VERSION = "openmed.eval.span_grounded_faithfulness.v1"
 MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
 RADIOLOGY_ENTITY_ANATOMY = "ANATOMY"
@@ -163,6 +192,62 @@ class F1Metrics:
 
     def __getitem__(self, key: str) -> int | float:
         return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class PipelineFact:
+    """One traceable clinical fact used by the end-to-end pipeline evaluator.
+
+    The record intentionally excludes mention text. Original-note offsets and a
+    stable fixture-local ``fact_id`` let stages preserve provenance without
+    placing raw clinical text in metrics, attribution reports, or gate evidence.
+    Fields become evaluable progressively from NER through FHIR export.
+    """
+
+    fact_id: str
+    start: int
+    end: int
+    label: str
+    assertion: str = ""
+    code_system: str = ""
+    code: str = ""
+    resource_type: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.fact_id.strip():
+            raise ValueError("pipeline facts require a non-empty fact_id")
+        if self.start < 0 or self.end < self.start:
+            raise ValueError("pipeline fact offsets are inconsistent")
+        if not self.label.strip():
+            raise ValueError("pipeline facts require a non-empty label")
+
+    def to_dict(self) -> dict[str, int | str]:
+        """Return a deterministic, raw-text-free fact payload."""
+
+        return {
+            "assertion": self.assertion,
+            "code": self.code,
+            "code_system": self.code_system,
+            "end": self.end,
+            "fact_id": self.fact_id,
+            "label": self.label,
+            "resource_type": self.resource_type,
+            "start": self.start,
+        }
+
+    def match_key(self) -> tuple[str | int, ...]:
+        """Return the exact fact-level matching key used for final F1."""
+
+        return (
+            self.fact_id,
+            self.start,
+            self.end,
+            self.label,
+            self.assertion,
+            self.code_system,
+            self.code,
+            self.resource_type,
+        )
 
 
 @dataclass(frozen=True)
@@ -1629,6 +1714,116 @@ def compute_exact_span_f1(
                 true_positives += 1
                 break
     return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def normalize_pipeline_fact(value: PipelineFact | Mapping[str, Any]) -> PipelineFact:
+    """Normalize one raw-text-free end-to-end fact record.
+
+    Args:
+        value: A :class:`PipelineFact` or mapping carrying stable source offsets,
+            a fixture-local fact id, and progressively populated clinical fields.
+
+    Returns:
+        A validated :class:`PipelineFact`.
+    """
+
+    if isinstance(value, PipelineFact):
+        return value
+    if not isinstance(value, Mapping):
+        raise TypeError("pipeline facts must be mappings or PipelineFact instances")
+
+    assertion = value.get("assertion")
+    if isinstance(assertion, Mapping):
+        assertion = "|".join(
+            f"{key}={assertion[key]}" for key in sorted(assertion, key=str)
+        )
+    return PipelineFact(
+        fact_id=str(value.get("fact_id") or value.get("id") or ""),
+        start=int(value.get("start", 0)),
+        end=int(value.get("end", value.get("start", 0))),
+        label=str(value.get("label") or value.get("type") or ""),
+        assertion=str(
+            assertion
+            if assertion is not None
+            else value.get("polarity") or value.get("assertion_status") or ""
+        ),
+        code_system=str(value.get("code_system") or value.get("system") or ""),
+        code=str(value.get("code") or value.get("concept_code") or ""),
+        resource_type=str(
+            value.get("resource_type") or value.get("fhir_resource_type") or ""
+        ),
+    )
+
+
+def normalize_pipeline_facts(
+    values: Iterable[PipelineFact | Mapping[str, Any]],
+) -> tuple[PipelineFact, ...]:
+    """Normalize a stage's facts and reject ambiguous duplicate ids."""
+
+    facts = tuple(normalize_pipeline_fact(value) for value in values)
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for fact in facts:
+        if fact.fact_id in seen:
+            duplicates.add(fact.fact_id)
+        seen.add(fact.fact_id)
+    if duplicates:
+        rendered = ", ".join(sorted(duplicates))
+        raise ValueError(f"duplicate pipeline fact id(s): {rendered}")
+    return facts
+
+
+def pipeline_fact_mismatch_fields(
+    gold: PipelineFact | Mapping[str, Any],
+    predicted: PipelineFact | Mapping[str, Any],
+    *,
+    stage: str,
+) -> tuple[str, ...]:
+    """Return fields first evaluable at ``stage`` that disagree with gold."""
+
+    if stage not in PIPELINE_STAGE_FACT_FIELDS:
+        allowed = ", ".join(PIPELINE_EVAL_STAGES)
+        raise ValueError(f"unknown pipeline stage {stage!r}; expected one of {allowed}")
+    expected = normalize_pipeline_fact(gold)
+    observed = normalize_pipeline_fact(predicted)
+    return tuple(
+        field_name
+        for field_name in PIPELINE_STAGE_FACT_FIELDS[stage]
+        if getattr(expected, field_name) != getattr(observed, field_name)
+    )
+
+
+def compute_fact_level_f1(
+    gold_facts: Iterable[PipelineFact | Mapping[str, Any]],
+    predicted_facts: Iterable[PipelineFact | Mapping[str, Any]],
+) -> F1Metrics:
+    """Compute exact end-to-end F1 over structured clinical facts.
+
+    Matching includes the stable fact id, original-note offsets, NER label,
+    assertion, terminology code, and FHIR resource type. Consequently a fact
+    corrupted by any pipeline stage is not counted as a true positive.
+    """
+
+    gold = normalize_pipeline_facts(gold_facts)
+    predicted = normalize_pipeline_facts(predicted_facts)
+    gold_keys = Counter(fact.match_key() for fact in gold)
+    predicted_keys = Counter(fact.match_key() for fact in predicted)
+    true_positives = sum((gold_keys & predicted_keys).values())
+    return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def merge_fact_level_f1(metrics: Iterable[F1Metrics]) -> F1Metrics:
+    """Merge per-fixture fact metrics without matching facts across fixtures."""
+
+    values = tuple(metrics)
+    true_positives = sum(metric.true_positives for metric in values)
+    predicted_count = sum(
+        metric.true_positives + metric.false_positives for metric in values
+    )
+    gold_count = sum(
+        metric.true_positives + metric.false_negatives for metric in values
+    )
+    return _f1_from_counts(true_positives, predicted_count, gold_count)
 
 
 def compute_relaxed_span_f1(
@@ -4020,6 +4215,8 @@ __all__ = [
     "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
     "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
+    "PIPELINE_EVAL_STAGES",
+    "PIPELINE_STAGE_FACT_FIELDS",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
     "RADIOLOGY_ENTITY_ANATOMY",
     "RADIOLOGY_ENTITY_OBSERVATION",
@@ -4033,6 +4230,7 @@ __all__ = [
     "CriticalFindingMiss",
     "CriticalFindingRecallMetrics",
     "EvalSpan",
+    "PipelineFact",
     "RateMetric",
     "F1Metrics",
     "UncertaintyAccuracyMetrics",
@@ -4051,6 +4249,9 @@ __all__ = [
     "FaithfulnessMetrics",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "normalize_pipeline_fact",
+    "normalize_pipeline_facts",
+    "pipeline_fact_mismatch_fields",
     "compute_span_grounded_faithfulness",
     "merge_faithfulness_metrics",
     "normalize_radiology_entity",
@@ -4063,6 +4264,8 @@ __all__ = [
     "compute_critical_finding_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
+    "compute_fact_level_f1",
+    "merge_fact_level_f1",
     "compute_radiology_entity_relation_metrics",
     "compute_radiology_uncertainty_accuracy",
     "section_boundary_accuracy",
