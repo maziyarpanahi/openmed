@@ -146,6 +146,72 @@ The PII command defaults to
 complete must still match its committed size and hash; a changed output stops
 the run with a clear integrity error instead of silently mixing results.
 
+## Distributed runs: start, resume, report
+
+A distributed run splits a corpus into deterministic shards, records each
+shard's state in a durable manifest, and can be resumed by run id after an
+interruption. Everything stays local: shards run on local workers and the
+manifest is an ordinary JSON file under the run directory.
+
+```bash
+# Start a run. --run-id is yours to choose and is stored verbatim, so it must
+# not embed a patient identifier or any other record-derived value.
+openmed batch-run start \
+  --run-dir runs/nightly-2026-08-02 \
+  --input-dir /data/notes \
+  --run-id nightly-2026-08-02 \
+  --shards 16 \
+  --workers 4
+
+# Resume after an interruption. Only shards that failed, went missing, or no
+# longer match their recorded digest are recomputed.
+openmed batch-run resume \
+  --run-dir runs/nightly-2026-08-02 \
+  --input-dir /data/notes \
+  --workers 4
+
+# Inspect a run without changing it.
+openmed batch-run report --run-dir runs/nightly-2026-08-02 --format markdown
+```
+
+Exit codes follow the repository's gate convention: `0` when every shard
+finished with a usable output, `1` when shards remain outstanding or have spent
+their attempt budget, and `2` for a usage error. A run that produced nothing
+never exits `0`. All three commands accept `--json` and emit a single envelope.
+
+### What a report contains, and what it deliberately omits
+
+Reports carry per-shard counts, attempt counters, durations, failures and
+fingerprints. They contain no note text, no document identifiers and no
+exception messages.
+
+| Emitted | Why it is safe to publish |
+| --- | --- |
+| `run_id` | Operator-supplied, length-bounded and control-character free. Reproduced rather than hashed because it is the key tying a report to its manifest. |
+| `plan_fingerprint`, per-shard `fingerprint` | sha256 over document hashes. |
+| `output_digest`, `output_bytes` | Digest and size of a shard's output. |
+| `status`, `attempts`, `document_count` | Enum values and counters. |
+| `duration_seconds`, `started_at`/`completed_at` | Timings. |
+| `worker_ref` | Hashed worker reference; the raw worker id is never published. |
+| `error_type` | Exception class name only, never its message. |
+
+Two omissions are deliberate. `output_path` is never published: a relative path
+is safe to *store*, but a filename is chosen by whoever configured the run and
+is not worth putting in an artifact that gets pasted into tickets. `worker_id`
+is never published either — the manifest bounds its length and rejects control
+characters, which does nothing to a host named after the ward it serves — so
+reports carry `worker_ref` instead. The same worker yields the same reference
+on every path of a report, so "which shards is this worker running" is still
+answerable.
+
+A zero-document shard that reports as `completed` is normal. Empty shards
+publish an empty output so that they settle rather than being re-queued by every
+later run.
+
+An empty straggler list means two different things, and the report says which:
+`straggler_detection_enabled` is `false` when too few shards had finished to
+establish a baseline, and `true` when detection ran and found nothing lagging.
+
 ## Operations
 
 `BatchProcessor` supports three operations:

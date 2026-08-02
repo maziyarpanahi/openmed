@@ -107,6 +107,18 @@ from .run_manifest import (
     shards_to_execute,
     validate_shard_outputs,
 )
+from .run_report import (
+    RUN_REPORT_SCHEMA_VERSION,
+    RUN_STATE_COMPLETE,
+    RUN_STATE_EXHAUSTED,
+    RUN_STATE_IN_PROGRESS,
+    UNRECOGNIZED_ERROR_TYPE,
+    BatchRunReport,
+    RunReportError,
+    RunReportPrivacyError,
+    assert_no_raw_text,
+    build_run_report,
+)
 from .sentences import SentenceSpan, segment_chinese_text, segment_text
 from .shard_executor import (
     DRIVER_ONLY_TYPES,
@@ -331,6 +343,16 @@ __all__ = [
     "reconcile_shard_attempts",
     "resume_plan",
     "worker_ref",
+    "RUN_REPORT_SCHEMA_VERSION",
+    "RUN_STATE_COMPLETE",
+    "RUN_STATE_EXHAUSTED",
+    "RUN_STATE_IN_PROGRESS",
+    "UNRECOGNIZED_ERROR_TYPE",
+    "BatchRunReport",
+    "RunReportError",
+    "RunReportPrivacyError",
+    "assert_no_raw_text",
+    "build_run_report",
     "ObjectStorageBatchResult",
     "ObjectStorageItemResult",
     "ObjectProgressCallback",
