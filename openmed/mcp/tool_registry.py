@@ -9,7 +9,13 @@ from dataclasses import dataclass
 from inspect import Parameter, Signature
 from typing import Any, Optional
 
-from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
+from openmed.core.schemas import load_schema
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -19,6 +25,15 @@ _SEMVER_RE = re.compile(
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
 _STABILITY_VALUES = frozenset({"experimental", "stable", "deprecated"})
+CLINICAL_STAGE_ORDER = (
+    "detect",
+    "context",
+    "sections",
+    "relations",
+    "ground",
+    "export",
+    "risk",
+)
 
 
 class ToolSchemaValidationError(ValueError):
@@ -77,6 +92,11 @@ class ToolSpec:
     version: str = "1.0.0"
     stability: str = "stable"
     parameters: Sequence[ToolParameter] = ()
+    title: str = ""
+    read_only_hint: bool = False
+    destructive_hint: bool = True
+    idempotent_hint: bool = False
+    open_world_hint: bool = True
 
     def __post_init__(self) -> None:
         """Normalize mutable inputs and validate core metadata."""
@@ -88,6 +108,10 @@ class ToolSpec:
             raise ValueError(
                 f"tool spec {self.name!r} stability must be one of {known}"
             )
+        title = self.title.strip()
+        if not title:
+            title = self.name.removeprefix("openmed_").replace("_", " ").title()
+        object.__setattr__(self, "title", title)
         object.__setattr__(self, "input_schema", deepcopy(dict(self.input_schema)))
         object.__setattr__(self, "output_schema", deepcopy(dict(self.output_schema)))
         object.__setattr__(self, "parameters", tuple(self.parameters))
@@ -100,6 +124,44 @@ class ToolSpec:
             [parameter.signature_parameter() for parameter in self.parameters],
             return_annotation=dict[str, Any],
         )
+
+    def annotations(self) -> JsonObject:
+        """Return MCP-compatible behavioral annotations for this tool."""
+
+        return {
+            "title": self.title,
+            "readOnlyHint": self.read_only_hint,
+            "destructiveHint": self.destructive_hint,
+            "idempotentHint": self.idempotent_hint,
+            "openWorldHint": self.open_world_hint,
+        }
+
+    def mcp_output_schema(self) -> JsonSchema:
+        """Return the MCP result schema, including structured failures."""
+
+        return {
+            "type": "object",
+            "anyOf": [
+                deepcopy(dict(self.output_schema)),
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "error": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "code": {"type": "string"},
+                                "message": {"type": "string"},
+                            },
+                            "required": ["code", "message"],
+                        },
+                        "is_error": {"type": "boolean", "const": True},
+                    },
+                    "required": ["error", "is_error"],
+                },
+            ],
+        }
 
     def document(self) -> JsonObject:
         """Return a machine-readable schema document for this tool."""
@@ -529,6 +591,16 @@ def _array(items: Mapping[str, Any]) -> JsonSchema:
     return {"type": "array", "items": dict(items)}
 
 
+def _openmed_span_schema() -> JsonSchema:
+    """Return the canonical span schema for a nested tool contract."""
+
+    schema = load_schema("span")
+    for metadata_key in ("$id", "$schema", "schema_version", "title"):
+        schema.pop(metadata_key, None)
+    schema["properties"]["canonical_label"]["enum"] = sorted(CANONICAL_LABELS)
+    return schema
+
+
 def _parameter(
     name: str,
     schema: Mapping[str, Any],
@@ -595,7 +667,7 @@ _KEEP_ALIVE_PARAMETER = _parameter(
 )
 _LANG_PARAMETER = _parameter(
     "lang",
-    _schema("string", enum=sorted(SUPPORTED_LANGUAGES)),
+    _schema("string", enum=sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)),
     str,
     "en",
     "PII language code.",
@@ -781,28 +853,314 @@ _WORKFLOW_RESULT_OUTPUT = _object(
         "trace",
     ),
 )
+_OPENMED_SPAN_OUTPUT = _openmed_span_schema()
+_CLINICAL_STAGE_SCHEMA = _schema(
+    "string",
+    enum=list(CLINICAL_STAGE_ORDER),
+)
+_CLINICAL_CONTRACT_ERROR_OUTPUT = _object(
+    properties={
+        "code": _schema("string"),
+        "message": _schema("string"),
+        "stage": _nullable(
+            "string",
+            enum=[*CLINICAL_STAGE_ORDER, None],
+        ),
+        "details": _object(),
+    },
+    required=("code", "message", "stage", "details"),
+    additional=False,
+)
+_CLINICAL_ERROR_OR_NULL = {"anyOf": [_CLINICAL_CONTRACT_ERROR_OUTPUT, _schema("null")]}
+_CLINICAL_TRACE_OUTPUT = _object(
+    properties={
+        "stage": _CLINICAL_STAGE_SCHEMA,
+        "status": _schema("string", enum=["planned", "completed"]),
+    },
+    required=("stage", "status"),
+    additional=False,
+)
+_GROUND_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.ground.v1"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "grounded_concepts": _array(_object()),
+        "error": _CLINICAL_ERROR_OR_NULL,
+    },
+    required=("schema_version", "status", "spans", "grounded_concepts", "error"),
+    additional=False,
+)
+_EXPORT_FHIR_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.export_fhir.v1"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "bundle": _object(),
+        "resource_count": _schema("integer", minimum=0),
+        "error": _CLINICAL_ERROR_OR_NULL,
+    },
+    required=(
+        "schema_version",
+        "status",
+        "spans",
+        "bundle",
+        "resource_count",
+        "error",
+    ),
+    additional=False,
+)
+_RISK_SCORE_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string", enum=["openmed.risk_score.v1"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "risk_report": _object(),
+        "error": _CLINICAL_ERROR_OR_NULL,
+    },
+    required=("schema_version", "status", "spans", "risk_report", "error"),
+    additional=False,
+)
+_CLINICAL_PIPELINE_OUTPUT = _object(
+    properties={
+        "schema_version": _schema(
+            "string",
+            enum=["openmed.clinical_pipeline.v1"],
+        ),
+        "status": _schema(
+            "string",
+            enum=["planned", "completed", "rejected", "failed"],
+        ),
+        "stages": _array(_CLINICAL_STAGE_SCHEMA),
+        "artifacts": _object(),
+        "final_output": {},
+        "error": _CLINICAL_ERROR_OR_NULL,
+        "trace": _array(_CLINICAL_TRACE_OUTPUT),
+    },
+    required=(
+        "schema_version",
+        "status",
+        "stages",
+        "artifacts",
+        "final_output",
+        "error",
+        "trace",
+    ),
+    additional=False,
+)
+_SPAN_ARRAY_OR_NULL = {"anyOf": [_array(_OPENMED_SPAN_OUTPUT), _schema("null")]}
+_STRING_ARRAY_OR_NULL = {"anyOf": [_array(_schema("string")), _schema("null")]}
+_OBJECT_ARRAY_OR_NULL = {"anyOf": [_array(_object()), _schema("null")]}
+_CLINICAL_STAGES_PARAMETER = _parameter(
+    "stages",
+    {
+        "type": "array",
+        "items": _CLINICAL_STAGE_SCHEMA,
+        "minItems": 1,
+        "uniqueItems": True,
+    },
+    list[str],
+    description=(
+        "Clinical workflow stages in canonical order: detect, context, sections, "
+        "relations, ground, export, risk."
+    ),
+)
+_CLINICAL_SPANS_PARAMETER = _parameter(
+    "spans",
+    _array(_OPENMED_SPAN_OUTPUT),
+    list[dict[str, Any]],
+    description="Canonical, text-free OpenMedSpan artifacts to process.",
+)
+_FHIR_RESOURCE_SCHEMA = _object(
+    properties={"resourceType": _schema("string")},
+    required=("resourceType",),
+    additional=True,
+)
+_FHIR_BUNDLE_ENTRY_OUTPUT = _object(
+    properties={
+        "fullUrl": _schema("string"),
+        "resource": _object(),
+        "request": _nullable("object"),
+    },
+    required=("fullUrl", "resource"),
+)
+_FHIR_BUNDLE_OUTPUT = _object(
+    properties={
+        "resourceType": _schema("string", enum=["Bundle"]),
+        "type": _schema("string"),
+        "entry": _array(_FHIR_BUNDLE_ENTRY_OUTPUT),
+    },
+    required=("resourceType", "type", "entry"),
+)
+_QUASI_IDENTIFIER_OUTPUT = _object(
+    properties={
+        "record_index": _schema("integer"),
+        "record_id": _nullable("string"),
+        "category": _schema("string"),
+        "value": _schema("string"),
+        "normalized_value": _schema("string"),
+        "source": _schema("string"),
+        "start": _nullable("integer"),
+        "end": _nullable("integer"),
+        "section": _nullable("string"),
+    },
+    required=(
+        "record_index",
+        "record_id",
+        "category",
+        "value",
+        "normalized_value",
+        "source",
+        "start",
+        "end",
+        "section",
+    ),
+)
+_QUASI_IDENTIFIER_KEY_OUTPUT = _object(
+    properties={
+        "category": _schema("string"),
+        "values": _array(_schema("string")),
+    },
+    required=("category", "values"),
+)
+_SINGLETON_RECORD_OUTPUT = _object(
+    properties={
+        "record_index": _schema("integer"),
+        "record_id": _nullable("string"),
+        "effective_k": _schema("integer"),
+        "quasi_identifier_key": _array(_QUASI_IDENTIFIER_KEY_OUTPUT),
+    },
+    required=(
+        "record_index",
+        "record_id",
+        "effective_k",
+        "quasi_identifier_key",
+    ),
+)
+_RISK_REPORT_OUTPUT = _object(
+    properties={
+        "leakage_rate": _schema("number"),
+        "reid_rate": _schema("number"),
+        "k_min": _schema("integer"),
+        "singleton_records": _array(_SINGLETON_RECORD_OUTPUT),
+        "quasi_identifiers": _array(_QUASI_IDENTIFIER_OUTPUT),
+    },
+    required=(
+        "leakage_rate",
+        "reid_rate",
+        "k_min",
+        "singleton_records",
+        "quasi_identifiers",
+    ),
+)
+_AUDIT_SPAN_OUTPUT = _object(
+    properties={
+        "start": _schema("integer"),
+        "end": _schema("integer"),
+        "label": _schema("string"),
+        "canonical_label": _schema("string"),
+        "sources": _array(_schema("string")),
+        "confidence": _schema("number"),
+        "threshold": _schema("number"),
+        "action": _schema("string"),
+        "surrogate": _nullable("string"),
+        "text_hash": _schema("string"),
+        "evidence": _object(),
+        "context": _object(),
+    },
+    required=(
+        "start",
+        "end",
+        "label",
+        "canonical_label",
+        "sources",
+        "confidence",
+        "threshold",
+        "action",
+        "surrogate",
+        "text_hash",
+    ),
+)
+_AUDIT_SIGNATURE_OUTPUT = _object(
+    properties={
+        "key_id": _schema("string"),
+        "algorithm": _schema("string"),
+        "value": _schema("string"),
+    },
+    required=("key_id", "algorithm", "value"),
+)
+_SIGNED_AUDIT_REPORT_OUTPUT = _object(
+    properties={
+        "policy": _schema("string"),
+        "resolved_profile": _object(),
+        "detectors": _array(_object()),
+        "safety_sweep": _object(),
+        "spans": _array(_AUDIT_SPAN_OUTPUT),
+        "thresholds": _object(),
+        "residual_risk": _object(),
+        "openmed_version": _schema("string"),
+        "manifest_hash": _schema("string"),
+        "document_length": _schema("integer"),
+        "input_hash": _schema("string"),
+        "deidentified_text_hash": _schema("string"),
+        "repro_hash": _schema("string"),
+        "signature": _AUDIT_SIGNATURE_OUTPUT,
+    },
+    required=(
+        "policy",
+        "spans",
+        "openmed_version",
+        "manifest_hash",
+        "document_length",
+        "input_hash",
+        "deidentified_text_hash",
+        "repro_hash",
+        "signature",
+    ),
+)
 
 
 def _tool_spec(
     *,
     name: str,
+    title: str,
     description: str,
     parameters: Sequence[ToolParameter],
     output_schema: Mapping[str, Any],
+    read_only_hint: bool,
+    destructive_hint: bool = False,
+    idempotent_hint: bool = True,
+    open_world_hint: bool = False,
 ) -> ToolSpec:
     return ToolSpec(
         name=name,
+        title=title,
         description=description,
         input_schema=input_schema(parameters),
         output_schema=output_schema,
         parameters=parameters,
+        read_only_hint=read_only_hint,
+        destructive_hint=destructive_hint,
+        idempotent_hint=idempotent_hint,
+        open_world_hint=open_world_hint,
     )
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
     _tool_spec(
         name="openmed_analyze_text",
+        title="Analyze Clinical Text",
         description="Run OpenMed named-entity recognition on clinical text.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _MODEL_NAME_PARAMETER,
@@ -824,7 +1182,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_extract_pii",
+        title="Extract PII and PHI",
         description="Extract PII/PHI entities from clinical text.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _PII_MODEL_NAME_PARAMETER,
@@ -838,7 +1198,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_deidentify",
+        title="De-identify Clinical Text",
         description="De-identify text by masking, removing, replacing, hashing, or shifting.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _parameter(
@@ -865,7 +1227,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_list_models",
+        title="List Available Models",
         description="List OpenMed model registry entries.",
+        read_only_hint=True,
         parameters=(
             _parameter("category", _nullable("string"), Optional[str], None),
             _parameter("pii_language", _nullable("string"), Optional[str], None),
@@ -875,19 +1239,25 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_list_pii_languages",
+        title="List PII Languages",
         description="List supported PII languages and default models.",
+        read_only_hint=True,
         parameters=(),
         output_schema=_LIST_PII_LANGUAGES_OUTPUT,
     ),
     _tool_spec(
         name="openmed_loaded_models",
+        title="List Loaded Models",
         description="Return currently loaded model resources.",
+        read_only_hint=True,
         parameters=(),
         output_schema=_GENERIC_OBJECT_OUTPUT,
     ),
     _tool_spec(
         name="openmed_unload_model",
+        title="Unload Model",
         description="Unload one inactive model, or all inactive models.",
+        read_only_hint=False,
         parameters=(
             _parameter("model_name", _nullable("string"), Optional[str], None),
             _parameter("all_models", _schema("boolean"), bool, False),
@@ -896,10 +1266,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_run_workflow",
+        title="Run Clinical Workflow",
         description=(
             "Run a stateful multi-step OpenMed workflow with server-side "
             "intermediate handles and PHI-safe egress."
         ),
+        read_only_hint=False,
         parameters=(
             _parameter("pipeline", _object(), dict[str, Any]),
             _parameter("session_id", _nullable("string"), Optional[str], None),
@@ -907,11 +1279,268 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         ),
         output_schema=_WORKFLOW_RESULT_OUTPUT,
     ),
+    _tool_spec(
+        name="openmed_ground",
+        title="Ground Clinical Spans",
+        description=(
+            "Ground canonical OpenMedSpan artifacts to clinical coding systems."
+        ),
+        read_only_hint=True,
+        open_world_hint=True,
+        parameters=(
+            _CLINICAL_SPANS_PARAMETER,
+            _parameter(
+                "vocabularies",
+                _STRING_ARRAY_OR_NULL,
+                Optional[list[str]],
+                None,
+                "Optional grounding vocabularies to constrain.",
+            ),
+            _parameter(
+                "max_candidates",
+                _schema("integer", minimum=1),
+                int,
+                5,
+                "Maximum grounding candidates per span.",
+            ),
+            _parameter(
+                "allow_external_llm",
+                _schema("boolean"),
+                bool,
+                False,
+                "Reserve privacy-gateway-mediated external LLM grounding.",
+            ),
+        ),
+        output_schema=_GROUND_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_export_fhir",
+        title="Export Clinical Spans to FHIR",
+        description="Export canonical OpenMedSpan artifacts to a FHIR Bundle.",
+        read_only_hint=True,
+        parameters=(
+            _CLINICAL_SPANS_PARAMETER,
+            _parameter(
+                "resources",
+                _OBJECT_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional prebuilt standalone FHIR resources.",
+            ),
+            _parameter("doc_id", _schema("string"), str, "workflow"),
+            _parameter(
+                "bundle_type",
+                _schema("string", enum=["collection", "transaction", "batch"]),
+                str,
+                "collection",
+            ),
+        ),
+        output_schema=_EXPORT_FHIR_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_risk_score",
+        title="Score Clinical Re-identification Risk",
+        description=(
+            "Score residual re-identification risk over de-identified clinical "
+            "artifacts."
+        ),
+        read_only_hint=True,
+        parameters=(
+            _CLINICAL_SPANS_PARAMETER,
+            _parameter(
+                "deidentified_text",
+                _nullable("string"),
+                Optional[str],
+                None,
+                "Optional de-identified text for residual-risk scoring.",
+            ),
+            _parameter(
+                "records",
+                _OBJECT_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional structured records for residual-risk scoring.",
+            ),
+            _parameter(
+                "quasi_identifiers",
+                _STRING_ARRAY_OR_NULL,
+                Optional[list[str]],
+                None,
+                "Optional quasi-identifier field names.",
+            ),
+        ),
+        output_schema=_RISK_SCORE_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_clinical_pipeline",
+        title="Plan Clinical Pipeline",
+        description=(
+            "Plan and validate declarative clinical stages without silently "
+            "reordering them."
+        ),
+        read_only_hint=True,
+        open_world_hint=True,
+        parameters=(
+            _CLINICAL_STAGES_PARAMETER,
+            _parameter(
+                "text",
+                _nullable("string"),
+                Optional[str],
+                None,
+                "Optional clinical text reserved for later pipeline execution.",
+            ),
+            _parameter(
+                "spans",
+                _SPAN_ARRAY_OR_NULL,
+                Optional[list[dict[str, Any]]],
+                None,
+                "Optional canonical OpenMedSpan artifacts.",
+            ),
+            _parameter(
+                "options",
+                _nullable("object"),
+                Optional[dict[str, Any]],
+                None,
+                "Execution options reserved for later pipeline handlers.",
+            ),
+            _parameter(
+                "allow_external_llm",
+                _schema("boolean"),
+                bool,
+                False,
+                "Reserve external LLM routing through the privacy gateway.",
+            ),
+            _parameter("session_id", _nullable("string"), Optional[str], None),
+            _parameter("workflow_id", _nullable("string"), Optional[str], None),
+        ),
+        output_schema=_CLINICAL_PIPELINE_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_fhir_bundle",
+        title="Assemble FHIR Bundle",
+        description="Assemble FHIR resources into a R4 bundle. ",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "resources", _array(_FHIR_RESOURCE_SCHEMA), list[dict[str, Any]]
+            ),
+            _parameter("doc_id", _schema("string"), str, "openmed-document"),
+            _parameter(
+                "bundle_type",
+                _schema(
+                    "string",
+                    enum=["transaction", "batch", "collection"],
+                ),
+                str,
+                "transaction",
+            ),
+        ),
+        output_schema=_FHIR_BUNDLE_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_risk_report",
+        title="Score Re-identification Risk",
+        description="Reidentification risk for de-identified text",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "deidentified",
+                {},
+                Any,
+            ),
+            _parameter(
+                "original",
+                _nullable("object"),
+                Optional[Any],
+                None,
+            ),
+            _parameter(
+                "aux",
+                _nullable("object"),
+                Optional[Any],
+                None,
+            ),
+        ),
+        output_schema=_RISK_REPORT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_signed_audit_report",
+        title="Generate Signed Audit Report",
+        description="Run deidentification with auditing set as True and return a signed audit report",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _TEXT_PARAMETER,
+            _parameter(
+                "method",
+                _schema(
+                    "string",
+                    enum=["hash", "mask", "remove", "replace", "shift_dates"],
+                ),
+                str,
+                "mask",
+            ),
+            _PII_MODEL_NAME_PARAMETER,
+            _DEID_CONFIDENCE_PARAMETER,
+            _LANG_PARAMETER,
+            _parameter(
+                "signing_key",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter("key_id", _schema("string"), str, "release"),
+            _KEEP_ALIVE_PARAMETER,
+        ),
+        output_schema=_SIGNED_AUDIT_REPORT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_search_models",
+        title="Search Available Models",
+        description="Search OpenMed models from the canonical manifest by category, "
+        "license, size and language.",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "category",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter(
+                "language",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter(
+                "max_size_mb",
+                _nullable("number", minimum=0.0),
+                Optional[float],
+                None,
+            ),
+            _parameter(
+                "license",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter("limit", _schema("integer", minimum=0), int, 50),
+        ),
+        output_schema=_LIST_MODELS_OUTPUT,
+    ),
 )
-
 TOOL_REGISTRY = ToolRegistry(TOOL_SPECS)
 
 __all__ = [
+    "CLINICAL_STAGE_ORDER",
     "TOOL_REGISTRY",
     "TOOL_SPECS",
     "ToolCompatibilityError",

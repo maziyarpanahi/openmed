@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -32,7 +33,14 @@ REQUIRED_FIELDS = frozenset(
     }
 )
 OPTIONAL_ENRICHMENT_FIELDS = frozenset(
-    {"latency_ms", "peak_ram_mb", "recommended_tier"}
+    {
+        "disk_mb",
+        "download_mb",
+        "latency_ms",
+        "peak_ram_mb",
+        "recommended_tier",
+        "script_coverage",
+    }
 )
 MANIFEST_FIELDS = REQUIRED_FIELDS | OPTIONAL_ENRICHMENT_FIELDS
 RECOMMENDED_TIERS = frozenset({"phone", "laptop", "workstation", "server"})
@@ -72,6 +80,9 @@ def validate_manifest_row(row: Mapping[str, Any]) -> None:
         _validate_number_map(row["latency_ms"], "latency_ms")
     if "peak_ram_mb" in row:
         _validate_number_map(row["peak_ram_mb"], "peak_ram_mb")
+    for field in ("download_mb", "disk_mb"):
+        if field in row:
+            _validate_positive_number(row[field], field)
     if "recommended_tier" in row:
         recommended_tier = row["recommended_tier"]
         if recommended_tier not in RECOMMENDED_TIERS:
@@ -146,7 +157,14 @@ def enrich_manifest_lines(
             continue
 
         enriched = dict(row)
-        for field in ("benchmark", "latency_ms", "peak_ram_mb", "recommended_tier"):
+        for field in (
+            "benchmark",
+            "download_mb",
+            "disk_mb",
+            "latency_ms",
+            "peak_ram_mb",
+            "recommended_tier",
+        ):
             if field in measurement:
                 enriched[field] = measurement[field]
 
@@ -230,7 +248,13 @@ def _normalize_measurement(record: Mapping[str, Any]) -> tuple[str, dict[str, An
         raise ValueError("measurement record must include repo_id")
 
     measurement: dict[str, Any] = {}
-    for field in ("latency_ms", "peak_ram_mb", "recommended_tier"):
+    for field in (
+        "download_mb",
+        "disk_mb",
+        "latency_ms",
+        "peak_ram_mb",
+        "recommended_tier",
+    ):
         if field in record:
             measurement[field] = record[field]
 
@@ -276,6 +300,11 @@ def _validate_nullable_positive_int(row: Mapping[str, Any], field: str) -> None:
         return
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ValueError(f"{field} must be a positive integer or null")
+
+
+def _validate_positive_number(value: Any, field: str) -> None:
+    if not _is_number(value) or not math.isfinite(float(value)) or float(value) <= 0:
+        raise ValueError(f"{field} must be a positive number")
 
 
 def _validate_benchmark(value: Any) -> None:

@@ -1,6 +1,7 @@
 package com.openmed.openmedkit
 
 import com.openmed.openmedkit.policy.PolicyProfiles
+import java.io.Closeable
 import java.io.File
 
 /**
@@ -11,7 +12,7 @@ class OpenMedKit(
     private val decoder: TokenClassificationDecoder = TokenClassificationDecoder(),
     private val merger: PiiEntityMerger = PiiEntityMerger(),
     private val deidentifyEngine: DeidentifyEngine = DeidentifyEngine(),
-) {
+) : Closeable {
     constructor(
         backend: OpenMedBackend,
         decoder: TokenClassificationDecoder = TokenClassificationDecoder(),
@@ -78,8 +79,12 @@ class OpenMedKit(
 
         val chunkEntities = chunks.flatMap { chunk ->
             val chunkText = text.substring(chunk.start, chunk.end)
+            val baseScalarOffset = UnicodeOffsetContract.utf16ToScalarOffset(
+                text,
+                chunk.start,
+            )
             extractPii(chunkText, confidenceThreshold, useSmartMerging)
-                .mapNotNull { it.offsetBy(chunk.start, text) }
+                .mapNotNull { it.offsetBy(baseScalarOffset, text) }
         }
 
         val repaired = SpanRepair.repair(
@@ -126,6 +131,10 @@ class OpenMedKit(
         return deidentifyEngine.deidentify(text, entities, profile)
     }
 
+    override fun close() {
+        classifier.close()
+    }
+
     internal fun makeTokenChunks(
         text: String,
         chunkTokenLimit: Int,
@@ -167,10 +176,31 @@ class OpenMedKit(
     )
 
     companion object {
+        const val VERSION = "2.0.0"
+
         /**
-         * Placeholder version until Android artifacts are released.
+         * Load an exported OpenMed ONNX directory for local Android inference.
          */
-        const val VERSION = "0.0.0-dev"
+        @JvmStatic
+        fun fromDirectory(
+            modelDirectory: File,
+            variant: String = "int8",
+        ): OpenMedKit {
+            val modelFileName = when (variant.lowercase()) {
+                "int8" -> "model_int8.onnx"
+                "fp32" -> "model.onnx"
+                "fp16" -> "model_fp16.onnx"
+                else -> throw IllegalArgumentException(
+                    "variant must be int8, fp32, or fp16",
+                )
+            }
+            return OpenMedKit(
+                OpenMedBackend(
+                    modelDirectory = modelDirectory,
+                    modelFile = File(modelDirectory, modelFileName),
+                ),
+            )
+        }
 
         internal fun deduplicateOverlappingEntities(
             entities: List<EntityPrediction>,
@@ -422,12 +452,14 @@ private data class LabeledPattern(
         return regex.findAll(text).mapNotNull { match ->
             val group = match.groups[groupIndex] ?: return@mapNotNull null
             val range = group.range
+            val utf16Start = range.first
+            val utf16End = range.last + 1
             EntityPrediction(
                 label = label,
-                text = text.substring(range.first, range.last + 1),
+                text = text.substring(utf16Start, utf16End),
                 confidence = 1.0f,
-                start = range.first,
-                end = range.last + 1,
+                start = UnicodeOffsetContract.utf16ToScalarOffset(text, utf16Start),
+                end = UnicodeOffsetContract.utf16ToScalarOffset(text, utf16End),
             )
         }.toList()
     }
@@ -454,11 +486,15 @@ private fun EntityPrediction.offsetBy(
 ): EntityPrediction? {
     val start = start + baseOffset
     val end = end + baseOffset
-    if (start < 0 || end <= start || end > sourceText.length) {
+    if (
+        start < 0 ||
+        end <= start ||
+        end > UnicodeOffsetContract.scalarLength(sourceText)
+    ) {
         return null
     }
     return copy(
-        text = sourceText.substring(start, end),
+        text = UnicodeOffsetContract.substring(sourceText, start, end),
         start = start,
         end = end,
     )

@@ -116,6 +116,33 @@ def test_complete_evidence_bundle_hashes_artifacts_and_covers_g1_g8(
     assert (tmp_path / "bundle" / eval_entry["bundle_path"]).is_file()
 
 
+def test_evidence_bundle_embeds_g9_relation_f1_details(tmp_path: Path) -> None:
+    artifacts = _complete_artifacts(tmp_path)
+    report = _gate_report(artifacts)
+    report.gate_results = (
+        *report.gate_results,
+        GateCheck(
+            "G9",
+            True,
+            details={
+                "per_relation_type": {"INHIBITOR": {"strict_f1": 0.91}},
+                "relaxed": {"f1": 0.95, "lower": 0.94},
+                "strict": {"f1": 0.91, "lower": 0.90},
+            },
+        ),
+    )
+
+    result = bundle_gate_evidence(report, tmp_path / "bundle")
+
+    g9 = next(
+        check
+        for check in result.manifest["gate_report"]["gate_results"]
+        if check["gate"] == "G9"
+    )
+    assert g9["details"]["strict"]["lower"] == 0.90
+    assert g9["details"]["per_relation_type"]["INHIBITOR"]["strict_f1"] == 0.91
+
+
 def test_missing_required_artifact_is_manifested_with_affected_gate(
     tmp_path: Path,
 ) -> None:
@@ -143,6 +170,24 @@ def test_missing_required_artifact_is_manifested_with_affected_gate(
     ]
     assert result.manifest["gates"]["G8"]["status"] == "missing"
     assert result.manifest["gates"]["G8"]["missing_artifacts"] == ["span_fixtures"]
+
+
+def test_faithfulness_report_artifact_covers_g10(tmp_path: Path) -> None:
+    faithfulness_path = _write(
+        tmp_path / "faithfulness.json",
+        '{"ungrounded_fact_rate": 0.0}\n',
+    )
+    artifact = _artifact(faithfulness_path, "faithfulness_report", ["G10"])
+    report = _gate_report([*_complete_artifacts(tmp_path), artifact])
+    report.gate_results = (
+        *report.gate_results,
+        GateCheck("G10", True, details={"evidence": [artifact]}),
+    )
+
+    result = bundle_gate_evidence(report, tmp_path / "bundle")
+
+    assert result.manifest["gates"]["G10"]["status"] == "covered"
+    assert result.manifest["gates"]["G10"]["artifacts"] == ["faithfulness_report"]
 
 
 def test_manifest_is_deterministic_across_repeated_runs(tmp_path: Path) -> None:

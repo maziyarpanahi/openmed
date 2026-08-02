@@ -31,17 +31,18 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
+      uv_lock_sha256: ${{ steps.digest.outputs.uv_lock_sha256 }}
 
     steps:
       - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Set up uv (cache disabled for clean resolver state)
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@v8.3.2
         with:
           enable-cache: false
 
@@ -159,6 +160,7 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
               gh.write(f"digest={digest}\n")
+              gh.write(f"uv_lock_sha256=sha256:{lock_hash}\n")
           PYEOF
 
       - name: Upload reproducibility digest artifact
@@ -180,12 +182,12 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Set up uv (cache disabled for independent installs)
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@v8.3.2
         with:
           enable-cache: false
 
@@ -256,6 +258,7 @@ jobs:
         run: |
           echo "Lock gate passed."
           echo "Reproducibility digest: ${{ needs.lock-integrity.outputs.digest }}"
+          echo "uv.lock sha256: ${{ needs.lock-integrity.outputs.uv_lock_sha256 }}"
           echo ""
           echo "This confirms:"
           echo "  - Every transitive dependency is pinned to an exact version."
