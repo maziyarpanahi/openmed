@@ -6,7 +6,7 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from openmed.core.result_cache import ResultCache, freeze_value
 
@@ -14,12 +14,22 @@ from .backend import BackendIdentity, TerminologyBackend, normalize_surface
 
 __all__ = [
     "ConceptNormalizationCache",
+    "IndexBoundCache",
     "NormalizationCacheStats",
     "RankedCandidateCache",
     "make_index_cache_key",
     "make_normalization_cache_key",
     "make_rerank_cache_key",
 ]
+
+
+@runtime_checkable
+class IndexBoundCache(Protocol):
+    """Cache that can evict entries when its grounding index changes."""
+
+    def bind_index(self, index_key: str) -> bool:
+        """Bind to ``index_key`` and return whether stale entries were evicted."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -49,6 +59,38 @@ class ConceptNormalizationCache:
         self._hits = 0
         self._misses = 0
         self._writes = 0
+        self._index_key: str | None = None
+        self._invalidations = 0
+
+    @property
+    def index_key(self) -> str | None:
+        """Grounding index key currently governing the cached results."""
+
+        return self._index_key
+
+    @property
+    def invalidation_count(self) -> int:
+        """Number of index changes that evicted cached results."""
+
+        return self._invalidations
+
+    def bind_index(self, index_key: str) -> bool:
+        """Bind this cache to an index and evict entries when the key drifts."""
+
+        resolved = str(index_key).strip()
+        if not resolved:
+            raise ValueError("index_key must not be empty")
+        if self._index_key == resolved:
+            return False
+
+        should_invalidate = self._index_key is not None or len(self._store) > 0
+        self._index_key = resolved
+        if not should_invalidate:
+            return False
+
+        self.clear()
+        self._invalidations += 1
+        return True
 
     def get(self, normalized_mention: str, backend: TerminologyBackend) -> Any | None:
         """Return a cached ranking tuple, if present."""
@@ -113,6 +155,38 @@ class RankedCandidateCache:
         self._hits = 0
         self._misses = 0
         self._writes = 0
+        self._index_key: str | None = None
+        self._invalidations = 0
+
+    @property
+    def index_key(self) -> str | None:
+        """Grounding index key currently governing the cached rankings."""
+
+        return self._index_key
+
+    @property
+    def invalidation_count(self) -> int:
+        """Number of index changes that evicted cached rankings."""
+
+        return self._invalidations
+
+    def bind_index(self, index_key: str) -> bool:
+        """Bind this cache to an index and evict entries when the key drifts."""
+
+        resolved = str(index_key).strip()
+        if not resolved:
+            raise ValueError("index_key must not be empty")
+        if self._index_key == resolved:
+            return False
+
+        should_invalidate = self._index_key is not None or len(self._store) > 0
+        self._index_key = resolved
+        if not should_invalidate:
+            return False
+
+        self.clear()
+        self._invalidations += 1
+        return True
 
     def get(
         self, mention: str, vocab_version: str, fingerprint: Any = None

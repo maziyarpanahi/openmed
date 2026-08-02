@@ -61,6 +61,7 @@ FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
 GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
+CROSS_DOCUMENT_LINKAGE_GATE = "cross_document_linkage"
 EXPORT_VARIANT_GATE = "export_variants"
 I18N_THROUGHPUT_GATE = "i18n_throughput"
 I18N_THROUGHPUT_REGRESSION_THRESHOLD = 0.20
@@ -94,6 +95,8 @@ G13_RADIOLOGY_UNCERTAINTY_ACCURACY_FLOOR = G13_UNCERTAINTY_ACCURACY_FLOOR
 #: synthetic site/note-type/demographic surrogate groups before G14 quarantines.
 G14_EXTRACTION_DISPARITY_CEILING = 0.050
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
+G10_UNGROUNDED_FACT_CEILING = 0.0
+DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING = 0.0
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "as": 0.0,
     "mr": 0.0,
@@ -607,6 +610,9 @@ class ReleaseGate:
         thresholds_matrix: Mapping[str, Any] | None = None,
         thresholds_matrix_path: str | Path | None = None,
         model_steward_config: Mapping[str, Any] | ModelStewardConfig | None = None,
+        cross_document_linkage_ceiling: float = (
+            DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING
+        ),
         signing_key: bytes | str | None = None,
         key_id: str = "release-gate",
     ) -> None:
@@ -619,6 +625,10 @@ class ReleaseGate:
         )
         self.model_steward_config = ModelStewardConfig.from_mapping(
             model_steward_config
+        )
+        self.cross_document_linkage_ceiling = _probability_ceiling(
+            cross_document_linkage_ceiling,
+            name="cross_document_linkage_ceiling",
         )
         self.signing_key = (
             signing_key
@@ -790,10 +800,18 @@ class ReleaseGate:
         if export_manifest:
             checks.extend(_export_variant_checks(export_manifest, metrics, metadata))
         checks.append(_zero_shot_language_leakage_check(metrics, metadata))
+        checks.append(_g10_faithfulness_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
             checks.append(federated_check)
         checks.append(_k_floor_check(metrics, metadata))
+        checks.append(
+            _cross_document_linkage_check(
+                metrics,
+                metadata,
+                ceiling=self.cross_document_linkage_ceiling,
+            )
+        )
         checks.append(_structured_release_risk_check(metrics, metadata))
 
         blocked_formats = tuple(
@@ -3300,6 +3318,465 @@ def _zero_shot_language_leakage_check(
     )
 
 
+def _g10_faithfulness_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _faithfulness_evidence(metrics, metadata)
+    if not evidence:
+        return GateCheck(
+            "G10",
+            True,
+            reason="not applicable",
+            details={
+                "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+                "faithfulness_metric_present": False,
+            },
+        )
+
+    rate = _optional_float(
+        _first_value(
+            evidence.get("ungrounded_fact_rate"),
+            evidence.get("rate"),
+            evidence.get("overall"),
+        )
+    )
+    if rate is None:
+        return GateCheck(
+            "G10",
+            False,
+            reason="ungrounded-fact rate is required",
+            details={
+                "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+                "faithfulness_metric_present": True,
+            },
+        )
+    if not 0.0 <= rate <= 1.0:
+        return GateCheck(
+            "G10",
+            False,
+            reason="ungrounded-fact rate must be between zero and one",
+            details={
+                "faithfulness_metric_present": True,
+                "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+                "ungrounded_fact_rate": rate,
+            },
+        )
+
+    violations: dict[str, Any] = {}
+    if rate > G10_UNGROUNDED_FACT_CEILING:
+        violations["ungrounded_fact_rate"] = {
+            "observed": rate,
+            "limit": G10_UNGROUNDED_FACT_CEILING,
+        }
+
+    return GateCheck(
+        "G10",
+        not violations,
+        reason=(
+            "ok" if not violations else "ungrounded-fact rate exceeds hard ceiling"
+        ),
+        details={
+            "by_fact_type": _mapping(evidence.get("by_fact_type")),
+            "faithfulness_metric_present": True,
+            "total_facts": _optional_int(evidence.get("total_facts")),
+            "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+            "ungrounded_fact_rate": rate,
+            "ungrounded_facts": _optional_int(evidence.get("ungrounded_facts")),
+            "violations": violations,
+        },
+    )
+
+
+def evaluate_cross_document_linkage_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+    *,
+    ceiling: float = DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING,
+) -> GateCheck:
+    """Evaluate longitudinal linkage evidence against a release ceiling.
+
+    ``report`` may be a benchmark report containing a
+    ``longitudinal_linkage_risk`` metric or the privacy-safe mapping returned by
+    :func:`openmed.risk.longitudinal_risk_report`. The returned check retains
+    only hashes, offsets, counts, and scores from that evidence.
+    """
+
+    resolved_ceiling = _probability_ceiling(ceiling, name="ceiling")
+    payload = _report_payload(report)
+    if "linkage_success_upper_bound" in payload:
+        evidence: Any = payload
+    else:
+        evidence = _longitudinal_linkage_evidence(
+            _mapping(payload.get("metrics")),
+            _mapping(payload.get("metadata")),
+        )
+    if evidence is None:
+        return GateCheck(
+            CROSS_DOCUMENT_LINKAGE_GATE,
+            False,
+            reason="longitudinal linkage-risk evidence is required",
+            details={"linkage_ceiling": resolved_ceiling},
+        )
+    return _evaluate_longitudinal_linkage_evidence(
+        evidence,
+        ceiling=resolved_ceiling,
+    )
+
+
+def _cross_document_linkage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    *,
+    ceiling: float,
+) -> GateCheck:
+    evidence = _longitudinal_linkage_evidence(metrics, metadata)
+    if evidence is None:
+        required = bool(
+            _first_value(
+                metadata.get("longitudinal_release"),
+                metrics.get("longitudinal_release"),
+                metadata.get("cross_document_release"),
+                metrics.get("cross_document_release"),
+            )
+        )
+        return GateCheck(
+            CROSS_DOCUMENT_LINKAGE_GATE,
+            not required,
+            reason=(
+                "not applicable"
+                if not required
+                else "longitudinal linkage-risk evidence is required"
+            ),
+            details={
+                "evidence_present": False,
+                "linkage_ceiling": ceiling,
+            },
+        )
+    return _evaluate_longitudinal_linkage_evidence(evidence, ceiling=ceiling)
+
+
+def _longitudinal_linkage_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> Any:
+    return _first_value(
+        metadata.get("longitudinal_linkage_risk"),
+        metrics.get("longitudinal_linkage_risk"),
+        metadata.get("longitudinal_risk_report"),
+        metrics.get("longitudinal_risk_report"),
+        metadata.get("cross_document_linkage_risk"),
+        metrics.get("cross_document_linkage_risk"),
+    )
+
+
+def _evaluate_longitudinal_linkage_evidence(
+    evidence: Any,
+    *,
+    ceiling: float,
+) -> GateCheck:
+    validated = _validated_longitudinal_linkage_evidence(evidence)
+    if validated is None:
+        return GateCheck(
+            CROSS_DOCUMENT_LINKAGE_GATE,
+            False,
+            reason="longitudinal linkage-risk evidence is malformed",
+            details={
+                "evidence_valid": False,
+                "linkage_ceiling": ceiling,
+            },
+        )
+
+    violations: dict[str, Any] = {}
+    upper_bound = validated["linkage_success_upper_bound"]
+    direct_leakage = validated["residual_direct_identifier_leakage"]
+    direct_leakage_count = validated["residual_direct_identifier_leakage_count"]
+    if upper_bound > ceiling + 1e-12:
+        violations["linkage_success_upper_bound"] = {
+            "observed": upper_bound,
+            "limit": ceiling,
+        }
+    if direct_leakage > 0.0:
+        violations["residual_direct_identifier_leakage"] = {
+            "observed": direct_leakage,
+            "limit": 0.0,
+        }
+    if direct_leakage_count > 0:
+        violations["residual_direct_identifier_leakage_count"] = {
+            "observed": direct_leakage_count,
+            "limit": 0,
+        }
+
+    return GateCheck(
+        CROSS_DOCUMENT_LINKAGE_GATE,
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "cross-document linkage risk violates release policy"
+        ),
+        details={
+            "evidence_valid": True,
+            "evidence_hash": validated["evidence_hash"],
+            "patient_count": validated["patient_count"],
+            "document_count": validated["document_count"],
+            "linkable_patient_count": validated["linkable_patient_count"],
+            "linkage_success_upper_bound": upper_bound,
+            "mean_patient_linkage_upper_bound": validated[
+                "mean_patient_linkage_upper_bound"
+            ],
+            "linkage_ceiling": ceiling,
+            "residual_direct_identifier_leakage": direct_leakage,
+            "residual_direct_identifier_leakage_count": direct_leakage_count,
+            "high_risk_patient_hashes": validated["high_risk_patient_hashes"],
+            "high_risk_evidence": validated["high_risk_evidence"],
+            "violations": violations,
+        },
+    )
+
+
+def _validated_longitudinal_linkage_evidence(
+    value: Any,
+) -> dict[str, Any] | None:
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        value = value.to_dict()
+    if not isinstance(value, Mapping):
+        return None
+
+    schema_version = _strict_nonnegative_int(value.get("schema_version"))
+    patient_count = _strict_nonnegative_int(value.get("patient_count"))
+    document_count = _strict_nonnegative_int(value.get("document_count"))
+    linkable_patient_count = _strict_nonnegative_int(
+        value.get("linkable_patient_count")
+    )
+    direct_leakage_count = _strict_nonnegative_int(
+        value.get("residual_direct_identifier_leakage_count")
+    )
+    upper_bound = _strict_probability(value.get("linkage_success_upper_bound"))
+    mean_bound = _strict_probability(value.get("mean_patient_linkage_upper_bound"))
+    direct_leakage = _strict_probability(
+        value.get("residual_direct_identifier_leakage")
+    )
+    if (
+        schema_version != 1
+        or patient_count is None
+        or patient_count < 1
+        or document_count is None
+        or document_count < 1
+        or linkable_patient_count is None
+        or direct_leakage_count is None
+        or upper_bound is None
+        or mean_bound is None
+        or direct_leakage is None
+    ):
+        return None
+
+    raw_patients = value.get("patient_risks")
+    raw_high_risk = value.get("high_risk_patients")
+    if not _is_mapping_sequence(raw_patients) or not _is_mapping_sequence(
+        raw_high_risk
+    ):
+        return None
+
+    patients = [_safe_longitudinal_patient(row) for row in raw_patients]
+    if any(patient is None for patient in patients):
+        return None
+    checked_patients = [patient for patient in patients if patient is not None]
+
+    patient_hashes = [patient["patient_hash"] for patient in checked_patients]
+    patient_bounds = [patient["linkage_upper_bound"] for patient in checked_patients]
+    if (
+        len(checked_patients) != patient_count
+        or len(set(patient_hashes)) != patient_count
+        or sum(patient["document_count"] for patient in checked_patients)
+        != document_count
+        or sum(patient["direct_identifier_count"] for patient in checked_patients)
+        != direct_leakage_count
+        or sum(bound > 0.0 for bound in patient_bounds) != linkable_patient_count
+        or not math.isclose(
+            max(patient_bounds), upper_bound, rel_tol=0.0, abs_tol=1e-12
+        )
+        or not math.isclose(
+            sum(patient_bounds) / patient_count,
+            mean_bound,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+        or (direct_leakage_count == 0 and direct_leakage != 0.0)
+        or (direct_leakage_count > 0 and direct_leakage <= 0.0)
+    ):
+        return None
+
+    expected_high_risk_patient_hashes = sorted(
+        patient["patient_hash"]
+        for patient in checked_patients
+        if upper_bound > 0.0
+        and math.isclose(
+            patient["linkage_upper_bound"],
+            upper_bound,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+    )
+    actual_high_risk_patient_hashes = sorted(
+        str(patient.get("patient_pseudonym")) for patient in raw_high_risk
+    )
+    if (
+        any(
+            not _is_privacy_safe_digest(patient_hash)
+            for patient_hash in actual_high_risk_patient_hashes
+        )
+        or actual_high_risk_patient_hashes != expected_high_risk_patient_hashes
+    ):
+        return None
+
+    high_risk_evidence = [
+        item
+        for patient in checked_patients
+        if patient["patient_hash"] in expected_high_risk_patient_hashes
+        for item in patient["evidence"]
+    ]
+    high_risk_evidence.sort(
+        key=lambda item: (
+            item["patient_hash"],
+            item["note_index"],
+            item["note_hash"],
+            item["value_hash"],
+            item.get("start", -1),
+            item.get("end", -1),
+        )
+    )
+
+    safe_projection = {
+        "schema_version": schema_version,
+        "patient_count": patient_count,
+        "document_count": document_count,
+        "linkable_patient_count": linkable_patient_count,
+        "linkage_success_upper_bound": upper_bound,
+        "mean_patient_linkage_upper_bound": mean_bound,
+        "residual_direct_identifier_leakage": direct_leakage,
+        "residual_direct_identifier_leakage_count": direct_leakage_count,
+        "patients": checked_patients,
+    }
+    return {
+        "evidence_hash": stable_hash(safe_projection),
+        "patient_count": patient_count,
+        "document_count": document_count,
+        "linkable_patient_count": linkable_patient_count,
+        "linkage_success_upper_bound": upper_bound,
+        "mean_patient_linkage_upper_bound": mean_bound,
+        "residual_direct_identifier_leakage": direct_leakage,
+        "residual_direct_identifier_leakage_count": direct_leakage_count,
+        "high_risk_patient_hashes": expected_high_risk_patient_hashes,
+        "high_risk_evidence": high_risk_evidence,
+    }
+
+
+def _safe_longitudinal_patient(
+    value: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    patient_hash = value.get("patient_pseudonym")
+    document_count = _strict_nonnegative_int(value.get("document_count"))
+    evidence_count = _strict_nonnegative_int(value.get("evidence_count"))
+    direct_identifier_count = _strict_nonnegative_int(
+        value.get("direct_identifier_count")
+    )
+    linkage_upper_bound = _strict_probability(value.get("linkage_upper_bound"))
+    if (
+        not _is_privacy_safe_digest(patient_hash)
+        or document_count is None
+        or document_count < 1
+        or evidence_count is None
+        or direct_identifier_count is None
+        or linkage_upper_bound is None
+    ):
+        return None
+
+    raw_evidence = value.get("evidence")
+    if not _is_mapping_sequence(raw_evidence):
+        return None
+
+    safe_evidence: list[dict[str, Any]] = []
+    for item in raw_evidence:
+        note_index = _strict_nonnegative_int(item.get("note_index"))
+        start = _strict_nonnegative_int(item.get("start"))
+        end = _strict_nonnegative_int(item.get("end"))
+        if (
+            note_index is None
+            or not _is_privacy_safe_digest(item.get("note_hash"))
+            or not _is_privacy_safe_digest(item.get("value_hash"))
+            or (item.get("start") is not None and start is None)
+            or (item.get("end") is not None and end is None)
+            or (start is not None and end is not None and end < start)
+        ):
+            return None
+        safe_item = {
+            "patient_hash": patient_hash,
+            "note_index": note_index,
+            "note_hash": item["note_hash"],
+            "value_hash": item["value_hash"],
+        }
+        if start is not None:
+            safe_item["start"] = start
+        if end is not None:
+            safe_item["end"] = end
+        safe_evidence.append(safe_item)
+
+    if len(safe_evidence) != evidence_count:
+        return None
+    return {
+        "patient_hash": patient_hash,
+        "document_count": document_count,
+        "direct_identifier_count": direct_identifier_count,
+        "linkage_upper_bound": linkage_upper_bound,
+        "evidence": safe_evidence,
+    }
+
+
+def _strict_nonnegative_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _strict_probability(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    parsed = float(value)
+    if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        return None
+    return parsed
+
+
+def _probability_ceiling(value: Any, *, name: str) -> float:
+    parsed = _strict_probability(value)
+    if parsed is None:
+        raise ValueError(f"{name} must be a finite number between zero and one")
+    return parsed
+
+
+def _is_mapping_sequence(value: Any) -> bool:
+    return (
+        isinstance(value, Sequence)
+        and not isinstance(value, (str, bytes, bytearray))
+        and all(isinstance(item, Mapping) for item in value)
+    )
+
+
+def _is_privacy_safe_digest(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    prefix, separator, digest = value.partition(":")
+    if separator != ":" or prefix not in {"sha256", "hmac-sha256"}:
+        return False
+    if len(digest) != 64:
+        return False
+    try:
+        int(digest, 16)
+    except ValueError:
+        return False
+    return True
+
+
 def _federated_boundary_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -4130,6 +4607,45 @@ def _span_fixtures(metadata: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return []
 
 
+def _faithfulness_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    direct = _first_mapping(
+        metrics.get("faithfulness"),
+        metrics.get("span_grounded_faithfulness"),
+        metrics.get("grounding_faithfulness"),
+        metadata.get("faithfulness"),
+        metadata.get("span_grounded_faithfulness"),
+    )
+    if direct:
+        return direct
+
+    rate = _first_value(
+        metrics.get("ungrounded_fact_rate"),
+        metadata.get("ungrounded_fact_rate"),
+    )
+    if rate is None:
+        return {}
+
+    return {
+        "by_fact_type": _first_mapping(
+            metrics.get("ungrounded_fact_rate_by_type"),
+            metrics.get("faithfulness_by_fact_type"),
+            metadata.get("faithfulness_by_fact_type"),
+        ),
+        "total_facts": _first_value(
+            metrics.get("total_facts"),
+            metadata.get("total_facts"),
+        ),
+        "ungrounded_fact_rate": rate,
+        "ungrounded_facts": _first_value(
+            metrics.get("ungrounded_facts"),
+            metadata.get("ungrounded_facts"),
+        ),
+    }
+
+
 def _baseline_label_recall(metrics: Mapping[str, Any]) -> dict[str, float]:
     return _float_map(
         _first_mapping(
@@ -4872,7 +5388,9 @@ def _tracking_issue_body(
 
 
 __all__ = [
+    "CROSS_DOCUMENT_LINKAGE_GATE",
     "CROSS_SCRIPT_GATE",
+    "DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING",
     "G1A_V16_RECALL_FLOOR",
     "G1A_V20_RECALL_FLOOR",
     "G1B_RECALL_FLOOR",
@@ -4881,6 +5399,7 @@ __all__ = [
     "G4_INT8_DELTA_LIMIT",
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
+    "G10_UNGROUNDED_FACT_CEILING",
     "G11_CRITICAL_RECALL_FLOOR",
     "G13_RADIOLOGY_ENTITY_F1_FLOOR",
     "G13_RADIOLOGY_RELATION_F1_FLOOR",
@@ -4910,6 +5429,7 @@ __all__ = [
     "apply_flakiness_quarantine",
     "build_arg_parser",
     "build_grounding_gate_report",
+    "evaluate_cross_document_linkage_gate",
     "evaluate_federated_boundary_gate",
     "evaluate_radiology_entity_relation_gate",
     "evaluate_grounding_accuracy_gate",

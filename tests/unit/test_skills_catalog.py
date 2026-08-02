@@ -10,6 +10,7 @@ only) and additionally enforces strict-YAML parseability when PyYAML is present.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -20,6 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / "skills"
 BUILDER = SKILLS_DIR / "build_catalog.py"
 INSTALLER = REPO_ROOT / "install-skills.sh"
+MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
 
 def _load_builder():
@@ -42,6 +44,19 @@ def test_all_skills_validate():
     assert not errors, "skill validation errors:\n" + "\n".join(errors)
     # A healthy catalog; guards against an empty/half-written checkout.
     assert len(skills) >= 50, f"expected the full skills catalog, found {len(skills)}"
+
+
+def test_marketplace_owner_omits_contact_email():
+    builder = _load_builder()
+    skills, errors = builder.load_skills()
+
+    assert not errors
+    expected_owner = {"name": "OpenMed"}
+    generated = json.loads(builder.render_marketplace(skills))
+    committed = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
+
+    assert generated["owner"] == expected_owner
+    assert committed["owner"] == expected_owner
 
 
 def test_every_skill_has_name_and_description():

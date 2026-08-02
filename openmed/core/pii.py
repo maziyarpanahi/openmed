@@ -1498,7 +1498,7 @@ def _apply_safety_sweep_to_result(
         safety_sweep,
     )
 
-    before_count = len(pii_result.entities)
+    before_entity_ids = {id(entity) for entity in pii_result.entities}
     entities = safety_sweep(
         text,
         pii_result.entities,
@@ -1506,7 +1506,14 @@ def _apply_safety_sweep_to_result(
         locale=locale,
         patterns=patterns,
     )
-    added_count = len(entities) - before_count
+    # Overlap resolution may remove model spans, so a list-length delta does
+    # not measure the sweep's independent recall contribution.
+    added_count = sum(
+        id(entity) not in before_entity_ids
+        and (getattr(entity, "metadata", None) or {}).get("source")
+        == SAFETY_SWEEP_SOURCE
+        for entity in entities
+    )
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
     metadata["safety_sweep"] = {
