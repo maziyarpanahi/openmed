@@ -228,6 +228,10 @@ cloud = [
   "adlfs>=2025.8.0",
 ]
 
+ray = [
+  "ray>=2.30,<3",
+]
+
 spark = [
   "pyspark>=3.5,<4",
   "pandas>=2.0",

@@ -18,6 +18,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "pyDeid",
     "pydeid",
     "pyspark",
+    "ray",
     "gliner",
     "haystack",
     "llama_index",
