@@ -11,6 +11,7 @@ import json
 import multiprocessing
 import os
 import pickle
+import tempfile
 import threading
 from collections.abc import Iterator, Mapping
 from dataclasses import replace
@@ -114,6 +115,33 @@ def non_bytes_shard_handler(shard: DocumentShard) -> bytes:
 
 
 # --- Helpers ----------------------------------------------------------------
+
+
+def _probe_inode_support() -> bool:
+    """Whether this filesystem reports distinct, non-zero inode numbers.
+
+    Windows fills ``st_ino`` from the NTFS file index, but it is 0 on some
+    filesystems. That breaks inode comparison in both directions at once:
+    "the inode changed" becomes trivially false, and "the inode is unchanged"
+    becomes trivially true and silently passes. Measure the property rather
+    than guessing from the platform name.
+    """
+    with tempfile.TemporaryDirectory() as raw_directory:
+        directory = Path(raw_directory)
+        first = directory / "first"
+        second = directory / "second"
+        first.write_bytes(b"first")
+        second.write_bytes(b"second")
+        first_inode = first.stat().st_ino
+        second_inode = second.stat().st_ino
+    return bool(first_inode) and bool(second_inode) and first_inode != second_inode
+
+
+#: Inode identity is a *corroborating* signal only. Every test below also
+#: proves its point portably -- by instrumenting the atomic-write hook, or by
+#: comparing bytes -- so skipping the inode assertion loses no coverage of the
+#: product contract, only of the mechanism.
+_INODES_DISTINGUISH_FILES = _probe_inode_support()
 
 
 def _inodes(root: Path) -> dict[str, int]:
@@ -277,7 +305,8 @@ def test_reexecuting_completed_shard_overwrites_same_bytes(tmp_path: Path) -> No
     assert sorted(replaced) == sorted(first_payloads)
     second_inodes = _inodes(tmp_path)
     assert second_inodes.keys() == first_inodes.keys()
-    assert all(second_inodes[name] != first_inodes[name] for name in first_inodes)
+    if _INODES_DISTINGUISH_FILES:
+        assert all(second_inodes[name] != first_inodes[name] for name in first_inodes)
     # Re-running appends nothing.
     for name, payload in _payloads(tmp_path).items():
         assert len(payload) == len(first_payloads[name])
@@ -308,7 +337,8 @@ def test_matching_outputs_are_skipped_without_rewriting(tmp_path: Path) -> None:
 
     assert second.executions == ()
     assert second.skipped_shards == tuple(range(plan.shard_count))
-    assert _inodes(tmp_path) == first_inodes
+    if _INODES_DISTINGUISH_FILES:
+        assert _inodes(tmp_path) == first_inodes
     assert all(record.attempts == 1 for record in second.manifest.shards)
     assert second.is_complete
 
@@ -674,7 +704,8 @@ def test_nondeterministic_handler_raises_without_destroying_output(
 
     # Not one byte changed, and not one file was rewritten.
     assert _payloads(tmp_path) == original
-    assert _inodes(tmp_path) == original_inodes
+    if _INODES_DISTINGUISH_FILES:
+        assert _inodes(tmp_path) == original_inodes
     # The earlier digests are still recorded, so the run stays validatable.
     assert validate_shard_outputs(first.manifest, root=tmp_path).all_valid
 
