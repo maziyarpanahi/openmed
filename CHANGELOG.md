@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
+  consistency scoring, a zero-violation blocking gate, and synthetic
+  discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and
+  contradiction-trap coverage (#1309).
 - Added an experimental `yasbd` sentence-segmentation backend selectable via
   `segment_text(..., backend="yasbd")` and
   `analyze_text(..., sentence_backend="yasbd")`, backed by the optional
