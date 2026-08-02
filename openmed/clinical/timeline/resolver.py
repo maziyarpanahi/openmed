@@ -3,23 +3,42 @@
 from __future__ import annotations
 
 import calendar
+import heapq
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from itertools import combinations
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Literal
 
 from openmed.clinical.context import (
     reconcile_temporality_with_interval,
     resolve_temporality,
 )
+from openmed.clinical.relations.temporal import (
+    TemporalCueReference,
+    TemporalRelationCandidate,
+    TemporalRelationType,
+    TemporalSpanReference,
+    extract_tlink_candidates,
+)
 from openmed.clinical.timeline.timex import (
     TemporalExpression,
     detect_timexes,
 )
+from openmed.core.audit import hash_text
+from openmed.core.decoding import (
+    EdgeDecisionTrace,
+    SpanEdge,
+    SpanGraphConstraints,
+    SpanNode,
+    decode_span_graph,
+)
+from openmed.processing.advanced_ner import EntitySpan
 
 TIMELINE_ASSISTIVE_DISCLAIMER = (
     "Clinical timeline normalization is assistive and is not a clinical "
@@ -28,6 +47,34 @@ TIMELINE_ASSISTIVE_DISCLAIMER = (
 )
 
 TimelineRelationKind = Literal["before", "after", "overlap", "unknown"]
+TimelineEdgeStatus = Literal["kept", "pruned"]
+
+ORDER_EVENTS_SCHEMA_VERSION = 1
+
+_TEMPORAL_ORDER_EDGE = "TEMPORAL_PRECEDES"
+_EVENT_SPAN_LABELS = frozenset(
+    {
+        "CONDITION",
+        "DIAGNOSIS",
+        "EVENT",
+        "FINDING",
+        "MEDICATION_EVENT",
+        "PROBLEM",
+        "PROCEDURE",
+        "SYMPTOM",
+    }
+)
+_TIMEX_SPAN_LABELS = frozenset(
+    {
+        "DATE",
+        "DURATION",
+        "SET",
+        "TEMPORAL_EXPRESSION",
+        "TIME",
+        "TIMEX",
+        "TIMEX3",
+    }
+)
 
 _ANCHOR_TERMS = {
     "admission": ("admission", "admitted", "hospitalization"),
@@ -166,6 +213,147 @@ class ResolvedTimeline:
 
 
 @dataclass(frozen=True)
+class OrderedTimelineEvent:
+    """Privacy-safe EVENT position in a decoded document timeline."""
+
+    event_id: str
+    label: str
+    start: int
+    end: int
+    text_hash: str
+    position: int
+    confidence: float
+
+    def __post_init__(self) -> None:
+        if not self.event_id or not self.label:
+            raise ValueError("ordered timeline event id and label must be non-empty")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("event offsets must satisfy 0 <= start < end")
+        if not self.text_hash.startswith("sha256:"):
+            raise ValueError("event text_hash must be a SHA-256 hash")
+        if self.position < 0:
+            raise ValueError("event position must be non-negative")
+        if not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError("event confidence must be between 0 and 1")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready event containing no raw note text."""
+
+        return {
+            "id": self.event_id,
+            "label": self.label,
+            "start": self.start,
+            "end": self.end,
+            "text_hash": self.text_hash,
+            "position": self.position,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True)
+class TimelineEdgeProvenance:
+    """Privacy-safe kept or pruned TLINK decision provenance."""
+
+    relation_type: TemporalRelationType
+    source: TemporalSpanReference
+    target: TemporalSpanReference
+    confidence: float
+    cue: TemporalCueReference
+    status: TimelineEdgeStatus
+    reason: str
+    constraint: str | None = None
+    features: Mapping[str, float] = field(default_factory=dict)
+    provenance: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError("edge confidence must be between 0 and 1")
+        if self.status not in {"kept", "pruned"}:
+            raise ValueError("edge status must be kept or pruned")
+        if not self.reason:
+            raise ValueError("edge decision reason must be non-empty")
+        object.__setattr__(
+            self,
+            "features",
+            MappingProxyType(
+                {key: float(value) for key, value in sorted(self.features.items())}
+            ),
+        )
+        object.__setattr__(
+            self,
+            "provenance",
+            MappingProxyType(dict(self.provenance)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready edge decision containing no raw note text."""
+
+        return {
+            "relation_type": self.relation_type,
+            "source": self.source.to_dict(),
+            "target": self.target.to_dict(),
+            "confidence": self.confidence,
+            "cue": self.cue.to_dict(),
+            "status": self.status,
+            "reason": self.reason,
+            "constraint": self.constraint,
+            "features": dict(self.features),
+            "provenance": dict(self.provenance),
+        }
+
+
+@dataclass(frozen=True)
+class Timeline:
+    """Cycle-free, privacy-safe ordering of supplied clinical EVENT spans."""
+
+    events: tuple[OrderedTimelineEvent, ...]
+    edges: tuple[TimelineEdgeProvenance, ...]
+    disclaimer: str = TIMELINE_ASSISTIVE_DISCLAIMER
+    schema_version: int = ORDER_EVENTS_SCHEMA_VERSION
+
+    @property
+    def edge_provenance(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return decisions for every retained or pruned TLINK candidate."""
+
+        return self.edges
+
+    @property
+    def kept_edges(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return TLINK candidates retained by graph decoding."""
+
+        return tuple(edge for edge in self.edges if edge.status == "kept")
+
+    @property
+    def retained_edges(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return an alias for retained TLINK candidates."""
+
+        return self.kept_edges
+
+    @property
+    def pruned_edges(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return TLINK candidates rejected by graph decoding."""
+
+        return tuple(edge for edge in self.edges if edge.status == "pruned")
+
+    @property
+    def is_cycle_free(self) -> bool:
+        """Return whether retained BEFORE/AFTER relations are acyclic."""
+
+        return _timeline_edges_are_acyclic(self.kept_edges)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready timeline containing no raw clinical text."""
+
+        return {
+            "schema_version": self.schema_version,
+            "events": [event.to_dict() for event in self.events],
+            "edges": [edge.to_dict() for edge in self.edges],
+            "cycle_free": self.is_cycle_free,
+            "disclaimer": self.disclaimer,
+        }
+
+
+@dataclass(frozen=True)
 class TimelineEvaluationResult:
     """Value-accuracy and ordering-consistency metrics for gold timelines."""
 
@@ -293,6 +481,82 @@ def resolve_timeline(
     )
 
 
+def order_events(
+    text: str,
+    spans: Iterable[EntitySpan | Mapping[str, Any]],
+) -> Timeline:
+    """Order supplied EVENT spans using privacy-safe typed TLINK candidates.
+
+    Typed candidates are converted to a single chronological edge direction
+    before the shared span-graph decoder applies its acyclicity constraint.
+    ``AFTER`` candidates are therefore reversed only for decoding; the public
+    provenance retains the original relation type and source/target roles.
+
+    Args:
+        text: Source clinical note used only during in-memory extraction.
+        spans: Existing EVENT and TIMEX spans with offsets into ``text``.
+
+    Returns:
+        A cycle-free ``Timeline``. Events contain normalized labels, offsets,
+        hashes, zero-based positions, and confidence. Edge provenance records
+        every kept or pruned candidate without retaining raw clinical text.
+    """
+
+    span_items = tuple(spans)
+    candidates = extract_tlink_candidates(text, span_items)
+    references = {
+        reference.span_id: reference
+        for reference in _safe_ordering_span_references(text, span_items)
+    }
+    for candidate in candidates:
+        _keep_stronger_reference(references, candidate.source)
+        _keep_stronger_reference(references, candidate.target)
+
+    nodes = tuple(_timeline_span_node(reference) for reference in references.values())
+    candidate_edges = tuple(
+        _timeline_candidate_edge(candidate, candidate_index=index)
+        for index, candidate in enumerate(candidates)
+    )
+    graph = decode_span_graph(
+        nodes,
+        candidate_edges,
+        constraints=SpanGraphConstraints(
+            allowed_edge_labels={
+                _TEMPORAL_ORDER_EDGE,
+                "BEGINS_ON",
+                "CONTAINS",
+                "ENDS_ON",
+                "OVERLAP",
+            },
+            acyclic_edge_labels=(_TEMPORAL_ORDER_EDGE,),
+        ),
+    )
+
+    ordered_node_ids = _topologically_order_timeline_nodes(graph.nodes, graph.edges)
+    order_index = {node_id: index for index, node_id in enumerate(ordered_node_ids)}
+    event_references = sorted(
+        (reference for reference in references.values() if reference.role == "EVENT"),
+        key=lambda reference: order_index[reference.span_id],
+    )
+    events = tuple(
+        OrderedTimelineEvent(
+            event_id=reference.span_id,
+            label=reference.label,
+            start=reference.start,
+            end=reference.end,
+            text_hash=reference.text_hash,
+            position=position,
+            confidence=reference.score,
+        )
+        for position, reference in enumerate(event_references)
+    )
+    edges = _timeline_edge_provenance(graph.decisions, candidates)
+    timeline = Timeline(events=events, edges=edges)
+    if not timeline.is_cycle_free:  # Defensive invariant around decoder changes.
+        raise RuntimeError("decoded temporal timeline contains a cycle")
+    return timeline
+
+
 def evaluate_timeline_gold(
     cases_or_path: str | Path | Iterable[Mapping[str, Any]],
 ) -> TimelineEvaluationResult:
@@ -359,6 +623,244 @@ def evaluate_timeline_gold(
         ordering_total=ordering_total,
         failures=tuple(failures),
     )
+
+
+def _safe_ordering_span_references(
+    text: str,
+    spans: Sequence[EntitySpan | Mapping[str, Any]],
+) -> tuple[TemporalSpanReference, ...]:
+    references: dict[str, TemporalSpanReference] = {}
+    for item in spans:
+        if isinstance(item, TemporalSpanReference):
+            start = item.start
+            end = item.end
+            raw_label = item.label
+            score = float(item.score)
+        elif isinstance(item, EntitySpan):
+            start = item.start
+            end = item.end
+            raw_label = item.label
+            score = float(item.score)
+        else:
+            metadata = item.get("metadata") or {}
+            if not isinstance(metadata, Mapping):
+                metadata = {}
+            start = int(item.get("start", item.get("start_char", -1)))
+            end = int(item.get("end", item.get("end_char", -1)))
+            raw_label = str(item.get("label", item.get("entity", "")))
+            score = float(item.get("score", metadata.get("confidence", 1.0)))
+
+        label = _timeline_span_label(raw_label)
+        if label in _EVENT_SPAN_LABELS:
+            role: Literal["EVENT", "TIMEX"] = "EVENT"
+        elif label in _TIMEX_SPAN_LABELS:
+            role = "TIMEX"
+        else:
+            continue
+        if start < 0 or end <= start or end > len(text):
+            continue
+        if not math.isfinite(score):
+            raise ValueError("temporal span score must be finite")
+
+        reference = TemporalSpanReference(
+            span_id=f"{role.casefold()}:{label.casefold()}:{start}:{end}",
+            label=label,
+            role=role,
+            start=start,
+            end=end,
+            score=round(max(0.0, min(score, 1.0)), 6),
+            text_hash=hash_text(text[start:end]),
+        )
+        _keep_stronger_reference(references, reference)
+
+    return tuple(
+        sorted(
+            references.values(),
+            key=lambda reference: (
+                reference.start,
+                reference.end,
+                reference.label,
+                reference.span_id,
+            ),
+        )
+    )
+
+
+def _keep_stronger_reference(
+    references: dict[str, TemporalSpanReference],
+    candidate: TemporalSpanReference,
+) -> None:
+    current = references.get(candidate.span_id)
+    if current is None or candidate.score > current.score:
+        references[candidate.span_id] = candidate
+
+
+def _timeline_span_node(reference: TemporalSpanReference) -> SpanNode:
+    return SpanNode(
+        node_id=reference.span_id,
+        start=reference.start,
+        end=reference.end,
+        label=reference.role,
+        score=reference.score,
+        text_hash=reference.text_hash,
+        metadata={
+            "schema_version": ORDER_EVENTS_SCHEMA_VERSION,
+            "source_label": reference.label,
+        },
+    )
+
+
+def _timeline_candidate_edge(
+    candidate: TemporalRelationCandidate,
+    *,
+    candidate_index: int,
+) -> SpanEdge:
+    if candidate.relation_type in {"BEFORE", "AFTER"}:
+        head, tail = _chronological_endpoints(
+            candidate.relation_type,
+            candidate.source.span_id,
+            candidate.target.span_id,
+        )
+        label = _TEMPORAL_ORDER_EDGE
+    else:
+        head = candidate.source.span_id
+        tail = candidate.target.span_id
+        label = candidate.relation_type
+    return SpanEdge(
+        head=head,
+        tail=tail,
+        label=label,
+        score=candidate.confidence,
+        metadata={"candidate_index": candidate_index},
+    )
+
+
+def _timeline_edge_provenance(
+    decisions: Sequence[EdgeDecisionTrace],
+    candidates: Sequence[TemporalRelationCandidate],
+) -> tuple[TimelineEdgeProvenance, ...]:
+    provenance: list[TimelineEdgeProvenance] = []
+    for decision in decisions:
+        candidate_index = decision.edge.metadata.get("candidate_index")
+        if (
+            isinstance(candidate_index, bool)
+            or not isinstance(candidate_index, int)
+            or not 0 <= candidate_index < len(candidates)
+        ):
+            raise RuntimeError("temporal graph decision lost candidate provenance")
+        candidate = candidates[candidate_index]
+        provenance.append(
+            TimelineEdgeProvenance(
+                relation_type=candidate.relation_type,
+                source=candidate.source,
+                target=candidate.target,
+                confidence=candidate.confidence,
+                cue=candidate.cue,
+                status=decision.status,
+                reason=decision.reason,
+                constraint=decision.constraint,
+                features=candidate.features,
+                provenance={
+                    "candidate": dict(candidate.provenance),
+                    "decoder": "span_graph",
+                    "schema_version": ORDER_EVENTS_SCHEMA_VERSION,
+                },
+            )
+        )
+    return tuple(provenance)
+
+
+def _topologically_order_timeline_nodes(
+    nodes: Sequence[SpanNode],
+    edges: Sequence[SpanEdge],
+) -> tuple[str, ...]:
+    nodes_by_id = {node.node_id: node for node in nodes}
+    adjacency = {node.node_id: set() for node in nodes}
+    indegree = {node.node_id: 0 for node in nodes}
+    for edge in edges:
+        if edge.label != _TEMPORAL_ORDER_EDGE:
+            continue
+        if edge.tail in adjacency[edge.head]:
+            continue
+        adjacency[edge.head].add(edge.tail)
+        indegree[edge.tail] += 1
+
+    ready = [
+        (*_timeline_node_sort_key(node), node.node_id)
+        for node in nodes
+        if indegree[node.node_id] == 0
+    ]
+    heapq.heapify(ready)
+    ordered: list[str] = []
+    while ready:
+        *_, node_id = heapq.heappop(ready)
+        ordered.append(node_id)
+        for target_id in sorted(
+            adjacency[node_id],
+            key=lambda item: _timeline_node_sort_key(nodes_by_id[item]),
+        ):
+            indegree[target_id] -= 1
+            if indegree[target_id] == 0:
+                target = nodes_by_id[target_id]
+                heapq.heappush(
+                    ready,
+                    (*_timeline_node_sort_key(target), target.node_id),
+                )
+
+    if len(ordered) != len(nodes):
+        raise RuntimeError("decoded temporal graph contains a cycle")
+    return tuple(ordered)
+
+
+def _timeline_node_sort_key(node: SpanNode) -> tuple[int, int, str]:
+    return node.start, node.end, node.label
+
+
+def _timeline_edges_are_acyclic(
+    edges: Sequence[TimelineEdgeProvenance],
+) -> bool:
+    adjacency: dict[str, set[str]] = {}
+    indegree: dict[str, int] = {}
+    for edge in edges:
+        if edge.status != "kept" or edge.relation_type not in {"BEFORE", "AFTER"}:
+            continue
+        head, tail = _chronological_endpoints(
+            edge.relation_type,
+            edge.source.span_id,
+            edge.target.span_id,
+        )
+        adjacency.setdefault(head, set())
+        adjacency.setdefault(tail, set())
+        indegree.setdefault(head, 0)
+        indegree.setdefault(tail, 0)
+        if tail not in adjacency[head]:
+            adjacency[head].add(tail)
+            indegree[tail] += 1
+
+    ready = [node_id for node_id, degree in indegree.items() if degree == 0]
+    visited = 0
+    while ready:
+        node_id = ready.pop()
+        visited += 1
+        for target_id in adjacency[node_id]:
+            indegree[target_id] -= 1
+            if indegree[target_id] == 0:
+                ready.append(target_id)
+    return visited == len(indegree)
+
+
+def _chronological_endpoints(
+    relation_type: TemporalRelationType,
+    source_id: str,
+    target_id: str,
+) -> tuple[str, str]:
+    if relation_type == "AFTER":
+        return target_id, source_id
+    return source_id, target_id
+
+
+def _timeline_span_label(label: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", label.upper()).strip("_")
 
 
 def _resolve_interval(
@@ -739,12 +1241,18 @@ def _rate(numerator: int, denominator: int) -> float:
 
 __all__ = [
     "NormalizedInterval",
+    "ORDER_EVENTS_SCHEMA_VERSION",
+    "OrderedTimelineEvent",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
+    "Timeline",
+    "TimelineEdgeProvenance",
+    "TimelineEdgeStatus",
     "TimelineEvaluationResult",
     "TimelineEvent",
     "TimelineRelation",
     "TimelineRelationKind",
     "evaluate_timeline_gold",
+    "order_events",
     "resolve_timeline",
 ]
