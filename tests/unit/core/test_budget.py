@@ -512,12 +512,19 @@ def test_batch_processor_input_budget_records_clean_error(monkeypatch):
 
 def test_batch_processor_wall_time_budget_is_fresh_per_item(monkeypatch):
     processed = []
+    monotonic_time = [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return monotonic_time[0]
 
     def fake_analyze_text(text, **kwargs):
         processed.append(text)
-        time.sleep(0.02)
+        monotonic_time[0] += 0.02
         return _name_prediction(text, model_name=kwargs.get("model_name", "stub"))
 
+    monkeypatch.setattr("openmed.core.budget.time", FakeTime)
     monkeypatch.setattr("openmed.analyze_text", fake_analyze_text)
 
     processor = BatchProcessor(
