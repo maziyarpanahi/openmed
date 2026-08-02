@@ -63,6 +63,7 @@ SURROGATE_QUALITY_GATE = "surrogate_quality"
 GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
 CROSS_DOCUMENT_LINKAGE_GATE = "cross_document_linkage"
+REIDENTIFICATION_RISK_GATE = "reidentification_risk"
 EXPORT_VARIANT_GATE = "export_variants"
 I18N_THROUGHPUT_GATE = "i18n_throughput"
 I18N_THROUGHPUT_REGRESSION_THRESHOLD = 0.20
@@ -836,6 +837,7 @@ class ReleaseGate:
                 ceiling=self.cross_document_linkage_ceiling,
             )
         )
+        checks.append(_reidentification_risk_check(metrics, metadata))
         checks.append(_structured_release_risk_check(metrics, metadata))
 
         blocked_formats = tuple(
@@ -4626,6 +4628,209 @@ def evaluate_federated_boundary_gate(
     )
 
 
+def evaluate_reidentification_risk_gate(
+    report: Any,
+    thresholds: Mapping[str, Any] | None = None,
+    *,
+    threshold: float | None = None,
+) -> GateCheck:
+    """Gate a structured re-identification report on scenario risk.
+
+    Args:
+        report: A report returned by
+            :func:`openmed.structured.reid_report.reid_report`.
+        thresholds: Per-scenario probability ceilings. Any subset of
+            ``prosecutor``, ``journalist``, and ``marketer`` may be configured.
+        threshold: Optional shared ceiling for all three scenarios. This is a
+            convenience alternative to ``thresholds``.
+
+    Returns:
+        A privacy-safe :class:`GateCheck`. A scenario passes when its headline
+        risk is less than or equal to the configured ceiling.
+    """
+
+    if thresholds is not None and threshold is not None:
+        raise ValueError("configure thresholds or threshold, not both")
+    configured: Mapping[str, Any]
+    if threshold is not None:
+        configured = {scenario: threshold for scenario in _REID_SCENARIOS}
+    elif thresholds is not None:
+        configured = thresholds
+    else:
+        raise ValueError("at least one re-identification risk threshold is required")
+    try:
+        return _evaluate_reidentification_risk_report(report, configured)
+    except (TypeError, ValueError):
+        return GateCheck(
+            REIDENTIFICATION_RISK_GATE,
+            False,
+            reason="re-identification report or thresholds are malformed",
+            details={"thresholds_configured": True},
+        )
+
+
+def evaluate_reid_risk_gate(
+    report: Any,
+    thresholds: Mapping[str, Any] | None = None,
+    *,
+    threshold: float | None = None,
+) -> GateCheck:
+    """Alias for :func:`evaluate_reidentification_risk_gate`."""
+
+    return evaluate_reidentification_risk_gate(
+        report,
+        thresholds,
+        threshold=threshold,
+    )
+
+
+_REID_SCENARIOS = ("prosecutor", "journalist", "marketer")
+
+
+def _reidentification_risk_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    raw_report = _first_value(
+        metadata.get("structured_reidentification_risk_report"),
+        metrics.get("structured_reidentification_risk_report"),
+        metadata.get("structured_reid_report"),
+        metrics.get("structured_reid_report"),
+        metadata.get("reidentification_risk_report"),
+        metrics.get("reidentification_risk_report"),
+    )
+    if raw_report is None:
+        return GateCheck(
+            REIDENTIFICATION_RISK_GATE,
+            True,
+            reason="not applicable",
+        )
+
+    raw_thresholds = _first_value(
+        metadata.get("reidentification_risk_thresholds"),
+        metrics.get("reidentification_risk_thresholds"),
+        metadata.get("reid_risk_thresholds"),
+        metrics.get("reid_risk_thresholds"),
+    )
+    if raw_thresholds is None:
+        return GateCheck(
+            REIDENTIFICATION_RISK_GATE,
+            False,
+            reason="re-identification risk thresholds are required",
+            details={"thresholds_configured": False},
+        )
+    try:
+        return _evaluate_reidentification_risk_report(raw_report, raw_thresholds)
+    except (TypeError, ValueError):
+        return GateCheck(
+            REIDENTIFICATION_RISK_GATE,
+            False,
+            reason="re-identification report or thresholds are malformed",
+            details={"thresholds_configured": True},
+        )
+
+
+def _evaluate_reidentification_risk_report(
+    report: Any,
+    thresholds: Any,
+) -> GateCheck:
+    if hasattr(report, "to_dict") and callable(report.to_dict):
+        report = report.to_dict()
+    if not isinstance(report, Mapping):
+        raise TypeError("re-identification report must be a mapping")
+    if not isinstance(thresholds, Mapping):
+        raise TypeError("re-identification thresholds must be a mapping")
+
+    scenario_risks = _validated_reidentification_scenario_risks(report)
+    unknown = sorted(set(thresholds) - set(_REID_SCENARIOS))
+    if unknown:
+        raise ValueError("re-identification thresholds contain unknown scenarios")
+    if not thresholds:
+        raise ValueError("at least one re-identification threshold is required")
+
+    configured: dict[str, float] = {}
+    observed: dict[str, float] = {}
+    violations: dict[str, Any] = {}
+    for scenario in _REID_SCENARIOS:
+        if scenario not in thresholds:
+            continue
+        ceiling = _strict_probability(thresholds[scenario])
+        if ceiling is None:
+            raise ValueError("re-identification thresholds must be probabilities")
+        scenario_risk = scenario_risks[scenario]
+        configured[scenario] = ceiling
+        observed[scenario] = scenario_risk
+        if scenario_risk > ceiling:
+            violations[scenario] = {
+                "observed": scenario_risk,
+                "threshold": ceiling,
+            }
+
+    population_model_consistent = report.get("population_model_consistent")
+    if not isinstance(population_model_consistent, bool):
+        raise ValueError("population-model consistency flag is required")
+    if not population_model_consistent:
+        violations["population_model"] = {"consistent": False}
+
+    return GateCheck(
+        REIDENTIFICATION_RISK_GATE,
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "re-identification report violates configured release policy"
+        ),
+        details={
+            "thresholds_configured": True,
+            "risks": observed,
+            "thresholds": configured,
+            "violations": violations,
+        },
+    )
+
+
+def _validated_reidentification_scenario_risks(
+    report: Mapping[str, Any],
+) -> dict[str, float]:
+    if type(report.get("schema_version")) is not int or report["schema_version"] != 1:
+        raise ValueError("unsupported re-identification report schema")
+
+    parsed: dict[str, dict[str, float]] = {}
+    for scenario in _REID_SCENARIOS:
+        scenario_report = report.get(scenario)
+        if not isinstance(scenario_report, Mapping):
+            raise ValueError("re-identification scenario report is missing")
+        risk = _strict_probability(scenario_report.get("risk"))
+        expected = _strict_probability(scenario_report.get("expected_probability"))
+        maximum = _strict_probability(scenario_report.get("maximum_probability"))
+        if risk is None or expected is None or maximum is None:
+            raise ValueError("re-identification scenario probabilities are invalid")
+        if expected > maximum:
+            raise ValueError("re-identification expected risk exceeds maximum risk")
+        canonical_risk = expected if scenario == "marketer" else maximum
+        if not math.isclose(risk, canonical_risk, rel_tol=0.0, abs_tol=1e-15):
+            raise ValueError("re-identification headline risk is inconsistent")
+        parsed[scenario] = {
+            "risk": risk,
+            "expected": expected,
+            "maximum": maximum,
+        }
+
+    scenario_relationships_invalid = (
+        parsed["journalist"]["expected"] != parsed["marketer"]["expected"]
+        or parsed["journalist"]["maximum"] != parsed["marketer"]["maximum"]
+    )
+    population_model_consistent = report.get("population_model_consistent")
+    if population_model_consistent is True:
+        scenario_relationships_invalid = scenario_relationships_invalid or (
+            parsed["prosecutor"]["expected"] < parsed["journalist"]["expected"]
+            or parsed["prosecutor"]["maximum"] < parsed["journalist"]["maximum"]
+        )
+    if scenario_relationships_invalid:
+        raise ValueError("re-identification scenario relationships are inconsistent")
+    return {scenario: parsed[scenario]["risk"] for scenario in _REID_SCENARIOS}
+
+
 def evaluate_release_risk_evidence(
     evidence: Any,
 ) -> GateCheck:
@@ -5918,6 +6123,7 @@ def _tracking_issue_body(
 __all__ = [
     "CROSS_DOCUMENT_LINKAGE_GATE",
     "CROSS_SCRIPT_GATE",
+    "REIDENTIFICATION_RISK_GATE",
     "DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING",
     "G1A_V16_RECALL_FLOOR",
     "G1A_V20_RECALL_FLOOR",
@@ -5964,6 +6170,8 @@ __all__ = [
     "evaluate_end_to_end_pipeline_gate",
     "evaluate_federated_boundary_gate",
     "evaluate_radiology_entity_relation_gate",
+    "evaluate_reid_risk_gate",
+    "evaluate_reidentification_risk_gate",
     "evaluate_relation_golden_regression_gate",
     "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
