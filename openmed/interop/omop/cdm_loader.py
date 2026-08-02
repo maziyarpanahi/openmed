@@ -16,6 +16,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from importlib import import_module
 from pathlib import Path
+from textwrap import dedent
 from typing import Any, Literal, Protocol
 
 UNMAPPED_CONCEPT_ID = 0
@@ -427,6 +428,18 @@ _SQL_DDL: Mapping[str, str] = {
     """,
 }
 
+_POSTGRES_DATE_COLUMNS: Mapping[str, tuple[str, ...]] = {
+    "visit_occurrence": ("visit_start_date",),
+    "note": ("note_date",),
+    "note_nlp": ("nlp_date",),
+    "condition_occurrence": ("condition_start_date",),
+    "drug_exposure": ("drug_exposure_start_date",),
+    "measurement": ("measurement_date",),
+    "procedure_occurrence": ("procedure_date",),
+    "observation": ("observation_date",),
+    "source_to_concept_map": ("valid_start_date", "valid_end_date"),
+}
+
 _NOTE_ID_FIELDS = ("note_id", "document_id", "doc_id", "source_document_id")
 _NOTE_TEXT_FIELDS = ("note_text", "text", "document_text", "source_text")
 _NOTE_DATE_FIELDS = ("note_date", "document_date", "date")
@@ -541,6 +554,30 @@ class OmopConstraintViolation:
         """Return a JSON-serializable validation violation."""
 
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class OmopValidationReport:
+    """PHI-free aggregate diagnostics for OMOP constraint validation."""
+
+    violation_count: int
+    by_table: Mapping[str, int]
+    by_reason: Mapping[str, int]
+
+    @property
+    def is_valid(self) -> bool:
+        """Return whether validation found no constraint violations."""
+
+        return self.violation_count == 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return count-only diagnostics without row or source identifiers."""
+
+        return {
+            "count": self.violation_count,
+            "by_table": dict(self.by_table),
+            "by_reason": dict(self.by_reason),
+        }
 
 
 @dataclass(frozen=True)
@@ -871,10 +908,29 @@ def create_omop_schema(con: Any) -> Any:
     return con
 
 
+def emit_postgres_ddl() -> str:
+    """Return stable PostgreSQL DDL for every loader-owned OMOP CDM table.
+
+    The script uses the loader's dependency-safe table order and PostgreSQL
+    ``DATE`` columns while retaining the same keys and relationships as the
+    local DuckDB and SQLite schemas. It contains no vocabulary data and needs
+    no OHDSI or Java runtime.
+    """
+
+    statements = []
+    for table in _TABLE_ORDER:
+        statement = dedent(_SQL_DDL[table]).strip()
+        for column in _POSTGRES_DATE_COLUMNS.get(table, ()):
+            statement = statement.replace(f"{column} TEXT", f"{column} DATE")
+        statements.append(statement)
+    header = "-- OpenMed OMOP CDM v5.4 loader-owned table subset"
+    return f"{header}\n\n" + ";\n\n".join(statements) + ";\n"
+
+
 def validate_omop_tables(
     tables: OmopCdmTables,
 ) -> tuple[OmopConstraintViolation, ...]:
-    """Validate CDM concept references, NOTE_NLP offsets, and row reachability."""
+    """Validate concept references, NOTE_NLP offsets, and domain reachability."""
 
     violations: list[OmopConstraintViolation] = []
     concept_ids = {int(row["concept_id"]) for row in tables.table("concept")}
@@ -930,10 +986,13 @@ def validate_omop_tables(
                 )
             )
 
+    domain_rows_by_event_id: dict[int, list[tuple[str, Mapping[str, Any]]]] = {}
     for table in _DOMAIN_SOURCE_CONCEPT_COLUMNS:
         for row in tables.table(table):
             row_id = int(row[_PRIMARY_KEYS[table]])
-            if int(row["note_nlp_id"]) not in note_nlp_rows:
+            domain_rows_by_event_id.setdefault(row_id, []).append((table, row))
+            note_nlp = note_nlp_rows.get(int(row["note_nlp_id"]))
+            if note_nlp is None:
                 violations.append(
                     OmopConstraintViolation(
                         table=table,
@@ -942,8 +1001,75 @@ def validate_omop_tables(
                         row_id=row_id,
                     )
                 )
+            elif _optional_int(note_nlp.get("note_nlp_event_id")) != row_id:
+                violations.append(
+                    OmopConstraintViolation(
+                        table=table,
+                        column="note_nlp_id",
+                        reason="unreachable_from_note_nlp",
+                        row_id=row_id,
+                    )
+                )
+
+    for row_id, row in note_nlp_rows.items():
+        event_id = _optional_int(row.get("note_nlp_event_id"))
+        event_rows = domain_rows_by_event_id.get(event_id or -1, ())
+        if not event_rows:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="missing_domain_event",
+                    row_id=row_id,
+                )
+            )
+            continue
+        matching_rows = [
+            event_row
+            for _, event_row in event_rows
+            if _optional_int(event_row.get("note_nlp_id")) == row_id
+        ]
+        if not matching_rows:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="mismatched_domain_event",
+                    row_id=row_id,
+                )
+            )
+        elif len(matching_rows) > 1:
+            violations.append(
+                OmopConstraintViolation(
+                    table="note_nlp",
+                    column="note_nlp_event_id",
+                    reason="ambiguous_domain_event",
+                    row_id=row_id,
+                )
+            )
 
     return tuple(violations)
+
+
+def summarize_omop_violations(
+    violations: Iterable[OmopConstraintViolation],
+) -> OmopValidationReport:
+    """Aggregate detailed violations into PHI-free table/count diagnostics."""
+
+    items = tuple(violations)
+    by_table = Counter(item.table for item in items)
+    by_reason = Counter(item.reason for item in items)
+    return OmopValidationReport(
+        violation_count=len(items),
+        by_table=dict(sorted(by_table.items())),
+        by_reason=dict(sorted(by_reason.items())),
+    )
+
+
+def validate_omop_tables_report(tables: OmopCdmTables) -> OmopValidationReport:
+    """Validate in-memory tables and return PHI-free aggregate diagnostics."""
+
+    return summarize_omop_violations(validate_omop_tables(tables))
 
 
 def validate_omop_database(con: Any) -> tuple[OmopConstraintViolation, ...]:
@@ -965,6 +1091,12 @@ def validate_omop_database(con: Any) -> tuple[OmopConstraintViolation, ...]:
             ),
         )
     )
+
+
+def validate_omop_database_report(con: Any) -> OmopValidationReport:
+    """Validate persisted tables and return PHI-free aggregate diagnostics."""
+
+    return summarize_omop_violations(validate_omop_database(con))
 
 
 def deterministic_omop_id(*parts: Any) -> int:
@@ -1541,6 +1673,7 @@ __all__ = [
     "OmopDomain",
     "OmopLoadEvent",
     "OmopLoadSummary",
+    "OmopValidationReport",
     "RejectedSpan",
     "UNMAPPED_CONCEPT_ID",
     "UNMAPPED_CONCEPT_NAME",
@@ -1549,10 +1682,14 @@ __all__ = [
     "create_omop_schema",
     "deterministic_note_hash",
     "deterministic_omop_id",
+    "emit_postgres_ddl",
     "load_grounded_jsonl",
     "load_grounded_notes",
+    "summarize_omop_violations",
     "validate_omop_database",
+    "validate_omop_database_report",
     "validate_omop_tables",
+    "validate_omop_tables_report",
     "write_omop_duckdb",
     "write_omop_parquet",
     "write_omop_sqlite",
