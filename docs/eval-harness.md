@@ -151,6 +151,17 @@ than the span schema, run the relation gate, and return a signed
 `RelationScorecard`. `run_relation_suite` exposes the same flow directly when a
 caller needs to supply a signing key, key id, or baseline explicitly.
 
+The fixture file is JSONL with one schema-version `1` document per line. Every
+row requires a globally unique `id`, source `text`, `metadata.synthetic=true`,
+and non-empty `entities` and `relations` arrays. Entity rows require unique
+`id`, `start`, `end`, and `label` fields. Relation rows require unique `id`, a
+normalized `type`, `head` and `tail` entity references, and a `scope` of either
+`sentence` or `document`. Optional `traps` rows require an `id`, a `kind`
+of `assertion` or `temporal`, one or more known `relation_ids`, and
+`zero_tolerance=true`. The loader rejects duplicate fixture, entity, or relation
+ids; invalid offsets; unknown references; unsupported versions; and
+non-synthetic rows before scoring.
+
 ```python
 from openmed.eval import run_relation_suite
 
@@ -171,6 +182,8 @@ Its signed payload contains:
 
 - strict and relaxed precision, recall, and F1, with relation-type, scope, and
   language breakdowns;
+- assertion- and temporal-consistency sub-scores computed over the trapped
+  relations, alongside their evaluated and leaked relation counts;
 - a SHA-256 hash of the exact fixture file plus a canonical hash for every
   validated fixture;
 - configured assertion and temporal trap summaries, aggregate leak counts, and
@@ -189,6 +202,11 @@ artifacts first, then raises `RelationGateFailure` whenever a pinned strict-F1
 comparison, required baseline, or zero-tolerance trap check fails. The
 exception carries the signed failure scorecard for archival; it is not a model
 release authorization.
+
+Every `(family, relation-type)` baseline is bound to the SHA-256 hash of the
+fixture file that produced it. A missing, malformed, or different candidate
+fixture hash quarantines the run, even when all reported F1 values are above
+their pinned floors.
 
 Future relation, event, and coreference suites should keep raw notes and mention
 surfaces out of this evidence layer. Extensions should add typed aggregate

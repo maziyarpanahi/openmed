@@ -138,10 +138,21 @@ def test_relation_suite_emits_signed_scorecard_and_model_card_evidence(
     }
     assert payload["metrics"]["trap_leaks"]["assertion"]["leak_count"] == 0
     assert payload["metrics"]["trap_leaks"]["temporal"]["leak_count"] == 0
+    assert payload["metrics"]["consistency"]["assertion"] == {
+        "evaluated_relation_count": 1,
+        "leak_count": 0,
+        "score": 1.0,
+    }
+    assert payload["metrics"]["consistency"]["temporal"] == {
+        "evaluated_relation_count": 2,
+        "leak_count": 0,
+        "score": 1.0,
+    }
     assert payload["provenance"]["fixture_set_hash"].startswith("sha256:")
     assert len(payload["provenance"]["fixture_hashes"]) == 3
     assert "Strict" in markdown
     assert "Zero-Tolerance Trap Summary" in markdown
+    assert "| `assertion` | 1 | 0 | 100.00% | yes |" in markdown
 
     evidence = scorecard.model_card_evidence()["relation_scorecard"]
     assert evidence["repro_hash"] == scorecard.repro_hash
@@ -150,6 +161,7 @@ def test_relation_suite_emits_signed_scorecard_and_model_card_evidence(
     assert benchmark_report.metadata["fixture_hashes"]
     assert benchmark_report.metadata["relation_traps"]["total"] == 2
     assert benchmark_report.metadata["relation_trap_leaks"]["assertion"] == {
+        "evaluated_relation_count": 1,
         "leak_count": 0,
         "leaked_relation_hashes": [],
         "trap_count": 1,
@@ -160,9 +172,20 @@ def test_relation_suite_emits_signed_scorecard_and_model_card_evidence(
     assert "Aspirin treats fever" not in scorecard.to_json() + markdown
 
 
+@pytest.mark.parametrize(
+    ("fixture_id", "conflicting_type", "trap_kind", "expected_score"),
+    [
+        ("relation-assertion-negated", "ASSERTED_PRESENT", "assertion", 0.0),
+        ("relation-document-temporal", "TEMPORALLY_AFTER", "temporal", 0.5),
+    ],
+)
 def test_relation_suite_runner_writes_signed_failure_before_propagating(
     tmp_path,
     monkeypatch,
+    fixture_id,
+    conflicting_type,
+    trap_kind,
+    expected_score,
 ) -> None:
     json_path = tmp_path / "failed-relation-scorecard.json"
     markdown_path = tmp_path / "failed-relation-scorecard.md"
@@ -170,10 +193,10 @@ def test_relation_suite_runner_writes_signed_failure_before_propagating(
 
     def conflicting_runner(fixture, _model_name, _device):
         predictions = list(fixture.gold_relations)
-        if fixture.fixture_id == "relation-assertion-negated":
+        if fixture.fixture_id == fixture_id:
             predictions[0] = replace(
                 predictions[0],
-                relation_type="ASSERTED_PRESENT",
+                relation_type=conflicting_type,
             )
         return predictions
 
@@ -197,7 +220,8 @@ def test_relation_suite_runner_writes_signed_failure_before_propagating(
     assert failure.gate_result["reason"] == (
         "zero-tolerance assertion or temporal trap leak"
     )
-    assert failure.metrics["trap_leaks"]["assertion"]["leak_count"] == 1
+    assert failure.metrics["trap_leaks"][trap_kind]["leak_count"] == 1
+    assert failure.metrics["consistency"][trap_kind]["score"] == expected_score
     assert "| Relation gate | failed |" in markdown_path.read_text(encoding="utf-8")
 
 

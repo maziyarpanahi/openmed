@@ -3384,9 +3384,10 @@ def evaluate_relation_golden_regression_gate(
     """Gate per-type strict relation F1 and zero-tolerance trap leaks.
 
     Candidate evidence uses ``relation_golden.by_type`` with the same strict
-    metric payload produced by :func:`compute_relation_metrics`, plus integer
-    ``trap_leaks`` counts for ``assertion`` and ``temporal``. Baselines come
-    from the committed ``relation_golden`` baseline-store section.
+    metric payload produced by :func:`compute_relation_metrics`, the evaluated
+    fixture-set hash, plus integer ``trap_leaks`` counts for ``assertion`` and
+    ``temporal``. Baselines come from the committed ``relation_golden``
+    baseline-store section and must be pinned to the same fixture set.
     """
 
     metadata = metadata or {}
@@ -3403,6 +3404,9 @@ def evaluate_relation_golden_regression_gate(
         )
 
     candidate_f1, invalid_candidates = _candidate_relation_strict_f1(evidence)
+    candidate_fixture_hash, fixture_hash_error = _candidate_relation_fixture_hash(
+        evidence, metadata
+    )
     family_baselines, invalid_baselines = _relation_golden_baselines(
         baseline, family=family
     )
@@ -3410,6 +3414,7 @@ def evaluate_relation_golden_regression_gate(
     missing_baselines: list[str] = []
     missing_candidates: list[str] = []
     regressions: dict[str, Any] = {}
+    fixture_hash_mismatches: dict[str, Any] = {}
 
     relation_types = sorted(
         set(candidate_f1)
@@ -3436,6 +3441,7 @@ def evaluate_relation_golden_regression_gate(
         comparison = {
             "baseline": baseline_f1,
             "baseline_key": pinned["key"],
+            "candidate_fixture_hash": candidate_fixture_hash,
             "candidate": candidate,
             "drop": drop,
             "fixture_hash": pinned["fixture_hash"],
@@ -3443,6 +3449,14 @@ def evaluate_relation_golden_regression_gate(
             "tolerance": tolerance,
         }
         comparisons[relation_type] = comparison
+        if (
+            candidate_fixture_hash is not None
+            and candidate_fixture_hash != pinned["fixture_hash"]
+        ):
+            fixture_hash_mismatches[relation_type] = {
+                "baseline": pinned["fixture_hash"],
+                "candidate": candidate_fixture_hash,
+            }
         if candidate + 1e-12 < minimum:
             regressions[relation_type] = comparison
 
@@ -3463,6 +3477,10 @@ def evaluate_relation_golden_regression_gate(
         violations["missing_candidate_relation_types"] = missing_candidates
     if invalid_candidates:
         violations["invalid_candidate_strict_f1"] = invalid_candidates
+    if fixture_hash_error is not None:
+        violations["candidate_fixture_hash"] = fixture_hash_error
+    if fixture_hash_mismatches:
+        violations["fixture_hash_mismatches"] = fixture_hash_mismatches
     if regressions:
         violations["strict_f1_regressions"] = regressions
     if missing_traps:
@@ -3479,6 +3497,8 @@ def evaluate_relation_golden_regression_gate(
         reason = "zero-tolerance assertion or temporal trap leak"
     elif missing_baselines or invalid_baselines:
         reason = "relation golden baseline is missing or invalid"
+    elif fixture_hash_mismatches:
+        reason = "relation golden fixture hash does not match pinned baseline"
     elif regressions:
         reason = "strict relation F1 regressed beyond pinned tolerance"
     else:
@@ -3576,6 +3596,27 @@ def _candidate_relation_strict_f1(
             continue
         values[relation_type] = parsed
     return values, invalid
+
+
+def _candidate_relation_fixture_hash(
+    evidence: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> tuple[str | None, str | None]:
+    nested_metrics = _mapping(evidence.get("metrics"))
+    nested_metadata = _mapping(evidence.get("metadata"))
+    raw_hash = _first_value(
+        evidence.get("fixture_set_hash"),
+        evidence.get("fixture_hash"),
+        nested_metrics.get("fixture_set_hash"),
+        nested_metadata.get("fixture_set_hash"),
+        metadata.get("fixture_set_hash"),
+    )
+    if raw_hash is None:
+        return None, "fixture_set_hash is required"
+    if not isinstance(raw_hash, str) or not raw_hash.startswith("sha256:"):
+        return None, "fixture_set_hash must be a sha256 digest"
+    if not _is_privacy_safe_digest(raw_hash):
+        return None, "fixture_set_hash must be a sha256 digest"
+    return raw_hash, None
 
 
 def _relation_golden_baselines(
