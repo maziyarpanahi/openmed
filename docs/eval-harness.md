@@ -143,6 +143,59 @@ the release package.
 | Cold-start latency | `latency.cold_start_ms` | No | Wall-clock latency of the first fixture call in ms. |
 | Peak RSS | `resources.peak_rss_bytes` | No | Peak resident set size in bytes during the run. |
 
+## Signed relation scorecard contract
+
+The committed synthetic relation gold is part of the normal suite-runner flow.
+Selecting `suite="relations"` makes `run_suite` load the relation schema rather
+than the span schema, run the relation gate, and return a signed
+`RelationScorecard`. `run_relation_suite` exposes the same flow directly when a
+caller needs to supply a signing key, key id, or baseline explicitly.
+
+```python
+from openmed.eval import run_relation_suite
+
+scorecard = run_relation_suite(
+    model_name="local-relation-model",
+    runner=relation_runner,
+    signing_key=local_release_key,
+    output_json="evidence/relation-scorecard.json",
+    output_markdown="evidence/relation-scorecard.md",
+)
+
+assert scorecard.verify(local_release_key)
+model_card_block = scorecard.model_card_evidence()
+```
+
+The JSON artifact type is `openmed.eval.relation_scorecard`, schema version `1`.
+Its signed payload contains:
+
+- strict and relaxed precision, recall, and F1, with relation-type, scope, and
+  language breakdowns;
+- a SHA-256 hash of the exact fixture file plus a canonical hash for every
+  validated fixture;
+- configured assertion and temporal trap summaries, aggregate leak counts, and
+  hashes for leaked trap relations rather than relation text;
+- the complete relation regression gate result, reproducibility hash, and HMAC
+  signature.
+
+`model_card_evidence()` returns the complete signed artifact under the
+`relation_scorecard` key. Existing `ModelScorecard` consumers can instead use
+`scorecard.to_benchmark_report()`, which preserves fixture hashes and trap
+summaries in report metadata. Consumers must verify the signature and require
+`gate_passed` before publishing either form as passing evidence.
+
+The runner is fail-closed. It writes requested JSON and Markdown failure
+artifacts first, then raises `RelationGateFailure` whenever a pinned strict-F1
+comparison, required baseline, or zero-tolerance trap check fails. The
+exception carries the signed failure scorecard for archival; it is not a model
+release authorization.
+
+Future relation, event, and coreference suites should keep raw notes and mention
+surfaces out of this evidence layer. Extensions should add typed aggregate
+breakdowns and hashed fixture provenance, define task-specific trap summaries,
+and version the artifact when binary head-tail relation semantics no longer
+describe the scored object.
+
 ## Edge Metrics
 
 ### cold_start_ms
