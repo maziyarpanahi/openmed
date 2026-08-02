@@ -1,17 +1,25 @@
 """Input validation utilities for OpenMed."""
 
-from pathlib import Path
 import re
-from typing import Any, Optional, List, Union
+from pathlib import Path
+from typing import Any, Optional
+
+from . import gateway
 
 
 def validate_input(
     text: Any,
     min_length: int = 1,
     max_length: Optional[int] = None,
-    allow_empty: bool = False
+    allow_empty: bool = False,
 ) -> str:
     """Validate and clean input text.
+
+    This is the library entry point into the shared input gateway. Character
+    and UTF-8 byte caps, encoding validation, whitespace normalization, and
+    empty/minimum-length checks are delegated to
+    :func:`openmed.utils.gateway.normalize_text`. The existing suspicious-input
+    heuristic remains as a library-specific compatibility check.
 
     Args:
         text: Input text to validate.
@@ -23,36 +31,27 @@ def validate_input(
         Validated and cleaned text.
 
     Raises:
-        ValueError: If validation fails.
+        InputValidationError: If validation fails. This subclasses
+            :class:`ValueError` for backward compatibility.
     """
-    if text is None:
-        if allow_empty:
-            return ""
-        raise ValueError("Input text cannot be None")
-
-    # Convert to string if not already
-    if not isinstance(text, str):
-        text = str(text)
-
-    # Basic cleaning
-    text = text.strip()
-
-    # Check empty string
-    if not text and not allow_empty:
-        raise ValueError("Input text cannot be empty")
-
-    # Check length constraints
-    if len(text) < min_length:
-        if allow_empty and len(text) == 0:
-            return text
-        raise ValueError(f"Input text too short. Minimum length: {min_length}")
-
-    if max_length and len(text) > max_length:
-        raise ValueError(f"Input text too long. Maximum length: {max_length}")
+    default_limits = gateway.get_default_limits()
+    limits = gateway.GatewayLimits(
+        max_chars=(default_limits.max_chars if max_length is None else max_length),
+        max_bytes=default_limits.max_bytes,
+    )
+    text = gateway.normalize_text(
+        text,
+        limits=limits,
+        min_length=min_length,
+        allow_empty=allow_empty,
+    )
 
     # Check for suspicious content
     if _contains_suspicious_content(text):
-        raise ValueError("Input text contains suspicious content")
+        raise gateway.InputValidationError(
+            "Input text contains suspicious content",
+            code="suspicious_content",
+        )
 
     return text
 
@@ -93,13 +92,13 @@ def validate_model_name(model_name: str) -> str:
             raise ValueError("Organization and model name cannot be empty")
 
         # Validate characters
-        if not re.match(r'^[a-zA-Z0-9\-_.]+$', org):
+        if not re.match(r"^[a-zA-Z0-9\-_.]+$", org):
             raise ValueError("Invalid characters in organization name")
-        if not re.match(r'^[a-zA-Z0-9\-_.]+$', model):
+        if not re.match(r"^[a-zA-Z0-9\-_.]+$", model):
             raise ValueError("Invalid characters in model name")
     else:
         # Just model name
-        if not re.match(r'^[a-zA-Z0-9\-_.]+$', model_name):
+        if not re.match(r"^[a-zA-Z0-9\-_.]+$", model_name):
             raise ValueError("Invalid characters in model name")
 
     return model_name
@@ -186,16 +185,18 @@ def _contains_suspicious_content(text: str) -> bool:
         True if suspicious content is found.
     """
     # Check for extremely long repeated characters
-    if re.search(r'(.)\1{100,}', text):
+    if re.search(r"(.)\1{100,}", text):
         return True
 
     # Check for excessive special characters
-    special_char_ratio = len(re.findall(r'[^\w\s]', text)) / len(text) if text else 0
+    special_char_ratio = len(re.findall(r"[^\w\s]", text)) / len(text) if text else 0
     if special_char_ratio > 0.5:
         return True
 
-    # Check for binary or encoded content
-    if re.search(r'[^\x00-\x7F]{50,}', text):
+    # Check for binary or encoded content (control characters excluding
+    # common whitespace).  Do NOT reject non-ASCII text — CJK, Arabic,
+    # Devanagari and other scripts legitimately contain long non-ASCII runs.
+    if re.search(r"[\x00-\x08\x0e-\x1f\x7f]{10,}", text):
         return True
 
     return False
@@ -214,10 +215,10 @@ def sanitize_filename(filename: str) -> str:
         filename = str(filename)
 
     # Remove path separators and dangerous characters
-    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
 
     # Remove control characters
-    filename = re.sub(r'[\x00-\x1f\x7f]', '', filename)
+    filename = re.sub(r"[\x00-\x1f\x7f]", "", filename)
 
     # Limit length
     if len(filename) > 255:

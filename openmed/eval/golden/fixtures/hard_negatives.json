@@ -1,0 +1,256 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-date-code-en",
+      "language": "en",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "A1-2026 remained a lab panel code, not a visit date."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-date-code-en",
+            "difficulty_score": 0.88,
+            "end": 7,
+            "label": "DATE",
+            "language": "en",
+            "lexical_proximity_score": 0.78,
+            "model_false_positive_score": 0.93,
+            "reason": "date_like_code",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "A1-2026"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "A1-2026 remained a lab panel code, not a visit date."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-id-bin-en",
+      "language": "en",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "MRN-0007 labeled a simulator bin, not a patient record."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-id-bin-en",
+            "difficulty_score": 0.91,
+            "end": 8,
+            "label": "ID_NUM",
+            "language": "en",
+            "lexical_proximity_score": 0.86,
+            "model_false_positive_score": 0.94,
+            "reason": "identifier_like",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "MRN-0007"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "MRN-0007 labeled a simulator bin, not a patient record."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-organization-ward-en",
+      "language": "en",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "Riverside Training Ward appeared as a course location only."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-organization-ward-en",
+            "difficulty_score": 0.79,
+            "end": 23,
+            "label": "ORGANIZATION",
+            "language": "en",
+            "lexical_proximity_score": 0.74,
+            "model_false_positive_score": 0.82,
+            "reason": "name_like",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "Riverside Training Ward"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "Riverside Training Ward appeared as a course location only."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-person-roster-en",
+      "language": "en",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "Nora Patel signed the fictional provider roster, not the patient chart."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-person-roster-en",
+            "difficulty_score": 0.84,
+            "end": 10,
+            "label": "PERSON",
+            "language": "en",
+            "lexical_proximity_score": 0.81,
+            "model_false_positive_score": 0.86,
+            "reason": "name_like",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "Nora Patel"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "Nora Patel signed the fictional provider roster, not the patient chart."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-email-example-en",
+      "language": "en",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "demo-alert@example.invalid was an example mailbox that must stay visible."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-email-example-en",
+            "difficulty_score": 0.87,
+            "end": 26,
+            "label": "EMAIL",
+            "language": "en",
+            "lexical_proximity_score": 0.9,
+            "model_false_positive_score": 0.85,
+            "reason": "email_like",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "demo-alert@example.invalid"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "demo-alert@example.invalid was an example mailbox that must stay visible."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-phone-device-en",
+      "language": "en",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "555-0100 measured a mock device channel, not a phone number."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-phone-device-en",
+            "difficulty_score": 0.82,
+            "end": 8,
+            "label": "PHONE",
+            "language": "en",
+            "lexical_proximity_score": 0.76,
+            "model_false_positive_score": 0.85,
+            "reason": "phone_like",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "555-0100"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "555-0100 measured a mock device channel, not a phone number."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-account-room-fr",
+      "language": "fr",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "Salle 12B/340 designait un tableau de formation, pas un compte."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-account-room-fr",
+            "difficulty_score": 0.8,
+            "end": 13,
+            "label": "ACCOUNT_NUMBER",
+            "language": "fr",
+            "lexical_proximity_score": 0.77,
+            "model_false_positive_score": 0.82,
+            "reason": "account_like_location",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "Salle 12B/340"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "Salle 12B/340 designait un tableau de formation, pas un compte."
+    },
+    {
+      "gold_spans": [],
+      "id": "golden-hard-negative-location-course-es",
+      "language": "es",
+      "metadata": {
+        "category": "hard_negatives",
+        "expected_output": {
+          "method": "none",
+          "text": "Clinica Demo Norte fue el nombre del curso, no una direccion."
+        },
+        "hard_negative_candidates": [
+          {
+            "candidate_id": "hn-committed-location-course-es",
+            "difficulty_score": 0.77,
+            "end": 18,
+            "label": "LOCATION",
+            "language": "es",
+            "lexical_proximity_score": 0.72,
+            "model_false_positive_score": 0.8,
+            "reason": "name_like",
+            "source_shard_id": "committed-synthetic",
+            "start": 0,
+            "synthetic": true,
+            "text": "Clinica Demo Norte"
+          }
+        ],
+        "hard_negative_pack": "om-627-hard-negatives-v1",
+        "synthetic": true
+      },
+      "text": "Clinica Demo Norte fue el nombre del curso, no una direccion."
+    }
+  ],
+  "notice": "Synthetic-only hard-negative golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}

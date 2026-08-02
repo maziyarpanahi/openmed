@@ -51,12 +51,16 @@ def tag_exists_locally(tag: str) -> bool:
 
 
 def tag_exists_on_origin(tag: str) -> bool:
-    result = run_git(["ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"])
+    result = run_git(
+        ["ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"]
+    )
     return result.returncode == 0
 
 
 def has_text(path: str, expected: str) -> bool:
     file_path = ROOT / path
+    if not file_path.is_file():
+        return False
     content = file_path.read_text(encoding="utf-8")
     return expected in content
 
@@ -81,20 +85,61 @@ def main() -> int:
 
     checks = [
         (package_version == expected_version, f"package version is {package_version}"),
-        (changelog_version == expected_version, f"top CHANGELOG release is {changelog_version}"),
+        (
+            changelog_version == expected_version,
+            f"top CHANGELOG release is {changelog_version}",
+        ),
         (not tag_exists_locally(tag), f"local tag {tag} is not already used"),
     ]
 
     if not args.skip_origin_tag_check:
-        checks.append((not tag_exists_on_origin(tag), f"origin tag {tag} is not already used"))
+        checks.append(
+            (not tag_exists_on_origin(tag), f"origin tag {tag} is not already used")
+        )
 
-    for path, expected in (
+    versioned_surfaces = (
         ("README.md", f'from: "{expected_version}"'),
+        (
+            "README.md",
+            f"com.github.maziyarpanahi:openmed:v{expected_version}",
+        ),
+        (
+            "android/README.md",
+            f"com.github.maziyarpanahi:openmed:v{expected_version}",
+        ),
+        (
+            "docs/export-onnx-android.md",
+            f"com.github.maziyarpanahi:openmed:v{expected_version}",
+        ),
         ("docs/swift-openmedkit.md", f'from: "{expected_version}"'),
+        ("docs/index.md", f"release/v{expected_version}.md"),
+        ("mkdocs.yml", f"OpenMed {expected_version} Release Notes"),
+        (
+            f"docs/release/v{expected_version}.md",
+            f"# OpenMed v{expected_version}",
+        ),
         ("docs/website/index.html", f"OpenMed {expected_version}"),
-        ("swift/OpenMedDemo/OpenMedDemo/Info.plist", f"<string>{expected_version}</string>"),
-        ("swift/OpenMedScanDemo/OpenMedScanDemo/Info.plist", f"<string>{expected_version}</string>"),
-    ):
+        ("docs/api/openapi.json", f'"version": "{expected_version}"'),
+        (
+            "deploy/helm/openmed-service/Chart.yaml",
+            f'appVersion: "{expected_version}"',
+        ),
+        (
+            "deploy/helm/openmed-service/values.yaml",
+            f'tag: "{expected_version}"',
+        ),
+        ("js/openmedkit-web/package.json", f'"version": "{expected_version}"'),
+        (
+            "swift/OpenMedDemo/OpenMedDemo/Info.plist",
+            f"<string>{expected_version}</string>",
+        ),
+        (
+            "swift/OpenMedScanDemo/OpenMedScanDemo/Info.plist",
+            f"<string>{expected_version}</string>",
+        ),
+    )
+
+    for path, expected in versioned_surfaces:
         checks.append(
             (
                 has_text(path, expected),

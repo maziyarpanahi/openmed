@@ -18,4 +18,3 @@ Model labels:
 
 - MLX: `OpenMed/privacy-filter-mlx-8bit`
 - CPU: `openai/privacy-filter`
-

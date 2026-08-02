@@ -138,7 +138,9 @@ def _swiglu(x: mx.array, *, alpha: float = 1.702, limit: float = 7.0) -> mx.arra
 class PrivacyFilterExpertLinear(nn.Module):
     """Batched expert linear layer with OPF's ``[experts, in, out]`` weights."""
 
-    def __init__(self, num_experts: int, in_features: int, out_features: int, dtype: mx.Dtype) -> None:
+    def __init__(
+        self, num_experts: int, in_features: int, out_features: int, dtype: mx.Dtype
+    ) -> None:
         super().__init__()
         self.weight = mx.zeros((num_experts, in_features, out_features), dtype=dtype)
         self.bias = mx.zeros((num_experts, out_features), dtype=dtype)
@@ -182,9 +184,15 @@ class PrivacyFilterQuantizedExpertLinear(nn.Module):
         self.mode = mode
         packed_features = (in_features * self.bits) // 32
         scale_groups = in_features // self.group_size
-        self.weight = mx.zeros((num_experts, out_features, packed_features), dtype=mx.uint32)
-        self.scales = mx.ones((num_experts, out_features, scale_groups), dtype=mx.float16)
-        self.biases = mx.zeros((num_experts, out_features, scale_groups), dtype=mx.float16)
+        self.weight = mx.zeros(
+            (num_experts, out_features, packed_features), dtype=mx.uint32
+        )
+        self.scales = mx.ones(
+            (num_experts, out_features, scale_groups), dtype=mx.float16
+        )
+        self.biases = mx.zeros(
+            (num_experts, out_features, scale_groups), dtype=mx.float16
+        )
         self.bias = mx.zeros((num_experts, out_features), dtype=mx.float16)
         self.freeze()
 
@@ -238,7 +246,9 @@ class PrivacyFilterQuantizedExpertLinear(nn.Module):
         return quantized
 
 
-def _as_bool_attention_mask(attention_mask: Optional[mx.array], shape: tuple[int, int]) -> Optional[mx.array]:
+def _as_bool_attention_mask(
+    attention_mask: Optional[mx.array], shape: tuple[int, int]
+) -> Optional[mx.array]:
     if attention_mask is None:
         return None
     if attention_mask.shape != shape:
@@ -262,7 +272,9 @@ def _local_attention(
     batch_size, num_tokens, num_kv_heads, query_mult, head_dim = query.shape
     window = left_context + right_context + 1
     key_padded = mx.pad(key, [(0, 0), (left_context, right_context), (0, 0), (0, 0)])
-    value_padded = mx.pad(value, [(0, 0), (left_context, right_context), (0, 0), (0, 0)])
+    value_padded = mx.pad(
+        value, [(0, 0), (left_context, right_context), (0, 0), (0, 0)]
+    )
     padded_tokens = num_tokens + left_context + right_context
     strides = (
         padded_tokens * num_kv_heads * head_dim,
@@ -307,7 +319,9 @@ def _local_attention(
         sink_scores[None, None, :, :, None],
         (batch_size, num_tokens, num_kv_heads, query_mult, 1),
     )
-    weights = mx.softmax(mx.concatenate([scores, sink_scores], axis=-1), axis=-1)[..., :-1]
+    weights = mx.softmax(mx.concatenate([scores, sink_scores], axis=-1), axis=-1)[
+        ..., :-1
+    ]
     attn = mx.einsum("bthqw,btwhd->bthqd", weights.astype(value.dtype), value_windows)
     return attn.reshape(batch_size, num_tokens, num_kv_heads * query_mult * head_dim)
 
@@ -323,10 +337,16 @@ class PrivacyFilterAttentionBlock(nn.Module):
         self.num_attention_heads = int(config["num_attention_heads"])
         self.num_key_value_heads = int(config["num_key_value_heads"])
         self.query_mult = self.num_attention_heads // self.num_key_value_heads
-        self.left_context = int(config.get("bidirectional_left_context", config.get("sliding_window", 0)))
+        self.left_context = int(
+            config.get("bidirectional_left_context", config.get("sliding_window", 0))
+        )
         self.right_context = int(config.get("bidirectional_right_context", 0))
-        self.norm = PrivacyFilterRMSNorm(hidden_size, eps=float(config.get("rms_norm_eps", 1e-5)))
-        qkv_dim = self.head_dim * (self.num_attention_heads + 2 * self.num_key_value_heads)
+        self.norm = PrivacyFilterRMSNorm(
+            hidden_size, eps=float(config.get("rms_norm_eps", 1e-5))
+        )
+        qkv_dim = self.head_dim * (
+            self.num_attention_heads + 2 * self.num_key_value_heads
+        )
         self.qkv = nn.Linear(hidden_size, qkv_dim)
         self.out = nn.Linear(self.head_dim * self.num_attention_heads, hidden_size)
         self.sinks = mx.zeros((self.num_attention_heads,), dtype=mx.float32)
@@ -344,15 +364,23 @@ class PrivacyFilterAttentionBlock(nn.Module):
         self.out.weight = self.out.weight.astype(dtype)
         self.out.bias = self.out.bias.astype(dtype)
 
-    def __call__(self, x: mx.array, *, attention_mask: Optional[mx.array] = None) -> mx.array:
+    def __call__(
+        self, x: mx.array, *, attention_mask: Optional[mx.array] = None
+    ) -> mx.array:
         batch_size, num_tokens, _ = x.shape
         t = _linear_input(self.norm(x), self.qkv)
         qkv = self.qkv(t)
         q_end = self.num_attention_heads * self.head_dim
         k_end = q_end + self.num_key_value_heads * self.head_dim
-        q = qkv[:, :, :q_end].reshape(batch_size, num_tokens, self.num_attention_heads, self.head_dim)
-        k = qkv[:, :, q_end:k_end].reshape(batch_size, num_tokens, self.num_key_value_heads, self.head_dim)
-        v = qkv[:, :, k_end:].reshape(batch_size, num_tokens, self.num_key_value_heads, self.head_dim)
+        q = qkv[:, :, :q_end].reshape(
+            batch_size, num_tokens, self.num_attention_heads, self.head_dim
+        )
+        k = qkv[:, :, q_end:k_end].reshape(
+            batch_size, num_tokens, self.num_key_value_heads, self.head_dim
+        )
+        v = qkv[:, :, k_end:].reshape(
+            batch_size, num_tokens, self.num_key_value_heads, self.head_dim
+        )
         q, k = self.rope(q, k)
         q = (q * self.qk_scale).reshape(
             batch_size,
@@ -385,7 +413,9 @@ class PrivacyFilterMLPBlock(nn.Module):
         num_experts = int(config["num_experts"])
         self.experts_per_token = int(config["experts_per_token"])
         self.swiglu_limit = float(config.get("swiglu_limit", 7.0))
-        self.norm = PrivacyFilterRMSNorm(hidden_size, eps=float(config.get("rms_norm_eps", 1e-5)))
+        self.norm = PrivacyFilterRMSNorm(
+            hidden_size, eps=float(config.get("rms_norm_eps", 1e-5))
+        )
         self.gate = nn.Linear(hidden_size, num_experts)
         self.swiglu = PrivacyFilterExpertLinear(
             num_experts,
@@ -408,15 +438,21 @@ class PrivacyFilterMLPBlock(nn.Module):
         t = self.norm(x).reshape(-1, hidden_size)
         gate_logits = self.gate(_linear_input(t, self.gate)).astype(mx.float32)
         expert_values, expert_indices = _topk(gate_logits, self.experts_per_token)
-        expert_weights = mx.softmax(expert_values, axis=-1) / float(self.experts_per_token)
+        expert_weights = mx.softmax(expert_values, axis=-1) / float(
+            self.experts_per_token
+        )
         expanded = mx.broadcast_to(
             _linear_input(t, self.swiglu)[:, None, :],
             (t.shape[0], self.experts_per_token, hidden_size),
         )
         hidden = self.swiglu(expanded, expert_indices).astype(mx.float32)
         hidden = _swiglu(hidden, limit=self.swiglu_limit)
-        out = self.out(_linear_input(hidden, self.out), expert_indices).astype(mx.float32)
-        out = mx.sum(out * expert_weights[..., None], axis=1) * float(self.experts_per_token)
+        out = self.out(_linear_input(hidden, self.out), expert_indices).astype(
+            mx.float32
+        )
+        out = mx.sum(out * expert_weights[..., None], axis=1) * float(
+            self.experts_per_token
+        )
         return x + out.reshape(*batch_shape, hidden_size).astype(x.dtype)
 
 
@@ -428,7 +464,9 @@ class PrivacyFilterTransformerBlock(nn.Module):
         self.attn = PrivacyFilterAttentionBlock(config)
         self.mlp = PrivacyFilterMLPBlock(config)
 
-    def __call__(self, x: mx.array, *, attention_mask: Optional[mx.array] = None) -> mx.array:
+    def __call__(
+        self, x: mx.array, *, attention_mask: Optional[mx.array] = None
+    ) -> mx.array:
         x = self.attn(x, attention_mask=attention_mask)
         return self.mlp(x)
 
@@ -440,7 +478,9 @@ class OpenAIPrivacyFilterForTokenClassification(nn.Module):
         super().__init__()
         dtype = _param_dtype(config)
         self.config = config
-        self.embedding = nn.Embedding(int(config["vocab_size"]), int(config["hidden_size"]))
+        self.embedding = nn.Embedding(
+            int(config["vocab_size"]), int(config["hidden_size"])
+        )
         self.embedding.weight = self.embedding.weight.astype(dtype)
         self.block = [
             PrivacyFilterTransformerBlock(config)

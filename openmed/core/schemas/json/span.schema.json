@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "action": {
-      "enum": ["keep", "redact", "replace", "mask", "hash"],
+      "enum": ["keep", "redact", "replace", "mask", "hash", "format_preserve"],
       "type": "string"
     },
     "canonical_label": {
@@ -84,7 +84,12 @@
       "type": "object"
     },
     "policy_label": {
-      "enum": ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "CLINICAL_CONCEPT"],
+      "enum": [
+        "DIRECT_IDENTIFIER",
+        "QUASI_IDENTIFIER",
+        "SENSITIVE_ATTRIBUTE",
+        "CLINICAL_CONCEPT"
+      ],
       "type": "string"
     },
     "regulatory_tags": {

@@ -1,11 +1,21 @@
 """Pytest configuration and fixtures for OpenMed tests."""
 
+from typing import Any, Dict, List
+from unittest.mock import MagicMock, Mock
+
 import pytest
-from unittest.mock import Mock, MagicMock
-from typing import Dict, Any, List
 
 import openmed
 from openmed.core.config import OpenMedConfig
+from openmed.processing.tokenizer_cache import clear_tokenizer_cache
+
+_PAGED_KV_SERVICE_ENV_VARS = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN",
+)
 
 
 @pytest.fixture
@@ -16,7 +26,7 @@ def sample_config():
         cache_dir="/tmp/test_cache",
         device="cpu",
         log_level="DEBUG",
-        timeout=60
+        timeout=60,
     )
 
 
@@ -95,15 +105,15 @@ def mock_pipeline():
             "score": 0.95,
             "word": "diabetes",
             "start": 21,
-            "end": 29
+            "end": 29,
         },
         {
             "entity": "B-MEDICATION",
             "score": 0.89,
             "word": "metformin",
             "start": 59,
-            "end": 68
-        }
+            "end": 68,
+        },
     ]
     return pipeline
 
@@ -117,22 +127,16 @@ def sample_predictions():
             "score": 0.95,
             "word": "diabetes",
             "start": 21,
-            "end": 29
+            "end": 29,
         },
         {
             "entity": "B-MEDICATION",
             "score": 0.89,
             "word": "metformin",
             "start": 59,
-            "end": 68
+            "end": 68,
         },
-        {
-            "entity": "B-DOSAGE",
-            "score": 0.87,
-            "word": "500mg",
-            "start": 69,
-            "end": 74
-        }
+        {"entity": "B-DOSAGE", "score": 0.87, "word": "500mg", "start": 69, "end": 74},
     ]
 
 
@@ -158,26 +162,43 @@ def reset_config():
     openmed.core.config.set_config(OpenMedConfig())
 
 
+@pytest.fixture(autouse=True)
+def reset_tokenizer_cache():
+    """Reset process-level tokenizer cache around each test."""
+    clear_tokenizer_cache()
+    yield
+    clear_tokenizer_cache()
+
+
+@pytest.fixture(autouse=True)
+def clear_paged_kv_service_env(monkeypatch):
+    """Keep optional MLX paged KV-cache service env from leaking into tests."""
+    for env_var in _PAGED_KV_SERVICE_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
+
+
 class TestHelpers:
     """Helper class with utility methods for tests."""
 
     @staticmethod
-    def create_entity_prediction(text: str, label: str, confidence: float, start: int = None, end: int = None):
+    def create_entity_prediction(
+        text: str, label: str, confidence: float, start: int = None, end: int = None
+    ):
         """Create an EntityPrediction for testing."""
         from openmed.processing.outputs import EntityPrediction
+
         return EntityPrediction(
-            text=text,
-            label=label,
-            confidence=confidence,
-            start=start,
-            end=end
+            text=text, label=label, confidence=confidence, start=start, end=end
         )
 
     @staticmethod
-    def create_prediction_result(text: str, entities: List[Dict], model_name: str = "test-model"):
+    def create_prediction_result(
+        text: str, entities: List[Dict], model_name: str = "test-model"
+    ):
         """Create a PredictionResult for testing."""
-        from openmed.processing.outputs import PredictionResult, EntityPrediction
         from datetime import datetime
+
+        from openmed.processing.outputs import EntityPrediction, PredictionResult
 
         entity_objects = [
             EntityPrediction(
@@ -185,8 +206,9 @@ class TestHelpers:
                 label=e["entity"],
                 confidence=e["score"],
                 start=e.get("start"),
-                end=e.get("end")
-            ) for e in entities
+                end=e.get("end"),
+            )
+            for e in entities
         ]
 
         return PredictionResult(
@@ -194,7 +216,7 @@ class TestHelpers:
             entities=entity_objects,
             model_name=model_name,
             timestamp=datetime.now().isoformat(),
-            processing_time=0.123
+            processing_time=0.123,
         )
 
 

@@ -1,0 +1,40 @@
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: openmed-ghcr-keyless-signatures
+spec:
+  mode: enforce
+  images:
+    - glob: ghcr.io/maziyarpanahi/openmed*
+  authorities:
+    - name: openmed-github-actions
+      keyless:
+        url: https://fulcio.sigstore.dev
+        identities:
+          - issuer: https://token.actions.githubusercontent.com
+            subjectRegExp: ^https://github.com/maziyarpanahi/openmed/\.github/workflows/image-signing\.yml@refs/(heads/master|tags/v.*)$
+      attestations:
+        - name: cyclonedx-sbom
+          predicateType: https://cyclonedx.org/bom
+          policy:
+            type: cue
+            data: |
+              predicateType: "https://cyclonedx.org/bom"
+              predicate: {
+                bomFormat: "CycloneDX"
+              }
+        - name: slsa-provenance
+          predicateType: https://slsa.dev/provenance/v1
+          policy:
+            type: cue
+            data: |
+              predicateType: "https://slsa.dev/provenance/v1"
+              predicate: {
+                buildDefinition: {
+                  externalParameters: {
+                    image: =~"^ghcr\\.io/maziyarpanahi/openmed@sha256:[0-9a-f]{64}$"
+                    publishingWorkflow: ".github/workflows/container-multiarch.yml"
+                    signingWorkflow: ".github/workflows/image-signing.yml"
+                  }
+                }
+              }

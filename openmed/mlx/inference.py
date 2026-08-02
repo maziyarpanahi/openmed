@@ -7,7 +7,6 @@ unchanged.
 
 from __future__ import annotations
 
-import math
 import json
 import logging
 import re
@@ -16,13 +15,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.core.decoding import (
-    TokenLabelInfo,
+    SpanEdge,
+    SpanNode,
     build_label_info,
+    decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
+    token_spans_to_char_spans,
     trim_span_whitespace,
     viterbi_decode,
-    zero_viterbi_biases,
 )
 from openmed.mlx.artifact import (
     MANIFEST_FILENAME,
@@ -30,12 +31,16 @@ from openmed.mlx.artifact import (
     load_artifact_config,
     read_manifest,
     resolve_tokenizer_reference,
+    resolve_weight_candidates,
 )
+from openmed.processing.advanced_ner import stream_token_classifier
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
 try:
     import mlx.core as mx
+
     MLX_AVAILABLE = True
 except ImportError:
     MLX_AVAILABLE = False
@@ -52,7 +57,7 @@ def _tokenizer_has_list_extra_special_tokens(reference: str | Path) -> bool:
         return False
 
     try:
-        with open(tokenizer_config) as f:
+        with open(tokenizer_config, encoding="utf-8") as f:
             config = json.load(f)
     except (OSError, json.JSONDecodeError):
         return False
@@ -66,23 +71,25 @@ def _load_auto_tokenizer(reference: str | Path) -> Any:
 
     def _from_pretrained(**kwargs: Any) -> Any:
         try:
-            return AutoTokenizer.from_pretrained(
+            return get_tokenizer_with_loader(
                 reference,
+                AutoTokenizer.from_pretrained,
                 fix_mistral_regex=True,
                 **kwargs,
             )
         except TypeError as exc:
             if "fix_mistral_regex" not in str(exc):
                 raise
-            return AutoTokenizer.from_pretrained(reference, **kwargs)
+            return get_tokenizer_with_loader(
+                reference, AutoTokenizer.from_pretrained, **kwargs
+            )
 
     try:
         return _from_pretrained()
     except AttributeError as exc:
-        if (
-            "'list' object has no attribute 'keys'" not in str(exc)
-            or not _tokenizer_has_list_extra_special_tokens(reference)
-        ):
+        if "'list' object has no attribute 'keys'" not in str(
+            exc
+        ) or not _tokenizer_has_list_extra_special_tokens(reference):
             raise
         return _from_pretrained(extra_special_tokens={})
 
@@ -188,6 +195,11 @@ class MLXTokenClassificationPipeline:
 
         return self._predict_single(text)
 
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental token-classification events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
+
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
         """Run token classification for a single input string."""
         # 1. Tokenize
@@ -243,14 +255,16 @@ class MLXTokenClassificationPipeline:
             score = probs[i][label_id]
             if label == "O":
                 continue
-            results.append({
-                "entity": label,
-                "score": score,
-                "word": text[start:end],
-                "start": start,
-                "end": end,
-                "index": i,
-            })
+            results.append(
+                {
+                    "entity": label,
+                    "score": score,
+                    "word": text[start:end],
+                    "start": start,
+                    "end": end,
+                    "index": i,
+                }
+            )
         return results
 
     def _decode_grouped(
@@ -305,7 +319,7 @@ class MLXTokenClassificationPipeline:
             else:
                 # Continue current entity
                 current["end"] = end
-                current["word"] = text[current["start"]:end]
+                current["word"] = text[current["start"] : end]
                 current["_scores"].append(score)
 
         if current is not None:
@@ -325,8 +339,12 @@ class MLXTokenClassificationPipeline:
         return entities
 
 
-def _decode_tiktoken_offsets(token_ids: Sequence[int], encoding: Any) -> tuple[str, list[int], list[int]]:
-    token_bytes = [encoding.decode_single_token_bytes(int(token_id)) for token_id in token_ids]
+def _decode_tiktoken_offsets(
+    token_ids: Sequence[int], encoding: Any
+) -> tuple[str, list[int], list[int]]:
+    token_bytes = [
+        encoding.decode_single_token_bytes(int(token_id)) for token_id in token_ids
+    ]
     decoded_text = b"".join(token_bytes).decode("utf-8", errors="replace")
     if not token_bytes:
         return decoded_text, [], []
@@ -408,8 +426,16 @@ class PrivacyFilterMLXPipeline:
             return self._predict_batch(list(text))
         return self._predict_single(text)
 
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental privacy-filter events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
+
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
-        token_ids = [int(token_id) for token_id in self.encoding.encode(text, allowed_special="all")]
+        token_ids = [
+            int(token_id)
+            for token_id in self.encoding.encode(text, allowed_special="all")
+        ]
         if not token_ids:
             return []
 
@@ -444,8 +470,7 @@ class PrivacyFilterMLXPipeline:
 
         max_len = max(len(token_ids) for _, _, token_ids in encoded)
         padded_ids = [
-            token_ids + [0] * (max_len - len(token_ids))
-            for _, _, token_ids in encoded
+            token_ids + [0] * (max_len - len(token_ids)) for _, _, token_ids in encoded
         ]
         attention_mask = [
             [True] * len(token_ids) + [False] * (max_len - len(token_ids))
@@ -485,12 +510,18 @@ class PrivacyFilterMLXPipeline:
             biases=self.viterbi_biases,
         )
 
-        decoded_text, char_starts, char_ends = _decode_tiktoken_offsets(token_ids, self.encoding)
+        decoded_text, char_starts, char_ends = _decode_tiktoken_offsets(
+            token_ids, self.encoding
+        )
         source_text = decoded_text if decoded_text != text else text
 
         if self.aggregation_strategy is None:
-            return self._decode_raw(pred_ids, probs_py, char_starts, char_ends, source_text)
-        return self._decode_grouped(pred_ids, probs_py, char_starts, char_ends, source_text)
+            return self._decode_raw(
+                pred_ids, probs_py, char_starts, char_ends, source_text
+            )
+        return self._decode_grouped(
+            pred_ids, probs_py, char_starts, char_ends, source_text
+        )
 
     def _decode_raw(
         self,
@@ -529,15 +560,17 @@ class PrivacyFilterMLXPipeline:
         char_ends: list[int],
         text: str,
     ) -> list[dict[str, Any]]:
-        labels_by_index = {index: int(label_id) for index, label_id in enumerate(pred_ids)}
+        labels_by_index = {
+            index: int(label_id) for index, label_id in enumerate(pred_ids)
+        }
         token_spans = labels_to_token_spans(labels_by_index, self.label_info)
+        token_offsets = list(zip(char_starts, char_ends))
+        char_spans = token_spans_to_char_spans(token_spans, token_offsets, text)
 
         entities: list[dict[str, Any]] = []
-        for span_label, token_start, token_end in token_spans:
-            if not (0 <= token_start < token_end <= len(char_starts)):
-                continue
-            start = char_starts[token_start]
-            end = char_ends[token_end - 1]
+        for token_span, char_span in zip(token_spans, char_spans):
+            _, token_start, token_end = token_span
+            span_label, start, end = char_span
             start, end = _trim_span_whitespace(start, end, text)
             if end <= start:
                 continue
@@ -609,7 +642,9 @@ def _as_batched_lists(values: Any) -> list[list[int]]:
     return [values]
 
 
-def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.array, mx.array]:
+def _build_ragged_span_batch(
+    spans: list[list[tuple[int, int]]],
+) -> tuple[mx.array, mx.array]:
     max_spans = max((len(sample) for sample in spans), default=0)
     max_spans = max(max_spans, 1)
     padded_spans = [
@@ -617,8 +652,7 @@ def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.arr
         for sample in spans
     ]
     padded_mask = [
-        [True] * len(sample) + [False] * (max_spans - len(sample))
-        for sample in spans
+        [True] * len(sample) + [False] * (max_spans - len(sample)) for sample in spans
     ]
     return (
         mx.array(padded_spans, dtype=mx.int32),
@@ -628,14 +662,18 @@ def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.arr
 
 def _suppress_overlaps(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
-    for entity in sorted(entities, key=lambda item: (-item["score"], item["start"], item["end"])):
+    for entity in sorted(
+        entities, key=lambda item: (-item["score"], item["start"], item["end"])
+    ):
         overlaps = any(
             not (entity["end"] <= current["start"] or entity["start"] >= current["end"])
             for current in selected
         )
         if not overlaps:
             selected.append(entity)
-    return sorted(selected, key=lambda item: (item["start"], item["end"], item["label"]))
+    return sorted(
+        selected, key=lambda item: (item["start"], item["end"], item["label"])
+    )
 
 
 class _BaseExperimentalMLXPipeline:
@@ -644,7 +682,9 @@ class _BaseExperimentalMLXPipeline:
     expected_task: str | None = None
     expected_family: str | None = None
 
-    def __init__(self, model_path: str | Path, tokenizer_name: Optional[str] = None) -> None:
+    def __init__(
+        self, model_path: str | Path, tokenizer_name: Optional[str] = None
+    ) -> None:
         if not MLX_AVAILABLE:
             raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
 
@@ -654,7 +694,9 @@ class _BaseExperimentalMLXPipeline:
         self.model = load_model(self.model_path)
         self.manifest, self.config = load_artifact_config(self.model_path)
         self.task = (self.manifest or {}).get("task") or self.config.get("_mlx_task")
-        self.family = (self.manifest or {}).get("family") or self.config.get("_mlx_family")
+        self.family = (self.manifest or {}).get("family") or self.config.get(
+            "_mlx_family"
+        )
 
         if self.expected_task is not None and self.task != self.expected_task:
             raise ValueError(
@@ -678,7 +720,11 @@ class _BaseExperimentalMLXPipeline:
                 "Install with: pip install tokenizers transformers"
             )
         self.max_length = _resolve_model_max_length(self.tokenizer, self.config)
-        self.prompt_spec = (self.manifest or {}).get("prompt_spec") or self.config.get("_mlx_prompt_spec") or {}
+        self.prompt_spec = (
+            (self.manifest or {}).get("prompt_spec")
+            or self.config.get("_mlx_prompt_spec")
+            or {}
+        )
 
 
 class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
@@ -721,18 +767,26 @@ class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
             padding=False,
         )
         words_mask = _prepare_word_mask(tokenized, skip_first_words=len(prompt_words))
-        span_idx, span_mask = build_candidate_span_indices([len(words)], self.config.get("max_width", 12))
+        span_idx, span_mask = build_candidate_span_indices(
+            [len(words)], self.config.get("max_width", 12)
+        )
 
         outputs = self.model(
-            input_ids=mx.array(_as_batched_lists(tokenized["input_ids"]), dtype=mx.int32),
-            attention_mask=mx.array(_as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32),
+            input_ids=mx.array(
+                _as_batched_lists(tokenized["input_ids"]), dtype=mx.int32
+            ),
+            attention_mask=mx.array(
+                _as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32
+            ),
             words_mask=mx.array([words_mask], dtype=mx.int32),
             span_idx=span_idx,
             span_mask=span_mask,
         )
 
         scores = _sigmoid(outputs["logits"])[0].tolist()
-        valid_prompt_count = min(len(labels), int(mx.sum(outputs["prompt_mask"][0].astype(mx.int32)).item()))
+        valid_prompt_count = min(
+            len(labels), int(mx.sum(outputs["prompt_mask"][0].astype(mx.int32)).item())
+        )
         candidate_spans = outputs["span_idx"][0].tolist()
         candidate_mask = outputs["span_mask"][0].tolist()
 
@@ -762,7 +816,9 @@ class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
         if flat_ner:
             return _suppress_overlaps(entities)
 
-        return sorted(entities, key=lambda item: (item["start"], item["end"], item["label"]))
+        return sorted(
+            entities, key=lambda item: (item["start"], item["end"], item["label"])
+        )
 
 
 class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
@@ -810,7 +866,9 @@ class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
         )
 
         scores = _sigmoid(outputs["logits"])[0].tolist()
-        valid_labels = min(len(labels), int(mx.sum(outputs["classes_mask"][0].astype(mx.int32)).item()))
+        valid_labels = min(
+            len(labels), int(mx.sum(outputs["classes_mask"][0].astype(mx.int32)).item())
+        )
         predictions = []
         for index in range(valid_labels):
             score = float(scores[index])
@@ -868,8 +926,12 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
         )
         words_mask = _prepare_word_mask(tokenized, skip_first_words=len(prompt_words))
         encoded = self.model.encode(
-            input_ids=mx.array(_as_batched_lists(tokenized["input_ids"]), dtype=mx.int32),
-            attention_mask=mx.array(_as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32),
+            input_ids=mx.array(
+                _as_batched_lists(tokenized["input_ids"]), dtype=mx.int32
+            ),
+            attention_mask=mx.array(
+                _as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32
+            ),
             words_mask=mx.array([words_mask], dtype=mx.int32),
         )
         entity_scores = _sigmoid(self.model.entity_scores(encoded))
@@ -884,17 +946,22 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
             multi_label=multi_label,
         )[0]
         decoded_spans = [
-            span for span in decoded_result.spans
+            span
+            for span in decoded_result.spans
             if span.label_index < entity_prompt_count
         ]
-        span_idx, span_mask = _build_ragged_span_batch([
-            [(span.start, span.end) for span in decoded_spans]
-        ])
+        span_idx, span_mask = _build_ragged_span_batch(
+            [[(span.start, span.end) for span in decoded_spans]]
+        )
         relation_outputs = self.model.relation_scores(encoded, span_idx, span_mask)
 
         relation_prompt_count = min(
             len(relations),
-            int(mx.sum(relation_outputs["relation_prompt_mask"][0].astype(mx.int32)).item()),
+            int(
+                mx.sum(
+                    relation_outputs["relation_prompt_mask"][0].astype(mx.int32)
+                ).item()
+            ),
         )
 
         entities: list[dict[str, Any]] = []
@@ -921,30 +988,85 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
         pair_idx = relation_outputs["pair_idx"][0].tolist()
         pair_mask = relation_outputs["pair_mask"][0].tolist()
 
-        extracted_relations: list[dict[str, Any]] = []
-        for pair_index, is_valid in enumerate(pair_mask):
-            if not is_valid:
-                continue
-            head_index, tail_index = pair_idx[pair_index]
-            if head_index >= len(entities) or tail_index >= len(entities):
-                continue
-            for relation_index in range(relation_prompt_count):
-                score = float(pair_scores[pair_index][relation_index])
-                if score < relation_threshold:
-                    continue
-                extracted_relations.append(
-                    {
-                        "label": str(relations[relation_index]),
-                        "score": score,
-                        "head": entities[head_index],
-                        "tail": entities[tail_index],
-                    }
-                )
-
         return {
             "entities": entities,
-            "relations": extracted_relations,
+            "relations": _decode_relation_graph(
+                entities=entities,
+                pair_scores=pair_scores,
+                pair_idx=pair_idx,
+                pair_mask=pair_mask,
+                relations=relations,
+                relation_prompt_count=relation_prompt_count,
+                relation_threshold=relation_threshold,
+            ),
         }
+
+
+def _decode_relation_graph(
+    *,
+    entities: Sequence[dict[str, Any]],
+    pair_scores: Sequence[Sequence[float]],
+    pair_idx: Sequence[Sequence[int]],
+    pair_mask: Sequence[bool],
+    relations: Sequence[str],
+    relation_prompt_count: int,
+    relation_threshold: float,
+) -> list[dict[str, Any]]:
+    """Decode relation candidates through the shared SpanGraph decoder."""
+
+    nodes = [
+        SpanNode(
+            node_id=str(entity["id"]),
+            start=int(entity["start"]),
+            end=int(entity["end"]),
+            label=str(entity["label"]),
+            score=float(entity["score"]),
+        )
+        for entity in entities
+    ]
+    candidates: list[SpanEdge] = []
+    for pair_index, is_valid in enumerate(pair_mask):
+        if (
+            not is_valid
+            or pair_index >= len(pair_idx)
+            or pair_index >= len(pair_scores)
+        ):
+            continue
+        head_index, tail_index = pair_idx[pair_index]
+        if (
+            head_index < 0
+            or tail_index < 0
+            or head_index >= len(entities)
+            or tail_index >= len(entities)
+        ):
+            continue
+        score_row = pair_scores[pair_index]
+        for relation_index in range(
+            min(relation_prompt_count, len(relations), len(score_row))
+        ):
+            score = float(score_row[relation_index])
+            if score < relation_threshold:
+                continue
+            candidates.append(
+                SpanEdge(
+                    head=str(head_index),
+                    tail=str(tail_index),
+                    label=str(relations[relation_index]),
+                    score=score,
+                )
+            )
+
+    graph = decode_span_graph(nodes, candidates)
+    entity_by_id = {str(entity["id"]): entity for entity in entities}
+    return [
+        {
+            "label": edge.label,
+            "score": edge.score,
+            "head": entity_by_id[edge.head],
+            "tail": entity_by_id[edge.tail],
+        }
+        for edge in graph.edges
+    ]
 
 
 # -- MLX model registry -------------------------------------------------------
@@ -990,20 +1112,21 @@ _MLX_MODEL_MAP: Dict[str, str] = {
 def _download_preconverted_mlx_model(
     repo_id: str,
     cache_dir: Optional[str] = None,
+    local_files_only: bool = False,
 ) -> str:
     """Download a pre-converted MLX model snapshot from the Hugging Face Hub."""
     try:
         from huggingface_hub import snapshot_download
     except ImportError as e:
         raise ImportError(
-            f"Missing dependency: {e}. "
-            "Install with: pip install openmed[mlx]"
+            f"Missing dependency: {e}. Install with: pip install openmed[mlx]"
         ) from e
 
     return snapshot_download(
         repo_id=repo_id,
         repo_type="model",
         cache_dir=cache_dir,
+        local_files_only=local_files_only,
         allow_patterns=[
             MANIFEST_FILENAME,
             "config.json",
@@ -1023,6 +1146,17 @@ def _download_preconverted_mlx_model(
     )
 
 
+def _is_legacy_mlx_artifact_config(config: dict[str, Any]) -> bool:
+    """Return whether *config* carries the pre-manifest converter markers."""
+    model_type = config.get("_mlx_model_type")
+    weights_format = config.get("_mlx_weights_format")
+    return (
+        isinstance(model_type, str)
+        and bool(model_type.strip())
+        and weights_format in {"safetensors", "npz"}
+    )
+
+
 def _resolve_mlx_model(
     model_name: str,
     config: Any = None,
@@ -1032,15 +1166,19 @@ def _resolve_mlx_model(
     Tries in order:
     1. Pre-converted MLX model from _MLX_MODEL_MAP
     2. Local path if model_name is a directory with config.json or openmed-mlx.json
-    3. On-the-fly conversion from HuggingFace
+    3. Pre-converted Hugging Face repository passed directly by the caller
+    4. On-the-fly conversion from HuggingFace
     """
     from openmed.core.model_registry import OPENMED_MODELS
+    from openmed.core.offline import is_local_only, raise_offline_error
 
     # Resolve registry key to full model ID
     if model_name in OPENMED_MODELS:
         full_model_id = OPENMED_MODELS[model_name].model_id
     else:
         full_model_id = model_name
+
+    local_only = is_local_only(config)
 
     cache_dir = None
     if config is not None:
@@ -1050,9 +1188,14 @@ def _resolve_mlx_model(
     if full_model_id in _MLX_MODEL_MAP:
         repo_id = _MLX_MODEL_MAP[full_model_id]
         try:
-            mlx_path = _download_preconverted_mlx_model(repo_id, cache_dir=cache_dir)
+            download_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+            if local_only:
+                download_kwargs["local_files_only"] = True
+            mlx_path = _download_preconverted_mlx_model(repo_id, **download_kwargs)
             return mlx_path, full_model_id
         except Exception as exc:
+            if local_only:
+                raise_offline_error(f"MLX model snapshot lookup for {repo_id}")
             logger.warning(
                 "Unable to download pre-converted MLX model %s for %s; "
                 "falling back to local conversion: %s",
@@ -1063,23 +1206,73 @@ def _resolve_mlx_model(
 
     # Check local path
     local = Path(model_name)
-    if local.is_dir() and ((local / "config.json").exists() or (local / MANIFEST_FILENAME).exists()):
+    if local.is_dir() and (
+        (local / "config.json").exists() or (local / MANIFEST_FILENAME).exists()
+    ):
         manifest = read_manifest(local)
         if manifest is not None or has_local_tokenizer(local):
             try:
                 _, local_config = load_artifact_config(local)
             except Exception:
                 local_config = {}
-            return str(local), resolve_tokenizer_reference(local, config=local_config, manifest=manifest)
+            return str(local), resolve_tokenizer_reference(
+                local, config=local_config, manifest=manifest
+            )
 
         try:
-            with open(local / "config.json") as f:
+            with open(local / "config.json", encoding="utf-8") as f:
                 local_config = json.load(f)
         except Exception:
             local_config = {}
 
         tokenizer_name = local_config.get("_name_or_path") or model_name
         return str(local), tokenizer_name
+
+    # Callers may pass a converted Hub repository directly instead of its
+    # source model ID. Do not send an existing MLX artifact through the PyTorch
+    # conversion path, which expects model.safetensors or pytorch_model.bin.
+    repo_name = full_model_id.rsplit("/", maxsplit=1)[-1]
+    if re.search(r"-mlx(?:-\d+bit)?$", repo_name, flags=re.IGNORECASE):
+        try:
+            download_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+            if local_only:
+                download_kwargs["local_files_only"] = True
+            mlx_path = Path(
+                _download_preconverted_mlx_model(
+                    full_model_id,
+                    **download_kwargs,
+                )
+            )
+        except Exception as exc:
+            if local_only:
+                raise_offline_error(f"MLX model snapshot lookup for {full_model_id}")
+            raise RuntimeError(
+                f"Unable to download pre-converted MLX model {full_model_id}"
+            ) from exc
+
+        manifest, artifact_config = load_artifact_config(mlx_path)
+        if manifest is None and not _is_legacy_mlx_artifact_config(artifact_config):
+            raise ValueError(
+                f"Pre-converted MLX repository {full_model_id} is missing "
+                f"{MANIFEST_FILENAME} and legacy MLX converter markers"
+            )
+        if not any(
+            path.is_file()
+            for path in resolve_weight_candidates(
+                mlx_path,
+                config=artifact_config,
+                manifest=manifest,
+            )
+        ):
+            raise ValueError(
+                f"Pre-converted MLX repository {full_model_id} has no supported "
+                "weights file"
+            )
+        return str(mlx_path), resolve_tokenizer_reference(
+            mlx_path,
+            config=artifact_config,
+            manifest=manifest,
+        )
 
     # On-the-fly conversion
     mlx_cache = Path(cache_dir or "~/.cache/openmed/mlx").expanduser()
@@ -1090,10 +1283,33 @@ def _resolve_mlx_model(
         logger.info("Using cached MLX model at %s", output_dir)
         return str(output_dir), full_model_id
 
+    if local_only:
+        raise_offline_error(f"MLX conversion or download for {full_model_id}")
+
     logger.info("Converting %s to MLX format (one-time) ...", full_model_id)
     from openmed.mlx.convert import convert
+
     convert(full_model_id, output_dir, cache_dir=cache_dir)
     return str(output_dir), full_model_id
+
+
+def create_mlx_language_model(
+    model_name: str,
+    *,
+    config: Any = None,
+    draft_model_name: str | None = None,
+    metrics: Any = None,
+) -> Any:
+    """Create an MLX-LM language-model runner with optional draft decoding."""
+
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    return OpenMedMLXLanguageModel(
+        model_name=model_name,
+        config=config,
+        draft_model_name=draft_model_name,
+        metrics=metrics,
+    )
 
 
 def create_mlx_pipeline(
@@ -1110,7 +1326,9 @@ def create_mlx_pipeline(
     manifest, artifact_config = load_artifact_config(model_path)
     from openmed.mlx.models import resolve_artifact_family
 
-    task = (manifest or {}).get("task") or artifact_config.get("_mlx_task", "token-classification")
+    task = (manifest or {}).get("task") or artifact_config.get(
+        "_mlx_task", "token-classification"
+    )
     raw_family = (manifest or {}).get("family") or artifact_config.get("_mlx_family")
     try:
         family = resolve_artifact_family(artifact_config, manifest=manifest)
@@ -1139,7 +1357,10 @@ def create_mlx_pipeline(
             model_path=model_path,
             tokenizer_name=tokenizer_name,
         )
-    if task == "zero-shot-relation-extraction" or family == "gliner-uni-encoder-token-relex":
+    if (
+        task == "zero-shot-relation-extraction"
+        or family == "gliner-uni-encoder-token-relex"
+    ):
         return GLiNERRelexMLXPipeline(
             model_path=model_path,
             tokenizer_name=tokenizer_name,

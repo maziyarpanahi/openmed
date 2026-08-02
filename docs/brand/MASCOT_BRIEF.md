@@ -1,34 +1,42 @@
-# OpenMed Mascot — Designer Brief
+# OpenMed Mascot — Historical Designer Brief
 
-> A creative brief for illustrating the OpenMed mascot. Goal: an original, ownable,
-> warm-but-capable **guardian** character that becomes the face of the project across
-> the README, website, social cards, and app icons.
+> **Status: superseded for new brand work.** This brief is retained to document
+> the origin of the cat crest. The current source of truth is
+> [`docs/brand/README.md`](README.md), especially
+> [`system/iconography.md`](system/iconography.md) and the canonical tokens under
+> `system/tokens/`. The cat is a community character, not the universal product
+> mark: current platform assignments use the Open Cross for website/docs chrome,
+> favicons, X, and LinkedIn, and reserve the cat for approved README/social
+> compositions and the Hugging Face organization avatar.
 
 ---
 
 ## 1. About OpenMed (context for the illustrator)
 
-OpenMed is **open-source, local-first healthcare AI**. It reads clinical text, finds
-medical entities (diseases, drugs, anatomy, genes), and strips out private patient
-information — and it does all of this **entirely on the user's own device or servers**.
-Nothing is sent to the cloud. The audience is developers, clinicians, and researchers
+OpenMed is an **Apache-2.0-licensed, local-first clinical AI SDK**. It extracts
+biomedical entities and supports de-identification workflows on hardware the
+operator controls. Core inference can run locally after required artifacts are
+present; model downloads and configured integrations may use a network. Model
+and dataset terms vary. The audience is developers, clinicians, and researchers
 who care about **privacy, sovereignty, and trust**.
 
 The one-line promise the mascot must embody:
 
-> **"Healthcare AI that never leaves your device."**
+> **"Local-first clinical AI on hardware you control."**
 
-Current traction (worth feeling confident/proud, not scrappy): ~1,360★ on GitHub,
-1,000+ open-source models, 12 languages, an arXiv paper, Apache-2.0.
+Repository snapshot on 2026-07-29: 4,700+ GitHub stars, 1,520 unique committed
+catalog entries, 34 supported PII routes, and 33 model-backed routes. These
+figures are governed by `system/claims.yml`; do not copy them into new art
+without the snapshot date and required qualifications.
 
 ---
 
 ## 2. The big idea — a Guardian of your data
 
 Every concept below is a variation on one theme: **a guardian that protects the
-user's most sensitive data and keeps it home.** The data is precious (treasure / a
-flock / a vault); the mascot watches over it, fast and vigilant, and never lets it
-wander off into the cloud.
+user's most sensitive data and keeps processing close.** The data is precious
+(treasure / a flock / a vault); the mascot watches over it, fast and vigilant,
+while the surrounding copy states the actual runtime and network boundary.
 
 This single idea ties the mascot to OpenMed's exact value: **privacy, local-first,
 on-device, sovereign, trustworthy.**
@@ -103,21 +111,25 @@ user's data* and should feature the OpenMed cross (see §5 + §9 for the legal n
 
 ---
 
-## 5. Color palette (use these exact values)
+## 5. Current color palette
 
-OpenMed's brand is a warm "clinical paper" palette with **teal as the hero color** and
-**coral as the accent**. Please stay inside it.
+The July 2026 system replaced the former teal-led palette. New compositions use
+one signal-red accent engine with cool light and blue-black dark surfaces.
+Preserve the checked-in cat crest as-is; do not recolor that historical raster.
 
 | Role | Hex | Notes |
 | --- | --- | --- |
-| **Hero — teal** | `#0D6E6E` / `#128787` | The main body/scales/plumage/collar color |
-| **Deep teal** | `#0A5656` | Shadows, depth on the teal |
-| **Cream / paper** | `#F7F4EC` | Belly, face, fur highlights, light backgrounds |
-| **Coral accent** | `#C5453A` | The medical cross + small accents only |
-| **Ink** | `#0E1116` | Linework and dark backgrounds |
-| **Yellow highlight** | `#F5E27A` | "Treasure glow" / sparkle — use sparingly |
+| **Signal accent** | `#B0413E` | Sole base for derived accent roles |
+| **Light background** | `#F4F7F8` | Default page canvas |
+| **Light surface** | `#FFFFFF` | Cards and raised content planes |
+| **Light ink** | `#0E1116` | Primary text and linework |
+| **Dark background** | `#0B0E13` | Dark page canvas |
+| **Dark surface** | `#10151C` | Dark cards and content planes |
+| **Dark ink** | `#E6EBEE` | Primary dark-theme text |
 
-Style of color: **mostly flat fills**, minimal shading, **no heavy gradients**.
+Style of color: **flat fills**, minimal shading, and no decorative gradients.
+The single rotating website word is a registered site exception, not a mascot
+art direction.
 
 ---
 
@@ -129,21 +141,23 @@ Style of color: **mostly flat fills**, minimal shading, **no heavy gradients**.
 - Aim for the *quality bar and scalability* of the best open-source mascots —
   **Ferris the crab (Rust), the Go gopher, GitHub's Octocat** — simple, instantly
   recognizable, works tiny or huge. **Original, not derivative** of any of these.
-- Should feel at home next to a **dark terminal UI** (OpenMed has a TUI) and on a
-  **warm cream page** equally well.
+- Should feel at home next to a **dark terminal UI** and on the current cool
+  light surface equally well.
 
 ---
 
 ## 7. Deliverables
 
-1. **Primary mascot** — friendly 3/4 view, "on guard" but welcoming (README hero).
-2. **Head-only icon** — must stay legible at **32px and 16px** (favicon, PyPI, GitHub
-   avatar, app icon).
+1. **Primary mascot** — friendly 3/4 view, "on guard" but welcoming.
+2. **Head-only community portrait** — legible at **32px and 16px**, without
+   implying approval for product chrome, favicons, personal avatars, or app
+   icons.
 3. **Pose set** (per chosen direction): guarding/hero · watching/alert ·
    at-home/curled (local-first) · holding-a-shield-or-lock (privacy).
 4. **Monochrome / single-color** version (for stamps, watermarks, embroidery).
-5. **Wide hero lockup** — mascot + "OpenMed" wordmark, **~1280×640** (GitHub social
-   card + README banner). Provide on **both** a cream and a dark background.
+5. **Wide community lockup** — mascot + Open Cross + lowercase visual wordmark,
+   for approved README, GitHub, and Hugging Face cards. Use the exact governed
+   artboard dimensions instead of the historical approximate size.
 
 **File formats:** layered editable source (**SVG + Figma or AI**), plus exported
 **transparent PNGs @1×/2×/3×**.
@@ -155,7 +169,8 @@ Style of color: **mostly flat fills**, minimal shading, **no heavy gradients**.
 - Must remain **clear and recognizable at 16–32px** — avoid fine detail that vanishes.
 - Must work as a **flat single color** (silhouette + cross should still read).
 - Keep the **cross legible** at every size.
-- Design the head/face so it can stand alone as the app/favicon mark.
+- Design the head/face so it can stand alone as a community portrait. Product,
+  favicon, and app assignments require a separate explicit decision.
 
 ---
 
@@ -182,7 +197,10 @@ Style of color: **mostly flat fills**, minimal shading, **no heavy gradients**.
 
 ## 11. AI-prompt starters (optional — for quick reference thumbnails)
 
-> **Full, copy-paste ChatGPT prompts live in [`mascot-image-prompts.md`](mascot-image-prompts.md).** The condensed starters below are kept for quick reference.
+> **Historical reference only.** These condensed prompts preserve the original
+> exploration and its superseded teal/coral palette. Retokenize any approved
+> future exploration against `system/tokens.json`; do not use these as current
+> production-art instructions.
 
 **Dragon**
 ```
@@ -224,11 +242,15 @@ background, centered, scalable icon.
 3. **Round 3 — final:** the full deliverable set in §7.
 
 **Acceptance criteria:** reads instantly as a *friendly guardian*; legible at 32px;
-works in flat single-color; on-palette; clearly says "protects your data, on your
-device"; original; and looks great on both cream and dark backgrounds.
+works in flat single-color; uses the then-approved exploration palette; clearly
+communicates protective, local-first intent without an absolute privacy claim;
+is original; and works on both light and dark backgrounds.
 
 ---
 
 *Brand reference for the illustrator: see `docs/website/og.png` (hero style),
-`docs/website/assets/openmed-tui-preview.png` (dark UI), and the existing cross logo
-in `examples/privacy_filter_studio/static/assets/logo.svg`.*
+the dark theme in `docs/website/index.html`, and the canonical
+`docs/brand/assets/open-cross.svg`, `open-cross-inverse.svg`, and
+`cat-crest.png` sources. The former production copy at
+`docs/website/assets/openmed-tui-preview.png` was retired during the July 2026
+design-system rollout because no published website surface used it.*

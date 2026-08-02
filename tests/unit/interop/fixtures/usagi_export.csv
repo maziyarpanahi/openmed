@@ -1,0 +1,6 @@
+sourceCode,sourceName,sourceVocabularyId,mappingStatus,equivalence,conceptId,conceptName,domainId,comment
+SRC-A,Local condition alpha,LOCAL,APPROVED,EQUIVALENT,1001,Example condition alpha,Condition,approved exact mapping
+SRC-B,Local medicine beta,LOCAL,APPROVED,BROADER,2001,Example medicine beta,Drug,approved broad mapping
+SRC-ZERO,Unmapped local code,LOCAL,APPROVED,INEXACT,0,No mapping,,zero concept should be skipped
+SRC-PENDING,Pending review local code,LOCAL,UNCHECKED,EQUIVALENT,4001,Pending target,Condition,not approved
+SRC-NOVOCAB,No vocabulary local code,,APPROVED,EQUIVALENT,3001,No vocabulary target,Condition,plain source-code key

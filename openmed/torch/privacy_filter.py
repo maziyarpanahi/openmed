@@ -18,6 +18,8 @@ import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.core.decoding import refine_privacy_filter_span, trim_span_whitespace
+from openmed.processing.advanced_ner import stream_token_classifier
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +31,13 @@ logger = logging.getLogger(__name__)
 # (OpenMed and openmed resolve to the same org).  Normalising both sides
 # prevents a user-supplied "openmed/privacy-filter-multilingual" from failing
 # to match the hard-coded "OpenMed/..." entry.
-TRUSTED_REMOTE_CODE_MODELS = frozenset({
-    "openai/privacy-filter",
-    "openmed/privacy-filter-multilingual",
-    "openmed/privacy-filter-nemotron",
-})
+TRUSTED_REMOTE_CODE_MODELS = frozenset(
+    {
+        "openai/privacy-filter",
+        "openmed/privacy-filter-multilingual",
+        "openmed/privacy-filter-nemotron",
+    }
+)
 
 # Operators with custom fine-tunes can extend the allowlist with a
 # comma-separated list of HuggingFace repo IDs. Empty entries are ignored.
@@ -42,9 +46,7 @@ _ALLOWLIST_ENV_VAR = "OPENMED_TRUSTED_REMOTE_CODE_MODELS"
 
 def _env_allowlist() -> frozenset[str]:
     raw = os.getenv(_ALLOWLIST_ENV_VAR, "")
-    return frozenset(
-        part.strip().lower() for part in raw.split(",") if part.strip()
-    )
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
 
 
 def is_trusted_for_remote_code(model_name: str) -> bool:
@@ -70,6 +72,7 @@ def is_trusted_for_remote_code(model_name: str) -> bool:
     # Local path check is deferred (it touches the filesystem) and imported
     # lazily to avoid a circular import with openmed.core.pii.
     from openmed.core.pii import _is_privacy_filter_artifact_path
+
     return _is_privacy_filter_artifact_path(model_name)
 
 
@@ -84,7 +87,7 @@ class PrivacyFilterTorchPipeline:
         model_name: HuggingFace model ID or local path. Default
             ``openai/privacy-filter``.
         device: Torch device string (``cpu``, ``cuda``, ``cuda:0``, ``mps``).
-            ``None`` autodetects: CUDA if available, else CPU.
+            ``None`` autodetects MPS, then CUDA, then CPU.
         dtype: Optional torch dtype (e.g. ``"float16"``, ``"bfloat16"``).
             Defaults to model native.
         aggregation_strategy: Passed through to HF's pipeline. ``"simple"``
@@ -139,9 +142,11 @@ class PrivacyFilterTorchPipeline:
         self.model_name = model_name
         self.aggregation_strategy = aggregation_strategy
 
-        resolved_device = device
-        if resolved_device is None:
-            resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
+        from openmed.torch.device import apply_mps_tuning, resolve_torch_device
+
+        resolved_device = resolve_torch_device(device)
+        if resolved_device.startswith("mps"):
+            apply_mps_tuning()
 
         load_kwargs: Dict[str, Any] = {
             "local_files_only": local_files_only,
@@ -152,13 +157,15 @@ class PrivacyFilterTorchPipeline:
             if torch_dtype is not None:
                 load_kwargs["torch_dtype"] = torch_dtype
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
+        self.tokenizer = get_tokenizer_with_loader(
             model_name,
+            AutoTokenizer.from_pretrained,
             local_files_only=local_files_only,
             trust_remote_code=trust_remote_code,
         )
         self.model = AutoModelForTokenClassification.from_pretrained(
-            model_name, **load_kwargs,
+            model_name,
+            **load_kwargs,
         )
         self.model.to(resolved_device)
         self.model.eval()
@@ -205,8 +212,7 @@ class PrivacyFilterTorchPipeline:
                 ]
             )
             return [
-                next(normalized_iter) if item and item.strip() else []
-                for item in texts
+                next(normalized_iter) if item and item.strip() else [] for item in texts
             ]
 
         if not text or not text.strip():
@@ -214,6 +220,11 @@ class PrivacyFilterTorchPipeline:
 
         raw = self._pipeline(text, **call_kwargs)
         return [self._normalize_entity(item, text) for item in raw]
+
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental token-classification events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
 
     @staticmethod
     def _normalize_batch_output(
@@ -224,7 +235,11 @@ class PrivacyFilterTorchPipeline:
         if expected_count == 1:
             if raw_batch == []:
                 return [[]]
-            if isinstance(raw_batch, list) and raw_batch and isinstance(raw_batch[0], dict):
+            if (
+                isinstance(raw_batch, list)
+                and raw_batch
+                and isinstance(raw_batch[0], dict)
+            ):
                 return [raw_batch]
             if isinstance(raw_batch, list) and len(raw_batch) == 1:
                 return [raw_batch[0] or []]

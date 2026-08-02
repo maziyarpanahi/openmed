@@ -1,8 +1,8 @@
 # Analyze Text Helper
 
 `openmed.analyze_text` is the top-level orchestrator that most users start with. It validates input, spins up a
-token-classification pipeline, segments sentences with pySBD, and normalizes the output so you can copy dict/JSON/HTML/CSV
-payloads straight into downstream systems.
+token-classification pipeline, segments sentences, and normalizes the output so you can copy dict/JSON/HTML/CSV payloads
+straight into downstream systems.
 
 ## Quick reference
 
@@ -13,13 +13,15 @@ result = analyze_text(
     text="Patient started on imatinib for chronic myeloid leukemia.",
     model_name="disease_detection_superclinical",
     aggregation_strategy="simple",
-    output_format="json",
+    output_format="dict",
     include_confidence=True,
     confidence_threshold=0.55,
     group_entities=True,
     metadata={"source": "clinic-note-42"},
 )
-print(result[:200])  # JSON string in this configuration
+print(result.model)
+print(result.entities[:3])
+payload = result.to_dict()
 ```
 
 ### Key arguments
@@ -28,12 +30,46 @@ print(result[:200])  # JSON string in this configuration
   auto-discovery.
 - `model_id`: alias for `model_name`, supported for API-style callers that use model-id terminology.
 - `aggregation_strategy`: forwarded to the HF pipeline. `simple` (default) yields grouped tokens; `None` keeps raw tokens.
-- `output_format`: `"dict"` (default, returns `PredictionResult`), `"json"`, `"html"`, or `"csv"`.
+- `output_format`: `"dict"` (default, returns `AnalyzeResult`), `"json"`, `"html"`, or `"csv"`.
 - `include_confidence` & `confidence_threshold`: control the final payload; defaults keep all scores.
 - `group_entities`: merge adjacent spans of the same label after formatting.
 - `formatter_kwargs`: forwarded to `openmed.processing.format_predictions`.
-- Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`) wrap pySBD so each
+- Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`, `sentence_backend`) wrap the sentence engine so each
   prediction carries the sentence span; disable them if latency matters more than helper metadata.
+
+## Optional YASBD sentence backend
+
+The default `sentence_backend="auto"` path is unchanged: OpenMed uses its built-in Indic and Chinese segmenters where
+appropriate and pySBD elsewhere. YASBD is neither installed nor imported by a core OpenMed installation.
+
+Install the experimental backend explicitly when you want to benchmark it on your own workload:
+
+```bash
+pip install "openmed[yasbd]"
+```
+
+Then select it for either the low-level sentence API or `analyze_text`:
+
+```python
+from openmed import analyze_text
+from openmed.processing.sentences import segment_text
+
+spans = segment_text(
+    "Patient is stable. Follow up tomorrow.",
+    language="en",
+    backend="yasbd",
+)
+
+result = analyze_text(
+    "Patient is stable. Follow up tomorrow.",
+    sentence_backend="yasbd",
+)
+```
+
+The adapter preserves OpenMed's exact, contiguous source offsets and assigns inter-sentence whitespace to the preceding
+span, matching the existing span contract. YASBD remains an explicit opt-in because sentence boundaries can differ
+between engines; validate representative clinical and multilingual inputs before adopting it in production. If the extra
+is missing, explicitly selecting `"yasbd"` raises an installation error instead of silently changing behavior.
 
 ## Chunking & truncation
 
@@ -44,7 +80,8 @@ result = analyze_text(
     aggregation_strategy=None,  # work with raw tokens
     max_length=512,             # forwarded to HF pipeline
     truncation=True,            # enforce length (default)
-    sentence_detection=False,   # skip pySBD to save ~2ms per note
+    sentence_detection=False,   # skip sentence detection to save ~2ms per note
+    sentence_backend="auto",    # "auto" (default) or "yasbd" (experimental, faster)
 )
 ```
 
@@ -76,6 +113,9 @@ result = analyze_text(
 
 for entity in result.entities:
     print(entity.text, entity.label)
+
+legacy_payload = result.to_dict()
+print(legacy_payload["model_name"])
 ```
 
 When the identifier points to an existing local path, OpenMed asks Transformers to load with `local_files_only=True` by
@@ -130,7 +170,7 @@ Behind the scenes `analyze_text` calls:
 
 - `validate_input` — trims whitespace and enforces max lengths.
 - `validate_model_name` — normalizes registry aliases.
-- Sentence detection (`openmed.processing.sentences`) — optional pySBD segmentation with language hints.
+- Sentence detection (`openmed.processing.sentences`) — optional segmentation with language hints and a selectable backend.
 - `OutputFormatter` — see [Advanced NER & Output Formatting](./output-formatting.md) for available kwargs.
 
 If you need custom validation or logging, inject your own `OpenMedConfig` or reuse a configured `ModelLoader`.

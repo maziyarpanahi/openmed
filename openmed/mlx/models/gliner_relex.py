@@ -7,8 +7,7 @@ try:
     import mlx.nn as nn
 except ImportError:
     raise ImportError(
-        "MLX is required for this module. "
-        "Install with: pip install openmed[mlx]"
+        "MLX is required for this module. Install with: pip install openmed[mlx]"
     )
 
 from openmed.mlx.models.deberta_v2_tc import DebertaV2Model
@@ -37,15 +36,29 @@ class GLiNERTokenScorer(nn.Module):
         batch_size, seq_len, hidden_size = token_rep.shape
         num_classes = label_rep.shape[1]
 
-        token_proj = self.proj_token(token_rep).reshape(batch_size, seq_len, 1, 2, hidden_size)
-        label_proj = self.proj_label(label_rep).reshape(batch_size, 1, num_classes, 2, hidden_size)
+        token_proj = self.proj_token(token_rep).reshape(
+            batch_size, seq_len, 1, 2, hidden_size
+        )
+        label_proj = self.proj_label(label_rep).reshape(
+            batch_size, 1, num_classes, 2, hidden_size
+        )
 
-        token_left = mx.broadcast_to(token_proj[:, :, :, 0, :], (batch_size, seq_len, num_classes, hidden_size))
-        token_right = mx.broadcast_to(token_proj[:, :, :, 1, :], (batch_size, seq_len, num_classes, hidden_size))
-        label_left = mx.broadcast_to(label_proj[:, :, :, 0, :], (batch_size, seq_len, num_classes, hidden_size))
-        label_right = mx.broadcast_to(label_proj[:, :, :, 1, :], (batch_size, seq_len, num_classes, hidden_size))
+        token_left = mx.broadcast_to(
+            token_proj[:, :, :, 0, :], (batch_size, seq_len, num_classes, hidden_size)
+        )
+        token_right = mx.broadcast_to(
+            token_proj[:, :, :, 1, :], (batch_size, seq_len, num_classes, hidden_size)
+        )
+        label_left = mx.broadcast_to(
+            label_proj[:, :, :, 0, :], (batch_size, seq_len, num_classes, hidden_size)
+        )
+        label_right = mx.broadcast_to(
+            label_proj[:, :, :, 1, :], (batch_size, seq_len, num_classes, hidden_size)
+        )
 
-        combined = mx.concatenate([token_left, label_left, token_right * label_right], axis=-1)
+        combined = mx.concatenate(
+            [token_left, label_left, token_right * label_right], axis=-1
+        )
         hidden = self.out_linear1(combined)
         hidden = self.dropout(hidden)
         hidden = nn.relu(hidden)
@@ -143,7 +156,9 @@ class GLiNERRelexModel(nn.Module):
     ) -> dict[str, mx.array]:
         span_idx = span_idx * span_mask[:, :, None].astype(span_idx.dtype)
         span_rep = self.span_rep_layer(encoded["words_embedding"], span_idx)
-        pair_idx, pair_mask, head_rep, tail_rep = build_all_entity_pairs(span_rep, span_mask)
+        pair_idx, pair_mask, head_rep, tail_rep = build_all_entity_pairs(
+            span_rep, span_mask
+        )
         pair_rep = mx.concatenate([head_rep, tail_rep], axis=-1)
         pair_rep = self.pair_rep_layer(pair_rep)
         pair_scores = mx.einsum("bnd,bcd->bnc", pair_rep, encoded["relation_prompts"])

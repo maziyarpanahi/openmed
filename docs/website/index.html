@@ -1,43 +1,91 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="light">
+<!doctype html>
+<html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenMed — Clinical AI that never leaves the device</title>
-    <meta name="description"
-        content="OpenMed 1.5.5 brings the OpenMed Multilingual Privacy Filter, Arabic/Japanese/Turkish PII MLX artifacts, unified PyTorch/MLX privacy routing, Faker-backed anonymization, 1,000+ open-source healthcare LLM models, and Swift-native OpenMedKit, Apache-2.0 end to end." />
-    <meta name="keywords"
-        content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical language models, healthcare machine learning, clinical LLM workflows, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
-    <meta name="author" content="Maziyar Panahi" />
-    <link rel="canonical" href="https://openmed.life/" />
-    <meta name="robots" content="index,follow" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <!-- openmed-claim:public_metadata:start -->
+    <title>OpenMed — local-first clinical AI</title>
+    <meta
+        name="description"
+        content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks."
+    >
+    <meta
+        name="keywords"
+        content="OpenMed, clinical NLP, biomedical NER, PHI de-identification, local-first AI, healthcare privacy, MLX, OpenMedKit, WebGPU"
+    >
+    <meta name="author" content="OpenMed">
+    <meta name="robots" content="index,follow">
+    <link rel="canonical" href="https://openmed.life/">
 
-    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="favicon.ico" sizes="48x48" />
-    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="favicon-64.png" type="image/png" sizes="64x64">
+    <link rel="icon" href="favicon.ico" sizes="48x48">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link
+        rel="preload"
+        href="assets/fonts/IBMPlexSans-Regular.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin
+    >
+    <link
+        rel="preload"
+        href="assets/fonts/IBMPlexSans-SemiBold.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin
+    >
+    <link
+        rel="preload"
+        href="assets/fonts/IBMPlexMono-Regular.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin
+    >
+    <meta
+        id="themeColorLight"
+        data-theme-color
+        name="theme-color"
+        content="#F4F7F8"
+        media="(prefers-color-scheme: light)"
+    >
+    <meta
+        id="themeColorDark"
+        data-theme-color
+        name="theme-color"
+        content="#0B0E13"
+        media="(prefers-color-scheme: dark)"
+    >
 
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="OpenMed — Clinical AI that never leaves the device" />
-    <meta property="og:description"
-        content="OpenMed 1.5.5 — OpenMed Multilingual Privacy Filter, Nemotron Privacy Filter MLX, Arabic/Japanese/Turkish PII, unified PyTorch/MLX routing, 1,000+ healthcare LLM models, and one local-first runtime across Python and Swift." />
-    <meta property="og:url" content="https://openmed.life/" />
-    <meta property="og:site_name" content="OpenMed" />
-    <meta property="og:image" content="https://openmed.life/og.png?v=20260425" />
-    <meta property="og:image:secure_url" content="https://openmed.life/og.png?v=20260425" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="OpenMed social preview showing local-first healthcare LLMs and an interactive clinical NER terminal." />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@OpenMed_AI" />
-    <meta name="twitter:creator" content="@MaziyarPanahi" />
-    <meta name="twitter:title" content="OpenMed — Clinical AI that never leaves the device" />
-    <meta name="twitter:description"
-        content="OpenMed 1.5.5 · OpenMed Multilingual Privacy Filter · Arabic/Japanese/Turkish PII · Nemotron Privacy Filter MLX · unified privacy routing · Swift-native OpenMedKit." />
-    <meta name="twitter:image" content="https://openmed.life/og.png?v=20260425" />
-    <meta name="twitter:image:alt" content="OpenMed social preview showing local-first healthcare LLMs and an interactive clinical NER terminal." />
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="OpenMed — local-first clinical AI">
+    <meta property="og:description" content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
+    <meta property="og:url" content="https://openmed.life/">
+    <meta property="og:site_name" content="OpenMed">
+    <meta property="og:image" content="https://openmed.life/og.png">
+    <meta property="og:image:secure_url" content="https://openmed.life/og.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta
+        property="og:image:alt"
+        content="OpenMed social card with the Open Cross and the words “Your data. Your model. Your hardware.”; its footer lists openmed.life, 2,000+ models, 340M+ downloads, 10M+ installs, and Apache-2.0."
+    >
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@OpenMed_AI">
+    <meta name="twitter:title" content="OpenMed — local-first clinical AI">
+    <meta name="twitter:description" content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
+    <meta name="twitter:image" content="https://openmed.life/og.png">
+    <meta
+        name="twitter:image:alt"
+        content="OpenMed social card with the Open Cross and the words “Your data. Your model. Your hardware.”; its footer lists openmed.life, 2,000+ models, 340M+ downloads, 10M+ installs, and Apache-2.0."
+    >
+    <!-- openmed-claim:public_metadata:end -->
 
+    <!-- openmed-claim:organization_jsonld:start -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -46,1021 +94,1159 @@
         "url": "https://openmed.life/",
         "logo": "https://openmed.life/logo.svg",
         "sameAs": [
+            "https://github.com/maziyarpanahi/openmed",
             "https://huggingface.co/OpenMed",
             "https://x.com/OpenMed_AI",
             "https://www.linkedin.com/company/openmed-ai/"
         ],
-        "founder": { "@type": "Person", "name": "Maziyar Panahi" }
+        "founder": {
+            "@type": "Person",
+            "name": "Maziyar Panahi"
+        }
     }
     </script>
+    <!-- openmed-claim:organization_jsonld:end -->
+    <!-- openmed-claim:software_source_jsonld:start -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "OpenMed Clinical LLM Suite",
-        "operatingSystem": "macOS, iOS, iPadOS, Cloud, On-Premises",
-        "applicationCategory": "AIApplication",
-        "description": "OpenMed Clinical LLM Suite provides open-source healthcare language models, biomedical named-entity recognition, Python MLX acceleration, and Swift-native deployment toolkits for compliant medical workflows.",
-        "softwareVersion": "1.5.5",
+        "@type": "SoftwareSourceCode",
+        "name": "OpenMed",
+        "description": "Apache-2.0 clinical NLP and de-identification software that runs on hardware you control, from phones and browsers to GPU servers.",
+        "codeRepository": "https://github.com/maziyarpanahi/openmed",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": [
+            "Python",
+            "Swift",
+            "Kotlin",
+            "TypeScript"
+        ],
+        "softwareVersion": "2.0.0",
         "url": "https://openmed.life/",
-        "provider": { "@type": "Organization", "name": "OpenMed", "url": "https://openmed.life/" },
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
-        "screenshot": "https://openmed.life/og.png",
-        "downloadUrl": "https://pypi.org/project/openmed/"
+        "isAccessibleForFree": true
     }
     </script>
+    <!-- openmed-claim:software_source_jsonld:end -->
+    <!-- openmed-claim:faq_jsonld:start -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
-            { "@type": "Question", "name": "What is OpenMed, exactly?",
-              "acceptedAnswer": { "@type": "Answer", "text": "An open-source medical LLM toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition — diseases, drugs, genes, anatomy, chemicals, oncology — plus PII extraction and de-identification across twelve languages. Ships as a Python package, a Dockerized FastAPI service, and a Swift package (OpenMedKit) for macOS and iOS apps. Apache-2.0, no vendor lock-in, runs on your infrastructure." } },
-            { "@type": "Question", "name": "Are these generative LLMs or something else?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Encoder transformers (BERT, ELECTRA, DeBERTa families), not generative chat models. They do extraction and classification — pulling structured entities out of unstructured clinical text — and stay small enough to run on a laptop or a phone. The reference paper reports new state-of-the-art on 10 of 12 biomedical NER benchmarks. Complementary to the larger generative medical LLM category, not a replacement." } },
-            { "@type": "Question", "name": "Where does my data go when I use OpenMed?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Nowhere you don't send it. You download the models once (Hugging Face or a private mirror) and inference runs wherever you run the Python process, the Docker container, or the Swift app — your laptop, your VPC, an on-prem server, or air-gapped hardware. No telemetry, no license check-in, no outbound calls at runtime. PHI stays on your side of the fence by default." } },
-            { "@type": "Question", "name": "Does OpenMed support HIPAA-aligned workflows?",
-              "acceptedAnswer": { "@type": "Answer", "text": "The PII catalog covers all 18 HIPAA Safe Harbor identifiers across English, Spanish, French, German, Italian, Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish — with locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, and Luhn checks. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls; the legal compliance boundary lives in your deployment." } },
-            { "@type": "Question", "name": "Can I fine-tune OpenMed models for my own vocabulary?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Yes. Models are published on Hugging Face under permissive licensing with full training recipes. The reference approach combines lightweight domain-adaptive pre-training on a 350k-passage biomedical corpus with parameter-efficient LoRA fine-tuning — updating less than 1.5% of model parameters and completing in under 12 hours on a single GPU (<1.2 kg CO2e). Tokenizer assets and starter notebooks are in the openmed-starter repo." } },
-            { "@type": "Question", "name": "Do I need OpenMed Agent to use OpenMed?",
-              "acceptedAnswer": { "@type": "Answer", "text": "No. The Python toolkit, OpenMedKit (Swift), and MLX backend are fully self-contained Apache-2.0 — you can build and ship without using the Agent. OpenMed Agent is a separate medical agent currently in preview — a terminal-native runner for clinical workflows on top of the same stack." } }
+            {
+                "@type": "Question",
+                "name": "How is this different from a cloud medical NLP API?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Cloud APIs bill per character and require sending clinical text to a vendor region — every new use case becomes a privacy review. OpenMed downloads once and runs in your process: laptop, VPC, or air-gapped box, with no telemetry and no licence check-in. It is also the only option here that runs inside an iPhone or a browser tab."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "And versus closed-source healthcare NLP?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Those are mature platforms with strong published accuracy and support contracts — if you need a vendor SLA, that is a real answer. OpenMed competes on ownership: no per-server subscription, Apache-2.0 weights and recipes, mobile and browser runtimes, and a release most weeks instead of quarterly. Our benchmarks you can rerun; theirs you take on trust."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can we fine-tune the models on our own vocabulary?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. Every model ships with its full training recipe: domain-adaptive pre-training plus LoRA, updating under 1.5% of parameters. A full run finishes in under 12 hours on a single GPU (under 1.2 kg CO2e), and starter notebooks live in the openmed-starter repo."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is a weekly release cadence safe for clinical use?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Releases are versioned, signed and documented, with pinned model artifacts, calibrated thresholds and release gates that fail closed. Pin a version and upgrade on your schedule — the cadence just means a gap you report closes in days, not in the next procurement cycle."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What does \"community-driven\" actually mean here?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Language packs, national-ID validators, translations and mobile runtimes have all come from people outside the original author. Issues and PRs are public, security disclosure is documented, and PHI-leak reports get a private channel. If your locale is missing, requesting it is a realistic path to it existing."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Are these generative models?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "No. They are compact encoder transformers fine-tuned for token classification — they label spans of text rather than generating it, so there is nothing to hallucinate. Small enough to run on a phone; the Privacy Filter family adds the de-identification policy layer on top."
+                }
+            }
         ]
     }
     </script>
+    <!-- openmed-claim:faq_jsonld:end -->
 
-    <link rel="stylesheet" href="assets/style.css?v=7">
-    <script src="assets/script.js?v=7" defer></script>
+    <link rel="stylesheet" href="assets/openmed-system.css">
+    <link rel="stylesheet" href="assets/style.css">
+    <script src="assets/script.js"></script>
 </head>
 
 <body>
-    <!-- ================================================================= -->
-    <!-- Nav                                                                -->
-    <!-- ================================================================= -->
-    <header class="nav">
-        <div class="container nav-inner">
-            <a href="#" class="logo" aria-label="OpenMed home">
-                <svg class="logo-mark" width="28" height="28" viewBox="0 0 40 40" aria-hidden="true">
-                    <rect x="2" y="2" width="36" height="36" rx="8" fill="var(--ink)" />
-                    <rect x="11" y="17.5" width="18" height="5" rx="1" fill="var(--paper)" />
-                    <rect x="17.5" y="11" width="5" height="18" rx="1" fill="var(--paper)" />
-                    <circle cx="20" cy="20" r="2" fill="var(--accent)" />
-                </svg>
-                <span class="wordmark">open<span class="med">med</span></span>
-                <span class="version-tag">v1.5.5</span>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <noscript>
+        <div class="no-js-note">
+            JavaScript is off. All core content remains available; interactive
+            filters and animation are shown in their complete static state.
+        </div>
+    </noscript>
+
+    <header class="site-header" data-header>
+        <div class="container header-inner">
+            <a class="brand" href="./" aria-label="OpenMed home">
+                <img src="logo.svg" width="28" height="28" alt="">
+                <span class="brand-word">openmed</span>
             </a>
 
-            <nav class="nav-menu" id="primaryNav" aria-label="Primary">
-                <ul class="nav-links">
-                    <li><a href="#apple-runtime">Runtime</a></li>
-                    <li><a href="#deidentification">Privacy</a></li>
+            <!-- openmed-claim:package_version_header:start -->
+            <a
+                class="release-chip"
+                href="https://github.com/maziyarpanahi/openmed/releases"
+                aria-label="OpenMed SDK version 2.0.0, shipped this week"
+                data-release-label
+            >
+                <span class="status-dot" aria-hidden="true"></span>
+                v2.0.0 shipped this week
+            </a>
+            <!-- openmed-claim:package_version_header:end -->
+
+            <nav id="primaryNav" class="primary-nav" aria-label="Primary navigation">
+                <ul>
+                    <li><a href="#quickstart">Quickstart</a></li>
+                    <li><a href="#compare">Compare</a></li>
+                    <li><a href="#runtimes">Runtime</a></li>
+                    <li><a href="#privacy">Privacy</a></li>
                     <li><a href="#models">Models</a></li>
-                    <li><a href="#research">Research</a></li>
-                    <li><a href="#sagemaker">SageMaker</a></li>
-                    <li><a href="#faq">FAQ</a></li>
-                    <li class="nav-links-mobile-only"><a href="docs/">Docs</a></li>
+                    <li class="mobile-only"><a href="docs/">Documentation</a></li>
                 </ul>
             </nav>
 
-            <div class="nav-actions">
-                <a class="star-pill" href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener" data-gh-stars aria-label="GitHub stars">
-                    <span aria-hidden="true">★</span>&nbsp;<span data-gh-count>—</span>
+            <div class="header-actions">
+                <button
+                    id="themeToggle"
+                    class="icon-button js-only"
+                    type="button"
+                    aria-label="Color theme: light. Activate for dark."
+                    title="Change color theme"
+                >
+                    <span
+                        class="theme-icon"
+                        data-theme-icon
+                        data-theme-state="light"
+                        aria-hidden="true"
+                    ></span>
+                    <span class="sr-only" data-theme-label>Light</span>
+                </button>
+                <!-- openmed-claim:github_stars:start -->
+                <a
+                    class="release-chip repository-stars"
+                    href="https://github.com/maziyarpanahi/openmed/stargazers"
+                    aria-label="4,700+ GitHub stars"
+                    data-repository-stars
+                >
+                    <span class="star-symbol" aria-hidden="true">★</span>
+                    <span data-star-count>4.7k</span>
                 </a>
-                <a class="btn btn-ghost docs-btn" href="docs/">Docs</a>
-                <a class="btn btn-primary" href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener">
-                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.1.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.9-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
-                    </svg>
-                    <span class="btn-label">GitHub</span>
-                    <svg class="icon btn-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="7" y1="17" x2="17" y2="7" />
-                        <polyline points="7 7 17 7 17 17" />
-                    </svg>
+                <!-- openmed-claim:github_stars:end -->
+                <a class="header-docs" href="docs/">Docs</a>
+                <a
+                    class="button button-ink header-github"
+                    href="https://github.com/maziyarpanahi/openmed"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label="Open OpenMed on GitHub"
+                >
+                    <span>GitHub <span aria-hidden="true">↗</span></span>
                 </a>
-                <button id="themeToggle" class="theme-toggle" aria-label="Toggle color theme" title="Toggle theme"></button>
-                <button id="navToggle" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primaryNav">
-                    <span class="nav-toggle-bar" aria-hidden="true"></span>
-                    <span class="nav-toggle-bar" aria-hidden="true"></span>
-                    <span class="nav-toggle-bar" aria-hidden="true"></span>
+                <button
+                    id="navToggle"
+                    class="nav-toggle js-only"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="primaryNav"
+                    aria-label="Open navigation"
+                >
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
                 </button>
             </div>
         </div>
     </header>
 
-    <main id="main-content">
-
-    <!-- ================================================================= -->
-    <!-- Hero                                                               -->
-    <!-- ================================================================= -->
-    <section id="home" class="hero bg-grid" data-screen>
-        <div class="container hero-grid">
-            <div>
-                <div class="eyebrow">OpenMed 1.5.5 · OpenMed Multilingual Privacy Filter · 8-bit MLX</div>
-                <h1 class="display-xl hero-title">
-                    Clinical AI that never leaves the <span class="serif-italic">device</span>.
-                </h1>
-                <p class="body-lg hero-desc">
-                    1,000+ state-of-the-art healthcare LLM models, Nemotron Privacy Filter MLX, Faker-backed de-identification, Portuguese, Arabic, Japanese, and Turkish PII, and 25+ curated datasets — one local-first runtime story across Python MLX on Apple Silicon and Swift-native OpenMedKit.
-                </p>
-
-                <div class="hero-ctas">
-                    <a class="btn btn-primary btn-lg" href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener">
-                        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.1.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.9-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
-                        </svg>
-                        View on GitHub
-                        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </a>
-                    <a class="btn btn-outline btn-lg" href="docs/getting-started/">
-                        Read the docs
-                        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                            <polyline points="12 5 19 12 12 19" />
-                        </svg>
-                    </a>
-                </div>
-
-                <div class="hero-meta">
-                    <span class="pip">
-                        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M19 14.5a5 5 0 0 1-3 4.5c-1 .5-2 .5-3 0-.8-.3-1.5-.3-2.3 0-1 .5-2 .5-3 0A5 5 0 0 1 5 14.5V10a5 5 0 0 1 5-5c.8 0 1.5.2 2 .5.5-.3 1.2-.5 2-.5a5 5 0 0 1 5 5z" />
-                            <path d="M14.5 2.5c.3 1-.2 2-.8 2.5" />
-                        </svg>
-                        Apple MLX
-                    </span>
-                    <span>·</span>
-                    <span class="pip">
-                        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M4 12c0-4 3-7 8-7s8 3 8 7-3 7-8 7-8-3-8-7zm4-1a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM9 14c.8 1.1 2 1.7 3 1.7s2.2-.6 3-1.7" />
-                        </svg>
-                        1,000+ models
-                    </span>
-                    <span>·</span>
-                    <span class="pip">
-                        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 3v13" />
-                            <polyline points="7 11 12 16 17 11" />
-                            <line x1="4" y1="21" x2="20" y2="21" />
-                        </svg>
-                        6M+ downloads
-                    </span>
-                    <span>·</span>
-                    <span class="pip">
-                        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="5" y="11" width="14" height="10" rx="2" />
-                            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                        </svg>
-                        On-device
-                    </span>
-                    <span>·</span>
-                    <span>Apache-2.0</span>
-                </div>
-            </div>
-
-            <div>
-                <!-- Animated PHI detection card (JS-rendered, cycles across languages) -->
-                <div class="phi-card" data-phi>
-                    <div class="phi-head">
-                        <div class="phi-head-left">
-                            <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-on-inverse)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                            </svg>
-                            <span data-phi-fn>pii.detect() · on-device</span>
-                        </div>
-                        <span class="phi-count">0/5 entities</span>
-                    </div>
-                    <pre class="phi-body" data-phi-body></pre>
-                    <div class="phi-foot">
-                        <span>lang=<span class="lang-val" data-phi-lang>"en"</span> · HIPAA Safe Harbor</span>
-                        <span class="phi-foot-right">
-                            <span class="phi-foot-dot"></span>
-                            0 bytes left device
+    <main id="main-content" tabindex="-1">
+        <section id="home" class="hero section" data-section>
+            <div class="container hero-grid">
+                <div class="hero-copy">
+                    <!-- openmed-claim:hero_claims:start -->
+                    <p class="eyebrow">
+                        <span class="status-dot status-dot-accent" aria-hidden="true"></span>
+                        OpenMed 2.0.0 · on-device clinical AI
+                    </p>
+                    <h1>
+                        Your data. Your model. Your
+                        <span class="sr-only">hardware.</span>
+                        <span class="rotating-wrap" aria-hidden="true">
+                            <span class="rotating-word" data-rotating-word aria-hidden="true">
+                                hardware.
+                            </span>
                         </span>
-                    </div>
-                </div>
-                <div class="hero-caption">
-                    <span>Live PHI detection · 12 languages</span>
-                    <span class="play">▶ watch</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- Stat band                                                          -->
-    <!-- ================================================================= -->
-    <section class="statband" aria-label="Key stats">
-        <div class="container">
-            <div class="statband-grid">
-                <div class="statband-cell">
-                    <div class="statband-num">6M<span class="suf">+</span></div>
-                    <div class="statband-label">PyPI Downloads</div>
-                </div>
-                <div class="statband-cell">
-                    <div class="statband-num">1,000<span class="suf">+</span></div>
-                    <div class="statband-label">HF Models</div>
-                </div>
-                <div class="statband-cell">
-                    <div class="statband-num">25<span class="suf">+</span></div>
-                    <div class="statband-label">Curated Datasets</div>
-                </div>
-                <div class="statband-cell">
-                    <div class="statband-num">55<span class="suf">+</span></div>
-                    <div class="statband-label">PII Entities</div>
-                </div>
-                <div class="statband-cell">
-                    <div class="statband-num">9</div>
-                    <div class="statband-label">Languages</div>
-                </div>
-                <div class="statband-cell">
-                    <div class="statband-num">&lt;1.2kg</div>
-                    <div class="statband-label">CO₂e Training</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- Runtime trio                                                       -->
-    <!-- ================================================================= -->
-    <section id="apple-runtime" data-screen>
-        <div class="container">
-            <div class="section-head">
-                <div class="eyebrow">The runtime story</div>
-                <h2 class="display-lg" style="max-width:20ch">
-                    One <span class="serif-italic">MLX</span> story across Python and Swift.
-                </h2>
-                <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Prototype with Python MLX on Apple Silicon, then ship the same local-first PII and clinical LLM experience inside native Swift apps with OpenMedKit — same artifacts, same behavior.
-                </p>
-            </div>
-
-            <div class="runtime-grid">
-                <div class="runtime-cell">
-                    <div class="cell-icon">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M19 14.5a5 5 0 0 1-3 4.5c-1 .5-2 .5-3 0-.8-.3-1.5-.3-2.3 0-1 .5-2 .5-3 0A5 5 0 0 1 5 14.5V10a5 5 0 0 1 5-5c.8 0 1.5.2 2 .5.5-.3 1.2-.5 2-.5a5 5 0 0 1 5 5z" />
-                            <path d="M14.5 2.5c.3 1-.2 2-.8 2.5" />
-                        </svg>
-                    </div>
-                    <div class="eyebrow muted">Python MLX</div>
-                    <h3 class="heading-md">Accelerated local workflows on Apple Silicon</h3>
-                    <p class="body-sm">
-                        Install <span class="code-inline">openmed[mlx]</span> to run local inference, PII extraction, and Nemotron Privacy Filter workflows with Apple-native MLX acceleration on Mac.
+                    </h1>
+                    <p class="hero-lead">
+                        OpenMed reads clinical text and removes 55+ PHI types on the
+                        hardware you control, so patient data never leaves the device.
+                        2,000+ Apache-2.0 models, 33 model-backed PII languages,
+                        state of the art on 10 of 12 biomedical NER benchmarks —
+                        and a new release most weeks.
                     </p>
-                    <a class="link-arrow" href="docs/mlx-backend/">Read the MLX backend guide →</a>
+                    <div class="button-row">
+                        <a
+                            class="button button-ink button-large"
+                            href="https://github.com/maziyarpanahi/openmed"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            View on GitHub <span aria-hidden="true">↗</span>
+                        </a>
+                        <a class="button button-outline button-large" href="#compare">
+                            Compare with your vendor <span aria-hidden="true">→</span>
+                        </a>
+                    </div>
+                    <button
+                        class="install-command js-only"
+                        type="button"
+                        aria-label="Copy pip install command"
+                        data-copy-text="pip install openmed"
+                        data-copy-label="Copy pip install command"
+                    >
+                        <span class="prompt" aria-hidden="true">$</span>
+                        <code>pip install openmed</code>
+                        <span class="copy-label" data-copy-feedback aria-hidden="true">⧉</span>
+                    </button>
+                    <!-- openmed-claim:hero_claims:end -->
                 </div>
 
-                <div class="runtime-cell">
-                    <div class="cell-icon">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <polyline points="16 18 22 12 16 6" />
-                            <polyline points="8 6 2 12 8 18" />
-                        </svg>
+                <div class="hero-demo">
+                    <div
+                        class="terminal phi-terminal"
+                        data-phi-demo
+                        aria-label="Animated synthetic PHI detection example"
+                    >
+                        <div class="terminal-header">
+                            <span>pii.detect() · on-device</span>
+                            <span class="terminal-chip" data-phi-count>5/5 · masked</span>
+                        </div>
+                        <div class="phi-body" data-phi-body aria-live="off">
+                            Pt <mark data-kind="NAME">[NAME]</mark>, MRN
+                            <mark data-kind="ID">[ID]</mark>, DOB
+                            <mark data-kind="DATE">[DATE]</mark>, contact
+                            <mark data-kind="PHONE">[PHONE]</mark>, admitted to
+                            <mark data-kind="HOSPITAL">[HOSPITAL]</mark>.
+                        </div>
+                        <div class="terminal-footer">
+                            <span>lang=<span data-phi-lang>"en"</span> · HIPAA Safe Harbor</span>
+                            <span class="local-status">
+                                <span class="status-dot status-dot-green" aria-hidden="true"></span>
+                                0 bytes left device
+                            </span>
+                        </div>
                     </div>
-                    <div class="eyebrow muted">OpenMedKit</div>
-                    <h3 class="heading-md">Swift-native PII and clinical LLMs for Apple apps</h3>
-                    <p class="body-sm">
-                        Bring detection, smart entity merging, and local model execution into macOS, iOS, and iPadOS apps without sending PHI off device.
-                    </p>
-                    <a class="link-arrow" href="docs/swift-openmedkit/">Explore OpenMedKit docs →</a>
-                </div>
-
-                <div class="runtime-cell">
-                    <div class="cell-icon">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 3v13" />
-                            <polyline points="7 11 12 16 17 11" />
-                            <line x1="4" y1="21" x2="20" y2="21" />
-                        </svg>
-                    </div>
-                    <div class="eyebrow muted">Shared MLX artifacts</div>
-                    <h3 class="heading-md">Move from notebooks to native apps with less friction</h3>
-                    <p class="body-sm">
-                        The same MLX artifacts power the Python and Swift paths — including <span class="code-inline">OpenMed/privacy-filter-nemotron-mlx</span> and the 8-bit variant — so you can prototype in a notebook, then ship the identical model into a native app without a second packaging track.
-                    </p>
-                    <a class="link-arrow" href="docs/mlx-backend/#mlx-and-swift-apps">See the shared artifact story →</a>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- De-identification                                                  -->
-    <!-- ================================================================= -->
-    <section id="deidentification" data-screen>
-        <div class="container">
-            <div class="section-head">
-                <div class="eyebrow">Healthcare data privacy</div>
-                <h2 class="display-lg" style="max-width:24ch">
-                    Clinical text de-identification, built for <span class="serif-italic">HIPAA &amp; GDPR</span>.
-                </h2>
-                <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Language-aware PII models across twelve languages. Process data locally — your PHI never leaves your environment.
-                </p>
-            </div>
-
-            <div class="deid-grid">
-                <div class="deid-cell">
-                    <div class="deid-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        </svg>
-                    </div>
-                    <h3 class="heading-sm">Context-aware PHI detection</h3>
-                    <p class="body-sm">Presidio-inspired scoring boosts confidence when keywords like SSN:, DOB:, or NPI: appear near detected entities.</p>
-                    <div class="tag-row">
-                        <span class="tag">Keyword boosting</span>
-                        <span class="tag">100-char window</span>
-                    </div>
-                </div>
-
-                <div class="deid-cell">
-                    <div class="deid-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                    </div>
-                    <h3 class="heading-sm">Checksum &amp; format validation</h3>
-                    <p class="body-sm">Built-in validators reduce false positives: French NIR, German Steuer-ID, Italian Codice Fiscale, Spanish DNI/NIE, Dutch BSN, Portuguese CPF/CNPJ, Luhn.</p>
-                    <div class="tag-row">
-                        <span class="tag">NIR</span>
-                        <span class="tag">Steuer-ID</span>
-                        <span class="tag">Codice Fiscale</span>
-                        <span class="tag">CPF / CNPJ</span>
-                    </div>
-                </div>
-
-                <div class="deid-cell">
-                    <div class="deid-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                        </svg>
-                    </div>
-                    <h3 class="heading-sm">Smart entity merging</h3>
-                    <p class="body-sm">Subword tokenizers split 123-45-6789 into fragments — semantic patterns reassemble complete SSNs, phones, and multi-word entities.</p>
-                    <div class="tag-row">
-                        <span class="tag">BIO tags</span>
-                        <span class="tag">Regex patterns</span>
-                    </div>
-                </div>
-
-                <div class="deid-cell">
-                    <div class="deid-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="5" y="11" width="14" height="10" rx="2" />
-                            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                        </svg>
-                    </div>
-                    <h3 class="heading-sm">Zero data movement</h3>
-                    <p class="body-sm">Process PHI entirely on your infrastructure. No API calls to external services. Your clinical data never leaves your secure environment.</p>
-                    <div class="tag-row">
-                        <span class="tag">Air-gapped</span>
-                        <span class="tag">On-premises</span>
-                    </div>
-                </div>
-
-                <div class="deid-cell">
-                    <div class="deid-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
-                            <path d="M4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z" />
-                        </svg>
-                    </div>
-                    <h3 class="heading-sm">Flexible redaction methods</h3>
-                    <p class="body-sm">Mask with entity-type labels [NAME], redact completely, hash, shift dates, or replace with deterministic Faker-backed surrogates. Configurable thresholds for precision control.</p>
-                    <div class="tag-row">
-                        <span class="tag">Mask</span>
-                        <span class="tag">Redact</span>
-                        <span class="tag">Replace</span>
-                    </div>
-                </div>
-
-                <div class="deid-cell">
-                    <div class="deid-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M5 8h14" />
-                            <path d="M9 8a7 7 0 0 0 7 10" />
-                            <path d="M14 21s-1-3-4-3" />
-                            <path d="M12 4v4" />
-                        </svg>
-                    </div>
-                    <h3 class="heading-sm">HIPAA Safe Harbor ready</h3>
-                    <p class="body-sm">Detects all 18 HIPAA Safe Harbor identifiers — part of a wider 55+ PII entity catalog — across English, Spanish, French, German, Italian, Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish clinical text.</p>
-                    <div class="tag-row">
-                        <span class="tag">18 Safe Harbor</span>
-                        <span class="tag">55+ entity types</span>
-                        <span class="tag">12 languages</span>
+                    <div class="demo-caption">
+                        <span>Live PHI detection · 33 model-backed languages</span>
+                        <span>Fictional patients · no real PHI</span>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- ================================================================= -->
-    <!-- Models                                                             -->
-    <!-- ================================================================= -->
-    <section id="models" class="bg-panel-section" data-screen>
-        <div class="container">
-            <div class="section-head">
-                <div class="tail">
-                    <div>
-                        <div class="eyebrow">The model library</div>
-                        <h2 class="display-lg" style="max-width:18ch">State-of-the-art, by entity type.</h2>
-                        <p class="body-lg" style="max-width:58ch;margin-top:16px">
-                            Production-ready LLMs for healthcare and clinical AI across 13 biomedical domains — chemicals, diseases, genes, proteins, species, anatomy, oncology.
+        <section id="community" class="section section-surface" data-section>
+            <div class="container">
+                <div class="section-rule">
+                    <span>Community</span>
+                    <span aria-hidden="true"></span>
+                    <small>Open source · community-driven</small>
+                </div>
+
+                <!-- openmed-claim:repository_snapshot:start -->
+                <div class="community-grid">
+                    <div class="community-lead">
+                        <p class="mono-label">Model downloads · all-time</p>
+                        <p class="community-number">340<span>M</span></p>
+                        <p>
+                            One person on lunch breaks in July 2025; the largest open
+                            medical-AI collection by July 2026. Founded by
+                            <span class="accent-text">Maziyar Panahi</span>.
+                            <a href="https://github.com/maziyarpanahi/openmed">
+                                Join on GitHub <span aria-hidden="true">↗</span>
+                            </a>
                         </p>
                     </div>
-                    <a class="btn btn-outline" href="https://huggingface.co/OpenMed" target="_blank" rel="noopener">
-                        Browse 1,000+ on HF
-                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </a>
-                </div>
-            </div>
-
-            <div class="chips" data-model-filter>
-                <button class="chip active" data-filter="All">All</button>
-                <button class="chip" data-filter="NER">NER</button>
-                <button class="chip" data-filter="disease">Disease</button>
-                <button class="chip" data-filter="chemical">Chemicals</button>
-                <button class="chip" data-filter="genomic">Genomics</button>
-                <button class="chip" data-filter="oncology">Oncology</button>
-            </div>
-
-            <div class="models-grid" data-model-grid>
-                <a class="model-cell" href="https://huggingface.co/OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M" target="_blank" rel="noopener"
-                   data-tags="NER chemical drug-discovery pharmacology">
-                    <span class="model-featured">Featured</span>
-                    <div class="heading-sm model-name">OpenMed-NER ChemicalDetect</div>
-                    <div class="model-arch">ElectraMed · 33M</div>
-                    <div class="model-tags">
-                        <span class="tag">chemical-entity-recognition</span>
-                        <span class="tag">drug-discovery</span>
-                        <span class="tag">pharmacology</span>
-                    </div>
-                    <div class="model-foot">
-                        <span class="dl"><strong>117K</strong> downloads</span>
-                        <span class="open">
-                            Open on HF
-                            <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="7" y1="17" x2="17" y2="7" />
-                                <polyline points="7 7 17 7 17 17" />
-                            </svg>
-                        </span>
-                    </div>
-                </a>
-
-                <a class="model-cell" href="https://huggingface.co/OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M" target="_blank" rel="noopener"
-                   data-tags="NER disease medical-diagnosis pathology">
-                    <span class="model-featured">Featured</span>
-                    <div class="heading-sm model-name">OpenMed-NER DiseaseDetect</div>
-                    <div class="model-arch">BioMed · 335M</div>
-                    <div class="model-tags">
-                        <span class="tag">disease-entity-recognition</span>
-                        <span class="tag">medical-diagnosis</span>
-                        <span class="tag">pathology</span>
-                    </div>
-                    <div class="model-foot">
-                        <span class="dl"><strong>104K</strong> downloads</span>
-                        <span class="open">
-                            Open on HF
-                            <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="7" y1="17" x2="17" y2="7" />
-                                <polyline points="7 7 17 7 17 17" />
-                            </svg>
-                        </span>
-                    </div>
-                </a>
-
-                <a class="model-cell" href="https://huggingface.co/OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M" target="_blank" rel="noopener"
-                   data-tags="NER genomic genetics gene">
-                    <div class="heading-sm model-name">OpenMed-NER GenomicDetect</div>
-                    <div class="model-arch">PubMed · 109M</div>
-                    <div class="model-tags">
-                        <span class="tag">gene-recognition</span>
-                        <span class="tag">genetics</span>
-                        <span class="tag">genomics</span>
-                    </div>
-                    <div class="model-foot">
-                        <span class="dl"><strong>103K</strong> downloads</span>
-                        <span class="open">
-                            Open on HF
-                            <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="7" y1="17" x2="17" y2="7" />
-                                <polyline points="7 7 17 7 17 17" />
-                            </svg>
-                        </span>
-                    </div>
-                </a>
-
-                <a class="model-cell" href="https://huggingface.co/OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M" target="_blank" rel="noopener"
-                   data-tags="NER oncology cancer-genetics gene-regulation">
-                    <div class="heading-sm model-name">OpenMed-NER OncologyDetect</div>
-                    <div class="model-arch">MultiMed · 568M</div>
-                    <div class="model-tags">
-                        <span class="tag">cancer-genetics</span>
-                        <span class="tag">oncology</span>
-                        <span class="tag">gene-regulation</span>
-                    </div>
-                    <div class="model-foot">
-                        <span class="dl"><strong>102K</strong> downloads</span>
-                        <span class="open">
-                            Open on HF
-                            <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="7" y1="17" x2="17" y2="7" />
-                                <polyline points="7 7 17 7 17 17" />
-                            </svg>
-                        </span>
-                    </div>
-                </a>
-
-                <a class="model-cell" href="https://huggingface.co/OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M" target="_blank" rel="noopener"
-                   data-tags="NER genomic dna protein molecular-biology">
-                    <div class="heading-sm model-name">OpenMed-NER DNADetect</div>
-                    <div class="model-arch">SuperClinical · 184M</div>
-                    <div class="model-tags">
-                        <span class="tag">protein-recognition</span>
-                        <span class="tag">molecular-biology</span>
-                        <span class="tag">dna</span>
-                    </div>
-                    <div class="model-foot">
-                        <span class="dl"><strong>90K</strong> downloads</span>
-                        <span class="open">
-                            Open on HF
-                            <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="7" y1="17" x2="17" y2="7" />
-                                <polyline points="7 7 17 7 17 17" />
-                            </svg>
-                        </span>
-                    </div>
-                </a>
-
-                <a class="model-cell" href="https://huggingface.co/OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M" target="_blank" rel="noopener"
-                   data-tags="NER chemical drug-discovery chem">
-                    <div class="heading-sm model-name">OpenMed-NER PharmaDetect</div>
-                    <div class="model-arch">BigMed · 278M</div>
-                    <div class="model-tags">
-                        <span class="tag">chemical-entity-recognition</span>
-                        <span class="tag">drug-discovery</span>
-                        <span class="tag">chem</span>
-                    </div>
-                    <div class="model-foot">
-                        <span class="dl"><strong>100K</strong> downloads</span>
-                        <span class="open">
-                            Open on HF
-                            <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <line x1="7" y1="17" x2="17" y2="7" />
-                                <polyline points="7 7 17 7 17 17" />
-                            </svg>
-                        </span>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- Code playground                                                    -->
-    <!-- ================================================================= -->
-    <section id="playground" data-screen>
-        <div class="container">
-            <div class="playground-grid">
-                <div class="playground-lead">
-                    <div class="eyebrow">Quickstart</div>
-                    <h2 class="display-lg">Four lines to <span class="serif-italic">production</span>.</h2>
-                    <p class="body-lg">Composable Python APIs for notebooks and services. Same call shape across local MLX, CPU, and cloud.</p>
-                    <ul class="playground-list">
-                        <li>
-                            <span class="playground-check">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                            </span>
-                            <div>
-                                <code class="code-inline">analyze_text(...)</code>
-                                <div class="body-sm" style="margin-top:4px">One-call inference with structured outputs</div>
-                            </div>
-                        </li>
-                        <li>
-                            <span class="playground-check">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                            </span>
-                            <div>
-                                <code class="code-inline">extract_pii / deidentify</code>
-                                <div class="body-sm" style="margin-top:4px">Language-aware across 12 languages</div>
-                            </div>
-                        </li>
-                        <li>
-                            <span class="playground-check">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                            </span>
-                            <div>
-                                <code class="code-inline">BatchProcessor(...)</code>
-                                <div class="body-sm" style="margin-top:4px">Progress callbacks, per-item results</div>
-                            </div>
-                        </li>
-                        <li>
-                            <span class="playground-check">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                            </span>
-                            <div>
-                                <code class="code-inline">OpenMedConfig.from_profile(...)</code>
-                                <div class="body-sm" style="margin-top:4px">dev / prod / test profiles</div>
-                            </div>
-                        </li>
-                    </ul>
-                    <a class="btn btn-primary" href="docs/analyze-text/">
-                        Read full API guide
-                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </a>
-                </div>
-
-                <div class="code-panel" data-playground>
-                    <div class="code-head">
-                        <div class="code-dots">
-                            <span class="code-dot red"></span>
-                            <span class="code-dot yellow"></span>
-                            <span class="code-dot green"></span>
+                    <div class="numbers-wall" aria-label="OpenMed community statistics">
+                        <div>
+                            <strong>30<span>M</span></strong>
+                            <small>Every month</small>
                         </div>
-                        <span class="code-title">openmed 1.5.5 · quickstart</span>
-                        <button class="code-copy" type="button">copy</button>
+                        <div>
+                            <strong>9.4<span>M</span></strong>
+                            <small>PyPI installs</small>
+                        </div>
+                        <div>
+                            <strong>2,000<span>+</span></strong>
+                            <small>Open models</small>
+                        </div>
+                        <div>
+                                            <strong>34</strong>
+                                            <small>Languages</small>
+                        </div>
                     </div>
-                    <div class="code-tabs"></div>
-                    <pre class="code-body"></pre>
                 </div>
-            </div>
-        </div>
-    </section>
 
-    <!-- ================================================================= -->
-    <!-- Research                                                           -->
-    <!-- ================================================================= -->
-    <section id="research" class="research" data-screen>
-        <div class="container research-grid">
-            <div>
-                <div class="research-eyebrow">Paper · arXiv:2508.01630 · since 2025</div>
-                <h2 class="display-lg">
-                    Started as a <span class="serif-italic">SOTA</span> NER paper. Grew into the catalog.
-                </h2>
-                <p class="body-lg">
-                    The original work — domain-adaptive pre-training with parameter-efficient LoRA on 350k biomedical passages — set state-of-the-art on 10 of 12 NER benchmarks. Since then, the catalog has expanded into multilingual PII, Apple-native MLX variants, and curated datasets across the broader OpenMed collection.
-                </p>
-                <div class="research-ctas">
-                    <a class="research-btn-solid" href="https://arxiv.org/pdf/2508.01630" target="_blank" rel="noopener">
-                        Download PDF
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 3v13" />
-                            <polyline points="7 11 12 16 17 11" />
-                            <line x1="4" y1="21" x2="20" y2="21" />
-                        </svg>
-                    </a>
-                    <a class="research-btn-outline" href="https://huggingface.co/papers/2508.01630" target="_blank" rel="noopener">
-                        Read on HF
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </a>
-                </div>
-            </div>
-            <div class="research-stats">
-                <div class="research-stat">
-                    <div class="num">25<span class="suf">+</span></div>
-                    <div class="lbl">Curated Datasets</div>
-                    <div class="sub">MIMIC-III, PubMed, BC5CDR, BC2GM, JNLPBA…</div>
-                </div>
-                <div class="research-stat">
-                    <div class="num">210</div>
-                    <div class="lbl">PII Models</div>
-                    <div class="sub">English, Spanish, French, German, Italian, Dutch, Hindi, Telugu, Portuguese</div>
-                </div>
-                <div class="research-stat">
-                    <div class="num">55<span class="suf">+</span></div>
-                    <div class="lbl">PII Entity Types</div>
-                    <div class="sub">Locale-aware: SSN, NIR, Steuer-ID, CF, DNI, BSN, CPF/CNPJ…</div>
-                </div>
-                <div class="research-stat">
-                    <div class="num">200<span class="suf">+</span></div>
-                    <div class="lbl">MLX Variants</div>
-                    <div class="sub">Apple Silicon ready, BERT-family supported</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- SageMaker                                                          -->
-    <!-- ================================================================= -->
-    <section id="sagemaker" data-screen>
-        <div class="container">
-            <div class="section-head">
-                <div class="tail">
+                <div class="facts-rail">
                     <div>
-                        <div class="eyebrow">AWS SageMaker</div>
-                        <h2 class="display-lg" style="max-width:20ch">When the cloud is the fastest path to production.</h2>
-                        <p class="body-lg" style="max-width:58ch;margin-top:16px">
-                            Marketplace-managed model packages with HIPAA-compliant infrastructure, sub-100ms endpoints, and end-to-end encryption.
+                        <strong>A release every week</strong>
+                        <span>13 releases in the first six months</span>
+                    </div>
+                    <div>
+                        <strong>34 languages supported</strong>
+                        <span>Docs · models · community-maintained</span>
+                    </div>
+                    <div>
+                        <strong>Free forever</strong>
+                        <span>Apache-2.0 · nothing to sign</span>
+                    </div>
+                </div>
+                <div class="snapshot-note">
+                    <span>Counted, not claimed · Hugging Face + PyPI · July 2026</span>
+                    <span data-community-stars>★ 4.7K GitHub stars · counted live</span>
+                </div>
+                <!-- openmed-claim:repository_snapshot:end -->
+            </div>
+        </section>
+
+        <section id="quickstart" class="section" data-section>
+            <div class="container">
+                <div class="section-rule">
+                    <span>Quickstart</span>
+                    <span aria-hidden="true"></span>
+                </div>
+
+                <div class="quickstart-grid">
+                    <div class="terminal code-terminal" data-code-example>
+                        <div class="terminal-header">
+                            <!-- openmed-claim:package_version_quickstart:start -->
+                            <span>openmed 2.0.0 · quickstart</span>
+                            <!-- openmed-claim:package_version_quickstart:end -->
+                            <button
+                                class="terminal-copy js-only"
+                                type="button"
+                                data-copy-active
+                                aria-label="Copy active quickstart example"
+                            >
+                                copy
+                            </button>
+                        </div>
+                        <div class="terminal-install">
+                            <span class="prompt" aria-hidden="true">$</span>
+                            <code>uv pip install "openmed[hf]"</code>
+                        </div>
+                        <div class="terminal-code">
+                            <pre tabindex="0"><code><span class="code-comment"># local extraction + de-identification — nothing leaves the process</span>
+from openmed import deidentify, extract_pii
+
+note = "Patient Casey Example (MRN 00123) called from 555-0100."
+
+result = extract_pii(note)  <span class="code-comment"># entities + offsets + confidence</span>
+print(deidentify(note))
+<span class="code-output"># → "Patient [NAME] ([ID]) called from [PHONE]."</span></code></pre>
+                        </div>
+                    </div>
+
+                    <div class="quickstart-copy">
+                        <h2>Four lines, no account.</h2>
+                        <p>
+                            No API key to provision, no procurement call, no
+                            data-processing agreement to negotiate. Install the
+                            package and the same call shape runs on a laptop CPU,
+                            Apple Silicon, or a GPU server.
+                        </p>
+                        <ul class="check-list">
+                            <li>
+                                <span class="check-icon" aria-hidden="true"></span>
+                                <div>
+                                    <code>analyze_text(...)</code>
+                                    <span>One-call inference with structured outputs</span>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="check-icon" aria-hidden="true"></span>
+                                <div>
+                                    <code>extract_pii / deidentify</code>
+                                    <span>Language-aware across 34 supported PII languages</span>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="check-icon" aria-hidden="true"></span>
+                                <div>
+                                    <code>BatchProcessor(...)</code>
+                                    <span>Up to 3.3× throughput on CPU, 2.2× on MLX</span>
+                                </div>
+                            </li>
+                            <li>
+                                <span class="check-icon" aria-hidden="true"></span>
+                                <div>
+                                    <code>openmed.service.app</code>
+                                    <span>REST and gRPC, auth and no-PHI logging built in</span>
+                                </div>
+                            </li>
+                        </ul>
+                        <a class="button button-ink" href="docs/api-reference/">
+                            Read the full API guide <span aria-hidden="true">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="compare" class="section section-ink" data-section>
+            <div class="container">
+                <div class="section-rule section-rule-inverse">
+                    <span>Head to head</span>
+                    <span aria-hidden="true"></span>
+                </div>
+                <div class="compare-intro">
+                    <div>
+                        <h2>Every other option asks you to give something up.</h2>
+                        <p>
+                            Cloud medical APIs want your notes. Licensed clinical
+                            NLP wants a per-server subscription. Research toolkits
+                            stopped shipping. OpenMed is the only one of the four
+                            that runs on a phone, costs nothing, and shipped this
+                            week.
                         </p>
                     </div>
-                    <a class="btn btn-outline" href="https://aws.amazon.com/marketplace/seller-profile?id=seller-ovsgauetge4d6" target="_blank" rel="noopener">
-                        OpenMed on AWS Marketplace
-                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
+                    <aside>
+                        <strong>What we don't claim</strong>
+                        <p>
+                            Incumbents publish strong accuracy numbers on their own
+                            harnesses — one closed-source vendor reports 96% F1 on
+                            PHI detection against 91% Azure, 83% AWS and 79%
+                            GPT-4o. We don't ask you to take ours on trust instead:
+                            the weights, recipes and eval scripts are public, so
+                            you can rerun all of it on your own notes.
+                        </p>
+                    </aside>
+                </div>
+
+                <div
+                    class="table-scroll"
+                    role="region"
+                    aria-label="Head-to-head clinical NLP comparison"
+                    tabindex="0"
+                >
+                    <table class="comparison-table">
+                        <caption class="sr-only">
+                            Capability and cadence comparison for OpenMed, cloud
+                            APIs, licensed clinical NLP, and research toolkits
+                        </caption>
+                        <colgroup>
+                            <col class="comparison-decision-column">
+                            <col span="4" class="comparison-option-column">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th scope="col"><span class="sr-only">Capability</span></th>
+                                <th scope="col" class="openmed-column">
+                                    <strong>OpenMed</strong>
+                                    <span>Apache-2.0 · on-device</span>
+                                </th>
+                                <th scope="col">
+                                    <strong>Cloud APIs</strong>
+                                    <span>AWS Comprehend Medical · Azure Health · Google Healthcare NLP</span>
+                                </th>
+                                <th scope="col">
+                                    <strong>Licensed clinical NLP</strong>
+                                    <span>Enterprise NLP suites, per-server subscription</span>
+                                </th>
+                                <th scope="col">
+                                    <strong>Research toolkits</strong>
+                                    <span>medspaCy · MedCAT · cTAKES</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th scope="row">
+                                    Where inference runs
+                                    <small>The question every compliance review starts with</small>
+                                </th>
+                                <td class="openmed-column">Your hardware — phone to GPU server</td>
+                                <td>Vendor cloud region</td>
+                                <td>Your servers, per-server licence</td>
+                                <td>Your servers</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Patient data leaves the network</th>
+                                <td class="openmed-column">Never</td>
+                                <td class="muted-value">Sent to the vendor</td>
+                                <td>No</td>
+                                <td>No</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">What it costs at 10M notes</th>
+                                <td class="openmed-column">$0 — Apache-2.0, weights included</td>
+                                <td class="muted-value">Per-character billing</td>
+                                <td class="muted-value">Per-server subscription</td>
+                                <td>$0</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    Languages supported
+                                    <small>PII and clinical coverage, per stack</small>
+                                </th>
+                                <td class="openmed-column">33 model-backed · 34 supported codes</td>
+                                <td>Mostly English endpoints</td>
+                                <td>A few clinical locales, licensed</td>
+                                <td class="muted-value">English only</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    Runs on iPhone and Android
+                                    <small>Where clinicians actually stand</small>
+                                </th>
+                                <td class="openmed-column">OpenMedKit · ONNX Runtime Mobile</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Apple Silicon acceleration</th>
+                                <td class="openmed-column">MLX — 24–33× faster than CPU</td>
+                                <td class="muted-value">n/a</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Runs in the browser</th>
+                                <td class="openmed-column">Transformers.js · WebGPU</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                                <td class="muted-value">—</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    CPU-optimised ONNX builds
+                                    <small>Most hospital hardware has no GPU</small>
+                                </th>
+                                <td class="openmed-column">fp32, fp16 and INT8 exports, ORT Mobile ready</td>
+                                <td class="muted-value">n/a — cloud only</td>
+                                <td>Heavyweight JVM runtime</td>
+                                <td>CPU, unoptimised</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    Release cadence
+                                    <small>How fast a gap gets closed</small>
+                                </th>
+                                <td class="openmed-column">Weekly, in public</td>
+                                <td>Vendor roadmap</td>
+                                <td>Quarterly majors</td>
+                                <td class="muted-value">Largely dormant</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Benchmarks you can rerun</th>
+                                <td class="openmed-column">arXiv:2508.01630 · open weights + scripts</td>
+                                <td>Vendor white papers</td>
+                                <td>Vendor-run comparisons</td>
+                                <td>Academic papers</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- openmed-claim:competitive_matrix_boundary:start -->
+                <p class="table-note">
+                    <span>Capability and cadence rows describe publicly documented positions · July 2026</span>
+                    <span>Sources: vendor docs · arXiv:2508.01630 · OpenMed release feed</span>
+                </p>
+                <!-- openmed-claim:competitive_matrix_boundary:end -->
+            </div>
+        </section>
+
+        <section id="runtimes" class="section" data-section>
+            <div class="container">
+                <div class="section-rule">
+                    <span>Runs everywhere</span>
+                    <span aria-hidden="true"></span>
+                </div>
+                <h2>The one thing no cloud API can do: run in a pocket.</h2>
+                <p class="section-lead">
+                    Same model names, five runtimes. iPhone, iPad and Android
+                    through OpenMedKit, Apple Silicon through MLX, plain CPUs and
+                    NVIDIA GPUs through PyTorch, the browser through Transformers.js
+                    and WebGPU, and REST or gRPC services in your own VPC.
+                </p>
+                <div class="runtime-grid">
+                    <article>
+                        <p class="mono-label">Apple Silicon · MLX</p>
+                        <h3>24–33× faster than CPU PyTorch</h3>
+                        <p>
+                            Median latency per inference step on the Privacy Filter
+                            family. Install <code>openmed[mlx]</code> and a MacBook
+                            becomes the inference tier.
+                        </p>
+                        <a href="docs/mlx-backend/">
+                            Read the MLX backend guide <span aria-hidden="true">→</span>
+                        </a>
+                    </article>
+                    <article>
+                        <p class="mono-label">OpenMedKit · Swift + Kotlin</p>
+                        <h3>Ship de-identification inside the app</h3>
+                        <p>
+                            Scan a note on an iPhone, redact it, extract clinical
+                            signals — offline, with ONNX Runtime Mobile on Android
+                            and Kotlin parity tests on span boundaries.
+                        </p>
+                        <a href="docs/swift-openmedkit/">
+                            Explore OpenMedKit docs <span aria-hidden="true">→</span>
+                        </a>
+                    </article>
+                    <article>
+                        <p class="mono-label">Browser · WebGPU</p>
+                        <h3>PHI never reaches your server either</h3>
+                        <p>
+                            Export ONNX token-classification artifacts into the
+                            <code>transformersjs/</code> layout and redact in the
+                            tab, before submit.
+                        </p>
+                        <a href="docs/export-transformersjs/">
+                            Read the export guide <span aria-hidden="true">→</span>
+                        </a>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="privacy" class="section section-surface" data-section>
+            <div class="container">
+                <div class="section-rule">
+                    <span>Healthcare data privacy</span>
+                    <span aria-hidden="true"></span>
+                </div>
+                <!-- openmed-claim:privacy_contract:start -->
+                <h2>De-identification you can audit, not just trust.</h2>
+                <p class="section-lead">
+                    All 18 HIPAA Safe Harbor identifiers inside a 55+ entity
+                    catalog: 33 model-backed PII languages,
+                    34 supported codes,
+                    600+ PII models, plus validator-backed ID-only locales.
+                    Policy-aware pipelines add calibrated thresholds, signed audit
+                    reports, re-identification risk scoring, and release gates that
+                    fail closed when the evidence is missing.
+                    <span class="sr-only">
+                        34 supported PII language codes:
+                        am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu
+                    </span>
+                </p>
+                <!-- openmed-claim:privacy_contract:end -->
+
+                <div class="privacy-grid">
+                    <article>
+                        <h3>Signed audit reports</h3>
+                        <p>
+                            Every run produces canonical span records and a signed
+                            report: what was found, what policy applied, what was
+                            released. Release gates fail closed.
+                        </p>
+                        <span>audit-trail</span><span>risk-scoring</span>
+                    </article>
+                    <article>
+                        <h3>Context-aware PHI detection</h3>
+                        <p>
+                            Presidio-inspired scoring boosts confidence when
+                            keywords like SSN:, DOB: or NPI: appear near a detected
+                            entity — the framework's idea, trained on clinical language.
+                        </p>
+                        <span>keyword-boosting</span><span>100-char-window</span>
+                    </article>
+                    <article>
+                        <h3>Checksum &amp; format validation</h3>
+                        <p>
+                            Built-in validators cut false positives: French NIR,
+                            German Steuer-ID, Italian Codice Fiscale, Spanish
+                            DNI/NIE, Dutch BSN, CPF/CNPJ, Luhn.
+                        </p>
+                        <span>NIR</span><span>Codice-Fiscale</span><span>CPF/CNPJ</span>
+                    </article>
+                    <article>
+                        <h3>Smart entity merging</h3>
+                        <p>
+                            Subword tokenizers split 123-45-6789 into fragments;
+                            semantic patterns reassemble complete SSNs, phone
+                            numbers and multi-word entities before redaction.
+                        </p>
+                        <span>BIO-tags</span><span>span-parity</span>
+                    </article>
+                    <article>
+                        <h3>Five redaction methods</h3>
+                        <p>
+                            Mask with [NAME] labels, redact, hash, shift dates by a
+                            fixed offset, or replace with Faker-backed surrogates
+                            that keep local ID formats valid.
+                        </p>
+                        <span>mask</span><span>replace</span><span>shift_dates</span>
+                    </article>
+                    <article>
+                        <h3>Zero data movement</h3>
+                        <p>
+                            No API calls, no licence check-in, no telemetry. Point
+                            a model name at a local directory and OpenMed never
+                            contacts the Hub — air-gapped by configuration, not by promise.
+                        </p>
+                        <span>air-gapped</span><span>no-telemetry</span>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="models" class="section" data-section>
+            <div class="container">
+                <div class="section-rule">
+                    <span>The model library</span>
+                    <span aria-hidden="true"></span>
+                </div>
+                <div class="models-intro">
+                    <div>
+                        <h2>Pick the entity type, not the platform.</h2>
+                        <p class="section-lead">
+                            Specialised models across 13 biomedical domains —
+                            chemicals, diseases, genes, proteins, species,
+                            anatomy, oncology — sized from 33M to 568M so the
+                            small ones fit on a phone.
+                        </p>
+                    </div>
+                    <a
+                        class="button button-outline"
+                        href="https://huggingface.co/OpenMed"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Browse the catalog <span aria-hidden="true">↗</span>
                     </a>
                 </div>
-            </div>
 
-            <div class="sage-grid">
-                <a class="sage-card" href="https://aws.amazon.com/marketplace/pp/prodview-wbdotr776wwym?sr=0-1&amp;ref_=beagle&amp;applicationId=AWSMPContessa" target="_blank" rel="noopener">
-                    <div class="sage-card-head">
-                        <div class="sage-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                            </svg>
+                <div class="model-filters" aria-label="Filter model examples">
+                    <button type="button" data-filter="all" aria-pressed="true">All</button>
+                    <button type="button" data-filter="disease" aria-pressed="false">Disease</button>
+                    <button type="button" data-filter="chemicals" aria-pressed="false">Chemicals</button>
+                    <button type="button" data-filter="genomics" aria-pressed="false">Genomics</button>
+                    <button type="button" data-filter="oncology" aria-pressed="false">Oncology</button>
+                </div>
+                <p class="sr-only" data-filter-status role="status" aria-live="polite">
+                    Showing all six model examples.
+                </p>
+
+                <div class="model-grid">
+                    <article data-category="chemicals">
+                        <div class="model-card-header"><h3>ChemicalDetect</h3><span>featured</span></div>
+                        <p class="model-arch">ElectraMed · 33M</p>
+                        <p class="model-tags"><span>chemical-entity-recognition</span><span>drug-discovery</span></p>
+                        <div class="model-footer"><span><strong>117K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                    </article>
+                    <article data-category="disease">
+                        <div class="model-card-header"><h3>DiseaseDetect</h3><span>featured</span></div>
+                        <p class="model-arch">BioMed · 335M</p>
+                        <p class="model-tags"><span>disease-entity-recognition</span><span>pathology</span></p>
+                        <div class="model-footer"><span><strong>104K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                    </article>
+                    <article data-category="genomics">
+                        <div class="model-card-header"><h3>GenomicDetect</h3></div>
+                        <p class="model-arch">PubMed · 109M</p>
+                        <p class="model-tags"><span>gene-recognition</span><span>genomics</span></p>
+                        <div class="model-footer"><span><strong>103K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                    </article>
+                    <article data-category="oncology">
+                        <div class="model-card-header"><h3>OncologyDetect</h3></div>
+                        <p class="model-arch">MultiMed · 568M</p>
+                        <p class="model-tags"><span>cancer-genetics</span><span>gene-regulation</span></p>
+                        <div class="model-footer"><span><strong>102K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                    </article>
+                    <article data-category="chemicals">
+                        <div class="model-card-header"><h3>PharmaDetect</h3></div>
+                        <p class="model-arch">BigMed · 278M</p>
+                        <p class="model-tags"><span>drug-recognition</span><span>pharmacovigilance</span></p>
+                        <div class="model-footer"><span><strong>100K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                    </article>
+                    <article data-category="genomics">
+                        <div class="model-card-header"><h3>DNADetect</h3></div>
+                        <p class="model-arch">SuperClinical · 184M</p>
+                        <p class="model-tags"><span>protein-recognition</span><span>molecular-biology</span></p>
+                        <div class="model-footer"><span><strong>90K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="products" class="section section-surface" data-section>
+            <div class="container">
+                <div class="section-rule">
+                    <span>Built with OpenMed</span>
+                    <span aria-hidden="true"></span>
+                </div>
+                <h2>Open at the core. Real products on top.</h2>
+                <p class="section-lead">
+                    The library is free and stands alone. Welna and OpenMed Agent
+                    are separate products built on it — one for patients, one for
+                    clinical teams.
+                </p>
+
+                <div class="products-grid">
+                    <article class="product-card">
+                        <div class="product-top">
+                            <strong>wel<span>·</span>na</strong>
+                            <small>App Store · iOS 17+</small>
                         </div>
-                        <span class="sage-chip">Marketplace</span>
-                    </div>
-                    <div>
-                        <h3 class="heading-sm">OpenMed NER Genome Detection</h3>
-                        <div class="sage-sub">Model package · BC2GM</div>
-                    </div>
-                    <p class="body-sm">Deploy secure inference endpoints in under five minutes.</p>
-                    <div class="tag-row">
-                        <span class="tag">Gene NER</span>
-                        <span class="tag">Clinical genomics</span>
-                    </div>
-                    <span class="link-arrow">
-                        Open listing
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </span>
-                </a>
-
-                <a class="sage-card" href="https://aws.amazon.com/marketplace/search/results?prevFilters=%257B%2522sr%2522%3A%25220-3%2522%2C%2522ref_%2522%3A%2522beagle%2522%2C%2522applicationId%2522%3A%2522AWSMPContessa%2522%257D&searchTerms=OpenMed+Species" target="_blank" rel="noopener">
-                    <div class="sage-card-head">
-                        <div class="sage-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                            </svg>
+                        <h3>Private patient intelligence for iPhone</h3>
+                        <p>
+                            Reads Apple Health with your permission, redacts
+                            identifiers on device, and turns ninety days of signals
+                            into plain-language reads, plus the questions worth
+                            bringing to a clinician.
+                        </p>
+                        <div class="mini-terminal mini-terminal-light">
+                            <span><em>vitality 100</em> · six signals · 90 days</span>
+                            <span><b>✓</b> [NAME] · [DOB] redacted on device</span>
+                            <span>prepare for your next visit <span aria-hidden="true">→</span></span>
                         </div>
-                        <span class="sage-chip">Marketplace</span>
-                    </div>
-                    <div>
-                        <h3 class="heading-sm">OpenMed NER Species Detection</h3>
-                        <div class="sage-sub">Pathogen NER · Marketplace</div>
-                    </div>
-                    <p class="body-sm">Accelerate biosurveillance and antimicrobial stewardship pipelines.</p>
-                    <div class="tag-row">
-                        <span class="tag">Microbiology</span>
-                        <span class="tag">Batch &amp; realtime</span>
-                    </div>
-                    <span class="link-arrow">
-                        Open listing
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </span>
-                </a>
+                        <p class="product-foundation">
+                            Runs the <strong>OpenMed PII</strong> model on device
+                            (~40 MB), redacting identifiers before anything leaves
+                            the phone.
+                        </p>
+                        <a
+                            href="https://welna.app"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            Download on the App Store <span aria-hidden="true">↗</span>
+                        </a>
+                    </article>
 
-                <a class="sage-card" href="https://github.com/maziyarpanahi/openmed-starter/tree/main/aws-marketplace-notebooks/examples" target="_blank" rel="noopener">
-                    <div class="sage-card-head">
-                        <div class="sage-icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polyline points="16 18 22 12 16 6" />
-                                <polyline points="8 6 2 12 8 18" />
-                            </svg>
+                    <article class="product-card product-card-ink">
+                        <div class="product-top">
+                            <strong>open<span>agent</span></strong>
+                            <small>preview</small>
                         </div>
-                        <span class="sage-chip">GitHub</span>
-                    </div>
-                    <div>
-                        <h3 class="heading-sm">SageMaker Starter Notebooks</h3>
-                        <div class="sage-sub">Examples repo</div>
-                    </div>
-                    <p class="body-sm">Batch transform, real-time endpoints, and cost governance examples.</p>
-                    <div class="tag-row">
-                        <span class="tag">JumpStart</span>
-                        <span class="tag">Monitoring</span>
-                        <span class="tag">Cost governance</span>
-                    </div>
-                    <span class="link-arrow">
-                        Browse notebooks
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </span>
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- Agent (sibling medical agent, currently in preview)                -->
-    <!-- ================================================================= -->
-    <section id="agent" aria-label="OpenMed Agent (preview)" style="padding: 56px 0;">
-        <div class="container">
-            <a class="agent-callout" href="https://agent.openmed.life/" target="_blank" rel="noopener">
-                <div class="agent-callout-left">
-                    <div class="eyebrow muted">Also shipping</div>
-                    <div class="agent-callout-wordmark">open<span class="serif-italic">agent</span></div>
-                    <p class="agent-callout-tagline">Terminal-native AI for clinical workflows that need control.</p>
-                    <p class="agent-callout-sub">One prompt, one plan, visible execution — for prior auth, appeals, clinical coding, FHIR, and literature search. A separate medical agent from the same team, currently in preview. Not required to use the OpenMed library.</p>
-                </div>
-                <div class="agent-callout-right">
-                    <span class="preview-pill">Preview</span>
-                    <span class="agent-callout-link">
-                        agent.openmed.life
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="7" y1="17" x2="17" y2="7" />
-                            <polyline points="7 7 17 7 17 17" />
-                        </svg>
-                    </span>
-                </div>
-            </a>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- FAQ                                                                -->
-    <!-- ================================================================= -->
-    <section id="faq" data-screen>
-        <div class="container faq-grid">
-            <div class="faq-lead">
-                <div class="eyebrow">Healthcare AI FAQ</div>
-                <h2 class="display-lg">Questions from the clinical, ML, and compliance teams.</h2>
-                <p class="body-lg">If we haven't answered yours, reach out — we reply from the same people who train the models.</p>
-            </div>
-            <div class="faq-list">
-                <div class="faq-item">
-                    <div class="faq-row">
-                        <div class="heading-sm">What is OpenMed, exactly?</div>
-                        <div class="faq-plus" aria-hidden="true">+</div>
-                    </div>
-                    <div class="faq-body">
-                        <p>An open-source medical NLP toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition — diseases, drugs, genes, anatomy, chemicals, oncology — plus PII extraction and de-identification across twelve languages. Ships as a Python package, a Dockerized FastAPI service, and a Swift package (OpenMedKit) for macOS and iOS apps. Apache-2.0, no vendor lock-in, runs on your infrastructure.</p>
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-row">
-                        <div class="heading-sm">Are these generative LLMs or something else?</div>
-                        <div class="faq-plus" aria-hidden="true">+</div>
-                    </div>
-                    <div class="faq-body">
-                        <p>Encoder transformers (BERT, ELECTRA, DeBERTa families), not generative chat models. They do extraction and classification — pulling structured entities out of unstructured clinical text — and stay small enough to run on a laptop or a phone. The paper (<a href="https://arxiv.org/abs/2508.01630" target="_blank" rel="noopener" style="color:var(--accent)">arXiv:2508.01630</a>) reports new state-of-the-art on 10 of 12 biomedical NER benchmarks. Think of them as complementary to the larger generative "medical LLM" category, not a replacement.</p>
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-row">
-                        <div class="heading-sm">Where does my data go when I use OpenMed?</div>
-                        <div class="faq-plus" aria-hidden="true">+</div>
-                    </div>
-                    <div class="faq-body">
-                        <p>Nowhere you don't send it. You download the models once (Hugging Face or a private mirror) and inference runs wherever you run the Python process, the Docker container, or the Swift app — your laptop, your VPC, an on-prem server, or air-gapped hardware. No telemetry, no license check-in, no outbound calls at runtime. PHI stays on your side of the fence by default.</p>
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-row">
-                        <div class="heading-sm">Does OpenMed support HIPAA-aligned workflows?</div>
-                        <div class="faq-plus" aria-hidden="true">+</div>
-                    </div>
-                    <div class="faq-body">
-                        <p>The PII catalog covers all 18 HIPAA Safe Harbor identifiers across English, Spanish, French, German, Italian, Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish — with locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, and Luhn checks. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls (on-device processing, configurable thresholds, multiple redaction methods); the legal compliance boundary lives in your deployment.</p>
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-row">
-                        <div class="heading-sm">Can I fine-tune OpenMed models for my own vocabulary?</div>
-                        <div class="faq-plus" aria-hidden="true">+</div>
-                    </div>
-                    <div class="faq-body">
-                        <p>Yes. Models are published on Hugging Face under permissive licensing with full training recipes. The reference approach combines lightweight domain-adaptive pre-training on a 350k-passage biomedical corpus with parameter-efficient LoRA fine-tuning — updating less than 1.5% of model parameters and completing in under 12 hours on a single GPU (&lt;1.2 kg CO₂e). Tokenizer assets and starter notebooks are in the <a href="https://github.com/maziyarpanahi/openmed-starter" target="_blank" rel="noopener" style="color:var(--accent)">openmed-starter</a> repo.</p>
-                    </div>
-                </div>
-                <div class="faq-item">
-                    <div class="faq-row">
-                        <div class="heading-sm">Do I need OpenMed Agent to use OpenMed?</div>
-                        <div class="faq-plus" aria-hidden="true">+</div>
-                    </div>
-                    <div class="faq-body">
-                        <p>No. The Python toolkit, OpenMedKit (Swift), and MLX backend are fully self-contained Apache-2.0 — you can build and ship without ever touching the Agent. <a href="https://agent.openmed.life/" target="_blank" rel="noopener" style="color:var(--accent)">OpenMed Agent</a> is a separate medical agent currently in preview — a terminal-native runner for clinical workflows on top of the same stack.</p>
-                    </div>
+                        <h3>Terminal-native AI for clinical workflows</h3>
+                        <p>
+                            One inspectable agent for prior auth, appeals, coding,
+                            claims, care coordination and FHIR work, with visible
+                            plans and auditable artifacts before any action.
+                        </p>
+                        <div class="mini-terminal agent-terminal">
+                            <span class="mini-terminal-header"><span>openmed · prior-auth</span><span>plan · 5 steps</span></span>
+                            <span><em>❯</em> Review CPT 27447 against LCD criteria</span>
+                            <span><b>✓</b> Read clinical record <small>· 6 summaries</small></span>
+                            <span><b>✓</b> De-identified on service <small>· OpenMed PII</small></span>
+                            <span><i>●</i> Drafting appeal, review before send</span>
+                        </div>
+                        <p class="product-foundation">
+                            Built on <strong>OpenMed extraction, de-ID &amp; terminology</strong>.
+                        </p>
+                        <a href="https://agent.openmed.life/" target="_blank" rel="noopener">
+                            Open agent.openmed.life <span aria-hidden="true">↗</span>
+                        </a>
+                    </article>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- ================================================================= -->
-    <!-- Contribute CTA                                                     -->
-    <!-- ================================================================= -->
-    <section id="contribute" class="contribute" data-screen>
-        <div class="container">
-            <div class="eyebrow">Open source, open invitation</div>
-            <h2 class="display-lg contribute-title">
-                6M+ downloads and counting. <span class="serif-italic">Built in the open.</span>
-            </h2>
-            <p class="body-lg contribute-desc">
-                OpenMed has crossed six million downloads on PyPI — and every model, validator, and language pack came from a community that ships in public. Star the repo, open an issue, or send a pull request: clinical AI gets better when more people can see how it works.
-            </p>
-            <div class="contribute-ctas">
-                <a class="btn btn-primary btn-lg" href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener">
-                    <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.1.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.9-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
-                    </svg>
-                    Contribute on GitHub
-                    <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="7" y1="17" x2="17" y2="7" />
-                        <polyline points="7 7 17 7 17 17" />
-                    </svg>
-                </a>
-                <a class="btn btn-outline btn-lg" href="docs/contributing/">
-                    Read the contributing guide
-                    <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                        <polyline points="12 5 19 12 12 19" />
-                    </svg>
-                </a>
+        <section id="research" class="section" data-section>
+            <div class="container research-grid">
+                <div>
+                    <p class="mono-label">Paper · arXiv:2508.01630</p>
+                    <h2>Benchmarks you can rerun on your own notes.</h2>
+                    <p class="section-lead">
+                        Domain-adaptive pre-training with parameter-efficient LoRA
+                        on 350k biomedical passages set state of the art on 10 of
+                        12 public NER benchmarks. Weights, recipes and eval scripts
+                        are all published, and a full fine-tune finishes in under
+                        12 hours on a single GPU.
+                    </p>
+                    <div class="button-row">
+                        <a
+                            class="button button-ink"
+                            href="https://arxiv.org/abs/2508.01630"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            Read the paper <span aria-hidden="true">↓</span>
+                        </a>
+                        <a
+                            class="button button-outline"
+                            href="https://huggingface.co/OpenMed"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            Reproduce the evals <span aria-hidden="true">↗</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="research-stats">
+                    <div><strong>25+</strong><b>Curated datasets</b><span>MIMIC-III, PubMed, BC5CDR, BC2GM…</span></div>
+                    <div><strong>600+</strong><b>PII models</b><span>33 model-backed languages</span></div>
+                    <div><strong>55+</strong><b>PII entity types</b><span>All 18 Safe Harbor identifiers, locale-aware</span></div>
+                    <div><strong>650+</strong><b>MLX variants</b><span>Apple Silicon ready, BERT-family</span></div>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
 
+        <section id="faq" class="section section-surface" data-section>
+            <div class="container faq-grid">
+                <div>
+                    <h2>Questions from ML, clinical and procurement.</h2>
+                    <p class="section-lead">
+                        If yours isn't here, open an issue — you'll get an answer
+                        from the people who train the models.
+                    </p>
+                </div>
+                <div class="faq-list" data-faq-list>
+                    <article class="faq-item">
+                        <h3>
+                            <button
+                                type="button"
+                                aria-expanded="true"
+                                aria-controls="faq-answer-1"
+                                id="faq-question-1"
+                            >
+                                <span>How is this different from a cloud medical NLP API?</span>
+                            </button>
+                        </h3>
+                        <div id="faq-answer-1" role="region" aria-labelledby="faq-question-1">
+                            <p>
+                                Cloud APIs bill per character and require sending
+                                clinical text to a vendor region — every new use case
+                                becomes a privacy review. OpenMed downloads once and
+                                runs in your process: laptop, VPC, or air-gapped box,
+                                with no telemetry and no licence check-in. It is also
+                                the only option here that runs inside an iPhone or a
+                                browser tab.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="faq-item">
+                        <h3>
+                            <button
+                                type="button"
+                                aria-expanded="true"
+                                aria-controls="faq-answer-2"
+                                id="faq-question-2"
+                            >
+                                <span>And versus closed-source healthcare NLP?</span>
+                            </button>
+                        </h3>
+                        <div id="faq-answer-2" role="region" aria-labelledby="faq-question-2">
+                            <p>
+                                Those are mature platforms with strong published
+                                accuracy and support contracts — if you need a vendor
+                                SLA, that is a real answer. OpenMed competes on
+                                ownership: no per-server subscription, Apache-2.0
+                                weights and recipes, mobile and browser runtimes, and
+                                a release most weeks instead of quarterly. Our
+                                benchmarks you can rerun; theirs you take on trust.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="faq-item">
+                        <h3>
+                            <button
+                                type="button"
+                                aria-expanded="true"
+                                aria-controls="faq-answer-3"
+                                id="faq-question-3"
+                            >
+                                <span>Can we fine-tune the models on our own vocabulary?</span>
+                            </button>
+                        </h3>
+                        <div id="faq-answer-3" role="region" aria-labelledby="faq-question-3">
+                            <p>
+                                Yes. Every model ships with its full training recipe:
+                                domain-adaptive pre-training plus LoRA, updating under
+                                1.5% of parameters. A full run finishes in under 12
+                                hours on a single GPU (under 1.2 kg CO2e), and starter
+                                notebooks live in the openmed-starter repo.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="faq-item">
+                        <h3>
+                            <button
+                                type="button"
+                                aria-expanded="true"
+                                aria-controls="faq-answer-4"
+                                id="faq-question-4"
+                            >
+                                <span>Is a weekly release cadence safe for clinical use?</span>
+                            </button>
+                        </h3>
+                        <div id="faq-answer-4" role="region" aria-labelledby="faq-question-4">
+                            <p>
+                                Releases are versioned, signed and documented, with
+                                pinned model artifacts, calibrated thresholds and
+                                release gates that fail closed. Pin a version and
+                                upgrade on your schedule — the cadence just means a
+                                gap you report closes in days, not in the next
+                                procurement cycle.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="faq-item">
+                        <h3>
+                            <button
+                                type="button"
+                                aria-expanded="true"
+                                aria-controls="faq-answer-5"
+                                id="faq-question-5"
+                            >
+                                <span>What does "community-driven" actually mean here?</span>
+                            </button>
+                        </h3>
+                        <div id="faq-answer-5" role="region" aria-labelledby="faq-question-5">
+                            <p>
+                                Language packs, national-ID validators, translations
+                                and mobile runtimes have all come from people outside
+                                the original author. Issues and PRs are public,
+                                security disclosure is documented, and PHI-leak
+                                reports get a private channel. If your locale is
+                                missing, requesting it is a realistic path to it existing.
+                            </p>
+                        </div>
+                    </article>
+                    <article class="faq-item">
+                        <h3>
+                            <button
+                                type="button"
+                                aria-expanded="true"
+                                aria-controls="faq-answer-6"
+                                id="faq-question-6"
+                            >
+                                <span>Are these generative models?</span>
+                            </button>
+                        </h3>
+                        <div id="faq-answer-6" role="region" aria-labelledby="faq-question-6">
+                            <p>
+                                No. They are compact encoder transformers fine-tuned
+                                for token classification — they label spans of text
+                                rather than generating it, so there is nothing to
+                                hallucinate. Small enough to run on a phone; the
+                                Privacy Filter family adds the de-identification
+                                policy layer on top.
+                            </p>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="contribute" class="section section-ink cta" data-section>
+            <div class="container cta-grid">
+                <div>
+                    <p class="eyebrow eyebrow-inverse">Open source, open invitation</p>
+                    <h2>Next release is already in progress.</h2>
+                    <p>
+                        Every model, validator and language pack came from someone
+                        who needed it and shipped it in public. Star the repo,
+                        request a language, file a redaction bypass, send a pull
+                        request — clinical AI gets better when more people can see
+                        how it works.
+                    </p>
+                </div>
+                <div class="cta-actions">
+                    <a
+                        class="button button-accent"
+                        href="https://github.com/maziyarpanahi/openmed"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Contribute on GitHub <span aria-hidden="true">↗</span>
+                    </a>
+                    <a
+                        class="button button-inverse"
+                        href="https://github.com/maziyarpanahi/openmed/issues"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Request a language <span aria-hidden="true">→</span>
+                    </a>
+                    <small>python · mlx · swift · kotlin · react-native · browser</small>
+                </div>
+            </div>
+        </section>
     </main>
 
-    <!-- ================================================================= -->
-    <!-- Footer                                                             -->
-    <!-- ================================================================= -->
-    <footer class="footer" id="about">
+    <footer class="site-footer">
         <div class="container">
             <div class="footer-grid">
-                <div class="footer-col">
-                    <div class="footer-brand">
-                        <svg width="28" height="28" viewBox="0 0 40 40" aria-hidden="true">
-                            <rect x="2" y="2" width="36" height="36" rx="8" fill="var(--ink)" />
-                            <rect x="11" y="17.5" width="18" height="5" rx="1" fill="var(--paper)" />
-                            <rect x="17.5" y="11" width="5" height="18" rx="1" fill="var(--paper)" />
-                            <circle cx="20" cy="20" r="2" fill="var(--accent)" />
-                        </svg>
-                        <span class="wordmark">open<span class="med">med</span></span>
-                    </div>
-                    <p class="body-sm" style="max-width:38ch">
-                        Community-driven, non-profit effort to democratize state-of-the-art LLMs for healthcare. Founded by <a href="https://x.com/MaziyarPanahi" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Maziyar Panahi</a>.
+                <div>
+                    <a class="brand footer-brand" href="./" aria-label="OpenMed home">
+                        <img src="logo-inverse.svg" width="24" height="24" alt="">
+                        <span class="brand-word">openmed</span>
+                    </a>
+                    <p>
+                        Community-driven, open-source effort to democratise
+                        state-of-the-art models for healthcare. Founded by
+                        <a href="https://github.com/maziyarpanahi">Maziyar Panahi</a>.
                     </p>
                 </div>
-
-                <div class="footer-col">
-                    <div class="footer-col-head">Product</div>
+                <div>
+                    <h2>Product</h2>
                     <ul>
-                        <li><a href="docs/analyze-text/">Python Toolkit</a></li>
+                        <li><a href="docs/">Python toolkit</a></li>
                         <li><a href="docs/swift-openmedkit/">OpenMedKit (Swift)</a></li>
-                        <li><a href="docs/mlx-backend/">MLX Backend</a></li>
-                        <li><a href="#sagemaker">SageMaker</a></li>
-                        <li><a href="https://agent.openmed.life/" target="_blank" rel="noopener">OpenMed Agent <span class="footer-tag">preview</span></a></li>
+                        <li><a href="docs/export-onnx-android/">Android &amp; ONNX</a></li>
+                        <li><a href="https://welna.app">Welna</a></li>
+                        <li><a href="https://agent.openmed.life/">OpenMed Agent</a></li>
                     </ul>
                 </div>
-
-                <div class="footer-col">
-                    <div class="footer-col-head">Research</div>
+                <div>
+                    <h2>Research</h2>
                     <ul>
-                        <li><a href="https://arxiv.org/pdf/2508.01630" target="_blank" rel="noopener">Paper (arXiv)</a></li>
-                        <li><a href="#research">Benchmarks</a></li>
-                        <li><a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener">Model Hub</a></li>
-                        <li><a href="https://huggingface.co/datasets?other=openmed" target="_blank" rel="noopener">Datasets</a></li>
+                        <li><a href="https://arxiv.org/abs/2508.01630">Paper (arXiv)</a></li>
+                        <li><a href="https://huggingface.co/OpenMed">Benchmarks</a></li>
+                        <li><a href="https://huggingface.co/OpenMed">Model hub</a></li>
+                        <li><a href="https://huggingface.co/OpenMed/datasets">Datasets</a></li>
                     </ul>
                 </div>
-
-                <div class="footer-col">
-                    <div class="footer-col-head">Community</div>
+                <div>
+                    <h2>Community</h2>
                     <ul>
-                        <li><a href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener">GitHub</a></li>
-                        <li><a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener">Hugging Face</a></li>
-                        <li><a href="https://x.com/OpenMed_AI" target="_blank" rel="noopener">X / Twitter</a></li>
-                        <li><a href="https://www.linkedin.com/company/openmed-ai/" target="_blank" rel="noopener">LinkedIn</a></li>
+                        <li><a href="https://github.com/maziyarpanahi/openmed/releases">Release notes</a></li>
+                        <li><a href="https://github.com/maziyarpanahi/openmed/issues">Issues</a></li>
+                        <li><a href="https://huggingface.co/OpenMed">Hugging Face</a></li>
+                        <li><a href="https://x.com/OpenMed_AI">X / Twitter</a></li>
                     </ul>
                 </div>
             </div>
-
-            <div class="footer-foot">
-                <span>© <span id="year"></span> OpenMed · Apache-2.0 · <a href="https://openmed.life/">openmed.life</a></span>
-                <span>Built by <a href="https://x.com/MaziyarPanahi" target="_blank" rel="noopener">Maziyar Panahi</a> · Paris</span>
+            <div class="footer-bottom">
+                <!-- openmed-claim:footer_license:start -->
+                <span>
+                    © <span id="year">2026</span> OpenMed · Apache-2.0 · openmed.life
+                </span>
+                <!-- openmed-claim:footer_license:end -->
+                <span>Built by Maziyar Panahi · Paris</span>
             </div>
         </div>
     </footer>
 
-    <!-- Cloudflare Web Analytics -->
-    <script defer src='https://static.cloudflareinsights.com/beacon.min.js'
-        data-cf-beacon='{"token": "86108e13d57f44f69a4c67a445df1f17"}'></script>
+    <div class="sr-only" id="copyStatus" role="status" aria-live="polite"></div>
 </body>
 
 </html>

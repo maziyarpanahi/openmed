@@ -3,42 +3,124 @@ name: Deploy Docs to GitHub Pages
 on:
   push:
     branches: ["master"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["master"]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "Makefile"
+      - "README*.md"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "models.jsonl"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "scripts/brand/**"
+      - "scripts/docs/**"
+      - "scripts/i18n/**"
+      - "tests/browser/brand/**"
+      - "tests/unit/test_brand_system.py"
+      - "tests/unit/test_docs_publication.py"
+      - "tests/unit/test_pages_manifest.py"
+      - "tests/unit/test_readme_i18n_drift.py"
+      - "tests/unit/test_readme_sw_drift.py"
+      - "tests/unit/test_web_demo_layout.py"
+      - "tests/unit/eval/test_leaderboard.py"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: "pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'deploy' }}"
+  # Pages deployments should finish once started; cancelling them can leave
+  # the final deploy-pages handoff in a failed state during merge bursts.
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+      - name: Install locked documentation tooling
+        run: uv sync --frozen --extra dev --extra docs --python 3.11
+      - name: Validate brand sources, claims, consumers, and generated art
+        run: |
+          uv run --frozen python scripts/brand/validate_system.py
+          uv run --frozen python scripts/brand/update_claims.py --check
+          uv run --frozen python scripts/brand/sync_consumers.py --check
+          uv run --frozen python scripts/brand/render_social_assets.py --check
+          uv run --frozen python -m pytest \
+            tests/unit/test_brand_system.py \
+            tests/unit/test_docs_publication.py \
+            tests/unit/test_pages_manifest.py \
+            tests/unit/test_readme_i18n_drift.py \
+            tests/unit/test_readme_sw_drift.py \
+            tests/unit/test_web_demo_layout.py \
+            tests/unit/eval/test_leaderboard.py \
+            -q
+      - name: Stage and verify the exact Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            uv run --frozen python scripts/docs/stage_pages.py --release-tag "$GITHUB_REF_NAME"
+          else
+            uv run --frozen python scripts/docs/stage_pages.py
+          fi
+      - name: Setup Node for browser validation
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tests/browser/brand/package-lock.json
+      - name: Install pinned browser test dependencies
+        run: npm ci --prefix tests/browser/brand
+      - name: Validate light, dark, mobile, and documentation surfaces
+        run: |
+          docker run --rm --ipc=host \
+            --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --workdir /work \
+            --env CI=true \
+            mcr.microsoft.com/playwright:v1.62.0-noble@sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471 \
+            /bin/bash -lc "npm --prefix tests/browser/brand test"
+      - name: Upload browser validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages-browser-evidence
+          path: output/playwright/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install documentation tooling
-        run: pip install ".[docs]"
-      - name: Build MkDocs site
-        run: mkdocs build --strict
-      - name: Bundle marketing site
-        run: rsync -av docs/website/ site/
       - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload site/ as Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./site
-      - name: Deploy to GitHub Pages
+        uses: actions/configure-pages@v6
+      - name: Deploy Pages artifact
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

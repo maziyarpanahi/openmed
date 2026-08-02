@@ -1,0 +1,549 @@
+#!/usr/bin/env python3
+"""Fail closed when installable direct dependencies are not permissive."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.metadata
+import json
+import re
+import sys
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping, Sequence
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - exercised by Python 3.10 CI
+    import tomli as tomllib
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PYPROJECT = ROOT / "pyproject.toml"
+ICU_RULES_PATH = Path("openmed/processing/resources/segmenter/indic_rules.json")
+ICU_LICENSE_PATH = Path("openmed/processing/resources/segmenter/ICU.txt")
+ICU_SOURCE_REPOSITORY = "https://github.com/unicode-org/icu"
+ICU_SOURCE_REVISION = "0c5873f89bf64f6bbc0a24b84f07d79b25785a42"
+ICU_SOURCE_PATH = "icu4c/source/data/brkitr/rules/char.txt"
+ICU_SOURCE_COPYRIGHT = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation "
+    "and others. All Rights Reserved."
+)
+ICU_SOURCE_RETRIEVED = "2026-07-28"
+ICU_LICENSE_MARKERS = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation and others.",
+    "ICU License - ICU 1.8.1 and later",
+    "Copyright (c) 1995-2016 International Business Machines Corporation and others",
+    "Permission is hereby granted, free of charge",
+)
+
+EXCLUDED_OPTIONAL_GROUPS = frozenset({"dev"})
+
+ALLOWED_LICENSE_MARKERS = (
+    "MIT",
+    "APACHE-2.0",
+    "APACHE SOFTWARE LICENSE",
+    "BSD",
+    "BSD-2-CLAUSE",
+    "BSD-3-CLAUSE",
+    "ISC",
+    "MPL-2.0",
+    "MOZILLA PUBLIC LICENSE 2.0",
+    "HPND",
+    "HISTORICAL PERMISSION NOTICE AND DISCLAIMER",
+)
+
+DISALLOWED_LICENSE_MARKERS = (
+    "AGPL",
+    "AFFRO GENERAL PUBLIC LICENSE",
+    "COMMONS CLAUSE",
+    "ELASTIC",
+    "GENERAL PUBLIC LICENSE",
+    "GPL",
+    "LGPL",
+    "LESSER GENERAL PUBLIC LICENSE",
+    "POLYFORM",
+    "SERVER SIDE PUBLIC LICENSE",
+    "SSPL",
+)
+
+GPL_BRIDGE_EXCEPTIONS = {
+    "sdcmicro": "GPL-2.0-only; optional out-of-process disclosure-control bridge",
+}
+
+REVIEWED_LICENSES = {
+    "accelerate": "Apache-2.0",
+    "adlfs": "BSD-3-Clause",
+    "auto-gptq": "MIT",
+    "autoawq": "MIT",
+    "click": "BSD-3-Clause",
+    "confluent-kafka": "Apache-2.0",
+    "coremltools": "BSD-3-Clause",
+    "cryptography": "Apache-2.0 OR BSD-3-Clause",
+    "dask": "BSD-3-Clause",
+    "duckdb": "MIT",
+    "easyocr": "Apache-2.0",
+    "faker": "MIT",
+    "fastapi": "MIT",
+    "fsspec": "BSD-3-Clause",
+    "gcsfs": "BSD-3-Clause",
+    "gliner": "Apache-2.0",
+    "grpcio": "Apache-2.0",
+    "griffe": "ISC",
+    "hanlp": "Apache-2.0",
+    "haystack-ai": "Apache-2.0",
+    "hnswlib": "Apache-2.0",
+    "huggingface-hub": "Apache-2.0",
+    "httpx": "BSD-3-Clause",
+    "indic-nlp-library": "MIT",
+    "jieba": "MIT",
+    "langchain-core": "MIT",
+    "llama-index-core": "MIT",
+    "markdown-it-py": "MIT",
+    "mcp": "MIT",
+    "mkdocs": "BSD-2-Clause",
+    "mkdocs-git-revision-date-localized-plugin": "MIT",
+    "mkdocs-llmstxt": "ISC",
+    "mkdocs-material": "MIT",
+    "mkdocs-minify-plugin": "MIT",
+    "mkdocs-static-i18n": "MIT",
+    "mkdocstrings": "ISC",
+    "mlx": "MIT",
+    "mlx-lm": "MIT",
+    "nncf": "Apache-2.0",
+    "numpy": "BSD-3-Clause",
+    "onnx": "Apache-2.0",
+    "onnxruntime": "MIT",
+    "pkuseg": "MIT",
+    "onnxscript": "MIT",
+    "opencc": "Apache-2.0",
+    "opentelemetry-api": "Apache-2.0",
+    "opentelemetry-exporter-otlp-proto-http": "Apache-2.0",
+    "opentelemetry-sdk": "Apache-2.0",
+    "openvino": "Apache-2.0",
+    "paddleocr": "Apache-2.0",
+    "pandas": "BSD-3-Clause",
+    "pdfplumber": "MIT",
+    "philter-ucsf": "BSD-3-Clause",
+    "piexif": "MIT",
+    "pillow": "HPND",
+    "pikepdf": "MPL-2.0",
+    "polars": "MIT",
+    "prefect": "Apache-2.0",
+    "presidio-analyzer": "MIT",
+    "pyarrow": "Apache-2.0",
+    "pycld2": "Apache-2.0",
+    "protobuf": "BSD-3-Clause",
+    "pydicom": "MIT",
+    "pydeid": "MIT",
+    "pypinyin": "MIT",
+    "pyyaml": "MIT",
+    "pymdown-extensions": "MIT",
+    "pysbd": "MIT",
+    "pyspark": "Apache-2.0",
+    "python-doctr": "Apache-2.0",
+    "pytesseract": "Apache-2.0",
+    "python-docx": "MIT",
+    "quickumls": "MIT",
+    "rapidfuzz": "MIT",
+    "rich": "MIT",
+    "s3fs": "BSD-3-Clause",
+    "safetensors": "Apache-2.0",
+    "scrubadub": "Apache-2.0",
+    "scispacy": "Apache-2.0",
+    "spacy": "MIT",
+    "tiktoken": "MIT",
+    "tokenizers": "Apache-2.0",
+    "torch": "BSD-3-Clause",
+    "transformers": "Apache-2.0",
+    "typer": "MIT",
+    "uvicorn": "BSD-3-Clause",
+    "yasbd-lib": "MPL-2.0",
+}
+
+NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
+RESTRICTED_VOCAB_DATA_MARKERS = (
+    "cpt",
+    "mrconso",
+    "mrrel",
+    "mrsty",
+    "sct2",
+    "snomed",
+    "umls",
+)
+RESTRICTED_VOCAB_DATA_SUFFIXES = frozenset(
+    {
+        ".arrow",
+        ".bz2",
+        ".csv",
+        ".db",
+        ".gz",
+        ".json",
+        ".jsonl",
+        ".parquet",
+        ".rrf",
+        ".sqlite",
+        ".sqlite3",
+        ".tsv",
+        ".txt",
+        ".xml",
+        ".xz",
+        ".zip",
+    }
+)
+
+
+@dataclass(frozen=True)
+class RequirementEntry:
+    """A direct requirement declared in project metadata."""
+
+    group: str
+    requirement: str
+    name: str
+
+
+@dataclass(frozen=True)
+class LicenseAuditResult:
+    """License policy decision for one direct requirement."""
+
+    entry: RequirementEntry
+    license_text: str
+    allowed: bool
+    reason: str
+
+
+def normalize_name(name: str) -> str:
+    """Normalize package names according to PEP 503."""
+
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def dependency_name(requirement: str) -> str:
+    """Extract the distribution name from a PEP 508 requirement string."""
+
+    match = NAME_RE.match(requirement)
+    if not match:
+        raise ValueError(
+            f"Cannot parse dependency name from requirement: {requirement!r}"
+        )
+    return normalize_name(match.group(1))
+
+
+def iter_installable_requirements(
+    pyproject: Mapping[str, object],
+) -> list[RequirementEntry]:
+    """Return direct non-dev dependencies from project metadata."""
+
+    project = pyproject.get("project", {})
+    if not isinstance(project, dict):
+        raise ValueError("pyproject.toml is missing a [project] table")
+
+    entries: list[RequirementEntry] = []
+
+    dependencies = project.get("dependencies", [])
+    if dependencies:
+        if not isinstance(dependencies, list):
+            raise ValueError("[project].dependencies must be a list")
+        entries.extend(
+            RequirementEntry(
+                "default", str(requirement), dependency_name(str(requirement))
+            )
+            for requirement in dependencies
+        )
+
+    optional_dependencies = project.get("optional-dependencies", {})
+    if optional_dependencies:
+        if not isinstance(optional_dependencies, dict):
+            raise ValueError("[project.optional-dependencies] must be a table")
+        for group, requirements in sorted(optional_dependencies.items()):
+            if normalize_name(str(group)) in EXCLUDED_OPTIONAL_GROUPS:
+                continue
+            if not isinstance(requirements, list):
+                raise ValueError(
+                    f"[project.optional-dependencies].{group} must be a list"
+                )
+            entries.extend(
+                RequirementEntry(
+                    str(group), str(requirement), dependency_name(str(requirement))
+                )
+                for requirement in requirements
+            )
+
+    return entries
+
+
+def read_pyproject(path: Path) -> dict[str, object]:
+    """Load a pyproject file as TOML."""
+
+    with path.open("rb") as handle:
+        return tomllib.load(handle)
+
+
+def installed_license_text(name: str) -> str | None:
+    """Resolve license text from installed distribution metadata, when available."""
+
+    try:
+        distribution = importlib.metadata.distribution(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+    package_metadata = distribution.metadata
+    candidates: list[str] = []
+
+    for field in ("License-Expression", "License"):
+        value = package_metadata.get(field)
+        if value:
+            candidates.append(value)
+
+    for classifier in package_metadata.get_all("Classifier") or []:
+        if classifier.startswith("License ::"):
+            candidates.append(classifier)
+
+    return " ; ".join(candidates) if candidates else None
+
+
+def resolve_license(
+    name: str,
+    reviewed_licenses: Mapping[str, str] = REVIEWED_LICENSES,
+) -> str:
+    """Resolve a direct dependency license from review data or package metadata."""
+
+    normalized = normalize_name(name)
+    if normalized in reviewed_licenses:
+        return reviewed_licenses[normalized]
+    return installed_license_text(normalized) or ""
+
+
+def contains_marker(license_text: str, markers: Sequence[str]) -> bool:
+    """Return true when license text includes one of the normalized markers."""
+
+    normalized = license_text.upper().replace("_", "-")
+    return any(marker in normalized for marker in markers)
+
+
+def is_allowed_license(name: str, license_text: str) -> tuple[bool, str]:
+    """Classify license text against the permissive-only policy."""
+
+    normalized_name = normalize_name(name)
+    if not license_text:
+        return False, "license could not be resolved; add a reviewed license entry"
+
+    has_disallowed = contains_marker(license_text, DISALLOWED_LICENSE_MARKERS)
+    has_allowed = contains_marker(license_text, ALLOWED_LICENSE_MARKERS)
+    is_bridge_exception = normalized_name in GPL_BRIDGE_EXCEPTIONS
+
+    if is_bridge_exception and has_disallowed and "ELASTIC" not in license_text.upper():
+        return (
+            True,
+            f"allowed only as bridge exception: {GPL_BRIDGE_EXCEPTIONS[normalized_name]}",
+        )
+
+    if has_disallowed:
+        return False, "license is not allowed for bundled or in-process dependencies"
+
+    if has_allowed:
+        return True, "permissive license"
+
+    return False, "license is outside the MIT/Apache-2.0/BSD/ISC allowlist"
+
+
+def audit_pyproject(
+    pyproject_path: Path = DEFAULT_PYPROJECT,
+    reviewed_licenses: Mapping[str, str] = REVIEWED_LICENSES,
+) -> list[LicenseAuditResult]:
+    """Audit direct installable dependencies declared by a pyproject file."""
+
+    pyproject = read_pyproject(pyproject_path)
+    results: list[LicenseAuditResult] = []
+
+    for entry in iter_installable_requirements(pyproject):
+        license_text = resolve_license(entry.name, reviewed_licenses)
+        allowed, reason = is_allowed_license(entry.name, license_text)
+        results.append(LicenseAuditResult(entry, license_text, allowed, reason))
+
+    return results
+
+
+def audit_restricted_vocab_data(project_root: Path = ROOT) -> list[Path]:
+    """Return package data files that look like restricted vocabulary dumps."""
+
+    package_root = project_root / "openmed"
+    if not package_root.exists():
+        return []
+
+    findings: list[Path] = []
+    for path in package_root.rglob("*"):
+        if (
+            not path.is_file()
+            or path.suffix.lower() not in RESTRICTED_VOCAB_DATA_SUFFIXES
+        ):
+            continue
+        relative = path.relative_to(project_root)
+        normalized = str(relative).lower().replace("\\", "/")
+        if any(marker in normalized for marker in RESTRICTED_VOCAB_DATA_MARKERS):
+            findings.append(relative)
+    return findings
+
+
+def audit_restricted_vocab_wheel(wheel_path: Path) -> list[str]:
+    """Return restricted vocabulary data entries found in a built wheel.
+
+    Args:
+        wheel_path: Built wheel archive to inspect.
+
+    Returns:
+        Sorted archive entry paths that violate the restricted-data policy.
+    """
+
+    if not wheel_path.is_file():
+        raise FileNotFoundError(f"wheel does not exist: {wheel_path}")
+    findings: list[str] = []
+    with zipfile.ZipFile(wheel_path) as archive:
+        for name in archive.namelist():
+            normalized = name.lower().replace("\\", "/")
+            if Path(normalized).suffix not in RESTRICTED_VOCAB_DATA_SUFFIXES:
+                continue
+            if any(marker in normalized for marker in RESTRICTED_VOCAB_DATA_MARKERS):
+                findings.append(name)
+    return sorted(findings)
+
+
+def audit_bundled_license_notices(project_root: Path = ROOT) -> list[str]:
+    """Return failures for bundled resources whose required notices are incomplete."""
+
+    findings: list[str] = []
+    rules_path = project_root / ICU_RULES_PATH
+    license_path = project_root / ICU_LICENSE_PATH
+    root_notice_path = project_root / "NOTICE"
+
+    if not rules_path.is_file():
+        return [f"missing bundled ICU rules: {ICU_RULES_PATH}"]
+    if not license_path.is_file():
+        findings.append(f"missing bundled ICU license: {ICU_LICENSE_PATH}")
+    if not root_notice_path.is_file():
+        findings.append("missing root NOTICE")
+
+    try:
+        rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        findings.append(f"invalid bundled ICU rules metadata: {exc}")
+        rules = {}
+
+    source = rules.get("source")
+    if (
+        rules.get("license") != "ICU"
+        or rules.get("license_file") != ICU_LICENSE_PATH.name
+        or not isinstance(source, dict)
+        or source.get("repository") != ICU_SOURCE_REPOSITORY
+        or source.get("revision") != ICU_SOURCE_REVISION
+        or source.get("path") != ICU_SOURCE_PATH
+        or source.get("copyright") != ICU_SOURCE_COPYRIGHT
+        or source.get("retrieved") != ICU_SOURCE_RETRIEVED
+        or not source.get("modifications")
+    ):
+        findings.append("bundled Indic rules lack immutable ICU provenance")
+
+    if license_path.is_file():
+        license_text = license_path.read_text(encoding="utf-8")
+        if any(marker not in license_text for marker in ICU_LICENSE_MARKERS):
+            findings.append("bundled ICU license notice is incomplete")
+
+    if root_notice_path.is_file():
+        root_notice = root_notice_path.read_text(encoding="utf-8")
+        required_notice_markers = (
+            "ICU (International Components for Unicode) grapheme-break rules",
+            ICU_SOURCE_REVISION,
+            "Source-file copyright: Copyright (C) 2002-2016",
+            str(ICU_LICENSE_PATH).replace("\\", "/"),
+        )
+        if any(marker not in root_notice for marker in required_notice_markers):
+            findings.append("root NOTICE does not attribute the bundled ICU rules")
+
+    return findings
+
+
+def print_results(results: Sequence[LicenseAuditResult]) -> None:
+    """Print a compact human-readable audit summary."""
+
+    failures = [result for result in results if not result.allowed]
+
+    if failures:
+        print("License policy failed:", file=sys.stderr)
+        for result in failures:
+            print(
+                f"- {result.entry.group}:{result.entry.name} "
+                f"({result.license_text or 'unknown'}): {result.reason}",
+                file=sys.stderr,
+            )
+        return
+
+    print("License policy passed")
+    for result in results:
+        print(f"- {result.entry.group}:{result.entry.name}: {result.license_text}")
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+
+    parser = argparse.ArgumentParser(
+        description="Check direct non-dev dependency licenses against OpenMed policy."
+    )
+    parser.add_argument(
+        "--pyproject",
+        type=Path,
+        default=DEFAULT_PYPROJECT,
+        help="Path to pyproject.toml to audit.",
+    )
+    parser.add_argument(
+        "--project-root",
+        type=Path,
+        default=ROOT,
+        help="Project root to scan for restricted bundled vocabulary data.",
+    )
+    parser.add_argument(
+        "--wheel",
+        action="append",
+        type=Path,
+        default=[],
+        help="Built wheel to scan for UMLS, SNOMED CT, or CPT data entries.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the dependency license audit."""
+
+    args = parse_args(argv)
+    results = audit_pyproject(args.pyproject)
+    print_results(results)
+    restricted_data = audit_restricted_vocab_data(args.project_root)
+    if restricted_data:
+        print("Restricted vocabulary data policy failed:", file=sys.stderr)
+        for path in restricted_data:
+            print(f"- {path}", file=sys.stderr)
+    restricted_wheel_data: list[tuple[Path, str]] = []
+    for wheel in args.wheel:
+        restricted_wheel_data.extend(
+            (wheel, entry) for entry in audit_restricted_vocab_wheel(wheel)
+        )
+    if restricted_wheel_data:
+        print("Restricted vocabulary wheel policy failed:", file=sys.stderr)
+        for wheel, entry in restricted_wheel_data:
+            print(f"- {wheel}: {entry}", file=sys.stderr)
+    bundled_notice_failures = audit_bundled_license_notices(args.project_root)
+    if bundled_notice_failures:
+        print("Bundled license notice policy failed:", file=sys.stderr)
+        for finding in bundled_notice_failures:
+            print(f"- {finding}", file=sys.stderr)
+    return (
+        1
+        if any(not result.allowed for result in results)
+        or restricted_data
+        or restricted_wheel_data
+        or bundled_notice_failures
+        else 0
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

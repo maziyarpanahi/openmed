@@ -1,0 +1,282 @@
+version: 1
+fallback_policy: disabled
+
+# Paths are relative to the final staged GitHub Pages artifact.
+expected_routes:
+  - index.html
+  - docs/index.html
+  - docs/getting-started/index.html
+  - docs/api-reference/index.html
+  - docs/zh/index.html
+  - docs/zh/getting-started/index.html
+  - docs/zh/onboarding-china/index.html
+  - docs/hi/index.html
+  - docs/hi/getting-started/index.html
+  - docs/hi/onboarding-india/index.html
+  - docs/eval/benchmark-leaderboard/index.html
+  - docs/demo/web/index.html
+  - docs/demo/rtl/index.html
+
+expected_assets:
+  - CNAME
+  - apple-touch-icon.png
+  - favicon-64.png
+  - favicon.ico
+  - favicon.svg
+  - logo.svg
+  - logo-inverse.svg
+  - og.png
+  - robots.txt
+  - site.webmanifest
+  - sitemap.xml
+  - assets/fonts/IBMPlexMono-Medium.woff2
+  - assets/fonts/IBMPlexMono-Regular.woff2
+  - assets/fonts/IBMPlexMono-SemiBold.woff2
+  - assets/fonts/IBMPlexSans-Bold.woff2
+  - assets/fonts/IBMPlexSans-Medium.woff2
+  - assets/fonts/IBMPlexSans-Regular.woff2
+  - assets/fonts/IBMPlexSans-SemiBold.woff2
+  - assets/fonts/Newsreader-Medium.woff2
+  - assets/fonts/Newsreader-MediumItalic.woff2
+  - assets/openmed-system.css
+  - assets/script.js
+  - assets/style.css
+  - docs/assets/openmed-favicon.svg
+  - docs/assets/openmed-mark-inverse.svg
+  - docs/assets/openmed-mark.svg
+  - docs/javascripts/openmed-docs.js
+  - docs/javascripts/openmed-standalone.js
+  - docs/stylesheets/openmed-brand.css
+  - docs/stylesheets/openmed-standalone.css
+  - docs/stylesheets/openmed-system.css
+  - docs/search/search_index.json
+  - docs/model-tokenizer-script-coverage.json
+  - docs/sitemap.xml
+  - docs/sitemap.xml.gz
+  - docs/hi/sitemap.xml
+  - docs/zh/sitemap.xml
+  - docs/llms.txt
+  - docs/llms-full.txt
+  - docs/eval/benchmark-leaderboard/leaderboard.json
+  - docs/eval/benchmark-leaderboard/reports/golden.report.json
+  - docs/demo/web/app.js
+
+translation_groups:
+  documentation_home:
+    source: index.md
+    translations:
+      zh: index.zh.md
+      hi: index.hi.md
+  getting_started:
+    source: getting-started.md
+    translations:
+      zh: getting-started.zh.md
+      hi: getting-started.hi.md
+  china_onboarding:
+    source: onboarding-china.md
+    translations:
+      zh: onboarding-china.zh.md
+  india_onboarding:
+    source: onboarding-india.md
+    translations:
+      hi: onboarding-india.hi.md
+
+classification:
+  navigated:
+    - index.md
+    - feature-map.md
+    - release/v2.0.0.md
+    - release/v1.6-v1.7-feature-coverage.md
+    - getting-started.md
+    - africa-onboarding.md
+    - low-bandwidth-install.md
+    - quickstarts.md
+    - onboarding-china.md
+    - onboarding-india.md
+    - agent-usage.md
+    - analyze-text.md
+    - rest-service.md
+    - mcp-clients.md
+    - rest-recipes.md
+    - serving/tracing.md
+    - serving/resilience.md
+    - deploy/hardened-image.md
+    - offline-install.md
+    - serving/async-jobs.md
+    - serving/grpc.md
+    - serving/authentication.md
+    - deploy/helm.md
+    - deploy/openhim-mediator.md
+    - deploy/africa-reference-deployment.md
+    - deploy/multi-arch.md
+    - model-loader.md
+    - model-registry.md
+    - model-manifest.md
+    - indic-encoders.md
+    - model-tokenizer-script-coverage.md
+    - output-formatting.md
+    - clinical/context-and-extraction.md
+    - clinical/concept-grounding.md
+    - clinical/abbreviation-disambiguation.md
+    - clinical/coreference.md
+    - clinical/temporal-normalization.md
+    - clinical/chinese-terminology-grounding.md
+    - clinical/multilingual-relations.md
+    - clinical/sig-parser.md
+    - medical-tokenizer.md
+    - indic-normalization.md
+    - configuration.md
+    - profiles.md
+    - plugin-sdk.md
+    - batch-processing.md
+    - legacy-indic-encoding.md
+    - profiling.md
+    - benchmarks/low-resource.md
+    - benchmarks/i18n-throughput.md
+    - zero-shot-howto.md
+    - zero-shot-ner.md
+    - examples.md
+    - document-adapter-provenance.md
+    - multimodal/epub-extraction.md
+    - testing.md
+    - eval-harness.md
+    - clinical-validation-protocol.md
+    - eval/leaderboard.md
+    - benchmarks/arm-latency.md
+    - clinical/experiencer-refinement.md
+    - runtimes/openvino.md
+    - runtimes/awq-grounding.md
+    - tiers.md
+    - export-awq.md
+    - export-gptq.md
+    - export-gguf.md
+    - api/deidentification.md
+    - reidentification-risk.md
+    - sms-short-text-deid.md
+    - anonymization.md
+    - chw-form-deid.md
+    - indic-name-matching.md
+    - languages.md
+    - india-health-id-deidentification.md
+    - pii-smart-merging.md
+    - security/no-raw-phi-logging.md
+    - security/tamper-evident-audit-log.md
+    - integrations-langchain.md
+    - integrations-haystack.md
+    - integrations-llamaindex.md
+    - integrations/columnar-redactor.md
+    - integrations/lakehouse-redaction.md
+    - integrations/dask.md
+    - duckdb-deidentification.md
+    - spark-deidentification.md
+    - prefect-integration.md
+    - spacy-component.md
+    - hl7v2-deidentification.md
+    - compliance.md
+    - compliance/api-deprecation-policy.md
+    - compliance/africa-malabo-baseline.md
+    - compliance/north-africa-pdpl-0908-checklist.md
+    - compliance/africa-data-residency-guide.md
+    - compliance/templates/africa-data-residency-attestation.md
+    - compliance/africa-context-sensitive-attributes.md
+    - compliance/hipaa-safe-harbor-attestation.md
+    - compliance/iso-27701-control-evidence.md
+    - compliance/consent-data-use-tags.md
+    - compliance/breach-notification-runbook.md
+    - compliance/templates/breach-report-template.md
+    - fhir-interop.md
+    - dhis2-export.md
+    - openmrs-adapter.md
+    - fhir-smart-guidelines.md
+    - icd11-grounding.md
+    - export-matrix.md
+    - mlx-backend.md
+    - performance-mps.md
+    - export-mlx-quant.md
+    - export-onnx-webgpu.md
+    - export-transformersjs.md
+    - runtimes/onnxruntime-web.md
+    - runtimes/low-ram-loading.md
+    - android-quickstart.md
+    - export-onnx-android.md
+    - android-tokenization.md
+    - android-parity.md
+    - on-device-segmenters.md
+    - coreml-export.md
+    - swift-openmedkit.md
+    - runtimes/apple-platforms.md
+    - swift-kotlin-parity.md
+    - faq.md
+    - troubleshooting.md
+    - onboarding.md
+    - migration.md
+    - contributing.md
+    - development.md
+    - contributing/reproducible-dependencies.md
+    - security/disclosure-policy.md
+    - security/threat-model.md
+    - security/threat-model-multilingual-ingestion.md
+    - security/red-team-corpus.md
+    - security/no-telemetry.md
+    - security/hf-token-policy.md
+    - security/supply-chain.md
+    - supply-chain/vulnerability-scanning.md
+    - security/sbom.md
+    - supply-chain/provenance.md
+    - supply-chain/sbom.md
+    - supply-chain/image-signing.md
+    - release/semver-and-channels.md
+    - migration/1.9-to-2.0.md
+    - migration/1.8-to-1.9.md
+    - release/trusted-publishing.md
+    - release/v1.9.1.md
+    - release/v1.9.0.md
+    - release/v1.8.0.md
+    - release/v1.7.0.md
+    - generative-model-policy.md
+    - api-reference.md
+  link_only:
+    - benchmarks/golden.md
+    - clinical-domains.md
+    - compliance/dpa-template.md
+    - compliance/dpia-template.md
+    - compliance/gdpr-dsar-export.md
+    - compliance/ke-dpa-identifier-checklist.md
+    - compliance/model-card-eu-ai-act-fields.md
+    - compliance/ng-ndpa-identifier-checklist.md
+    - compliance/za-popia-identifier-checklist.md
+    - i18n/glossary.md
+    - leaderboard/index.md
+    - security/dependency-policy.md
+    - security/secret-handling.md
+    - security/secret-scanning.md
+    - status/index.md
+    - status/open-benchmark-publication.md
+    - status/trust-status-contract.md
+  excluded:
+    - _hooks.py
+    - __pycache__/**
+    - overrides/**
+    - brand/**
+    - website/**
+    - demo/web/README.md
+
+metadata_policy:
+  indexable_pages:
+    title: required
+    description: required
+    canonical: required
+    favicon: required_local
+    open_graph: required
+    twitter_card: required
+  localized_pages:
+    alternates: real_translations_only
+    default_language_fallback: prohibited
+
+fixtures:
+  - source: demo/rtl/index.html
+    route: docs/demo/rtl/index.html
+    indexing: noindex,nofollow
+    data_policy: synthetic_only
+    social_metadata: prohibited
+    purpose: rtl_layout_and_accessibility

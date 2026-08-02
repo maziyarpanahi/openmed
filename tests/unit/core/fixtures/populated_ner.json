@@ -1,0 +1,17 @@
+{
+  "repo_id": "OpenMed/OpenMed-NER-OncologyDetect-ElectraMed-560M",
+  "family": "NER",
+  "task": "token-classification",
+  "languages": ["en"],
+  "tier": "Large",
+  "param_count": 560000000,
+  "architecture": "electra",
+  "base_model": "google/electra-large-discriminator",
+  "formats": ["pytorch", "mlx-fp"],
+  "canonical_labels": ["CANCER", "TREATMENT"],
+  "benchmark": {"dataset": "ONCOLOGY", "micro_f1": 0.9063, "recall": 0.9044},
+  "arxiv": "2508.01630",
+  "license": "apache-2.0",
+  "reproducibility_hash": "sha256:abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abcd",
+  "released": "2025-08-05"
+}

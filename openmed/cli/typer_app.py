@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 try:  # soft dependency to avoid import errors in base installs
     import typer
@@ -24,22 +24,29 @@ except ImportError:  # pragma: no cover - optional surface
     Table = None
     rprint = print
 
-from openmed import analyze_text, list_models, get_model_max_length
+from openmed import analyze_text, get_model_max_length, list_models
+from openmed.cli.main import _format_models_size_table, build_models_size_report
 from openmed.core.config import (
     OpenMedConfig,
     get_config,
-    set_config,
-    resolve_config_path,
     load_config_from_file,
+    resolve_config_path,
     save_config_to_file,
+    set_config,
+)
+from openmed.core.model_integrity import (
+    ModelIntegrityError,
+    verify_cached_models,
 )
 from openmed.ner import (
-    build_index,
-    write_index,
-    infer as zs_infer,
     NerRequest,
-    ensure_gliner_available,
+    build_index,
     ensure_gliner2_available,
+    ensure_gliner_available,
+    write_index,
+)
+from openmed.ner import (
+    infer as zs_infer,
 )
 
 
@@ -79,7 +86,8 @@ def _render_table(title: str, headers: List[str], rows: List[List[str]]) -> None
     Console().print(table)
 
 
-def main() -> None:
+def build_app():
+    """Build and return the Typer application."""
     _ensure_typer()
 
     app = typer.Typer(help="OpenMed Typer CLI (draft).")
@@ -117,7 +125,9 @@ def main() -> None:
             False, "--no-confidence", help="Exclude confidence values."
         ),
         sentence_detection: bool = typer.Option(
-            True, "--sentence-detection/--no-sentence-detection", help="Toggle sentence splitting."
+            True,
+            "--sentence-detection/--no-sentence-detection",
+            help="Toggle sentence splitting.",
         ),
         config_path: Optional[Path] = typer.Option(
             None, "--config-path", help="Override config path."
@@ -160,7 +170,9 @@ def main() -> None:
         ),
     ):
         cfg = _load_config(config_path)
-        models = list_models(include_registry=True, include_remote=include_remote, config=cfg)
+        models = list_models(
+            include_registry=True, include_remote=include_remote, config=cfg
+        )
         rows = [[m] for m in models]
         _render_table("Models", ["model_id"], rows)
 
@@ -174,6 +186,121 @@ def main() -> None:
         cfg = _load_config(config_path)
         max_len = get_model_max_length(model_key, config=cfg)
         _echo_json({"model_key": model_key, "max_length": max_len})
+
+    @models_app.command("verify")
+    def models_verify(
+        model_id: Optional[str] = typer.Argument(
+            None,
+            help="Registry model id or local model directory.",
+        ),
+        all_models: bool = typer.Option(
+            False,
+            "--all",
+            help="Verify every cached model with integrity metadata.",
+        ),
+        config_path: Optional[Path] = typer.Option(
+            None,
+            "--config-path",
+            help="Override config path.",
+        ),
+    ):
+        """Verify cached model artifacts without network access."""
+        if (model_id is None) == (not all_models):
+            raise typer.BadParameter("Provide MODEL_ID or --all, but not both.")
+        cfg = _load_config(config_path)
+        try:
+            results = verify_cached_models(
+                cache_dir=str(cfg.cache_dir),
+                model_id=None if all_models else model_id,
+            )
+        except ModelIntegrityError as exc:
+            _render_table(
+                "Model integrity",
+                ["model_id", "status", "expected", "actual", "files"],
+                [
+                    [
+                        exc.model_id,
+                        "FAIL",
+                        exc.expected_sha256,
+                        exc.actual_sha256,
+                        "-",
+                    ]
+                ],
+            )
+            rprint(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        except (OSError, ValueError) as exc:
+            rprint(f"[red]Model integrity verification failed: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+
+        rows = [
+            [
+                result.model_id,
+                "PASS",
+                result.expected_sha256,
+                result.actual_sha256,
+                str(result.files_checked),
+            ]
+            for result in results
+        ]
+        _render_table(
+            "Model integrity",
+            ["model_id", "status", "expected", "actual", "files"],
+            rows,
+        )
+        if not rows:
+            rprint("No verified model caches found.")
+
+    @models_app.command("size")
+    def model_size(
+        model_key: Optional[str] = typer.Argument(
+            None, help="Optional registry alias or full model repository id."
+        ),
+        remote: bool = typer.Option(
+            False,
+            "--remote",
+            help="Refine snapshot sizes from Hugging Face Hub metadata.",
+        ),
+        budget_mb: Optional[float] = typer.Option(
+            None,
+            "--budget-mb",
+            min=0,
+            help="Only show models needing at most this many MB to download.",
+        ),
+        output_format: str = typer.Option(
+            "table",
+            "--format",
+            help="Output format: table or json.",
+        ),
+    ):
+        """Show offline-safe download, disk, and peak RAM estimates."""
+
+        if output_format not in {"table", "json"}:
+            raise typer.BadParameter("--format must be 'table' or 'json'")
+        try:
+            report = build_models_size_report(
+                model_key,
+                budget_mb=budget_mb,
+                remote=remote,
+            )
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
+            typer.echo(f"Failed to inspect model sizes: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+        if not report["models"]:
+            if budget_mb is None:
+                message = "No model size metadata is available."
+            else:
+                message = f"No models fit the {budget_mb:g} MB download budget."
+            typer.echo(message, err=True)
+            raise typer.Exit(code=1)
+
+        for warning in report["warnings"]:
+            typer.echo(f"Remote size lookup warning: {warning}", err=True)
+        if output_format == "json":
+            typer.echo(json.dumps(report, indent=2, ensure_ascii=False))
+        else:
+            typer.echo(_format_models_size_table(report), nl=False)
 
     app.add_typer(models_app, name="models")
 
@@ -207,7 +334,9 @@ def main() -> None:
             cfg = get_config()
         cfg_dict = cfg.to_dict()
         if key not in cfg_dict:
-            raise typer.BadParameter(f"Unknown key '{key}'. Valid: {', '.join(cfg_dict.keys())}")
+            raise typer.BadParameter(
+                f"Unknown key '{key}'. Valid: {', '.join(cfg_dict.keys())}"
+            )
         cfg_dict[key] = None if unset else value
         new_cfg = OpenMedConfig.from_dict(cfg_dict)
         set_config(new_cfg)
@@ -237,9 +366,15 @@ def main() -> None:
 
     @zero_app.command("index")
     def zero_index(
-        models_dir: Path = typer.Argument(..., help="Root directory containing zero-shot models."),
-        output: Optional[Path] = typer.Option(None, "--output", "-o", help="Path to write index.json"),
-        pretty: bool = typer.Option(True, "--pretty/--compact", help="Pretty-print JSON."),
+        models_dir: Path = typer.Argument(
+            ..., help="Root directory containing zero-shot models."
+        ),
+        output: Optional[Path] = typer.Option(
+            None, "--output", "-o", help="Path to write index.json"
+        ),
+        pretty: bool = typer.Option(
+            True, "--pretty/--compact", help="Pretty-print JSON."
+        ),
     ):
         index = build_index(models_dir)
         out_path = output or (models_dir / "index.json")
@@ -249,14 +384,23 @@ def main() -> None:
     @zero_app.command("infer")
     def zero_infer(
         text: str = typer.Argument(..., help="Input text for zero-shot NER."),
-        model_id: str = typer.Option(..., "--model-id", "-m", help="Model id from index."),
+        model_id: str = typer.Option(
+            ..., "--model-id", "-m", help="Model id from index."
+        ),
         labels: Optional[str] = typer.Option(
             None, "--labels", "-l", help="Comma-separated label list (optional)."
         ),
-        domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Domain hint."),
-        threshold: float = typer.Option(0.5, "--threshold", "-c", help="Score threshold."),
+        domain: Optional[str] = typer.Option(
+            None, "--domain", "-d", help="Domain hint."
+        ),
+        threshold: float = typer.Option(
+            0.5, "--threshold", "-c", help="Score threshold."
+        ),
         index_path: Optional[Path] = typer.Option(
-            None, "--index-path", "-i", help="Path to index.json (defaults to models/index.json)."
+            None,
+            "--index-path",
+            "-i",
+            help="Path to index.json (defaults to models/index.json).",
         ),
     ):
         label_list = [label.strip() for label in labels.split(",")] if labels else None
@@ -272,7 +416,12 @@ def main() -> None:
 
     app.add_typer(zero_app, name="zero")
 
-    app()
+    return app
+
+
+def main() -> None:
+    """Run the Typer command-line application."""
+    build_app()()
 
 
 if __name__ == "__main__":  # pragma: no cover

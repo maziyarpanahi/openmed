@@ -2,6 +2,11 @@
 
 This directory contains comprehensive Jupyter notebooks demonstrating OpenMed's capabilities.
 
+## Script Quick Starts
+
+- [`../first_five_minutes_redact_extract_fhir.py`](../first_five_minutes_redact_extract_fhir.py) - A five-minute synthetic
+  redact -> extract -> FHIR walkthrough that prints the redacted note, extracted entities, and a FHIR Bundle.
+
 ## 📚 Available Notebooks
 
 ### 🆕 [PII_Detection_Complete_Guide.ipynb](./PII_Detection_Complete_Guide.ipynb)
@@ -38,6 +43,23 @@ A comprehensive tutorial covering **everything** about PII functionality:
 
 ---
 
+### [Deidentification_Cookbook.ipynb](./Deidentification_Cookbook.ipynb)
+
+**Task-oriented de-identification recipes (copy-paste)**
+
+Short, self-contained recipes for the most common real workflows:
+
+- De-identify a list or CSV of clinical strings
+- Batch-redact a directory of text files with `BatchProcessor`
+- Reversible replace + re-identify round-trip
+- Per-language model selection with `DEFAULT_PII_MODELS`
+
+Uses **synthetic PHI only** and a lightweight 44M English model for CPU-friendly runs.
+
+**Recommended for:** Engineers wiring de-identification into a pipeline who want a quick, runnable starting point.
+
+---
+
 ### 🌍 [Multilingual_PII_Detection_Guide.ipynb](./Multilingual_PII_Detection_Guide.ipynb)
 
 **Multilingual PII detection across 9 supported languages**
@@ -54,6 +76,23 @@ Walk through language-aware extraction and de-identification for:
 - Teams processing multilingual clinical text
 - Reviewers validating new PII releases
 - Anyone comparing locale-specific pattern behavior
+
+---
+
+### [Chinese_Hindi_Deid_Tour.ipynb](./Chinese_Hindi_Deid_Tour.ipynb)
+
+**Runnable Chinese, Hindi, and Hinglish de-identification tour**
+
+Mirrors the two companion scripts with rendered output cells:
+
+- Fabricated Simplified Chinese, Hindi, and code-mixed Hinglish clinical notes
+- Structured PII entity output with offsets, labels, replacements, and sources
+- UTF-8 redacted text files created in a temporary tutorial workspace
+- Explicit assertions that no known synthetic identifier survives
+- A deterministic no-download loader for clean top-to-bottom execution
+
+**Recommended for:** Developers evaluating multilingual clinical
+de-identification who want an offline-friendly, fail-closed walkthrough.
 
 ---
 
@@ -136,7 +175,7 @@ Explore zero-shot learning:
 
 ```bash
 # Install OpenMed
-uv pip install "openmed[hf]"
+uv pip install --upgrade "openmed[hf]"
 
 # Install Jupyter
 uv pip install jupyter
@@ -180,6 +219,7 @@ Get your token from: <https://huggingface.co/settings/tokens>
 | Notebook | Difficulty | Topics | Duration |
 |----------|-----------|--------|----------|
 | **PII_Detection_Complete_Guide** | Intermediate | PII, De-identification, HIPAA | 30-45 min |
+| **Chinese_Hindi_Deid_Tour** | Beginner | Chinese, Hindi, Hinglish, De-identification | 10-15 min |
 | **getting_started** | Beginner | Basics, Installation | 10-15 min |
 | **Sentence_Detection_Batching** | Intermediate | Batch processing | 15-20 min |
 | **Medical_Tokenizer_Demo** | Intermediate | Tokenization | 10-15 min |
@@ -198,8 +238,9 @@ Get your token from: <https://huggingface.co/settings/tokens>
 ### Path 2: PII Detection & De-identification
 
 1. `getting_started.ipynb` - Basics first
-2. `PII_Detection_Complete_Guide.ipynb` - Complete PII guide
-3. Practice with your own clinical notes
+2. `Chinese_Hindi_Deid_Tour.ipynb` - Synthetic multilingual walkthrough
+3. `PII_Detection_Complete_Guide.ipynb` - Complete PII guide
+4. Practice with your own authorized or synthetic clinical notes
 
 ### Path 3: Advanced NER
 

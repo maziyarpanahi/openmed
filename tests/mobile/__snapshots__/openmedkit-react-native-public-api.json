@@ -1,0 +1,28 @@
+{
+  "exports": [
+    "OPENMED_REACT_NATIVE_MODULE_NAME",
+    "OPENMED_SPAN_SCHEMA_VERSION",
+    "analyzeText",
+    "deidentify",
+    "extractPii",
+    "loadModel",
+    "setOpenMedKitNativeModuleForTests"
+  ],
+  "packagePeerDependencies": {
+    "react": ">=18",
+    "react-native": ">=0.74"
+  },
+  "packagePeerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    }
+  },
+  "packageScripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run typecheck && npm run test:node",
+    "test:node": "tsx --test ../../tests/mobile/test_rn_bridge_parity.ts"
+  }
+}

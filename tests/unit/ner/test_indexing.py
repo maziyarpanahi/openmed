@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from datetime import datetime, timezone
-
-from openmed.ner.indexing import ModelIndex, ModelRecord, build_index, load_index, write_index
+from openmed.ner.indexing import (
+    ModelIndex,
+    ModelRecord,
+    build_index,
+    load_index,
+    write_index,
+)
 
 
 @pytest.fixture()
@@ -67,3 +72,13 @@ def test_write_and_load_index_roundtrip(temp_models_dir: Path, tmp_path: Path) -
     assert isinstance(loaded, ModelIndex)
     assert len(loaded.models) == len(index.models)
     assert loaded.unique_domains == index.unique_domains
+
+
+def test_load_index_rejects_malformed_json(tmp_path: Path) -> None:
+    path = tmp_path / "index.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in index file") as exc_info:
+        load_index(path)
+
+    assert str(path) in str(exc_info.value)

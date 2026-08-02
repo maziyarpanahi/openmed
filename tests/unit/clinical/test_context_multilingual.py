@@ -1,0 +1,353 @@
+"""Multilingual ConText cue lexicon tests for OM-724."""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+from openmed.clinical import (
+    AFFIRMED,
+    CERTAIN,
+    HISTORICAL,
+    HYPOTHETICAL,
+    NEGATED,
+    RECENT,
+    UNCERTAIN,
+    assert_context_axes,
+    resolve_negation,
+    resolve_span_context,
+    resolve_temporality,
+    resolve_uncertainty,
+    scan_context_cues,
+)
+from openmed.clinical.context import ClinicalContextResult
+from openmed.clinical.lexicons import (
+    ClinicalCueLexicon,
+    available_clinical_cue_languages,
+    clinical_context_lexicon_stats,
+    register_clinical_cue_lexicon,
+)
+from openmed.eval import (
+    DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
+    load_context_multilingual_fixtures,
+    run_context_multilingual_eval,
+)
+
+FORBIDDEN_FIXTURE_MARKERS = ("cpt", "dua", "i2b2", "mimic", "n2c2", "snomed", "umls")
+REQUIRED_LANGUAGES = {"en", "es", "fr", "de", "zh", "hi", "ja"}
+CONTEXT_GUIDE = (
+    Path(__file__).resolve().parents[3]
+    / "docs"
+    / "clinical"
+    / "context-and-extraction.md"
+)
+
+
+def test_context_multilingual_fixture_is_synthetic_and_complete() -> None:
+    meta, rows = load_context_multilingual_fixtures()
+
+    assert meta["synthetic"] is True
+    assert REQUIRED_LANGUAGES <= set(meta["languages"])
+    assert REQUIRED_LANGUAGES <= {row["language"] for row in rows}
+    assert all(row.get("synthetic") is True for row in rows)
+    for language in REQUIRED_LANGUAGES:
+        traps = {row["trap"] for row in rows if row["language"] == language}
+        assert {"affirmed", "negated", "historical", "hypothetical"} <= traps
+        assert {"pseudo_negation", "double_negation"} <= traps
+
+    fixture_text = Path(DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE).read_text(
+        encoding="utf-8"
+    )
+    for marker in FORBIDDEN_FIXTURE_MARKERS:
+        assert re.search(rf"(?<![a-z0-9]){marker}(?![a-z0-9])", fixture_text) is None
+
+
+def test_multilingual_context_docs_cover_safe_contribution_contract() -> None:
+    guide = CONTEXT_GUIDE.read_text(encoding="utf-8")
+    normalized_guide = re.sub(r"\s+", " ", guide)
+
+    for field in ClinicalCueLexicon.__dataclass_fields__:
+        assert f"`{field}`" in guide
+
+    for requirement in (
+        "Extending the NegEx Lexicon for Multiple Languages",
+        "pyConTextSwe",
+        "## Language-Pack Review Checklist",
+        "context_multilingual.jsonl",
+        '"synthetic": true',
+        "No raw PHI",
+        "must not require edits to resolver or scanner logic",
+    ):
+        assert requirement in normalized_guide
+
+
+def test_resolvers_accept_language_without_breaking_english_defaults() -> None:
+    assert resolve_negation("no evidence of pneumonia") == NEGATED
+    assert resolve_temporality("history of MI") == HISTORICAL
+    assert resolve_uncertainty("possible pneumonia") == UNCERTAIN
+
+    assert resolve_negation("sin evidencia de neumonía", language="es") == NEGATED
+    assert resolve_temporality("antécédent de pneumonie", language="fr") == HISTORICAL
+    assert resolve_uncertainty("不能排除肺炎", language="zh") == UNCERTAIN
+
+
+def test_multilingual_fixture_rows_match_resolver_outputs() -> None:
+    _, rows = load_context_multilingual_fixtures()
+
+    for row in rows:
+        span = _span_from_row(row)
+        context = resolve_span_context(span, language=row["language"])
+
+        assert context == ClinicalContextResult(
+            temporality=row["expected"]["temporality"],
+            certainty=row["expected"]["certainty"],
+            negation=row["expected"]["negation"],
+        ), row["case_id"]
+
+
+def test_pseudo_and_double_negation_are_deterministic_per_language() -> None:
+    _, rows = load_context_multilingual_fixtures()
+
+    for row in rows:
+        if row["trap"] not in {"pseudo_negation", "double_negation"}:
+            continue
+        span = _span_from_row(row)
+        assert resolve_negation(span, language=row["language"]) == AFFIRMED
+
+
+def test_scanner_uses_language_specific_conjunction_terminators() -> None:
+    text = "Sin evidencia de neumonía pero fiebre presente."
+    span = _span(text, "fiebre")
+
+    hits = scan_context_cues(text, [span], language="es")
+
+    assert hits[span] == ()
+
+
+def test_japanese_script_matching_and_scope_termination() -> None:
+    negated_text = "肺炎は認められない。"
+    negated_span = _span(negated_text, "肺炎")
+
+    negated_hits = scan_context_cues(
+        negated_text,
+        [negated_span],
+        sentences=[negated_text],
+        language="ja",
+    )
+
+    assert [
+        (hit.cue, hit.category, hit.direction) for hit in negated_hits[negated_span]
+    ] == [("認められない", "negation", "backward")]
+
+    terminated_text = "既往歴に肺炎あり、しかし発熱を確認した。"
+    terminated_span = _span(terminated_text, "発熱")
+
+    terminated_hits = scan_context_cues(
+        terminated_text,
+        [terminated_span],
+        sentences=[terminated_text],
+        language="ja",
+    )
+
+    assert terminated_hits[terminated_span] == ()
+    assert resolve_temporality(terminated_span, language="ja") == RECENT
+
+
+def test_assert_context_axes_uses_language_pack() -> None:
+    assertion = assert_context_axes(
+        _span("Si la neumonía regresa, llamar a la clínica.", "neumonía"),
+        language="es",
+    )
+
+    assert assertion.temporality == HYPOTHETICAL
+    assert assertion.certainty == UNCERTAIN
+    assert assertion.negation == AFFIRMED
+
+
+def test_stub_language_pack_loads_without_resolver_logic_changes() -> None:
+    register_clinical_cue_lexicon(
+        ClinicalCueLexicon(
+            language="xx",
+            negation=("zz no",),
+            pseudo_negation=("zz no maybe",),
+            historical=("zz old",),
+            hypothetical=("zz if",),
+            recent=("zz now",),
+            uncertainty=("zz maybe", "zz if"),
+            backward=("zz done",),
+            scope_terminators=("zz stop",),
+            conjunction_terminators=("zz stop",),
+        )
+    )
+
+    assert "xx" in available_clinical_cue_languages()
+    assert resolve_negation("zz no fever", language="xx") == NEGATED
+    assert resolve_negation("zz no maybe fever", language="xx") == AFFIRMED
+    assert resolve_temporality("zz old fever", language="xx") == HISTORICAL
+    assert resolve_uncertainty("zz maybe fever", language="xx") == UNCERTAIN
+
+
+def test_context_multilingual_eval_gate_and_coverage_stats() -> None:
+    report = run_context_multilingual_eval()
+    scores = report.metrics["context_macro_f1"]
+    summary = report.metrics["context_language_summary"]
+
+    assert report.metrics["context_gate_passed"] is True
+    for language in REQUIRED_LANGUAGES:
+        assert scores[language]["negation"] >= 0.90
+        assert scores[language]["temporality"] >= 0.85
+        assert scores[language]["uncertainty"] >= 0.85
+        assert summary[language]["assertion_axis_scores"] == scores[language]
+        assert summary[language]["fixture_count"] > 0
+        assert summary[language]["lexicon_language"] == language
+        assert set(summary[language]["lexicon_coverage"]) == {
+            "negation",
+            "temporality",
+            "uncertainty",
+        }
+        assert all(summary[language]["lexicon_coverage"].values())
+
+    coverage = clinical_context_lexicon_stats()
+    for language in REQUIRED_LANGUAGES:
+        assert coverage[language]["negation"] > 0
+        assert coverage[language]["uncertainty"] > 0
+    assert coverage["ja"] == {
+        "negation": 8,
+        "pseudo_negation": 4,
+        "historical": 6,
+        "hypothetical": 5,
+        "recent": 6,
+        "uncertainty": 13,
+        "backward": 20,
+        "scope_terminators": 4,
+        "conjunction_terminators": 3,
+    }
+    assert report.metrics["context_lexicon_coverage"]["ja"] == coverage["ja"]
+
+    markdown = report.to_markdown()
+    assert "`context_language_summary.en.assertion_axis_scores.negation`" in markdown
+    assert "`context_language_summary.zh.lexicon_coverage.temporality`" in markdown
+
+
+def test_context_multilingual_eval_does_not_pass_an_empty_fixture(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "context_empty.jsonl"
+    fixture.write_text(
+        json.dumps(
+            {
+                "kind": "meta",
+                "suite": "context_multilingual",
+                "synthetic": True,
+                "languages": ["en"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_context_multilingual_eval(fixture)
+
+    assert report.fixture_count == 0
+    assert report.metrics["context_gate_passed"] is False
+    assert report.metrics["context_macro_f1"] == {}
+    assert report.metrics["context_language_summary"]["en"] == {
+        "assertion_axis_scores": {},
+        "fixture_count": 0,
+        "lexicon_coverage": {
+            "negation": 29,
+            "temporality": 25,
+            "uncertainty": 36,
+        },
+        "lexicon_language": "en",
+    }
+
+
+def test_context_multilingual_eval_reports_unknown_language_fallback(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "context_unknown.jsonl"
+    rows = [
+        {
+            "kind": "meta",
+            "suite": "context_multilingual",
+            "synthetic": True,
+            "languages": ["zz-unknown"],
+        },
+        {
+            "kind": "case",
+            "case_id": "zz-uncertain",
+            "language": "zz-unknown",
+            "synthetic": True,
+            "text": "Possible pneumonia is documented.",
+            "target": {"text": "pneumonia"},
+            "expected": {
+                "negation": "affirmed",
+                "temporality": "recent",
+                "certainty": "uncertain",
+            },
+        },
+    ]
+    fixture.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_context_multilingual_eval(fixture)
+    summary = report.metrics["context_language_summary"]["zz-unknown"]
+
+    assert summary["fixture_count"] == 1
+    assert summary["lexicon_language"] == "en"
+    assert summary["assertion_axis_scores"] == {
+        "negation": 1.0,
+        "temporality": 1.0,
+        "uncertainty": 1.0,
+    }
+    assert summary["lexicon_coverage"] == {
+        "negation": 29,
+        "temporality": 25,
+        "uncertainty": 36,
+    }
+
+
+def test_unknown_language_falls_back_to_english() -> None:
+    context = resolve_span_context("possible pneumonia", language="zz-unknown")
+
+    assert context.temporality == RECENT
+    assert context.certainty == UNCERTAIN
+    assert context.negation == AFFIRMED
+
+
+def test_language_specific_recent_cue_blocks_historical_section_prior() -> None:
+    span = _span("Heute akute Pneumonie.", "Pneumonie")
+
+    english_fallback = assert_context_axes(
+        span,
+        section="Past Medical History",
+        language="en",
+    )
+    assertion = assert_context_axes(
+        span,
+        section="Past Medical History",
+        language="de",
+    )
+
+    assert english_fallback.temporality == HISTORICAL
+    assert assertion.temporality == RECENT
+    assert assertion.certainty == CERTAIN
+    assert assertion.negation == AFFIRMED
+
+
+def _span_from_row(row: dict) -> dict[str, object]:
+    return _span(row["text"], row["target"]["text"])
+
+
+def _span(text: str, target: str) -> dict[str, object]:
+    start = text.index(target)
+    return {
+        "text": target,
+        "context": text,
+        "start": start,
+        "end": start + len(target),
+    }

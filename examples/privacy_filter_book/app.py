@@ -24,7 +24,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
 
@@ -155,7 +154,9 @@ def _label_from_raw(raw_label: str) -> str:
     return aliases.get(label, label)
 
 
-def _normalize_entities(raw_entities: list[dict[str, Any]], text: str) -> list[dict[str, Any]]:
+def _normalize_entities(
+    raw_entities: list[dict[str, Any]], text: str
+) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
     for item in raw_entities:
         start = item.get("start")
@@ -178,7 +179,12 @@ def _normalize_entities(raw_entities: list[dict[str, Any]], text: str) -> list[d
         if start_i < 0 or end_i <= start_i or end_i > len(text):
             continue
 
-        raw_label = str(item.get("entity_group") or item.get("entity") or item.get("label") or "private")
+        raw_label = str(
+            item.get("entity_group")
+            or item.get("entity")
+            or item.get("label")
+            or "private"
+        )
         score = item.get("score", item.get("confidence", 0.0))
         try:
             score_f = float(score)
@@ -205,12 +211,16 @@ def _dedupe_entities(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
         key=lambda item: (item["start"], -(item["end"] - item["start"]), item["label"]),
     ):
         overlaps = any(
-            not (entity["end"] <= existing["start"] or entity["start"] >= existing["end"])
+            not (
+                entity["end"] <= existing["start"] or entity["start"] >= existing["end"]
+            )
             for existing in selected
         )
         if not overlaps:
             selected.append(entity)
-    return sorted(selected, key=lambda item: (item["start"], item["end"], item["label"]))
+    return sorted(
+        selected, key=lambda item: (item["start"], item["end"], item["label"])
+    )
 
 
 EXACT_ENTITY_HINTS: tuple[tuple[str, str], ...] = (
@@ -238,10 +248,22 @@ EXACT_ENTITY_HINTS: tuple[tuple[str, str], ...] = (
 )
 
 REGEX_ENTITY_HINTS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("private_email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
+    (
+        "private_email",
+        re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    ),
     ("private_url", re.compile(r"\bhttps?://[^\s,;]+")),
-    ("private_phone", re.compile(r"(?:\+\d{1,3}[\s.-]?)?(?:\(?\d{1,4}\)?[\s.-]?){3,6}\d{2,4}")),
-    ("private_date", re.compile(r"\b\d{1,2}\s+(?:Apr|April|May|Jun|June|juin|avril)\s+\d{4}\b", re.IGNORECASE)),
+    (
+        "private_phone",
+        re.compile(r"(?:\+\d{1,3}[\s.-]?)?(?:\(?\d{1,4}\)?[\s.-]?){3,6}\d{2,4}"),
+    ),
+    (
+        "private_date",
+        re.compile(
+            r"\b\d{1,2}\s+(?:Apr|April|May|Jun|June|juin|avril)\s+\d{4}\b",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 
@@ -315,6 +337,7 @@ def _fallback_result(
 def _load_mlx_pipeline(download: bool) -> tuple[Any, float]:
     started = time.perf_counter()
     from huggingface_hub import snapshot_download
+
     from openmed.mlx.inference import create_mlx_pipeline
 
     model_path = snapshot_download(
