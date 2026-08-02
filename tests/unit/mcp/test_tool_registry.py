@@ -21,6 +21,7 @@ from openmed.core.audit import (
 from openmed.interop import adapter_tool_definitions, langchain, presidio
 from openmed.mcp import server as mcp_server
 from openmed.mcp.tool_registry import (
+    CLINICAL_STAGE_ORDER,
     TOOL_REGISTRY,
     ToolCompatibilityError,
     ToolRegistry,
@@ -28,7 +29,34 @@ from openmed.mcp.tool_registry import (
     ToolSpec,
     check_tool_registry_compatibility,
     invoke_tool,
+    validate_registered_tool_output,
 )
+
+CLINICAL_TOOL_NAMES = {
+    "openmed_clinical_pipeline",
+    "openmed_export_fhir",
+    "openmed_ground",
+    "openmed_risk_score",
+}
+SYNTHETIC_CLINICAL_SPAN = {
+    "schema_version": 1,
+    "doc_id": "synthetic-note-001",
+    "start": 0,
+    "end": 7,
+    "text_hash": f"hmac-sha256:{'0' * 64}",
+    "entity_type": "SYNTHETIC_CONCEPT",
+    "canonical_label": "CONDITION",
+    "policy_label": "CLINICAL_CONCEPT",
+    "regulatory_tags": [],
+    "score": 0.9,
+    "detector": "synthetic-test-detector",
+    "evidence": {"synthetic": True},
+    "action": "keep",
+    "replacement": None,
+    "reversible_id": None,
+    "section": "assessment",
+    "metadata": {"synthetic": True},
+}
 
 
 class FakeFastMCP:
@@ -161,6 +189,50 @@ def test_registry_supports_multiple_versions_side_by_side() -> None:
         "1.0.0",
         "2.0.0",
     ]
+
+
+@pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
+def test_clinical_tool_contracts_are_versioned(tool_name: str) -> None:
+    spec = TOOL_REGISTRY.get(tool_name)
+
+    assert spec.version == "1.0.0"
+    assert spec.document()["input_schema"] == spec.input_schema
+    assert spec.document()["output_schema"] == spec.output_schema
+    assert spec.input_schema["required"]
+    assert spec.output_schema["required"]
+
+
+@pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
+def test_clinical_tool_contracts_use_compatibility_gate(tool_name: str) -> None:
+    spec = TOOL_REGISTRY.get(tool_name)
+    input_schema = deepcopy(dict(spec.input_schema))
+    required_parameter = input_schema["required"][0]
+    input_schema["properties"][required_parameter]["type"] = "string"
+    broken = _replace_spec(spec, input_schema=input_schema)
+
+    with pytest.raises(ToolCompatibilityError, match="without version bump"):
+        check_tool_registry_compatibility([spec], [broken])
+
+
+def test_clinical_contract_handlers_return_registered_output_shapes() -> None:
+    span = deepcopy(SYNTHETIC_CLINICAL_SPAN)
+    handlers = mcp_server.build_mcp_tool_handlers(None)
+    invocations = {
+        "openmed_ground": {"spans": [span]},
+        "openmed_export_fhir": {"spans": [span]},
+        "openmed_risk_score": {"spans": [span]},
+        "openmed_clinical_pipeline": {
+            "stages": ["detect", "context", "ground", "risk"]
+        },
+    }
+
+    for tool_name, arguments in invocations.items():
+        payload = handlers[tool_name](**arguments)
+        assert validate_registered_tool_output(tool_name, payload) == payload
+
+    pipeline = handlers["openmed_clinical_pipeline"](stages=list(CLINICAL_STAGE_ORDER))
+    assert pipeline["status"] == "planned"
+    assert pipeline["stages"] == list(CLINICAL_STAGE_ORDER)
 
 
 # Issue #1741

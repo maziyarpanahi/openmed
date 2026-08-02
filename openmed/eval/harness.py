@@ -512,22 +512,25 @@ class RelationScorecard:
         trap_summary = _mapping_value(self.provenance.get("trap_summary"))
         configured_traps = _mapping_value(trap_summary.get("by_kind"))
         trap_leaks = _mapping_value(self.metrics.get("trap_leaks"))
+        consistency = _mapping_value(self.metrics.get("consistency"))
         lines.extend(
             [
                 "",
                 "## Zero-Tolerance Trap Summary",
                 "",
-                "| Trap kind | Configured | Leaks | Zero tolerance |",
-                "|---|---:|---:|---|",
+                "| Trap kind | Configured | Leaks | Consistency | Zero tolerance |",
+                "|---|---:|---:|---:|---|",
             ]
         )
-        for kind in sorted(set(configured_traps) | set(trap_leaks)):
+        for kind in sorted(set(configured_traps) | set(trap_leaks) | set(consistency)):
             configured = _mapping_value(configured_traps.get(kind))
             leaks = _mapping_value(trap_leaks.get(kind))
+            consistency_metric = _mapping_value(consistency.get(kind))
             lines.append(
                 "| "
                 f"`{kind}` | {int(configured.get('count') or 0)} | "
                 f"{int(leaks.get('leak_count') or 0)} | "
+                f"{_relation_percent(consistency_metric.get('score'))} | "
                 f"{'yes' if configured.get('zero_tolerance') else 'no'} |"
             )
 
@@ -569,8 +572,10 @@ class RelationScorecard:
         by_type = _mapping_value(self.metrics.get("by_type"))
         by_language = _mapping_value(self.metrics.get("by_language"))
         counts = _mapping_value(self.metrics.get("counts"))
+        consistency = _mapping_value(self.metrics.get("consistency"))
         relation_metrics = {
             "by_scope": _mapping_value(self.metrics.get("by_scope")),
+            "consistency": consistency,
             "gold_relation_count": int(counts.get("gold") or 0),
             "per_language": by_language,
             "per_relation_type": by_type,
@@ -587,8 +592,10 @@ class RelationScorecard:
                 "relation_extraction": relation_metrics,
                 "relation_golden": {
                     "by_type": by_type,
+                    "consistency": consistency,
                     "trap_leaks": _mapping_value(self.metrics.get("trap_leaks")),
                 },
+                "relation_consistency": consistency,
                 "relaxed_relation_f1": relaxed,
                 "strict_relation_f1": strict,
                 "per_language_relation_f1": by_language,
@@ -1938,10 +1945,12 @@ def run_relation_suite(
     fixture_hashes = _relation_fixture_hashes(fixtures)
     trap_summary = relation_trap_summary(fixtures)
     trap_leaks = _relation_trap_leak_summary(fixtures, results)
+    consistency = _relation_consistency_scores(trap_leaks)
     relation_metrics = _mapping_value(report.metrics.get("relation_extraction"))
     by_type = _mapping_value(relation_metrics.get("per_relation_type"))
     relation_golden = {
         "by_type": by_type,
+        "consistency": consistency,
         "fixture_set_hash": fixture_set_hash,
         "trap_leaks": trap_leaks,
     }
@@ -1977,6 +1986,7 @@ def run_relation_suite(
         "by_language": _mapping_value(relation_metrics.get("per_language")),
         "by_scope": _mapping_value(relation_metrics.get("by_scope")),
         "by_type": by_type,
+        "consistency": consistency,
         "counts": {
             "gold": int(relation_metrics.get("gold_relation_count") or 0),
             "predicted": int(relation_metrics.get("predicted_relation_count") or 0),
@@ -3631,6 +3641,7 @@ def _relation_trap_leak_summary(
         "temporal": set(),
     }
     trap_count = {"assertion": 0, "temporal": 0}
+    evaluated_relation_count = {"assertion": 0, "temporal": 0}
     for fixture in fixtures:
         fixture_id = str(getattr(fixture, "fixture_id"))
         predicted = result_by_id.get(fixture_id)
@@ -3652,7 +3663,10 @@ def _relation_trap_leak_summary(
             trap_count[kind] += 1
             for relation_id in getattr(trap, "relation_ids", ()):
                 gold = gold_by_id.get(str(relation_id))
-                if gold is None or not _relation_trap_conflict(
+                if gold is None:
+                    continue
+                evaluated_relation_count[kind] += 1
+                if not _relation_trap_conflict(
                     gold,
                     predictions,
                     kind=kind,
@@ -3670,12 +3684,35 @@ def _relation_trap_leak_summary(
 
     return {
         kind: {
+            "evaluated_relation_count": evaluated_relation_count[kind],
             "leak_count": len(leaked_by_kind[kind]),
             "leaked_relation_hashes": sorted(leaked_by_kind[kind]),
             "trap_count": trap_count[kind],
         }
         for kind in ("assertion", "temporal")
     }
+
+
+def _relation_consistency_scores(
+    trap_leaks: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Return assertion and temporal consistency over trapped relations."""
+
+    scores: dict[str, dict[str, Any]] = {}
+    for kind in ("assertion", "temporal"):
+        leak_evidence = _mapping_value(trap_leaks.get(kind))
+        evaluated_relation_count = int(
+            leak_evidence.get("evaluated_relation_count") or 0
+        )
+        leak_count = int(leak_evidence.get("leak_count") or 0)
+        denominator = max(evaluated_relation_count, 1)
+        score = max(0.0, 1.0 - (leak_count / denominator))
+        scores[kind] = {
+            "evaluated_relation_count": evaluated_relation_count,
+            "leak_count": leak_count,
+            "score": score,
+        }
+    return scores
 
 
 def _relation_trap_conflict(
@@ -3746,7 +3783,10 @@ def _is_relation_suite(suite: str) -> bool:
 
 
 def _sha256_path(path: Path) -> str:
-    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    """Hash fixture bytes with platform line endings normalized to LF."""
+
+    fixture_bytes = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return f"sha256:{hashlib.sha256(fixture_bytes).hexdigest()}"
 
 
 def _mapping_value(value: Any) -> dict[str, Any]:
