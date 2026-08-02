@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Mapping
 from pathlib import Path
@@ -11,10 +12,15 @@ import pyarrow.parquet as pq
 from openmed.interop import adapter_spec, available_adapters, get_adapter
 from openmed.interop.omop import (
     UNMAPPED_CONCEPT_ID,
+    OmopCdmTables,
+    OmopLoadSummary,
+    emit_postgres_ddl,
     load_grounded_jsonl,
     load_grounded_notes,
     validate_omop_database,
+    validate_omop_database_report,
     validate_omop_tables,
+    validate_omop_tables_report,
     write_omop_duckdb,
     write_omop_parquet,
     write_omop_sqlite,
@@ -183,6 +189,11 @@ def test_load_grounded_notes_builds_valid_duckdb_omop_tables() -> None:
     con = write_omop_duckdb(tables)
 
     assert validate_omop_database(con) == ()
+    assert validate_omop_database_report(con).to_dict() == {
+        "count": 0,
+        "by_table": {},
+        "by_reason": {},
+    }
     assert _table_counts_from_duckdb(con) == _expected_counts()
     assert con.execute(
         """
@@ -198,6 +209,76 @@ def test_load_grounded_notes_builds_valid_duckdb_omop_tables() -> None:
         WHERE source_code = 'SRC-UNMAPPED'
         """
     ).fetchall() == [(UNMAPPED_CONCEPT_ID, "UNMAPPED")]
+
+
+def test_postgres_ddl_is_stable_and_covers_loader_owned_tables() -> None:
+    ddl = emit_postgres_ddl()
+    con = sqlite3.connect(":memory:")
+    con.executescript(ddl)
+
+    assert ddl == emit_postgres_ddl()
+    assert re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", ddl) == [
+        "concept",
+        "person",
+        "visit_occurrence",
+        "note",
+        "note_nlp",
+        "condition_occurrence",
+        "drug_exposure",
+        "measurement",
+        "procedure_occurrence",
+        "observation",
+        "source_to_concept_map",
+    ]
+    assert "note_date DATE" in ddl
+    assert "valid_end_date DATE" in ddl
+    assert "REFERENCES concept(concept_id)" in ddl
+    assert "REFERENCES note_nlp(note_nlp_id)" in ddl
+    assert ddl.endswith(";\n")
+    assert con.execute(
+        "SELECT count(*) FROM sqlite_master WHERE type = 'table'"
+    ).fetchone() == (11,)
+    con.close()
+
+
+def test_validation_reports_phi_free_concept_and_reachability_counts() -> None:
+    valid_tables = load_grounded_notes(_fixture_notes())
+    corrupted = {
+        name: tuple(dict(row) for row in rows)
+        for name, rows in valid_tables.tables.items()
+    }
+    condition = corrupted["condition_occurrence"][0]
+    condition["condition_concept_id"] = 999_999_999
+    note_nlp = next(
+        row
+        for row in corrupted["note_nlp"]
+        if row["note_nlp_id"] == condition["note_nlp_id"]
+    )
+    note_nlp["note_nlp_event_id"] = 888_888_888
+    tables = OmopCdmTables(
+        tables=corrupted,
+        summary=OmopLoadSummary(
+            row_counts={name: len(rows) for name, rows in corrupted.items()},
+            rejection_counts={},
+        ),
+    )
+
+    report = validate_omop_tables_report(tables)
+
+    assert report.is_valid is False
+    assert report.to_dict() == {
+        "count": 3,
+        "by_table": {"condition_occurrence": 2, "note_nlp": 1},
+        "by_reason": {
+            "missing_concept": 1,
+            "missing_domain_event": 1,
+            "unreachable_from_note_nlp": 1,
+        },
+    }
+    serialized = json.dumps(report.to_dict(), sort_keys=True)
+    assert NOTE_TEXT not in serialized
+    assert "secret-note-456" not in serialized
+    assert "secret-patient-123" not in serialized
 
 
 def test_append_mode_is_idempotent_for_duckdb_sqlite_and_parquet(

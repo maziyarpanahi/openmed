@@ -153,6 +153,35 @@ changed hashes, and incoming row counts. It receives no note text, lexical
 variants, document identifiers, or patient identifiers. Callback failures occur
 after persistence and should be retried independently by the integration.
 
+## Deploy and validate the Postgres table subset
+
+`emit_postgres_ddl()` returns one deterministic PostgreSQL script covering every
+table owned by the grounded-note loader. The script contains schema only: it
+does not bundle vocabulary rows or require a Java or OHDSI runtime. Apply it
+with the PostgreSQL deployment mechanism used by your environment before
+loading rows:
+
+```python
+from pathlib import Path
+
+from openmed.interop.omop import emit_postgres_ddl
+
+Path("openmed-omop-v5.4.sql").write_text(emit_postgres_ddl(), encoding="utf-8")
+```
+
+After loading, `validate_omop_database_report(connection)` checks concept
+references, NOTE_NLP offsets, and reciprocal NOTE_NLP-to-domain reachability.
+Its serializable form contains only a total plus counts by table and reason, so
+it is suitable for logs and deployment diagnostics without exposing note text,
+lexical variants, document identifiers, patient identifiers, or row keys:
+
+```python
+from openmed.interop.omop import validate_omop_database_report
+
+report = validate_omop_database_report(connection)
+assert report.is_valid, report.to_dict()
+```
+
 ## Linking evaluation
 
 `evaluate_medmentions_st21pv()` accepts a caller-created JSONL projection with
