@@ -131,6 +131,46 @@ def _quantity(cell: str) -> float:
     return value
 
 
+def test_guide_reads_as_utf8_on_every_platform() -> None:
+    """Guard the guide's decoding, independent of the platform default.
+
+    The guide contains em dashes and Han characters. Read with a non-UTF-8
+    platform default such as cp1252, an em dash decodes to three mojibake
+    characters and U+2014 disappears, so these assertions fail rather than the
+    suite silently comparing against a corrupted document.
+    """
+
+    guide = _guide()
+
+    assert "—" in guide, "em dash lost: the guide was not decoded as UTF-8"
+    assert "患者" in guide, "Han text lost: the guide was not decoded as UTF-8"
+    assert "�" not in guide, "replacement character present in the decoded guide"
+    assert "â€”" not in guide, "em dash mojibake: cp1252 decode of UTF-8"
+
+    # The bytes on disk really are UTF-8, so any failure above is a reader bug.
+    GUIDE.read_bytes().decode("utf-8")
+
+
+def test_documentation_needles_are_posix_paths() -> None:
+    """Doc-facing path strings must never use the local path separator.
+
+    Markdown always spells paths with forward slashes, so a needle built with
+    ``str(Path(...))`` matches on POSIX and fails on Windows. This pins the
+    fix rather than relying on the assertion sites staying correct.
+    """
+
+    source = Path(__file__).read_text(encoding="utf-8")
+
+    # Needles are assembled at runtime so this guard does not match itself.
+    posix_call = ".relative_to(ROOT)" + ".as_posix()"
+    for symbol in ("SEGMENTATION_TESTS", "CONFORMANCE_FIXTURE"):
+        assert "str(" + symbol + ".relative_to" not in source, symbol
+    assert source.count(posix_call) == 2
+
+    # And the guide itself must not contain a backslash-separated path.
+    assert "tests" + chr(92) not in _guide()
+
+
 def test_guide_is_published_in_the_nav_and_cross_linked() -> None:
     nav = MKDOCS.read_text(encoding="utf-8")
     publication = PUBLICATION.read_text(encoding="utf-8")
@@ -535,7 +575,9 @@ def test_documented_regression_gate_matches_the_shipped_threshold() -> None:
     assert documented is not None, "the guide must state the shipped F1 gate"
     assert float(documented.group(1)) == float(threshold.group(1))
 
-    assert str(SEGMENTATION_TESTS.relative_to(ROOT)) in _guide()
+    # Documentation paths are always forward-slash, so the needle must be
+    # POSIX-style rather than rendered with the local path separator.
+    assert SEGMENTATION_TESTS.relative_to(ROOT).as_posix() in _guide()
 
 
 CONFORMANCE_TESTS = Path(__file__).with_name("test_zh_segmentation_conformance.py")
@@ -632,7 +674,7 @@ def test_documented_conformance_corpus_shape_matches_the_fixture() -> None:
     metadata = document["metadata"]
     guide = _guide()
 
-    assert str(CONFORMANCE_FIXTURE.relative_to(ROOT)) in guide
+    assert CONFORMANCE_FIXTURE.relative_to(ROOT).as_posix() in guide
     assert metadata["synthetic"] is True
     assert metadata["case_count"] == 200
     assert len(document["names"]) == 40
