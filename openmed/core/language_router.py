@@ -28,6 +28,15 @@ from .script_detect import (
     segment_by_script,
 )
 
+# Per-script routing sources for runs whose lexical evidence reorders the
+# script's candidate list: the first entry names the evidence that fired, the
+# second the deterministic fallback used when that language has no pack.
+_SCRIPT_EVIDENCE_SOURCES = {
+    "Bengali": ("stdlib:assamese-cues", "stdlib:bengali-fallback"),
+    "Arabic": ("stdlib:urdu-cues", "stdlib:arabic-fallback"),
+}
+_DEFAULT_EVIDENCE_SOURCES = ("stdlib:text-cues", "stdlib:text-cue-fallback")
+
 
 @dataclass(frozen=True, slots=True)
 class LanguagePrediction:
@@ -329,11 +338,22 @@ class LanguageRouter:
         if text_hints is None:
             text_hints = candidate_languages_for_text(text, script)
         if text_hints != candidate_languages_for_script(script):
+            cue_source, fallback_source = _SCRIPT_EVIDENCE_SOURCES.get(
+                script,
+                _DEFAULT_EVIDENCE_SOURCES,
+            )
             candidates_by_code = {pack.code: pack for pack in candidates}
-            for code in text_hints:
+            for rank, code in enumerate(text_hints):
                 selected = candidates_by_code.get(code)
-                if selected is not None:
-                    return selected, 0.99, "stdlib:assamese-cues"
+                if selected is None:
+                    continue
+                if rank == 0:
+                    return selected, 0.99, cue_source
+                # The evidence-preferred language has no registered pack, so
+                # the run falls back to the next candidate that does. The
+                # lower confidence keeps that fallback visible in the routing
+                # metadata instead of reading as a confident match.
+                return selected, 0.8, fallback_source
 
         if len(candidates) == 1:
             return candidates[0], 0.99, "stdlib:script"

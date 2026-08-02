@@ -30,6 +30,7 @@ from openmed.core.script_detect import (
     UNKNOWN_SCRIPT,
     ScriptRun,
     candidate_languages_for_script,
+    candidate_languages_for_text,
     confusable_skeleton,
     detect_mixed_script,
     detect_script,
@@ -39,10 +40,29 @@ from openmed.core.script_detect import (
     normalizer_for_script,
     numeral_set_for_script,
     segment_by_script,
+    urdu_language_evidence,
 )
 from openmed.processing.text import (
     INDIC_SCRIPTS as PROCESSING_INDIC_SCRIPTS,
 )
+
+# Synthetic Arabic-script material, built from code points so no sample is
+# pasted from real text. ``_ARABIC_STEM`` uses only letters shared by Arabic,
+# Persian and Urdu, so on its own it carries no language evidence.
+_ARABIC_STEM = "".join(chr(codepoint) for codepoint in (0x0627, 0x0644, 0x0645, 0x0631))
+_URDU_LETTERS = tuple(
+    chr(codepoint) for codepoint in (0x0679, 0x0688, 0x0691, 0x06BA, 0x06BE, 0x06D2)
+)
+# Persian-exclusive peh/tcheh/jeh/gaf plus farsi yeh and heh: none of these is
+# an Urdu-exclusive letter, so Persian must never score.
+_PERSIAN_LETTERS = "".join(
+    chr(codepoint) for codepoint in (0x067E, 0x0686, 0x0698, 0x06AF, 0x06CC, 0x0647)
+)
+_EXTENDED_ARABIC_INDIC_DIGITS = "".join(
+    chr(codepoint) for codepoint in range(0x06F0, 0x06FA)
+)
+_ARABIC_INDIC_DIGITS = "".join(chr(codepoint) for codepoint in range(0x0660, 0x066A))
+_ARABIC_PRESENTATION_RANGES = ((0xFB50, 0xFDFF), (0xFE70, 0xFEFF))
 
 
 @st.composite
@@ -268,6 +288,83 @@ def test_cee_script_language_hints_route_to_native_packs():
     assert "cs" in candidate_languages_for_script("Latin")
     assert candidate_languages_for_script("Cyrillic") == ("ru", "uk")
     assert candidate_languages_for_script("Greek") == ("el",)
+
+
+def test_urdu_exclusive_letters_are_the_only_letter_evidence():
+    assert urdu_language_evidence(_ARABIC_STEM) == 0
+    for letter in _URDU_LETTERS:
+        assert urdu_language_evidence(_ARABIC_STEM + letter) == 1
+    assert urdu_language_evidence(_ARABIC_STEM + "".join(_URDU_LETTERS)) == len(
+        _URDU_LETTERS
+    )
+
+
+def test_persian_text_yields_no_urdu_evidence():
+    # Persian shares peh/tcheh/jeh/gaf with Urdu but none of the six
+    # Urdu-exclusive letters, and it uses the same extended Arabic-Indic
+    # digits, so neither signal may route Persian to Urdu.
+    assert urdu_language_evidence(_PERSIAN_LETTERS) == 0
+    assert urdu_language_evidence(_PERSIAN_LETTERS + _EXTENDED_ARABIC_INDIC_DIGITS) == 0
+    assert candidate_languages_for_text(_PERSIAN_LETTERS, "Arabic") == (
+        candidate_languages_for_script("Arabic")
+    )
+
+
+def test_koranic_stop_sign_ligatures_are_not_urdu_evidence():
+    # U+FDF0/U+FDF1 decompose through yeh barree (U+06D2) under NFKC but occur
+    # in Arabic religious text, so only single-character decompositions count.
+    for codepoint in (0xFDF0, 0xFDF1):
+        ligature = chr(codepoint)
+        assert chr(0x06D2) in unicodedata.normalize("NFKC", ligature)
+        assert urdu_language_evidence(_ARABIC_STEM + ligature) == 0
+
+
+def test_urdu_presentation_form_evidence_is_pinned_to_sixteen_forms():
+    scoring_forms = [
+        chr(codepoint)
+        for start, end in _ARABIC_PRESENTATION_RANGES
+        for codepoint in range(start, end + 1)
+        if urdu_language_evidence(chr(codepoint)) > 0
+    ]
+
+    # Pinned so a Unicode database upgrade fails loudly instead of silently
+    # widening or narrowing the Urdu evidence set.
+    assert len(scoring_forms) == 16
+    assert all(
+        unicodedata.normalize("NFKC", form) in _URDU_LETTERS for form in scoring_forms
+    )
+
+
+def test_extended_arabic_indic_digits_reinforce_but_never_trigger_urdu():
+    assert urdu_language_evidence(_EXTENDED_ARABIC_INDIC_DIGITS) == 0
+    assert urdu_language_evidence(_ARABIC_STEM + _EXTENDED_ARABIC_INDIC_DIGITS) == 0
+    assert urdu_language_evidence(_URDU_LETTERS[0] + _EXTENDED_ARABIC_INDIC_DIGITS) == (
+        1 + len(_EXTENDED_ARABIC_INDIC_DIGITS)
+    )
+    # Arabic-Indic digits are shared with Arabic and never add evidence.
+    assert urdu_language_evidence(_URDU_LETTERS[0] + _ARABIC_INDIC_DIGITS) == 1
+
+
+def test_urdu_evidence_moves_ur_ahead_of_ar_without_dropping_candidates():
+    baseline = candidate_languages_for_script("Arabic")
+    reordered = candidate_languages_for_text(_ARABIC_STEM + _URDU_LETTERS[0], "Arabic")
+
+    assert baseline == ("ar", "ha", "ur")
+    assert reordered == ("ur", "ar", "ha")
+    assert set(reordered) == set(baseline)
+    assert candidate_languages_for_text(_ARABIC_STEM, "Arabic") == baseline
+
+
+def test_urdu_disambiguation_leaves_script_runs_and_graphemes_unchanged():
+    fatha = chr(0x064E)
+    arabic = f"Patient {_ARABIC_STEM}{fatha} stable"
+    urdu = f"Patient {_ARABIC_STEM[:-1]}{_URDU_LETTERS[0]}{fatha} stable"
+
+    assert len(arabic) == len(urdu)
+    assert list(segment_by_script(arabic)) == list(segment_by_script(urdu))
+    for text in (arabic, urdu):
+        for start, end, _script in segment_by_script(text):
+            assert snap_span_to_grapheme_boundaries(start, end, text) == (start, end)
 
 
 def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():

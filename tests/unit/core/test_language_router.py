@@ -47,6 +47,20 @@ _ROUTING_CORPUS = (
 )
 
 
+# Synthetic Arabic-script material built from code points, never pasted text.
+# The stem uses only letters shared by Arabic, Persian and Urdu.
+_ARABIC_STEM = "".join(chr(codepoint) for codepoint in (0x0627, 0x0644, 0x0645, 0x0631))
+_ARABIC_TEXT = f"{_ARABIC_STEM} {_ARABIC_STEM}"
+# Adds tteh and yeh barree, which only Urdu among the Arabic candidates uses.
+_URDU_TEXT = f"{_ARABIC_STEM}{chr(0x0679)} {_ARABIC_STEM}{chr(0x06D2)}"
+# Adds peh/tcheh/gaf, shared with Urdu, plus farsi yeh: no Urdu-exclusive letter.
+_PERSIAN_TEXT = "".join(
+    chr(codepoint) for codepoint in (0x067E, 0x0686, 0x06AF, 0x06CC)
+)
+# Urdu letters alongside extended Arabic-Indic digits (U+06F0-U+06F9).
+_URDU_EXTENDED_DIGIT_TEXT = f"{_URDU_TEXT} {chr(0x06F4)}{chr(0x06F2)}"
+
+
 def _pack(
     code: str,
     scripts: tuple[str, ...],
@@ -111,6 +125,114 @@ def test_han_uses_kana_context_for_japanese_and_priority_for_chinese():
     assert japanese.language == "ja"
     assert {run.language for run in japanese.runs} == {"ja"}
     assert any(run.source == "stdlib:context-script" for run in japanese.runs)
+
+
+def test_urdu_cues_select_ur_over_ar_once_an_urdu_pack_is_registered():
+    router = LanguageRouter(
+        packs=(
+            _pack("ar", ("Arabic",), "OpenMed/arabic"),
+            _pack("ur", ("Arabic",), "OpenMed/urdu"),
+        ),
+        use_optional_lid=False,
+    )
+
+    urdu = router.route(_URDU_TEXT)
+    arabic = router.route(_ARABIC_TEXT)
+    persian = router.route(_PERSIAN_TEXT)
+
+    assert urdu.language == "ur"
+    assert urdu.runs[0].source == "stdlib:urdu-cues"
+    assert urdu.runs[0].confidence == pytest.approx(0.99)
+    assert urdu.runs[0].candidates == ("ur", "ar", "ha")
+    assert arabic.language == "ar"
+    assert all(run.language != "ur" for run in arabic.runs)
+    assert arabic.runs[0].candidates == ("ar", "ha", "ur")
+    assert persian.language == "ar"
+    assert all(run.language != "ur" for run in persian.runs)
+    assert persian.runs[0].candidates == ("ar", "ha", "ur")
+
+
+def test_urdu_disambiguation_never_resolves_the_hausa_candidate():
+    # ``ha`` sits in the Arabic hint tuple but is national-ID-only: the input
+    # gateway rejects it whenever ``include_national_id`` is false, which is
+    # what every public edge uses. Reordering must never promote it into
+    # ``language``. The guarantee is ordering, not absence: evidence moves only
+    # ``ur``, so ``ar`` keeps its place ahead of ``ha`` and always wins first.
+    router = LanguageRouter(
+        packs=(
+            _pack("ar", ("Arabic",), "OpenMed/arabic"),
+            _pack("ha", ("Arabic",), "OpenMed/hausa"),
+            _pack("ur", ("Arabic",), "OpenMed/urdu"),
+        ),
+        use_optional_lid=False,
+    )
+
+    for text in (_ARABIC_TEXT, _URDU_TEXT, _PERSIAN_TEXT, _URDU_EXTENDED_DIGIT_TEXT):
+        for run in router.route_runs(text):
+            assert run.language != "ha"
+            # ``ha`` may still be advertised in the advisory candidate list.
+            assert "ha" in run.candidates
+            assert run.candidates.index("ar") < run.candidates.index("ha")
+
+
+def test_urdu_evidence_without_a_registered_pack_falls_back_to_arabic():
+    # The built-in catalog ships no ``ur`` pack, so Urdu evidence must land on
+    # the documented Arabic fallback at a visibly lower confidence.
+    router = LanguageRouter(use_optional_lid=False)
+
+    urdu = router.route(_URDU_TEXT)
+    arabic = router.route(_ARABIC_TEXT)
+
+    assert urdu.language == "ar"
+    assert urdu.runs[0].source == "stdlib:arabic-fallback"
+    assert urdu.runs[0].confidence == pytest.approx(0.8)
+    assert arabic.language == "ar"
+    assert arabic.runs[0].source == "stdlib:script"
+    assert arabic.runs[0].confidence == pytest.approx(0.99)
+
+    # The evidence is preserved in the run metadata even though no pack can
+    # act on it yet: ``ur`` leads the candidate order while ``language``
+    # reports the Arabic fallback that actually handled the run.
+    assert urdu.runs[0].candidates == ("ur", "ar", "ha")
+    assert urdu.runs[0].candidates[0] != urdu.runs[0].language
+    assert arabic.runs[0].candidates == ("ar", "ha", "ur")
+    assert arabic.runs[0].candidates[0] == arabic.runs[0].language
+
+
+def test_arabic_fallback_confidence_weights_the_document_decision():
+    # Hangul is the only script whose sole candidate pack routes at 0.99, so it
+    # isolates the Arabic fallback's 0.8 in the length-weighted document score.
+    router = LanguageRouter(use_optional_lid=False)
+    prefix = "".join(chr(codepoint) for codepoint in (0xD658, 0xC790)) + " "
+    decision = router.route(prefix + _URDU_TEXT)
+
+    hangul, arabic = decision.runs
+    assert (hangul.language, hangul.confidence) == ("ko", pytest.approx(0.99))
+    assert (arabic.language, arabic.confidence) == ("ar", pytest.approx(0.8))
+    assert arabic.source == "stdlib:arabic-fallback"
+    assert arabic.candidates == ("ur", "ar", "ha")
+    assert hangul.candidates == ("ko",)
+
+    # The lower per-run confidence must propagate into the length-weighted
+    # document score rather than being rounded away.
+    expected = ((0.99 * len(prefix)) + (0.8 * len(_URDU_TEXT))) / len(
+        prefix + _URDU_TEXT
+    )
+    assert decision.confidence == pytest.approx(expected)
+    assert decision.confidence < 0.99
+
+
+def test_bengali_evidence_keeps_its_established_routing_source():
+    # The Urdu source vocabulary is added per script; Assamese must keep the
+    # label that the golden-fixture gate pins.
+    router = LanguageRouter(use_optional_lid=False)
+
+    decision = router.route("গগৈ আৰু বৰা")
+
+    assert decision.language == "as"
+    assert decision.runs[0].source == "stdlib:assamese-cues"
+    assert decision.runs[0].confidence == pytest.approx(0.99)
+    assert decision.runs[0].candidates == ("as", "bn")
 
 
 def test_devanagari_uses_pack_declared_candidate_priority():
