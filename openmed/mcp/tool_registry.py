@@ -176,13 +176,107 @@ class ToolSpec:
         }
 
 
+@dataclass(frozen=True)
+class WorkflowArtifactSpec:
+    """Registered schema for one discoverable workflow artifact."""
+
+    name: str
+    schema_id: str
+    schema: Mapping[str, Any]
+    source_tool: str
+
+    def __post_init__(self) -> None:
+        """Detach the stored schema from caller-owned mutable mappings."""
+
+        object.__setattr__(self, "schema", deepcopy(dict(self.schema)))
+
+    def document(self, *, include_schema: bool = False) -> JsonObject:
+        """Return discovery metadata and, optionally, the full JSON schema."""
+
+        payload: JsonObject = {
+            "name": self.name,
+            "schema_id": self.schema_id,
+            "source_tool": self.source_tool,
+        }
+        if include_schema:
+            payload["schema"] = deepcopy(dict(self.schema))
+        return payload
+
+
+@dataclass(frozen=True)
+class WorkflowSpec:
+    """Discovery contract for an MCP prompt/resource workflow."""
+
+    name: str
+    description: str
+    prompt_name: str
+    resource_uri: str
+    fixture_uri: str
+    stage_order: Sequence[str]
+    tools: Sequence[str]
+    artifacts: Sequence[WorkflowArtifactSpec]
+    version: str = "1.0.0"
+    default_execution: str = "local"
+
+    def __post_init__(self) -> None:
+        """Normalize sequence fields and validate discoverable identifiers."""
+
+        if not _SEMVER_RE.match(self.version):
+            raise ValueError(f"workflow spec {self.name!r} has invalid semver")
+        if not self.prompt_name or not self.resource_uri or not self.fixture_uri:
+            raise ValueError(f"workflow spec {self.name!r} is not discoverable")
+        stage_order = tuple(self.stage_order)
+        artifacts = tuple(self.artifacts)
+        if tuple(artifact.name for artifact in artifacts) != stage_order:
+            raise ValueError(
+                f"workflow spec {self.name!r} artifact order must match stage order"
+            )
+        object.__setattr__(self, "stage_order", stage_order)
+        object.__setattr__(self, "tools", tuple(self.tools))
+        object.__setattr__(self, "artifacts", artifacts)
+
+    def artifact(self, name: str) -> WorkflowArtifactSpec:
+        """Return the registered artifact schema named *name*."""
+
+        for artifact in self.artifacts:
+            if artifact.name == name:
+                return artifact
+        raise KeyError(f"unknown workflow artifact {self.name!r} {name!r}")
+
+    def document(self, *, include_schemas: bool = False) -> JsonObject:
+        """Return the workflow's machine-readable discovery document."""
+
+        return {
+            "name": self.name,
+            "description": self.description,
+            "version": self.version,
+            "prompt_name": self.prompt_name,
+            "resource_uri": self.resource_uri,
+            "fixture_uri": self.fixture_uri,
+            "default_execution": self.default_execution,
+            "stage_order": list(self.stage_order),
+            "tools": list(self.tools),
+            "artifacts": [
+                artifact.document(include_schema=include_schemas)
+                for artifact in self.artifacts
+            ],
+        }
+
+
 class ToolRegistry:
     """In-memory registry of named, versioned tool specifications."""
 
-    def __init__(self, specs: Iterable[ToolSpec] = ()) -> None:
+    def __init__(
+        self,
+        specs: Iterable[ToolSpec] = (),
+        workflows: Iterable[WorkflowSpec] = (),
+    ) -> None:
         self._specs: dict[tuple[str, str], ToolSpec] = {}
+        self._workflows: dict[tuple[str, str], WorkflowSpec] = {}
         for spec in specs:
             self.register(spec)
+        for workflow in workflows:
+            self.register_workflow(workflow)
 
     def register(self, spec: ToolSpec) -> None:
         """Register one tool spec version."""
@@ -191,6 +285,20 @@ class ToolRegistry:
         if key in self._specs:
             raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
         self._specs[key] = spec
+
+    def register_workflow(self, spec: WorkflowSpec) -> None:
+        """Register one discoverable workflow spec version."""
+
+        key = (spec.name, spec.version)
+        if key in self._workflows:
+            raise ValueError(f"duplicate workflow spec {spec.name!r} {spec.version!r}")
+        unknown_tools = set(spec.tools) - {tool.name for tool in self._specs.values()}
+        if unknown_tools:
+            unknown = ", ".join(sorted(unknown_tools))
+            raise ValueError(
+                f"workflow spec {spec.name!r} references unknown tools: {unknown}"
+            )
+        self._workflows[key] = spec
 
     def get(self, name: str, version: str | None = None) -> ToolSpec:
         """Return one spec by name and optional version."""
@@ -222,12 +330,37 @@ class ToolRegistry:
             )
         )
 
+    def get_workflow(self, name: str, version: str | None = None) -> WorkflowSpec:
+        """Return one workflow spec by name and optional version."""
+
+        if version is not None:
+            try:
+                return self._workflows[(name, version)]
+            except KeyError as exc:
+                raise KeyError(f"unknown workflow spec {name!r} {version!r}") from exc
+
+        candidates = [spec for spec in self._workflows.values() if spec.name == name]
+        if not candidates:
+            raise KeyError(f"unknown workflow spec {name!r}")
+        return max(candidates, key=lambda spec: _semver_key(spec.version))
+
+    def workflow_specs(self) -> tuple[WorkflowSpec, ...]:
+        """Return all workflow specs sorted by name and semantic version."""
+
+        return tuple(
+            sorted(
+                self._workflows.values(),
+                key=lambda spec: (spec.name, _semver_key(spec.version)),
+            )
+        )
+
     def document(self) -> JsonObject:
         """Return the generated machine-readable registry document."""
 
         return {
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
             "tools": [spec.document() for spec in self.all_specs()],
+            "workflows": [spec.document() for spec in self.workflow_specs()],
         }
 
 
@@ -281,6 +414,30 @@ def validate_registered_tool_output(name: str, payload: Any) -> JsonObject:
     """Validate an output payload against the latest registered spec for *name*."""
 
     return validate_tool_output(TOOL_REGISTRY.get(name), payload)
+
+
+def validate_registered_workflow_artifact(
+    workflow_name: str,
+    artifact_name: str,
+    payload: Any,
+) -> JsonObject:
+    """Validate one artifact against its registered workflow schema."""
+
+    workflow = TOOL_REGISTRY.get_workflow(workflow_name)
+    artifact = workflow.artifact(artifact_name)
+    errors: list[str] = []
+    _validate_schema(payload, artifact.schema, "$", errors)
+    if errors:
+        preview = "; ".join(errors[:4])
+        raise ToolSchemaValidationError(
+            f"{workflow.name}.{artifact.name} failed schema "
+            f"{artifact.schema_id}: {preview}"
+        )
+    if not isinstance(payload, Mapping):
+        raise ToolSchemaValidationError(
+            f"{workflow.name}.{artifact.name} must be an object"
+        )
+    return dict(payload)
 
 
 def validate_tool_output(spec: ToolSpec, payload: Any) -> JsonObject:
@@ -957,6 +1114,59 @@ _CLINICAL_PIPELINE_OUTPUT = _object(
     ),
     additional=False,
 )
+_DEIDENTIFIED_HANDOFF_OUTPUT = _object(
+    properties={
+        "schema_version": _schema(
+            "string",
+            enum=["openmed.deidentified_handoff.v1"],
+        ),
+        "deidentified_text": _schema("string"),
+        "source_text_hash": _schema("string"),
+    },
+    required=("schema_version", "deidentified_text", "source_text_hash"),
+    additional=False,
+)
+_DETECT_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "model_name": _schema("string"),
+        "entity_count": _schema("integer", minimum=0),
+    },
+    required=("spans", "model_name", "entity_count"),
+    additional=False,
+)
+_CONTEXT_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "context_count": _schema("integer", minimum=0),
+    },
+    required=("spans", "context_count"),
+    additional=False,
+)
+_SECTION_ARTIFACT_OUTPUT = _object(
+    properties={
+        "label": _schema("string"),
+        "start": _schema("integer", minimum=0),
+        "end": _schema("integer", minimum=0),
+    },
+    required=("label", "start", "end"),
+)
+_SECTIONS_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "sections": _array(_SECTION_ARTIFACT_OUTPUT),
+    },
+    required=("spans", "sections"),
+    additional=False,
+)
+_RELATIONS_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "relations": _array(_object()),
+    },
+    required=("spans", "relations"),
+    additional=False,
+)
 _SPAN_ARRAY_OR_NULL = {"anyOf": [_array(_OPENMED_SPAN_OUTPUT), _schema("null")]}
 _STRING_ARRAY_OR_NULL = {"anyOf": [_array(_schema("string")), _schema("null")]}
 _OBJECT_ARRAY_OR_NULL = {"anyOf": [_array(_object()), _schema("null")]}
@@ -1537,10 +1747,86 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         output_schema=_LIST_MODELS_OUTPUT,
     ),
 )
-TOOL_REGISTRY = ToolRegistry(TOOL_SPECS)
+
+CLINICAL_WORKFLOW_NAME = "openmed_clinical_workflow"
+CLINICAL_WORKFLOW_SPEC = WorkflowSpec(
+    name=CLINICAL_WORKFLOW_NAME,
+    description=(
+        "Local-first de-identification, clinical extraction, grounding, FHIR "
+        "export, and residual-risk workflow with PHI-safe intermediate artifacts."
+    ),
+    prompt_name="openmed-clinical-workflow",
+    resource_uri="openmed://clinical-workflow",
+    fixture_uri="openmed://clinical-workflow/golden-agent-run",
+    stage_order=("deidentify", *CLINICAL_STAGE_ORDER),
+    tools=(
+        "openmed_deidentify",
+        "openmed_clinical_pipeline",
+        "openmed_ground",
+        "openmed_export_fhir",
+        "openmed_risk_score",
+    ),
+    artifacts=(
+        WorkflowArtifactSpec(
+            name="deidentify",
+            schema_id="openmed.deidentified_handoff.v1",
+            schema=_DEIDENTIFIED_HANDOFF_OUTPUT,
+            source_tool="openmed_deidentify",
+        ),
+        WorkflowArtifactSpec(
+            name="detect",
+            schema_id="openmed.clinical_artifact.detect.v1",
+            schema=_DETECT_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="context",
+            schema_id="openmed.clinical_artifact.context.v1",
+            schema=_CONTEXT_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="sections",
+            schema_id="openmed.clinical_artifact.sections.v1",
+            schema=_SECTIONS_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="relations",
+            schema_id="openmed.clinical_artifact.relations.v1",
+            schema=_RELATIONS_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="ground",
+            schema_id="openmed.ground.v1",
+            schema=_GROUND_OUTPUT,
+            source_tool="openmed_ground",
+        ),
+        WorkflowArtifactSpec(
+            name="export",
+            schema_id="openmed.export_fhir.v1",
+            schema=_EXPORT_FHIR_OUTPUT,
+            source_tool="openmed_export_fhir",
+        ),
+        WorkflowArtifactSpec(
+            name="risk",
+            schema_id="openmed.risk_score.v1",
+            schema=_RISK_SCORE_OUTPUT,
+            source_tool="openmed_risk_score",
+        ),
+    ),
+)
+
+TOOL_REGISTRY = ToolRegistry(
+    TOOL_SPECS,
+    workflows=(CLINICAL_WORKFLOW_SPEC,),
+)
 
 __all__ = [
     "CLINICAL_STAGE_ORDER",
+    "CLINICAL_WORKFLOW_NAME",
+    "CLINICAL_WORKFLOW_SPEC",
     "TOOL_REGISTRY",
     "TOOL_SPECS",
     "ToolCompatibilityError",
@@ -1548,6 +1834,8 @@ __all__ = [
     "ToolRegistry",
     "ToolSchemaValidationError",
     "ToolSpec",
+    "WorkflowArtifactSpec",
+    "WorkflowSpec",
     "check_tool_registry_compatibility",
     "input_schema",
     "invoke_tool",
@@ -1557,5 +1845,6 @@ __all__ = [
     "render_presidio_tool_definitions",
     "render_tool_registry_document",
     "validate_registered_tool_output",
+    "validate_registered_workflow_artifact",
     "validate_tool_output",
 ]
