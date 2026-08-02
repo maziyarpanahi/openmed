@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequen
 from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import InputError as InputError
 from ..processing.text import validate_pii_input
+from .budget import BudgetClock, RequestBudget, coerce_budget
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -1124,9 +1125,18 @@ def _extract_pii_batch(
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
+    budget_clock: Optional[BudgetClock] = None,
     **pipeline_kwargs: Any,
 ) -> list[Any]:
     """Extract PII for multiple texts while reusing the same backend resources."""
+    if budget_clock is not None:
+        for text in texts:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="extract_pii.input_guard",
+            )
+        budget_clock.check("extract_pii.prepare")
+
     if code_mixed and len(texts) != 1:
         raise ValueError("code-mixed token tags currently require one input text")
     effective_model = _resolve_effective_pii_model(model_name, lang)
@@ -1163,6 +1173,8 @@ def _extract_pii_batch(
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
 
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.backend_setup")
         if privacy_filter_pipeline is not None:
             pipeline = privacy_filter_pipeline
         elif config is None:
@@ -1175,8 +1187,12 @@ def _extract_pii_batch(
             for key in ("batch_size", "num_workers")
             if key in pipeline_kwargs and pipeline_kwargs[key] is not None
         }
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.privacy_filter_batch")
         with network_blocked_if_offline(config):
             raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.privacy_filter_batch_complete")
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
             _prediction_result_from_privacy_filter_raw(
@@ -1193,11 +1209,15 @@ def _extract_pii_batch(
         from .. import analyze_text
         from .models import ModelLoader
 
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.backend_setup")
         shared_loader = loader
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
         for item, india_clinical in zip(prepared, india_clinical_flags):
+            if budget_clock is not None:
+                budget_clock.check("extract_pii.batch_item")
             if india_clinical:
                 result = _extract_india_clinical_via_script_windows(
                     item.inference_text,
@@ -1221,6 +1241,8 @@ def _extract_pii_batch(
                     group_entities=True,
                     **pipeline_kwargs,
                 )
+            if budget_clock is not None:
+                budget_clock.check("extract_pii.batch_item_complete")
             result = _mutable_prediction_result(result)
             results.append(result)
 
@@ -1293,6 +1315,8 @@ def _extract_pii_batch(
     for result in results:
         validate_entity_spans(result.entities, result.text)
 
+    if budget_clock is not None:
+        budget_clock.check("extract_pii.complete")
     return results
 
 
@@ -1318,6 +1342,7 @@ def extract_pii(
     token_language_tags: Optional[Sequence[Any]] = None,
     lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
+    budget: Optional[RequestBudget] = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -1374,6 +1399,9 @@ def extract_pii(
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
+        budget: Optional per-request wall-time and input-character budget.
+            ``None`` means unlimited. Deadline checks are cooperative, and an
+            over-length input is rejected before model inference.
 
     Returns:
         PredictionResult with detected PII entities
@@ -1406,8 +1434,19 @@ def extract_pii(
         ('Casey Example', 'NAME')
     """
     text = validate_pii_input(text)
+    resolved_budget = coerce_budget(budget)
+    if resolved_budget is not None:
+        resolved_budget.check_input_length(
+            len(text),
+            checkpoint="extract_pii.input_guard",
+        )
     if cache_results:
         params = dict(locals())
+        params.pop("resolved_budget")
+        if resolved_budget is None:
+            params.pop("budget")
+        else:
+            params["budget"] = resolved_budget
         cache_key = make_cache_key("extract_pii", params)
         cache = get_result_cache(max_entries=max_cache_entries)
         final_result = cache.get(cache_key)
@@ -1418,6 +1457,7 @@ def extract_pii(
         runtime_kwargs["batch_size"] = batch_size
     if num_workers is not None:
         runtime_kwargs["num_workers"] = num_workers
+    budget_clock = resolved_budget.start() if resolved_budget is not None else None
     final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
@@ -1435,6 +1475,7 @@ def extract_pii(
         token_language_tags=token_language_tags,
         lid_model=lid_model,
         transliterated_name_config=transliterated_name_config,
+        budget_clock=budget_clock,
         **runtime_kwargs,
     )[0]
     if cache_results:
@@ -2313,9 +2354,18 @@ def _deidentify_batch(
     surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
+    budget_clock: Optional[BudgetClock] = None,
     **pipeline_kwargs: Any,
 ) -> list[DeidentificationResult]:
     """De-identify multiple texts after one batched PII extraction pass."""
+    if budget_clock is not None:
+        for text in texts:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="deidentify.input_guard",
+            )
+        budget_clock.check("deidentify.prepare")
+
     effective_method = _resolve_deidentification_method(
         method,
         shift_dates,
@@ -2361,12 +2411,15 @@ def _deidentify_batch(
         transliterated_name_config=transliterated_name_config,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
+        budget_clock=budget_clock,
         **pipeline_kwargs,
     )
 
     if use_safety_sweep:
         swept_results = []
         for source_text, pii_result in zip(source_texts, pii_results):
+            if budget_clock is not None:
+                budget_clock.check("deidentify.safety_sweep_item")
             sweep_patterns = None
             if code_mixed:
                 if resolved_token_language_tags is None:
@@ -2394,33 +2447,41 @@ def _deidentify_batch(
             )
             _suppress_custom_allowed_entities(source_text, pii_result, recognizer)
             swept_results.append(pii_result)
+            if budget_clock is not None:
+                budget_clock.check("deidentify.safety_sweep_item_complete")
         pii_results = swept_results
 
-    return [
-        _build_deidentification_result(
-            text,
-            pii_result,
-            effective_method=effective_method,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days,
-            patient_key=patient_key,
-            date_shift_max_days=date_shift_max_days,
-            date_shift_secret=date_shift_secret,
-            keep_mapping=keep_mapping,
-            lang=lang,
-            normalize_accents=normalize_accents,
-            use_smart_merging=use_smart_merging,
-            use_safety_sweep=use_safety_sweep,
-            consistent=consistent,
-            seed=seed,
-            locale=locale,
-            surrogate_vault=surrogate_vault,
-            policy=policy or "hipaa_safe_harbor",
+    results: list[DeidentificationResult] = []
+    for text, pii_result in zip(source_texts, pii_results):
+        if budget_clock is not None:
+            budget_clock.check("deidentify.build_item")
+        results.append(
+            _build_deidentification_result(
+                text,
+                pii_result,
+                effective_method=effective_method,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                keep_year=keep_year,
+                date_shift_days=date_shift_days,
+                patient_key=patient_key,
+                date_shift_max_days=date_shift_max_days,
+                date_shift_secret=date_shift_secret,
+                keep_mapping=keep_mapping,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                use_smart_merging=use_smart_merging,
+                use_safety_sweep=use_safety_sweep,
+                consistent=consistent,
+                seed=seed,
+                locale=locale,
+                surrogate_vault=surrogate_vault,
+                policy=policy or "hipaa_safe_harbor",
+            )
         )
-        for text, pii_result in zip(source_texts, pii_results)
-    ]
+        if budget_clock is not None:
+            budget_clock.check("deidentify.build_item_complete")
+    return results
 
 
 def deidentify(
@@ -2457,6 +2518,7 @@ def deidentify(
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
+    budget: Optional[RequestBudget] = None,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -2557,6 +2619,9 @@ def deidentify(
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
+        budget: Optional per-request wall-time and input-character budget.
+            ``None`` means unlimited. Deadline checks are cooperative, and an
+            over-length input is rejected before model inference.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -2604,8 +2669,19 @@ def deidentify(
     """
 
     text = validate_pii_input(text)
+    resolved_budget = coerce_budget(budget)
+    if resolved_budget is not None:
+        resolved_budget.check_input_length(
+            len(text),
+            checkpoint="deidentify.input_guard",
+        )
     if cache_results:
         params = dict(locals())
+        params.pop("resolved_budget")
+        if resolved_budget is None:
+            params.pop("budget")
+        else:
+            params["budget"] = resolved_budget
         cache_key = make_cache_key("deidentify", params)
         cache = get_result_cache(max_entries=max_cache_entries)
         final_result = cache.get(cache_key)
@@ -2660,6 +2736,7 @@ def deidentify(
         locale=locale,
         surrogate_vault=surrogate_vault,
         audit=audit,
+        budget=resolved_budget,
     )
 
     if audit and result.deidentification_result.audit_report is not None:

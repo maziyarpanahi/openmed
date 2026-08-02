@@ -9,6 +9,7 @@ from .audit_chain import (
     append_to_chain_file,
     verify_chain,
 )
+from .budget import BudgetExceededError, RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
     OpenMedConfig,
@@ -175,6 +176,9 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "RequestBudget",
+    "BudgetExceededError",
+    "coerce_budget",
     "prefetch_model",
     "list_cached_models",
     "clear_cached_model",

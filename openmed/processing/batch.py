@@ -822,6 +822,7 @@ class BatchProcessor:
         continue_on_error: bool = True,
         checkpoint_interval: int = _DEFAULT_CHECKPOINT_INTERVAL,
         _atomic_write_hook: Optional[AtomicWriteHook] = None,
+        budget: Optional[Any] = None,
         **analyze_kwargs: Any,
     ):
         """Initialize batch processor.
@@ -846,6 +847,9 @@ class BatchProcessor:
             continue_on_error: Continue processing on individual item errors.
             checkpoint_interval: Maximum number of items processed between
                 durable checkpoints.
+            budget: Optional per-request resource budget applied independently
+                to each ``extract_pii`` or ``deidentify`` item. ``None`` means
+                unlimited. The ``analyze_text`` operation ignores this value.
             **analyze_kwargs: Additional arguments passed to the selected function.
         """
         if operation not in _VALID_OPERATIONS:
@@ -869,6 +873,9 @@ class BatchProcessor:
         )
         self.group_entities = group_entities
         self.continue_on_error = continue_on_error
+        from ..core.budget import coerce_budget
+
+        self.budget = coerce_budget(budget)
         if isinstance(checkpoint_interval, bool) or checkpoint_interval < 1:
             raise ValueError("Checkpoint interval must be positive")
         self.checkpoint_interval = int(checkpoint_interval)
@@ -1537,6 +1544,12 @@ class BatchProcessor:
         if not valid_positions:
             return [item for item in results if item is not None]
 
+        if self.budget is not None:
+            fn = self._get_operation_fn()
+            for index, item in valid_positions:
+                results[index] = self._process_single_item(item, fn)
+            return [item for item in results if item is not None]
+
         valid_items = [item for _, item in valid_positions]
         start_time = time.time()
         try:
@@ -1615,13 +1628,16 @@ class BatchProcessor:
                     **self.analyze_kwargs,
                 )
             else:
+                pii_kwargs = dict(self.analyze_kwargs)
+                if self.budget is not None:
+                    pii_kwargs["budget"] = self.budget
                 result = fn(
                     item.text,
                     model_name=self.model_name,
                     confidence_threshold=self.confidence_threshold,
                     config=self.config,
                     loader=self._get_shared_loader(),
-                    **self.analyze_kwargs,
+                    **pii_kwargs,
                 )
             processing_time = time.time() - start_time
 
