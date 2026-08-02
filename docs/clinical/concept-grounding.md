@@ -109,6 +109,79 @@ CI runs the committed synthetic round trip through the official HL7 FHIR R4
 validator and the offline OMOP smoke checks. It also builds a wheel and rejects
 restricted UMLS, SNOMED, or CPT vocabulary data paths.
 
+## Run incremental OMOP loads
+
+The OMOP writers use idempotent append mode by default. A rerun with the same
+deterministic rows does not create duplicates and does not remove data already
+in the target. Use replace-by-note mode when the incoming batch is the complete,
+authoritative extraction result for each source note hash in that batch:
+
+```python
+from openmed.interop.omop import load_grounded_jsonl, write_omop_sqlite
+
+
+def refresh_quality_profiles(event):
+    quality_queue.enqueue(event.changed_note_hashes)
+
+
+def refresh_cohort_queries(event):
+    cohort_cache.invalidate(event.changed_note_hashes)
+
+
+tables = load_grounded_jsonl("grounded.jsonl", mode="replace_by_note")
+write_omop_sqlite(
+    tables,
+    "local-cdm.sqlite",
+    mode="replace_by_note",
+    downstream_consumers=(refresh_quality_profiles, refresh_cohort_queries),
+)
+```
+
+Replace-by-note removes and reloads NOTE, NOTE_NLP, domain, and
+SOURCE_TO_CONCEPT_MAP rows for the incoming hashes. It preserves rows belonging
+to omitted note hashes and shared PERSON, VISIT_OCCURRENCE, and CONCEPT rows. An
+incoming note with fewer spans therefore removes stale derived rows without
+disturbing unrelated notes. The same behavior is available for DuckDB and
+Parquet and from the CLI with `openmed omop load --mode replace-by-note`.
+
+When note text is unchanged but extraction results are regenerated, its
+content-derived hash remains stable. If a caller supplies `source_note_hash`, it
+must be a stable, privacy-safe digest for that logical source note; do not use a
+plaintext document or patient identifier. Every downstream callback runs only
+after its writer succeeds and receives an `OmopLoadEvent` containing the mode,
+changed hashes, and incoming row counts. It receives no note text, lexical
+variants, document identifiers, or patient identifiers. Callback failures occur
+after persistence and should be retried independently by the integration.
+
+## Deploy and validate the Postgres table subset
+
+`emit_postgres_ddl()` returns one deterministic PostgreSQL script covering every
+table owned by the grounded-note loader. The script contains schema only: it
+does not bundle vocabulary rows or require a Java or OHDSI runtime. Apply it
+with the PostgreSQL deployment mechanism used by your environment before
+loading rows:
+
+```python
+from pathlib import Path
+
+from openmed.interop.omop import emit_postgres_ddl
+
+Path("openmed-omop-v5.4.sql").write_text(emit_postgres_ddl(), encoding="utf-8")
+```
+
+After loading, `validate_omop_database_report(connection)` checks concept
+references, NOTE_NLP offsets, and reciprocal NOTE_NLP-to-domain reachability.
+Its serializable form contains only a total plus counts by table and reason, so
+it is suitable for logs and deployment diagnostics without exposing note text,
+lexical variants, document identifiers, patient identifiers, or row keys:
+
+```python
+from openmed.interop.omop import validate_omop_database_report
+
+report = validate_omop_database_report(connection)
+assert report.is_valid, report.to_dict()
+```
+
 ## Linking evaluation
 
 `evaluate_medmentions_st21pv()` accepts a caller-created JSONL projection with

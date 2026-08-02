@@ -1,7 +1,9 @@
-"""Lazy interoperability adapter registry.
+"""Interoperability package for section 4.2.
 
-Adapters live behind explicit imports so importing :mod:`openmed` or
-``openmed.interop`` never imports optional third-party detector dependencies.
+Intended contents include optional lazily-imported adapters that emit canonical
+spans, plus bridges/ for subprocess-only integrations. Adapters live behind
+explicit imports so importing :mod:`openmed` or ``openmed.interop`` never imports
+optional third-party detector dependencies.
 """
 
 from __future__ import annotations

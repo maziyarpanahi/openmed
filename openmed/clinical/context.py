@@ -1289,13 +1289,14 @@ def assert_context_axes(
         certainty=resolve_uncertainty(span, modifier_hits, language=language),
         negation=resolve_negation(span, modifier_hits, language=language),
     )
-    return apply_section_context(span, section, assertion)
+    return apply_section_context(span, section, assertion, language=language)
 
 
 def apply_section_context(
     span: Any,
     section: Any = None,
     assertion: ClinicalAssertion | None = None,
+    language: str | None = None,
 ) -> ClinicalAssertion:
     """Apply conservative section priors to a span assertion.
 
@@ -1304,12 +1305,13 @@ def apply_section_context(
     back to ``span.section`` or mapping-style ``span["section"]``. Section
     priors only fill unset/default axes for the current span and never override
     explicit in-sentence temporal cues such as ``"acute"``, ``"history of"``,
-    or ``"if"``.
+    or ``"if"``. ``language`` selects the registered cue lexicon used to
+    recognize those explicit cues; unknown codes retain the English fallback.
     """
 
     resolved_assertion = assertion or ClinicalAssertion(
-        temporality=resolve_temporality(span),
-        certainty=resolve_uncertainty(span),
+        temporality=resolve_temporality(span, language=language),
+        certainty=resolve_uncertainty(span, language=language),
     )
     canonical_section = _canonical_section_name(section) or _canonical_section_name(
         span
@@ -1326,7 +1328,7 @@ def apply_section_context(
     if (
         temporality_prior
         and resolved_assertion.temporality == RECENT
-        and not _has_explicit_temporality_cue(span)
+        and not _has_explicit_temporality_cue(span, language=language)
     ):
         changes["temporality"] = temporality_prior
 

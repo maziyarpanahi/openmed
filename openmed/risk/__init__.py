@@ -1,4 +1,8 @@
-"""Re-identification risk package for section 4.2."""
+"""Re-identification risk package for section 4.2.
+
+Intended contents include quasi-identifier detection, uniqueness/k-anonymity
+measurement, and adversarial re-identification analysis.
+"""
 
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
