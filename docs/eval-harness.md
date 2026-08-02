@@ -18,6 +18,26 @@ provision licensed assets outside the repository and pass an explicit local
 path to `load_cmeee`. Missing paths and repository-internal real-data paths fail
 with license-boundary guidance.
 
+### Optional local model assets
+
+Set `OPENMED_ZH_CLINICAL_NER_MODEL_DIR` to a checkpoint directory you are
+licensed to use, then run `run_chinese_clinical_ner_conformance`. It enforces
+the span and canonical-label contract — a span out of bounds, inverted, or
+misaligned to the text it claims raises `ChineseClinicalNerContractError`,
+while nested and overlapping spans are allowed because nested entities are
+normal in CMeEE data. On top of the suite's existing `per_label` and
+`phi_token_leakage` metrics it adds latency percentiles and local-asset
+evidence: a path fingerprint and whitelisted artifact descriptors, never the
+local path or the directory basename. When the variable is unset the optional
+check skips with configuration guidance.
+
+Two limits are worth stating. Passing proves the contract and the skip
+semantics, not the measured quality of any checkpoint — quality numbers only
+exist for your own opt-in run. And the PHI-leakage gate judges
+de-identification behaviour, so a CMeEE-trained entity model will
+legitimately leave the synthetic identifiers standing; pass
+`fail_on_leakage=False` for such a model and read leakage as evidence.
+
 ## Clinical PHI flagship SHIELD comparison
 
 The `OpenMed/OpenMed-ClinicalPrivacy-tier0` SHIELD report is comparison
