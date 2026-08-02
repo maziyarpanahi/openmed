@@ -10,15 +10,19 @@ import pytest
 
 from openmed.mcp.server import _register_tools
 from openmed.mcp.tool_registry import (
+    CLINICAL_STAGE_ORDER,
     TOOL_REGISTRY,
     ToolSchemaValidationError,
     validate_registered_tool_output,
 )
 from openmed.mcp.workflow import (
+    ClinicalStageOrderError,
     TransientWorkflowError,
     WorkflowRunner,
     WorkflowStateStore,
     builtin_workflow_step_executors,
+    plan_clinical_pipeline,
+    validate_clinical_stage_order,
 )
 
 PHI_NOTE = "Patient Jane Doe called 555-1212 about diabetes."
@@ -397,3 +401,66 @@ def test_workflow_tool_is_registered_and_schema_validated():
     _register_tools(fake_server, runtime_provider=None)
 
     assert "openmed_run_workflow" in fake_server.tools
+
+
+def test_clinical_stage_order_accepts_canonical_subsequences() -> None:
+    stages = [" Detect ", "sections", "ground", "risk"]
+
+    normalized = validate_clinical_stage_order(stages)
+    plan = plan_clinical_pipeline(stages)
+
+    assert normalized == ("detect", "sections", "ground", "risk")
+    assert plan["status"] == "planned"
+    assert plan["stages"] == list(normalized)
+    assert [item["status"] for item in plan["trace"]] == ["planned"] * 4
+    assert validate_registered_tool_output("openmed_clinical_pipeline", plan) == plan
+
+
+def test_invalid_clinical_stage_order_returns_error_without_work() -> None:
+    calls: Counter[str] = Counter()
+
+    def record(stage: str) -> dict[str, str]:
+        calls[stage] += 1
+        return {"stage": stage}
+
+    callbacks = {
+        stage: (lambda stage=stage: record(stage)) for stage in CLINICAL_STAGE_ORDER
+    }
+
+    plan = plan_clinical_pipeline(
+        ["detect", "risk", "ground"],
+        stage_callbacks=callbacks,
+    )
+
+    assert plan["status"] == "rejected"
+    assert plan["stages"] == ["detect", "risk", "ground"]
+    assert plan["error"] == {
+        "code": "invalid_stage_order",
+        "message": "Clinical pipeline stages are not in canonical order.",
+        "stage": "ground",
+        "details": {
+            "allowed_order": list(CLINICAL_STAGE_ORDER),
+            "declared_index": 2,
+            "previous_stage": "risk",
+        },
+    }
+    assert calls == {}
+    assert plan["artifacts"] == {}
+    assert plan["trace"] == []
+    assert validate_registered_tool_output("openmed_clinical_pipeline", plan) == plan
+
+
+def test_unknown_clinical_stage_error_does_not_echo_input() -> None:
+    private_marker = "SYNTHETIC-PRIVATE-MARKER"
+
+    with pytest.raises(ClinicalStageOrderError) as exc_info:
+        validate_clinical_stage_order(["detect", private_marker])
+
+    plan = plan_clinical_pipeline(["detect", private_marker])
+    serialized = json.dumps(plan, sort_keys=True)
+
+    assert exc_info.value.error["code"] == "unknown_stage"
+    assert plan["status"] == "rejected"
+    assert plan["stages"] == ["detect"]
+    assert private_marker not in serialized
+    assert validate_registered_tool_output("openmed_clinical_pipeline", plan) == plan
