@@ -384,7 +384,6 @@ def test_extract_pii_batch_cancels_between_items_without_partial_state(monkeypat
 
     def fake_analyze_text(text, **kwargs):
         processed.append(text)
-        time.sleep(0.02)
         return _name_prediction(text, model_name=kwargs.get("model_name", "stub"))
 
     monkeypatch.setattr("openmed.analyze_text", fake_analyze_text)
@@ -394,10 +393,21 @@ def test_extract_pii_batch_cancels_between_items_without_partial_state(monkeypat
         "Patient Casey Example two.",
         "Patient Casey Example three.",
     ]
-    # A very short budget that trips shortly after the first item's slow call,
-    # so cancellation lands at a between-item checkpoint (not on item zero and
-    # not after the whole batch).
-    clock = RequestBudget(max_wall_time=0.01).start()
+    # Expire deterministically after the first item. Real-time sleeps made this
+    # assertion scheduler-dependent: on slower runners, the valid earlier
+    # backend-setup checkpoint could observe the elapsed deadline first.
+    clock = RequestBudget(max_wall_time=60.0).start()
+
+    def expire_after_first_item(checkpoint):
+        if checkpoint == "extract_pii.batch_item_complete":
+            raise BudgetExceededError(
+                kind="wall_time",
+                limit=60.0,
+                observed=60.01,
+                checkpoint=checkpoint,
+            )
+
+    monkeypatch.setattr(clock, "check", expire_after_first_item)
 
     result = None
     with pytest.raises(BudgetExceededError) as excinfo:
@@ -415,7 +425,7 @@ def test_extract_pii_batch_cancels_between_items_without_partial_state(monkeypat
     # No partial result list escaped, and the batch was cancelled before every
     # item was processed -- no partial-state corruption.
     assert result is None
-    assert len(processed) < len(texts)
+    assert len(processed) == 1
 
 
 def test_deidentify_batch_cancels_between_items_without_partial_result(monkeypatch):
