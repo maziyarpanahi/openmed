@@ -117,7 +117,10 @@ def _tool_handler(
         ),
         "openmed_risk_score": lambda **kwargs: mcp_server.openmed_risk_score(**kwargs),
         "openmed_clinical_pipeline": (
-            lambda **kwargs: mcp_server.openmed_clinical_pipeline(**kwargs)
+            lambda **kwargs: mcp_server.openmed_clinical_pipeline(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
         ),
         "openmed_fhir_bundle": lambda **kwargs: mcp_server.openmed_fhir_bundle(
             **kwargs
