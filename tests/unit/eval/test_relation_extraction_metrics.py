@@ -172,6 +172,27 @@ def test_relation_suite_emits_signed_scorecard_and_model_card_evidence(
     assert "Aspirin treats fever" not in scorecard.to_json() + markdown
 
 
+def test_relation_suite_fixture_hash_is_stable_for_crlf_checkouts(tmp_path) -> None:
+    fixture_path = tmp_path / "relation-gold-crlf.jsonl"
+    fixture_bytes = DEFAULT_RELATION_GOLD_PATH.read_bytes()
+    fixture_path.write_bytes(fixture_bytes.replace(b"\n", b"\r\n"))
+
+    scorecard = run_relation_suite(
+        fixture_path,
+        model_name="synthetic-relation-model",
+        runner=lambda fixture, _model, _device: fixture.gold_relations,
+        generated_at="2026-08-02T00:00:00Z",
+        signing_key=RELATION_SIGNING_KEY,
+        ci_resamples=20,
+        ci_seed=19,
+    )
+
+    assert scorecard.gate_passed is True
+    assert scorecard.provenance["fixture_set_hash"] == (
+        "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187"
+    )
+
+
 @pytest.mark.parametrize(
     ("fixture_id", "conflicting_type", "trap_kind", "expected_score"),
     [

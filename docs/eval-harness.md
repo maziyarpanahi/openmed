@@ -184,8 +184,8 @@ Its signed payload contains:
   language breakdowns;
 - assertion- and temporal-consistency sub-scores computed over the trapped
   relations, alongside their evaluated and leaked relation counts;
-- a SHA-256 hash of the exact fixture file plus a canonical hash for every
-  validated fixture;
+- a SHA-256 hash of the fixture bytes after canonicalizing platform line endings
+  to LF, plus a canonical hash for every validated fixture;
 - configured assertion and temporal trap summaries, aggregate leak counts, and
   hashes for leaked trap relations rather than relation text;
 - the complete relation regression gate result, reproducibility hash, and HMAC

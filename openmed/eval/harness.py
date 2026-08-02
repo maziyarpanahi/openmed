@@ -3717,7 +3717,10 @@ def _is_relation_suite(suite: str) -> bool:
 
 
 def _sha256_path(path: Path) -> str:
-    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+    """Hash fixture bytes with platform line endings normalized to LF."""
+
+    fixture_bytes = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return f"sha256:{hashlib.sha256(fixture_bytes).hexdigest()}"
 
 
 def _mapping_value(value: Any) -> dict[str, Any]:
