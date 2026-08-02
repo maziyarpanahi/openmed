@@ -212,6 +212,14 @@ from .normalization import (
     load_chinese_terminology_dictionary,
     normalize_chinese_clinical_surface,
 )
+from .oncotree import (
+    ONCOTREE_ADVISORY,
+    OncoTreeMapping,
+    OncoTreeNode,
+    OncoTreeRelease,
+    load_oncotree,
+    map_tumor_type,
+)
 from .problem_list import (
     ACTIVE,
     INACTIVE,
@@ -542,6 +550,12 @@ __all__ = [
     "TnmStage",
     "UnparsedToken",
     "parse_tnm",
+    "ONCOTREE_ADVISORY",
+    "OncoTreeMapping",
+    "OncoTreeNode",
+    "OncoTreeRelease",
+    "load_oncotree",
+    "map_tumor_type",
     "ProblemClinicalStatus",
     "ProblemMention",
     "ReconciledProblem",

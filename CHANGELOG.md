@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic OncoTree tumor-type mapping
+  (`openmed.clinical.load_oncotree`, `map_tumor_type`) against a
+  caller-supplied local release snapshot (path / `OPENMED_ONCOTREE_PATH` and
+  version / `OPENMED_ONCOTREE_VERSION`; nothing is bundled or downloaded). The
+  snapshot must be a flat JSON list of tumor-type nodes; nested OncoTree tree
+  dumps are unsupported. Exact and normalized name/code lookup indexes history
+  and revocation aliases with current codes winning collisions; unmatched or
+  ambiguous mentions stay unmapped with a reason (no fuzzy/lexical fallback).
+  Results are version-stamped `OncoTreeMapping` values. Includes synthetic
+  golden fixtures and `oncotree_top1_accuracy` evaluation support.
+
 ### Fixed
 
 - Fixed the PySpark batch de-identification adapter so
