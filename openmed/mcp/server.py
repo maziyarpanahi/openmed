@@ -5,14 +5,22 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict
 from inspect import Signature
 from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
-from openmed.clinical.exporters.fhir import to_bundle
+from openmed.clinical.exporters.fhir import to_bundle, to_fhir
+from openmed.clinical.grounding import (
+    DEFAULT_GROUNDING_SYSTEMS,
+    Candidate,
+    GroundedSpan,
+    VocabLoader,
+    ground,
+)
+from openmed.clinical.grounding.provenance import GroundingProvenance
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -20,6 +28,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.core.schemas import OpenMedSpan
 from openmed.mcp.tool_registry import (
     TOOL_REGISTRY,
     ToolSchemaValidationError,
@@ -33,6 +42,7 @@ from openmed.mcp.workflow import (
     builtin_workflow_step_executors,
     plan_clinical_pipeline,
 )
+from openmed.risk import safe_risk_summary
 from openmed.risk.reid import risk_report
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.gateway import normalize_text, validate_language
@@ -647,16 +657,71 @@ def openmed_ground(
     max_candidates: int = 5,
     allow_external_llm: bool = False,
 ) -> Dict[str, Any]:
-    """Return the registered grounding contract until its handler lands."""
+    """Ground text-free clinical spans with cache-only local vocabularies.
 
-    del vocabularies, max_candidates, allow_external_llm
-    response = {
-        "schema_version": "openmed.ground.v1",
-        "status": "unimplemented",
-        "spans": deepcopy(spans),
-        "grounded_concepts": [],
-        "error": _pending_clinical_contract_error("ground"),
-    }
+    The handler uses an input-only ``metadata.grounding_surface`` when present,
+    falling back to the source ``entity_type`` label. Grounding surfaces and
+    matched aliases are never returned. The emitted concept records contain
+    only offsets, the existing span HMAC, and vocabulary-derived metadata.
+    """
+
+    del allow_external_llm
+    validated, safe_spans = _prepare_clinical_spans(spans)
+    if type(max_candidates) is not int or max_candidates < 1:
+        raise ValueError("max_candidates must be a positive integer")
+
+    groundable = [
+        (index, span)
+        for index, span in enumerate(validated)
+        if span.policy_label == "CLINICAL_CONCEPT"
+    ]
+    try:
+        grounded = ground(
+            [_grounding_input(span) for _, span in groundable],
+            systems=vocabularies or DEFAULT_GROUNDING_SYSTEMS,
+            loader=VocabLoader(local_only=True),
+        )
+        concepts: list[Dict[str, Any]] = []
+        for (span_index, source_span), result in zip(groundable, grounded):
+            candidates = tuple(result.candidates[:max_candidates])
+            provenance = GroundingProvenance.from_candidates(
+                start=source_span.start,
+                end=source_span.end,
+                candidates=candidates,
+                method="composite",
+                text_hash=source_span.text_hash,
+                calibrated_score=result.calibrated_score,
+                abstained=result.abstained or not candidates,
+            ).to_dict()
+            concept = {
+                "span_index": span_index,
+                "canonical_label": source_span.canonical_label,
+                **provenance,
+            }
+            concepts.append(concept)
+            metadata = dict(safe_spans[span_index]["metadata"])
+            metadata["grounding"] = deepcopy(concept)
+            safe_spans[span_index]["metadata"] = metadata
+        response = {
+            "schema_version": "openmed.ground.v1",
+            "status": "completed",
+            "spans": safe_spans,
+            "grounded_concepts": concepts,
+            "error": None,
+        }
+    except Exception as error:
+        response = {
+            "schema_version": "openmed.ground.v1",
+            "status": "failed",
+            "spans": safe_spans,
+            "grounded_concepts": [],
+            "error": _clinical_handler_error(
+                "ground",
+                "grounding_failed",
+                "Local clinical grounding could not complete.",
+                error,
+            ),
+        }
     return validate_registered_tool_output("openmed_ground", response)
 
 
@@ -666,17 +731,48 @@ def openmed_export_fhir(
     doc_id: str = "workflow",
     bundle_type: str = "collection",
 ) -> Dict[str, Any]:
-    """Return the registered FHIR export contract until its handler lands."""
+    """Export prebuilt or locally grounded clinical artifacts to FHIR R4."""
 
-    del resources, doc_id, bundle_type
-    response = {
-        "schema_version": "openmed.export_fhir.v1",
-        "status": "unimplemented",
-        "spans": deepcopy(spans),
-        "bundle": {},
-        "resource_count": 0,
-        "error": _pending_clinical_contract_error("export"),
-    }
+    _, safe_spans = _prepare_clinical_spans(spans)
+    try:
+        fhir_resources = [
+            _sanitize_fhir_resource(resource) for resource in (resources or [])
+        ]
+        for span in safe_spans:
+            grounded_span = _grounded_span_from_artifact(span)
+            if grounded_span is None:
+                continue
+            exported = to_fhir(grounded_span, document_id=doc_id)
+            if exported is not None:
+                fhir_resources.append(exported)
+
+        bundle = to_bundle(
+            fhir_resources,
+            doc_id=doc_id,
+            bundle_type=bundle_type,
+        )
+        response = {
+            "schema_version": "openmed.export_fhir.v1",
+            "status": "completed",
+            "spans": safe_spans,
+            "bundle": bundle,
+            "resource_count": len(bundle.get("entry", [])),
+            "error": None,
+        }
+    except Exception as error:
+        response = {
+            "schema_version": "openmed.export_fhir.v1",
+            "status": "failed",
+            "spans": safe_spans,
+            "bundle": {},
+            "resource_count": 0,
+            "error": _clinical_handler_error(
+                "export",
+                "fhir_export_failed",
+                "FHIR export could not complete.",
+                error,
+            ),
+        }
     return validate_registered_tool_output("openmed_export_fhir", response)
 
 
@@ -686,16 +782,45 @@ def openmed_risk_score(
     records: Optional[list[Dict[str, Any]]] = None,
     quasi_identifiers: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
-    """Return the registered risk-score contract until its handler lands."""
+    """Score residual risk and return only the aggregate PHI-safe summary."""
 
-    del deidentified_text, records, quasi_identifiers
-    response = {
-        "schema_version": "openmed.risk_score.v1",
-        "status": "unimplemented",
-        "spans": deepcopy(spans),
-        "risk_report": {},
-        "error": _pending_clinical_contract_error("risk"),
-    }
+    _, safe_spans = _prepare_clinical_spans(spans)
+    try:
+        risk_input: Any
+        if records is not None:
+            risk_input = deepcopy(records)
+            record_count = len(records)
+        else:
+            risk_input = {
+                "deidentified_text": deidentified_text or "",
+                "spans": safe_spans,
+            }
+            record_count = 1 if deidentified_text is not None or safe_spans else 0
+        detailed = risk_report(
+            risk_input,
+            quasi_identifier_fields=quasi_identifiers,
+        )
+        detailed["record_count"] = record_count
+        response = {
+            "schema_version": "openmed.risk_score.v1",
+            "status": "completed",
+            "spans": safe_spans,
+            "risk_report": safe_risk_summary(detailed),
+            "error": None,
+        }
+    except Exception as error:
+        response = {
+            "schema_version": "openmed.risk_score.v1",
+            "status": "failed",
+            "spans": safe_spans,
+            "risk_report": {},
+            "error": _clinical_handler_error(
+                "risk",
+                "risk_scoring_failed",
+                "Residual-risk scoring could not complete.",
+                error,
+            ),
+        }
     return validate_registered_tool_output("openmed_risk_score", response)
 
 
@@ -715,12 +840,186 @@ def openmed_clinical_pipeline(
     return validate_registered_tool_output("openmed_clinical_pipeline", response)
 
 
-def _pending_clinical_contract_error(stage: str) -> Dict[str, Any]:
+_INPUT_ONLY_TEXT_KEYS = frozenset(
+    {
+        "deidentified_surface",
+        "deidentified_text",
+        "entity_text",
+        "grounding_surface",
+        "note",
+        "span_text",
+        "surface",
+        "text",
+        "word",
+    }
+)
+_PATIENT_DIRECT_IDENTIFIER_FIELDS = frozenset(
+    {
+        "address",
+        "birthDate",
+        "contact",
+        "generalPractitioner",
+        "identifier",
+        "link",
+        "managingOrganization",
+        "name",
+        "photo",
+        "telecom",
+    }
+)
+
+
+def _prepare_clinical_spans(
+    spans: Sequence[Mapping[str, Any]],
+) -> tuple[list[OpenMedSpan], list[Dict[str, Any]]]:
+    """Validate canonical spans and remove input-only text from artifacts."""
+
+    if isinstance(spans, (str, bytes, bytearray)) or not isinstance(spans, Sequence):
+        raise TypeError("spans must be a sequence of OpenMedSpan mappings")
+    validated: list[OpenMedSpan] = []
+    safe_spans: list[Dict[str, Any]] = []
+    for index, payload in enumerate(spans):
+        if not isinstance(payload, Mapping):
+            raise TypeError(f"span at index {index} must be a mapping")
+        span = OpenMedSpan.from_dict(payload)
+        safe = span.to_dict()
+        safe["evidence"] = _remove_input_text(safe["evidence"])
+        safe["metadata"] = _remove_input_text(safe["metadata"])
+        validated.append(span)
+        safe_spans.append(safe)
+    return validated, safe_spans
+
+
+def _remove_input_text(value: Any) -> Any:
+    """Deep-copy structured metadata while dropping raw-text carrier keys."""
+
+    if isinstance(value, Mapping):
+        return {
+            str(key): _remove_input_text(item)
+            for key, item in value.items()
+            if str(key).casefold() not in _INPUT_ONLY_TEXT_KEYS
+        }
+    if isinstance(value, (list, tuple)):
+        return [_remove_input_text(item) for item in value]
+    return deepcopy(value)
+
+
+def _grounding_input(span: OpenMedSpan) -> Dict[str, Any]:
+    """Adapt a text-free artifact to the local grounding facade."""
+
+    metadata = span.metadata
+    surface = next(
+        (
+            value.strip()
+            for key in (
+                "grounding_surface",
+                "deidentified_surface",
+                "surface",
+                "text",
+            )
+            if isinstance((value := metadata.get(key)), str) and value.strip()
+        ),
+        span.entity_type,
+    )
+    language = metadata.get("source_language")
     return {
-        "code": "handler_pending",
-        "message": "This clinical tool contract has no runtime handler yet.",
+        "text": surface,
+        "start": span.start,
+        "end": span.end,
+        "canonical_label": span.canonical_label,
+        "source_language": language if isinstance(language, str) else "en",
+    }
+
+
+def _grounded_span_from_artifact(span: Mapping[str, Any]) -> GroundedSpan | None:
+    """Rebuild a grounding object from safe MCP artifact metadata."""
+
+    metadata = span.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return None
+    grounding = metadata.get("grounding")
+    if not isinstance(grounding, Mapping) or grounding.get("abstained") is True:
+        return None
+
+    candidates: list[Candidate] = []
+    chosen = _candidate_from_grounding_record(grounding)
+    if chosen is not None:
+        candidates.append(chosen)
+    alternatives = grounding.get("alternatives")
+    if isinstance(alternatives, list):
+        candidates.extend(
+            candidate
+            for item in alternatives
+            if isinstance(item, Mapping)
+            if (candidate := _candidate_from_grounding_record(item)) is not None
+        )
+    if not candidates:
+        return None
+
+    export_metadata: Dict[str, Any] = {}
+    value = metadata.get("value")
+    if isinstance(value, (bool, int, float)):
+        export_metadata["value"] = value
+    unit = metadata.get("unit")
+    if isinstance(unit, str) and unit.strip():
+        export_metadata["unit"] = unit.strip()
+    return GroundedSpan(
+        text=candidates[0].display,
+        start=int(span["start"]),
+        end=int(span["end"]),
+        candidates=tuple(candidates),
+        canonical_label=str(span["canonical_label"]),
+        metadata=export_metadata,
+    )
+
+
+def _candidate_from_grounding_record(
+    record: Mapping[str, Any],
+) -> Candidate | None:
+    system = record.get("system")
+    code = record.get("code")
+    display = record.get("display")
+    score = record.get("score")
+    if not all(isinstance(value, str) and value for value in (system, code, display)):
+        return None
+    if not isinstance(score, (int, float)) or isinstance(score, bool):
+        return None
+    return Candidate(
+        system=system,
+        code=code,
+        display=display,
+        score=float(score),
+        source=str(record.get("source") or "mcp"),
+        match_kind=str(record.get("match_kind") or ""),
+        vocab_version=str(record.get("vocab_version") or "") or None,
+    )
+
+
+def _sanitize_fhir_resource(resource: Mapping[str, Any]) -> Dict[str, Any]:
+    """Drop direct Patient identifiers before deterministic Bundle assembly."""
+
+    if not isinstance(resource, Mapping):
+        raise TypeError("FHIR resources must be mappings")
+    sanitized = deepcopy(dict(resource))
+    if sanitized.get("resourceType") == "Patient":
+        for field in _PATIENT_DIRECT_IDENTIFIER_FIELDS:
+            sanitized.pop(field, None)
+    return sanitized
+
+
+def _clinical_handler_error(
+    stage: str,
+    code: str,
+    message: str,
+    error: Exception,
+) -> Dict[str, Any]:
+    """Return a deterministic error without including exception or input text."""
+
+    return {
+        "code": code,
+        "message": message,
         "stage": stage,
-        "details": {"implemented": False},
+        "details": {"error_type": error.__class__.__name__},
     }
 
 
