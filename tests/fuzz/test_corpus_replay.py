@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from pathlib import Path
@@ -79,9 +80,23 @@ def test_corpus_covers_every_required_adversarial_shape() -> None:
     ids=[f"{path.stem}-crlf" for path in CORPUS_FILES],
 )
 def test_corpus_directives_decode_identically_with_crlf(corpus_path: Path) -> None:
-    data = corpus_path.read_bytes()
+    lf_data = corpus_path.read_bytes().replace(b"\r\n", b"\n")
+    crlf_data = lf_data.replace(b"\n", b"\r\n")
 
-    assert decode_fuzz_case(data.replace(b"\n", b"\r\n")) == decode_fuzz_case(data)
+    lf_case = decode_fuzz_case(lf_data)
+    crlf_case = decode_fuzz_case(crlf_data)
+    lf_fingerprint = (
+        len(lf_case.text),
+        hashlib.sha256(lf_case.text).hexdigest(),
+        hashlib.sha256(repr(lf_case.custom_recognizer).encode("utf-8")).hexdigest(),
+    )
+    crlf_fingerprint = (
+        len(crlf_case.text),
+        hashlib.sha256(crlf_case.text).hexdigest(),
+        hashlib.sha256(repr(crlf_case.custom_recognizer).encode("utf-8")).hexdigest(),
+    )
+
+    assert crlf_fingerprint == lf_fingerprint
 
 
 @pytest.mark.timeout(2)
