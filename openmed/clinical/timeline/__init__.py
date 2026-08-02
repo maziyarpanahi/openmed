@@ -1,13 +1,19 @@
 """Clinical timeline normalization public API."""
 
 from openmed.clinical.timeline.resolver import (
+    EVENT_ANCHORING_ADVISORY,
     TIMELINE_ASSISTIVE_DISCLAIMER,
+    EventAnchoringResult,
+    EventAnchorSource,
+    EventTemporalAnchor,
     NormalizedInterval,
     ResolvedTimeline,
     TimelineEvaluationResult,
     TimelineEvent,
     TimelineRelation,
     TimelineRelationKind,
+    TimexAnchorReference,
+    anchor_events,
     evaluate_timeline_gold,
     resolve_timeline,
 )
@@ -22,6 +28,10 @@ from openmed.clinical.timeline.timex import (
 )
 
 __all__ = [
+    "EVENT_ANCHORING_ADVISORY",
+    "EventAnchorSource",
+    "EventAnchoringResult",
+    "EventTemporalAnchor",
     "NormalizedInterval",
     "RelativeDirection",
     "ResolvedTimeline",
@@ -31,6 +41,8 @@ __all__ = [
     "TimelineEvent",
     "TimelineRelation",
     "TimelineRelationKind",
+    "TimexAnchorReference",
+    "anchor_events",
     "TimexType",
     "detect_timexes",
     "duration_value",

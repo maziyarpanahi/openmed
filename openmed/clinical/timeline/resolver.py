@@ -16,18 +16,25 @@ from openmed.clinical.context import (
     reconcile_temporality_with_interval,
     resolve_temporality,
 )
+from openmed.clinical.temporal_normalizer import NormalizedTimex, normalize_temporal
 from openmed.clinical.timeline.timex import (
     TemporalExpression,
     detect_timexes,
 )
+from openmed.core.audit import hash_text
 
 TIMELINE_ASSISTIVE_DISCLAIMER = (
     "Clinical timeline normalization is assistive and is not a clinical "
     "decision, diagnosis, treatment recommendation, or substitute for "
     "clinician review."
 )
+EVENT_ANCHORING_ADVISORY = (
+    "Clinical event anchoring is deterministic assistive metadata for review "
+    "and is not a clinical decision or substitute for clinician verification."
+)
 
 TimelineRelationKind = Literal["before", "after", "overlap", "unknown"]
+EventAnchorSource = Literal["timex", "dct_fallback"]
 
 _ANCHOR_TERMS = {
     "admission": ("admission", "admitted", "hospitalization"),
@@ -136,6 +143,78 @@ class TimelineRelation:
             "target_id": self.target_id,
             "relation": self.relation,
             "evidence": self.evidence,
+        }
+
+
+@dataclass(frozen=True)
+class TimexAnchorReference:
+    """Privacy-safe reference to a normalized TIMEX source span."""
+
+    start: int
+    end: int
+    text_hash: str
+    timex_type: str
+    normalized_value: str
+    granularity_flags: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return TIMEX metadata without raw source text."""
+
+        return {
+            "span": [self.start, self.end],
+            "start": self.start,
+            "end": self.end,
+            "text_hash": self.text_hash,
+            "type": self.timex_type,
+            "normalized_value": self.normalized_value,
+            "granularity_flags": list(self.granularity_flags),
+        }
+
+
+@dataclass(frozen=True)
+class EventTemporalAnchor:
+    """One EVENT span anchored to DCT and optionally to a resolved TIMEX."""
+
+    event_start: int
+    event_end: int
+    event_text_hash: str
+    anchor_source: EventAnchorSource
+    anchor_value: str
+    dct_position: TimelineRelationKind
+    timex: TimexAnchorReference | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return anchoring metadata containing no raw note text."""
+
+        return {
+            "event": {
+                "span": [self.event_start, self.event_end],
+                "start": self.event_start,
+                "end": self.event_end,
+                "text_hash": self.event_text_hash,
+            },
+            "anchor_source": self.anchor_source,
+            "anchor_value": self.anchor_value,
+            "dct_position": self.dct_position,
+            "timex": self.timex.to_dict() if self.timex is not None else None,
+        }
+
+
+@dataclass(frozen=True)
+class EventAnchoringResult:
+    """Privacy-safe DCT anchoring output for a collection of EVENT spans."""
+
+    document_creation_time: str
+    anchors: tuple[EventTemporalAnchor, ...]
+    disclaimer: str = EVENT_ANCHORING_ADVISORY
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return deterministic JSON-ready anchoring output."""
+
+        return {
+            "document_creation_time": self.document_creation_time,
+            "anchors": [anchor.to_dict() for anchor in self.anchors],
+            "disclaimer": self.disclaimer,
         }
 
 
@@ -290,6 +369,120 @@ def resolve_timeline(
             **reference_provenance,
             "required": any(event.reference_date_dependent for event in events),
         },
+    )
+
+
+def anchor_events(
+    text: str,
+    event_spans: Iterable[Mapping[str, object] | Sequence[int]],
+    document_creation_time: str | date | datetime,
+    timex_spans: Iterable[NormalizedTimex | Mapping[str, object] | Sequence[int]]
+    | None = None,
+    *,
+    max_character_distance: int = 160,
+) -> EventAnchoringResult:
+    """Anchor every supplied EVENT span to DCT and a nearby resolved TIMEX.
+
+    When ``timex_spans`` is omitted, deterministic TIMEX detection supplies
+    candidate offsets. Passing an empty iterable disables detection. Only
+    resolved ``DATE`` and ``TIME`` records can anchor an event; other or
+    unresolved TIMEX values cause a DCT fallback. Candidate links never cross
+    a sentence boundary and the nearest candidate wins deterministically.
+
+    Args:
+        text: Source document used only in memory for offsets and hashing.
+        event_spans: EVENT mappings with ``start``/``end`` offsets or two-item
+            offset sequences.
+        document_creation_time: Required ISO DCT used by relative-date
+            normalization and DCT-position calculation.
+        timex_spans: Optional normalized TIMEX records or source offsets. When
+            omitted, offsets are detected locally before normalization.
+        max_character_distance: Largest character gap allowed between an
+            EVENT and its TIMEX candidate within the same sentence.
+
+    Returns:
+        An ``EventAnchoringResult`` whose source evidence consists only of
+        offsets and hashes. Every input EVENT has exactly one output anchor.
+
+    Raises:
+        TypeError: If the text, DCT, or a span has an unsupported type.
+        ValueError: If the DCT, distance, or a span is invalid.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if isinstance(max_character_distance, bool) or max_character_distance < 0:
+        raise ValueError("max_character_distance must be non-negative")
+
+    dct_value, dct_date = _coerce_document_creation_time(document_creation_time)
+    events = tuple(
+        _coerce_source_span(span, text_length=len(text)) for span in event_spans
+    )
+    normalized_timexes = _event_anchor_timexes(
+        text,
+        timex_spans,
+        document_creation_time=document_creation_time,
+    )
+
+    anchors: list[EventTemporalAnchor] = []
+    for event_start, event_end in events:
+        timex = _nearest_event_timex(
+            text,
+            event_start=event_start,
+            event_end=event_end,
+            timexes=normalized_timexes,
+            max_character_distance=max_character_distance,
+        )
+        event_hash = hash_text(text[event_start:event_end])
+        if timex is None:
+            anchors.append(
+                EventTemporalAnchor(
+                    event_start=event_start,
+                    event_end=event_end,
+                    event_text_hash=event_hash,
+                    anchor_source="dct_fallback",
+                    anchor_value=dct_value,
+                    dct_position="overlap",
+                )
+            )
+            continue
+
+        position = _normalized_timex_dct_position(timex, dct_date)
+        if position == "unknown" or timex.value is None:
+            anchors.append(
+                EventTemporalAnchor(
+                    event_start=event_start,
+                    event_end=event_end,
+                    event_text_hash=event_hash,
+                    anchor_source="dct_fallback",
+                    anchor_value=dct_value,
+                    dct_position="overlap",
+                )
+            )
+            continue
+
+        anchors.append(
+            EventTemporalAnchor(
+                event_start=event_start,
+                event_end=event_end,
+                event_text_hash=event_hash,
+                anchor_source="timex",
+                anchor_value=timex.value,
+                dct_position=position,
+                timex=TimexAnchorReference(
+                    start=timex.start,
+                    end=timex.end,
+                    text_hash=hash_text(text[timex.start : timex.end]),
+                    timex_type=timex.timex_type,
+                    normalized_value=timex.value,
+                    granularity_flags=timex.granularity_flags,
+                ),
+            )
+        )
+
+    return EventAnchoringResult(
+        document_creation_time=dct_value,
+        anchors=tuple(anchors),
     )
 
 
@@ -676,6 +869,160 @@ def _coerce_date(value: str | date | datetime | None) -> date | None:
     return date.fromisoformat(value)
 
 
+def _coerce_document_creation_time(
+    value: str | date | datetime,
+) -> tuple[str, date]:
+    if isinstance(value, datetime):
+        return value.isoformat(), value.date()
+    if isinstance(value, date):
+        return value.isoformat(), value
+    if not isinstance(value, str):
+        raise TypeError(
+            "document_creation_time must be an ISO string, date, or datetime"
+        )
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("document_creation_time must not be empty")
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
+            parsed_date = date.fromisoformat(normalized)
+            return parsed_date.isoformat(), parsed_date
+        parsed_datetime = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(
+            "document_creation_time must be a valid ISO date or datetime"
+        ) from exc
+    return parsed_datetime.isoformat(), parsed_datetime.date()
+
+
+def _coerce_source_span(
+    raw_span: Mapping[str, object] | Sequence[int],
+    *,
+    text_length: int,
+) -> tuple[int, int]:
+    if isinstance(raw_span, Mapping):
+        raw_start = raw_span.get("start", raw_span.get("start_char"))
+        raw_end = raw_span.get("end", raw_span.get("end_char"))
+    elif isinstance(raw_span, Sequence) and not isinstance(raw_span, (str, bytes)):
+        if len(raw_span) != 2:
+            raise ValueError("span sequences must contain exactly start and end")
+        raw_start, raw_end = raw_span
+    else:
+        raise TypeError("spans must be mappings or two-item sequences")
+    if raw_start is None or raw_end is None:
+        raise ValueError("spans require integer start and end offsets")
+    if isinstance(raw_start, bool) or isinstance(raw_end, bool):
+        raise ValueError("spans require integer start and end offsets")
+    try:
+        start = int(str(raw_start))
+        end = int(str(raw_end))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("spans require integer start and end offsets") from exc
+    if start < 0 or end <= start or end > text_length:
+        raise ValueError("span offsets must satisfy 0 <= start < end <= len(text)")
+    return start, end
+
+
+def _event_anchor_timexes(
+    text: str,
+    timex_spans: Iterable[NormalizedTimex | Mapping[str, object] | Sequence[int]]
+    | None,
+    *,
+    document_creation_time: str | date | datetime,
+) -> tuple[NormalizedTimex, ...]:
+    if timex_spans is None:
+        offsets: list[Mapping[str, object] | Sequence[int]] = [
+            (timex.start, timex.end) for timex in detect_timexes(text)
+        ]
+    else:
+        offsets = []
+        for timex in timex_spans:
+            if isinstance(timex, NormalizedTimex):
+                offsets.append((timex.start, timex.end))
+            else:
+                offsets.append(timex)
+    records = normalize_temporal(text, offsets, document_creation_time)
+    return tuple(
+        record
+        for record in records
+        if record.timex_type in {"DATE", "TIME"} and record.value is not None
+    )
+
+
+def _nearest_event_timex(
+    text: str,
+    *,
+    event_start: int,
+    event_end: int,
+    timexes: Sequence[NormalizedTimex],
+    max_character_distance: int,
+) -> NormalizedTimex | None:
+    candidates: list[tuple[tuple[int, int, int, int], NormalizedTimex]] = []
+    for timex in timexes:
+        if event_end <= timex.start:
+            distance = timex.start - event_end
+            between = text[event_end : timex.start]
+            follows_event = 1
+        elif timex.end <= event_start:
+            distance = event_start - timex.end
+            between = text[timex.end : event_start]
+            follows_event = 0
+        else:
+            distance = 0
+            between = ""
+            follows_event = 0
+        if distance > max_character_distance or re.search(r"[.!?。！？\n]", between):
+            continue
+        rank = (distance, follows_event, timex.start, timex.end)
+        candidates.append((rank, timex))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: item[0])[1]
+
+
+def _normalized_timex_dct_position(
+    timex: NormalizedTimex,
+    dct: date,
+) -> TimelineRelationKind:
+    if timex.value is None:
+        return "unknown"
+    bounds = _normalized_value_date_bounds(timex.value)
+    if bounds is None:
+        return "unknown"
+    start, end = bounds
+    if "since" in timex.granularity_flags:
+        end = max(end, dct)
+    return _interval_relation(start, end, dct, dct)
+
+
+def _normalized_value_date_bounds(value: str) -> tuple[date, date] | None:
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        parsed = date.fromisoformat(value)
+        return parsed, parsed
+    if match := re.fullmatch(r"(?P<year>\d{4})-(?P<month>\d{2})", value):
+        year = int(match.group("year"))
+        month = int(match.group("month"))
+        start = date(year, month, 1)
+        end = date(year, month, calendar.monthrange(year, month)[1])
+        return start, end
+    if match := re.fullmatch(r"(?P<year>\d{4})-W(?P<week>\d{2})", value):
+        start = date.fromisocalendar(
+            int(match.group("year")),
+            int(match.group("week")),
+            1,
+        )
+        return start, start + timedelta(days=6)
+    if re.fullmatch(r"\d{4}", value):
+        year = int(value)
+        return date(year, 1, 1), date(year, 12, 31)
+    try:
+        parsed_datetime = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    parsed_date = parsed_datetime.date()
+    return parsed_date, parsed_date
+
+
 def _sentence_windows(text: str) -> tuple[tuple[int, int], ...]:
     if not text:
         return ()
@@ -738,6 +1085,10 @@ def _rate(numerator: int, denominator: int) -> float:
 
 
 __all__ = [
+    "EVENT_ANCHORING_ADVISORY",
+    "EventAnchorSource",
+    "EventAnchoringResult",
+    "EventTemporalAnchor",
     "NormalizedInterval",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
@@ -745,6 +1096,8 @@ __all__ = [
     "TimelineEvent",
     "TimelineRelation",
     "TimelineRelationKind",
+    "TimexAnchorReference",
+    "anchor_events",
     "evaluate_timeline_gold",
     "resolve_timeline",
 ]
