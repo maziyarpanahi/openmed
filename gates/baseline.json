@@ -77,5 +77,34 @@
       "updated_at": "2026-04-14T00:00:00+00:00"
     }
   },
+  "relation_golden": {
+    "entries": {
+      "relation::asserted-absent": {
+        "family": "Relation",
+        "fixture_hash": "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187",
+        "key": "relation::asserted-absent",
+        "relation_type": "ASSERTED_ABSENT",
+        "strict_f1": 1.0,
+        "tolerance": 0.01
+      },
+      "relation::temporally-before": {
+        "family": "Relation",
+        "fixture_hash": "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187",
+        "key": "relation::temporally-before",
+        "relation_type": "TEMPORALLY_BEFORE",
+        "strict_f1": 1.0,
+        "tolerance": 0.01
+      },
+      "relation::treats": {
+        "family": "Relation",
+        "fixture_hash": "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187",
+        "key": "relation::treats",
+        "relation_type": "TREATS",
+        "strict_f1": 1.0,
+        "tolerance": 0.01
+      }
+    },
+    "schema_version": 1
+  },
   "schema_version": 1
 }

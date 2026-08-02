@@ -10,12 +10,18 @@ from pathlib import Path
 from typing import Any
 
 from ..processing.outputs import EntityPrediction
+from ..processing.text import InputComplexityError, InputError
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .schemas.span import OpenMedSpan, hmac_text_hash
 
 CUSTOM_DENY_DETECTOR = "custom:deny"
 DEFAULT_CUSTOM_HASH_SECRET = b"openmed-custom-recognizer-v1"
 ABDM_MODE = "abdm"
+MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES = 512 * 1024
+MAX_CUSTOM_RECOGNIZER_RULES = 512
+MAX_CUSTOM_RECOGNIZER_RULE_BYTES = 4096
+MAX_CUSTOM_RECOGNIZER_METADATA_CHARACTERS = 256
+MAX_CUSTOM_RECOGNIZER_SCAN_WORK = 16 * 1024 * 1024
 
 ABHA_NUMBER = "ABHA_NUMBER"
 ABHA_ADDRESS = "ABHA_ADDRESS"
@@ -60,6 +66,18 @@ DEFAULT_HINGLISH_NAME_ALLOW: tuple[str, ...] = (
 )
 
 
+class CustomRecognizerInputError(InputError):
+    """Raised when a custom-recognizer payload is malformed."""
+
+    reason = "custom_recognizer"
+
+
+class CustomRecognizerLimitError(InputComplexityError):
+    """Raised before custom-recognizer construction or scanning exceeds a cap."""
+
+    reason = "custom_recognizer_limit"
+
+
 @dataclass(frozen=True)
 class CustomMatch:
     """A raw custom recognizer match with safe rule provenance."""
@@ -96,6 +114,45 @@ class _CompiledRule:
             )
 
 
+@dataclass
+class _RuleBudget:
+    count: int = 0
+    total_bytes: int = 0
+
+    def consume(self, value: str, label: str, rule_id: str) -> None:
+        self.count += 1
+        if self.count > MAX_CUSTOM_RECOGNIZER_RULES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer exceeds the configured rule-count limit"
+            )
+        if (
+            len(label) > MAX_CUSTOM_RECOGNIZER_METADATA_CHARACTERS
+            or len(rule_id) > MAX_CUSTOM_RECOGNIZER_METADATA_CHARACTERS
+        ):
+            raise CustomRecognizerLimitError(
+                "Custom recognizer metadata exceeds the configured limit"
+            )
+        if len(value) > MAX_CUSTOM_RECOGNIZER_RULE_BYTES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer rule exceeds the configured byte limit"
+            )
+        try:
+            rule_bytes = len(value.encode("utf-8", errors="strict"))
+        except UnicodeEncodeError:
+            raise CustomRecognizerInputError(
+                "Custom recognizer rules must contain valid Unicode"
+            ) from None
+        if rule_bytes > MAX_CUSTOM_RECOGNIZER_RULE_BYTES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer rule exceeds the configured byte limit"
+            )
+        self.total_bytes += rule_bytes
+        if self.total_bytes > MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer exceeds the configured byte limit"
+            )
+
+
 class CustomRecognizer:
     """Recognize user-supplied deny-list spans and suppress allow-list spans.
 
@@ -129,18 +186,21 @@ class CustomRecognizer:
         case_sensitive: bool = False,
     ) -> None:
         self.case_sensitive = bool(case_sensitive)
+        budget = _RuleBudget()
         self._deny_rules = (
             *_parse_rules(
                 deny_terms,
                 kind="deny_term",
                 case_sensitive=self.case_sensitive,
                 require_label=True,
+                budget=budget,
             ),
             *_parse_rules(
                 deny_patterns,
                 kind="deny_pattern",
                 case_sensitive=self.case_sensitive,
                 require_label=True,
+                budget=budget,
             ),
         )
         self._allow_rules = (
@@ -149,12 +209,14 @@ class CustomRecognizer:
                 kind="allow_term",
                 case_sensitive=self.case_sensitive,
                 require_label=False,
+                budget=budget,
             ),
             *_parse_rules(
                 allow_patterns,
                 kind="allow_pattern",
                 case_sensitive=self.case_sensitive,
                 require_label=False,
+                budget=budget,
             ),
         )
 
@@ -202,6 +264,7 @@ class CustomRecognizer:
     def allow_matches(self, text: str) -> tuple[CustomMatch, ...]:
         """Return allow-list matches for *text*."""
 
+        self._validate_scan_budget(text)
         return _dedupe_matches(
             match for rule in self._allow_rules for match in rule.iter_matches(text)
         )
@@ -209,6 +272,7 @@ class CustomRecognizer:
     def deny_matches(self, text: str) -> tuple[CustomMatch, ...]:
         """Return deny-list matches not suppressed by allow-list rules."""
 
+        self._validate_scan_budget(text)
         allow_intervals = _intervals(self.allow_matches(text))
         return _dedupe_matches(
             match
@@ -216,6 +280,13 @@ class CustomRecognizer:
             for match in rule.iter_matches(text)
             if not _overlaps_any(match.start, match.end, allow_intervals)
         )
+
+    def _validate_scan_budget(self, text: str) -> None:
+        rule_count = len(self._deny_rules) + len(self._allow_rules)
+        if rule_count and len(text) * rule_count > MAX_CUSTOM_RECOGNIZER_SCAN_WORK:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer scan exceeds the configured work limit"
+            )
 
     def detect_entities(
         self,
@@ -583,19 +654,55 @@ def _load_config(config: Mapping[str, Any] | str | Path) -> Mapping[str, Any]:
     if isinstance(config, Mapping):
         return config
 
-    path = Path(config).expanduser()
-    suffix = path.suffix.lower()
-    if suffix == ".json":
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    elif suffix in {".yaml", ".yml"}:
-        import yaml
+    try:
+        path = Path(config).expanduser()
+        if path.stat().st_size > MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer config exceeds the configured byte limit"
+            )
+    except CustomRecognizerLimitError:
+        raise
+    except (OSError, TypeError, ValueError):
+        raise CustomRecognizerInputError(
+            "Custom recognizer config is unreadable"
+        ) from None
 
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    else:
-        raise ValueError("custom recognizer config path must be JSON or YAML")
+    suffix = path.suffix.lower()
+    try:
+        with path.open("rb") as handle:
+            config_bytes = handle.read(MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES + 1)
+        if len(config_bytes) > MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer config exceeds the configured byte limit"
+            )
+        config_text = config_bytes.decode("utf-8", errors="strict")
+        if suffix == ".json":
+            payload = json.loads(config_text)
+        elif suffix in {".yaml", ".yml"}:
+            import yaml
+
+            payload = yaml.safe_load(config_text)
+        else:
+            raise CustomRecognizerInputError(
+                "Custom recognizer config path must be JSON or YAML"
+            )
+    except InputError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError):
+        raise CustomRecognizerInputError(
+            "Custom recognizer config is malformed"
+        ) from None
+    except Exception as exc:
+        # PyYAML's parser exception hierarchy is optional at import time. Keep
+        # its diagnostics content-free without swallowing process-level errors.
+        if exc.__class__.__module__.startswith("yaml"):
+            raise CustomRecognizerInputError(
+                "Custom recognizer config is malformed"
+            ) from None
+        raise
 
     if not isinstance(payload, Mapping):
-        raise ValueError("custom recognizer config must be a mapping")
+        raise CustomRecognizerInputError("Custom recognizer config must be a mapping")
     return payload
 
 
@@ -663,29 +770,48 @@ def _parse_rules(
     kind: str,
     case_sensitive: bool,
     require_label: bool,
+    budget: _RuleBudget,
 ) -> tuple[_CompiledRule, ...]:
-    entries = _expand_entries(values, require_label=require_label)
+    try:
+        entries = _expand_entries(values, require_label=require_label)
+    except InputError:
+        raise
+    except (TypeError, ValueError):
+        raise CustomRecognizerInputError(
+            "Custom recognizer rule collection is malformed"
+        ) from None
     rules = []
     for index, (entry, default_label) in enumerate(entries):
-        raw_value, label, entry_case_sensitive, confidence, rule_id = _parse_entry(
-            entry,
-            default_label=default_label,
-            kind=kind,
-            index=index,
-            require_label=require_label,
-            case_sensitive=case_sensitive,
-        )
+        try:
+            raw_value, label, entry_case_sensitive, confidence, rule_id = _parse_entry(
+                entry,
+                default_label=default_label,
+                kind=kind,
+                index=index,
+                require_label=require_label,
+                case_sensitive=case_sensitive,
+            )
+        except (TypeError, ValueError, OverflowError):
+            raise CustomRecognizerInputError(
+                "Custom recognizer rule is malformed"
+            ) from None
+        budget.consume(raw_value, label, rule_id)
         pattern = re.escape(raw_value) if kind.endswith("_term") else raw_value
         flags = 0 if entry_case_sensitive else re.IGNORECASE
-        rules.append(
-            _CompiledRule(
-                kind=kind,
-                label=label,
-                rule_id=rule_id,
-                pattern=re.compile(pattern, flags),
-                confidence=confidence,
+        try:
+            rules.append(
+                _CompiledRule(
+                    kind=kind,
+                    label=label,
+                    rule_id=rule_id,
+                    pattern=re.compile(pattern, flags),
+                    confidence=confidence,
+                )
             )
-        )
+        except re.error:
+            raise CustomRecognizerInputError(
+                "Custom recognizer pattern is invalid"
+            ) from None
     return tuple(rules)
 
 
@@ -694,20 +820,33 @@ def _expand_entries(
     *,
     require_label: bool,
 ) -> list[tuple[Any, str | None]]:
+    def append_bounded(
+        target: list[tuple[Any, str | None]],
+        item: tuple[Any, str | None],
+    ) -> None:
+        if len(target) >= MAX_CUSTOM_RECOGNIZER_RULES:
+            raise CustomRecognizerLimitError(
+                "Custom recognizer exceeds the configured rule-count limit"
+            )
+        target.append(item)
+
     if values is None:
         return []
     if isinstance(values, Mapping) and not _looks_like_rule(values):
         expanded: list[tuple[Any, str | None]] = []
         for label, grouped_values in values.items():
             if isinstance(grouped_values, str) or _looks_like_rule(grouped_values):
-                expanded.append((grouped_values, str(label)))
+                append_bounded(expanded, (grouped_values, str(label)))
             else:
                 for item in grouped_values or ():
-                    expanded.append((item, str(label)))
+                    append_bounded(expanded, (item, str(label)))
         return expanded
     if isinstance(values, str) or _looks_like_rule(values):
         return [(values, None)]
-    return [(item, None) for item in values or ()]
+    expanded = []
+    for item in values or ():
+        append_bounded(expanded, (item, None))
+    return expanded
 
 
 def _looks_like_rule(value: Any) -> bool:
@@ -851,6 +990,13 @@ __all__ = [
     "CUSTOM_DENY_DETECTOR",
     "CustomMatch",
     "CustomRecognizer",
+    "CustomRecognizerInputError",
+    "CustomRecognizerLimitError",
+    "MAX_CUSTOM_RECOGNIZER_CONFIG_BYTES",
+    "MAX_CUSTOM_RECOGNIZER_METADATA_CHARACTERS",
+    "MAX_CUSTOM_RECOGNIZER_RULE_BYTES",
+    "MAX_CUSTOM_RECOGNIZER_RULES",
+    "MAX_CUSTOM_RECOGNIZER_SCAN_WORK",
     "PAN",
     "abdm_mode_enabled",
     "build_transliterated_name_recognizer",

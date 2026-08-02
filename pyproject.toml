@@ -366,6 +366,7 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 markers = [
   "integration: marks end-to-end or external integration tests",
   "slow: marks tests that are expected to run slowly",
+  "contract: marks property-based stage-boundary contract tests",
   "fuzz: marks property-based (Hypothesis) fuzz tests",
   "doctest_examples: runs doctest examples for targeted public modules"
 ]
