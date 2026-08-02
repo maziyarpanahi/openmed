@@ -29,6 +29,11 @@ from openmed.clinical.grounding import (
 )
 from openmed.clinical.grounding.index import brute_force_neighbors
 from openmed.clinical.grounding.vocab import VocabLoader, VocabSource
+from openmed.clinical.normalization import (
+    ConceptNormalizationCache,
+    RankedCandidateCache,
+    SyntheticTerminologyBackend,
+)
 from openmed.eval.suites.grounding_index_recall import (
     evaluate_grounding_index_recall,
 )
@@ -53,6 +58,44 @@ def _loader(tmp_path: Path, path: Path = _FIXTURE) -> VocabLoader:
         for system in _SYSTEMS
     }
     return VocabLoader(cache_dir=tmp_path / "cache", registry=registry)
+
+
+def _fixture_with_delta(tmp_path: Path) -> Path:
+    fixture = tmp_path / "v2.jsonl"
+    fixture.write_text(
+        _FIXTURE.read_text(encoding="utf-8")
+        + json.dumps(
+            {
+                "concept_id": "E11.51",
+                "system": "icd10cm",
+                "canonical_term": (
+                    "Type 2 diabetes mellitus with diabetic peripheral angiopathy"
+                ),
+                "aliases": ["type 2 diabetes with peripheral angiopathy"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return fixture
+
+
+class _RecordingEncoder:
+    def __init__(self) -> None:
+        self._inner = HashingAliasEncoder()
+        self.batches: list[tuple[str, ...]] = []
+
+    @property
+    def encoder_id(self):
+        return self._inner.encoder_id
+
+    @property
+    def dimension(self):
+        return self._inner.dimension
+
+    def encode(self, surfaces):
+        self.batches.append(tuple(surfaces))
+        return self._inner.encode(surfaces)
 
 
 def test_build_then_query_returns_dense_candidates(tmp_path):
@@ -133,6 +176,51 @@ def test_hnsw_backend_matches_brute_force_reference_recall_at_10(tmp_path):
     assert report["recall_at_k"] >= 0.95
 
 
+def test_incremental_hnsw_update_replaces_only_changed_ann_shard(tmp_path):
+    pytest.importorskip("hnswlib")
+
+    encoder = _RecordingEncoder()
+    cache_dir = tmp_path / "index-cache"
+    initial = build_or_load_index(
+        _loader(tmp_path / "v1"),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm", "rxnorm"],
+        backend="hnsw",
+    )
+    assert initial is not None
+    first_manifest = json.loads(
+        (cache_dir / "alias_index.json").read_text(encoding="utf-8")
+    )
+    first_icd_ann = cache_dir / first_manifest["shards"]["ICD10CM"]["ann_file"]
+    first_rxnorm_ann = cache_dir / first_manifest["shards"]["RXNORM"]["ann_file"]
+    rxnorm_ann_bytes = first_rxnorm_ann.read_bytes()
+    rxnorm_ann_mtime = first_rxnorm_ann.stat().st_mtime_ns
+
+    updated = build_or_load_index(
+        _loader(tmp_path / "v2", path=_fixture_with_delta(tmp_path)),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm", "rxnorm"],
+        backend="hnsw",
+    )
+    assert updated is not None
+    updated_manifest = json.loads(
+        (cache_dir / "alias_index.json").read_text(encoding="utf-8")
+    )
+    updated_icd_ann = cache_dir / updated_manifest["shards"]["ICD10CM"]["ann_file"]
+    updated_rxnorm_ann = cache_dir / updated_manifest["shards"]["RXNORM"]["ann_file"]
+
+    assert updated.update_summary.reused_shards == ("RXNORM",)
+    assert updated.update_summary.rebuilt_shards == ("ICD10CM",)
+    assert updated_icd_ann != first_icd_ann
+    assert updated_icd_ann.is_file()
+    assert not first_icd_ann.exists()
+    assert updated_rxnorm_ann == first_rxnorm_ann
+    assert updated_rxnorm_ann.read_bytes() == rxnorm_ann_bytes
+    assert updated_rxnorm_ann.stat().st_mtime_ns == rxnorm_ann_mtime
+
+
 def test_changing_vocabulary_version_rekeys_and_rebuilds(tmp_path):
     encoder = HashingAliasEncoder()
     cache_dir = tmp_path / "index-cache"
@@ -148,20 +236,7 @@ def test_changing_vocabulary_version_rekeys_and_rebuilds(tmp_path):
     assert persisted_key == index_v1.index_key
 
     # A changed vocabulary edition must change the content hash and the key.
-    second_fixture = tmp_path / "v2.jsonl"
-    second_fixture.write_text(
-        _FIXTURE.read_text(encoding="utf-8")
-        + json.dumps(
-            {
-                "concept_id": "E11.51",
-                "system": "icd10cm",
-                "canonical_term": "Type 2 diabetes mellitus with diabetic peripheral angiopathy",
-                "aliases": ["type 2 diabetes with peripheral angiopathy"],
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    second_fixture = _fixture_with_delta(tmp_path)
     loader_v2 = _loader(tmp_path / "v2", path=second_fixture)
     index_v2 = build_or_load_index(
         loader_v2, encoder, cache_dir=cache_dir, systems=["icd10cm"]
@@ -172,6 +247,146 @@ def test_changing_vocabulary_version_rekeys_and_rebuilds(tmp_path):
     assert index_v2.vocab_versions != index_v1.vocab_versions
     # The stale payload was overwritten, not silently reused.
     assert load_index(cache_dir).index_key == index_v2.index_key
+
+
+def test_version_drift_evicts_index_bound_dependent_caches(tmp_path):
+    encoder = HashingAliasEncoder()
+    ranked_cache = RankedCandidateCache()
+    normalization_cache = ConceptNormalizationCache()
+    terminology_backend = SyntheticTerminologyBackend()
+    cache_dir = tmp_path / "index-cache"
+    first_fixture = tmp_path / "v1.jsonl"
+    first_fixture.write_text(_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+    first = build_or_load_index(
+        _loader(tmp_path / "v1", path=first_fixture),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm"],
+        dependent_caches=[normalization_cache, ranked_cache],
+    )
+    assert first is not None
+    assert ranked_cache.index_key == first.index_key
+    ranked_cache.set("type 2 diabetes", "v1", ("stale",))
+    normalization_cache.set("type 2 diabetes", terminology_backend, ("stale",))
+    assert ranked_cache.stats().size == 1
+    assert normalization_cache.stats().size == 1
+
+    second = build_or_load_index(
+        _loader(tmp_path / "v2", path=_fixture_with_delta(tmp_path)),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm"],
+        dependent_caches=[normalization_cache, ranked_cache],
+    )
+
+    assert second is not None
+    assert second.index_key != first.index_key
+    assert ranked_cache.index_key == second.index_key
+    assert ranked_cache.invalidation_count == 1
+    assert ranked_cache.stats().size == 0
+    assert normalization_cache.index_key == second.index_key
+    assert normalization_cache.invalidation_count == 1
+    assert normalization_cache.stats().size == 0
+
+    ranked_cache.set("type 2 diabetes", "v2", ("fresh",))
+    build_or_load_index(
+        _loader(tmp_path / "v2-again", path=_fixture_with_delta(tmp_path)),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm"],
+        dependent_caches=[normalization_cache, ranked_cache],
+    )
+    assert ranked_cache.invalidation_count == 1
+    assert ranked_cache.stats().size == 1
+
+
+def test_incremental_delta_rebuilds_only_changed_shard(tmp_path):
+    encoder = _RecordingEncoder()
+    cache_dir = tmp_path / "index-cache"
+    first_fixture = tmp_path / "v1.jsonl"
+    first_fixture.write_text(_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+    first = build_or_load_index(
+        _loader(tmp_path / "v1", path=first_fixture),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm", "rxnorm"],
+        backend="brute",
+    )
+    assert first is not None
+    assert first.update_summary.rebuilt_shards == ("ICD10CM", "RXNORM")
+    assert len(encoder.batches) == 2
+
+    first_manifest = json.loads(
+        (cache_dir / "alias_index.json").read_text(encoding="utf-8")
+    )
+    rxnorm_path = cache_dir / first_manifest["shards"]["RXNORM"]["file"]
+    rxnorm_bytes = rxnorm_path.read_bytes()
+    rxnorm_mtime = rxnorm_path.stat().st_mtime_ns
+
+    delta_fixture = _fixture_with_delta(tmp_path)
+    incremental = build_or_load_index(
+        _loader(tmp_path / "v2", path=delta_fixture),
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm", "rxnorm"],
+        backend="brute",
+    )
+    assert incremental is not None
+    assert incremental.update_summary.reused_shards == ("RXNORM",)
+    assert incremental.update_summary.rebuilt_shards == ("ICD10CM",)
+    assert incremental.update_summary.removed_shards == ()
+    assert len(encoder.batches) == 3
+    assert "type 2 diabetes with peripheral angiopathy" in encoder.batches[-1]
+    assert rxnorm_path.read_bytes() == rxnorm_bytes
+    assert rxnorm_path.stat().st_mtime_ns == rxnorm_mtime
+
+    full = build_index(
+        _loader(tmp_path / "full", path=delta_fixture),
+        HashingAliasEncoder(),
+        systems=["icd10cm", "rxnorm"],
+        backend="brute",
+    )
+    assert full is not None
+    for surface in ("type 2 diabetes", "acetaminophen", "peripheral angiopathy"):
+        (vector,) = encoder.encode([surface])
+        assert [repr(candidate) for candidate in incremental.query(vector, 10)] == [
+            repr(candidate) for candidate in full.query(vector, 10)
+        ]
+
+
+def test_incremental_remove_reuses_remaining_shard_and_prunes_file(tmp_path):
+    encoder = _RecordingEncoder()
+    cache_dir = tmp_path / "index-cache"
+    loader = _loader(tmp_path)
+    initial = build_or_load_index(
+        loader,
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm", "rxnorm"],
+        backend="brute",
+    )
+    assert initial is not None
+    manifest = json.loads((cache_dir / "alias_index.json").read_text(encoding="utf-8"))
+    removed_path = cache_dir / manifest["shards"]["RXNORM"]["file"]
+    batches_after_build = len(encoder.batches)
+
+    updated = build_or_load_index(
+        loader,
+        encoder,
+        cache_dir=cache_dir,
+        systems=["icd10cm"],
+        backend="brute",
+    )
+
+    assert updated is not None
+    assert updated.systems == ("ICD10CM",)
+    assert updated.update_summary.reused_shards == ("ICD10CM",)
+    assert updated.update_summary.rebuilt_shards == ()
+    assert updated.update_summary.removed_shards == ("RXNORM",)
+    assert len(encoder.batches) == batches_after_build
+    assert not removed_path.exists()
 
 
 def test_unchanged_vocabulary_reuses_persisted_index(tmp_path):
@@ -231,6 +446,22 @@ def test_missing_encoder_degrades_to_sparse_only(tmp_path):
     assert index is None
     assert query_index(index, [0.0], k=5) == []
 
+    ranked_cache = RankedCandidateCache()
+    ranked_cache.bind_index("grounding-index:configured")
+    ranked_cache.set("type 2 diabetes", "v1", ("dense",))
+    assert (
+        build_or_load_index(
+            _loader(tmp_path),
+            None,
+            cache_dir=tmp_path / "index-cache",
+            systems=["icd10cm"],
+            dependent_caches=[ranked_cache],
+        )
+        is None
+    )
+    assert ranked_cache.index_key == "grounding-index:none"
+    assert ranked_cache.stats().size == 0
+
     generator = DenseCandidateGenerator(encoder=None, loader=_loader(tmp_path))
     assert generator.generate("type 2 diabetes", ["icd10cm"]) == []
 
@@ -260,7 +491,10 @@ def test_persisted_index_records_provenance(tmp_path):
     assert "ICD10CM" in provenance["vocab_versions"]
     assert provenance["vocab_versions"]["ICD10CM"].startswith("sha256:")
 
-    restored = AliasEmbeddingIndex.from_payload(payload)
+    assert provenance["shards"]["ICD10CM"]["record_count"] > 0
+    assert (directory / payload["shards"]["ICD10CM"]["file"]).is_file()
+
+    restored = AliasEmbeddingIndex.from_payload(payload, directory=directory)
     assert restored.index_key == index.index_key
     assert restored.record_count == index.record_count
 
