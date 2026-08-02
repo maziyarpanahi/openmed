@@ -409,6 +409,18 @@ def shard_payload_digest(payload: bytes) -> str:
     return f"sha256:{_sha256_bytes(bytes(payload))}"
 
 
+#: Windows refuses ``MoveFileEx`` with a sharing violation while another handle
+#: holds the destination, so two workers publishing the same shard at the same
+#: moment can make the loser's ``os.replace`` fail with ``PermissionError``.
+#: POSIX ``rename(2)`` has no such restriction. Duplicate publication is the
+#: documented normal path here, not a corner case, so the loser retries rather
+#: than failing the shard. The bound matters: a directory that is genuinely
+#: unwritable must still surface its error instead of being retried forever.
+_REPLACE_RETRY_ATTEMPTS = 12
+_REPLACE_RETRY_BACKOFF_SECONDS = 0.01
+_MAX_REPLACE_BACKOFF_SECONDS = 0.2
+
+
 def write_shard_output(
     path: Union[str, Path],
     payload: bytes,
@@ -421,11 +433,32 @@ def write_shard_output(
     re-running a shard converges on byte-identical output. Skipping already
     complete shards is a scheduling decision made by the driver, not by this
     helper.
+
+    A concurrent duplicate writer can make the atomic replace fail with
+    ``PermissionError`` on Windows. That is contention, not a fault, so the
+    publish is retried with backoff; the payload is republished in full each
+    time, from a fresh temporary file, so a retry never appends or leaves a
+    partial file behind. If it still fails after the bound, the error is
+    raised unchanged -- a genuinely unwritable destination must not be
+    mistaken for a lost race.
     """
     if not isinstance(payload, (bytes, bytearray)):
         raise ShardExecutionError("shard handler must return bytes")
     payload_bytes = bytes(payload)
-    _atomic_write_bytes(Path(path), payload_bytes, hook=hook)
+    last_attempt = _REPLACE_RETRY_ATTEMPTS - 1
+    for attempt in range(_REPLACE_RETRY_ATTEMPTS):
+        try:
+            _atomic_write_bytes(Path(path), payload_bytes, hook=hook)
+            break
+        except PermissionError:
+            if attempt == last_attempt:
+                raise
+            time.sleep(
+                min(
+                    _REPLACE_RETRY_BACKOFF_SECONDS * (2**attempt),
+                    _MAX_REPLACE_BACKOFF_SECONDS,
+                )
+            )
     return shard_payload_digest(payload_bytes), len(payload_bytes)
 
 

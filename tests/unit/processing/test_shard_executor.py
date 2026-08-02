@@ -454,10 +454,17 @@ def test_duplicate_concurrent_writers_never_interleave(tmp_path: Path) -> None:
 
     barrier = threading.Barrier(len(payloads))
     results: list[tuple[str, int]] = []
+    # An exception raised inside a thread never reaches the test body, so
+    # without capturing it a writer that died is indistinguishable from one
+    # that never ran and the only symptom is a short results list.
+    failures: list[BaseException] = []
 
     def writer(payload: bytes) -> None:
         barrier.wait()
-        results.append(write_shard_output(path, payload))
+        try:
+            results.append(write_shard_output(path, payload))
+        except BaseException as error:  # recorded, then asserted on below
+            failures.append(error)
 
     threads = [threading.Thread(target=writer, args=(payload,)) for payload in payloads]
     for thread in threads:
@@ -465,6 +472,7 @@ def test_duplicate_concurrent_writers_never_interleave(tmp_path: Path) -> None:
     for thread in threads:
         thread.join()
 
+    assert not failures, f"writer threads raised: {[repr(e) for e in failures]}"
     assert len(results) == len(payloads)
     persisted = path.read_bytes()
     # Exactly one writer's bytes survive, whole.
@@ -472,6 +480,70 @@ def test_duplicate_concurrent_writers_never_interleave(tmp_path: Path) -> None:
     assert shard_output_digest(path) in {digest for digest, _ in results}
     assert not list(tmp_path.glob("*.tmp"))
     assert sorted(entry.name for entry in tmp_path.iterdir()) == [path.name]
+
+
+def test_publish_survives_a_windows_style_sharing_violation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A losing racer must republish, not fail the shard.
+
+    Windows refuses ``MoveFileEx`` with a sharing violation while another
+    handle holds the destination, so concurrent duplicate publication makes the
+    loser's ``os.replace`` raise ``PermissionError``. POSIX ``rename(2)`` has no
+    such restriction, which is why this only ever failed on Windows CI. The
+    failure is injected here so the contract is verified on every platform.
+    """
+    path = tmp_path / shard_output_filename(0)
+    payload = b"synthetic shard payload\n"
+    real_replace = os.replace
+    calls: list[int] = []
+
+    def failing_replace(src: object, dst: object) -> None:
+        calls.append(1)
+        if len(calls) <= 3:
+            raise PermissionError(
+                13, "The process cannot access the file because it is in use"
+            )
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", failing_replace)
+    digest, size = write_shard_output(path, payload)
+
+    assert len(calls) == 4, "the publish should have been retried, not abandoned"
+    assert path.read_bytes() == payload
+    assert digest == shard_output_digest(path)
+    assert size == len(payload)
+    # A retry republishes in full from a fresh temporary; it never appends and
+    # never leaves the discarded attempts behind.
+    assert not list(tmp_path.glob("*.tmp"))
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == [path.name]
+
+
+def test_persistent_permission_error_is_not_mistaken_for_contention(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A genuinely unwritable destination must still raise.
+
+    The retry exists to absorb a lost race, not to swallow a real permission
+    fault, so an error that never clears has to surface once the bound is spent.
+    """
+    path = tmp_path / shard_output_filename(0)
+    calls: list[int] = []
+
+    def always_failing_replace(src: object, dst: object) -> None:
+        calls.append(1)
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(os, "replace", always_failing_replace)
+
+    with pytest.raises(PermissionError):
+        write_shard_output(path, b"synthetic shard payload\n")
+
+    assert calls, "the publish should have been attempted"
+    assert len(calls) <= 12, "the retry must be bounded"
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_planted_temporary_file_is_never_counted_as_a_shard_output(
