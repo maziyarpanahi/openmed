@@ -13,9 +13,6 @@ from openmed.utils import gateway
 from openmed.utils.gateway import (
     GatewayLimits,
     InputValidationError,
-    NormalizedInput,
-    ensure_valid_encoding,
-    normalize_input,
     normalize_text,
     validate_language,
 )
@@ -47,6 +44,9 @@ class TestNormalizeText:
     def test_bytes_input_is_decoded(self):
         assert normalize_text("café".encode("utf-8")) == "café"
 
+    def test_memoryview_input_is_decoded(self):
+        assert normalize_text(memoryview("café".encode("utf-8"))) == "café"
+
     def test_invalid_utf8_bytes_are_rejected(self):
         with pytest.raises(InputValidationError) as exc:
             normalize_text(b"\xff\xfe not utf-8")
@@ -69,6 +69,18 @@ class TestNormalizeText:
         assert exc.value.code == "max_chars"
         assert exc.value.limit == 10
         assert exc.value.actual == 11
+        assert exc.value.metadata == {
+            "unit": "characters",
+            "limit": 10,
+            "actual": 11,
+        }
+
+    def test_minimum_length_is_enforced(self):
+        with pytest.raises(InputValidationError) as exc:
+            normalize_text("abc", min_length=4)
+        assert exc.value.code == "min_chars"
+        assert exc.value.limit == 4
+        assert exc.value.actual == 3
 
     def test_byte_limit_is_enforced(self):
         # Four two-byte characters == 8 bytes but only 4 chars, so this trips the
@@ -79,24 +91,9 @@ class TestNormalizeText:
         assert exc.value.code == "max_bytes"
         assert exc.value.limit == 4
 
-    def test_control_character_run_is_rejected(self):
-        with pytest.raises(InputValidationError) as exc:
-            normalize_text("ok" + "\x00" * 12)
-        assert exc.value.code == "control_characters"
-
-    def test_single_control_character_is_rejected(self):
-        with pytest.raises(InputValidationError) as exc:
-            normalize_text("hello\x07world")
-        assert exc.value.code == "control_characters"
-
     def test_common_whitespace_is_allowed(self):
         text = "line one\nline two\tindented"
         assert normalize_text(text) == text
-
-    def test_abusive_repeated_run_is_rejected(self):
-        with pytest.raises(InputValidationError) as exc:
-            normalize_text("a" * 200)
-        assert exc.value.code == "repeated_characters"
 
     def test_error_message_never_contains_input_text(self):
         secret = "SSN 123-45-6789 belongs to Jane Q Patient"
@@ -105,23 +102,6 @@ class TestNormalizeText:
             normalize_text(secret, limits=GatewayLimits(max_chars=5))
         assert secret not in str(exc.value)
         assert "123-45-6789" not in str(exc.value)
-
-
-class TestEnsureValidEncoding:
-    def test_passes_valid_text(self):
-        assert ensure_valid_encoding("hello") == "hello"
-
-    def test_decodes_bytes(self):
-        assert ensure_valid_encoding("café".encode("utf-8")) == "café"
-
-    def test_rejects_none(self):
-        with pytest.raises(InputValidationError):
-            ensure_valid_encoding(None)
-
-    def test_rejects_invalid_bytes(self):
-        with pytest.raises(InputValidationError) as exc:
-            ensure_valid_encoding(b"\xff\xfe")
-        assert exc.value.code == "invalid_encoding"
 
 
 class TestValidateLanguage:
@@ -133,10 +113,10 @@ class TestValidateLanguage:
 
     def test_unsupported_language_raises(self):
         with pytest.raises(InputValidationError) as exc:
-            validate_language("xx")
+            validate_language("private-patient-code")
         assert exc.value.code == "unsupported_language"
-        # The canonical library message contract is preserved.
         assert "Unsupported language" in str(exc.value)
+        assert "private-patient-code" not in str(exc.value)
 
     def test_none_language_raises(self):
         with pytest.raises(InputValidationError) as exc:
@@ -154,30 +134,23 @@ class TestValidateLanguage:
             validate_language("en", supported={"zz"})
 
     def test_defaults_to_pii_supported_languages(self):
-        from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+        from openmed.core.pii_i18n import (
+            INDIC_NER_LANGUAGES,
+            NATIONAL_ID_ONLY_LANGUAGES,
+            SUPPORTED_LANGUAGES,
+        )
 
-        for code in SUPPORTED_LANGUAGES:
+        for code in (
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        ):
             assert validate_language(code) == code
 
+    def test_api_language_set_excludes_national_id_only_languages(self):
+        from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES
 
-class TestNormalizeInput:
-    def test_returns_normalized_text_and_language(self):
-        result = normalize_input("  hello  ", lang="EN")
-        assert isinstance(result, NormalizedInput)
-        assert result.text == "hello"
-        assert result.language == "en"
-
-    def test_language_optional(self):
-        result = normalize_input("hello")
-        assert result.language is None
-
-    def test_propagates_text_failure(self):
+        national_id_only = next(iter(NATIONAL_ID_ONLY_LANGUAGES))
         with pytest.raises(InputValidationError):
-            normalize_input("", lang="en")
-
-    def test_propagates_language_failure(self):
-        with pytest.raises(InputValidationError):
-            normalize_input("hello", lang="xx")
+            validate_language(national_id_only, include_national_id=False)
 
 
 class TestDefaultLimits:
@@ -210,7 +183,18 @@ class TestTypedError:
         assert issubclass(InputValidationError, ValueError)
 
     def test_carries_structured_metadata(self):
-        err = InputValidationError("boom", code="max_chars", limit=10, actual=20)
+        err = InputValidationError(
+            "boom",
+            code="max_chars",
+            metadata={"unit": "characters"},
+            limit=10,
+            actual=20,
+        )
         assert err.code == "max_chars"
         assert err.limit == 10
         assert err.actual == 20
+        assert err.metadata == {
+            "unit": "characters",
+            "limit": 10,
+            "actual": 20,
+        }

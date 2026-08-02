@@ -1,0 +1,55 @@
+{
+  "cases": [
+    {
+      "language": "hi",
+      "context": "रोगी रामको आज देखा गया।",
+      "surface": "रामको",
+      "stem": "राम",
+      "suffix": "को"
+    },
+    {
+      "language": "mr",
+      "context": "मीराला औषध देण्यात आले.",
+      "surface": "मीराला",
+      "stem": "मीरा",
+      "suffix": "ला"
+    },
+    {
+      "language": "ta",
+      "context": "லதாவிடம் அறிக்கை வழங்கப்பட்டது.",
+      "surface": "லதாவிடம்",
+      "stem": "லதா",
+      "suffix": "விடம்",
+      "split_suffix": "இடம்"
+    },
+    {
+      "language": "te",
+      "context": "సీతతో వైద్యుడు మాట్లాడారు.",
+      "surface": "సీతతో",
+      "stem": "సీత",
+      "suffix": "తో"
+    },
+    {
+      "language": "ml",
+      "context": "ലതയുടെ റിപ്പോർട്ട് തയ്യാറായി.",
+      "surface": "ലതയുടെ",
+      "stem": "ലത",
+      "suffix": "യുടെ"
+    },
+    {
+      "language": "kn",
+      "context": "ಸೀತಾಗೆ ಔಷಧ ನೀಡಲಾಯಿತು.",
+      "surface": "ಸೀತಾಗೆ",
+      "stem": "ಸೀತಾ",
+      "suffix": "ಗೆ"
+    }
+  ],
+  "held_out_names": [
+    {"language": "hi", "name": "मेनका"},
+    {"language": "mr", "name": "चेतने"},
+    {"language": "ta", "name": "பாவை"},
+    {"language": "te", "name": "రజని"},
+    {"language": "ml", "name": "അനിൽ"},
+    {"language": "kn", "name": "ಮಲ್ಲಿಗೆ"}
+  ]
+}

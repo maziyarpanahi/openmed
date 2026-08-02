@@ -13,6 +13,7 @@ from __future__ import annotations
 # stdlib-only, so the public multimodal import path remains free of heavy deps.
 from openmed.interop import cda as _cda
 
+from . import contacts_calendar as _contacts_calendar
 from . import dicom as _dicom
 
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
@@ -35,6 +36,15 @@ from .chatlog_jsonl import (
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
 )
+from .chw_forms import (
+    ACTION_GENERALIZE_GEO,
+    ChwFieldDecision,
+    RedactedChwForm,
+    classify_chw_field,
+    parse_xform_path,
+    redact_chw_form,
+)
+from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
     DicomHeaderAction,
     DicomHeaderDeidPolicy,
@@ -93,13 +103,30 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .sms_messages import (
+    DEFAULT_SMS_MODEL,
+    SHORT_TEXT,
+    SHORT_TEXT_PRESET,
+    RedactedSMSExport,
+    ShortTextPreset,
+    SMSRedactionSummary,
+    coarsen_timestamp,
+    deidentify_short_text,
+    iter_redacted_sms_records,
+    redact_sms_csv,
+    redact_sms_export,
+    redact_sms_json,
+    resolve_short_text_preset,
+)
 from .tabular_csv import (
     ColumnDecision,
     RedactedTable,
     TableView,
     classify_columns,
+    derive_date_shift_days,
     read_table,
     redact_table,
+    shift_quasi_identifier_date,
 )
 from .verify_pdf import (
     PdfFidelityReport,
@@ -123,6 +150,13 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "ACTION_GENERALIZE_GEO",
+    "ChwFieldDecision",
+    "RedactedChwForm",
+    "classify_chw_field",
+    "parse_xform_path",
+    "redact_chw_form",
+    "redact_contacts_calendar",
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
     "DicomHeaderDeidResult",
@@ -165,12 +199,27 @@ __all__ = [
     "register_ocr_engine",
     "available_ocr_engines",
     "run_doctr_ocr",
+    "DEFAULT_SMS_MODEL",
+    "SHORT_TEXT",
+    "SHORT_TEXT_PRESET",
+    "RedactedSMSExport",
+    "SMSRedactionSummary",
+    "ShortTextPreset",
+    "coarsen_timestamp",
+    "deidentify_short_text",
+    "iter_redacted_sms_records",
+    "redact_sms_csv",
+    "redact_sms_export",
+    "redact_sms_json",
+    "resolve_short_text_preset",
     "ColumnDecision",
     "TableView",
     "RedactedTable",
     "read_table",
     "classify_columns",
     "redact_table",
+    "derive_date_shift_days",
+    "shift_quasi_identifier_date",
     "extract_markdown",
     "extract_asciidoc",
     "redact_source_text",

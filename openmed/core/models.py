@@ -3,38 +3,81 @@
 import gc
 import logging
 from collections.abc import Mapping
+from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
-try:
-    from transformers import (
-        AutoConfig,
-        AutoModelForTokenClassification,
-        AutoTokenizer,
-        pipeline,
-    )
+HF_AVAILABLE = find_spec("transformers") is not None
+AutoTokenizer: Any = None
+AutoModelForTokenClassification: Any = None
+AutoConfig: Any = None
+pipeline: Any = None
 
-    HF_AVAILABLE = True
-except (ImportError, OSError) as e:
-    HF_AVAILABLE = False
-    logger.warning(
-        "HuggingFace transformers could not be imported (%s). "
-        "Install with: pip install transformers",
-        e,
-    )
 
-    AutoTokenizer = None  # type: ignore[assignment]
-    AutoModelForTokenClassification = None  # type: ignore[assignment]
-    AutoConfig = None  # type: ignore[assignment]
-    pipeline = None  # type: ignore[assignment]
+def _require_transformers() -> None:
+    """Raise actionable guidance when Transformers is unavailable."""
+    if not HF_AVAILABLE:
+        raise ImportError(
+            "HuggingFace transformers is required. "
+            "Install with: pip install transformers"
+        )
+
+
+def _ensure_hf_auto_config() -> None:
+    """Import the Transformers configuration factory only when needed."""
+    global AutoConfig
+
+    if AutoConfig is None:
+        _require_transformers()
+        from transformers import AutoConfig as TransformersAutoConfig
+
+        AutoConfig = TransformersAutoConfig
+
+
+def _ensure_hf_auto_model() -> None:
+    """Import the Torch-backed Transformers model factory only when needed."""
+    global AutoModelForTokenClassification
+
+    if AutoModelForTokenClassification is None:
+        _require_transformers()
+        from transformers import (
+            AutoModelForTokenClassification as TransformersAutoModel,
+        )
+
+        AutoModelForTokenClassification = TransformersAutoModel
+
+
+def _ensure_hf_auto_tokenizer() -> None:
+    """Import the Transformers tokenizer factory only when needed."""
+    global AutoTokenizer
+
+    if AutoTokenizer is None:
+        _require_transformers()
+        from transformers import AutoTokenizer as TransformersAutoTokenizer
+
+        AutoTokenizer = TransformersAutoTokenizer
+
+
+def _ensure_hf_pipeline() -> None:
+    """Import the Transformers pipeline factory only for the HF backend."""
+    global pipeline
+
+    if not HF_AVAILABLE:
+        _require_transformers()
+    if pipeline is None:
+        from transformers import pipeline as transformers_pipeline
+
+        pipeline = transformers_pipeline
+
 
 if TYPE_CHECKING:
     from .config import OpenMedConfig
 
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
+from .model_integrity import prepare_model_reference
 from .model_registry import (
     ModelInfo as RegistryModelInfo,
 )
@@ -44,7 +87,11 @@ from .model_registry import (
     get_model_suggestions,
     get_models_by_category,
 )
-from .offline import configure_offline_mode, is_local_only
+from .offline import (
+    configure_offline_mode,
+    is_local_only,
+    network_blocked_if_offline,
+)
 
 
 class ModelLoader:
@@ -56,17 +103,17 @@ class ModelLoader:
         Args:
             config: OpenMed configuration. If None, uses global config.
         """
-        if not HF_AVAILABLE:
+        self.config = config or get_config()
+        if not HF_AVAILABLE and getattr(self.config, "backend", None) != "onnx":
             raise ImportError(
                 "HuggingFace transformers is required. "
                 "Install with: pip install transformers"
             )
 
-        self.config = config or get_config()
         configure_offline_mode(self.config)
-        self._models = {}  # Cache for loaded models
-        self._tokenizers = {}  # Cache for loaded tokenizers
-        self._pipelines = {}  # Cache for created pipelines
+        self._models: Dict[str, Any] = {}  # Cache for loaded models
+        self._tokenizers: Dict[str, Any] = {}  # Cache for loaded tokenizers
+        self._pipelines: Dict[Tuple[Any, ...], Any] = {}  # Cached pipelines
 
     def list_available_models(
         self,
@@ -126,13 +173,24 @@ class ModelLoader:
                 "config": self._models[full_model_name].config,
             }
 
+        requested_local_loading = self._local_loading_kwargs(full_model_name, kwargs)
+        pretrained_reference = self._prepare_model_reference(
+            model_name,
+            full_model_name,
+            local_only=bool(requested_local_loading.get("local_files_only")),
+        )
+
         try:
             logger.info("Loading model: %s", full_model_name)
 
             auth_kwargs = self._hub_auth_kwargs()
-            local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
-            pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
+            local_loading_kwargs = self._local_loading_kwargs(
+                pretrained_reference,
+                kwargs,
+            )
             load_kwargs = dict(kwargs)
+            load_kwargs.pop("local_files_only", None)
+            pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
             device_preference = load_kwargs.pop("device", None)
             attention_preference = load_kwargs.pop("attn_implementation", None)
             resolved_device = self._resolve_torch_device(device_preference)
@@ -145,8 +203,9 @@ class ModelLoader:
             )
 
             # Load config first to verify it's a token classification model
+            _ensure_hf_auto_config()
             config = AutoConfig.from_pretrained(
-                full_model_name,
+                pretrained_reference,
                 cache_dir=self.config.cache_dir,
                 **pretrained_kwargs,
             )
@@ -167,8 +226,9 @@ class ModelLoader:
                     )
 
             # Load tokenizer
+            _ensure_hf_auto_tokenizer()
             tokenizer = get_tokenizer_with_loader(
-                full_model_name,
+                pretrained_reference,
                 AutoTokenizer.from_pretrained,
                 refresh_cache=force_reload,
                 cache_dir=self.config.cache_dir,
@@ -179,15 +239,17 @@ class ModelLoader:
             # not by modifying the model tokenizer/vocabulary.
 
             # Load model
-            model_kwargs = {**pretrained_kwargs, **load_kwargs}
-            model_kwargs["attn_implementation"] = attn_implementation
+            model_kwargs = {**load_kwargs, **pretrained_kwargs}
+            if attn_implementation is not None:
+                model_kwargs["attn_implementation"] = attn_implementation
             if quantization_config is not None:
                 model_kwargs["quantization_config"] = quantization_config
             model_uses_quantization = (
                 model_kwargs.get("quantization_config") is not None
             )
+            _ensure_hf_auto_model()
             model = AutoModelForTokenClassification.from_pretrained(
-                full_model_name,
+                pretrained_reference,
                 cache_dir=self.config.cache_dir,
                 **model_kwargs,
             )
@@ -231,14 +293,30 @@ class ModelLoader:
                 **kwargs,
             )
 
+        full_model_name = self._resolve_model_name(model_name)
+        cache_key = (
+            "backend",
+            type(backend).__name__,
+            full_model_name,
+            task,
+            aggregation_strategy,
+            use_fast_tokenizer,
+            self._freeze_cache_value(kwargs),
+        )
+        if cache_key in self._pipelines:
+            logger.info("Using cached pipeline for %s", full_model_name)
+            return self._pipelines[cache_key]
+
         try:
-            return backend.create_pipeline(
+            created_pipeline = backend.create_pipeline(
                 model_name,
                 task=task,
                 aggregation_strategy=aggregation_strategy,
                 use_fast_tokenizer=use_fast_tokenizer,
                 **kwargs,
             )
+            self._pipelines[cache_key] = created_pipeline
+            return created_pipeline
         except Exception:
             if getattr(self.config, "backend", None) is not None:
                 raise
@@ -278,6 +356,7 @@ class ModelLoader:
         Returns:
             HuggingFace pipeline object.
         """
+        _ensure_hf_pipeline()
         # Resolve model name if it's a registry key
         full_model_name = self._resolve_model_name(model_name)
         cache_key = self._build_pipeline_cache_key(
@@ -292,19 +371,39 @@ class ModelLoader:
             logger.info("Using cached pipeline for %s", full_model_name)
             return self._pipelines[cache_key]
 
+        requested_local_loading = self._local_loading_kwargs(full_model_name, kwargs)
+        pipeline_model_reference = self._prepare_model_reference(
+            model_name,
+            full_model_name,
+            local_only=bool(requested_local_loading.get("local_files_only")),
+        )
+
+        model_kwargs: Dict[str, Any] = {}
         try:
             # Create pipeline directly with model name for better caching
             pipeline_device = kwargs.get("device", self._get_device_id())
             pipeline_kwargs = {
-                "model": full_model_name,
+                "model": pipeline_model_reference,
                 "aggregation_strategy": aggregation_strategy,
                 "device": pipeline_device,
                 "use_fast": use_fast_tokenizer,
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
-            pipeline_kwargs.update(self._local_loading_kwargs(full_model_name, kwargs))
+            local_loading_kwargs = self._local_loading_kwargs(
+                pipeline_model_reference,
+                kwargs,
+            )
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
+            # Transformers forwards loader options through ``model_kwargs``;
+            # top-level extras are sent to the instantiated pipeline instead.
+            pipeline_load_kwargs.pop("local_files_only", None)
+            model_kwargs.update(local_loading_kwargs)
+            cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
+            if cache_dir is None and local_loading_kwargs.get("local_files_only"):
+                cache_dir = getattr(self.config, "cache_dir", None)
+            if cache_dir is not None:
+                model_kwargs.setdefault("cache_dir", cache_dir)
             if "quantization_config" in pipeline_load_kwargs:
                 model_kwargs.setdefault(
                     "quantization_config",
@@ -322,7 +421,12 @@ class ModelLoader:
             pipeline_kwargs.update(pipeline_load_kwargs)
             self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
-            ner_pipeline = pipeline(task, **pipeline_kwargs)
+            effective_local_only = bool(model_kwargs.get("local_files_only"))
+            with network_blocked_if_offline(
+                self.config,
+                local_only=effective_local_only,
+            ):
+                ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
 
             logger.info("Created pipeline for %s", full_model_name)
@@ -331,20 +435,32 @@ class ModelLoader:
         except Exception as e:
             logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
-            model_data = self.load_model(model_name)
+            fallback_load_kwargs = {
+                key: model_kwargs[key]
+                for key in ("local_files_only",)
+                if key in model_kwargs
+            }
+            with network_blocked_if_offline(
+                self.config,
+                local_only=bool(fallback_load_kwargs.get("local_files_only")),
+            ):
+                model_data = self.load_model(model_name, **fallback_load_kwargs)
 
-            fallback_kwargs = dict(kwargs)
-            fallback_kwargs.pop("device", None)
-            if aggregation_strategy is not None:
-                fallback_kwargs["aggregation_strategy"] = aggregation_strategy
+                fallback_kwargs = dict(kwargs)
+                fallback_kwargs.pop("device", None)
+                fallback_kwargs.pop("local_files_only", None)
+                fallback_kwargs.pop("cache_dir", None)
+                fallback_kwargs.pop("model_kwargs", None)
+                if aggregation_strategy is not None:
+                    fallback_kwargs["aggregation_strategy"] = aggregation_strategy
 
-            ner_pipeline = pipeline(
-                task,
-                model=model_data["model"],
-                tokenizer=model_data["tokenizer"],
-                device=kwargs.get("device", self._get_device_id()),
-                **fallback_kwargs,
-            )
+                ner_pipeline = pipeline(
+                    task,
+                    model=model_data["model"],
+                    tokenizer=model_data["tokenizer"],
+                    device=kwargs.get("device", self._get_device_id()),
+                    **fallback_kwargs,
+                )
             self._pipelines[cache_key] = ner_pipeline
             return ner_pipeline
 
@@ -413,18 +529,23 @@ class ModelLoader:
         tokenizer: Optional[Any] = None,
     ) -> Optional[int]:
         """Infer the maximum supported sequence length for a model/tokenizer."""
-        if not HF_AVAILABLE:
-            return None
-
         from ..processing.tokenization import infer_tokenizer_max_length
+
+        if tokenizer is not None:
+            inferred = infer_tokenizer_max_length(tokenizer)
+            if inferred is not None:
+                return inferred
+
+        if getattr(self.config, "backend", None) == "onnx" or not HF_AVAILABLE:
+            return None
 
         full_model_name = self._resolve_model_name(model_name)
         auth_kwargs = self._hub_auth_kwargs()
         local_loading_kwargs = self._local_loading_kwargs(full_model_name)
         pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
-
         if tokenizer is None:
             try:
+                _ensure_hf_auto_tokenizer()
                 tokenizer = get_tokenizer_with_loader(
                     full_model_name,
                     AutoTokenizer.from_pretrained,
@@ -446,6 +567,7 @@ class ModelLoader:
                 return inferred
 
         try:
+            _ensure_hf_auto_config()
             config = AutoConfig.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
@@ -500,7 +622,9 @@ class ModelLoader:
             apply_mps_tuning()
         return resolved_device
 
-    def _resolve_attn_implementation(self, prefer: Optional[str] = None) -> str:
+    def _resolve_attn_implementation(
+        self, prefer: Optional[str] = None
+    ) -> Optional[str]:
         """Resolve a safe Transformers attention backend for PyTorch loading."""
         from openmed.torch.attention import select_attn_implementation
 
@@ -519,10 +643,11 @@ class ModelLoader:
             "attn_implementation",
             attention_preference,
         )
-        model_kwargs["attn_implementation"] = self._resolve_attn_implementation(
-            attention_preference
-        )
-        pipeline_kwargs["model_kwargs"] = model_kwargs
+        attn_implementation = self._resolve_attn_implementation(attention_preference)
+        if attn_implementation is not None:
+            model_kwargs["attn_implementation"] = attn_implementation
+        if model_kwargs:
+            pipeline_kwargs["model_kwargs"] = model_kwargs
 
     def get_registry_info(self, model_key: str) -> Optional[RegistryModelInfo]:
         """Get information from model registry."""
@@ -555,6 +680,25 @@ class ModelLoader:
         if getattr(self.config, "hf_token", None):
             return {"token": self.config.hf_token}
         return {}
+
+    def _prepare_model_reference(
+        self,
+        requested_model_name: str,
+        resolved_model_name: str,
+        *,
+        local_only: bool,
+    ) -> str:
+        """Resolve and verify cached artifacts before model construction."""
+        registry_info = get_model_info(requested_model_name) or get_model_info(
+            resolved_model_name
+        )
+        return prepare_model_reference(
+            resolved_model_name,
+            registry_info=registry_info,
+            cache_dir=str(self.config.cache_dir),
+            local_only=local_only,
+            token=getattr(self.config, "hf_token", None),
+        )
 
     def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
         """Return a filesystem path when ``model_name`` points to local files."""
@@ -656,6 +800,8 @@ class ModelLoader:
     def _release_cached_memory(self) -> None:
         """Nudge Python and torch runtimes after cache references are dropped."""
         gc.collect()
+        if getattr(self.config, "backend", None) == "onnx":
+            return
         try:
             import torch
         except Exception:

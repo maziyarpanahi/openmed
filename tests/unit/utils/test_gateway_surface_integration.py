@@ -17,6 +17,22 @@ from openmed.utils.gateway import InputValidationError
 # Library surface
 # ---------------------------------------------------------------------------
 class TestLibrarySurface:
+    def test_validate_input_delegates_to_gateway(self, monkeypatch):
+        from openmed.utils import gateway, validation
+
+        captured = {}
+
+        def fake_normalize_text(value, **kwargs):
+            captured["value"] = value
+            captured["kwargs"] = kwargs
+            return "normalized text"
+
+        monkeypatch.setattr(gateway, "normalize_text", fake_normalize_text)
+
+        assert validation.validate_input("raw text") == "normalized text"
+        assert captured["value"] == "raw text"
+        assert captured["kwargs"]["min_length"] == 1
+
     def test_validate_input_rejects_invalid_utf8_bytes(self):
         from openmed.utils.validation import validate_input
 
@@ -35,13 +51,21 @@ class TestLibrarySurface:
 
         assert validate_input("  hello  ") == "hello"
 
+    def test_validate_input_enforces_configured_byte_cap(self, monkeypatch):
+        from openmed.utils.validation import validate_input
+
+        monkeypatch.setenv("OPENMED_MAX_TEXT_BYTES", "5")
+        with pytest.raises(InputValidationError) as exc:
+            validate_input("é" * 3)
+        assert exc.value.code == "max_bytes"
+
     def test_extract_pii_language_guardrail_uses_gateway(self):
         from openmed.core.pii import extract_pii
 
         # ``_resolve_effective_pii_model`` now validates the language through the
         # shared gateway, preserving the canonical "Unsupported language" error.
-        with pytest.raises(ValueError, match="Unsupported language"):
-            extract_pii("test", lang="ko")
+        with pytest.raises(InputValidationError, match="Unsupported language"):
+            extract_pii("test", lang="xx")
 
     def test_resolve_effective_pii_model_uses_gateway(self, monkeypatch):
         import openmed.utils.gateway as gateway
@@ -87,13 +111,24 @@ class TestRestSurface:
         with pytest.raises(ValueError):
             AnalyzeRequest(text="   ")
 
-    def test_pii_extract_request_rejects_control_characters(self):
+    def test_pii_extract_request_enforces_byte_cap(self, monkeypatch):
         from openmed.service.schemas import PIIExtractRequest
 
+        monkeypatch.setenv("OPENMED_MAX_TEXT_BYTES", "5")
         with pytest.raises(ValueError):
-            PIIExtractRequest(
-                text="clinical note\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-            )
+            PIIExtractRequest(text="é" * 3)
+
+    def test_rest_validation_messages_do_not_echo_text(self, monkeypatch):
+        from openmed.service.schemas import AnalyzeRequest
+
+        monkeypatch.setenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", "5")
+        secret = "Synthetic MRN 9988776655"
+        with pytest.raises(ValueError) as exc:
+            AnalyzeRequest(text=secret)
+
+        messages = [str(error.get("msg", "")) for error in exc.value.errors()]
+        assert all(secret not in message for message in messages)
+        assert all("9988776655" not in message for message in messages)
 
     def test_pii_extract_request_rejects_invalid_utf8_bytes(self):
         from openmed.service.schemas import PIIExtractRequest
@@ -106,6 +141,26 @@ class TestRestSurface:
 
         req = AnalyzeRequest(text="  Patient has asthma.  ")
         assert req.text == "Patient has asthma."
+
+    def test_pii_language_delegates_to_gateway(self, monkeypatch):
+        from openmed.service import schemas
+
+        captured = {}
+        real_validate_language = schemas.validate_language
+
+        def spy(value, **kwargs):
+            captured["value"] = value
+            captured["kwargs"] = kwargs
+            return real_validate_language(value, **kwargs)
+
+        monkeypatch.setattr(schemas, "validate_language", spy)
+
+        request = schemas.PIIExtractRequest(text="synthetic note", lang="EN")
+        assert request.lang == "en"
+        assert captured == {
+            "value": "EN",
+            "kwargs": {"include_national_id": False},
+        }
 
     def test_char_cap_honours_service_env(self, monkeypatch):
         monkeypatch.setenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", "5")
@@ -186,13 +241,43 @@ class TestMcpSurface:
                 runtime_provider=_exploding_runtime_provider(),
             )
 
-    def test_error_from_mcp_does_not_leak_input_text(self):
+    def test_list_models_rejects_unsupported_language_through_gateway(self):
+        from openmed.mcp.server import openmed_list_models
+
+        secret = "synthetic-private-language-code"
+        with pytest.raises(InputValidationError) as exc:
+            openmed_list_models(pii_language=secret)
+        assert secret not in str(exc.value)
+
+    def test_signed_audit_rejects_blank_text_before_runtime(self):
+        from openmed.mcp.server import openmed_signed_audit_report
+
+        with pytest.raises(InputValidationError):
+            openmed_signed_audit_report(
+                "   ",
+                signing_key="synthetic-signing-key",
+                runtime_provider=_exploding_runtime_provider(),
+            )
+
+    def test_signed_audit_rejects_language_before_runtime(self):
+        from openmed.mcp.server import openmed_signed_audit_report
+
+        with pytest.raises(InputValidationError):
+            openmed_signed_audit_report(
+                "Synthetic patient note",
+                lang="xx",
+                signing_key="synthetic-signing-key",
+                runtime_provider=_exploding_runtime_provider(),
+            )
+
+    def test_error_from_mcp_does_not_leak_input_text(self, monkeypatch):
         from openmed.mcp.server import openmed_extract_pii
 
-        secret = "SSN 123-45-6789 " + "x" * 10_000_000
+        monkeypatch.setenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", "5")
+        secret = "Synthetic MRN 9988776655"
         with pytest.raises(InputValidationError) as exc:
             openmed_extract_pii(
                 secret,
                 runtime_provider=_exploding_runtime_provider(),
             )
-        assert "123-45-6789" not in str(exc.value)
+        assert "9988776655" not in str(exc.value)

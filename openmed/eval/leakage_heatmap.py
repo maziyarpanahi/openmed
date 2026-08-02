@@ -10,14 +10,24 @@ from typing import Any
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.metrics import (
+    _contains_surface,  # noqa: PLC2701
     _covered_char_count,  # noqa: PLC2701
+    _grapheme_count,  # noqa: PLC2701
+    _grapheme_overlap_tally,  # noqa: PLC2701
+    _iter_extraction_offsets,  # noqa: PLC2701
+    _iter_extraction_text_values,  # noqa: PLC2701
+    _surface_index,  # noqa: PLC2701
+    compute_leakage_rate,
     normalize_eval_spans,
 )
 
 
 @dataclass(frozen=True, init=False)
 class LeakageHeatmapCell:
-    """Leakage rate and counts for one canonical label and language cell."""
+    """Grapheme leakage rate for one canonical label and language cell.
+
+    The ``*_chars`` names remain compatibility aliases for grapheme counts.
+    """
 
     canonical_label: str
     language: str
@@ -221,6 +231,81 @@ class LeakageHeatmap:
         return self.to_dict()[key]
 
 
+@dataclass(frozen=True)
+class ScriptLeakageHeatmapCell:
+    """PHI-free grapheme leakage counts for one Unicode script."""
+
+    script: str
+    leaked_graphemes: int
+    total_graphemes: int
+    rate: float
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        """Return a JSON-compatible script cell."""
+        return {
+            "script": self.script,
+            "leaked_graphemes": self.leaked_graphemes,
+            "total_graphemes": self.total_graphemes,
+            "rate": self.rate,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class ScriptLeakageHeatmap:
+    """Grapheme leakage heatmap covering every script in the gold spans."""
+
+    scripts: tuple[str, ...]
+    cells: Mapping[str, ScriptLeakageHeatmapCell]
+    worst_scripts: tuple[ScriptLeakageHeatmapCell, ...]
+    total: ScriptLeakageHeatmapCell
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, PHI-free, JSON-compatible payload."""
+        return {
+            "scripts": list(self.scripts),
+            "cells": {script: self.cells[script].to_dict() for script in self.scripts},
+            "worst_scripts": [cell.to_dict() for cell in self.worst_scripts],
+            "total": self.total.to_dict(),
+            "unit": "grapheme_cluster",
+        }
+
+    def to_markdown(self) -> str:
+        """Render the per-script leakage heatmap as deterministic Markdown."""
+        rows = [
+            _markdown_row(["Script", "Leaked graphemes", "Total graphemes", "Rate"]),
+            _markdown_row(["---", "---:", "---:", "---:"]),
+        ]
+        for script in self.scripts:
+            cell = self.cells[script]
+            rows.append(
+                _markdown_row(
+                    [
+                        f"`{script}`",
+                        str(cell.leaked_graphemes),
+                        str(cell.total_graphemes),
+                        f"{cell.rate:.3f}",
+                    ]
+                )
+            )
+        rows.append(
+            _markdown_row(
+                [
+                    "**Total**",
+                    str(self.total.leaked_graphemes),
+                    str(self.total.total_graphemes),
+                    f"{self.total.rate:.3f}",
+                ]
+            )
+        )
+        return "\n".join(rows)
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
 def compute_leakage_heatmap(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -257,7 +342,112 @@ def compute_leakage_heatmap(
         default_device=default_device,
         source_text=source_text,
     )
+    leaked_counts = [
+        max(_grapheme_count(span) - _covered_char_count(span, predicted), 0)
+        for span in gold
+    ]
+    return _heatmap_from_leaked_counts(gold, leaked_counts, worst_n=worst_n)
 
+
+def compute_script_leakage_heatmap(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    worst_n: int = 10,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> ScriptLeakageHeatmap:
+    """Compute grapheme leakage for every Unicode script in the gold set."""
+    leakage = compute_leakage_rate(
+        gold_spans,
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    scripts = tuple(
+        sorted(
+            script
+            for script, total in leakage.total_chars_by_script.items()
+            if total > 0
+        )
+    )
+    cells = {
+        script: ScriptLeakageHeatmapCell(
+            script=script,
+            leaked_graphemes=leakage.leaked_chars_by_script.get(script, 0),
+            total_graphemes=leakage.total_chars_by_script[script],
+            rate=leakage.by_script[script],
+        )
+        for script in scripts
+    }
+    limit = max(int(worst_n), 0)
+    worst = tuple(
+        sorted(
+            cells.values(),
+            key=lambda cell: (-cell.rate, cell.script),
+        )[:limit]
+    )
+    return ScriptLeakageHeatmap(
+        scripts=scripts,
+        cells=cells,
+        worst_scripts=worst,
+        total=ScriptLeakageHeatmapCell(
+            script="all",
+            leaked_graphemes=leakage.leaked_graphemes,
+            total_graphemes=leakage.total_graphemes,
+            rate=leakage.overall,
+        ),
+    )
+
+
+def compute_extraction_reemission_heatmap(
+    gold_spans: Iterable[Any],
+    extraction_outputs: Any,
+    *,
+    worst_n: int = 10,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> LeakageHeatmap:
+    """Compute a PHI-free heatmap for extraction or grounding re-emissions."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    leaked_intervals: defaultdict[int, list[tuple[int, int]]] = defaultdict(list)
+    surfaces = _surface_index(gold)
+
+    for text in _iter_extraction_text_values(extraction_outputs):
+        folded = text.casefold()
+        for span_index, surface in surfaces:
+            if _contains_surface(folded, surface):
+                span = gold[span_index]
+                leaked_intervals[span_index].append((span.start, span.end))
+
+    for start, end in _iter_extraction_offsets(extraction_outputs):
+        for span_index, span in enumerate(gold):
+            overlap_start = max(start, span.start)
+            overlap_end = min(end, span.end)
+            if overlap_start < overlap_end:
+                leaked_intervals[span_index].append((overlap_start, overlap_end))
+
+    leaked_counts = [
+        _grapheme_overlap_tally(span, leaked_intervals.get(index, ())).matched
+        for index, span in enumerate(gold)
+    ]
+    return _heatmap_from_leaked_counts(gold, leaked_counts, worst_n=worst_n)
+
+
+def _heatmap_from_leaked_counts(
+    gold: Iterable[Any],
+    leaked_counts: Iterable[int],
+    *,
+    worst_n: int,
+) -> LeakageHeatmap:
     leaked_by_cell: defaultdict[tuple[str, str], int] = defaultdict(int)
     total_by_cell: defaultdict[tuple[str, str], int] = defaultdict(int)
     leaked_by_label: defaultdict[str, int] = defaultdict(int)
@@ -267,19 +457,19 @@ def compute_leakage_heatmap(
 
     total_chars = 0
     leaked_chars = 0
-    for span in gold:
-        covered = _covered_char_count(span, predicted)
-        leaked = max(span.length - covered, 0)
+    for span, raw_leaked in zip(gold, leaked_counts):
+        total = _grapheme_count(span)
+        leaked = min(max(int(raw_leaked), 0), total)
         key = (span.label, span.language)
 
         leaked_by_cell[key] += leaked
-        total_by_cell[key] += span.length
+        total_by_cell[key] += total
         leaked_by_label[span.label] += leaked
-        total_by_label[span.label] += span.length
+        total_by_label[span.label] += total
         leaked_by_language[span.language] += leaked
-        total_by_language[span.language] += span.length
+        total_by_language[span.language] += total
         leaked_chars += leaked
-        total_chars += span.length
+        total_chars += total
 
     labels = _ordered_keys(CANONICAL_LABELS, total_by_label, leaked_by_label)
     languages = _ordered_keys(
@@ -344,6 +534,13 @@ def compute_leakage_heatmap(
 
 def render_leakage_heatmap_markdown(heatmap: LeakageHeatmap) -> str:
     """Render a leakage heatmap as a deterministic Markdown matrix."""
+    return heatmap.to_markdown()
+
+
+def render_script_leakage_heatmap_markdown(
+    heatmap: ScriptLeakageHeatmap,
+) -> str:
+    """Render a per-script leakage heatmap as deterministic Markdown."""
     return heatmap.to_markdown()
 
 

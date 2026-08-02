@@ -1,0 +1,94 @@
+"""Hypothesis profile registration for the de-identification fuzz harness.
+
+Two profiles keep CI fast by default while allowing a heavier scheduled run:
+
+- ``fuzz-default`` (used by the normal suite): small example budget and a
+  short per-example deadline so the fuzz tests add negligible wall-clock time
+  to ``pytest tests/``.
+- ``fuzz-nightly`` (opted into via ``HYPOTHESIS_PROFILE=fuzz-nightly``): a much
+  larger example budget for the scheduled CI job.
+
+Selection order:
+
+1. If ``HYPOTHESIS_PROFILE`` is set, that exact profile is loaded (so
+   developers and the nightly job can override). Unknown explicit profiles
+   fail closed instead of silently reducing the fuzz budget.
+2. Otherwise ``fuzz-default`` is loaded.
+
+The profiles are registered at import time and are idempotent, so importing the
+fuzz modules in any order (or repeatedly) is safe.
+"""
+
+from __future__ import annotations
+
+import os
+
+import pytest
+
+try:  # pragma: no cover - exercised indirectly; skip cleanly if unavailable.
+    from hypothesis import HealthCheck, settings
+    from hypothesis.errors import InvalidArgument
+except ImportError:  # pragma: no cover
+    settings = None  # type: ignore[assignment]
+    HealthCheck = None  # type: ignore[assignment]
+    InvalidArgument = ValueError  # type: ignore[misc,assignment]
+
+
+_DEFAULT_PROFILE = "fuzz-default"
+_NIGHTLY_PROFILE = "fuzz-nightly"
+_ALLOWED_PROFILES = frozenset({_DEFAULT_PROFILE, _NIGHTLY_PROFILE})
+_PROFILES_REGISTERED = False
+
+
+def _register_profiles() -> None:
+    """Register the bounded and nightly Hypothesis profiles once."""
+    global _PROFILES_REGISTERED
+    if _PROFILES_REGISTERED or settings is None:
+        return
+
+    # Bounded default: cheap enough to run in the standard suite on every push.
+    settings.register_profile(
+        _DEFAULT_PROFILE,
+        max_examples=40,
+        deadline=400,  # milliseconds per example
+        derandomize=True,  # deterministic example stream for a fixed seed
+        print_blob=True,
+        suppress_health_check=[HealthCheck.too_slow] if HealthCheck else [],
+    )
+
+    # Heavier scheduled sweep: broader coverage, still time-bounded per example.
+    settings.register_profile(
+        _NIGHTLY_PROFILE,
+        max_examples=1000,
+        deadline=1000,
+        derandomize=False,
+        print_blob=True,
+        suppress_health_check=[HealthCheck.too_slow] if HealthCheck else [],
+    )
+
+    _PROFILES_REGISTERED = True
+
+
+def _load_selected_profile() -> None:
+    """Load the profile named by ``HYPOTHESIS_PROFILE`` or the bounded default."""
+    if settings is None:
+        return
+    _register_profiles()
+    requested_profile = os.environ.get("HYPOTHESIS_PROFILE")
+    profile = _DEFAULT_PROFILE if requested_profile is None else requested_profile
+    if profile not in _ALLOWED_PROFILES:
+        allowed = ", ".join(sorted(_ALLOWED_PROFILES))
+        raise InvalidArgument(
+            f"Unsupported HYPOTHESIS_PROFILE {profile!r}; expected one of: {allowed}"
+        )
+    settings.load_profile(profile)
+
+
+# Register + load at import so the settings apply to every test in this package.
+_load_selected_profile()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _fuzz_profile_loaded() -> None:
+    """Ensure the bounded/nightly profile is active for the fuzz package."""
+    _load_selected_profile()

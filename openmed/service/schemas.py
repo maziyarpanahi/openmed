@@ -6,13 +6,14 @@ from collections.abc import Sequence
 from typing import Any, Literal, Optional, Union
 
 from openmed.core.policy import canonical_policy_name
-from openmed.utils.gateway import get_default_limits, normalize_text
+from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
 )
 
 from .keep_alive import parse_keep_alive
+from .limits import get_max_text_length
 
 try:
     from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -34,13 +35,15 @@ _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 KeepAliveValue = Union[int, float, str]
 
-# Languages accepted by the PII endpoints. This MUST mirror
-# ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` so the REST/MCP layer does not
-# reject a language the core library actually supports (e.g. ar/ja/tr, which
-# shipped with published models but were missing from these schemas). The
-# parity is guarded by
+# Languages accepted by the PII endpoints. This MUST include both built-in
+# ``SUPPORTED_LANGUAGES`` and the explicitly configured optional Indic NER
+# routes so the REST/MCP layer does not reject a route accepted by the core.
+# The parity is guarded by
 # ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
 PIILanguage = Literal[
+    "am",
+    "as",
+    "bn",
     "en",
     "fr",
     "de",
@@ -48,6 +51,13 @@ PIILanguage = Literal[
     "es",
     "nl",
     "hi",
+    "gu",
+    "kn",
+    "ml",
+    "mr",
+    "or",
+    "pa",
+    "ta",
     "te",
     "pt",
     "ar",
@@ -56,15 +66,33 @@ PIILanguage = Literal[
     "tr",
     "id",
     "th",
+    "ko",
+    "ro",
+    "ru",
+    "sv",
+    "da",
+    "no",
+    "sw",
+    "zu",
+    "xh",
+    "zh",
+    "uk",
+    "cs",
+    "el",
 ]
 
 
 def _normalize_text(value: Any) -> str:
     # Route through the shared gateway so REST requests validate text identically
     # to the library and MCP surfaces: same character cap (still driven by
-    # ``OPENMED_SERVICE_MAX_TEXT_LENGTH``), plus byte-size, UTF-8 encoding, and
-    # control-character guardrails. Errors never echo the (possibly PHI) text.
-    return normalize_text(value, limits=get_default_limits())
+    # ``OPENMED_SERVICE_MAX_TEXT_LENGTH``), plus byte-size and UTF-8 encoding
+    # guardrails. Errors never echo the (possibly PHI) text.
+    return normalize_text(value)
+
+
+def _normalize_pii_language(value: Any) -> str:
+    """Normalize API PII languages through the shared gateway."""
+    return validate_language(value, include_national_id=False)
 
 
 def _normalize_model_name(value: str) -> str:
@@ -164,6 +192,21 @@ def _normalize_optional_nonblank_string(value: Any, field_name: str) -> Optional
     return _normalize_nonblank_string(value, field_name)
 
 
+def _normalize_records_jsonl(value: Any) -> str:
+    if value is None:
+        raise ValueError("records_jsonl is required")
+    if not isinstance(value, str):
+        raise ValueError("records_jsonl must be a string")
+    if not value.strip():
+        raise ValueError("records_jsonl must not be blank")
+    max_text_length = get_max_text_length()
+    if len(value) > max_text_length:
+        raise ValueError(
+            f"records_jsonl exceeds the maximum length of {max_text_length} characters"
+        )
+    return value
+
+
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
     method = values.get("method", "mask")
     shift_dates = values.get("shift_dates")
@@ -190,6 +233,19 @@ class _StrictModel(BaseModel):
 
         class Config:
             extra = "forbid"
+
+    if PYDANTIC_V2:
+
+        @field_validator("lang", mode="before", check_fields=False)
+        @classmethod
+        def _validate_pii_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
+
+    else:  # pragma: no cover
+
+        @validator("lang", pre=True, check_fields=False)
+        def _validate_pii_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
 
 if PYDANTIC_V2:
@@ -362,7 +418,8 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_confidence_threshold(cls, value: float) -> float:
             normalized = _normalize_confidence_threshold(value)
-            assert normalized is not None
+            if normalized is None:
+                raise ValueError("confidence_threshold must not be None")
             return normalized
 
         @field_validator("policy", mode="before")
@@ -578,6 +635,23 @@ if PYDANTIC_V2:
                 setattr(self, field_name, value)
             return self
 
+    class OmopLoadRequest(_StrictModel):
+        """Request schema for /omop/load."""
+
+        records_jsonl: str
+        vocabulary_version: Optional[str] = None
+        validate_constraints: bool = False
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+        @field_validator("vocabulary_version", mode="before")
+        @classmethod
+        def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
 else:
 
     class AnalyzeRequest(_StrictModel):
@@ -729,7 +803,8 @@ else:
         @validator("confidence_threshold", "detector_confidence_floor")
         def _validate_confidence_threshold(cls, value: float) -> float:
             normalized = _normalize_confidence_threshold(value)
-            assert normalized is not None
+            if normalized is None:
+                raise ValueError("confidence_threshold must not be None")
             return normalized
 
         @validator("policy", pre=True)
@@ -915,3 +990,18 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
+
+    class OmopLoadRequest(_StrictModel):
+        """Request schema for /omop/load."""
+
+        records_jsonl: str
+        vocabulary_version: Optional[str] = None
+        validate_constraints: bool = False
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+        @validator("vocabulary_version", pre=True)
+        def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, "vocabulary_version")
