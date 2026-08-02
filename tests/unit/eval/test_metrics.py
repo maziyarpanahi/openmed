@@ -49,6 +49,7 @@ def test_eval_modules_import_cleanly():
         "cmeee",
         "naamapadam",
         "chinese-clinical-ner",
+        "cblue-task-coverage",
         "multimodal_dicom",
         "code_mixed_routing",
         "india_health_id_leakage",

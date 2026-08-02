@@ -237,10 +237,24 @@ def test_default_registry_contains_both_license_aware_suites() -> None:
 
 
 def test_no_real_benchmark_payload_filenames_are_committed() -> None:
+    """Fail if a benchmark-named payload is committed without self-attestation.
+
+    Scope, stated plainly: this checks the ``metadata.synthetic`` attestation,
+    not the content. A file carrying real rows with ``synthetic: true`` would
+    pass here. The CBLUE fixtures are additionally content-locked by
+    ``test_committed_fixtures_are_reproducible_from_the_generator``, which
+    compares them byte for byte against a generator that reads no external
+    state; that test, not this one, is what makes their content provable.
+    """
+
     repo_root = Path(__file__).resolve().parents[3]
-    benchmark_name = re.compile(r"cblue|cmeee|naamapadam|indicglue", re.IGNORECASE)
+    benchmark_name = re.compile(
+        r"cblue|cmeee|cmeie|chip[-_]?cdn|chip[-_]?ctc|imcs|kuake|naamapadam|indicglue",
+        re.IGNORECASE,
+    )
     payload_suffixes = {".bio", ".conll", ".csv", ".iob", ".json", ".jsonl", ".tsv"}
     offenders: list[str] = []
+    scanned: list[str] = []
 
     for scan_root in (repo_root / "openmed", repo_root / "tests"):
         for path in scan_root.rglob("*"):
@@ -250,11 +264,37 @@ def test_no_real_benchmark_payload_filenames_are_committed() -> None:
                 or benchmark_name.search(path.name) is None
             ):
                 continue
+            scanned.append(str(path.relative_to(repo_root)))
             if _is_synthetic_payload(path):
                 continue
             offenders.append(str(path.relative_to(repo_root)))
 
     assert offenders == []
+    # A no-vendor guard that matches nothing proves nothing. Every committed
+    # benchmark-named payload, including each CBLUE task fixture, must be in
+    # scope and must have been vetted as synthetic above.
+    assert set(scanned) >= {
+        "openmed/eval/fixtures/cblue_chip_cdn_synthetic.jsonl",
+        "openmed/eval/fixtures/cblue_imcs_v2_ner_synthetic.jsonl",
+        "openmed/eval/fixtures/cmeee_zh_synthetic.jsonl",
+        "tests/unit/eval/fixtures/multilingual_ner/cmeee.jsonl",
+    }
+
+
+def test_no_vendor_guard_rejects_a_non_synthetic_payload(tmp_path: Path) -> None:
+    synthetic = tmp_path / "cblue_chip_cdn_synthetic.jsonl"
+    synthetic.write_text(
+        json.dumps({"text": "甲区甲型热症", "metadata": {"synthetic": True}}) + "\n",
+        encoding="utf-8",
+    )
+    vendored = tmp_path / "cblue_chip_cdn_test.jsonl"
+    vendored.write_text(
+        json.dumps({"text": "甲区甲型热症", "metadata": {"synthetic": False}}) + "\n",
+        encoding="utf-8",
+    )
+
+    assert _is_synthetic_payload(synthetic) is True
+    assert _is_synthetic_payload(vendored) is False
 
 
 def _identity_runner(

@@ -26,6 +26,7 @@ from openmed.eval.metrics import (
 from openmed.eval.report import BenchmarkReport
 
 CHINESE_CLINICAL_NER = "chinese-clinical-ner"
+MULTILINGUAL_FALLBACK_MODEL = "OpenMed/privacy-filter-multilingual"
 DEFAULT_SYNTHETIC_CMEEE_PATH = (
     Path(__file__).resolve().parents[1] / "fixtures" / "cmeee_zh_synthetic.jsonl"
 )
@@ -197,22 +198,50 @@ def load_chinese_clinical_ner_fixtures(
 
 
 def chinese_clinical_ner_metadata() -> dict[str, Any]:
-    """Return the suite license, model, and redistribution disclaimers."""
+    """Return the suite license, model, and redistribution disclaimers.
 
+    The model notice is model-card evidence, so it names the routed default
+    rather than a fixed claim: the ``zh`` language pack now resolves to a
+    dedicated Chinese PII checkpoint, and callers evaluating a different local
+    model must record that substitution in their own model card.
+    """
+
+    default_model = _zh_default_model()
     return {
         "data_boundary": (
             "CMeEE, CBLUE, and eHealth records are user-supplied local inputs; "
             "OpenMed bundles only synthetic smoke records."
         ),
         "language": "zh",
+        "model_evidence": {
+            "dedicated_zh_model": default_model != MULTILINGUAL_FALLBACK_MODEL,
+            "routed_default_model": default_model,
+            "weights_bundled": False,
+        },
         "model_notice": (
-            "The bundled Chinese default is a documented multilingual routing "
-            "placeholder, not a dedicated Chinese clinical NER checkpoint."
+            f"The routed Chinese default is {default_model}. It is a PII "
+            "checkpoint scored here for entity coverage, not a CMeEE-trained "
+            "clinical NER checkpoint; OpenMed bundles no weights, and any "
+            "dedicated local model substituted for it must be recorded as "
+            "model-card evidence with its own license and provenance."
         ),
         "redistribution": "no licensed corpus records or model weights are bundled",
         "suite": CHINESE_CLINICAL_NER,
         "task": "clinical_ner_with_phi_leakage_gate",
     }
+
+
+def _zh_default_model() -> str:
+    """Return the model the ``zh`` language pack currently routes to."""
+
+    from openmed.core.language_pack_catalog import (
+        DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+        DEFAULT_PII_MODELS,
+    )
+
+    if "zh" in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES:
+        return MULTILINGUAL_FALLBACK_MODEL
+    return str(DEFAULT_PII_MODELS.get("zh") or MULTILINGUAL_FALLBACK_MODEL)
 
 
 def run_chinese_clinical_ner_suite(
@@ -759,6 +788,7 @@ __all__ = [
     "CHINESE_LOCAL_MODEL_TOKENIZER_FILES",
     "CHINESE_LOCAL_MODEL_WEIGHT_SUFFIXES",
     "DEFAULT_SYNTHETIC_CMEEE_PATH",
+    "MULTILINGUAL_FALLBACK_MODEL",
     "ChineseClinicalNerAdapter",
     "ChineseClinicalNerAssetUnavailable",
     "ChineseClinicalNerContractError",
