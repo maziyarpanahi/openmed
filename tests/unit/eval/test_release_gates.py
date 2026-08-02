@@ -27,6 +27,7 @@ from openmed.eval.surrogate_quality import load_surrogate_quality_records
 from openmed.risk import (
     AnonymityPolicy,
     anonymize_release,
+    longitudinal_risk_report,
     validate_released_output,
 )
 
@@ -249,6 +250,33 @@ def _structured_release_evidence(
         ),
         composition=composition,
     )
+
+
+def _synthetic_longitudinal_records(
+    *,
+    diversified_surrogates: bool,
+) -> list[dict[str, object]]:
+    surrogate_values = (
+        ("synthetic-surrogate-a", "synthetic-surrogate-b")
+        if diversified_surrogates
+        else ("synthetic-surrogate-a", "synthetic-surrogate-a")
+    )
+    return [
+        {
+            "patient_id": "synthetic-subject-001",
+            "record_id": f"synthetic-note-{index}",
+            "text": "Synthetic follow-up note.",
+            "audit_spans": [
+                {
+                    "canonical_label": "SYNTHETIC_SURROGATE",
+                    "surrogate": surrogate,
+                    "start": 0,
+                    "end": 9,
+                }
+            ],
+        }
+        for index, surrogate in enumerate(surrogate_values, start=1)
+    ]
 
 
 def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, object]:
@@ -1301,6 +1329,114 @@ def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> 
     assert result.decision == RELEASABLE
     assert calls == {"strict": 1}
     assert _check(result, "G8").details["spans_checked"] == 3
+
+
+def test_cross_document_linkage_gate_signs_blocked_and_mitigated_verdicts(
+    tmp_path: Path,
+) -> None:
+    overlinked = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=False),
+        hmac_key="synthetic-release-gate-key",
+    )
+    mitigated = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=True),
+        hmac_key="synthetic-release-gate-key",
+    )
+
+    blocked = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"longitudinal_linkage_risk": overlinked},
+        ),
+        _baseline(),
+    )
+    releasable = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"longitudinal_linkage_risk": mitigated},
+        ),
+        _baseline(),
+    )
+
+    blocked_check = _check(blocked, release_gates.CROSS_DOCUMENT_LINKAGE_GATE)
+    releasable_check = _check(
+        releasable,
+        release_gates.CROSS_DOCUMENT_LINKAGE_GATE,
+    )
+    assert overlinked["linkage_success_upper_bound"] == pytest.approx(1.0)
+    assert mitigated["linkage_success_upper_bound"] == pytest.approx(0.0)
+    assert blocked.decision == QUARANTINED
+    assert blocked.verify(SIGNING_KEY)
+    assert GateReport.from_json(blocked.to_json()).verify(SIGNING_KEY)
+    assert blocked_check.passed is False
+    assert releasable.decision == RELEASABLE
+    assert releasable.verify(SIGNING_KEY)
+    assert releasable_check.passed is True
+
+    serialized = blocked.to_json()
+    assert "synthetic-subject-001" not in serialized
+    assert "synthetic-note-1" not in serialized
+    assert "synthetic-surrogate-a" not in serialized
+    assert blocked_check.details["evidence_hash"].startswith("sha256:")
+    assert blocked_check.details["high_risk_evidence"]
+    assert all(
+        {"start", "end"}.issubset(item)
+        for item in blocked_check.details["high_risk_evidence"]
+    )
+    assert all(
+        set(item)
+        <= {
+            "patient_hash",
+            "note_index",
+            "note_hash",
+            "value_hash",
+            "start",
+            "end",
+        }
+        for item in blocked_check.details["high_risk_evidence"]
+    )
+
+
+def test_cross_document_linkage_gate_discards_raw_fields_from_signed_evidence() -> None:
+    evidence = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=True),
+        hmac_key="synthetic-release-gate-key",
+    )
+    evidence["patient_risks"][0]["raw_note"] = "synthetic-private-canary"
+
+    check = release_gates.evaluate_cross_document_linkage_gate(evidence)
+
+    assert check.passed is True
+    assert check.details["evidence_valid"] is True
+    assert check.details["evidence_hash"].startswith("sha256:")
+    assert "synthetic-private-canary" not in json.dumps(check.to_dict())
+
+
+def test_cross_document_linkage_gate_honors_configured_ceiling(
+    tmp_path: Path,
+) -> None:
+    evidence = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=False),
+        hmac_key="synthetic-release-gate-key",
+    )
+    gate = ReleaseGate(
+        signing_key=SIGNING_KEY,
+        cross_document_linkage_ceiling=1.0,
+    )
+
+    report = gate.evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"longitudinal_linkage_risk": evidence},
+        ),
+        _baseline(),
+    )
+    check = _check(report, release_gates.CROSS_DOCUMENT_LINKAGE_GATE)
+
+    assert report.decision == RELEASABLE
+    assert report.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["linkage_ceiling"] == pytest.approx(1.0)
 
 
 def test_k_floor_release_gate_passes_signed_enforcement_evidence(
