@@ -4,9 +4,11 @@ No OncoTree payload is bundled or downloaded. Callers supply a local JSON
 snapshot (path or ``OPENMED_ONCOTREE_PATH``) and a release version
 (``version=...`` or ``OPENMED_ONCOTREE_VERSION``); OncoTree JSON does not
 carry a version field. The snapshot must be a flat JSON list of tumor-type
-node objects (the OncoTree ``tumorTypes`` / API list shape). Nested tree
-dumps (root object with recursive ``children``) are unsupported. Matching is
-deterministic exact / normalized name and code lookup (including
+node objects (the OncoTree ``tumorTypes`` / API list shape). Callers may add an
+optional ``synonyms`` string list to nodes in their local snapshot; this is an
+OpenMed extension, not a field supplied by the OncoTree API. Nested tree dumps
+(root object with recursive ``children``) are unsupported. Matching is
+deterministic exact / normalized name, synonym, and code lookup (including
 ``history`` / ``revocations`` former codes). History and revocation aliases
 that collide with a still-live code in the same release are not indexed, so
 current codes win over former-code aliases. Outputs are assistive only -- see
@@ -30,8 +32,9 @@ ONCOTREE_ADVISORY = (
     "grounding against a user-supplied OncoTree release snapshot. OpenMed does "
     "not bundle, download, or refresh OncoTree data; every mapping is scoped to "
     "the loaded release version stamped in oncotree_version and may change "
-    "across releases. Matching uses exact and normalized name/code lookup and "
-    "indexes history and revocation code aliases from that snapshot except "
+    "across releases. Matching uses exact and normalized name/code lookup, "
+    "plus optional caller-supplied synonyms, and indexes history and revocation "
+    "code aliases from that snapshot except "
     "when an alias collides with a still-live code (current codes win). "
     "Ambiguous or unmatched mentions are returned unmapped with a reason "
     "rather than guessed. The mapper does not predict tumor type, derive "
@@ -76,6 +79,7 @@ class OncoTreeNode:
     name: str
     main_type: str
     tissue: str
+    synonyms: tuple[str, ...] = ()
     history: tuple[str, ...] = ()
     revocations: tuple[str, ...] = ()
 
@@ -160,8 +164,8 @@ def map_tumor_type(mention: str, release: OncoTreeRelease) -> OncoTreeMapping:
 
     Returns:
         An :class:`OncoTreeMapping` with version provenance on every result.
-        Exact and normalized name/code tiers only; unmatched or ambiguous
-        mentions stay unmapped with a reason.
+        Exact and normalized name/synonym/code tiers only; unmatched or
+        ambiguous mentions stay unmapped with a reason.
     """
 
     stripped = mention.strip()
@@ -172,10 +176,10 @@ def map_tumor_type(mention: str, release: OncoTreeRelease) -> OncoTreeMapping:
 
     # (index, lookup_key, confidence)
     tiers: list[tuple[Mapping[str, tuple[str, ...]], str, float]] = [
-        (release._exact_name, stripped, _CONFIDENCE_EXACT),
         (release._exact_code, stripped, _CONFIDENCE_EXACT),
-        (release._normalized_name, normalized, _CONFIDENCE_NORMALIZED),
+        (release._exact_name, stripped, _CONFIDENCE_EXACT),
         (release._normalized_code, normalized, _CONFIDENCE_NORMALIZED),
+        (release._normalized_name, normalized, _CONFIDENCE_NORMALIZED),
     ]
 
     for index, key, confidence in tiers:
@@ -242,12 +246,15 @@ def _coerce_node(item: Any, *, index: int) -> OncoTreeNode:
         name=name.strip(),
         main_type=main_type.strip(),
         tissue=tissue.strip(),
-        history=_code_list(item.get("history"), field="history", code=code),
-        revocations=_code_list(item.get("revocations"), field="revocations", code=code),
+        synonyms=_string_list(item.get("synonyms"), field="synonyms", code=code),
+        history=_string_list(item.get("history"), field="history", code=code),
+        revocations=_string_list(
+            item.get("revocations"), field="revocations", code=code
+        ),
     )
 
 
-def _code_list(raw: Any, *, field: str, code: str) -> tuple[str, ...]:
+def _string_list(raw: Any, *, field: str, code: str) -> tuple[str, ...]:
     if raw is None:
         return ()
     if not isinstance(raw, list):
@@ -285,6 +292,8 @@ def _build_release(version: str, nodes: Iterable[OncoTreeNode]) -> OncoTreeRelea
     # current node instead of ambiguous.
     for node in node_list:
         _index_surface(exact_name, normalized_name, node.name, node.code)
+        for synonym in node.synonyms:
+            _index_surface(exact_name, normalized_name, synonym, node.code)
         _index_code_alias(exact_code, normalized_code, node.code, target=node.code)
         for alias in (*node.history, *node.revocations):
             if alias in nodes_by_code:

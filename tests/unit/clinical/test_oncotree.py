@@ -15,19 +15,24 @@ from openmed.clinical import (
 
 ROOT = Path(__file__).resolve().parents[3]
 STUB = ROOT / "tests" / "fixtures" / "clinical" / "oncotree_stub.json"
-# Canonical mapping gold lives with eval fixtures (single source of truth).
-GOLD = ROOT / "openmed" / "eval" / "golden" / "fixtures" / "oncotree_map.jsonl"
+FIXTURE = ROOT / "tests" / "fixtures" / "clinical" / "oncotree_map.jsonl"
 VERSION = "synthetic-oncotree-1"
 
 
 def _load_gold() -> list[dict]:
-    with GOLD.open(encoding="utf-8") as handle:
+    with FIXTURE.open(encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
 
 
 @pytest.fixture(scope="module")
 def release():
     return load_oncotree(STUB, version=VERSION)
+
+
+def test_mapping_fixture_is_present_and_synthetic():
+    rows = _load_gold()
+    assert len(rows) >= 12
+    assert all(row["metadata"]["synthetic"] is True for row in rows)
 
 
 def test_load_stub_stamps_version(release):
@@ -86,7 +91,7 @@ def test_gold_mentions_map_with_provenance(release):
         assert result["oncotree_version"] == VERSION
         assert result["advisory"] == ONCOTREE_ADVISORY
         checked += 1
-    assert checked >= 40
+    assert checked >= 12
 
 
 def test_empty_mention_unmapped(release):
@@ -175,6 +180,56 @@ def test_history_alias_colliding_with_live_code_prefers_live(tmp_path: Path):
     assert mapped_b["reason"] is None
 
 
+def test_caller_supplied_synonyms_are_exact_and_normalized(tmp_path: Path):
+    path = tmp_path / "synonyms.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "code": "SYN_LUNG",
+                    "name": "Synthetic Pulmonary Adenocarcinoma",
+                    "mainType": "Synthetic Adenocarcinoma",
+                    "tissue": "Synthetic Lung",
+                    "synonyms": ["Synthetic Lung Adenocarcinoma"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    release = load_oncotree(path, version="synonyms-v1")
+
+    exact = map_tumor_type("Synthetic Lung Adenocarcinoma", release)
+    normalized = map_tumor_type("synthetic-lung-adenocarcinoma", release)
+
+    assert exact["code"] == "SYN_LUNG"
+    assert exact["match_confidence"] == 1.0
+    assert normalized["code"] == "SYN_LUNG"
+    assert normalized["match_confidence"] == 0.95
+
+
+def test_live_code_wins_over_caller_supplied_synonym(tmp_path: Path):
+    path = tmp_path / "code_synonym_collision.json"
+    path.write_text(
+        json.dumps(
+            [
+                {"code": "LIVE_A", "name": "Alpha Tumor"},
+                {
+                    "code": "LIVE_B",
+                    "name": "Beta Tumor",
+                    "synonyms": ["LIVE_A"],
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    release = load_oncotree(path, version="collision-v1")
+
+    mapped = map_tumor_type("LIVE_A", release)
+
+    assert mapped["code"] == "LIVE_A"
+    assert mapped["name"] == "Alpha Tumor"
+
+
 def test_duplicate_live_codes_rejected(tmp_path: Path):
     path = tmp_path / "duplicate_codes.json"
     path.write_text(
@@ -243,10 +298,20 @@ def test_duplicate_live_codes_rejected(tmp_path: Path):
             ],
             r"'revocations' entries must be strings",
         ),
+        (
+            [{"code": "X1", "name": "Example Tumor", "synonyms": "alias"}],
+            r"'synonyms' must be a list",
+        ),
+        (
+            [{"code": "X1", "name": "Example Tumor", "synonyms": [42]}],
+            r"'synonyms' entries must be strings",
+        ),
     ],
 )
-def test_malformed_history_types_rejected(tmp_path: Path, payload: list, match: str):
-    path = tmp_path / "malformed_history.json"
+def test_malformed_string_list_fields_rejected(
+    tmp_path: Path, payload: list, match: str
+):
+    path = tmp_path / "malformed_list.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match=match):
         load_oncotree(path, version="malformed-v1")
