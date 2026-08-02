@@ -319,12 +319,21 @@ def test_unknown_language_falls_back_to_english() -> None:
     assert context.negation == AFFIRMED
 
 
-def test_language_specific_recent_values_remain_valid() -> None:
+def test_language_specific_recent_cue_blocks_historical_section_prior() -> None:
+    span = _span("Heute akute Pneumonie.", "Pneumonie")
+
+    english_fallback = assert_context_axes(
+        span,
+        section="Past Medical History",
+        language="en",
+    )
     assertion = assert_context_axes(
-        _span("Heute akute Pneumonie.", "Pneumonie"),
+        span,
+        section="Past Medical History",
         language="de",
     )
 
+    assert english_fallback.temporality == HISTORICAL
     assert assertion.temporality == RECENT
     assert assertion.certainty == CERTAIN
     assert assertion.negation == AFFIRMED
