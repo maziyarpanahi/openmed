@@ -1007,6 +1007,50 @@ def test_guard_detects_every_known_smuggle_shape() -> None:
         type(class_attribute).store = None
 
 
+def test_guard_survives_id_recycling_among_its_own_temporaries() -> None:
+    """Memoizing by ``id()`` must not let a freed address hide a later node.
+
+    The walker allocates temporaries as it goes -- ``list(partial.args)`` and
+    ``dict(partial.keywords)`` -- and memoizes them by ``id()``. An id is only
+    unique among *live* objects, so once such a temporary is freed CPython
+    hands its address to the next allocation and the later node is skipped as
+    "already seen" without ever being inspected.
+
+    This is the dangerous direction of the failure: the guard returns clean for
+    a payload it should reject. The store below sits in the *last* partial, so
+    it is only found if every earlier same-shaped temporary failed to poison
+    the memo. Before the fix this missed on 200 of 200 runs at this size, so
+    the reproduction is deterministic rather than a timing flake.
+    """
+    store = InMemoryRunManifestStore()
+    partials = [
+        functools.partial(handler_with_store, [index] * 4) for index in range(200)
+    ]
+    partials.append(functools.partial(handler_with_store, [store]))
+
+    leaked = find_driver_only_state(partials)
+
+    assert leaked, "id recycling hid a store from the guard"
+    assert any("InMemoryRunManifestStore" in entry for entry in leaked)
+
+
+def test_guard_memo_still_collapses_cycles_and_repeated_nodes() -> None:
+    """The memo must keep doing its job: terminate, and report once.
+
+    Holding visited nodes alive fixes id reuse, but it must not turn the memo
+    off -- a cycle still has to terminate and a node reached by two paths still
+    has to be reported a single time.
+    """
+    store = InMemoryRunManifestStore()
+
+    cycle: dict[str, object] = {"store": store}
+    cycle["self"] = cycle
+    assert find_driver_only_state(cycle)
+
+    diamond = {"left": store, "right": store}
+    assert len(find_driver_only_state(diamond)) == 1
+
+
 def test_guard_reaches_deeply_nested_captures() -> None:
     class Node:
         def __init__(self, **kwargs: object) -> None:

@@ -198,6 +198,15 @@ def find_driver_only_state(
     """
     found: list[str] = []
     seen: set[int] = set()
+    # ``seen`` memoizes by ``id()`` to stop cycles and exponential re-walks, but
+    # an id is only unique among *live* objects. This walker allocates its own
+    # temporaries (``list(partial.args)``, ``dict(partial.keywords)``), and once
+    # one is freed CPython hands its address to the next allocation -- so a
+    # later node inherits a memoized id and is skipped without ever being
+    # inspected, and the guard returns "clean" for a payload it should reject.
+    # Holding every visited node alive for the duration of the walk makes the
+    # ids unique in practice as well as in principle.
+    visited: list[Any] = []
     forbidden = tuple(forbidden_types)
     budget = [_MAX_STATE_NODES]
 
@@ -228,6 +237,7 @@ def find_driver_only_state(
         if marker in seen:
             return
         seen.add(marker)
+        visited.append(node)
 
         try:
             if isinstance(node, forbidden) or _looks_like_manifest_store(node):
