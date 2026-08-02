@@ -230,6 +230,7 @@ def test_priority_scheduler_prefers_interactive_without_starving_bulk():
     assert any(item.startswith("bulk-") for batch in calls for item in batch)
 
 
+@pytest.mark.no_cover
 def test_mixed_load_harness_keeps_interactive_latency_bounded_and_sheds_bulk():
     async def run_load(*, interactive_count: int, bulk_count: int):
         async def dispatch(items):

@@ -1,0 +1,115 @@
+{
+  "schema_version": 2,
+  "source_claims": "../../system/claims.yml",
+  "source_voice": "../../system/voice.md",
+  "required_claims": [
+    "runtime_locality",
+    "sdk_license",
+    "model_license_population",
+    "dataset_access"
+  ],
+  "claim_placeholders": {
+    "runtime_public_wording": "runtime_locality.public_wording",
+    "sdk_license": "sdk_license.public_wording",
+    "model_license_public_wording": "model_license_population.public_wording",
+    "dataset_access_public_wording": "dataset_access.public_wording"
+  },
+  "platforms": {
+    "website": {
+      "target": "OpenMed.life website",
+      "link": "https://openmed.life/",
+      "title": "OpenMed — local-first clinical AI",
+      "description": "Build clinical extraction and de-identification workflows on hardware you control. Model and dataset terms vary by source.",
+      "card_asset": "og-website",
+      "card_alt": "OpenMed social card with the Open Cross and the words “Your data. Your model. Your hardware.”; its footer lists openmed.life, 2,000+ models, 340M+ downloads, 10M+ installs, and Apache-2.0.",
+      "authorization": "Repository source update only; deployment and cache refresh require separate explicit approval."
+    },
+    "github_repository": {
+      "target": "maziyarpanahi/openmed",
+      "link": "https://github.com/maziyarpanahi/openmed",
+      "website": "https://openmed.life/",
+      "description": "Local-first clinical extraction and de-identification on hardware you control. {sdk_license}; model and dataset terms vary.",
+      "topics": [
+        "clinical-nlp",
+        "de-identification",
+        "local-first",
+        "medical-nlp",
+        "privacy"
+      ],
+      "social_preview_asset": "github-social",
+      "social_preview_alt": "OpenMed GitHub social preview with the cat mascot, Open Cross, technology labels, installation command, and the words “State-of-the-art clinical AI models, tools, and native apps.”; its bottom line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+      "avatar_policy": "Never change the personal owner avatar.",
+      "limits": {
+        "description_max_characters": 350
+      },
+      "authorization": "Repository metadata and social-preview edits require separate explicit approval."
+    },
+    "hugging_face_organization": {
+      "target": "OpenMed organization",
+      "link": "https://huggingface.co/OpenMed",
+      "bio": "Local-first clinical model workflows on hardware you control.",
+      "about": "OpenMed publishes model artifacts for clinical extraction and de-identification workflows. {model_license_public_wording} {dataset_access_public_wording}",
+      "avatar_asset": "avatar-cat",
+      "avatar_alt": "OpenMed white cat mascot wearing a teal turban and medical-cross pendant.",
+      "limits": {
+        "bio_max_characters": 160
+      },
+      "authorization": "Organization profile edits require separate explicit approval."
+    },
+    "hugging_face_card_repository": {
+      "target": "OpenMed/README",
+      "link": "https://huggingface.co/spaces/OpenMed/README",
+      "about": "Organization presentation repository for the OpenMed card asset and profile copy.",
+      "card_asset": "hf-org",
+      "card_alt": "OpenMed Hugging Face card with the cat mascot, Open Cross, topic labels, and the words “The open clinical AI hub.”; its metric line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+      "space_policy": "Code/file push only. Never read or change Hugging Face Space visibility or settings.",
+      "authorization": "Repository file update requires separate explicit approval; Space settings are never authorized by this runbook."
+    },
+    "x": {
+      "target": "@OpenMed_AI",
+      "link": "https://x.com/OpenMed_AI",
+      "bio": "Local-first clinical AI on hardware you control. {sdk_license}. Model and dataset terms vary.",
+      "pinned_post": "OpenMed is a local-first SDK for clinical extraction and de-identification workflows. Core processing can run on hardware you control after required artifacts are present. Choose and validate models for your use case. {sdk_license}; model and dataset terms vary.",
+      "avatar_asset": "avatar-x-circle",
+      "avatar_alt": "OpenMed Open Cross centered in a circular light tile.",
+      "header_asset": "x-header",
+      "header_alt": "OpenMed X header reading “Built to run anywhere, inspected by anyone.” beside panels labeled 2,000+ open models, 340M+ model downloads, and 10M+ installs.",
+      "limits": {
+        "bio_max_characters": 160,
+        "post_max_characters": 280
+      },
+      "authorization": "Profile, header, avatar, link, and pinned-post edits require separate explicit approval."
+    },
+    "linkedin": {
+      "target": "OpenMed company page",
+      "link": "https://www.linkedin.com/company/openmed-ai/",
+      "tagline": "Local-first clinical AI on hardware you control.",
+      "about": "OpenMed is a software library and research toolkit for clinical extraction and de-identification workflows. Its core runtime can process locally after required artifacts are present; downloads and configured integrations may use a network. {sdk_license}. Model and dataset terms vary by source.",
+      "featured_post": "Build clinical extraction and de-identification workflows on hardware you control. Review each model and dataset for your use case and deployment boundary. {sdk_license}.",
+      "tile_asset": "avatar-linkedin",
+      "tile_alt": "OpenMed Open Cross in a dark rounded-square tile.",
+      "cover_asset": "linkedin-banner",
+      "cover_alt": "OpenMed LinkedIn banner reading “Built to run anywhere, inspected by anyone.” beside panels labeled 340M+ model downloads and 10M+ installs.",
+      "limits": {
+        "tagline_max_characters": 120,
+        "about_max_characters": 2000,
+        "post_max_characters": 3000
+      },
+      "authorization": "Company profile, cover, tile, link, and featured-content edits require separate explicit approval."
+    }
+  },
+  "alt_text": {
+    "og-website": "OpenMed social card with the Open Cross and the words “Your data. Your model. Your hardware.”; its footer lists openmed.life, 2,000+ models, 340M+ downloads, 10M+ installs, and Apache-2.0.",
+    "github-social": "OpenMed GitHub social preview with the cat mascot, Open Cross, technology labels, installation command, and the words “State-of-the-art clinical AI models, tools, and native apps.”; its bottom line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+    "x-header": "OpenMed X header reading “Built to run anywhere, inspected by anyone.” beside panels labeled 2,000+ open models, 340M+ model downloads, and 10M+ installs.",
+    "hf-org": "OpenMed Hugging Face card with the cat mascot, Open Cross, topic labels, and the words “The open clinical AI hub.”; its metric line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+    "readme-banner": "OpenMed README banner with the cat mascot, lowercase wordmark, Open Cross, and the text “Open-source healthcare AI · 340M+ downloads · 10M+ installs.”",
+    "linkedin-banner": "OpenMed LinkedIn banner reading “Built to run anywhere, inspected by anyone.” beside panels labeled 340M+ model downloads and 10M+ installs.",
+    "avatar-cat": "OpenMed white cat mascot wearing a teal turban and medical-cross pendant.",
+    "avatar-x-circle": "OpenMed Open Cross centered in a circular light tile.",
+    "avatar-linkedin": "OpenMed Open Cross in a dark rounded-square tile.",
+    "favicon": "OpenMed Open Cross.",
+    "apple-touch": "OpenMed Open Cross on a light surface.",
+    "favicon-ico": "OpenMed Open Cross in browser favicon sizes."
+  }
+}

@@ -1,0 +1,44 @@
+services:
+  openmed-mediator:
+    build:
+      context: ../..
+      dockerfile: examples/openhim-mediator/Dockerfile
+    environment:
+      OPENMED_OPENHIM_CORE_URL: ${OPENMED_OPENHIM_CORE_URL:?Set OPENMED_OPENHIM_CORE_URL}
+      OPENMED_OPENHIM_USERNAME: ${OPENMED_OPENHIM_USERNAME:?Set OPENMED_OPENHIM_USERNAME}
+      OPENMED_OPENHIM_PASSWORD: ${OPENMED_OPENHIM_PASSWORD:?Set OPENMED_OPENHIM_PASSWORD}
+      OPENMED_OPENHIM_AUTH_MODE: ${OPENMED_OPENHIM_AUTH_MODE:-basic}
+      OPENMED_OPENHIM_POLICY: ${OPENMED_OPENHIM_POLICY:-hipaa_safe_harbor}
+      OPENMED_OPENHIM_METHOD: ${OPENMED_OPENHIM_METHOD:-replace}
+      OPENMED_OPENHIM_VERIFY_TLS: ${OPENMED_OPENHIM_VERIFY_TLS:-true}
+      OPENMED_OPENHIM_ALLOW_INSECURE_HTTP: ${OPENMED_OPENHIM_ALLOW_INSECURE_HTTP:-false}
+      OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS: ${OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS:-10}
+    ports:
+      - "127.0.0.1:${OPENMED_OPENHIM_HOST_PORT:-8080}:8080"
+    volumes:
+      - ./mediator-config.json:/etc/openmed/mediator-config.json:ro
+    restart: unless-stopped
+
+  openhim-fixture:
+    image: python:3.11-slim@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3
+    profiles:
+      - fixture
+    command:
+      - python
+      - /fixture/fixture_server.py
+    environment:
+      OPENHIM_FIXTURE_USERNAME: openhim@example.org
+      OPENHIM_FIXTURE_PASSWORD: synthetic-password
+    ports:
+      - "127.0.0.1:${OPENMED_OPENHIM_FIXTURE_HOST_PORT:-8081}:8081"
+    volumes:
+      - ./fixture_server.py:/fixture/fixture_server.py:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)
+      interval: 2s
+      timeout: 2s
+      retries: 15

@@ -202,8 +202,9 @@ def _require_autoawq() -> Any:
         from awq import AutoAWQForCausalLM
     except ImportError as exc:
         raise ImportError(
-            "AWQ quantization requires the optional `autoawq` dependency. "
-            "Install it with: pip install openmed[awq]"
+            "AWQ quantization requires the optional `autoawq` dependency on "
+            "Linux. Install it with: pip install openmed[awq]. On macOS, use "
+            "the MLX or CoreML export path instead."
         ) from exc
     return AutoAWQForCausalLM
 

@@ -6,11 +6,15 @@ on:
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
+      - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
     branches: [main, master]
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
+      - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
 permissions:
   contents: read
@@ -39,6 +43,14 @@ jobs:
     - name: Assemble OpenMedKit debug library
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
+
+    - name: Run Android offset-contract parity suite
+      working-directory: android
+      run: >-
+        ./gradlew :openmedkit:testDebugUnitTest
+        --tests '*OffsetContractParityTest'
+        --tests '*IcuSegmentationFallbackTest'
+        --stacktrace
 
     - name: Run OpenMedKit unit tests
       working-directory: android

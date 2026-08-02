@@ -31,8 +31,10 @@ Example:
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Optional
+from math import isfinite
+from typing import Any, Optional
 
 __all__ = [
     "BudgetClock",
@@ -95,9 +97,10 @@ def _validate_positive_number(
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a number or None")
-    if value <= 0:
-        raise ValueError(f"{name} must be positive")
-    return float(value)
+    normalized = float(value)
+    if not isfinite(normalized) or normalized <= 0:
+        raise ValueError(f"{name} must be positive and finite")
+    return normalized
 
 
 def _validate_positive_int(
@@ -238,7 +241,9 @@ class BudgetClock:
             )
 
 
-def coerce_budget(budget: Optional[RequestBudget]) -> Optional[RequestBudget]:
+def coerce_budget(
+    budget: Optional[RequestBudget | Mapping[str, Any]],
+) -> Optional[RequestBudget]:
     """Validate and return a :class:`RequestBudget` or ``None``.
 
     Accepts an existing :class:`RequestBudget`, ``None`` (unlimited), or a
@@ -259,7 +264,7 @@ def coerce_budget(budget: Optional[RequestBudget]) -> Optional[RequestBudget]:
         return None
     if isinstance(budget, RequestBudget):
         return None if budget.is_unlimited else budget
-    if isinstance(budget, dict):
+    if isinstance(budget, Mapping):
         coerced = RequestBudget(
             max_wall_time=budget.get("max_wall_time"),
             max_input_chars=budget.get("max_input_chars"),

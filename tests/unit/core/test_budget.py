@@ -20,13 +20,21 @@ from datetime import datetime
 
 import pytest
 
+import openmed
+import openmed.core.pii as pii_module
+from openmed import core
 from openmed.core.budget import (
     BudgetClock,
     BudgetExceededError,
     RequestBudget,
     coerce_budget,
 )
-from openmed.core.pii import _extract_pii_batch, deidentify, extract_pii
+from openmed.core.pii import (
+    _deidentify_batch,
+    _extract_pii_batch,
+    deidentify,
+    extract_pii,
+)
 from openmed.core.pipeline import Pipeline
 from openmed.processing.batch import BatchProcessor
 from openmed.processing.outputs import EntityPrediction, PredictionResult
@@ -64,11 +72,20 @@ def test_request_budget_unlimited_by_default():
     assert budget.is_unlimited is True
 
 
+def test_budget_types_are_exported_from_public_namespaces():
+    assert openmed.RequestBudget is RequestBudget
+    assert openmed.BudgetExceededError is BudgetExceededError
+    assert core.RequestBudget is RequestBudget
+    assert core.BudgetExceededError is BudgetExceededError
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
         {"max_wall_time": 0},
         {"max_wall_time": -1.0},
+        {"max_wall_time": float("inf")},
+        {"max_wall_time": float("nan")},
         {"max_input_chars": 0},
         {"max_input_chars": -5},
     ],
@@ -394,14 +411,48 @@ def test_extract_pii_batch_cancels_between_items_without_partial_state(monkeypat
 
     assert excinfo.value.kind == "wall_time"
     # Cooperative: the batch stopped at a named checkpoint, mid-batch.
-    assert excinfo.value.checkpoint in {
-        "extract_pii.batch_setup",
-        "extract_pii.batch_item",
-    }
+    assert excinfo.value.checkpoint == "extract_pii.batch_item_complete"
     # No partial result list escaped, and the batch was cancelled before every
     # item was processed -- no partial-state corruption.
     assert result is None
     assert len(processed) < len(texts)
+
+
+def test_deidentify_batch_cancels_between_items_without_partial_result(monkeypatch):
+    texts = [
+        "Patient Casey Example one.",
+        "Patient Casey Example two.",
+    ]
+    predictions = [_name_prediction(text) for text in texts]
+    monkeypatch.setattr(
+        pii_module,
+        "_extract_pii_batch",
+        lambda *args, **kwargs: predictions,
+    )
+
+    original_build = pii_module._build_deidentification_result
+    built = []
+
+    def slow_build(text, *args, **kwargs):
+        built.append(text)
+        time.sleep(0.02)
+        return original_build(text, *args, **kwargs)
+
+    monkeypatch.setattr(pii_module, "_build_deidentification_result", slow_build)
+
+    result = None
+    with pytest.raises(BudgetExceededError) as excinfo:
+        result = _deidentify_batch(
+            texts,
+            model_name="m",
+            use_smart_merging=False,
+            use_safety_sweep=False,
+            budget_clock=RequestBudget(max_wall_time=0.01).start(),
+        )
+
+    assert excinfo.value.checkpoint == "deidentify.build_item_complete"
+    assert result is None
+    assert len(built) == 1
 
 
 def test_extract_pii_batch_no_budget_processes_all(monkeypatch):
@@ -446,6 +497,36 @@ def test_batch_processor_input_budget_records_clean_error(monkeypatch):
     assert item.success is False
     assert item.result is None
     assert "budget exceeded" in (item.error or "").lower()
+    assert "Casey Example" not in (item.error or "")
+
+
+def test_batch_processor_wall_time_budget_is_fresh_per_item(monkeypatch):
+    processed = []
+
+    def fake_analyze_text(text, **kwargs):
+        processed.append(text)
+        time.sleep(0.02)
+        return _name_prediction(text, model_name=kwargs.get("model_name", "stub"))
+
+    monkeypatch.setattr("openmed.analyze_text", fake_analyze_text)
+
+    processor = BatchProcessor(
+        model_name="m",
+        operation="extract_pii",
+        batch_size=2,
+        use_smart_merging=False,
+        continue_on_error=True,
+        budget=RequestBudget(max_wall_time=0.01),
+    )
+    result = processor.process_texts(
+        [
+            "Patient Casey Example one.",
+            "Patient Casey Example two.",
+        ]
+    )
+
+    assert result.failed_items == 2
+    assert len(processed) == 2
 
 
 def test_batch_processor_no_budget_processes_normally(monkeypatch):

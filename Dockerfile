@@ -1,4 +1,4 @@
-FROM python:3.11-slim@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
+FROM python:3.11-slim@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0dc86c47c0d8b3
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -9,7 +9,11 @@ WORKDIR /app
 
 COPY . /app
 
-RUN python -m pip install --upgrade pip \
+RUN python -m pip install --no-cache-dir --upgrade \
+        "pip==26.1.2" \
+        "setuptools==83.0.0" \
+        "wheel==0.47.0" \
+        "jaraco.context==6.1.2" \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && pip install --no-cache-dir ".[hf,service]"
 
