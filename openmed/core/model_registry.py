@@ -275,6 +275,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
+    "vietnamese": "vi",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
     code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"

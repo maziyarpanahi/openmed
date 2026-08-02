@@ -136,6 +136,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "uk": "Ukrainian",
     "cs": "Czech",
     "el": "Greek",
+    "vi": "Vietnamese",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -179,6 +180,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "uk": "Ukrainian-",
     "cs": "Czech-",
     "el": "Greek-",
+    "vi": "Vietnamese-",
 }
 
 # ---------------------------------------------------------------------------
@@ -3466,6 +3468,23 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Οκτώβριος",
         "Νοέμβριος",
         "Δεκέμβριος",
+    ],
+    # Vietnamese spells months out as "Tháng" plus the cardinal number, with
+    # "Tháng Tư" (not "Tháng Bốn") for April. The numeric "tháng M" form used by
+    # the "ngày D tháng M năm YYYY" detector stays handled by that pattern.
+    "vi": [
+        "Tháng Một",
+        "Tháng Hai",
+        "Tháng Ba",
+        "Tháng Tư",
+        "Tháng Năm",
+        "Tháng Sáu",
+        "Tháng Bảy",
+        "Tháng Tám",
+        "Tháng Chín",
+        "Tháng Mười",
+        "Tháng Mười Một",
+        "Tháng Mười Hai",
     ],
 }
 
