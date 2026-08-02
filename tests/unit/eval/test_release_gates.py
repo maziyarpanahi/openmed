@@ -12,7 +12,10 @@ from openmed.compliance import (
 )
 from openmed.core.audit import stable_hash
 from openmed.eval import release_gates
-from openmed.eval.metrics import compute_metrics_bundle
+from openmed.eval.metrics import (
+    compute_metrics_bundle,
+    compute_span_grounded_faithfulness,
+)
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -592,6 +595,90 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
 
     assert result.decision == QUARANTINED
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
+
+
+def test_g10_faithfulness_gate_passes_grounded_outputs(tmp_path: Path) -> None:
+    text = "Patient has hypertension."
+    start = text.index("hypertension")
+    faithfulness = compute_span_grounded_faithfulness(
+        [
+            {
+                "fact_type": "diagnosis",
+                "value": "hypertension",
+                "supporting_span": {
+                    "start": start,
+                    "end": start + len("hypertension"),
+                },
+            }
+        ],
+        source_text=text,
+    )
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"faithfulness": faithfulness.to_dict()},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert faithfulness.ungrounded_fact_rate == 0.0
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["ungrounded_fact_rate"] == pytest.approx(0.0)
+
+
+def test_g10_faithfulness_gate_quarantines_fabricated_facts(
+    tmp_path: Path,
+) -> None:
+    text = "Patient has hypertension."
+    start = text.index("hypertension")
+    faithfulness = compute_span_grounded_faithfulness(
+        [
+            {
+                "fact_type": "diagnosis",
+                "value": "pneumonia",
+                "supporting_span": {
+                    "start": start,
+                    "end": start + len("hypertension"),
+                },
+            }
+        ],
+        source_text=text,
+    )
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"faithfulness": faithfulness.to_dict()},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert faithfulness.ungrounded_fact_rate > 0.0
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "ungrounded-fact rate exceeds hard ceiling"
+    assert check.details["violations"]["ungrounded_fact_rate"]["observed"] == 1.0
+
+
+@pytest.mark.parametrize("rate", [-0.01, 1.01])
+def test_g10_faithfulness_gate_rejects_invalid_rates(
+    tmp_path: Path,
+    rate: float,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"faithfulness": {"ungrounded_fact_rate": rate}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "ungrounded-fact rate must be between zero and one"
 
 
 def test_extraction_reemission_critical_identifier_forces_quarantine(
