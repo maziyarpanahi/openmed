@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from openmed.clinical.lexicons import (
     clinical_context_lexicon_stats,
     register_clinical_cue_lexicon,
 )
-from openmed.eval.harness import (
+from openmed.eval import (
     DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
     load_context_multilingual_fixtures,
     run_context_multilingual_eval,
@@ -190,12 +191,22 @@ def test_stub_language_pack_loads_without_resolver_logic_changes() -> None:
 def test_context_multilingual_eval_gate_and_coverage_stats() -> None:
     report = run_context_multilingual_eval()
     scores = report.metrics["context_macro_f1"]
+    summary = report.metrics["context_language_summary"]
 
     assert report.metrics["context_gate_passed"] is True
     for language in REQUIRED_LANGUAGES:
         assert scores[language]["negation"] >= 0.90
         assert scores[language]["temporality"] >= 0.85
         assert scores[language]["uncertainty"] >= 0.85
+        assert summary[language]["assertion_axis_scores"] == scores[language]
+        assert summary[language]["fixture_count"] > 0
+        assert summary[language]["lexicon_language"] == language
+        assert set(summary[language]["lexicon_coverage"]) == {
+            "negation",
+            "temporality",
+            "uncertainty",
+        }
+        assert all(summary[language]["lexicon_coverage"].values())
 
     coverage = clinical_context_lexicon_stats()
     for language in REQUIRED_LANGUAGES:
@@ -213,6 +224,91 @@ def test_context_multilingual_eval_gate_and_coverage_stats() -> None:
         "conjunction_terminators": 3,
     }
     assert report.metrics["context_lexicon_coverage"]["ja"] == coverage["ja"]
+
+    markdown = report.to_markdown()
+    assert "`context_language_summary.en.assertion_axis_scores.negation`" in markdown
+    assert "`context_language_summary.zh.lexicon_coverage.temporality`" in markdown
+
+
+def test_context_multilingual_eval_does_not_pass_an_empty_fixture(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "context_empty.jsonl"
+    fixture.write_text(
+        json.dumps(
+            {
+                "kind": "meta",
+                "suite": "context_multilingual",
+                "synthetic": True,
+                "languages": ["en"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_context_multilingual_eval(fixture)
+
+    assert report.fixture_count == 0
+    assert report.metrics["context_gate_passed"] is False
+    assert report.metrics["context_macro_f1"] == {}
+    assert report.metrics["context_language_summary"]["en"] == {
+        "assertion_axis_scores": {},
+        "fixture_count": 0,
+        "lexicon_coverage": {
+            "negation": 29,
+            "temporality": 25,
+            "uncertainty": 36,
+        },
+        "lexicon_language": "en",
+    }
+
+
+def test_context_multilingual_eval_reports_unknown_language_fallback(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "context_unknown.jsonl"
+    rows = [
+        {
+            "kind": "meta",
+            "suite": "context_multilingual",
+            "synthetic": True,
+            "languages": ["zz-unknown"],
+        },
+        {
+            "kind": "case",
+            "case_id": "zz-uncertain",
+            "language": "zz-unknown",
+            "synthetic": True,
+            "text": "Possible pneumonia is documented.",
+            "target": {"text": "pneumonia"},
+            "expected": {
+                "negation": "affirmed",
+                "temporality": "recent",
+                "certainty": "uncertain",
+            },
+        },
+    ]
+    fixture.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_context_multilingual_eval(fixture)
+    summary = report.metrics["context_language_summary"]["zz-unknown"]
+
+    assert summary["fixture_count"] == 1
+    assert summary["lexicon_language"] == "en"
+    assert summary["assertion_axis_scores"] == {
+        "negation": 1.0,
+        "temporality": 1.0,
+        "uncertainty": 1.0,
+    }
+    assert summary["lexicon_coverage"] == {
+        "negation": 29,
+        "temporality": 25,
+        "uncertainty": 36,
+    }
 
 
 def test_unknown_language_falls_back_to_english() -> None:
