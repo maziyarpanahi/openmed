@@ -258,6 +258,29 @@ class TestResolveOverlappingEntities:
         _assert_no_overlaps(resolved)
         assert [entity.label for entity in resolved] == ["SSN"]
 
+    def test_prefers_canonical_high_risk_label_over_longer_low_risk_span(self):
+        entities = [
+            _ent(
+                "synthetic URL example.test",
+                label="OTHER",
+                start=0,
+                end=26,
+                confidence=0.99,
+            ),
+            _ent(
+                "example.test",
+                label="URL",
+                start=14,
+                end=26,
+                confidence=0.10,
+            ),
+        ]
+
+        resolved = resolve_overlapping_entities(entities)
+
+        _assert_no_overlaps(resolved)
+        assert [entity.label for entity in resolved] == ["URL"]
+
     def test_partial_overlap_prefers_longest_span_within_same_risk_tier(self):
         entities = [
             _ent("Alpha", label="OTHER", start=0, end=5, confidence=0.95),
