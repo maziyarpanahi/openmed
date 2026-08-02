@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the PySpark batch de-identification adapter so
+  `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
+  UDF construction instead of failing with an unsupported `Any` signature
+  (#1942).
+- Fixed `openmed risk discover`, `risk assess`, and `risk anonymize` handling
+  of UTF-8 BOM-prefixed CSV and TSV schemas so the first column is classified
+  consistently, and added bounded validation causes to structured-release CLI
+  errors instead of replacing actionable `TypeError` and `ValueError` details
+  with a generic schema mismatch.
+
 ### Added
 
 - Added deterministic OncoTree tumor-type mapping
@@ -20,18 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mentions stay unmapped with a reason (no fuzzy/lexical fallback).
   Results are version-stamped `OncoTreeMapping` values. Includes synthetic
   golden fixtures and `oncotree_top1_accuracy` evaluation support.
-
-### Fixed
-
-- Fixed the PySpark batch de-identification adapter so
-  `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
-  UDF construction instead of failing with an unsupported `Any` signature
-  (#1942).
-- Fixed `openmed risk discover`, `risk assess`, and `risk anonymize` handling
-  of UTF-8 BOM-prefixed CSV and TSV schemas so the first column is classified
-  consistently, and added bounded validation causes to structured-release CLI
-  errors instead of replacing actionable `TypeError` and `ValueError` details
-  with a generic schema mismatch.
 
 ## [2.0.0] - 2026-07-28
 
