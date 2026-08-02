@@ -309,7 +309,7 @@ docs = [
 ]
 
 yasbd = [
-  "yasbd-lib>=0.13.1,<1.0",
+  "yasbd-lib>=0.13.1,<0.14",
 ]
 
 [project.scripts]

@@ -6,7 +6,7 @@ import logging
 import re
 import time
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
 from .__about__ import __version__
 
@@ -356,7 +356,7 @@ def analyze_text(
     sentence_language: str = "en",
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
-    sentence_backend: str = "auto",
+    sentence_backend: Literal["auto", "yasbd"] = "auto",
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
@@ -389,7 +389,8 @@ def analyze_text(
         sentence_segmenter: Optional preconstructed segmenter object to reuse.
             It cannot be combined with ``sentence_backend="yasbd"``.
         sentence_backend: Sentence segmentation engine to use.
-            It can be ``"auto"`` (default) or ``"yasbd"`` (experimental, faster).
+            It can be ``"auto"`` (default, unchanged routing) or ``"yasbd"``
+            (experimental opt-in; requires ``openmed[yasbd]``).
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
@@ -517,6 +518,8 @@ def analyze_text(
                 backend=sentence_backend,
             )
         except ImportError:
+            if sentence_backend != "auto":
+                raise
             sentence_detection = False
     if not raw_segments:
         sentence_detection = False

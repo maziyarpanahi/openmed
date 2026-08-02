@@ -5,7 +5,7 @@ from __future__ import annotations
 import unicodedata
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
 from ..core.decoding.spans import is_grapheme_boundary, is_indic_text
 from ..core.script_detect import is_han_dominant
@@ -14,6 +14,7 @@ from ..core.script_detect import is_han_dominant
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 _SEGMENTER_CACHE: Dict[Tuple[str, str, bool], Any] = {}
+_SentenceBackend = Literal["auto", "yasbd"]
 
 _CHINESE_TERMINATORS = frozenset({"。", "！", "？", "；", "．", "｡", "!", "?", ";"})
 _CHINESE_OPEN_TO_CLOSE = {
@@ -100,7 +101,7 @@ def _get_segmenter(
     language: str,
     clean: bool,
     segmenter: Optional[Any] = None,
-    backend: str = "auto",
+    backend: _SentenceBackend = "auto",
 ) -> Any:
     """Return a cached segmenter instance for the selected backend."""
     if segmenter is not None:
@@ -112,18 +113,17 @@ def _get_segmenter(
 
     if backend == "yasbd":
         try:
-            from yasbd.rules.zh import ZhRules  # type: ignore import
-            from yasbd.utils.pysbd_adapter import Segmenter  # type: ignore import
-
-            ZhRules.TERMINATORS.add("；")
+            from yasbd.utils.pysbd_adapter import (
+                Segmenter,  # type: ignore[import-not-found]
+            )
         except ImportError as exc:  # pragma: no cover - depends on optional dependency
             raise ImportError(
                 "yasbd-lib is required for sentence detection when `backend='yasbd'`. "
-                "Install it with `pip install yasbd-lib` or add the `yasbd-lib` dependency."
+                "Install the optional extra with `pip install 'openmed[yasbd]'`."
             ) from exc
     else:
         try:
-            from pysbd import Segmenter  # type: ignore import
+            from pysbd import Segmenter  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover - depends on optional dependency
             raise ImportError(
                 "pySBD is required for sentence detection. "
@@ -158,6 +158,58 @@ def _fallback_spans(text: str, sentences: Iterable[str]) -> List[SentenceSpan]:
         spans.append(SentenceSpan(sentence, start, end))
         cursor = end
     return spans
+
+
+def _normalize_yasbd_spans(
+    text: str,
+    spans: List[SentenceSpan],
+) -> List[SentenceSpan]:
+    """Normalize YASBD offsets to OpenMed's exact contiguous span contract.
+
+    The YASBD adapter can assign inter-sentence whitespace to the following
+    sentence and omit trailing whitespace. OpenMed historically assigns that
+    whitespace to the preceding sentence. Validate the adapter offsets before
+    moving only whitespace boundaries; non-whitespace gaps fail closed.
+    """
+    if not spans:
+        return []
+
+    raw_cursor = 0
+    for span in spans:
+        if span.end > len(text) or span.start < raw_cursor:
+            raise ValueError("yasbd-lib returned invalid or overlapping offsets")
+        if text[raw_cursor : span.start].strip():
+            raise ValueError("yasbd-lib returned a non-whitespace span gap")
+        if span.text != text[span.start : span.end]:
+            raise ValueError("yasbd-lib returned text that does not match its offsets")
+        raw_cursor = span.end
+
+    if text[raw_cursor:].strip():
+        raise ValueError("yasbd-lib did not cover the complete source text")
+
+    boundaries: List[int] = []
+    for span in spans:
+        boundary = span.end
+        while boundary < len(text) and text[boundary].isspace():
+            boundary += 1
+        if not boundaries or boundary > boundaries[-1]:
+            boundaries.append(boundary)
+
+    normalized: List[SentenceSpan] = []
+    start = 0
+    for end in boundaries:
+        if end > start and not text[start:end].isspace():
+            normalized.append(SentenceSpan(text[start:end], start, end))
+        elif normalized:
+            previous = normalized[-1]
+            normalized[-1] = SentenceSpan(
+                text[previous.start : end],
+                previous.start,
+                end,
+            )
+        start = end
+
+    return normalized
 
 
 def _uses_chinese_segmenter(text: str, language: str) -> bool:
@@ -199,7 +251,10 @@ def _continues_chinese_sentence(char: str) -> bool:
     return char.isspace() or char in _CHINESE_TERMINATORS or char in _CHINESE_CLOSERS
 
 
-def _chinese_spans(text: str) -> List[SentenceSpan]:
+def _chinese_spans(
+    text: str,
+    terminators: frozenset[str] = _CHINESE_TERMINATORS,
+) -> List[SentenceSpan]:
     spans: List[SentenceSpan] = []
     stack: List[str] = []
     start = 0
@@ -230,7 +285,7 @@ def _chinese_spans(text: str) -> List[SentenceSpan]:
                     deferred_boundary = False
             continue
 
-        if char not in _CHINESE_TERMINATORS or _is_non_boundary_fullwidth_period(
+        if char not in terminators or _is_non_boundary_fullwidth_period(
             text,
             index,
         ):
@@ -247,6 +302,28 @@ def _chinese_spans(text: str) -> List[SentenceSpan]:
     if all(text[span.start : span.end] == span.text for span in spans):
         return spans
     return _fallback_spans(text, (span.text for span in spans))
+
+
+def _split_yasbd_chinese_semicolons(
+    text: str,
+    spans: List[SentenceSpan],
+    language: str,
+) -> List[SentenceSpan]:
+    """Add OpenMed's Chinese-semicolon boundary without mutating YASBD globals."""
+    if "；" not in text or not _uses_chinese_segmenter(text, language):
+        return spans
+
+    refined: List[SentenceSpan] = []
+    for span in spans:
+        for local in _chinese_spans(span.text, frozenset({"；"})):
+            refined.append(
+                SentenceSpan(
+                    local.text,
+                    span.start + local.start,
+                    span.start + local.end,
+                )
+            )
+    return refined
 
 
 def segment_chinese_text(text: str) -> List[SentenceSpan]:
@@ -346,7 +423,7 @@ def segment_text(
     language: str = "en",
     clean: bool = False,
     segmenter: Optional[Any] = None,
-    backend: str = "auto",
+    backend: _SentenceBackend = "auto",
 ) -> List[SentenceSpan]:
     """Split ``text`` into sentences and capture exact character spans.
 
@@ -359,19 +436,18 @@ def segment_text(
     segmentation.
     See https://github.com/maziyarpanahi/openmed/issues/1848#issuecomment-5037658538
     """
-    if not text:
-        return []
-
     if backend not in {"auto", "yasbd"}:
         raise ValueError(
             f"Unknown segmentation backend {backend!r}. Choose from 'auto' or 'yasbd'."
         )
-    if segmenter is not None and backend == "yasbd":
+    if segmenter is not None and backend != "auto":
         raise ValueError(
-            "A preconstructed segmenter cannot be combined with the 'yasbd' backend."
+            "A preconstructed segmenter cannot be combined with a non-'auto' backend."
         )
+    if not text:
+        return []
 
-    if backend == "auto":
+    if backend == "auto" and segmenter is None:
         if is_indic_text(text):
             return segment_indic_text(text)
         if _uses_chinese_segmenter(text, language):
@@ -380,7 +456,15 @@ def segment_text(
     seg = _get_segmenter(
         language=language, clean=clean, segmenter=segmenter, backend=backend
     )
-    sentences = seg.segment(text)
+    segment_input = text
+    span_offset = 0
+    if backend == "yasbd":
+        # YASBD 0.13.x reports offsets relative to the first non-whitespace
+        # paragraph when the source begins with blank lines. Strip that prefix
+        # before segmentation, then restore it to OpenMed's source offsets.
+        span_offset = len(text) - len(text.lstrip())
+        segment_input = text[span_offset:]
+    sentences = seg.segment(segment_input)
 
     spans: List[SentenceSpan] = []
 
@@ -388,17 +472,27 @@ def segment_text(
         for sentence in sentences:
             sent_text = getattr(sentence, "sent", None)
             if sent_text is None:
-                sent_text = text[sentence.start : sentence.end]
+                sent_text = segment_input[sentence.start : sentence.end]
             spans.append(
                 SentenceSpan(
                     sent_text,
-                    int(sentence.start),
-                    int(sentence.end),
+                    int(sentence.start) + span_offset,
+                    int(sentence.end) + span_offset,
                 )
             )
     else:
-        spans = _fallback_spans(text, sentences)
+        spans = _fallback_spans(segment_input, sentences)
+        if span_offset:
+            spans = [
+                SentenceSpan(
+                    span.text, span.start + span_offset, span.end + span_offset
+                )
+                for span in spans
+            ]
 
+    if backend == "yasbd":
+        normalized = _normalize_yasbd_spans(text, spans)
+        return _split_yasbd_chinese_semicolons(text, normalized, language)
     return spans
 
 

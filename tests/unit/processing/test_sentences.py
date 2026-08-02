@@ -13,6 +13,13 @@ from openmed.processing import (
 )
 
 
+@pytest.fixture(autouse=True)
+def clear_segmenter_cache():
+    sentences._SEGMENTER_CACHE.clear()
+    yield
+    sentences._SEGMENTER_CACHE.clear()
+
+
 @pytest.fixture
 def fake_yasbd_segmenter():
     segmenter_cls = Mock(name="Segmenter")
@@ -174,10 +181,23 @@ def test_explicit_segmenter_override_is_preserved_for_han_text():
     assert spans == [SentenceSpan(text, 0, len(text))]
 
 
+def test_explicit_segmenter_override_is_preserved_for_indic_text():
+    text = "रोगी स्थिर है। कल समीक्षा करें।"
+    sentence_object = SimpleNamespace(sent=text, start=0, end=len(text))
+    explicit_segmenter = Mock()
+    explicit_segmenter.segment.return_value = [sentence_object]
+
+    spans = segment_text(text, language="hi", segmenter=explicit_segmenter)
+
+    explicit_segmenter.segment.assert_called_once_with(text)
+    assert spans == [SentenceSpan(text, 0, len(text))]
+
+
 @pytest.mark.parametrize("backend", ["fast", "", None])
-def test_unknown_backend_raises_value_error(backend):
+@pytest.mark.parametrize("text", ["", "Patient is stable."])
+def test_unknown_backend_raises_value_error(backend, text):
     with pytest.raises(ValueError, match="Unknown segmentation backend"):
-        segment_text("Patient is stable.", backend=backend)
+        segment_text(text, backend=backend)
 
 
 def test_preconstructed_segmenter_with_yasbd_backend_raises():
@@ -186,8 +206,9 @@ def test_preconstructed_segmenter_with_yasbd_backend_raises():
 
 
 def test_yasbd_backend_routes_through_yasbd_adapter(fake_yasbd_segmenter):
+    segmenter_cls = fake_yasbd_segmenter
     text = "Patient is stable. Follow up tomorrow."
-    instance = fake_yasbd_segmenter.return_value
+    instance = segmenter_cls.return_value
     instance.segment.return_value = [
         SimpleNamespace(sent="Patient is stable. ", start=0, end=19),
         SimpleNamespace(sent="Follow up tomorrow.", start=19, end=len(text)),
@@ -195,12 +216,111 @@ def test_yasbd_backend_routes_through_yasbd_adapter(fake_yasbd_segmenter):
 
     spans = segment_text(text, backend="yasbd")
 
-    fake_yasbd_segmenter.assert_called_once_with(
-        language="en", clean=False, char_span=True
-    )
+    segmenter_cls.assert_called_once_with(language="en", clean=False, char_span=True)
     instance.segment.assert_called_once_with(text)
     assert spans == [
         SentenceSpan("Patient is stable. ", 0, 19),
         SentenceSpan("Follow up tomorrow.", 19, len(text)),
     ]
     assert ("yasbd", "en", False) in sentences._SEGMENTER_CACHE
+
+
+def test_yasbd_backend_normalizes_whitespace_and_trailing_offsets(
+    fake_yasbd_segmenter,
+):
+    segmenter_cls = fake_yasbd_segmenter
+    text = "Patient is stable.\n\nFollow up tomorrow.\n"
+    first_end = text.index("\n")
+    final_newline = len(text) - 1
+    instance = segmenter_cls.return_value
+    instance.segment.return_value = [
+        SimpleNamespace(sent=text[:first_end], start=0, end=first_end),
+        SimpleNamespace(
+            sent=text[first_end:final_newline],
+            start=first_end,
+            end=final_newline,
+        ),
+    ]
+
+    spans = segment_text(text, backend="yasbd")
+
+    assert [span.text for span in spans] == [
+        "Patient is stable.\n\n",
+        "Follow up tomorrow.\n",
+    ]
+    _assert_exact_round_trip(text, spans)
+    assert not any(span.text.isspace() for span in spans)
+
+
+def test_yasbd_backend_restores_offsets_after_leading_blank_lines(
+    fake_yasbd_segmenter,
+):
+    segmenter_cls = fake_yasbd_segmenter
+    text = "\n\nPatient is stable. Follow up tomorrow.\n"
+    segment_input = text.lstrip()
+    first_end = segment_input.index(" ", len("Patient is stable."))
+    final_newline = len(segment_input) - 1
+    instance = segmenter_cls.return_value
+    instance.segment.return_value = [
+        SimpleNamespace(
+            sent=segment_input[:first_end],
+            start=0,
+            end=first_end,
+        ),
+        SimpleNamespace(
+            sent=segment_input[first_end:final_newline],
+            start=first_end,
+            end=final_newline,
+        ),
+    ]
+
+    spans = segment_text(text, backend="yasbd")
+
+    instance.segment.assert_called_once_with(segment_input)
+    assert [span.text for span in spans] == [
+        "\n\nPatient is stable. ",
+        "Follow up tomorrow.\n",
+    ]
+    _assert_exact_round_trip(text, spans)
+
+
+def test_yasbd_chinese_semicolon_boundary_has_no_global_rule_mutation(
+    fake_yasbd_segmenter,
+):
+    segmenter_cls = fake_yasbd_segmenter
+    text = "第一项完成；第二项完成。"
+    instance = segmenter_cls.return_value
+    instance.segment.return_value = [
+        SimpleNamespace(sent=text, start=0, end=len(text)),
+    ]
+
+    spans = segment_text(text, language="zh", backend="yasbd")
+
+    assert [span.text for span in spans] == ["第一项完成；", "第二项完成。"]
+    _assert_exact_round_trip(text, spans)
+
+
+def test_missing_yasbd_dependency_names_openmed_extra():
+    with patch.dict(sys.modules, {"yasbd": None}):
+        with pytest.raises(ImportError, match=r"openmed\[yasbd\]"):
+            segment_text("Patient is stable.", backend="yasbd")
+
+
+@pytest.mark.integration
+def test_yasbd_real_adapter_preserves_openmed_span_contract():
+    pytest.importorskip("yasbd", reason="requires the optional openmed[yasbd] extra")
+    cases = [
+        ("en", "Patient is stable.\n\nFollow up tomorrow.\n"),
+        ("en", "\n\nPatient is stable.\n\nFollow up tomorrow.\n\n"),
+        ("de", "Dr. Müller kam um 8.30 Uhr. Danach ging er."),
+        ("es", "El paciente está estable. Seguimiento mañana."),
+        ("zh", "第一项完成；第二项完成。"),
+    ]
+
+    for language, text in cases:
+        spans = segment_text(text, language=language, backend="yasbd")
+        _assert_exact_round_trip(text, spans)
+        assert not any(span.text.isspace() for span in spans)
+
+    chinese = segment_text(cases[-1][1], language="zh", backend="yasbd")
+    assert [span.text for span in chinese] == ["第一项完成；", "第二项完成。"]

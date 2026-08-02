@@ -1,8 +1,8 @@
 # Analyze Text Helper
 
 `openmed.analyze_text` is the top-level orchestrator that most users start with. It validates input, spins up a
-token-classification pipeline, segments sentences with pySBD (or the experimental yasbd backend), and normalizes the output so you can copy dict/JSON/HTML/CSV
-payloads straight into downstream systems.
+token-classification pipeline, segments sentences, and normalizes the output so you can copy dict/JSON/HTML/CSV payloads
+straight into downstream systems.
 
 ## Quick reference
 
@@ -36,6 +36,40 @@ payload = result.to_dict()
 - `formatter_kwargs`: forwarded to `openmed.processing.format_predictions`.
 - Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`, `sentence_backend`) wrap the sentence engine so each
   prediction carries the sentence span; disable them if latency matters more than helper metadata.
+
+## Optional YASBD sentence backend
+
+The default `sentence_backend="auto"` path is unchanged: OpenMed uses its built-in Indic and Chinese segmenters where
+appropriate and pySBD elsewhere. YASBD is neither installed nor imported by a core OpenMed installation.
+
+Install the experimental backend explicitly when you want to benchmark it on your own workload:
+
+```bash
+pip install "openmed[yasbd]"
+```
+
+Then select it for either the low-level sentence API or `analyze_text`:
+
+```python
+from openmed import analyze_text
+from openmed.processing.sentences import segment_text
+
+spans = segment_text(
+    "Patient is stable. Follow up tomorrow.",
+    language="en",
+    backend="yasbd",
+)
+
+result = analyze_text(
+    "Patient is stable. Follow up tomorrow.",
+    sentence_backend="yasbd",
+)
+```
+
+The adapter preserves OpenMed's exact, contiguous source offsets and assigns inter-sentence whitespace to the preceding
+span, matching the existing span contract. YASBD remains an explicit opt-in because sentence boundaries can differ
+between engines; validate representative clinical and multilingual inputs before adopting it in production. If the extra
+is missing, explicitly selecting `"yasbd"` raises an installation error instead of silently changing behavior.
 
 ## Chunking & truncation
 
