@@ -31,7 +31,9 @@ from openmed.eval.metrics import (
     compute_metrics_bundle,
     compute_relaxed_span_f1,
     compute_resource_metrics,
+    compute_span_grounded_faithfulness,
     expected_calibration_error,
+    merge_faithfulness_metrics,
     normalize_eval_spans,
     reliability_bins,
 )
@@ -940,6 +942,19 @@ def run_benchmark(
         default_device=device,
         source_text=corpus_text,
     )
+    faithfulness_metrics = [
+        compute_span_grounded_faithfulness(
+            facts,
+            source_text=fixture.text,
+            fixture_id=fixture.fixture_id,
+        )
+        for fixture in fixtures
+        if (facts := _fixture_extracted_facts(fixture))
+    ]
+    if faithfulness_metrics:
+        metrics["faithfulness"] = merge_faithfulness_metrics(
+            faithfulness_metrics
+        ).to_dict()
     if confidence_intervals:
         metrics = _attach_confidence_intervals(
             metrics,
@@ -2576,6 +2591,23 @@ def _corpus_coordinates(
             predicted.extend(_shift_spans(result.predicted_spans, offset))
         offset += len(fixture.text) + 1
     return gold, predicted, "\n".join(text_parts)
+
+
+def _fixture_extracted_facts(fixture: BenchmarkFixture) -> list[Any]:
+    for key in (
+        "extracted_facts",
+        "facts",
+        "clinical_facts",
+        "entities",
+        "relations",
+        "grounded_concepts",
+    ):
+        value = fixture.metadata.get(key)
+        if isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            return list(value)
+    return []
 
 
 def _relation_corpus_relations(
