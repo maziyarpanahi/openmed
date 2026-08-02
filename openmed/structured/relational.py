@@ -320,7 +320,10 @@ def deidentify_linked_tables(
                 cache_key = (space_name, value)
                 if cache_key not in surrogate_by_space_value:
                     surrogate_by_space_value[cache_key] = _key_surrogate(
-                        vault, key_space=space_name, value=value
+                        vault,
+                        key_space=space_name,
+                        value=value,
+                        is_subject=space_name == schema.subject_key_space,
                     )
                     if cache_key not in seen_sources:
                         sources.append(
@@ -476,8 +479,20 @@ def _namespaced_source(key_space: str, value: str) -> str:
     return f"{key_space}{_NAMESPACE_SEPARATOR}{value}"
 
 
-def _key_surrogate(vault: SurrogateVault, *, key_space: str, value: str) -> str:
+def _key_surrogate(
+    vault: SurrogateVault,
+    *,
+    key_space: str,
+    value: str,
+    is_subject: bool = False,
+) -> str:
     source_text = _namespaced_source(key_space, value)
+    if is_subject:
+        return vault.resolve_subject(
+            value,
+            aliases=(SurrogateSource(source_text, key_space, _LANG),),
+        )
+
     token = vault.text_hash(source_text).rsplit(":", 1)[-1][:12]
     stem = _surrogate_stem(key_space)
 
