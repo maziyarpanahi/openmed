@@ -4,6 +4,14 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .consistency import (
+    CrossModalConsistencyReport,
+    SubjectConsistencyManifest,
+    SubjectTableDeidentificationResult,
+    assert_cross_modal_consistency,
+    deidentify_subject_column,
+    verify_cross_modal_consistency,
+)
 from .discharge_summary import (
     REQUIRED_DISCHARGE_SLOTS,
     DischargeSlotName,
@@ -132,6 +140,7 @@ __all__ = [
     "ColumnClassification",
     "ColumnRef",
     "ColumnRole",
+    "CrossModalConsistencyReport",
     "DanglingForeignKeyError",
     "DateColumn",
     "DischargeSlotName",
@@ -162,6 +171,8 @@ __all__ = [
     "SUPPORTED_STREAMING_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
     "StreamingKanonDecision",
+    "SubjectConsistencyManifest",
+    "SubjectTableDeidentificationResult",
     "SurrogateManifest",
     "TABLE_ADVISORY",
     "Table",
@@ -170,11 +181,13 @@ __all__ = [
     "TableRoleScan",
     "TimeSeriesPoint",
     "anonymize_table",
+    "assert_cross_modal_consistency",
     "build_enforcement_hierarchies",
     "canonical_analyte",
     "cell_at",
     "canonical_discharge_slot",
     "deidentify_linked_tables",
+    "deidentify_subject_column",
     "describe_level",
     "generalize_value",
     "get_hierarchy",
@@ -189,5 +202,6 @@ __all__ = [
     "structure_lab_panels",
     "structure_table",
     "to_enforce_kanon_hierarchy",
+    "verify_cross_modal_consistency",
     "write_table",
 ]
