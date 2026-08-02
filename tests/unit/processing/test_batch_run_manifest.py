@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator, Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -51,6 +52,13 @@ PHI_MARKERS = (
     "diabetes",
 )
 SHARD_COUNT = 4
+
+# Windows does not enforce POSIX permission bits for owner reads, and root
+# bypasses them everywhere, so chmod(0o000) is not a portable way to make a
+# file unreadable.
+_POSIX_PERMISSIONS_ENFORCED = (
+    os.name != "nt" and getattr(os, "geteuid", lambda: 1)() != 0
+)
 
 
 def _documents(count: int = 12) -> list[dict[str, str]]:
@@ -748,9 +756,7 @@ def test_persisted_manifest_is_strict_json_with_no_nan_tokens(tmp_path: Path) ->
 # --- I/O failures stay inside the error hierarchy --------------------------
 
 
-def test_unreadable_and_corrupted_manifests_raise_run_manifest_error(
-    tmp_path: Path,
-) -> None:
+def test_corrupted_manifests_raise_run_manifest_error(tmp_path: Path) -> None:
     """A sibling recovering with `except RunManifestError` must not crash."""
 
     invalid_utf8 = tmp_path / "invalid-utf8.json"
@@ -763,6 +769,48 @@ def test_unreadable_and_corrupted_manifests_raise_run_manifest_error(
     with pytest.raises(RunManifestError, match="not readable"):
         LocalFileRunManifestStore(directory).load()
 
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        PermissionError(13, "Permission denied"),
+        OSError(5, "Input/output error"),
+    ],
+    ids=["permission-denied", "io-error"],
+)
+def test_read_failures_surface_as_run_manifest_error_on_every_platform(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: OSError,
+) -> None:
+    """The product contract, verified without depending on POSIX permissions.
+
+    What matters to callers is that no read failure escapes the
+    ``RunManifestError`` hierarchy, so ``except RunManifestError`` is enough to
+    recover. Injecting the ``OSError`` keeps that covered on every platform;
+    the POSIX-only test below covers the permission-bit mechanism itself.
+    """
+
+    path = tmp_path / "run-manifest.json"
+    path.write_text("{}", encoding="utf-8")
+
+    def deny(*args: Any, **kwargs: Any) -> str:
+        raise error
+
+    monkeypatch.setattr(Path, "read_text", deny)
+
+    with pytest.raises(RunManifestError, match="not readable"):
+        LocalFileRunManifestStore(path).load()
+
+
+@pytest.mark.skipif(
+    not _POSIX_PERMISSIONS_ENFORCED,
+    reason=(
+        "POSIX permission bits are not enforced for owner reads on Windows, "
+        "and root bypasses them; the portable contract is covered above"
+    ),
+)
+def test_posix_permission_bits_make_a_manifest_unreadable(tmp_path: Path) -> None:
     unreadable = tmp_path / "unreadable.json"
     unreadable.write_text("{}", encoding="utf-8")
     unreadable.chmod(0o000)
