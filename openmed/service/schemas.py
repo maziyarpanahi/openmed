@@ -33,6 +33,7 @@ _DEFAULT_STREAM_CHUNK_SIZE = 1024
 _DEFAULT_STREAM_WINDOW_CHARS = 4096
 _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
+_DEFAULT_GROUNDING_SYSTEMS = ["rxnorm", "icd10cm", "loinc", "hpo"]
 KeepAliveValue = Union[int, float, str]
 
 # Languages accepted by the PII endpoints. This MUST include both built-in
@@ -205,6 +206,42 @@ def _normalize_records_jsonl(value: Any) -> str:
             f"records_jsonl exceeds the maximum length of {max_text_length} characters"
         )
     return value
+
+
+def _normalize_optional_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return _normalize_text(value)
+
+
+def _normalize_grounding_systems(value: Any) -> list[str]:
+    if value is None:
+        return list(_DEFAULT_GROUNDING_SYSTEMS)
+    if isinstance(value, str):
+        values = value.split(",")
+    elif isinstance(value, Sequence):
+        values = list(value)
+    else:
+        raise ValueError("systems must be a list of vocabulary names")
+    systems = [str(item).strip() for item in values if str(item).strip()]
+    if not systems:
+        raise ValueError("systems must contain at least one vocabulary")
+    return list(dict.fromkeys(systems))
+
+
+def _normalize_grounding_entities(value: Any) -> Optional[list[dict[str, Any]]]:
+    if value is None:
+        return None
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError("entities must be a list of objects")
+    entities: list[dict[str, Any]] = []
+    for index, entity in enumerate(value):
+        if not isinstance(entity, dict):
+            raise ValueError(f"entity at index {index} must be an object")
+        entities.append(dict(entity))
+    if not entities:
+        raise ValueError("entities must contain at least one object")
+    return entities
 
 
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
@@ -652,6 +689,44 @@ if PYDANTIC_V2:
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
 
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @field_validator("text", mode="before")
+        @classmethod
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @field_validator("entities", mode="before")
+        @classmethod
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @field_validator("systems", mode="before")
+        @classmethod
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @field_validator("source_language", mode="before")
+        @classmethod
+        def _validate_source_language(cls, value: Any) -> str:
+            return str(value or "en").strip().casefold()
+
+        @model_validator(mode="after")
+        def _validate_inputs(self) -> "GroundRequest":
+            if self.text is None and not self.entities:
+                raise ValueError("provide text or at least one entity")
+            return self
+
 else:
 
     class AnalyzeRequest(_StrictModel):
@@ -1005,3 +1080,37 @@ else:
         @validator("vocabulary_version", pre=True)
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @validator("text", pre=True)
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @validator("entities", pre=True)
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @validator("systems", pre=True)
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @validator("source_language", pre=True)
+        def _validate_source_language(cls, value: Any) -> str:
+            return str(value or "en").strip().casefold()
+
+        @root_validator
+        def _validate_inputs(cls, values: dict[str, Any]) -> dict[str, Any]:
+            if values.get("text") is None and not values.get("entities"):
+                raise ValueError("provide text or at least one entity")
+            return values
