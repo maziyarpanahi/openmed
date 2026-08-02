@@ -40,14 +40,14 @@ via capped ``max_examples`` and an explicit Hypothesis deadline.
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
 from typing import Sequence
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from openmed.core.arbitration import arbitrate
+from openmed.core.arbitration import MODE_BALANCED, arbitrate
 from openmed.core.decoding import coerce_token_classification_spans
 from openmed.core.decoding.spans import TokenClassificationSpan
 from openmed.core.labels import CANONICAL_LABELS, PERSON, normalize_label
@@ -212,8 +212,8 @@ def _assert_no_raw_phi_in_structured_output(
     """Leakage-first: structured span payloads never carry raw surface text.
 
     ``OpenMedSpan`` deliberately has no ``text`` field — only offsets and an
-    ``hmac-sha256:`` hash. This asserts the contract holds for the serialized
-    payload and the PHI-safe audit dict of each span.
+    ``hmac-sha256:`` hash. This asserts the contract for span serialization;
+    whole-pipeline properties separately cover the structured audit record.
     """
 
     for span in spans:
@@ -261,22 +261,65 @@ def test_stage1_normalize_returns_document_with_valid_offset_map(text: str) -> N
 
 
 @CONTRACT_SETTINGS
-@given(text=synthetic_text)
-def test_stage1_normalized_span_round_trip_stays_in_bounds(text: str) -> None:
-    """A normalized span maps back to an in-bounds original span slice."""
+@given(text=synthetic_text, data=st.data())
+def test_stage1_span_round_trips_are_consistent(
+    text: str,
+    data: st.DataObject,
+) -> None:
+    """Arbitrary original and normalized spans round-trip consistently."""
 
     document = Pipeline().stage1_normalize(text)
     normalized = document.normalized_text
     if not normalized:
         return
 
-    # Take the whole normalized text as one span and round-trip it.
-    original_start, original_end = (
-        document.offset_map.normalized_span_to_original_offsets(0, len(normalized))
+    original_start = data.draw(
+        st.integers(min_value=0, max_value=len(text) - 1),
+        label="original_start",
     )
-    assert 0 <= original_start <= original_end <= len(text)
-    # The mapped original slice is itself a valid code-point slice.
-    assert len(text[original_start:original_end]) == original_end - original_start
+    original_end = data.draw(
+        st.integers(min_value=original_start + 1, max_value=len(text)),
+        label="original_end",
+    )
+    normalized_start, normalized_end = document.offset_map.original_span_to_normalized(
+        original_start,
+        original_end,
+    )
+    assert 0 <= normalized_start <= normalized_end <= len(normalized)
+
+    round_trip_start, round_trip_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    assert 0 <= round_trip_start <= original_start < original_end <= round_trip_end
+    assert round_trip_end <= len(text)
+    assert document.offset_map.original_span_to_normalized(
+        round_trip_start,
+        round_trip_end,
+    ) == (normalized_start, normalized_end)
+
+    normalized_start = data.draw(
+        st.integers(min_value=0, max_value=len(normalized) - 1),
+        label="normalized_start",
+    )
+    normalized_end = data.draw(
+        st.integers(min_value=normalized_start + 1, max_value=len(normalized)),
+        label="normalized_end",
+    )
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    assert 0 <= original_start < original_end <= len(text)
+    remapped_start, remapped_end = document.offset_map.original_span_to_normalized(
+        original_start,
+        original_end,
+    )
+    assert remapped_start <= normalized_start < normalized_end <= remapped_end
 
 
 # ---------------------------------------------------------------------------
@@ -307,9 +350,11 @@ def test_decode_seam_emits_sorted_in_bounds_bioes_stripped_spans(
         # BIOES prefixes are stripped by the decode seam.
         for prefix in ("B-", "I-", "E-", "S-"):
             assert not span.label.startswith(prefix)
-        # Byte offsets, when present, are consistent with a byte encoding.
+        # Byte offsets, when present, match the UTF-8 encoding exactly while
+        # start/end remain Python code-point indices.
         if span.byte_start is not None and span.byte_end is not None:
-            assert 0 <= span.byte_start <= span.byte_end
+            assert span.byte_start == len(text[: span.start].encode("utf-8"))
+            assert span.byte_end == len(text[: span.end].encode("utf-8"))
         key = (span.start, span.end, span.label, span.id)
         if previous_key is not None:
             assert key >= previous_key, ("decode output not sorted", previous_key, key)
@@ -384,7 +429,7 @@ def test_arbitrate_balanced_is_sorted_and_non_overlapping(
     """Balanced arbitration returns sorted, pairwise non-overlapping spans."""
 
     text, spans = payload
-    resolved = arbitrate(spans)
+    resolved = arbitrate(spans, mode=MODE_BALANCED)
 
     assert isinstance(resolved, tuple)
     _assert_span_integrity(resolved, text)
@@ -393,20 +438,18 @@ def test_arbitrate_balanced_is_sorted_and_non_overlapping(
 
 @CONTRACT_SETTINGS
 @given(payload=_openmed_spans())
-def test_arbitrate_only_returns_input_spans(
+def test_arbitrate_collapses_duplicates_and_only_returns_input_spans(
     payload: tuple[str, tuple[OpenMedSpan, ...]],
 ) -> None:
-    """Arbitration never fabricates a span; every winner came from the input set."""
+    """Balanced arbitration collapses duplicates and never fabricates spans."""
 
-    text, spans = payload
-    resolved = arbitrate(spans)
+    _, spans = payload
+    resolved = arbitrate((*spans, *spans), mode=MODE_BALANCED)
 
-    input_keys = {
-        (s.doc_id, s.start, s.end, s.canonical_label, s.detector) for s in spans
-    }
-    for span in resolved:
-        key = (span.doc_id, span.start, span.end, span.canonical_label, span.detector)
-        assert key in input_keys, ("fabricated span", key)
+    input_payloads = {span.to_json() for span in spans}
+    resolved_payloads = [span.to_json() for span in resolved]
+    assert len(resolved_payloads) == len(set(resolved_payloads))
+    assert set(resolved_payloads) <= input_payloads
 
 
 @CONTRACT_SETTINGS
@@ -417,7 +460,7 @@ def test_arbitrate_preserves_leakage_free_structured_output(
     """Merge stage never reintroduces raw PHI text into structured span records."""
 
     text, spans = payload
-    resolved = arbitrate(spans)
+    resolved = arbitrate(spans, mode=MODE_BALANCED)
     _assert_no_raw_phi_in_structured_output(resolved, text)
 
 
@@ -451,10 +494,22 @@ def _fake_model_detector_factory(gold_surface: str, gold_label: str):
             text=text,
             entities=entities,
             model_name=kwargs.get("model_name", "fake-model"),
-            timestamp=datetime.now().isoformat(),
+            timestamp="2026-01-01T00:00:00+00:00",
         )
 
     return model_detector
+
+
+def _run_offline_pipeline(text: str, gold_surface: str) -> PipelineResult:
+    """Drive both model-backed stages with the same deterministic local fake."""
+
+    detector = _fake_model_detector_factory(gold_surface, "NAME")
+    return Pipeline(
+        model_detector=detector,
+        clinical_model_detector=detector,
+        use_safety_sweep=False,
+        hmac_secret=_HMAC_SECRET,
+    ).run(text, method="mask")
 
 
 # Synthetic gold surfaces: clearly-not-real names embedded in carrier sentences.
@@ -477,15 +532,13 @@ def test_full_pipeline_result_types_and_span_contracts(
     """End-to-end run keeps stage types stable and span contracts intact."""
 
     text = carrier.format(name=gold_surface)
-    detector = _fake_model_detector_factory(gold_surface, "NAME")
-
-    result = Pipeline(model_detector=detector, use_safety_sweep=False).run(
-        text, method="mask"
-    )
+    result = _run_offline_pipeline(text, gold_surface)
 
     # Type-stability contract at the emit boundary.
     assert isinstance(result, PipelineResult)
+    assert isinstance(result.route, LanguageRoute)
     assert isinstance(result.spans, tuple)
+    assert isinstance(result.stage_results, tuple)
     assert isinstance(result.redacted_text, str)
     assert isinstance(result.deidentification_result, DeidentificationResult)
     for stage_result in result.stage_results:
@@ -496,6 +549,13 @@ def test_full_pipeline_result_types_and_span_contracts(
     _assert_span_integrity(result.spans, text)
     _assert_sorted_non_overlapping(result.spans)
     _assert_no_raw_phi_in_structured_output(result.spans, text)
+
+    # The pipeline audit record is also structured output: it exposes HMACs,
+    # counts, offsets, and provenance, never the synthetic PHI surface.
+    serialized_audit = json.dumps(result.audit_record, sort_keys=True)
+    assert gold_surface not in serialized_audit
+    assert result.audit_record["input_text_hash"].startswith("hmac-sha256:")
+    assert result.audit_record["redacted_text_hash"].startswith("hmac-sha256:")
 
 
 @CONTRACT_SETTINGS
@@ -509,15 +569,16 @@ def test_full_pipeline_redacts_every_acted_span_from_output_text(
     """Emit contract: an acted span's surface never survives in redacted text."""
 
     text = carrier.format(name=gold_surface)
-    detector = _fake_model_detector_factory(gold_surface, "NAME")
-
-    result = Pipeline(model_detector=detector, use_safety_sweep=False).run(
-        text, method="mask"
-    )
+    result = _run_offline_pipeline(text, gold_surface)
 
     # The synthetic name is detected and redacted out of the emitted text.
     assert gold_surface not in result.redacted_text
     assert gold_surface not in result.deidentification_result.deidentified_text
+    assert result.deidentification_result.pii_entities
+    for entity in result.deidentification_result.pii_entities:
+        acted_surface = text[entity.start : entity.end]
+        assert acted_surface
+        assert acted_surface not in result.redacted_text
 
     # Detected entities carry canonical labels; NAME normalizes to PERSON.
     assert any(span.canonical_label == PERSON for span in result.spans)
@@ -536,21 +597,22 @@ def test_full_pipeline_stage_boundaries_are_ordered_and_typed(
     """Every declared stage boundary is present, ordered, and carries typed spans."""
 
     text = carrier.format(name=gold_surface)
-    detector = _fake_model_detector_factory(gold_surface, "NAME")
-
-    result = Pipeline(model_detector=detector, use_safety_sweep=False).run(
-        text, method="mask"
-    )
+    result = _run_offline_pipeline(text, gold_surface)
 
     emitted_names = [sr.name for sr in result.stage_results]
-    # Stage order is a subsequence of the declared STAGE_NAMES contract.
-    declared = list(Pipeline.stage_names)
-    positions = [declared.index(name) for name in emitted_names]
-    assert positions == sorted(positions), ("stages out of order", emitted_names)
+    assert emitted_names == list(Pipeline.stage_names)
+    assert [sr.stage for sr in result.stage_results] == list(range(1, 11))
+    for stage_name in Pipeline.stage_names[4:]:
+        assert result.stage(stage_name).spans
 
     # Every span the pipeline threaded through a stage boundary is well-formed.
     for stage_result in result.stage_results:
-        _assert_span_integrity(stage_result.spans, result.normalized_text)
+        stage_text = (
+            result.original_text
+            if stage_result.name == "emit"
+            else result.normalized_text
+        )
+        _assert_span_integrity(stage_result.spans, stage_text)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation helper
