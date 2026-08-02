@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any
 
 from openmed.core.decoding.spans import trim_span_whitespace
@@ -286,6 +290,8 @@ def risk_report(
     deidentified: Any,
     original: Any | None = None,
     aux: Any | None = None,
+    *,
+    quasi_identifier_fields: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Score residual re-identification risk for text or table records.
 
@@ -296,7 +302,12 @@ def risk_report(
     the quasi-identifier value is sliced from the source text and its section
     metadata is carried into the report. Regex and column-name extraction are
     deliberately small hooks until grounding-driven QI classification lands.
+    ``quasi_identifier_fields`` selects an exact tabular key for equivalence
+    classes. This keeps arbitrary-schema table scans byte-compatible with the
+    keys emitted for singleton records while preserving scalar types.
     """
+
+    resolved_fields = _validated_qi_fields(quasi_identifier_fields)
 
     deidentified_records = _coerce_records(deidentified, source="deidentified")
     original_records = (
@@ -308,14 +319,23 @@ def risk_report(
     original_profiles = [_profile_record(record) for record in original_records]
     aux_profiles = [_profile_record(record) for record in aux_records]
 
-    class_counts = Counter(profile.key for profile in deidentified_profiles)
-    k_values = [class_counts[profile.key] for profile in deidentified_profiles]
+    key_payloads = [
+        _profile_key_payload(profile, resolved_fields)
+        for profile in deidentified_profiles
+    ]
+    key_bytes = [_canonical_qi_key_bytes(payload) for payload in key_payloads]
+    class_counts = Counter(key_bytes)
+    k_values = [class_counts[key] for key in key_bytes]
     k_min = min(k_values) if k_values else 0
 
     singleton_records = [
-        _singleton_record(profile, class_counts[profile.key])
-        for profile in deidentified_profiles
-        if class_counts[profile.key] == 1
+        _singleton_record(profile, class_counts[key], payload)
+        for profile, key, payload in zip(
+            deidentified_profiles,
+            key_bytes,
+            key_payloads,
+        )
+        if class_counts[key] == 1
     ]
     quasi_identifiers = [
         qi.to_dict()
@@ -325,11 +345,62 @@ def risk_report(
 
     return {
         "leakage_rate": _leakage_rate(deidentified_records, original_records),
-        "reid_rate": _reid_rate(deidentified_profiles, original_profiles, aux_profiles),
+        "reid_rate": _reid_rate(
+            deidentified_profiles,
+            original_profiles,
+            aux_profiles,
+            fields=resolved_fields,
+        ),
         "k_min": k_min,
         "singleton_records": singleton_records,
         "quasi_identifiers": quasi_identifiers,
     }
+
+
+def quasi_identifier_key(
+    record: Any,
+    *,
+    fields: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the ``risk_report`` quasi-identifier key for one row or record.
+
+    When ``fields`` is omitted, the standard record profiler supplies the key.
+    When ``fields`` is provided, each named scalar retains its field, type, and
+    exact published representation. Both forms match the key shape emitted by
+    ``risk_report()["singleton_records"][*]["quasi_identifier_key"]`` for the
+    same configuration.
+    """
+
+    resolved_fields = _validated_qi_fields(fields)
+    if resolved_fields is not None and isinstance(record, Mapping):
+        return _tabular_qi_key_payload(record, resolved_fields)
+
+    records = _coerce_records(record, source="deidentified")
+    if not records:
+        return []
+    if len(records) != 1:
+        raise ValueError("quasi_identifier_key expects exactly one record")
+    profile = _profile_record(records[0])
+    return _profile_key_payload(profile, resolved_fields)
+
+
+def quasi_identifier_key_bytes(
+    record: Any,
+    *,
+    fields: Sequence[str] | None = None,
+) -> bytes:
+    """Return the canonical UTF-8 bytes for a risk-report QI key.
+
+    Args:
+        record: One record or table-row mapping.
+        fields: Optional explicit tabular quasi-identifier fields.
+
+    Returns:
+        Canonical JSON bytes matching the corresponding ``risk_report``
+        singleton key.
+    """
+
+    return _canonical_qi_key_bytes(quasi_identifier_key(record, fields=fields))
 
 
 def build_longitudinal_corpus(
@@ -1143,36 +1214,150 @@ def _profile_key(
     )
 
 
-def _singleton_record(profile: _Profile, effective_k: int) -> dict[str, Any]:
+def _singleton_record(
+    profile: _Profile,
+    effective_k: int,
+    key_payload: list[dict[str, Any]],
+) -> dict[str, Any]:
     return {
         "record_index": profile.record.index,
         "record_id": profile.record.record_id,
         "effective_k": effective_k,
-        "quasi_identifier_key": [
-            {"category": category, "values": list(values)}
-            for category, values in profile.key
-        ],
+        "quasi_identifier_key": key_payload,
     }
+
+
+def _serialized_profile_key(
+    key: tuple[tuple[str, tuple[str, ...]], ...],
+) -> list[dict[str, Any]]:
+    return [{"category": category, "values": list(values)} for category, values in key]
+
+
+def _profile_key_payload(
+    profile: _Profile,
+    fields: tuple[str, ...] | None,
+) -> list[dict[str, Any]]:
+    if fields is None:
+        return _serialized_profile_key(profile.key)
+    return _tabular_qi_key_payload(profile.record.fields, fields)
+
+
+def _validated_qi_fields(
+    fields: Sequence[str] | None,
+) -> tuple[str, ...] | None:
+    if fields is None:
+        return None
+    if isinstance(fields, (str, bytes, bytearray)):
+        raise TypeError("quasi_identifier_fields must be a sequence of field names")
+    resolved: list[str] = []
+    for field in fields:
+        if not isinstance(field, str):
+            raise TypeError("quasi-identifier field names must be strings")
+        if not field:
+            raise ValueError("quasi-identifier field names must not be empty")
+        if field not in resolved:
+            resolved.append(field)
+    if not resolved:
+        raise ValueError("quasi_identifier_fields must not be empty")
+    return tuple(resolved)
+
+
+def _tabular_qi_key_payload(
+    record: Mapping[str, Any],
+    fields: Sequence[str],
+) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for field in sorted(fields):
+        value_type, value = _typed_tabular_qi_value(record, field)
+        payload.append({"field": field, "type": value_type, "value": value})
+    return payload
+
+
+def _typed_tabular_qi_value(
+    record: Mapping[str, Any],
+    field: str,
+) -> tuple[str, str]:
+    if field not in record:
+        return "missing", ""
+    value = record[field]
+    if value is None:
+        return "null", ""
+    if isinstance(value, bool):
+        return "boolean", "true" if value else "false"
+    if isinstance(value, int):
+        return "integer", str(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "float", "nan"
+        if math.isinf(value):
+            return "float", "infinity" if value > 0 else "-infinity"
+        return "float", repr(value)
+    if isinstance(value, Decimal):
+        return "decimal", _canonical_decimal_text(value)
+    if isinstance(value, datetime):
+        if value.tzinfo is not None and value.utcoffset() is None:
+            raise ValueError("datetime timezone offsets must be determinate")
+        return "datetime", value.isoformat()
+    if isinstance(value, date):
+        return "date", value.isoformat()
+    if isinstance(value, time):
+        return "time", value.isoformat()
+    if isinstance(value, bytes):
+        return "bytes", value.hex()
+    if isinstance(value, str):
+        return "string", value
+    return f"unsupported:{type(value).__name__}", ""
+
+
+def _canonical_decimal_text(value: Decimal) -> str:
+    if value.is_zero():
+        return "0"
+    sign, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int):
+        raise ValueError("Cannot canonicalize a non-finite decimal")
+    normalized_digits = list(digits)
+    while normalized_digits and normalized_digits[-1] == 0:
+        normalized_digits.pop()
+        exponent += 1
+    return str(Decimal((sign, tuple(normalized_digits), exponent)))
+
+
+def _canonical_qi_key_bytes(key: list[dict[str, Any]]) -> bytes:
+    return json.dumps(
+        key,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
 def _reid_rate(
     deidentified_profiles: list[_Profile],
     original_profiles: list[_Profile],
     aux_profiles: list[_Profile],
+    *,
+    fields: tuple[str, ...] | None,
 ) -> float:
     if not deidentified_profiles:
         return 0.0
 
-    original_counts = Counter(
-        profile.key for profile in original_profiles if profile.key
-    )
-    aux_counts = Counter(profile.key for profile in aux_profiles if profile.key)
+    original_keys = [
+        _canonical_qi_key_bytes(_profile_key_payload(profile, fields))
+        for profile in original_profiles
+    ]
+    aux_keys = [
+        _canonical_qi_key_bytes(_profile_key_payload(profile, fields))
+        for profile in aux_profiles
+    ]
+    original_counts = Counter(key for key in original_keys if key != b"[]")
+    aux_counts = Counter(key for key in aux_keys if key != b"[]")
 
     linked = 0
     for profile in deidentified_profiles:
-        if not profile.key:
+        key = _canonical_qi_key_bytes(_profile_key_payload(profile, fields))
+        if key == b"[]":
             continue
-        if original_counts[profile.key] == 1 or aux_counts[profile.key] == 1:
+        if original_counts[key] == 1 or aux_counts[key] == 1:
             linked += 1
     return linked / len(deidentified_profiles)
 
@@ -1253,26 +1438,302 @@ def _span_is_direct_identifier(span: Mapping[str, Any]) -> bool:
 
 
 def _field_is_direct_identifier(name: str) -> bool:
-    normalized = _name_key(name)
-    if any(
-        safe_hint in normalized
-        for safe_hint in ("date", "age", "diagnosis", "condition")
+    """Return whether a field name strongly signals a direct identifier.
+
+    Identifier hints are matched as semantic tokens or reviewed compound
+    names.  Substring matching is intentionally avoided: ordinary fields such
+    as ``validity_score``, ``fluid_balance``, and ``candidate_score`` contain
+    the letters ``id`` but are not identifiers.
+    """
+
+    tokens = _field_name_tokens(name)
+    normalized = "".join(tokens)
+    if any(token in {"id", "identifier"} for token in tokens):
+        return True
+
+    direct_tokens = {
+        "email",
+        "emailaddress",
+        "phone",
+        "telephone",
+        "ssn",
+        "mrn",
+        "address",
+        "fax",
+        "passport",
+        "fingerprint",
+        "voiceprint",
+        "photo",
+        "photograph",
+        "imei",
+        "imsi",
+        "uuid",
+        "guid",
+        "npi",
+        "password",
+        "apikey",
+    }
+    if any(token in direct_tokens for token in tokens):
+        return True
+
+    if normalized in {
+        "id",
+        "identifier",
+        "medicalrecordnumber",
+        "socialsecuritynumber",
+        "emailaddress",
+        "phonenumber",
+        "telephonenumber",
+        "streetaddress",
+        "postaladdress",
+        "bankaccount",
+        "accountnumber",
+        "bankaccountnumber",
+        "financialaccountnumber",
+        "healthplanbeneficiarynumber",
+        "passportnumber",
+        "driverslicensenumber",
+        "driverlicense",
+        "driverslicense",
+        "licensenumber",
+        "certificatenumber",
+        "vehicleserialnumber",
+        "vin",
+        "deviceserialnumber",
+        "url",
+        "ipaddress",
+        "biometricidentifier",
+        "fullfacephoto",
+        "apikey",
+        "secretkey",
+        "firstname",
+        "givenname",
+        "lastname",
+        "familyname",
+        "middlename",
+        "fullname",
+        "surname",
+        "forename",
+        "legalname",
+        "birthname",
+        "nickname",
+        "alias",
+        "patientname",
+        "personname",
+        "membername",
+        "providername",
+        "clinicianname",
+        "physicianname",
+        "doctorname",
+        "employeename",
+        "mothermaidenname",
+        "emergencycontactname",
+        "emergencycontact",
+        "nextofkinname",
+        "nextofkin",
+        "guardianname",
+        "spousename",
+        "username",
+        "loginname",
+        "screenname",
+        "accountname",
+        "account",
+        "uuid",
+        "guid",
+        "npi",
+        "nhsnumber",
+        "abhanumber",
+        "medicarenumber",
+        "medicaidnumber",
+        "healthplannumber",
+        "healthinsurancenumber",
+        "medicalrecordno",
+        "patientnumber",
+        "patientnum",
+        "subjectnumber",
+        "subjectnum",
+        "membernumber",
+        "membernum",
+        "recordnumber",
+        "recordnum",
+        "chartnumber",
+        "chartnum",
+        "claimnumber",
+        "claimnum",
+        "beneficiarynumber",
+        "beneficiarynum",
+        "subscribernumber",
+        "subscribernum",
+        "policynumber",
+        "policynum",
+        "insurancenumber",
+        "insurancenum",
+        "hospitalnumber",
+        "hospitalnum",
+        "admissionnumber",
+        "admissionnum",
+        "encounternumber",
+        "encounternum",
+        "visitnumber",
+        "visitnum",
+        "patientkey",
+        "subjectkey",
+        "memberkey",
+        "recordkey",
+        "userkey",
+        "accountkey",
+        "deviceserial",
+        "serialnumber",
+        "licenseplate",
+        "weburl",
+        "ip",
+        "mobile",
+        "imei",
+        "imsi",
+        "photo",
+        "photograph",
+    }:
+        return True
+    if "name" in tokens and any(
+        token
+        in {
+            "diagnosis",
+            "condition",
+            "procedure",
+            "medication",
+            "facility",
+            "test",
+            "code",
+        }
+        for token in tokens
     ):
         return False
-    return any(
-        hint in normalized
-        for hint in (
-            "name",
-            "email",
-            "phone",
-            "ssn",
-            "mrn",
-            "id",
-            "address",
+    if "name" in tokens and any(
+        token
+        in {
+            "middle",
+            "legal",
+            "birth",
+            "patient",
+            "person",
+            "member",
+            "provider",
+            "clinician",
+            "physician",
+            "doctor",
+            "employee",
+            "mother",
+            "maiden",
+            "emergency",
+            "contact",
+            "guardian",
+            "spouse",
+            "kin",
+            "beneficiary",
+        }
+        for token in tokens
+    ):
+        return True
+    if any(token in {"number", "num", "no"} for token in tokens) and any(
+        token
+        in {
+            "patient",
+            "person",
+            "subject",
+            "member",
+            "record",
+            "medical",
+            "chart",
+            "claim",
+            "beneficiary",
+            "subscriber",
+            "policy",
+            "insurance",
+            "medicare",
+            "medicaid",
+            "nhs",
+            "abha",
+            "hospital",
+            "admission",
+            "encounter",
+            "visit",
             "account",
-            "password",
-            "apikey",
+            "provider",
+            "clinician",
+            "physician",
+            "employee",
+            "user",
+        }
+        for token in tokens
+    ):
+        return True
+    if "key" in tokens and any(
+        token
+        in {
+            "patient",
+            "person",
+            "subject",
+            "member",
+            "record",
+            "account",
+            "user",
+            "provider",
+            "employee",
+        }
+        for token in tokens
+    ):
+        return True
+    if "serial" in tokens and any(
+        token in {"device", "vehicle", "equipment", "serial", "number"}
+        for token in tokens
+    ):
+        return True
+    if "plate" in tokens and any(
+        token in {"license", "vehicle", "registration"} for token in tokens
+    ):
+        return True
+    if any(token in {"mobile", "cell"} for token in tokens) and any(
+        token in {"phone", "telephone", "number", "num", "no"} for token in tokens
+    ):
+        return True
+    if any(token in {"photo", "photograph"} for token in tokens) and any(
+        token in {"patient", "person", "member", "employee", "face", "full"}
+        for token in tokens
+    ):
+        return True
+    if "url" in tokens or "ip" in tokens:
+        return True
+    if normalized.endswith(
+        (
+            "patientid",
+            "personid",
+            "subjectid",
+            "recordid",
+            "memberid",
+            "accountid",
+            "userid",
+            "encounterid",
+            "documentid",
+            "providerid",
         )
+    ):
+        return True
+    if any(
+        safe_hint in tokens for safe_hint in ("date", "age", "diagnosis", "condition")
+    ):
+        return False
+    return len(tokens) == 1 and tokens[0] == "name"
+
+
+def _field_name_tokens(name: str) -> tuple[str, ...]:
+    """Split snake, kebab, spaced, and camel-case field names safely."""
+
+    separated = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", str(name))
+    separated = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", separated)
+    return tuple(
+        token.casefold()
+        for token in re.findall(r"[^\W_]+", separated, flags=re.UNICODE)
+        if token
     )
 
 
@@ -1303,5 +1764,7 @@ __all__ = [
     "build_longitudinal_corpus",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "quasi_identifier_key",
+    "quasi_identifier_key_bytes",
     "risk_report",
 ]
