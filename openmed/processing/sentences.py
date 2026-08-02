@@ -172,6 +172,8 @@ def _normalize_yasbd_spans(
     moving only whitespace boundaries; non-whitespace gaps fail closed.
     """
     if not spans:
+        if text.strip():
+            raise ValueError("yasbd-lib returned no spans for non-whitespace text")
         return []
 
     raw_cursor = 0

@@ -284,6 +284,16 @@ def test_yasbd_backend_restores_offsets_after_leading_blank_lines(
     _assert_exact_round_trip(text, spans)
 
 
+def test_yasbd_backend_fails_closed_when_non_whitespace_text_has_no_spans(
+    fake_yasbd_segmenter,
+):
+    instance = fake_yasbd_segmenter.return_value
+    instance.segment.return_value = []
+
+    with pytest.raises(ValueError, match="no spans for non-whitespace text"):
+        segment_text("Patient is stable.", backend="yasbd")
+
+
 def test_yasbd_chinese_semicolon_boundary_has_no_global_rule_mutation(
     fake_yasbd_segmenter,
 ):
@@ -309,6 +319,8 @@ def test_missing_yasbd_dependency_names_openmed_extra():
 @pytest.mark.integration
 def test_yasbd_real_adapter_preserves_openmed_span_contract():
     pytest.importorskip("yasbd", reason="requires the optional openmed[yasbd] extra")
+    base_rules = pytest.importorskip("yasbd.rules.base")
+    terminators_before = set(base_rules.Rules.TERMINATORS)
     cases = [
         ("en", "Patient is stable.\n\nFollow up tomorrow.\n"),
         ("en", "\n\nPatient is stable.\n\nFollow up tomorrow.\n\n"),
@@ -324,3 +336,12 @@ def test_yasbd_real_adapter_preserves_openmed_span_contract():
 
     chinese = segment_text(cases[-1][1], language="zh", backend="yasbd")
     assert [span.text for span in chinese] == ["第一项完成；", "第二项完成。"]
+    assert set(base_rules.Rules.TERMINATORS) == terminators_before
+
+
+@pytest.mark.integration
+def test_yasbd_real_adapter_rejects_clean_with_exact_spans():
+    pytest.importorskip("yasbd", reason="requires the optional openmed[yasbd] extra")
+
+    with pytest.raises(ValueError, match="char_span must be False if clean is True"):
+        segment_text("Patient is stable.", clean=True, backend="yasbd")
