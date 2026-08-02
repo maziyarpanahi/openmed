@@ -171,6 +171,7 @@ def render_risk_dashboard(
     risk: Mapping[str, Any],
     *,
     kanon: Mapping[str, Any] | None = None,
+    longitudinal: Mapping[str, Any] | None = None,
     title: str | None = None,
 ) -> str:
     """Render a local-sensitive, self-contained diagnostic dashboard.
@@ -185,6 +186,9 @@ def render_risk_dashboard(
         risk: Mapping returned by :func:`openmed.risk.risk_report`.
         kanon: Optional mapping returned by :func:`openmed.risk.kanon_report`
             or :func:`openmed.risk.enforce_kanon`.
+        longitudinal: Optional mapping returned by
+            :func:`openmed.risk.longitudinal_risk_report`. Its panel renders
+            only validated hashes, offsets, counts, and scores.
         title: Optional document and page title. Defaults to a stable title.
 
     Returns:
@@ -200,6 +204,8 @@ def render_risk_dashboard(
     ]
     if kanon is not None:
         body.append(_render_kanon(kanon))
+    if longitudinal is not None:
+        body.append(_render_longitudinal_linkage(longitudinal))
 
     return _render_document(document_title, body)
 
@@ -219,6 +225,7 @@ def write_risk_dashboard(
 def render_release_assessment_dashboard(
     assessment: ReleaseAssessment | AnonymizationResult | Mapping[str, Any],
     *,
+    longitudinal: Mapping[str, Any] | None = None,
     title: str | None = None,
 ) -> str:
     """Render only allow-listed aggregate release evidence.
@@ -228,6 +235,9 @@ def render_release_assessment_dashboard(
             :class:`AnonymizationResult`, or the mapping returned by
             ``to_dict()`` / ``to_safe_dict()`` on those objects. Detailed
             ``risk_report`` and ``kanon_report`` mappings are rejected.
+        longitudinal: Optional mapping returned by
+            :func:`openmed.risk.longitudinal_risk_report`. Its panel renders
+            only validated hashes, offsets, counts, and scores.
         title: Optional document and page title.
 
     Returns:
@@ -245,6 +255,8 @@ def render_release_assessment_dashboard(
         body.append(_render_release_assessment(payload, section_id="assessment"))
     else:
         body.extend(_render_anonymization_summary(payload))
+    if longitudinal is not None:
+        body.append(_render_longitudinal_linkage(longitudinal))
     return _render_document(document_title, body)
 
 
@@ -252,13 +264,18 @@ def write_release_assessment_dashboard(
     assessment: ReleaseAssessment | AnonymizationResult | Mapping[str, Any],
     path: str | Path,
     *,
+    longitudinal: Mapping[str, Any] | None = None,
     title: str | None = None,
 ) -> Path:
     """Write an aggregate release-evidence dashboard and return its path."""
 
     output_path = Path(path)
     output_path.write_text(
-        render_release_assessment_dashboard(assessment, title=title),
+        render_release_assessment_dashboard(
+            assessment,
+            longitudinal=longitudinal,
+            title=title,
+        ),
         encoding="utf-8",
     )
     return output_path
@@ -535,6 +552,295 @@ def _render_safe_generalization_levels(value: Any) -> list[str]:
         "<h2>Selected Generalization</h2>",
         _table(["Attribute", "Level", "Loss"], rows),
     ]
+
+
+def _render_longitudinal_linkage(report: Mapping[str, Any]) -> str:
+    validated = _safe_longitudinal_report(report)
+    if validated is None:
+        return "\n".join(
+            [
+                '<section aria-labelledby="longitudinal-linkage-risk">',
+                '<h2 id="longitudinal-linkage-risk">Longitudinal Linkage Risk</h2>',
+                (
+                    '<p class="empty">Longitudinal linkage evidence is '
+                    "unavailable or malformed.</p>"
+                ),
+                "</section>",
+            ]
+        )
+
+    patients = validated["patients"]
+    highest_bound = validated["linkage_success_upper_bound"]
+    highest_risk = [
+        patient
+        for patient in patients
+        if highest_bound > 0.0
+        and math.isclose(
+            patient["linkage_upper_bound"],
+            highest_bound,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+    ]
+
+    sections = [
+        '<section aria-labelledby="longitudinal-linkage-risk">',
+        '<h2 id="longitudinal-linkage-risk">Longitudinal Linkage Risk</h2>',
+        (
+            '<p class="subtle">The maximum is a conservative patient-level '
+            "upper bound, not an observed attack-success rate.</p>"
+        ),
+        '<div class="metric-grid">',
+        _metric("Patients", _format_count(validated["patient_count"])),
+        _metric("Documents", _format_count(validated["document_count"])),
+        _metric(
+            "Linkable patients",
+            _format_count(validated["linkable_patient_count"]),
+        ),
+        _metric(
+            "Maximum linkage bound",
+            _format_rate(validated["linkage_success_upper_bound"]),
+        ),
+        _metric(
+            "Mean patient bound",
+            _format_rate(validated["mean_patient_linkage_upper_bound"]),
+        ),
+        _metric(
+            "Affected document rate",
+            _format_rate(validated["residual_direct_identifier_leakage"]),
+        ),
+        _metric(
+            "Residual direct identifiers",
+            _format_count(validated["residual_direct_identifier_leakage_count"]),
+        ),
+        "</div>",
+        "<h2>Highest-Risk Cohort</h2>",
+    ]
+    if highest_risk:
+        sections.append(
+            _table(
+                [
+                    "Patient hash",
+                    "Documents",
+                    "Evidence items",
+                    "Direct identifiers",
+                    "Upper bound",
+                ],
+                [
+                    [
+                        patient["patient_hash"],
+                        str(patient["document_count"]),
+                        str(patient["evidence_count"]),
+                        str(patient["direct_identifier_count"]),
+                        _format_rate(patient["linkage_upper_bound"]),
+                    ]
+                    for patient in highest_risk
+                ],
+            )
+        )
+    else:
+        sections.append('<p class="empty">No linkable patient cohort reported.</p>')
+
+    evidence_rows = [
+        [
+            patient["patient_hash"],
+            str(item["note_index"]),
+            item["note_hash"],
+            item["value_hash"],
+            _format_count(item.get("start")),
+            _format_count(item.get("end")),
+        ]
+        for patient in highest_risk
+        for item in patient["evidence"]
+    ]
+    if evidence_rows:
+        sections.extend(
+            [
+                "<h2>Highest-Risk Hashed Evidence</h2>",
+                _table(
+                    [
+                        "Patient hash",
+                        "Note index",
+                        "Note hash",
+                        "Value hash",
+                        "Start",
+                        "End",
+                    ],
+                    evidence_rows,
+                ),
+            ]
+        )
+    sections.append("</section>")
+    return "\n".join(sections)
+
+
+def _safe_longitudinal_report(report: Mapping[str, Any]) -> dict[str, Any] | None:
+    schema_version = _nonnegative_int(report.get("schema_version"))
+    patient_count = _nonnegative_int(report.get("patient_count"))
+    document_count = _nonnegative_int(report.get("document_count"))
+    linkable_patient_count = _nonnegative_int(report.get("linkable_patient_count"))
+    upper_bound = _probability(report.get("linkage_success_upper_bound"))
+    mean_bound = _probability(report.get("mean_patient_linkage_upper_bound"))
+    direct_leakage = _probability(report.get("residual_direct_identifier_leakage"))
+    direct_leakage_count = _nonnegative_int(
+        report.get("residual_direct_identifier_leakage_count")
+    )
+    patients = _safe_longitudinal_patients(report.get("patient_risks"))
+    if (
+        schema_version != 1
+        or patient_count is None
+        or document_count is None
+        or linkable_patient_count is None
+        or upper_bound is None
+        or mean_bound is None
+        or direct_leakage is None
+        or direct_leakage_count is None
+        or patients is None
+    ):
+        return None
+
+    patient_bounds = [patient["linkage_upper_bound"] for patient in patients]
+    patient_hashes = [patient["patient_hash"] for patient in patients]
+    expected_upper_bound = max(patient_bounds, default=0.0)
+    expected_mean_bound = sum(patient_bounds) / patient_count if patient_count else 0.0
+    if (
+        len(patients) != patient_count
+        or len(set(patient_hashes)) != patient_count
+        or sum(patient["document_count"] for patient in patients) != document_count
+        or sum(patient["direct_identifier_count"] for patient in patients)
+        != direct_leakage_count
+        or sum(bound > 0.0 for bound in patient_bounds) != linkable_patient_count
+        or not math.isclose(
+            upper_bound,
+            expected_upper_bound,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+        or not math.isclose(
+            mean_bound,
+            expected_mean_bound,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+        or (direct_leakage_count == 0 and direct_leakage != 0.0)
+        or (direct_leakage_count > 0 and direct_leakage <= 0.0)
+    ):
+        return None
+    return {
+        "patient_count": patient_count,
+        "document_count": document_count,
+        "linkable_patient_count": linkable_patient_count,
+        "linkage_success_upper_bound": upper_bound,
+        "mean_patient_linkage_upper_bound": mean_bound,
+        "residual_direct_identifier_leakage": direct_leakage,
+        "residual_direct_identifier_leakage_count": direct_leakage_count,
+        "patients": patients,
+    }
+
+
+def _safe_longitudinal_patients(value: Any) -> list[dict[str, Any]] | None:
+    patients = []
+    for item in _as_sequence(value):
+        if not isinstance(item, Mapping):
+            return None
+        patient_hash = _safe_digest(item.get("patient_pseudonym"))
+        document_count = _nonnegative_int(item.get("document_count"))
+        evidence_count = _nonnegative_int(item.get("evidence_count"))
+        direct_identifier_count = _nonnegative_int(item.get("direct_identifier_count"))
+        linkage_upper_bound = _probability(item.get("linkage_upper_bound"))
+        evidence = _safe_longitudinal_evidence(item.get("evidence"))
+        if (
+            patient_hash is None
+            or document_count is None
+            or document_count < 1
+            or evidence_count is None
+            or direct_identifier_count is None
+            or linkage_upper_bound is None
+            or evidence is None
+            or evidence_count != len(evidence)
+        ):
+            return None
+        patients.append(
+            {
+                "patient_hash": patient_hash,
+                "document_count": document_count,
+                "evidence_count": evidence_count,
+                "direct_identifier_count": direct_identifier_count,
+                "linkage_upper_bound": linkage_upper_bound,
+                "evidence": evidence,
+            }
+        )
+    patients.sort(key=lambda patient: patient["patient_hash"])
+    return patients
+
+
+def _safe_longitudinal_evidence(value: Any) -> list[dict[str, Any]] | None:
+    evidence = []
+    for item in _as_sequence(value):
+        if not isinstance(item, Mapping):
+            return None
+        note_index = _nonnegative_int(item.get("note_index"))
+        note_hash = _safe_digest(item.get("note_hash"))
+        value_hash = _safe_digest(item.get("value_hash"))
+        raw_start = item.get("start")
+        raw_end = item.get("end")
+        start = _nonnegative_int(raw_start)
+        end = _nonnegative_int(raw_end)
+        if (
+            note_index is None
+            or note_hash is None
+            or value_hash is None
+            or (raw_start is not None and start is None)
+            or (raw_end is not None and end is None)
+            or (start is not None and end is not None and end < start)
+        ):
+            return None
+        safe_item = {
+            "note_index": note_index,
+            "note_hash": note_hash,
+            "value_hash": value_hash,
+        }
+        if start is not None:
+            safe_item["start"] = start
+        if end is not None:
+            safe_item["end"] = end
+        evidence.append(safe_item)
+    evidence.sort(
+        key=lambda item: (
+            item["note_index"],
+            item["note_hash"],
+            item["value_hash"],
+            item.get("start", -1),
+            item.get("end", -1),
+        )
+    )
+    return evidence
+
+
+def _safe_digest(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    prefix, separator, digest = value.partition(":")
+    if separator != ":" or prefix not in {"sha256", "hmac-sha256"}:
+        return None
+    if len(digest) != 64:
+        return None
+    try:
+        int(digest, 16)
+    except ValueError:
+        return None
+    return value
+
+
+def _nonnegative_int(value: Any) -> int | None:
+    return value if type(value) is int and value >= 0 else None
+
+
+def _probability(value: Any) -> float | None:
+    if type(value) not in {int, float}:
+        return None
+    parsed = float(value)
+    return parsed if math.isfinite(parsed) and 0.0 <= parsed <= 1.0 else None
 
 
 def _safe_metadata_strings(value: Any) -> list[str]:
