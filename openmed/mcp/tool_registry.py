@@ -14,6 +14,7 @@ from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
     INDIC_NER_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
 
@@ -824,7 +825,12 @@ _KEEP_ALIVE_PARAMETER = _parameter(
 )
 _LANG_PARAMETER = _parameter(
     "lang",
-    _schema("string", enum=sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)),
+    _schema(
+        "string",
+        enum=sorted(
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+        ),
+    ),
     str,
     "en",
     "PII language code.",

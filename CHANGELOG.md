@@ -27,8 +27,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
   contract, with explicit errors for missing dependencies, unknown backends,
   and conflicting preconstructed segmenters (#1848).
+- Registered the Indic and Urdu routing candidates (`mr`, `ne`, `bn`, `as`,
+  `ta`, `kn`, `ml`, `gu`, `pa`, `or`, `ur`) across the public language
+  surfaces. Nepali and Urdu now have display names, model prefixes, and REST,
+  MCP, TypeScript, and Go language enums; Nepali resolves to Faker's native
+  `ne_NP` locale. Languages in `USER_SUPPLIED_MODEL_LANGUAGES` claim no bundled
+  default model and raise an actionable `ValueError` naming every user-supplied
+  code when `model_name` is omitted, while `SUPPORTED_LANGUAGES` stays
+  model-backed-only so documented model-backed counts are unchanged (#1569).
 
 ### Fixed
+
+- Fixed `Pipeline.stage2_language_script` rejecting national-ID-only and
+  user-supplied language codes that `openmed.core.pii` already accepted, so an
+  explicit `lang` is no longer refused one stage earlier (#1569).
+- Fixed the shared input gateway rejecting `USER_SUPPLIED_MODEL_LANGUAGES`
+  codes. `openmed.utils.gateway.validate_language` now includes them in its
+  default acceptance set, so the REST and MCP edges accept every code they
+  advertise on their language enums instead of returning `unsupported_language`
+  for `ne` and `ur`. `include_national_id` still toggles exactly
+  `NATIONAL_ID_ONLY_LANGUAGES` (#1569).
 
 - Fixed the PySpark batch de-identification adapter so
   `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
