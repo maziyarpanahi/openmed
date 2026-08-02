@@ -91,6 +91,48 @@ PHI. The generated card marks the checkpoint as assistive de-identification,
 not diagnosis, treatment recommendation, or an automatic clinical-decision
 trigger.
 
+## DirectID Tiny certification
+
+`build_directid_release` consumes the aggregate artifacts from the DirectID
+dataset, Mode-A distillation, safety-sweep, and quantization workflows. It
+reuses the release-gate harness and signs exactly G1b, G3, G4, and G5 for one
+selected runtime format. The selected format is publishable only when the
+certified evaluation covers every DirectID label, structured-ID recall is at
+least 99.5%, critical and residual leakage are both zero, quantization recall
+loss is within the format limit, and measured latency and RAM fit the Tiny
+tier.
+
+```python
+from openmed.eval.directid_release import build_directid_release
+
+release = build_directid_release(
+    directid_evidence,
+    candidate_checkpoint=candidate_checkpoint,
+    training_report=training_report,
+    run_manifest=run_manifest,
+    training_provenance=training_provenance,
+    dataset_evidence=dataset_evidence,
+    quantization_evidence=quantization_evidence,
+    release_format="mlx-8bit",
+    release_date="2026-08-02",
+    signing_key=release_signing_key,
+)
+paths = release.write("release-evidence/directid-tiny")
+```
+
+A releasable package contains `gate-report.json`,
+`checkpoint-manifest.json`, `README.md`, `model-datasheet.json`, and
+`release-manifest.json`. A failing package writes only the signed gate report
+and release manifest; it has no checkpoint manifest, model card, or publish
+target. Optional formats are isolated: for example, a rejected INT4 artifact
+is listed under `quarantined_formats` without blocking a passing INT8 format.
+
+All inputs and outputs are aggregate and offline-friendly. Dataset sources are
+represented by IDs, licenses, revisions, and hashes; safety-sweep evidence uses
+counts, offsets, hashes, and its patterns version. Raw identifiers, source
+records, restricted dataset payloads, and signing secrets are never copied into
+the release package.
+
 ## Metric Bundle
 
 | Metric | Path | Gating? | Description |
