@@ -16,7 +16,13 @@ from types import MappingProxyType
 from typing import Any, Literal, cast
 
 from openmed.core.audit import hash_text
-from openmed.core.decoding import SpanEdge
+from openmed.core.decoding import (
+    SpanEdge,
+    SpanGraph,
+    SpanGraphConstraints,
+    SpanNode,
+    decode_span_graph,
+)
 from openmed.core.labels import normalize_label
 from openmed.processing.advanced_ner import EntitySpan
 
@@ -46,6 +52,12 @@ TEMPORAL_RELATION_TYPES: tuple[TemporalRelationType, ...] = (
     "ENDS_ON",
 )
 TEMPORAL_RELATION_SCHEMA_VERSION = 1
+TEMPORAL_GRAPH_SCHEMA_VERSION = 1
+
+_REDUCED_TEMPORAL_RELATION_TYPES = frozenset(
+    {"BEFORE", "OVERLAP", "CONTAINS", "BEGINS_ON", "ENDS_ON"}
+)
+_PARTIAL_ORDER_RELATION_TYPES = frozenset({"BEFORE", "CONTAINS"})
 
 _EVENT_LABEL_ALIASES = frozenset(
     {
@@ -267,6 +279,110 @@ def extract_tlink_candidates(
         candidates.append(candidate)
 
     return tuple(sorted(candidates, key=lambda candidate: candidate.stable_key()))
+
+
+def decode_tlink_candidates(
+    candidates: Iterable[TemporalRelationCandidate],
+    *,
+    min_confidence: float = 0.0,
+) -> SpanGraph:
+    """Decode typed TLINK candidates into a consistent reduced graph.
+
+    ``AFTER(source, target)`` is canonicalized to
+    ``BEFORE(target, source)`` so contradictory BEFORE/AFTER claims share one
+    partial-order constraint. ``BEFORE`` and ``CONTAINS`` edges are decoded as
+    an acyclic graph and transitively reduced. The original relation type,
+    direction, cue offsets, hashes, and extraction provenance remain attached
+    to each :class:`~openmed.core.decoding.SpanEdge` decision trace.
+
+    Args:
+        candidates: Privacy-safe typed TLINK candidates to decode.
+        min_confidence: Inclusive confidence floor between zero and one.
+
+    Returns:
+        A deterministic span graph containing only reduced retained edges plus
+        kept and pruned provenance for every supplied candidate.
+
+    Raises:
+        ValueError: If ``min_confidence`` is invalid or one span id is reused
+            with conflicting span metadata.
+    """
+
+    if not math.isfinite(float(min_confidence)) or not 0.0 <= min_confidence <= 1.0:
+        raise ValueError("min_confidence must be finite and between 0 and 1")
+
+    candidate_tuple = tuple(candidates)
+    spans_by_id: dict[str, TemporalSpanReference] = {}
+    for candidate in candidate_tuple:
+        for span in (candidate.source, candidate.target):
+            existing = spans_by_id.get(span.span_id)
+            if existing is not None and existing != span:
+                raise ValueError(
+                    f"temporal span id {span.span_id!r} has conflicting metadata"
+                )
+            spans_by_id[span.span_id] = span
+
+    nodes = tuple(_temporal_graph_node(span) for span in spans_by_id.values())
+    edges = tuple(_temporal_graph_edge(candidate) for candidate in candidate_tuple)
+    return decode_span_graph(
+        nodes,
+        edges,
+        constraints=SpanGraphConstraints(
+            allowed_edge_labels=_REDUCED_TEMPORAL_RELATION_TYPES,
+            acyclic_edge_labels=_PARTIAL_ORDER_RELATION_TYPES,
+            transitive_reduction_edge_labels=_PARTIAL_ORDER_RELATION_TYPES,
+        ),
+        min_edge_score=min_confidence,
+    )
+
+
+def _temporal_graph_node(span: TemporalSpanReference) -> SpanNode:
+    return SpanNode(
+        node_id=span.span_id,
+        start=span.start,
+        end=span.end,
+        label=span.role,
+        score=span.score,
+        text_hash=span.text_hash,
+        metadata={
+            "schema_version": TEMPORAL_GRAPH_SCHEMA_VERSION,
+            "source_label": span.label,
+        },
+    )
+
+
+def _temporal_graph_edge(candidate: TemporalRelationCandidate) -> SpanEdge:
+    source = candidate.source
+    target = candidate.target
+    relation_type = candidate.relation_type
+    canonical_relation_type = relation_type
+    if relation_type == "AFTER":
+        source, target = target, source
+        canonical_relation_type = "BEFORE"
+    elif relation_type == "OVERLAP" and _temporal_span_key(target) < _temporal_span_key(
+        source
+    ):
+        source, target = target, source
+
+    return SpanEdge(
+        head=source.span_id,
+        tail=target.span_id,
+        label=canonical_relation_type,
+        score=candidate.confidence,
+        metadata={
+            "schema_version": TEMPORAL_GRAPH_SCHEMA_VERSION,
+            "candidate_relation_type": relation_type,
+            "candidate_source_id": candidate.source.span_id,
+            "candidate_target_id": candidate.target.span_id,
+            "cue": candidate.cue.to_dict(),
+            "features": dict(candidate.features),
+            "provenance": dict(candidate.provenance),
+        },
+    )
+
+
+def _temporal_span_key(span: TemporalSpanReference) -> tuple[int, int, str, str]:
+    return (span.start, span.end, span.role, span.span_id)
 
 
 def _temporal_relation_rules(
@@ -493,6 +609,7 @@ def _intervening_span_count(
 
 
 __all__ = [
+    "TEMPORAL_GRAPH_SCHEMA_VERSION",
     "TEMPORAL_RELATION_SCHEMA_VERSION",
     "TEMPORAL_RELATION_TYPES",
     "TemporalCueReference",
@@ -500,5 +617,6 @@ __all__ = [
     "TemporalRelationType",
     "TemporalSpanReference",
     "TemporalSpanRole",
+    "decode_tlink_candidates",
     "extract_tlink_candidates",
 ]
