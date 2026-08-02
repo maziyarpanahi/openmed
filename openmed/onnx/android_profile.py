@@ -138,8 +138,12 @@ def export_android_fp16(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model = onnx.load(str(onnx_path))
-    fp16_model = convert_float_to_float16(model, keep_io_types=keep_io_types)
+    model = onnx.load(str(onnx_path), load_external_data=False)
+    fp16_model = convert_float_to_float16(
+        str(onnx_path),
+        keep_io_types=keep_io_types,
+    )
+    _copy_missing_model_metadata(fp16_model, model)
     onnx.save(fp16_model, str(output_path))
     if validate:
         validate_android_profile(output_path, expected_opset=expected_opset)
@@ -193,8 +197,36 @@ def _load_and_check_onnx(path: Path) -> Any:
         ) from exc
 
     model = onnx.load(str(path))
-    onnx.checker.check_model(model)
+    onnx.checker.check_model(str(path))
     return model
+
+
+def _copy_missing_model_metadata(target: Any, source: Any) -> None:
+    if not getattr(target, "ir_version", None) and getattr(source, "ir_version", None):
+        target.ir_version = source.ir_version
+
+    for field in ("producer_name", "producer_version", "domain", "doc_string"):
+        if not getattr(target, field, None) and getattr(source, field, None):
+            setattr(target, field, getattr(source, field))
+    if not getattr(target, "model_version", None) and getattr(
+        source, "model_version", None
+    ):
+        target.model_version = source.model_version
+
+    target_opsets = getattr(target, "opset_import", None)
+    source_opsets = getattr(source, "opset_import", None)
+    if target_opsets is not None and source_opsets is not None and not target_opsets:
+        target_opsets.extend(source_opsets)
+
+    target_graph = getattr(target, "graph", None)
+    source_graph = getattr(source, "graph", None)
+    if (
+        target_graph is not None
+        and source_graph is not None
+        and not getattr(target_graph, "name", None)
+        and getattr(source_graph, "name", None)
+    ):
+        target_graph.name = source_graph.name
 
 
 def _default_opset(model: Any) -> int:

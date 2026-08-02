@@ -3,7 +3,9 @@
 import pytest
 
 from openmed.core.labels import (
+    ABNORMAL_FLAG,
     ACCOUNT_NUMBER,
+    ADMINISTRATION_ROUTE,
     AGE,
     AIRWAY_MANAGEMENT,
     AMOUNT,
@@ -17,6 +19,8 @@ from openmed.core.labels import (
     BODY_SITE,
     BUILDING_NUMBER,
     CANONICAL_LABELS,
+    CARE_INTERVENTION,
+    CKD_STAGE,
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
     CONDITION,
@@ -26,19 +30,31 @@ from openmed.core.labels import (
     CVV,
     DATE,
     DATE_OF_BIRTH,
+    DEVELOPMENTAL_MILESTONE,
+    DEVICE,
+    DIALYSIS_MODALITY,
     DIET_TYPE,
+    DOSAGE,
+    DOSE_NUMBER,
+    DURATION,
+    DYSPNEA_GRADE,
     EMAIL,
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
+    ETHNICITY,
     EYE_COLOR,
     FEEDING_ROUTE,
     FIRST_NAME,
+    FORM,
+    FREQUENCY,
     GENDER,
     GENE_SYMBOL,
     GI_SCORE,
     GI_SYMPTOM,
     GLYCEMIC_MEASURE,
     GPS_COORDINATES,
+    GROWTH_PARAMETER,
+    GROWTH_PERCENTILE,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
     HORMONE_LEVEL,
@@ -49,12 +65,16 @@ from openmed.core.labels import (
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
     IMEI,
+    INDICATION,
     INSULIN_REGIMEN,
+    INTAKE_OUTPUT,
     IP_ADDRESS,
     JOB_DEPARTMENT,
     JOB_TITLE,
     LAB_TEST,
+    LAB_VALUE,
     LAST_NAME,
+    LINE_DRAIN_TUBE,
     LITECOIN_ADDRESS,
     LOCATION,
     MAC_ADDRESS,
@@ -62,28 +82,43 @@ from openmed.core.labels import (
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
+    NURSING_RISK_SCORE,
     NUTRITION_TARGET,
     NUTRITIONAL_STATUS,
     OCCUPATION,
     ORDINAL_DIRECTION,
     ORGANIZATION,
     OTHER,
+    OXYGEN_SUPPORT,
     PASSWORD,
     PERSON,
     PHONE,
     PIN,
     POLYP_DESCRIPTOR,
     PREFIX,
+    PROBLEM,
     PROCEDURE,
     PROTEIN_CHANGE,
+    REFERENCE_RANGE,
+    RENAL_FUNCTION_MEASURE,
+    RESPIRATORY_FINDING,
+    ROUTE,
+    SEVERITY,
+    SPIROMETRY_MEASURE,
     SSN,
     STREET_ADDRESS,
+    STRENGTH,
     SUSCEPTIBILITY,
     THYROID_MEASURE,
     TIME,
+    UNIT,
+    URINE_FINDING,
     URL,
     USER_AGENT,
     USERNAME,
+    VACCINE_LOT,
+    VACCINE_NAME,
+    VACCINE_SERIES,
     VARIANT_DESCRIPTOR,
     VEHICLE_REGISTRATION,
     VIN,
@@ -426,7 +461,7 @@ class TestClinicalConceptLabels:
         "alias,expected",
         [
             ("disease", CONDITION),
-            ("diagnosis", CONDITION),
+            ("diagnosis", PROBLEM),
             ("finding", CONDITION),
             ("drug", MEDICATION),
             ("medication", MEDICATION),
@@ -587,6 +622,104 @@ class TestGastroenterologyConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestPediatricGrowthConceptLabels:
+    """Pediatric growth and developmental-surveillance labels (issue #896)."""
+
+    NEW_LABELS = (
+        GROWTH_PARAMETER,
+        GROWTH_PERCENTILE,
+        DEVELOPMENTAL_MILESTONE,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("growth parameter", GROWTH_PARAMETER),
+            ("weight", GROWTH_PARAMETER),
+            ("length", GROWTH_PARAMETER),
+            ("head circumference", GROWTH_PARAMETER),
+            ("arm circumference", GROWTH_PARAMETER),
+            ("muac", GROWTH_PARAMETER),
+            ("skinfold", GROWTH_PARAMETER),
+            ("subscapular skinfold", GROWTH_PARAMETER),
+            ("triceps skinfold", GROWTH_PARAMETER),
+            ("bmi", GROWTH_PARAMETER),
+            ("bodymassindex", GROWTH_PARAMETER),
+            ("growth percentile", GROWTH_PERCENTILE),
+            ("percentile", GROWTH_PERCENTILE),
+            ("growth z score", GROWTH_PERCENTILE),
+            ("developmental milestone", DEVELOPMENTAL_MILESTONE),
+            ("milestone", DEVELOPMENTAL_MILESTONE),
+            ("motor development", DEVELOPMENTAL_MILESTONE),
+            ("feeding history", NUTRITIONAL_STATUS),
+            ("pediatric finding", CONDITION),
+        ],
+    )
+    def test_pediatric_growth_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_pediatric_growth_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_pediatric_growth_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
+class TestNursingObservationConceptLabels:
+    """Nursing-care observation labels (issue #910)."""
+
+    NEW_LABELS = (
+        INTAKE_OUTPUT,
+        LINE_DRAIN_TUBE,
+        NURSING_RISK_SCORE,
+        CARE_INTERVENTION,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("intake output", INTAKE_OUTPUT),
+            ("intake and output", INTAKE_OUTPUT),
+            ("urine output", INTAKE_OUTPUT),
+            ("line drain tube", LINE_DRAIN_TUBE),
+            ("foley", LINE_DRAIN_TUBE),
+            ("foley catheter", LINE_DRAIN_TUBE),
+            ("central line", LINE_DRAIN_TUBE),
+            ("chest tube", LINE_DRAIN_TUBE),
+            ("nursing risk score", NURSING_RISK_SCORE),
+            ("braden score", NURSING_RISK_SCORE),
+            ("braden", NURSING_RISK_SCORE),
+            ("morse fall scale", NURSING_RISK_SCORE),
+            ("fall risk", NURSING_RISK_SCORE),
+            ("care intervention", CARE_INTERVENTION),
+            ("wound dressing", CARE_INTERVENTION),
+            ("dressing change", CARE_INTERVENTION),
+            ("repositioning", CARE_INTERVENTION),
+            ("mobility status", OTHER),
+            ("pain score", OTHER),
+            ("skin assessment", BODY_SITE),
+        ],
+    )
+    def test_nursing_observation_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_nursing_observation_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_nursing_observation_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -655,6 +788,20 @@ class TestClinicalLabelsAreAdditive:
             LAB_TEST,
             PROCEDURE,
             BODY_SITE,
+            DEVICE,
+            PROBLEM,
+            SEVERITY,
+            DOSAGE,
+            ROUTE,
+            FREQUENCY,
+            DURATION,
+            FORM,
+            STRENGTH,
+            INDICATION,
+            LAB_VALUE,
+            UNIT,
+            REFERENCE_RANGE,
+            ABNORMAL_FLAG,
             ANESTHESIA_TYPE,
             ANESTHETIC_AGENT,
             AIRWAY_MANAGEMENT,
@@ -663,6 +810,11 @@ class TestClinicalLabelsAreAdditive:
             NUTRITION_TARGET,
             FEEDING_ROUTE,
             NUTRITIONAL_STATUS,
+            VACCINE_NAME,
+            VACCINE_SERIES,
+            VACCINE_LOT,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -676,6 +828,22 @@ class TestClinicalLabelsAreAdditive:
             GI_SYMPTOM,
             GI_SCORE,
             POLYP_DESCRIPTOR,
+            CKD_STAGE,
+            DIALYSIS_MODALITY,
+            RENAL_FUNCTION_MEASURE,
+            URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
+            GROWTH_PARAMETER,
+            GROWTH_PERCENTILE,
+            DEVELOPMENTAL_MILESTONE,
+            ETHNICITY,
+            INTAKE_OUTPUT,
+            LINE_DRAIN_TUBE,
+            NURSING_RISK_SCORE,
+            CARE_INTERVENTION,
         }
     )
 

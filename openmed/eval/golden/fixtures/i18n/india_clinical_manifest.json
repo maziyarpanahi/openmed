@@ -1,0 +1,54 @@
+{
+  "corpus_id": "openmed-india-clinical-deid-synthetic-v1",
+  "schema_version": "openmed.eval.datasets.india_clinical_phi.v1",
+  "fixture_file": "india_clinical.jsonl",
+  "synthetic_only": true,
+  "contains_real_phi": false,
+  "contains_dua_data": false,
+  "license_id": "Apache-2.0",
+  "provenance": "Deterministic fictional personas and generated identifier values created only for offline evaluation; no patient or production source was used.",
+  "disclaimer": "Assist-only, non-decisional evaluation fixture. It is not clinical ground truth and must not be used to make patient-care decisions.",
+  "minimum_documents": 3,
+  "required_scripts": [
+    "Latin",
+    "Devanagari",
+    "Tamil"
+  ],
+  "required_identifier_types": [
+    "person_name",
+    "abha",
+    "aadhaar",
+    "pan",
+    "indian_phone",
+    "street_address",
+    "pin_code"
+  ],
+  "required_clinical_terms": [
+    "Ayurveda",
+    "आयुष",
+    "योग",
+    "சித்தா"
+  ],
+  "cross_document_identities": [
+    {
+      "group_id": "india-person-001",
+      "aliases": [
+        {
+          "document_id": "india-doc-001",
+          "text": "Aarav Sharma",
+          "script": "Latin"
+        },
+        {
+          "document_id": "india-doc-002",
+          "text": "आरव शर्मा",
+          "script": "Devanagari"
+        },
+        {
+          "document_id": "india-doc-003",
+          "text": "ஆரவ் சர்மா",
+          "script": "Tamil"
+        }
+      ]
+    }
+  ]
+}

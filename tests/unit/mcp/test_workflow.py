@@ -384,7 +384,8 @@ def test_workflow_tool_is_registered_and_schema_validated():
         def __init__(self) -> None:
             self.tools: list[str] = []
 
-        def tool(self, *, name: str):
+        def tool(self, *, name: str, **metadata: Any):
+            del metadata
             self.tools.append(name)
 
             def decorator(func):
