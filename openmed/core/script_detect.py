@@ -25,6 +25,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
+from ..processing.text import InputError, validate_pii_input
 from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
 if TYPE_CHECKING:
@@ -470,7 +471,7 @@ SIMPLIFIED_VARIANT_CHARS = _SIMPLIFIED_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
 TRADITIONAL_VARIANT_CHARS = _TRADITIONAL_VARIANT_RAW - _SHARED_VARIANT_EVIDENCE
 
 
-class EncodingIngestionError(ValueError):
+class EncodingIngestionError(InputError):
     """Base class for fail-closed multilingual byte-decoding errors."""
 
     reason = "encoding_rejected"
@@ -1219,6 +1220,7 @@ def normalize_for_pii_detection(
 
     from ..processing.legacy_encoding import convert_legacy_encoding
 
+    text = validate_pii_input(text)
     legacy_conversion = convert_legacy_encoding(
         text,
         legacy_font_map=legacy_font_map,

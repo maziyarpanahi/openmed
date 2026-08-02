@@ -7,9 +7,145 @@ import re
 import unicodedata
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
+
+MAX_PII_INPUT_BYTES = 8 * 1024 * 1024
+MAX_PII_COMBINING_SEQUENCE = 64
+MAX_PII_FORMAT_SEQUENCE = 256
+MAX_PII_CONTROL_SEQUENCE = 256
+MAX_PII_CONTROL_CHARACTERS = 4096
+
+
+class InputError(ValueError):
+    """Base class for fail-closed errors caused by untrusted PII input."""
+
+    reason = "input_rejected"
+
+
+class InputTypeError(InputError):
+    """Raised when PII input is not text or a supported bytes-like value."""
+
+    reason = "input_type"
+
+
+class InputEncodingError(InputError):
+    """Raised when PII input is not strict, well-formed UTF-8 text."""
+
+    reason = "input_encoding"
+
+
+class InputSizeError(InputError):
+    """Raised before normalization when PII input crosses its byte budget."""
+
+    reason = "input_size"
+
+
+class InputComplexityError(InputError):
+    """Raised when Unicode structure exceeds a bounded normalization budget."""
+
+    reason = "input_complexity"
+
+
+def validate_pii_input(text: Any) -> str:
+    """Return bounded UTF-8 text safe to pass to PII normalization.
+
+    The check runs before normalization allocates offset maps. It accepts
+    ordinary :class:`str` input and strict UTF-8 bytes-like values, rejects a
+    payload larger than :data:`MAX_PII_INPUT_BYTES`, and bounds adversarial
+    runs of combining marks, format controls, and non-whitespace controls.
+    Raised errors never contain source text.
+
+    Args:
+        text: Untrusted text or strict UTF-8 bytes-like input.
+
+    Returns:
+        A validated Unicode string.
+
+    Raises:
+        InputError: If the value cannot be normalized within the fixed budget.
+    """
+
+    if isinstance(text, memoryview):
+        byte_length = text.nbytes
+        if byte_length > MAX_PII_INPUT_BYTES:
+            raise InputSizeError("PII input exceeds the configured byte limit")
+        payload = bytes(text)
+        try:
+            value = payload.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            raise InputEncodingError("PII byte input must be strict UTF-8") from None
+    elif isinstance(text, (bytes, bytearray)):
+        if len(text) > MAX_PII_INPUT_BYTES:
+            raise InputSizeError("PII input exceeds the configured byte limit")
+        try:
+            value = bytes(text).decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            raise InputEncodingError("PII byte input must be strict UTF-8") from None
+    elif isinstance(text, str):
+        value = text
+    else:
+        raise InputTypeError("PII input must be text or a bytes-like value")
+
+    # UTF-8 uses at least one byte per code point, so this avoids materializing
+    # an encoded copy for obviously oversized ASCII input such as the 10 MiB
+    # regression case.
+    if len(value) > MAX_PII_INPUT_BYTES:
+        raise InputSizeError("PII input exceeds the configured byte limit")
+    try:
+        byte_length = len(value.encode("utf-8", errors="strict"))
+    except UnicodeEncodeError:
+        raise InputEncodingError(
+            "PII text contains an invalid Unicode scalar"
+        ) from None
+    if byte_length > MAX_PII_INPUT_BYTES:
+        raise InputSizeError("PII input exceeds the configured byte limit")
+
+    _validate_pii_unicode_complexity(value)
+    return value
+
+
+def _validate_pii_unicode_complexity(text: str) -> None:
+    combining_run = 0
+    format_run = 0
+    control_run = 0
+    control_count = 0
+
+    for char in text:
+        category = unicodedata.category(char)
+
+        if category.startswith("M"):
+            combining_run += 1
+            if combining_run > MAX_PII_COMBINING_SEQUENCE:
+                raise InputComplexityError(
+                    "PII input contains an excessive combining-mark sequence"
+                )
+        else:
+            combining_run = 0
+
+        if category == "Cf":
+            format_run += 1
+            if format_run > MAX_PII_FORMAT_SEQUENCE:
+                raise InputComplexityError(
+                    "PII input contains an excessive format-control sequence"
+                )
+        else:
+            format_run = 0
+
+        if category == "Cc" and char not in {"\t", "\n", "\r"}:
+            control_count += 1
+            control_run += 1
+            if (
+                control_count > MAX_PII_CONTROL_CHARACTERS
+                or control_run > MAX_PII_CONTROL_SEQUENCE
+            ):
+                raise InputComplexityError(
+                    "PII input contains excessive control characters"
+                )
+        else:
+            control_run = 0
 
 
 INDIC_SCRIPTS = (
@@ -736,6 +872,7 @@ def normalize_indic_text(
     so ISCII round trips remain byte-identical.
     """
 
+    text = validate_pii_input(text)
     if char_origins is None:
         char_origins = tuple((index, index + 1) for index in range(len(text)))
     if len(char_origins) != len(text):

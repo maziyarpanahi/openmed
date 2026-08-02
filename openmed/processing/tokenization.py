@@ -32,6 +32,8 @@ from openmed.core.decoding.spans import (
     iter_grapheme_clusters,
 )
 
+from .text import InputError, validate_pii_input
+
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizer
 
@@ -193,7 +195,7 @@ class UserDictionaryEntry:
     pos: str | None = None
 
 
-class DictionaryIngestionError(ValueError):
+class DictionaryIngestionError(InputError):
     """Base class for fail-closed dictionary ingestion errors."""
 
     reason = "dictionary_rejected"
@@ -328,7 +330,7 @@ def validate_user_dictionary_entry(
     """Validate one dictionary line without logging its content."""
 
     if not isinstance(line, str):
-        raise TypeError("Dictionary entry must be text")
+        raise InputError("Dictionary entry must be text")
     if line_number <= 0:
         raise ValueError("line_number must be positive")
 
@@ -688,6 +690,7 @@ def grapheme_tokenize(text: str) -> List[SpanToken]:
         Non-whitespace tokens with exact source code-point offsets.
     """
 
+    text = validate_pii_input(text)
     return [
         SpanToken(text[start:end], start, end)
         for start, end in iter_grapheme_clusters(text)
@@ -737,6 +740,7 @@ def indic_word_tokenize(text: str) -> List[SpanToken]:
     boundary. Returned spans always index ``text`` exactly.
     """
 
+    text = validate_pii_input(text)
     clusters = list(iter_grapheme_clusters(text))
     tokens: List[SpanToken] = []
     token_start: Optional[int] = None
@@ -1068,6 +1072,7 @@ class ResourceSegmenter:
         used for Han runs; it is imported lazily and is never required.
         """
 
+        text = validate_pii_input(text)
         if not text:
             return []
         han_tokenizer = self._load_optional_jieba() if use_accelerated else None
@@ -1286,6 +1291,7 @@ def medical_tokenize(
     user-facing token boundaries and to remap model predictions back onto medical-friendly
     spans.
     """
+    text = validate_pii_input(text)
     exceptions_set = {e for e in (exceptions or []) if e}
     if not exceptions_set:
         return _medical_tokens_in_segment(text)
