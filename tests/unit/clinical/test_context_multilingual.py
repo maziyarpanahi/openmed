@@ -35,6 +35,12 @@ from openmed.eval.harness import (
 
 FORBIDDEN_FIXTURE_MARKERS = ("cpt", "dua", "i2b2", "mimic", "n2c2", "snomed", "umls")
 REQUIRED_LANGUAGES = {"en", "es", "fr", "de", "zh", "hi"}
+CONTEXT_GUIDE = (
+    Path(__file__).resolve().parents[3]
+    / "docs"
+    / "clinical"
+    / "context-and-extraction.md"
+)
 
 
 def test_context_multilingual_fixture_is_synthetic_and_complete() -> None:
@@ -53,6 +59,25 @@ def test_context_multilingual_fixture_is_synthetic_and_complete() -> None:
     )
     for marker in FORBIDDEN_FIXTURE_MARKERS:
         assert re.search(rf"(?<![a-z0-9]){marker}(?![a-z0-9])", fixture_text) is None
+
+
+def test_multilingual_context_docs_cover_safe_contribution_contract() -> None:
+    guide = CONTEXT_GUIDE.read_text(encoding="utf-8")
+    normalized_guide = re.sub(r"\s+", " ", guide)
+
+    for field in ClinicalCueLexicon.__dataclass_fields__:
+        assert f"`{field}`" in guide
+
+    for requirement in (
+        "Extending the NegEx Lexicon for Multiple Languages",
+        "pyConTextSwe",
+        "## Language-Pack Review Checklist",
+        "context_multilingual.jsonl",
+        '"synthetic": true',
+        "No raw PHI",
+        "must not require edits to resolver or scanner logic",
+    ):
+        assert requirement in normalized_guide
 
 
 def test_resolvers_accept_language_without_breaking_english_defaults() -> None:

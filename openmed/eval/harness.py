@@ -63,6 +63,9 @@ PipelineStageRunner = Callable[
 ]
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
+_DEFAULT_RELATION_SCORECARD_SIGNING_KEY = "openmed-relation-scorecard-local-key"
+RELATION_SCORECARD_ARTIFACT = "openmed.eval.relation_scorecard"
+RELATION_SCORECARD_SCHEMA_VERSION = 1
 DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent
     / "golden"
@@ -291,6 +294,315 @@ class RelationFixtureResult:
     fixture_id: str
     predicted_relations: tuple[EvalRelation, ...]
     latency_ms: float
+
+
+class RelationGateFailure(RuntimeError):
+    """Raised with signed evidence when a relation suite fails its gate."""
+
+    def __init__(self, scorecard: "RelationScorecard") -> None:
+        self.scorecard = scorecard
+        reason = str(scorecard.gate_result.get("reason") or "relation gate failed")
+        super().__init__(reason)
+
+
+@dataclass
+class RelationScorecard:
+    """Signed, aggregate-only relation suite evidence for model cards."""
+
+    suite: str
+    model_name: str
+    device: str
+    fixture_count: int
+    metrics: Mapping[str, Any]
+    provenance: Mapping[str, Any]
+    gate_result: Mapping[str, Any]
+    gate_passed: bool
+    generated_at: str | None = None
+    repro_hash: str = ""
+    signature: AuditSignature | None = None
+
+    def __post_init__(self) -> None:
+        self.metrics = _plain(self.metrics)
+        self.provenance = _plain(self.provenance)
+        self.gate_result = _plain(self.gate_result)
+        if bool(self.gate_result.get("passed", False)) != self.gate_passed:
+            raise ValueError("relation scorecard gate result is inconsistent")
+        if not self.repro_hash:
+            self.repro_hash = self.recompute_repro_hash()
+
+    def _payload(
+        self,
+        *,
+        include_repro_hash: bool,
+        include_signature: bool,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "artifact_type": RELATION_SCORECARD_ARTIFACT,
+            "device": self.device,
+            "fixture_count": int(self.fixture_count),
+            "gate_passed": bool(self.gate_passed),
+            "gate_result": _plain(self.gate_result),
+            "generated_at": self.generated_at,
+            "metrics": _plain(self.metrics),
+            "model_name": self.model_name,
+            "provenance": _plain(self.provenance),
+            "schema_version": RELATION_SCORECARD_SCHEMA_VERSION,
+            "suite": self.suite,
+        }
+        if include_repro_hash:
+            payload["repro_hash"] = self.repro_hash
+        if include_signature:
+            payload["signature"] = (
+                self.signature.to_dict() if self.signature is not None else None
+            )
+        return payload
+
+    def recompute_repro_hash(self) -> str:
+        """Recompute the scorecard evidence hash."""
+
+        return stable_hash(
+            self._payload(include_repro_hash=False, include_signature=False)
+        )
+
+    def sign(
+        self,
+        key: bytes | str,
+        *,
+        key_id: str = "relation-scorecard",
+    ) -> "RelationScorecard":
+        """Sign the complete scorecard and return ``self``."""
+
+        self.repro_hash = self.recompute_repro_hash()
+        message = _canonical_json(
+            self._payload(include_repro_hash=True, include_signature=False)
+        ).encode("utf-8")
+        self.signature = AuditSignature(
+            key_id=key_id,
+            algorithm=_SIGNATURE_ALGORITHM,
+            value=hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest(),
+        )
+        return self
+
+    def verify(self, key: bytes | str) -> bool:
+        """Verify the evidence hash and HMAC signature."""
+
+        if self.recompute_repro_hash() != self.repro_hash:
+            return False
+        if self.signature is None or self.signature.algorithm != _SIGNATURE_ALGORITHM:
+            return False
+        message = _canonical_json(
+            self._payload(include_repro_hash=True, include_signature=False)
+        ).encode("utf-8")
+        expected = hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, self.signature.value)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the stable JSON-ready scorecard payload."""
+
+        return self._payload(include_repro_hash=True, include_signature=True)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "RelationScorecard":
+        """Restore a relation scorecard from a JSON-compatible mapping."""
+
+        if data.get("artifact_type") != RELATION_SCORECARD_ARTIFACT:
+            raise ValueError("unsupported relation scorecard artifact_type")
+        if data.get("schema_version") != RELATION_SCORECARD_SCHEMA_VERSION:
+            raise ValueError("unsupported relation scorecard schema_version")
+        signature_data = data.get("signature")
+        return cls(
+            suite=str(data.get("suite") or ""),
+            model_name=str(data.get("model_name") or ""),
+            device=str(data.get("device") or ""),
+            fixture_count=int(data.get("fixture_count") or 0),
+            metrics=dict(data.get("metrics") or {}),
+            provenance=dict(data.get("provenance") or {}),
+            gate_result=dict(data.get("gate_result") or {}),
+            gate_passed=bool(data.get("gate_passed", False)),
+            generated_at=(
+                str(data["generated_at"])
+                if data.get("generated_at") is not None
+                else None
+            ),
+            repro_hash=str(data.get("repro_hash") or ""),
+            signature=(
+                AuditSignature.from_dict(signature_data)
+                if isinstance(signature_data, Mapping)
+                else None
+            ),
+        )
+
+    @classmethod
+    def from_json(cls, data: str | bytes) -> "RelationScorecard":
+        """Restore a relation scorecard from JSON."""
+
+        try:
+            payload = json.loads(data)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid relation scorecard JSON: {exc}") from exc
+        if not isinstance(payload, Mapping):
+            raise ValueError("relation scorecard JSON must contain an object")
+        return cls.from_dict(payload)
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the signed scorecard to deterministic JSON."""
+
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=True,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write the signed scorecard JSON artifact."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return output_path
+
+    def to_markdown(self) -> str:
+        """Render aggregate relation evidence as deterministic Markdown."""
+
+        strict = _mapping_value(self.metrics.get("strict"))
+        relaxed = _mapping_value(self.metrics.get("relaxed"))
+        lines = [
+            f"# Relation Scorecard: {self.model_name}",
+            "",
+            "## Summary",
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            f"| Suite | `{self.suite}` |",
+            f"| Model | `{self.model_name}` |",
+            f"| Device | `{self.device}` |",
+            f"| Fixtures | {self.fixture_count} |",
+            f"| Relation gate | {'passed' if self.gate_passed else 'failed'} |",
+            f"| Gate reason | {self.gate_result.get('reason', '')} |",
+            "",
+            "## Overall Relation Metrics",
+            "",
+            "| Match | Precision | Recall | F1 |",
+            "|---|---:|---:|---:|",
+            _relation_markdown_metric_row("Strict", strict),
+            _relation_markdown_metric_row("Relaxed", relaxed),
+            "",
+            "## Per-Relation-Type Metrics",
+            "",
+            "| Relation type | Strict F1 | Relaxed F1 |",
+            "|---|---:|---:|",
+        ]
+        by_type = _mapping_value(self.metrics.get("by_type"))
+        if by_type:
+            for relation_type, metric in sorted(
+                by_type.items(), key=lambda item: str(item[0])
+            ):
+                pair = _mapping_value(metric)
+                lines.append(
+                    "| "
+                    f"`{relation_type}` | "
+                    f"{_relation_percent(_mapping_value(pair.get('strict')).get('f1'))} | "
+                    f"{_relation_percent(_mapping_value(pair.get('relaxed')).get('f1'))} |"
+                )
+        else:
+            lines.append("| `none` | n/a | n/a |")
+
+        trap_summary = _mapping_value(self.provenance.get("trap_summary"))
+        configured_traps = _mapping_value(trap_summary.get("by_kind"))
+        trap_leaks = _mapping_value(self.metrics.get("trap_leaks"))
+        lines.extend(
+            [
+                "",
+                "## Zero-Tolerance Trap Summary",
+                "",
+                "| Trap kind | Configured | Leaks | Zero tolerance |",
+                "|---|---:|---:|---|",
+            ]
+        )
+        for kind in sorted(set(configured_traps) | set(trap_leaks)):
+            configured = _mapping_value(configured_traps.get(kind))
+            leaks = _mapping_value(trap_leaks.get(kind))
+            lines.append(
+                "| "
+                f"`{kind}` | {int(configured.get('count') or 0)} | "
+                f"{int(leaks.get('leak_count') or 0)} | "
+                f"{'yes' if configured.get('zero_tolerance') else 'no'} |"
+            )
+
+        signature = self.signature
+        lines.extend(
+            [
+                "",
+                "## Provenance and Signature",
+                "",
+                "| Field | Value |",
+                "|---|---|",
+                f"| Fixture set hash | `{self.provenance.get('fixture_set_hash', '')}` |",
+                f"| Fixture schema version | `{self.provenance.get('fixture_schema_version', '')}` |",
+                f"| Scorecard hash | `{self.repro_hash}` |",
+                f"| Signature key | `{signature.key_id if signature else ''}` |",
+                f"| Signature algorithm | `{signature.algorithm if signature else ''}` |",
+            ]
+        )
+        return "\n".join(lines) + "\n"
+
+    def write_markdown(self, path: str | Path) -> Path:
+        """Write the human-readable scorecard artifact."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_markdown(), encoding="utf-8")
+        return output_path
+
+    def model_card_evidence(self) -> dict[str, Any]:
+        """Return the signed scorecard as a model-card evidence block."""
+
+        return {"relation_scorecard": self.to_dict()}
+
+    def to_benchmark_report(self) -> BenchmarkReport:
+        """Expose the scorecard through the existing model-scorecard input shape."""
+
+        strict = _mapping_value(self.metrics.get("strict"))
+        relaxed = _mapping_value(self.metrics.get("relaxed"))
+        by_type = _mapping_value(self.metrics.get("by_type"))
+        by_language = _mapping_value(self.metrics.get("by_language"))
+        counts = _mapping_value(self.metrics.get("counts"))
+        relation_metrics = {
+            "by_scope": _mapping_value(self.metrics.get("by_scope")),
+            "gold_relation_count": int(counts.get("gold") or 0),
+            "per_language": by_language,
+            "per_relation_type": by_type,
+            "predicted_relation_count": int(counts.get("predicted") or 0),
+            "relaxed": relaxed,
+            "strict": strict,
+        }
+        return BenchmarkReport(
+            suite=self.suite,
+            model_name=self.model_name,
+            device=self.device,
+            fixture_count=self.fixture_count,
+            metrics={
+                "relation_extraction": relation_metrics,
+                "relation_golden": {
+                    "by_type": by_type,
+                    "trap_leaks": _mapping_value(self.metrics.get("trap_leaks")),
+                },
+                "relaxed_relation_f1": relaxed,
+                "strict_relation_f1": strict,
+                "per_language_relation_f1": by_language,
+                "per_relation_type_re_f1": by_type,
+            },
+            generated_at=self.generated_at,
+            metadata={
+                **dict(self.provenance),
+                "relation_gate_passed": self.gate_passed,
+                "relation_scorecard_hash": self.repro_hash,
+                "relation_trap_leaks": _mapping_value(self.metrics.get("trap_leaks")),
+                "relation_traps": _mapping_value(self.provenance.get("trap_summary")),
+                "task": "relation",
+            },
+        )
 
 
 @dataclass(frozen=True)
@@ -1368,6 +1680,37 @@ def run_relation_benchmark(
     ci_seed: int = 0,
 ) -> BenchmarkReport:
     """Run a relation model over fixtures with typed span relations."""
+
+    report, _ = _run_relation_benchmark(
+        fixtures,
+        suite=suite,
+        model_name=model_name,
+        runner=runner,
+        device=device,
+        generated_at=generated_at,
+        metadata=metadata,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
+    )
+    return report
+
+
+def _run_relation_benchmark(
+    fixtures: Sequence[Any],
+    *,
+    suite: str,
+    model_name: str,
+    runner: RelationModelRunner,
+    device: str,
+    generated_at: str | None,
+    metadata: Mapping[str, Any] | None,
+    ci_resamples: int,
+    ci_alpha: float,
+    ci_seed: int,
+) -> tuple[BenchmarkReport, tuple[RelationFixtureResult, ...]]:
+    """Run relation inference and retain per-fixture results for suite gates."""
+
     if not fixtures:
         raise ValueError("relation benchmark requires at least one fixture")
     _validate_unique_fixture_ids(fixtures)
@@ -1453,15 +1796,162 @@ def run_relation_benchmark(
         "languages",
         sorted({relation.head.language for relation in gold_relations}),
     )
-    return BenchmarkReport(
+    return (
+        BenchmarkReport(
+            suite=suite,
+            model_name=model_name,
+            device=device,
+            fixture_count=len(fixtures),
+            metrics=metrics,
+            generated_at=generated_at,
+            metadata=report_metadata,
+        ),
+        tuple(results),
+    )
+
+
+def run_relation_suite(
+    fixture_path: str | Path | None = None,
+    *,
+    model_name: str,
+    runner: RelationModelRunner,
+    suite: str = "relations",
+    device: str = "cpu",
+    output_json: str | Path | None = None,
+    output_markdown: str | Path | None = None,
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    family: str = "Relation",
+    baseline: Mapping[str, Any] | None = None,
+    baseline_path: str | Path | None = None,
+    signing_key: bytes | str | None = None,
+    key_id: str = "relation-scorecard",
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
+) -> RelationScorecard:
+    """Run synthetic relation gold, sign its scorecard, and fail closed.
+
+    A failing gate is still serialized to requested output paths before
+    :class:`RelationGateFailure` is raised, so automation can archive the
+    signed failure evidence without treating the run as successful.
+    """
+
+    from openmed.core.baseline import (
+        BASELINE_PATH,
+        BaselineError,
+        load_baseline_store,
+    )
+    from openmed.eval.release_gates import evaluate_relation_golden_regression_gate
+    from openmed.eval.suites.relations import (
+        DEFAULT_RELATION_GOLD_PATH,
+        RELATION_GOLD_SCHEMA_VERSION,
+        load_relation_fixtures,
+        relation_suite_metadata,
+        relation_trap_summary,
+    )
+
+    resolved_path = (
+        Path(fixture_path) if fixture_path is not None else DEFAULT_RELATION_GOLD_PATH
+    )
+    fixtures = load_relation_fixtures(resolved_path)
+    report, results = _run_relation_benchmark(
+        fixtures,
         suite=suite,
         model_name=model_name,
+        runner=runner,
         device=device,
-        fixture_count=len(fixtures),
-        metrics=metrics,
         generated_at=generated_at,
-        metadata=report_metadata,
+        metadata=metadata,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
     )
+
+    fixture_set_hash = _sha256_path(resolved_path)
+    fixture_hashes = _relation_fixture_hashes(fixtures)
+    trap_summary = relation_trap_summary(fixtures)
+    trap_leaks = _relation_trap_leak_summary(fixtures, results)
+    relation_metrics = _mapping_value(report.metrics.get("relation_extraction"))
+    by_type = _mapping_value(relation_metrics.get("per_relation_type"))
+    relation_golden = {
+        "by_type": by_type,
+        "fixture_set_hash": fixture_set_hash,
+        "trap_leaks": trap_leaks,
+    }
+    report_metrics = {
+        **dict(report.metrics),
+        "relation_golden": relation_golden,
+    }
+    report_metadata = {
+        **dict(report.metadata),
+        "family": family,
+        "fixture_hashes": fixture_hashes,
+        "fixture_set_hash": fixture_set_hash,
+        "relation_golden_regression_required": True,
+        "relation_suite": relation_suite_metadata(),
+        "relation_trap_leaks": trap_leaks,
+        "relation_traps": trap_summary,
+    }
+    report = replace(report, metrics=report_metrics, metadata=report_metadata)
+
+    resolved_baseline = baseline
+    if resolved_baseline is None:
+        try:
+            resolved_baseline = load_baseline_store(baseline_path or BASELINE_PATH)
+        except (OSError, BaselineError, json.JSONDecodeError):
+            resolved_baseline = {}
+    gate = evaluate_relation_golden_regression_gate(
+        report.metrics,
+        resolved_baseline,
+        family=family,
+        metadata=report.metadata,
+    )
+    scorecard_metrics = {
+        "by_language": _mapping_value(relation_metrics.get("per_language")),
+        "by_scope": _mapping_value(relation_metrics.get("by_scope")),
+        "by_type": by_type,
+        "counts": {
+            "gold": int(relation_metrics.get("gold_relation_count") or 0),
+            "predicted": int(relation_metrics.get("predicted_relation_count") or 0),
+        },
+        "relaxed": _mapping_value(relation_metrics.get("relaxed")),
+        "strict": _mapping_value(relation_metrics.get("strict")),
+        "trap_leaks": trap_leaks,
+    }
+    provenance = {
+        "fixture_hashes": fixture_hashes,
+        "fixture_schema_version": RELATION_GOLD_SCHEMA_VERSION,
+        "fixture_set_hash": fixture_set_hash,
+        "relation_suite": relation_suite_metadata(),
+        "trap_summary": trap_summary,
+    }
+    active_signing_key = (
+        signing_key
+        if signing_key is not None
+        else os.environ.get(
+            "OPENMED_RELATION_SCORECARD_KEY",
+            _DEFAULT_RELATION_SCORECARD_SIGNING_KEY,
+        )
+    )
+    scorecard = RelationScorecard(
+        suite=report.suite,
+        model_name=report.model_name,
+        device=report.device,
+        fixture_count=report.fixture_count,
+        metrics=scorecard_metrics,
+        provenance=provenance,
+        gate_result=gate.to_dict(),
+        gate_passed=gate.passed,
+        generated_at=report.generated_at,
+    ).sign(active_signing_key, key_id=key_id)
+    if output_json is not None:
+        scorecard.write_json(output_json)
+    if output_markdown is not None:
+        scorecard.write_markdown(output_markdown)
+    if not scorecard.gate_passed:
+        raise RelationGateFailure(scorecard)
+    return scorecard
 
 
 def run_suite(
@@ -1490,8 +1980,26 @@ def run_suite(
     abstention_seed: int = 0,
     cache_dir: str | Path | None = None,
     cache_code_hash: str | None = None,
-) -> BenchmarkReport:
+) -> BenchmarkReport | RelationScorecard:
     """Load fixtures, run the benchmark, and optionally write reports."""
+
+    if _is_relation_suite(suite):
+        if runner is None:
+            raise ValueError("relation suite requires an explicit relation runner")
+        return run_relation_suite(
+            fixture_path,
+            suite=suite,
+            model_name=model_name,
+            device=device,
+            runner=runner,
+            output_json=output_json,
+            output_markdown=output_markdown,
+            generated_at=generated_at,
+            metadata=metadata,
+            ci_resamples=ci_resamples,
+            ci_alpha=ci_alpha,
+            ci_seed=ci_seed,
+        )
     report = run_benchmark(
         load_fixtures(fixture_path),
         suite=suite,
@@ -3034,6 +3542,120 @@ def _fixture_gold_relations(fixture: Any) -> Iterable[Any]:
     return getattr(fixture, "gold_relations", ())
 
 
+def _relation_fixture_hashes(fixtures: Sequence[Any]) -> dict[str, str]:
+    """Hash each normalized fixture without carrying its source text."""
+
+    fixture_hashes: dict[str, str] = {}
+    for fixture in fixtures:
+        fixture_id = str(getattr(fixture, "fixture_id"))
+        payload = fixture.to_dict() if hasattr(fixture, "to_dict") else fixture
+        fixture_hashes[fixture_id] = stable_hash(_plain(payload))
+    return dict(sorted(fixture_hashes.items()))
+
+
+def _relation_trap_leak_summary(
+    fixtures: Sequence[Any],
+    results: Sequence[RelationFixtureResult],
+) -> dict[str, dict[str, Any]]:
+    """Count conflicting predictions for zero-tolerance relation traps."""
+
+    result_by_id = {result.fixture_id: result for result in results}
+    leaked_by_kind: dict[str, set[str]] = {
+        "assertion": set(),
+        "temporal": set(),
+    }
+    trap_count = {"assertion": 0, "temporal": 0}
+    for fixture in fixtures:
+        fixture_id = str(getattr(fixture, "fixture_id"))
+        predicted = result_by_id.get(fixture_id)
+        predictions = predicted.predicted_relations if predicted is not None else ()
+        gold_by_id = {
+            relation.relation_id: relation
+            for relation in normalize_eval_relations(
+                _fixture_gold_relations(fixture),
+                entity_spans=getattr(fixture, "entities", None),
+                fixture_id=fixture_id,
+                default_language=str(getattr(fixture, "language", "en")),
+                source_text=str(getattr(fixture, "text", "")),
+            )
+        }
+        for trap in getattr(fixture, "traps", ()):
+            kind = str(getattr(trap, "kind", "")).strip().lower()
+            if kind not in trap_count:
+                continue
+            trap_count[kind] += 1
+            for relation_id in getattr(trap, "relation_ids", ()):
+                gold = gold_by_id.get(str(relation_id))
+                if gold is None or not _relation_trap_conflict(
+                    gold,
+                    predictions,
+                    kind=kind,
+                ):
+                    continue
+                leaked_by_kind[kind].add(
+                    stable_hash(
+                        {
+                            "fixture_id": fixture_id,
+                            "relation_id": str(relation_id),
+                            "trap_id": str(getattr(trap, "trap_id", "")),
+                        }
+                    )
+                )
+
+    return {
+        kind: {
+            "leak_count": len(leaked_by_kind[kind]),
+            "leaked_relation_hashes": sorted(leaked_by_kind[kind]),
+            "trap_count": trap_count[kind],
+        }
+        for kind in ("assertion", "temporal")
+    }
+
+
+def _relation_trap_conflict(
+    gold: EvalRelation,
+    predictions: Sequence[EvalRelation],
+    *,
+    kind: str,
+) -> bool:
+    for predicted in predictions:
+        same_id = bool(
+            gold.relation_id
+            and predicted.relation_id
+            and gold.relation_id == predicted.relation_id
+        )
+        same_direction = _relation_arguments_overlap(gold, predicted)
+        reverse_direction = kind == "temporal" and _relation_arguments_overlap(
+            gold,
+            predicted,
+            reverse=True,
+        )
+        if not (same_id or same_direction or reverse_direction):
+            continue
+        if same_direction and predicted.relation_type == gold.relation_type:
+            continue
+        return True
+    return False
+
+
+def _relation_arguments_overlap(
+    gold: EvalRelation,
+    predicted: EvalRelation,
+    *,
+    reverse: bool = False,
+) -> bool:
+    predicted_head = predicted.tail if reverse else predicted.head
+    predicted_tail = predicted.head if reverse else predicted.tail
+    return _eval_spans_overlap(gold.head, predicted_head) and _eval_spans_overlap(
+        gold.tail,
+        predicted_tail,
+    )
+
+
+def _eval_spans_overlap(left: EvalSpan, right: EvalSpan) -> bool:
+    return min(left.end, right.end) > max(left.start, right.start)
+
+
 def _validate_relation_offsets(
     relation: EvalRelation,
     text: str,
@@ -3050,6 +3672,36 @@ def _validate_relation_offsets(
                 f"{fixture_id}:{argument_name} "
                 f"{argument.start}:{argument.end} for text length {len(text)}"
             )
+
+
+def _is_relation_suite(suite: str) -> bool:
+    normalized = suite.strip().lower().replace("_", "-")
+    return normalized in {"relation", "relation-gold", "relation-golden", "relations"}
+
+
+def _sha256_path(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
+def _mapping_value(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _relation_markdown_metric_row(
+    label: str,
+    metric: Mapping[str, Any],
+) -> str:
+    return (
+        f"| {label} | {_relation_percent(metric.get('precision'))} | "
+        f"{_relation_percent(metric.get('recall'))} | "
+        f"{_relation_percent(metric.get('f1'))} |"
+    )
+
+
+def _relation_percent(value: Any) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "n/a"
+    return f"{float(value):.2%}"
 
 
 def _shift_spans(spans: Iterable[EvalSpan], offset: int) -> list[EvalSpan]:
@@ -3145,7 +3797,11 @@ __all__ = [
     "PipelineEvalReport",
     "PipelineFixtureEvalResult",
     "PipelineStageOutput",
+    "RELATION_SCORECARD_ARTIFACT",
+    "RELATION_SCORECARD_SCHEMA_VERSION",
     "RelationFixtureResult",
+    "RelationGateFailure",
+    "RelationScorecard",
     "SandboxViolation",
     "TrainingEvalOverlapFinding",
     "check_training_manifest_overlap",
@@ -3157,6 +3813,7 @@ __all__ = [
     "run_pipeline_eval_fixture",
     "run_benchmark",
     "run_relation_benchmark",
+    "run_relation_suite",
     "run_cross_lingual_transfer",
     "run_cross_lingual_transfer_suite",
     "run_masakhaner_scorecard",
