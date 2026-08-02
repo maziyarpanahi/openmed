@@ -62,7 +62,7 @@ def test_local_only_hf_pipeline_uses_cached_files(mock_pipeline, monkeypatch):
 
     pipeline_kwargs = mock_pipeline.call_args.kwargs
     assert "local_files_only" not in pipeline_kwargs
-    assert pipeline_kwargs["model_kwargs"]["local_files_only"] is True
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
     assert pipeline_kwargs["model_kwargs"]["cache_dir"] == loader.config.cache_dir
 
 
@@ -81,7 +81,86 @@ def test_local_only_config_cannot_be_disabled_by_pipeline_kwarg(
 
     pipeline_kwargs = mock_pipeline.call_args.kwargs
     assert "local_files_only" not in pipeline_kwargs
-    assert pipeline_kwargs["model_kwargs"]["local_files_only"] is True
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
+@patch("openmed.core.models.pipeline")
+def test_nested_local_only_pipeline_kwarg_is_enforced_without_forwarding_collision(
+    mock_pipeline,
+    monkeypatch,
+):
+    _clear_offline_env(monkeypatch)
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(OpenMedConfig(backend="hf"))
+    with patch.object(
+        loader,
+        "_prepare_model_reference",
+        return_value="/cached/local-pii",
+    ) as mock_prepare:
+        loader.create_pipeline(
+            "OpenMed/local-pii",
+            model_kwargs={"local_files_only": True},
+        )
+
+    assert mock_prepare.call_args.kwargs["local_only"] is True
+    pipeline_kwargs = mock_pipeline.call_args.kwargs
+    assert "local_files_only" not in pipeline_kwargs
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
+
+
+@patch("openmed.core.models.prepare_model_reference")
+@patch("openmed.core.hf_hub._import_snapshot_download")
+def test_local_only_model_uses_snapshot_from_standard_hf_cache(
+    mock_import_snapshot_download,
+    mock_prepare_model_reference,
+    tmp_path,
+    monkeypatch,
+):
+    _clear_offline_env(monkeypatch)
+    model_id = "OpenMed/local-pii"
+    snapshot = tmp_path / "hf-cache" / "snapshot"
+    snapshot.mkdir(parents=True)
+    calls = []
+
+    class LocalEntryNotFoundError(Exception):
+        pass
+
+    def fake_snapshot_download(**kwargs):
+        calls.append(kwargs)
+        if "cache_dir" in kwargs:
+            raise LocalEntryNotFoundError
+        return str(snapshot)
+
+    mock_prepare_model_reference.return_value = model_id
+    mock_import_snapshot_download.return_value = (
+        fake_snapshot_download,
+        LocalEntryNotFoundError,
+    )
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(OpenMedConfig(local_only=True, backend="hf"))
+
+    assert loader._prepare_model_reference(model_id, model_id, local_only=True) == str(
+        snapshot
+    )
+    assert calls == [
+        {
+            "repo_id": model_id,
+            "revision": None,
+            "local_files_only": True,
+            "cache_dir": loader.config.cache_dir,
+        },
+        {
+            "repo_id": model_id,
+            "revision": None,
+            "local_files_only": True,
+        },
+    ]
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)

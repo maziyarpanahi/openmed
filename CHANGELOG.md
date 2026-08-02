@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed offline Hugging Face pipeline loading so `openmed models pull` caches
+  are resolved without passing `local_files_only` twice through Transformers,
+  including fallback component loading from the standard Hub cache (#1983).
 - Fixed the PySpark batch de-identification adapter so
   `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
   UDF construction instead of failing with an unsupported `Any` signature
