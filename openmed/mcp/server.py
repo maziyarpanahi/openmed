@@ -31,6 +31,7 @@ from openmed.mcp.tool_registry import (
 from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
 from openmed.risk.reid import risk_report
 from openmed.service.runtime import ServiceRuntime
+from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
 
 RuntimeProvider = Callable[[], ServiceRuntime]
@@ -266,6 +267,10 @@ def openmed_analyze_text(
     """Run OpenMed named-entity recognition and return a JSON-ready result."""
     from openmed.service.schemas import AnalyzeRequest
 
+    # Validate through the shared gateway so the MCP surface applies the same
+    # length/size/encoding guardrails as the library and REST entry points.
+    text = normalize_text(text)
+
     payload = AnalyzeRequest(
         text=text,
         model_name=model_name,
@@ -320,6 +325,11 @@ def openmed_extract_pii(
     """Extract PII/PHI entities and return a JSON-ready result."""
     from openmed.service.schemas import PIIExtractRequest
 
+    # Shared gateway: normalize text and guard the language before dispatch so
+    # the MCP surface rejects the same bad inputs as the REST and library paths.
+    text = normalize_text(text)
+    lang = validate_language(lang, include_national_id=False)
+
     payload = PIIExtractRequest(
         text=text,
         model_name=model_name,
@@ -371,6 +381,11 @@ def openmed_deidentify(
 ) -> Dict[str, Any]:
     """De-identify text by masking, removing, replacing, hashing, or shifting PII."""
     from openmed.service.schemas import PIIDeidentifyRequest
+
+    # Shared gateway: normalize text and guard the language before dispatch so
+    # the MCP surface rejects the same bad inputs as the REST and library paths.
+    text = normalize_text(text)
+    lang = validate_language(lang, include_national_id=False)
 
     payload = PIIDeidentifyRequest(
         text=text,
@@ -424,6 +439,12 @@ def openmed_list_models(
     limit: int = 50,
 ) -> Dict[str, Any]:
     """List OpenMed registry models with optional category or PII language filters."""
+    if pii_language is not None:
+        pii_language = validate_language(
+            pii_language,
+            include_national_id=False,
+        )
+
     models = openmed.get_all_models()
 
     if category:
@@ -434,13 +455,7 @@ def openmed_list_models(
             if model.category.lower() == category_lower
         }
 
-    if pii_language:
-        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
-        if pii_language not in accepted_languages:
-            raise ValueError(
-                f"Unsupported language '{pii_language}'. "
-                f"Supported: {sorted(accepted_languages)}"
-            )
+    if pii_language is not None:
         allowed = openmed.get_pii_models_by_language(pii_language)
         models = {key: model for key, model in models.items() if key in allowed}
 
@@ -511,6 +526,8 @@ def openmed_signed_audit_report(
     runtime_provider: Optional[RuntimeProvider] = None,
 ) -> Dict[str, Any]:
     """returns a signed PHI-sage audit report"""
+    text = normalize_text(text)
+    lang = validate_language(lang, include_national_id=False)
     if not signing_key:
         raise ValueError("A signing key is required")
     runtime = _runtime(runtime_provider)

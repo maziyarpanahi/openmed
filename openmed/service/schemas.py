@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any, Literal, Optional, Union
 
 from openmed.core.policy import canonical_policy_name
+from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
@@ -82,20 +83,16 @@ PIILanguage = Literal[
 
 
 def _normalize_text(value: Any) -> str:
-    if value is None:
-        raise ValueError("Text is required")
-    if not isinstance(value, str):
-        value = str(value)
+    # Route through the shared gateway so REST requests validate text identically
+    # to the library and MCP surfaces: same character cap (still driven by
+    # ``OPENMED_SERVICE_MAX_TEXT_LENGTH``), plus byte-size and UTF-8 encoding
+    # guardrails. Errors never echo the (possibly PHI) text.
+    return normalize_text(value)
 
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError("Text must not be blank")
-    max_text_length = get_max_text_length()
-    if len(normalized) > max_text_length:
-        raise ValueError(
-            f"Text exceeds the maximum length of {max_text_length} characters"
-        )
-    return normalized
+
+def _normalize_pii_language(value: Any) -> str:
+    """Normalize API PII languages through the shared gateway."""
+    return validate_language(value, include_national_id=False)
 
 
 def _normalize_model_name(value: str) -> str:
@@ -236,6 +233,19 @@ class _StrictModel(BaseModel):
 
         class Config:
             extra = "forbid"
+
+    if PYDANTIC_V2:
+
+        @field_validator("lang", mode="before", check_fields=False)
+        @classmethod
+        def _validate_pii_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
+
+    else:  # pragma: no cover
+
+        @validator("lang", pre=True, check_fields=False)
+        def _validate_pii_language(cls, value: Any) -> str:
+            return _normalize_pii_language(value)
 
 
 if PYDANTIC_V2:
