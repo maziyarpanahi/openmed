@@ -1292,6 +1292,144 @@ def assert_context_axes(
     return apply_section_context(span, section, assertion, language=language)
 
 
+def assert_context(
+    text: str,
+    spans: Iterable[Any],
+    sentences: Iterable[Any] | None = None,
+    language: str | None = None,
+    section_experiencer: str | None = None,
+) -> list[dict[str, Any]]:
+    """Attach all four clinical context axes to extracted spans.
+
+    The returned span mappings carry ``negation``, ``uncertainty``,
+    ``experiencer``, and ``temporality`` at the top level. The same compact
+    mapping is placed under ``metadata["clinical_context"]`` so formatted NER
+    results can preserve it without changing their public entity schema.
+    Input spans are never mutated.
+
+    Args:
+        text: Source document text indexed by the span offsets.
+        spans: Span mappings, span-like objects, or strings. Offset-bearing
+            spans are preferred; a text-only span is located in ``text``.
+        sentences: Optional sentence spans used to bound cue propagation.
+        language: Optional cue-lexicon language code.
+        section_experiencer: Optional patient/family/other section prior used
+            only when no explicit experiencer cue governs a span.
+
+    Returns:
+        Copied span mappings enriched with the four context axes, in input
+        order.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    if isinstance(spans, (str, Mapping)):
+        span_list = [spans]
+    else:
+        span_list = list(spans)
+
+    scoped_hits = scan_context_cues(
+        text,
+        span_list,
+        sentences=sentences,
+        language=language,
+    )
+
+    # Imported lazily because experiencer.py reuses constants and data classes
+    # from this module.
+    from openmed.clinical.experiencer import resolve_experiencer
+
+    enriched_spans: list[dict[str, Any]] = []
+    for span in span_list:
+        start, end = _target_offsets(text, span)
+        scoped_span = {
+            "text": text[start:end],
+            "document_text": text,
+            "start": start,
+            "end": end,
+        }
+        assertion = assert_context_axes(
+            scoped_span,
+            scoped_hits[span],
+            section=_span_section(span),
+            language=language,
+        )
+        assignment = resolve_experiencer(
+            text,
+            {"start": start, "end": end},
+            section_experiencer=section_experiencer or assertion.experiencer,
+        )
+        context_fields = {
+            "negation": assertion.negation or AFFIRMED,
+            "uncertainty": assertion.certainty,
+            "experiencer": assignment.experiencer,
+            "temporality": assertion.temporality,
+        }
+
+        enriched = _span_mapping_copy(span, text=text, start=start, end=end)
+        enriched.update(context_fields)
+        raw_metadata = enriched.get("metadata")
+        if isinstance(raw_metadata, Mapping):
+            metadata = dict(raw_metadata)
+        elif raw_metadata is None:
+            metadata = {}
+        else:
+            metadata = {"value": raw_metadata}
+        metadata["clinical_context"] = dict(context_fields)
+        enriched["metadata"] = metadata
+        enriched_spans.append(enriched)
+
+    return enriched_spans
+
+
+def _span_mapping_copy(
+    span: Any,
+    *,
+    text: str,
+    start: int,
+    end: int,
+) -> dict[str, Any]:
+    """Return a detached mapping representation of a span-like value."""
+
+    if isinstance(span, Mapping):
+        return dict(span)
+
+    to_dict = getattr(span, "to_dict", None)
+    if callable(to_dict):
+        serialized = to_dict()
+        if isinstance(serialized, Mapping):
+            return dict(serialized)
+
+    fallback: dict[str, Any] = {
+        "text": text[start:end],
+        "start": start,
+        "end": end,
+    }
+    for name in ("label", "confidence"):
+        value = getattr(span, name, None)
+        if value is not None:
+            fallback[name] = value
+    return fallback
+
+
+def _span_section(span: Any) -> str | None:
+    """Return only an explicit section field from a clinical span."""
+
+    if isinstance(span, Mapping):
+        for key in ("section", "section_label", "section_name"):
+            value = span.get(key)
+            if isinstance(value, str):
+                return value
+        return None
+
+    for name in ("section", "section_label", "section_name"):
+        value = getattr(span, name, None)
+        if isinstance(value, str):
+            return value
+    return None
+
+
 def apply_section_context(
     span: Any,
     section: Any = None,
@@ -1381,6 +1519,7 @@ __all__ = [
     "canonical_section_name",
     "canonical_section_label",
     "apply_section_context",
+    "assert_context",
     "resolve_span_context",
     "assert_context_axes",
 ]
