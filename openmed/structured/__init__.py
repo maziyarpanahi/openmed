@@ -4,6 +4,18 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .anonymize import (
+    ENGINE_ARX,
+    ENGINE_AUTO,
+    ENGINE_PYTHON,
+    MODEL_DP,
+    MODEL_L_DIVERSITY,
+    MODEL_T_CLOSENESS,
+    SUPPORTED_ENGINES,
+    SUPPORTED_TABLE_MODELS,
+    TableAnonymizationResult,
+    anonymize_table,
+)
 from .consistency import (
     CrossModalConsistencyReport,
     SubjectConsistencyManifest,
@@ -35,11 +47,10 @@ from .generalize import (
     MODEL_K_ANON,
     REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP,
     REFERENCE_SUPPRESSION_RATE_CAP,
-    SUPPORTED_MODELS,
     AnonymizationError,
     AnonymizationResult,
-    anonymize_table,
 )
+from .generalize import SUPPORTED_MODELS as SUPPORTED_GENERALIZATION_MODELS
 from .hierarchies import (
     COLUMN_TYPE_AGE,
     COLUMN_TYPE_CLINICAL_CODE,
@@ -93,6 +104,8 @@ from .relational import (
 from .scan import (
     ColumnClassification,
     ColumnRole,
+    ProfilerNotAvailableError,
+    ProfilerReportError,
     RoleOverrideError,
     TableRoleScan,
 )
@@ -115,6 +128,11 @@ from .tables import (
     structure_table,
 )
 
+# ``anonymize_table`` now names the complete public orchestrator. Preserve the
+# lower-level engine inventory under an explicit name while keeping the legacy
+# ``SUPPORTED_MODELS`` spelling aligned with the function callers invoke.
+SUPPORTED_MODELS = SUPPORTED_TABLE_MODELS
+
 __all__ = [
     "COLUMN_TYPE_AGE",
     "COLUMN_TYPE_CLINICAL_CODE",
@@ -123,18 +141,27 @@ __all__ = [
     "DEFAULT_TARGET_K",
     "DEFAULT_TARGET_L",
     "DEFAULT_TARGET_T",
+    "ENGINE_ARX",
+    "ENGINE_AUTO",
+    "ENGINE_PYTHON",
     "FLOWSHEET_ADVISORY",
     "HIERARCHY_SCHEMA_VERSION",
     "LAB_PANEL_ADVISORY",
     "MANIFEST_SCHEMA_VERSION",
+    "MODEL_DP",
     "MODEL_K_ANON",
+    "MODEL_L_DIVERSITY",
+    "MODEL_T_CLOSENESS",
     "PANEL_ORDER",
     "RELATIONAL_ADVISORY",
     "REQUIRED_DISCHARGE_SLOTS",
     "REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP",
     "REFERENCE_SUPPRESSION_RATE_CAP",
     "SUPPORTED_COLUMN_TYPES",
+    "SUPPORTED_ENGINES",
+    "SUPPORTED_GENERALIZATION_MODELS",
     "SUPPORTED_MODELS",
+    "SUPPORTED_TABLE_MODELS",
     "AnalyteRow",
     "AnonymizationError",
     "AnonymizationResult",
@@ -159,6 +186,8 @@ __all__ = [
     "LabPanel",
     "MemoryCeilingError",
     "ParameterSeries",
+    "ProfilerNotAvailableError",
+    "ProfilerReportError",
     "ROLE_DIRECT_ID",
     "ROLE_FREE_TEXT",
     "ROLE_INTERNAL_LINKAGE",
@@ -177,6 +206,7 @@ __all__ = [
     "SurrogateManifest",
     "TABLE_ADVISORY",
     "Table",
+    "TableAnonymizationResult",
     "TableCell",
     "TableToken",
     "TableRoleScan",

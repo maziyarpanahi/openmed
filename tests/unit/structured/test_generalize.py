@@ -364,7 +364,7 @@ def test_anonymize_table_accepts_dataframe_like_object():
 # --------------------------------------------------------------------------- #
 def test_unknown_model_is_rejected():
     with pytest.raises(AnonymizationError):
-        anonymize_table(_mixed_table(), {"age": "age"}, model="l-diversity")
+        anonymize_table(_mixed_table(), {"age": "age"}, model="unsupported")
 
 
 def test_unknown_column_type_is_rejected():
@@ -409,5 +409,7 @@ def test_invalid_suppression_rate_is_rejected():
         anonymize_table(_mixed_table(), {"age": "age"}, suppression_rate=1.5)
 
 
-def test_supported_models_contains_only_k_anon():
-    assert SUPPORTED_MODELS == frozenset({MODEL_K_ANON})
+def test_supported_models_cover_the_public_table_orchestrator():
+    assert SUPPORTED_MODELS == frozenset(
+        {MODEL_K_ANON, "dp", "l-diversity", "t-closeness"}
+    )
