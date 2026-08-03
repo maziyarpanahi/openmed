@@ -1,5 +1,26 @@
-"""Parameter-efficient clinical adapter training recipes."""
+"""Offline clinical adapter transfer and training recipes."""
 
+from .config import (
+    CLINICAL_ADAPTER_DISCLAIMER,
+    DEFAULT_BACKBONE_MODEL_ID,
+    DEFAULT_FAMILY_TRANSFER_CONFIG,
+    DEFAULT_LANGUAGE_FAMILIES,
+    DEFAULT_TRANSFER_GRAPH,
+    PERMISSIVE_ADAPTER_LICENSES,
+    AdapterMetadata,
+    FamilyTransferConfig,
+    FamilyTransferResolution,
+    LanguageFamily,
+    TransferEdge,
+    get_family_transfer_config,
+    normalize_language_code,
+)
+from .family_transfer import (
+    adapter_metadata_for,
+    donor_languages_for,
+    primary_donor_for,
+    resolve_family_transfer,
+)
 from .recipe import (
     ADAPTER_METADATA_SCHEMA_VERSION,
     ADAPTER_RECIPE_SCHEMA_VERSION,
@@ -19,15 +40,32 @@ from .recipe import (
 __all__ = [
     "ADAPTER_METADATA_SCHEMA_VERSION",
     "ADAPTER_RECIPE_SCHEMA_VERSION",
+    "CLINICAL_ADAPTER_DISCLAIMER",
     "DEFAULT_ADAPTER_TRAINING_DISCLAIMER",
+    "DEFAULT_BACKBONE_MODEL_ID",
+    "DEFAULT_FAMILY_TRANSFER_CONFIG",
+    "DEFAULT_LANGUAGE_FAMILIES",
+    "DEFAULT_TRANSFER_GRAPH",
+    "PERMISSIVE_ADAPTER_LICENSES",
     "AdapterArtifactMetadata",
+    "AdapterMetadata",
     "AdapterParameterAccounting",
     "AdapterRecipeDryRun",
     "AdapterTrainingRecipeError",
     "AdapterTrainingSchedule",
     "DonorToTargetAdapterRecipe",
+    "FamilyTransferConfig",
+    "FamilyTransferResolution",
+    "LanguageFamily",
     "LocalTrainingAsset",
     "ParameterEfficientAdapterConfig",
+    "TransferEdge",
+    "adapter_metadata_for",
     "build_donor_to_target_adapter_recipe",
+    "donor_languages_for",
     "dry_run_donor_to_target_adapter_recipe",
+    "get_family_transfer_config",
+    "normalize_language_code",
+    "primary_donor_for",
+    "resolve_family_transfer",
 ]
