@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "policies": {
+    "clinical_release_default": {
+      "max_epsilon": 3.0,
+      "max_delta": 1e-06,
+      "composition": "advanced",
+      "delta_prime": 1e-09
+    },
+    "research_broad": {
+      "max_epsilon": 8.0,
+      "max_delta": 1e-05,
+      "composition": "basic"
+    },
+    "strict_minimal": {
+      "max_epsilon": 1.0,
+      "max_delta": 1e-07,
+      "composition": "advanced",
+      "delta_prime": 1e-10
+    }
+  }
+}

@@ -186,7 +186,7 @@ def test_false_negatives_cli_json_emits_valid_records(
     )
     assert result == 0
 
-    payload = json.loads(capsys.readouterr().out)
+    payload = json.loads(capsys.readouterr().out)["data"]
     assert payload["suite"] == "golden"
     assert payload["model_name"] == "synthetic-model"
     assert payload["total_missed"] == 3
@@ -226,7 +226,7 @@ def test_false_negatives_cli_honors_label_filter(
     )
     assert result == 0
 
-    payload = json.loads(capsys.readouterr().out)
+    payload = json.loads(capsys.readouterr().out)["data"]
     assert payload["label_filter"] == "PHONE"
     assert payload["total_missed"] == 1
     records = [rec for group in payload["groups"] for rec in group["records"]]
@@ -255,7 +255,7 @@ def test_false_negatives_cli_honors_limit(
     )
     assert result == 0
 
-    payload = json.loads(capsys.readouterr().out)
+    payload = json.loads(capsys.readouterr().out)["data"]
     assert payload["limit"] == 1
     # Three spans were missed, but only one is shown under the cap.
     assert payload["total_missed"] == 3
@@ -338,7 +338,7 @@ def test_false_negatives_cli_without_fixtures_hides_raw_text(
     assert result == 0
 
     raw_out = capsys.readouterr().out
-    payload = json.loads(raw_out)
+    payload = json.loads(raw_out)["data"]
     assert payload["has_text"] is False
     records = [rec for group in payload["groups"] for rec in group["records"]]
     assert records
@@ -388,7 +388,7 @@ def test_false_negatives_cli_context_chars_trims_window(
     )
     assert result == 0
 
-    payload = json.loads(capsys.readouterr().out)
+    payload = json.loads(capsys.readouterr().out)["data"]
     record = payload["groups"][0]["records"][0]
     assert len(record["context"]) <= 10
     # The missed span stays visible inside the trimmed window.
@@ -413,7 +413,8 @@ def test_false_negatives_cli_rejects_negative_context_chars(
         ]
     )
 
-    assert result == 1
+    # Invalid argument value -> EXIT_USAGE (2) per the documented exit-code table.
+    assert result == 2
     assert "context-chars must be non-negative" in capsys.readouterr().err
 
 

@@ -19,6 +19,7 @@
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "replace",
     "QUASI_IDENTIFIER": "mask",
+    "SENSITIVE_ATTRIBUTE": "mask",
     "CLINICAL_CONCEPT": "mask"
   },
   "actions": {
@@ -59,6 +60,7 @@
     "LITECOIN_ADDRESS": "replace",
     "MASKED_NUMBER": "replace",
     "GENDER": "mask",
+    "ETHNICITY": "mask",
     "EYE_COLOR": "mask",
     "HEIGHT": "mask",
     "ORGANIZATION": "mask",
@@ -79,6 +81,20 @@
     "LAB_TEST": "mask",
     "PROCEDURE": "mask",
     "BODY_SITE": "mask",
+    "DEVICE": "mask",
+    "PROBLEM": "mask",
+    "SEVERITY": "mask",
+    "DOSAGE": "mask",
+    "ROUTE": "mask",
+    "FREQUENCY": "mask",
+    "DURATION": "mask",
+    "FORM": "mask",
+    "STRENGTH": "mask",
+    "INDICATION": "mask",
+    "LAB_VALUE": "mask",
+    "UNIT": "mask",
+    "REFERENCE_RANGE": "mask",
+    "ABNORMAL_FLAG": "mask",
     "ANESTHESIA_TYPE": "mask",
     "ANESTHETIC_AGENT": "mask",
     "AIRWAY_MANAGEMENT": "mask",
@@ -117,6 +133,10 @@
     "GROWTH_PARAMETER": "mask",
     "GROWTH_PERCENTILE": "mask",
     "DEVELOPMENTAL_MILESTONE": "mask",
+    "INTAKE_OUTPUT": "mask",
+    "LINE_DRAIN_TUBE": "mask",
+    "NURSING_RISK_SCORE": "mask",
+    "CARE_INTERVENTION": "mask",
     "OTHER": "mask"
   }
 }
