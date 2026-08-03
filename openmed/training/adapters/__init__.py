@@ -1,4 +1,4 @@
-"""Offline metadata for clinical language-family adapter transfer."""
+"""Offline clinical adapter transfer and training recipes."""
 
 from .config import (
     CLINICAL_ADAPTER_DISCLAIMER,
@@ -27,15 +27,39 @@ from .family_transfer import (
     resolve_family_transfer,
     route_family_adapter,
 )
+from .recipe import (
+    ADAPTER_METADATA_SCHEMA_VERSION,
+    ADAPTER_RECIPE_SCHEMA_VERSION,
+    DEFAULT_ADAPTER_TRAINING_DISCLAIMER,
+    AdapterArtifactMetadata,
+    AdapterParameterAccounting,
+    AdapterRecipeDryRun,
+    AdapterTrainingRecipeError,
+    AdapterTrainingSchedule,
+    DonorToTargetAdapterRecipe,
+    LocalTrainingAsset,
+    ParameterEfficientAdapterConfig,
+    build_donor_to_target_adapter_recipe,
+    dry_run_donor_to_target_adapter_recipe,
+)
 
 __all__ = [
+    "ADAPTER_METADATA_SCHEMA_VERSION",
+    "ADAPTER_RECIPE_SCHEMA_VERSION",
     "CLINICAL_ADAPTER_DISCLAIMER",
+    "DEFAULT_ADAPTER_TRAINING_DISCLAIMER",
     "DEFAULT_BACKBONE_MODEL_ID",
     "DEFAULT_FAMILY_TRANSFER_CONFIG",
     "DEFAULT_LANGUAGE_FAMILIES",
     "DEFAULT_TRANSFER_GRAPH",
     "PERMISSIVE_ADAPTER_LICENSES",
+    "AdapterArtifactMetadata",
     "AdapterMetadata",
+    "AdapterParameterAccounting",
+    "AdapterRecipeDryRun",
+    "AdapterTrainingRecipeError",
+    "AdapterTrainingSchedule",
+    "DonorToTargetAdapterRecipe",
     "FamilyAdapterFallback",
     "FamilyAdapterRoute",
     "FamilyTransferConfig",
@@ -43,10 +67,14 @@ __all__ = [
     "FamilyTransferResolution",
     "FamilyTransferRouter",
     "LanguageFamily",
+    "LocalTrainingAsset",
+    "ParameterEfficientAdapterConfig",
     "TransferEdge",
     "UnsupportedFamilyTransferLanguageError",
     "adapter_metadata_for",
+    "build_donor_to_target_adapter_recipe",
     "donor_languages_for",
+    "dry_run_donor_to_target_adapter_recipe",
     "get_family_transfer_config",
     "normalize_language_code",
     "primary_donor_for",
