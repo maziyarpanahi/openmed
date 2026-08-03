@@ -7,9 +7,11 @@ from pathlib import Path
 
 from openmed.clinical import (
     MEDICATION_LINK_ADVISORY,
+    CoreferenceChain,
     MedicationRelationScorer,
     link_medication_attributes,
 )
+from openmed.core.schemas import OpenMedSpan, hmac_text_hash
 
 FIXTURE = (
     Path(__file__).resolve().parents[2]
@@ -18,6 +20,13 @@ FIXTURE = (
     / "medication_relations_gold.json"
 )
 MICRO_F1_THRESHOLD = 0.85
+COREFERENCE_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "medication_coreference_collapse.json"
+)
+_SYNTHETIC_HASH_SECRET = "synthetic-medication-coreference-secret"
 
 
 def test_link_medication_attributes_is_byte_deterministic_for_gold_corpus() -> None:
@@ -111,6 +120,74 @@ def test_default_scorer_loads_versioned_config_resource() -> None:
 
     assert scorer.config["version"] == 1
     assert "drug_to_frequency" in scorer.config["relations"]
+
+
+def test_coreferent_medication_heads_collapse_with_safe_supporting_evidence() -> None:
+    case = json.loads(COREFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    chain = _coreference_chain(case)
+
+    groups = link_medication_attributes(
+        case["text"],
+        case["relation_spans"],
+        coreference_chains=(chain,),
+    )
+
+    assert len(groups) == 1
+    group = groups[0]
+    assert group.medication.offset_key() == (
+        chain.representative.start,
+        chain.representative.end,
+    )
+    assert [relation.attribute_type for relation in group.relations] == ["dose"]
+    assert all(relation.head == group.medication for relation in group.relations)
+    assert group.coreference is not None
+    assert group.coreference.cluster_id == chain.chain_id
+    assert [
+        (mention.start, mention.end, mention.text_hash)
+        for mention in group.coreference.supporting_mentions
+    ] == [(member.start, member.end, member.text_hash) for member in chain.members]
+    assert all(
+        relation.coreference == group.coreference for relation in group.relations
+    )
+
+    provenance_values = {
+        value.casefold() for value in _string_values(group.coreference.to_dict())
+    }
+    for mention in case["mentions"]:
+        assert mention["surface"].casefold() not in provenance_values
+
+
+def _coreference_chain(case: dict) -> CoreferenceChain:
+    members = tuple(
+        OpenMedSpan(
+            doc_id=case["document_id"],
+            start=mention["start"],
+            end=mention["end"],
+            text_hash=hmac_text_hash(
+                case["text"][mention["start"] : mention["end"]],
+                _SYNTHETIC_HASH_SECRET,
+            ),
+            entity_type="DRUG",
+            canonical_label="MEDICATION",
+        )
+        for mention in case["mentions"]
+    )
+    return CoreferenceChain(
+        chain_id="coref-synthetic-medication",
+        members=members,
+        representative=members[case["representative_index"]],
+        confidence=0.98,
+    )
+
+
+def _string_values(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [item for child in value.values() for item in _string_values(child)]
+    if isinstance(value, list):
+        return [item for child in value for item in _string_values(child)]
+    return []
 
 
 def _load_corpus() -> list[dict]:
