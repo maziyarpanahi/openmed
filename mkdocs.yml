@@ -103,6 +103,7 @@ nav:
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
       - Public API Deprecation Policy: compliance/api-deprecation-policy.md
+      - Multimodal Dependency Licenses: compliance/multimodal-dependency-licenses.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
       - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
