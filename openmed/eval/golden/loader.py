@@ -46,6 +46,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
         "code_mixed_hinglish.jsonl",
         "context_multilingual.jsonl",
+        "event_coref.jsonl",
         "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
         "grounding_export.jsonl",
@@ -65,7 +66,9 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "radiology_entity_relations.jsonl",
         "hgvs_parse.jsonl",
         "measurement_trend.jsonl",
+        "temporal_tlinks.jsonl",
         "tnm_stage.jsonl",
+        "oncotree_map.jsonl",
     }
 )
 

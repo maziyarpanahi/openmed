@@ -50,6 +50,7 @@ from .multilingual import (
     relation_type_mapping,
 )
 from .temporal import (
+    TEMPORAL_GRAPH_SCHEMA_VERSION,
     TEMPORAL_RELATION_SCHEMA_VERSION,
     TEMPORAL_RELATION_TYPES,
     TemporalCueReference,
@@ -57,6 +58,7 @@ from .temporal import (
     TemporalRelationType,
     TemporalSpanReference,
     TemporalSpanRole,
+    decode_tlink_candidates,
     extract_tlink_candidates,
 )
 
@@ -84,6 +86,7 @@ __all__ = [
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
+    "TEMPORAL_GRAPH_SCHEMA_VERSION",
     "TEMPORAL_RELATION_SCHEMA_VERSION",
     "TEMPORAL_RELATION_TYPES",
     "RelationCandidate",
@@ -96,6 +99,7 @@ __all__ = [
     "TemporalSpanReference",
     "TemporalSpanRole",
     "build_relation_candidates",
+    "decode_tlink_candidates",
     "extract_tlink_candidates",
     "link_medication_attributes",
     "CMEIE_ENTITY_TYPES",

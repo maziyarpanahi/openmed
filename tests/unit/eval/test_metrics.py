@@ -16,6 +16,7 @@ from openmed.eval.metrics import (
     apply_abstention_policy,
     compute_abstention_metrics,
     compute_character_recall,
+    compute_coreference_clustering_score,
     compute_critical_finding_recall,
     compute_date_shift_consistency,
     compute_exact_span_f1,
@@ -270,6 +271,17 @@ def test_surrogate_consistency_is_document_scoped_checksum_aware_and_phi_free():
     assert "Synthetic Alice" not in serialized
     assert "Person One" not in serialized
     assert "000-invalid" not in serialized
+
+
+def test_coreference_clustering_metric_uses_documented_bcubed_proxy():
+    gold = {"m1": "a", "m2": "a", "m3": "b"}
+    predicted = {"m1": "x", "m2": "x", "m3": "y"}
+
+    score = compute_coreference_clustering_score(predicted, gold)
+
+    assert score.metric == "bcubed"
+    assert score.item_count == 3
+    assert score.f1 == 1.0
 
 
 def test_critical_abstentions_route_to_redaction_not_passthrough():

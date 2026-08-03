@@ -8,8 +8,12 @@ from unittest.mock import patch
 import pytest
 
 from openmed.clinical import (
+    TEMPORAL_GRAPH_SCHEMA_VERSION,
     TEMPORAL_RELATION_TYPES,
+    TemporalCueReference,
     TemporalRelationCandidate,
+    TemporalSpanReference,
+    decode_tlink_candidates,
     extract_tlink_candidates,
 )
 from openmed.clinical.relations.candidate import build_relation_candidates
@@ -138,6 +142,84 @@ def test_temporal_relation_registry_lists_the_tlink_schema() -> None:
     )
 
 
+def test_decode_tlinks_prunes_weaker_before_after_contradiction() -> None:
+    event_a = _temporal_span("event-a", 0)
+    event_b = _temporal_span("event-b", 10)
+    graph = decode_tlink_candidates(
+        [
+            _candidate("BEFORE", event_a, event_b, 0.95),
+            _candidate("AFTER", event_a, event_b, 0.40),
+        ]
+    )
+
+    assert graph.edge_keys() == (("BEFORE", "event-a", "event-b"),)
+    contradiction = next(
+        decision
+        for decision in graph.decisions
+        if decision.edge.metadata["candidate_relation_type"] == "AFTER"
+    )
+    assert contradiction.status == "pruned"
+    assert contradiction.constraint == "acyclicity:BEFORE"
+
+
+def test_decode_tlinks_returns_consistent_transitive_reduction() -> None:
+    event_a = _temporal_span("event-a", 0)
+    event_b = _temporal_span("event-b", 10)
+    event_c = _temporal_span("event-c", 20)
+    candidates = [
+        _candidate("BEFORE", event_a, event_b, 0.95),
+        _candidate("BEFORE", event_b, event_c, 0.90),
+        _candidate("BEFORE", event_a, event_c, 0.80),
+        _candidate("AFTER", event_a, event_c, 0.20),
+    ]
+
+    graph = decode_tlink_candidates(reversed(candidates))
+
+    assert graph.edge_keys() == (
+        ("BEFORE", "event-a", "event-b"),
+        ("BEFORE", "event-b", "event-c"),
+    )
+    closure = _before_closure(graph.edge_keys())
+    assert ("event-a", "event-c") in closure
+    assert all((tail, head) not in closure for head, tail in closure)
+    pruned = {
+        decision.edge.metadata["candidate_relation_type"]: decision.constraint
+        for decision in graph.decisions
+        if decision.status == "pruned"
+    }
+    assert pruned["BEFORE"] == "transitive_reduction:BEFORE"
+    assert pruned["AFTER"] == "acyclicity:BEFORE"
+
+
+def test_decode_tlinks_retains_non_ordering_relations_and_safe_provenance() -> None:
+    event_a = _temporal_span("event-a", 0)
+    event_b = _temporal_span("event-b", 10)
+    timex = _temporal_span("timex-a", 20, role="TIMEX")
+    graph = decode_tlink_candidates(
+        [
+            _candidate("OVERLAP", event_b, event_a, 0.80),
+            _candidate("CONTAINS", timex, event_a, 0.85),
+            _candidate("BEGINS_ON", event_b, timex, 0.90),
+            _candidate("ENDS_ON", event_a, timex, 0.75),
+        ]
+    )
+
+    assert set(graph.edge_keys()) == {
+        ("OVERLAP", "event-a", "event-b"),
+        ("CONTAINS", "timex-a", "event-a"),
+        ("BEGINS_ON", "event-b", "timex-a"),
+        ("ENDS_ON", "event-a", "timex-a"),
+    }
+    payload = json.dumps(graph.to_dict(), sort_keys=True)
+    assert "synthetic symptom" not in payload
+    assert "synthetic date" not in payload
+    assert '"text"' not in payload
+    assert all(
+        edge.metadata["schema_version"] == TEMPORAL_GRAPH_SCHEMA_VERSION
+        for edge in graph.edges
+    )
+
+
 def _spans(text: str, source_text: str, target_text: str) -> list[dict[str, object]]:
     target_label = "TIMEX" if any(char.isdigit() for char in target_text) else "EVENT"
     return [
@@ -162,3 +244,65 @@ def _payload(candidates: tuple[TemporalRelationCandidate, ...]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+_SAFE_HASH = "sha256:" + "0" * 64
+
+
+def _temporal_span(
+    span_id: str,
+    start: int,
+    *,
+    role: str = "EVENT",
+) -> TemporalSpanReference:
+    label = "TIMEX" if role == "TIMEX" else "EVENT"
+    return TemporalSpanReference(
+        span_id=span_id,
+        label=label,
+        role=role,
+        start=start,
+        end=start + 5,
+        score=0.99,
+        text_hash=_SAFE_HASH,
+    )
+
+
+def _candidate(
+    relation_type: str,
+    source: TemporalSpanReference,
+    target: TemporalSpanReference,
+    confidence: float,
+) -> TemporalRelationCandidate:
+    return TemporalRelationCandidate(
+        relation_type=relation_type,
+        source=source,
+        target=target,
+        confidence=confidence,
+        cue=TemporalCueReference(
+            category=relation_type,
+            start=100,
+            end=101,
+            text_hash=_SAFE_HASH,
+        ),
+        provenance={"fixture": "synthetic-offline"},
+    )
+
+
+def _before_closure(
+    edge_keys: tuple[tuple[str, str, str], ...],
+) -> set[tuple[str, str]]:
+    adjacency: dict[str, set[str]] = {}
+    for label, head, tail in edge_keys:
+        if label == "BEFORE":
+            adjacency.setdefault(head, set()).add(tail)
+
+    closure: set[tuple[str, str]] = set()
+    for source in adjacency:
+        stack = list(adjacency[source])
+        while stack:
+            target = stack.pop()
+            if (source, target) in closure:
+                continue
+            closure.add((source, target))
+            stack.extend(adjacency.get(target, ()))
+    return closure

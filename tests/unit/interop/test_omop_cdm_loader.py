@@ -14,6 +14,7 @@ from openmed.interop.omop import (
     UNMAPPED_CONCEPT_ID,
     OmopCdmTables,
     OmopLoadSummary,
+    VocabularyRouter,
     emit_postgres_ddl,
     load_grounded_jsonl,
     load_grounded_notes,
@@ -32,6 +33,14 @@ NOTE_TEXT = (
 )
 TARGET_NOTE_HASH = "1" * 64
 PRESERVED_NOTE_HASH = "2" * 64
+
+_ROUTED_CONCEPTS = {
+    "COND-1": (9_101, 201826, "Condition"),
+    "DRUG-1": (9_102, 1112807, "Drug"),
+    "MEAS-1": (9_103, 3004410, "Measurement"),
+    "PROC-1": (9_104, 4017990, "Procedure"),
+    "OBS-1": (9_105, 40766527, "Observation"),
+}
 
 
 def _entity(
@@ -98,6 +107,38 @@ def _fixture_notes() -> list[dict[str, Any]]:
             ],
         }
     ]
+
+
+def _vocabulary_router() -> VocabularyRouter:
+    target_records = {}
+    source_records = {}
+    usagi = {}
+    for source_code, (source_id, target_id, domain) in _ROUTED_CONCEPTS.items():
+        target_code = f"TARGET-{source_code}"
+        target_records[target_code] = {
+            "concept_id": target_id,
+            "concept_name": f"Standard {source_code}",
+            "domain_id": domain,
+            "vocabulary_id": "SYNTHETIC",
+            "concept_class_id": "Standard",
+            "standard_concept": "S",
+            "concept_code": target_code,
+        }
+        source_records[source_code] = {
+            "concept_id": source_id,
+            "concept_name": f"Source {source_code}",
+            "domain_id": domain,
+            "vocabulary_id": "LOCAL",
+            "concept_class_id": "Source",
+            "standard_concept": None,
+            "concept_code": source_code,
+        }
+        usagi[f"LOCAL:{source_code}"] = target_id
+    return VocabularyRouter(
+        {"SYNTHETIC": target_records, "LOCAL": source_records},
+        usagi,
+        vocabulary_version="SYNTHETIC 2026-01",
+    )
 
 
 def _replacement_fixture_notes(*, include_stale_span: bool) -> list[dict[str, Any]]:
@@ -209,6 +250,115 @@ def test_load_grounded_notes_builds_valid_duckdb_omop_tables() -> None:
         WHERE source_code = 'SRC-UNMAPPED'
         """
     ).fetchall() == [(UNMAPPED_CONCEPT_ID, "UNMAPPED")]
+
+
+def test_vocabulary_router_drives_end_to_end_cdm_load(tmp_path: Path) -> None:
+    notes = _fixture_notes()
+    invented_ids = set()
+    for index, entity in enumerate(notes[0]["entities"][:5], start=1):
+        invented_id = 8_000_000 + index
+        entity["concept_id"] = invented_id
+        invented_ids.add(invented_id)
+    jsonl = tmp_path / "routed-grounded.jsonl"
+    jsonl.write_text(json.dumps(notes[0]) + "\n", encoding="utf-8")
+
+    tables = load_grounded_jsonl(
+        jsonl,
+        vocabulary_router=_vocabulary_router(),
+    )
+
+    expected_counts = dict(_expected_counts())
+    expected_counts["concept"] = 11
+    assert tables.row_counts == expected_counts
+    assert validate_omop_tables(tables) == ()
+
+    concepts = {row["concept_id"]: row for row in tables.table("concept")}
+    assert invented_ids.isdisjoint(concepts)
+    assert concepts[UNMAPPED_CONCEPT_ID]["concept_code"] == ""
+    assert concepts[UNMAPPED_CONCEPT_ID]["domain_id"] == ""
+    for source_code, (source_id, target_id, domain) in _ROUTED_CONCEPTS.items():
+        assert concepts[source_id] == {
+            "concept_id": source_id,
+            "concept_name": f"Source {source_code}",
+            "domain_id": domain,
+            "vocabulary_id": "LOCAL",
+            "concept_class_id": "Source",
+            "standard_concept": None,
+            "concept_code": source_code,
+        }
+        assert concepts[target_id]["concept_code"] == f"TARGET-{source_code}"
+        assert concepts[target_id]["standard_concept"] == "S"
+
+    provenance = {
+        row["source_code"]: row for row in tables.table("source_to_concept_map")
+    }
+    for source_code, (source_id, target_id, _domain) in _ROUTED_CONCEPTS.items():
+        row = provenance[source_code]
+        assert row["source_concept_id"] == source_id
+        assert row["source_vocabulary_id"] == "LOCAL"
+        assert row["target_concept_id"] == target_id
+        assert row["target_vocabulary_id"] == "SYNTHETIC"
+        assert row["vocabulary_version"] == "SYNTHETIC 2026-01"
+    assert provenance["SRC-UNMAPPED"]["target_concept_id"] == UNMAPPED_CONCEPT_ID
+    assert provenance["SRC-UNMAPPED"]["target_vocabulary_id"] == "UNMAPPED"
+    assert provenance["SRC-UNMAPPED"]["invalid_reason"] == "UNMAPPED"
+
+    con = write_omop_duckdb(tables)
+    first_counts = _table_counts_from_duckdb(con)
+    write_omop_duckdb(tables, con)
+    assert _table_counts_from_duckdb(con) == first_counts == expected_counts
+    assert validate_omop_database(con) == ()
+
+
+def test_vocabulary_router_does_not_mislabel_unknown_target_metadata() -> None:
+    note_text = "Synthetic source finding."
+    source_code = "SRC-ABSENT"
+    router = VocabularyRouter(
+        {
+            "LOCAL": {
+                source_code: {
+                    "concept_id": 9_999,
+                    "concept_name": "Synthetic source concept",
+                    "domain_id": "Condition",
+                    "vocabulary_id": "LOCAL",
+                    "concept_class_id": "Source",
+                    "standard_concept": None,
+                    "concept_code": source_code,
+                }
+            }
+        },
+        {f"LOCAL:{source_code}": 8_888},
+    )
+
+    tables = load_grounded_notes(
+        [
+            {
+                "document_id": "synthetic-note",
+                "person_id": "synthetic-person",
+                "note_text": note_text,
+                "entities": [
+                    {
+                        "text": "source finding",
+                        "start": note_text.index("source finding"),
+                        "end": note_text.index("source finding")
+                        + len("source finding"),
+                        "code": source_code,
+                        "vocabulary_id": "LOCAL",
+                        "domain_id": "Condition",
+                    }
+                ],
+            }
+        ],
+        vocabulary_router=router,
+    )
+
+    target = next(row for row in tables.table("concept") if row["concept_id"] == 8_888)
+    provenance = tables.table("source_to_concept_map")[0]
+    assert target["concept_name"] == "Concept 8888"
+    assert target["concept_code"] == ""
+    assert target["vocabulary_id"] == ""
+    assert provenance["target_vocabulary_id"] == ""
+    assert validate_omop_tables(tables) == ()
 
 
 def test_postgres_ddl_is_stable_and_covers_loader_owned_tables() -> None:

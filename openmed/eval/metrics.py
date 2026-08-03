@@ -51,6 +51,18 @@ PIPELINE_STAGE_FACT_FIELDS: Mapping[str, tuple[str, ...]] = {
 }
 FAITHFULNESS_SCHEMA_VERSION = "openmed.eval.span_grounded_faithfulness.v1"
 MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
+TEMPORAL_AWARENESS_F1_FLOOR = 0.75
+TEMPORAL_CONSISTENCY_VIOLATION_CEILING = 0
+TEMPORAL_RELATION_LABELS: tuple[str, ...] = (
+    "BEFORE",
+    "AFTER",
+    "OVERLAP",
+    "CONTAINS",
+    "BEGINS_ON",
+    "ENDS_ON",
+)
+_TEMPORAL_TRANSITIVE_LABELS = frozenset({"BEFORE", "CONTAINS"})
+_TEMPORAL_PARTIAL_ORDER_LABELS = frozenset({"BEFORE", "CONTAINS"})
 RADIOLOGY_ENTITY_ANATOMY = "ANATOMY"
 RADIOLOGY_ENTITY_OBSERVATION = "OBSERVATION"
 RADIOLOGY_ENTITY_TYPES: tuple[str, ...] = (
@@ -188,6 +200,72 @@ class F1Metrics:
             "true_positives": self.true_positives,
             "false_positives": self.false_positives,
             "false_negatives": self.false_negatives,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class CoreferenceClusteringScore:
+    """Documented B-cubed proxy score for coreference clustering.
+
+    Precision and recall are averaged per mention from the overlap between its
+    predicted and gold clusters; ``f1`` is their harmonic mean. This transparent
+    proxy is used instead of the full CoNLL MUC/B3/CEAF average for the small,
+    synthetic event-coreference gate.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    metric: str
+    item_count: int
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        """Return a JSON-compatible metric payload."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "metric": self.metric,
+            "item_count": self.item_count,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class TemporalAwarenessMetrics:
+    """Closure-aware precision, recall, and F1 over reduced TLINK graphs.
+
+    Precision checks reduced predicted relations against the gold closure;
+    recall checks reduced gold relations against the predicted closure. The two
+    match counts are kept separately because closure-aware scoring does not
+    necessarily have one symmetric true-positive count.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    precision_matches: int
+    recall_matches: int
+    predicted_reduced_relations: int
+    gold_reduced_relations: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        """Return aggregate counts without node ids or source text."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "precision_matches": self.precision_matches,
+            "recall_matches": self.recall_matches,
+            "predicted_reduced_relations": self.predicted_reduced_relations,
+            "gold_reduced_relations": self.gold_reduced_relations,
         }
 
     def __getitem__(self, key: str) -> int | float:
@@ -559,6 +637,35 @@ class ConsistencyMetric:
             "consistent": self.consistent,
             "total": self.total,
             "violations": self.violations,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class TemporalConsistencyGateResult:
+    """Merge-blocking temporal-awareness and closure-consistency verdict."""
+
+    passed: bool
+    blocking: bool
+    awareness: TemporalAwarenessMetrics
+    consistency: ConsistencyMetric
+    awareness_floor: float = TEMPORAL_AWARENESS_F1_FLOOR
+    violation_ceiling: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING
+    failure_reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, raw-text-free gate payload."""
+
+        return {
+            "awareness": self.awareness.to_dict(),
+            "awareness_floor": self.awareness_floor,
+            "blocking": self.blocking,
+            "consistency": self.consistency.to_dict(),
+            "failure_reasons": list(self.failure_reasons),
+            "passed": self.passed,
+            "violation_ceiling": self.violation_ceiling,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -1678,6 +1785,42 @@ def compute_critical_finding_recall(
     )
 
 
+def compute_coreference_clustering_score(
+    predicted: Mapping[Any, str],
+    gold: Mapping[Any, str],
+    *,
+    metric: str = "bcubed",
+) -> CoreferenceClusteringScore:
+    """Score clusters with the documented mention-averaged B-cubed proxy.
+
+    ``predicted`` and ``gold`` must label the same mention keys. For every
+    mention, B-cubed precision is the fraction of its predicted cluster that is
+    in its gold cluster, and recall is the fraction of its gold cluster recovered
+    by the prediction. The returned F1 is the harmonic mean of the averages.
+
+    Args:
+        predicted: Mention key to predicted cluster id.
+        gold: The same mention keys mapped to gold cluster ids.
+        metric: Metric selector. Only ``"bcubed"`` is supported.
+
+    Returns:
+        Precision, recall, F1, metric name, and scored mention count.
+    """
+
+    if metric != "bcubed":
+        raise ValueError("only the documented 'bcubed' coreference proxy is supported")
+    from openmed.clinical.coref import bcubed_precision_recall_f1
+
+    score = bcubed_precision_recall_f1(predicted, gold)
+    return CoreferenceClusteringScore(
+        precision=score.precision,
+        recall=score.recall,
+        f1=score.f1,
+        metric=metric,
+        item_count=len(gold),
+    )
+
+
 def compute_exact_span_f1(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -2271,6 +2414,220 @@ def compute_surrogate_consistency(
         total=len(groups),
         violations=violations,
     )
+
+
+def normalize_temporal_edges(edges: Any) -> tuple[tuple[str, str, str], ...]:
+    """Return canonical ``(label, head, tail)`` keys for temporal edges.
+
+    ``AFTER(a, b)`` becomes ``BEFORE(b, a)`` and symmetric ``OVERLAP``
+    endpoints are ordered deterministically. Inputs may be compact triples,
+    edge mappings, temporal candidate objects, or a decoded ``SpanGraph``.
+    Duplicate relations are removed.
+
+    Args:
+        edges: Temporal edge records or a decoded graph exposing ``edge_keys``.
+
+    Returns:
+        Unique canonical temporal edge keys in deterministic order.
+
+    Raises:
+        TypeError: If ``edges`` is not an edge iterable or decoded graph.
+        ValueError: If an edge label or endpoint is invalid.
+    """
+
+    values = _temporal_edge_values(edges)
+    normalized = {_normalize_temporal_edge(value) for value in values}
+    return tuple(sorted(normalized))
+
+
+def compute_temporal_awareness_f1(
+    gold_edges: Any,
+    predicted_edges: Any,
+) -> TemporalAwarenessMetrics:
+    """Score closure-aware TLINK precision/recall over reduced graphs.
+
+    This follows temporal-awareness evaluation: reduced system relations are
+    checked against the gold closure for precision, while reduced gold
+    relations are checked against the system closure for recall. ``BEFORE``
+    and ``CONTAINS`` are transitively closed; the other supported TLINK labels
+    remain exact directed relations after inverse/symmetric normalization.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+
+    Returns:
+        Closure-aware precision, recall, F1, and reduced-graph counts.
+    """
+
+    gold_reduced = _reduce_temporal_edges(normalize_temporal_edges(gold_edges))
+    predicted_reduced = _reduce_temporal_edges(
+        normalize_temporal_edges(predicted_edges)
+    )
+    gold_closure = _temporal_labeled_closure(gold_reduced)
+    predicted_closure = _temporal_labeled_closure(predicted_reduced)
+
+    precision_matches = len(set(predicted_reduced) & gold_closure)
+    recall_matches = len(set(gold_reduced) & predicted_closure)
+    precision = _safe_rate(
+        precision_matches,
+        len(predicted_reduced),
+        zero_denominator=1.0,
+    )
+    recall = _safe_rate(
+        recall_matches,
+        len(gold_reduced),
+        zero_denominator=1.0,
+    )
+    f1 = (
+        0.0
+        if precision + recall == 0.0
+        else 2.0 * precision * recall / (precision + recall)
+    )
+    return TemporalAwarenessMetrics(
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        precision_matches=precision_matches,
+        recall_matches=recall_matches,
+        predicted_reduced_relations=len(predicted_reduced),
+        gold_reduced_relations=len(gold_reduced),
+    )
+
+
+def compute_temporal_closure_consistency(edges: Any) -> ConsistencyMetric:
+    """Score whether the partial-order transitive closure is contradiction-free.
+
+    The consistency graph mirrors temporal decoding by treating ``BEFORE`` and
+    ``CONTAINS`` as strict partial-order edges. A closure relation is a
+    violation when it reaches itself or its reverse is also reachable.
+    Violation details contain stable aggregate indexes and reason codes only,
+    never caller-provided node ids or clinical text.
+
+    Args:
+        edges: TLINK records or a decoded temporal graph.
+
+    Returns:
+        A consistency score with PHI-safe closure-violation details.
+    """
+
+    normalized = normalize_temporal_edges(edges)
+    order_pairs = {
+        (head, tail)
+        for label, head, tail in normalized
+        if label in _TEMPORAL_PARTIAL_ORDER_LABELS
+    }
+    closure = _temporal_pair_closure(order_pairs)
+    inconsistent = {
+        pair for pair in closure if pair[0] == pair[1] or (pair[1], pair[0]) in closure
+    }
+    violations: dict[str, list[str]] = {}
+    for index, (head, tail) in enumerate(sorted(inconsistent)):
+        reason = (
+            "self_reachability_in_transitive_closure"
+            if head == tail
+            else "reverse_reachability_in_transitive_closure"
+        )
+        violations[f"closure_relation:{index}"] = [reason]
+
+    total = len(closure)
+    consistent = total - len(inconsistent)
+    return ConsistencyMetric(
+        score=_safe_rate(consistent, total, zero_denominator=1.0),
+        consistent=consistent,
+        total=total,
+        violations=violations,
+    )
+
+
+def evaluate_temporal_consistency_gate(
+    gold_edges: Any,
+    predicted_edges: Any,
+    *,
+    minimum_awareness_f1: float = TEMPORAL_AWARENESS_F1_FLOOR,
+    maximum_consistency_violations: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING,
+) -> TemporalConsistencyGateResult:
+    """Evaluate the merge-blocking TLINK quality and consistency gate.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+        minimum_awareness_f1: Inclusive temporal-awareness F1 floor.
+        maximum_consistency_violations: Inclusive closure-violation ceiling.
+
+    Returns:
+        A blocking pass/fail verdict with aggregate metric evidence.
+
+    Raises:
+        ValueError: If either gate threshold is invalid.
+    """
+
+    if not isfinite(float(minimum_awareness_f1)) or not (
+        0.0 <= minimum_awareness_f1 <= 1.0
+    ):
+        raise ValueError("minimum_awareness_f1 must be finite and between 0 and 1")
+    if (
+        isinstance(maximum_consistency_violations, bool)
+        or not isinstance(maximum_consistency_violations, int)
+        or maximum_consistency_violations < 0
+    ):
+        raise ValueError("maximum_consistency_violations must be a non-negative int")
+
+    gold = normalize_temporal_edges(gold_edges)
+    predicted = normalize_temporal_edges(predicted_edges)
+    awareness = compute_temporal_awareness_f1(gold, predicted)
+    consistency = compute_temporal_closure_consistency(predicted)
+    failure_reasons: list[str] = []
+    if awareness.f1 < minimum_awareness_f1:
+        failure_reasons.append("temporal_awareness_f1_below_floor")
+    if len(consistency.violations) > maximum_consistency_violations:
+        failure_reasons.append("transitive_closure_violation")
+    return TemporalConsistencyGateResult(
+        passed=not failure_reasons,
+        blocking=True,
+        awareness=awareness,
+        consistency=consistency,
+        awareness_floor=float(minimum_awareness_f1),
+        violation_ceiling=maximum_consistency_violations,
+        failure_reasons=tuple(failure_reasons),
+    )
+
+
+def assert_temporal_consistency_gate(
+    gold_edges: Any,
+    predicted_edges: Any,
+    *,
+    minimum_awareness_f1: float = TEMPORAL_AWARENESS_F1_FLOOR,
+    maximum_consistency_violations: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING,
+) -> TemporalConsistencyGateResult:
+    """Return the gate result or raise a PHI-safe merge-blocking assertion.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+        minimum_awareness_f1: Inclusive temporal-awareness F1 floor.
+        maximum_consistency_violations: Inclusive closure-violation ceiling.
+
+    Returns:
+        The passing temporal consistency gate result.
+
+    Raises:
+        AssertionError: If awareness is below the floor or closure is invalid.
+        ValueError: If either gate threshold is invalid.
+    """
+
+    result = evaluate_temporal_consistency_gate(
+        gold_edges,
+        predicted_edges,
+        minimum_awareness_f1=minimum_awareness_f1,
+        maximum_consistency_violations=maximum_consistency_violations,
+    )
+    if not result.passed:
+        reasons = ", ".join(result.failure_reasons)
+        raise AssertionError(
+            f"merge-blocking temporal consistency gate failed: {reasons}"
+        )
+    return result
 
 
 def compute_latency_summary(latencies_ms: Sequence[int | float]) -> LatencyMetrics:
@@ -3235,6 +3592,30 @@ def tnm_field_accuracy(
     }
 
 
+def oncotree_top1_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> RateMetric:
+    """Top-1 OncoTree code accuracy against gold mappings.
+
+    ``predicted`` and ``gold`` are parallel iterables of mapping rows, each
+    carrying a ``code`` field. A hit requires exact equality of predicted and
+    gold codes; ``None == None`` counts as correct so intentional unmapped rows
+    are not penalized. Mapper-agnostic: callers pass already-produced mappings.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        if predicted_row.get("code") == gold_row.get("code"):
+            correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
 def _normalize_trend_entity(value: Any) -> str:
     return " ".join(str(value or "").split()).casefold()
 
@@ -4020,6 +4401,139 @@ def _count_map(keys: Iterable[str], counts: Mapping[str, int]) -> dict[str, int]
     return {key: int(counts.get(key, 0)) for key in keys}
 
 
+def _temporal_edge_values(edges: Any) -> tuple[Any, ...]:
+    edge_keys = getattr(edges, "edge_keys", None)
+    if callable(edge_keys):
+        return tuple(edge_keys())
+    if isinstance(edges, Mapping):
+        return (edges,)
+    if _is_temporal_edge_triple(edges):
+        return (edges,)
+    if isinstance(edges, str | bytes) or not isinstance(edges, Iterable):
+        raise TypeError("temporal edges must be an iterable or decoded graph")
+    return tuple(edges)
+
+
+def _is_temporal_edge_triple(value: Any) -> bool:
+    return (
+        isinstance(value, Sequence)
+        and not isinstance(value, str | bytes)
+        and len(value) == 3
+        and isinstance(value[0], str)
+    )
+
+
+def _normalize_temporal_edge(edge: Any) -> tuple[str, str, str]:
+    if _is_temporal_edge_triple(edge):
+        relation_type, head, tail = edge
+    else:
+        data = edge
+        nested_edge = _temporal_field(data, "edge")
+        if (
+            nested_edge is not None
+            and _temporal_field(data, "label", "type", "relation_type") is None
+        ):
+            data = nested_edge
+        relation_type = _temporal_field(data, "label", "type", "relation_type")
+        head = _temporal_field(data, "head", "source", "source_id")
+        tail = _temporal_field(data, "tail", "target", "target_id")
+
+    label = re.sub(r"[^A-Z0-9]+", "_", str(relation_type or "").upper()).strip("_")
+    if label not in TEMPORAL_RELATION_LABELS:
+        raise ValueError("unsupported temporal relation label")
+    head_id = _temporal_node_id(head)
+    tail_id = _temporal_node_id(tail)
+    if label == "AFTER":
+        label = "BEFORE"
+        head_id, tail_id = tail_id, head_id
+    elif label == "OVERLAP" and tail_id < head_id:
+        head_id, tail_id = tail_id, head_id
+    return label, head_id, tail_id
+
+
+def _temporal_field(value: Any, *names: str) -> Any:
+    if isinstance(value, Mapping):
+        for name in names:
+            if name in value:
+                return value[name]
+        return None
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    return None
+
+
+def _temporal_node_id(value: Any) -> str:
+    if isinstance(value, str):
+        node_id = value
+    else:
+        node_id = _temporal_field(value, "span_id", "node_id", "id")
+    normalized = str(node_id or "").strip()
+    if not normalized:
+        raise ValueError("temporal edge endpoints require non-empty node ids")
+    return normalized
+
+
+def _reduce_temporal_edges(
+    edges: Iterable[tuple[str, str, str]],
+) -> tuple[tuple[str, str, str], ...]:
+    kept = set(edges)
+    for label in sorted(_TEMPORAL_TRANSITIVE_LABELS):
+        for edge in sorted(item for item in kept if item[0] == label):
+            kept.remove(edge)
+            pairs = {
+                (head, tail) for edge_label, head, tail in kept if edge_label == label
+            }
+            if edge[2] not in _temporal_reachable(edge[1], pairs):
+                kept.add(edge)
+    return tuple(sorted(kept))
+
+
+def _temporal_labeled_closure(
+    edges: Iterable[tuple[str, str, str]],
+) -> set[tuple[str, str, str]]:
+    closure = set(edges)
+    for label in _TEMPORAL_TRANSITIVE_LABELS:
+        pairs = {
+            (head, tail) for edge_label, head, tail in closure if edge_label == label
+        }
+        closure.update(
+            (label, head, tail) for head, tail in _temporal_pair_closure(pairs)
+        )
+    return closure
+
+
+def _temporal_pair_closure(
+    pairs: Iterable[tuple[str, str]],
+) -> set[tuple[str, str]]:
+    materialized = set(pairs)
+    nodes = {node for pair in materialized for node in pair}
+    closure: set[tuple[str, str]] = set()
+    for source in nodes:
+        closure.update(
+            (source, target) for target in _temporal_reachable(source, materialized)
+        )
+    return closure
+
+
+def _temporal_reachable(
+    source: str,
+    pairs: Iterable[tuple[str, str]],
+) -> set[str]:
+    adjacency: defaultdict[str, set[str]] = defaultdict(set)
+    for head, tail in pairs:
+        adjacency[head].add(tail)
+    reachable: set[str] = set()
+    stack = list(adjacency.get(source, ()))
+    while stack:
+        target = stack.pop()
+        if target in reachable:
+            continue
+        reachable.add(target)
+        stack.extend(adjacency.get(target, ()))
+    return reachable
+
+
 def _parse_date(value: str) -> date | None:
     candidates = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")
     for fmt in candidates:
@@ -4296,6 +4810,9 @@ __all__ = [
     "PIPELINE_EVAL_STAGES",
     "PIPELINE_STAGE_FACT_FIELDS",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
+    "TEMPORAL_AWARENESS_F1_FLOOR",
+    "TEMPORAL_CONSISTENCY_VIOLATION_CEILING",
+    "TEMPORAL_RELATION_LABELS",
     "RADIOLOGY_ENTITY_ANATOMY",
     "RADIOLOGY_ENTITY_OBSERVATION",
     "RADIOLOGY_ENTITY_TYPES",
@@ -4311,6 +4828,9 @@ __all__ = [
     "PipelineFact",
     "RateMetric",
     "F1Metrics",
+    "CoreferenceClusteringScore",
+    "TemporalAwarenessMetrics",
+    "TemporalConsistencyGateResult",
     "UncertaintyAccuracyMetrics",
     "LeakageMetrics",
     "MixedScriptLeakageMetrics",
@@ -4340,6 +4860,7 @@ __all__ = [
     "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
+    "compute_coreference_clustering_score",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_fact_level_f1",
@@ -4353,6 +4874,7 @@ __all__ = [
     "hgvs_field_accuracy",
     "TNM_FIELDS",
     "tnm_field_accuracy",
+    "oncotree_top1_accuracy",
     "trend_direction_accuracy",
     "trend_grouping_accuracy",
     "compute_relaxed_span_f1",
@@ -4361,6 +4883,11 @@ __all__ = [
     "compute_abstention_metrics",
     "compute_date_shift_consistency",
     "compute_surrogate_consistency",
+    "normalize_temporal_edges",
+    "compute_temporal_awareness_f1",
+    "compute_temporal_closure_consistency",
+    "evaluate_temporal_consistency_gate",
+    "assert_temporal_consistency_gate",
     "compute_latency_summary",
     "compute_resource_metrics",
     "coverage_gaps_by_language",
