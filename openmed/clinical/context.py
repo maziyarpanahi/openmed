@@ -1397,11 +1397,11 @@ def _span_mapping_copy(
 
     to_dict = getattr(span, "to_dict", None)
     if callable(to_dict):
-        payload = to_dict()
-        if isinstance(payload, Mapping):
-            return dict(payload)
+        serialized = to_dict()
+        if isinstance(serialized, Mapping):
+            return dict(serialized)
 
-    payload: dict[str, Any] = {
+    fallback: dict[str, Any] = {
         "text": text[start:end],
         "start": start,
         "end": end,
@@ -1409,8 +1409,8 @@ def _span_mapping_copy(
     for name in ("label", "confidence"):
         value = getattr(span, name, None)
         if value is not None:
-            payload[name] = value
-    return payload
+            fallback[name] = value
+    return fallback
 
 
 def _span_section(span: Any) -> str | None:
