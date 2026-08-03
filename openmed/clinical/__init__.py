@@ -212,6 +212,14 @@ from .normalization import (
     load_chinese_terminology_dictionary,
     normalize_chinese_clinical_surface,
 )
+from .oncotree import (
+    ONCOTREE_ADVISORY,
+    OncoTreeMapping,
+    OncoTreeNode,
+    OncoTreeRelease,
+    load_oncotree,
+    map_tumor_type,
+)
 from .problem_list import (
     ACTIVE,
     INACTIVE,
@@ -322,15 +330,21 @@ from .summary_card import (
 )
 from .temporal_normalizer import NormalizedTimex, normalize_temporal
 from .timeline import (
+    ORDER_EVENTS_SCHEMA_VERSION,
     TIMELINE_ASSISTIVE_DISCLAIMER,
     NormalizedInterval,
+    OrderedTimelineEvent,
     ResolvedTimeline,
     TemporalExpression,
+    Timeline,
+    TimelineEdgeProvenance,
+    TimelineEdgeStatus,
     TimelineEvaluationResult,
     TimelineEvent,
     TimelineRelation,
     detect_timexes,
     evaluate_timeline_gold,
+    order_events,
     resolve_timeline,
 )
 from .trend import (
@@ -506,12 +520,18 @@ __all__ = [
     "TemporalExpression",
     "detect_timexes",
     "NormalizedInterval",
+    "ORDER_EVENTS_SCHEMA_VERSION",
+    "OrderedTimelineEvent",
     "TimelineEvent",
     "TimelineRelation",
+    "Timeline",
+    "TimelineEdgeProvenance",
+    "TimelineEdgeStatus",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
     "TimelineEvaluationResult",
     "evaluate_timeline_gold",
+    "order_events",
     "resolve_timeline",
     "TREND_ADVISORY",
     "TrendDirection",
@@ -552,6 +572,12 @@ __all__ = [
     "TnmStage",
     "UnparsedToken",
     "parse_tnm",
+    "ONCOTREE_ADVISORY",
+    "OncoTreeMapping",
+    "OncoTreeNode",
+    "OncoTreeRelease",
+    "load_oncotree",
+    "map_tumor_type",
     "ProblemClinicalStatus",
     "ProblemMention",
     "ReconciledProblem",

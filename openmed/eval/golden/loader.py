@@ -67,6 +67,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "measurement_trend.jsonl",
         "temporal_tlinks.jsonl",
         "tnm_stage.jsonl",
+        "oncotree_map.jsonl",
     }
 )
 

@@ -1,14 +1,20 @@
 """Clinical timeline normalization public API."""
 
 from openmed.clinical.timeline.resolver import (
+    ORDER_EVENTS_SCHEMA_VERSION,
     TIMELINE_ASSISTIVE_DISCLAIMER,
     NormalizedInterval,
+    OrderedTimelineEvent,
     ResolvedTimeline,
+    Timeline,
+    TimelineEdgeProvenance,
+    TimelineEdgeStatus,
     TimelineEvaluationResult,
     TimelineEvent,
     TimelineRelation,
     TimelineRelationKind,
     evaluate_timeline_gold,
+    order_events,
     resolve_timeline,
 )
 from openmed.clinical.timeline.timex import (
@@ -23,10 +29,15 @@ from openmed.clinical.timeline.timex import (
 
 __all__ = [
     "NormalizedInterval",
+    "ORDER_EVENTS_SCHEMA_VERSION",
+    "OrderedTimelineEvent",
     "RelativeDirection",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
     "TemporalExpression",
+    "Timeline",
+    "TimelineEdgeProvenance",
+    "TimelineEdgeStatus",
     "TimelineEvaluationResult",
     "TimelineEvent",
     "TimelineRelation",
@@ -36,6 +47,7 @@ __all__ = [
     "duration_value",
     "evaluate_timeline_gold",
     "normalize_unit",
+    "order_events",
     "parse_number",
     "resolve_timeline",
 ]
