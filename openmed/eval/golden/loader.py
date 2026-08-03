@@ -53,6 +53,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "grounding_vocab_synthetic.jsonl",
         "india_clinical.jsonl",
         "indic_name_variants.json",
+        "joint_entity_relation.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",

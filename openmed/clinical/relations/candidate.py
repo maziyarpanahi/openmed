@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal
@@ -155,6 +156,231 @@ class RelationCandidateBatch:
     nodes: tuple[SpanNode, ...]
     candidates: tuple[SpanEdge, ...]
     spans_by_node_id: Mapping[str, SpanReference]
+
+
+@dataclass(frozen=True)
+class JointSpanCandidate:
+    """One contiguous token span considered by the joint decoder head.
+
+    Token offsets are half-open indices into the encoder sequence. Character
+    offsets are half-open Python code-point indices into the source text.
+
+    Args:
+        token_start: Inclusive encoder-token index.
+        token_end: Exclusive encoder-token index.
+        start: Inclusive source character offset.
+        end: Exclusive source character offset.
+    """
+
+    token_start: int
+    token_end: int
+    start: int
+    end: int
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.token_start < self.token_end:
+            raise ValueError("token offsets must satisfy 0 <= start < end")
+        if not 0 <= self.start < self.end:
+            raise ValueError("character offsets must satisfy 0 <= start < end")
+
+    @property
+    def token_width(self) -> int:
+        """Return the number of encoder tokens covered by the span."""
+
+        return self.token_end - self.token_start
+
+    def stable_key(self) -> tuple[int, int, int, int]:
+        """Return the deterministic identity used for sampling and sorting."""
+
+        return self.token_start, self.token_end, self.start, self.end
+
+
+@dataclass(frozen=True)
+class SpanPairCandidate:
+    """One directed span pair and its optional training relation label.
+
+    Args:
+        head: Directed relation source span.
+        tail: Directed relation target span.
+        relation_label: Typed relation label, or ``None`` for a negative pair.
+    """
+
+    head: JointSpanCandidate
+    tail: JointSpanCandidate
+    relation_label: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.head == self.tail:
+            raise ValueError("span pair head and tail must differ")
+        if _token_spans_overlap(self.head, self.tail):
+            raise ValueError("span pair head and tail must not overlap")
+        if self.relation_label == "":
+            raise ValueError("relation_label must be non-empty when provided")
+
+    @property
+    def is_negative(self) -> bool:
+        """Return whether this pair is a no-relation training example."""
+
+        return self.relation_label is None
+
+    def stable_key(self) -> tuple[int, ...]:
+        """Return a deterministic directed pair identity."""
+
+        return (*self.head.stable_key(), *self.tail.stable_key())
+
+
+def enumerate_joint_span_candidates(
+    token_offsets: Sequence[tuple[int, int]],
+    *,
+    max_span_width: int,
+) -> tuple[JointSpanCandidate, ...]:
+    """Enumerate contiguous SpERT-style spans over encoder token offsets.
+
+    Args:
+        token_offsets: Monotonic half-open source character offsets for every
+            encoder token.
+        max_span_width: Maximum number of encoder tokens in one candidate.
+
+    Returns:
+        Candidate spans in deterministic token-boundary order.
+    """
+
+    if max_span_width < 1:
+        raise ValueError("max_span_width must be positive")
+    normalized_offsets = _validate_token_offsets(token_offsets)
+    candidates: list[JointSpanCandidate] = []
+    for token_start in range(len(normalized_offsets)):
+        limit = min(len(normalized_offsets), token_start + max_span_width)
+        for token_end in range(token_start + 1, limit + 1):
+            candidates.append(
+                JointSpanCandidate(
+                    token_start=token_start,
+                    token_end=token_end,
+                    start=normalized_offsets[token_start][0],
+                    end=normalized_offsets[token_end - 1][1],
+                )
+            )
+    return tuple(candidates)
+
+
+def enumerate_span_pair_candidates(
+    spans: Sequence[JointSpanCandidate],
+    *,
+    max_token_distance: int | None = None,
+) -> tuple[SpanPairCandidate, ...]:
+    """Enumerate directed, non-overlapping span pairs for relation scoring.
+
+    Args:
+        spans: Contiguous entity-span candidates.
+        max_token_distance: Optional maximum count of tokens between endpoints.
+
+    Returns:
+        Span pairs in deterministic directed order.
+    """
+
+    if max_token_distance is not None and max_token_distance < 0:
+        raise ValueError("max_token_distance must be non-negative when provided")
+    pairs: list[SpanPairCandidate] = []
+    for head in spans:
+        for tail in spans:
+            if head == tail or _token_spans_overlap(head, tail):
+                continue
+            if (
+                max_token_distance is not None
+                and _span_token_distance(head, tail) > max_token_distance
+            ):
+                continue
+            pairs.append(SpanPairCandidate(head=head, tail=tail))
+    return tuple(sorted(pairs, key=SpanPairCandidate.stable_key))
+
+
+def sample_negative_span_pairs(
+    spans: Sequence[JointSpanCandidate],
+    positive_pairs: Iterable[SpanPairCandidate],
+    *,
+    max_negatives: int,
+    seed: int = 0,
+    max_token_distance: int | None = None,
+) -> tuple[SpanPairCandidate, ...]:
+    """Sample deterministic no-relation pairs for joint-head training.
+
+    Positive direction is significant: the reverse of a typed relation may be
+    sampled as a negative. Selection uses a stable SHA-256 rank rather than a
+    process-global random generator, so repeated offline recipes are identical.
+
+    Args:
+        spans: Contiguous entity-span candidates.
+        positive_pairs: Directed pairs carrying gold typed relations.
+        max_negatives: Maximum no-relation examples to return.
+        seed: Stable offline sampling seed.
+        max_token_distance: Optional maximum count of tokens between endpoints.
+
+    Returns:
+        Deterministically selected pairs whose ``relation_label`` is ``None``.
+    """
+
+    if max_negatives < 0:
+        raise ValueError("max_negatives must be non-negative")
+    if max_negatives == 0:
+        return ()
+    positive_keys = {pair.stable_key() for pair in positive_pairs}
+    negatives = [
+        pair
+        for pair in enumerate_span_pair_candidates(
+            spans,
+            max_token_distance=max_token_distance,
+        )
+        if pair.stable_key() not in positive_keys
+    ]
+    ranked = sorted(
+        negatives,
+        key=lambda pair: (
+            hashlib.sha256(f"{seed}\0{pair.stable_key()}".encode("ascii")).hexdigest(),
+            pair.stable_key(),
+        ),
+    )
+    return tuple(sorted(ranked[:max_negatives], key=SpanPairCandidate.stable_key))
+
+
+def _validate_token_offsets(
+    token_offsets: Sequence[tuple[int, int]],
+) -> tuple[tuple[int, int], ...]:
+    normalized: list[tuple[int, int]] = []
+    previous_end = 0
+    for offset in token_offsets:
+        if len(offset) != 2:
+            raise ValueError("each token offset must contain start and end")
+        start, end = offset
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, int)
+            or not isinstance(end, int)
+        ):
+            raise TypeError("token offsets must be integers")
+        if start < previous_end or end <= start:
+            raise ValueError("token offsets must be monotonic and non-overlapping")
+        normalized.append((start, end))
+        previous_end = end
+    return tuple(normalized)
+
+
+def _token_spans_overlap(
+    left: JointSpanCandidate,
+    right: JointSpanCandidate,
+) -> bool:
+    return left.token_start < right.token_end and right.token_start < left.token_end
+
+
+def _span_token_distance(
+    left: JointSpanCandidate,
+    right: JointSpanCandidate,
+) -> int:
+    if left.token_end <= right.token_start:
+        return right.token_start - left.token_end
+    if right.token_end <= left.token_start:
+        return left.token_start - right.token_end
+    return 0
 
 
 @dataclass(frozen=True)
@@ -581,6 +807,7 @@ __all__ = [
     "MedicationRelation",
     "MedicationRelationGroup",
     "MedicationRelationType",
+    "JointSpanCandidate",
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
@@ -588,6 +815,10 @@ __all__ = [
     "RelationCandidateRule",
     "RelationCandidate",
     "Relation",
+    "SpanPairCandidate",
     "SpanReference",
     "build_relation_candidates",
+    "enumerate_joint_span_candidates",
+    "enumerate_span_pair_candidates",
+    "sample_negative_span_pairs",
 ]
