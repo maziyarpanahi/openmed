@@ -140,6 +140,10 @@ def _tool_handler(
     }
     try:
         return handlers[name]
+    except KeyError:
+        pass
+    try:
+        return TOOL_REGISTRY.handler(name)
     except KeyError as exc:
         raise KeyError(f"unknown OpenMed tool {name!r}") from exc
 
