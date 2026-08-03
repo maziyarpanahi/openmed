@@ -23,6 +23,7 @@ from typing import (
 
 from openmed.compliance.data_use import DataUseAction, DataUsePolicy, DataUseTag
 
+from .budget import RequestBudget, coerce_budget
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
     build_transliterated_name_recognizer,
@@ -385,7 +386,17 @@ class Pipeline:
         explain: bool = False,
         data_use_tags: Sequence[DataUseTag | str] | DataUseTag | str = (),
         data_use_action: DataUseAction | str = "process",
+        budget: Optional[RequestBudget] = None,
     ) -> PipelineResult:
+        resolved_budget = coerce_budget(budget)
+        budget_clock = resolved_budget.start() if resolved_budget is not None else None
+        if budget_clock is not None:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="pipeline.input_guard",
+            )
+            budget_clock.check("pipeline.start")
+
         from openmed.compliance.data_use import (
             DEFAULT_DATA_USE_POLICY,
             DataUseAction,
@@ -422,9 +433,13 @@ class Pipeline:
         original_text = text if self.preserve_whitespace else text.strip()
         with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
             normalized = self.stage1_normalize(original_text)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage1_normalize")
         with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
             route = self.stage2_language_script(normalized.normalized_text)
         token_language_tags = self._normalize_code_mixed_tags(normalized)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage2_language_script")
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
@@ -437,6 +452,8 @@ class Pipeline:
                 ),
                 normalized,
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage3_doc_type_section")
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
@@ -501,6 +518,8 @@ class Pipeline:
                 policy_profile=self.policy_profile,
             )
             cascade_duration_ms = (perf_counter() - cascade_started) * 1000.0
+            if budget_clock is not None:
+                budget_clock.check("pipeline.cascade_router")
 
             with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
                 deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
@@ -540,6 +559,8 @@ class Pipeline:
                         metadata=cascade_metadata,
                     )
                 )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage4_deterministic_detectors")
 
             with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
                 model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
@@ -568,6 +589,8 @@ class Pipeline:
                         },
                     )
                 )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage5_fast_pii_model")
 
             with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
                 clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
@@ -596,6 +619,8 @@ class Pipeline:
                         },
                     )
                 )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage6_clinical_phi_model")
 
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
@@ -608,6 +633,8 @@ class Pipeline:
                     normalized.normalized_text,
                     context,
                 )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage4_deterministic_detectors")
             deterministic_spans = _stamp_span_sections(
                 deterministic_spans,
                 context.section_metadata,
@@ -641,6 +668,8 @@ class Pipeline:
                         pipeline_stage=STAGE_NAMES[4],
                     ),
                 )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage5_fast_pii_model")
             model_spans = _stamp_span_sections(model_spans, context.section_metadata)
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
@@ -651,6 +680,8 @@ class Pipeline:
                     normalized.normalized_text,
                     context,
                 )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage6_clinical_phi_model")
             clinical_spans = _stamp_span_sections(
                 clinical_spans,
                 context.section_metadata,
@@ -709,6 +740,8 @@ class Pipeline:
                 options=self.clinical_protect_options,
                 lang=route.lang,
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage7_arbitration")
         stage_results.append(
             PipelineStageResult(
                 7,
@@ -764,6 +797,8 @@ class Pipeline:
                     )
                 ],
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage8_policy_actions")
 
         with _stage_timer(stage_durations_ms, STAGE_NAMES[8]):
             sweep_spans, sweep_metadata = self.stage9_safety_sweep(
@@ -771,6 +806,8 @@ class Pipeline:
                 pii_result,
                 context,
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage9_safety_sweep")
         stage_results.append(
             PipelineStageResult(
                 9,
@@ -807,6 +844,8 @@ class Pipeline:
                 ),
                 transliterator=getattr(normalizer, "transliterator", None),
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage10_emit")
         with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
             deidentified = self.stage10_emit(
                 normalized.original_text,
@@ -838,6 +877,8 @@ class Pipeline:
                 audit=audit,
                 config=self.config,
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage10_emit_complete")
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
@@ -875,6 +916,8 @@ class Pipeline:
                 serialized_data_use_decision if resolved_data_use_tags else None
             ),
         )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.complete")
 
         return PipelineResult(
             original_text=normalized.original_text,
@@ -1079,6 +1122,7 @@ class Pipeline:
 
         if hasattr(sections, "detect_sections"):
             return {
+                "document_type": sections.classify_document(text),
                 "section_hook": "detect_sections",
                 "sections": sections.detect_sections(text, language=language),
                 "section_detection": {

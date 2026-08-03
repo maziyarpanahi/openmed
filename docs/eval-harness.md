@@ -18,6 +18,121 @@ provision licensed assets outside the repository and pass an explicit local
 path to `load_cmeee`. Missing paths and repository-internal real-data paths fail
 with license-boundary guidance.
 
+## Clinical PHI flagship SHIELD comparison
+
+The `OpenMed/OpenMed-ClinicalPrivacy-tier0` SHIELD report is comparison
+evidence, not a high-recall release gate. Its explicit
+`metrics.shield_comparison` block contains aggregate recall, leakage, and exact
+span scores plus recall and leakage for every SHIELD-mapped canonical label.
+G1a, G2, and G3 certification remains a separate release-gate workflow.
+
+The flagship runner requires a checkpoint manifest and a stable link to that
+manifest. The report binds that checkpoint row to the committed clinical-PHI
+dataset manifest, the public SHIELD corpus coordinates, the normalized fixture
+set, and the eval code. It stores hashes instead of raw fixture identifiers and
+does not vendor SHIELD rows.
+
+```bash
+openmed benchmark pii \
+  --suite shield \
+  --models OpenMed/OpenMed-ClinicalPrivacy-tier0 \
+  --checkpoint-manifest models.jsonl \
+  --checkpoint-manifest-ref \
+    models.jsonl#OpenMed/OpenMed-ClinicalPrivacy-tier0 \
+  --output clinical-privacy-shield.report.json
+```
+
+The checkpoint input may be a JSON object, a list of model rows, or JSONL. Its
+flagship row must identify `OpenMed/OpenMed-ClinicalPrivacy-tier0`; when a
+`reproducibility_hash` is present, it must be a lowercase `sha256:` digest.
+Offline tests use only synthetic SHIELD-shaped rows.
+
+## Clinical PHI flagship certification
+
+`build_clinical_privacy_release` certifies the named
+`OpenMed/OpenMed-ClinicalPrivacy-tier0` checkpoint from four inputs: its
+checkpoint manifest row, verified mode-C training provenance, a held-out
+clinical-PHI `BenchmarkReport`, and the manifest-linked SHIELD comparison
+report. It reuses the release harness's v1.6 G1a and G2 floors, requires
+explicit category coverage plus a reported zero critical-leakage count and
+zero residual leakage for G3, then signs a report containing exactly those
+three gate verdicts.
+
+The signed checks bind hashes and stable references for the checkpoint,
+clinical-PHI dataset manifest, held-out report, and SHIELD report. SHIELD stays
+comparison-only evidence and cannot be promoted to the high-recall gate. A
+quarantined candidate yields a signed failure report but no model card or model
+manifest entry.
+
+```python
+from openmed.eval.clinical_privacy_release import (
+    build_clinical_privacy_release,
+)
+
+release = build_clinical_privacy_release(
+    held_out_report,
+    shield_report,
+    checkpoint_manifest=checkpoint_row,
+    training_provenance=training_provenance,
+    checkpoint_manifest_ref="models.jsonl#clinical-privacy-tier0",
+    held_out_report_ref="release-evidence/held-out-report.json",
+    shield_report_ref="release-evidence/shield-report.json",
+    release_date="2026-08-01",
+    signing_key=release_signing_key,
+)
+paths = release.write("release-evidence/clinical-privacy-tier0")
+```
+
+The output directory contains `gate-report.json`, `README.md`,
+`model-datasheet.json`, `model-manifest-entry.json`, and
+`release-manifest.json`. These artifacts contain aggregate metrics, hashes,
+and provenance references only—never source notes, fixture identifiers, or raw
+PHI. The generated card marks the checkpoint as assistive de-identification,
+not diagnosis, treatment recommendation, or an automatic clinical-decision
+trigger.
+
+## DirectID Tiny certification
+
+`build_directid_release` consumes the aggregate artifacts from the DirectID
+dataset, Mode-A distillation, safety-sweep, and quantization workflows. It
+reuses the release-gate harness and signs exactly G1b, G3, G4, and G5 for one
+selected runtime format. The selected format is publishable only when the
+certified evaluation covers every DirectID label, structured-ID recall is at
+least 99.5%, critical and residual leakage are both zero, quantization recall
+loss is within the format limit, and measured latency and RAM fit the Tiny
+tier.
+
+```python
+from openmed.eval.directid_release import build_directid_release
+
+release = build_directid_release(
+    directid_evidence,
+    candidate_checkpoint=candidate_checkpoint,
+    training_report=training_report,
+    run_manifest=run_manifest,
+    training_provenance=training_provenance,
+    dataset_evidence=dataset_evidence,
+    quantization_evidence=quantization_evidence,
+    release_format="mlx-8bit",
+    release_date="2026-08-02",
+    signing_key=release_signing_key,
+)
+paths = release.write("release-evidence/directid-tiny")
+```
+
+A releasable package contains `gate-report.json`,
+`checkpoint-manifest.json`, `README.md`, `model-datasheet.json`, and
+`release-manifest.json`. A failing package writes only the signed gate report
+and release manifest; it has no checkpoint manifest, model card, or publish
+target. Optional formats are isolated: for example, a rejected INT4 artifact
+is listed under `quarantined_formats` without blocking a passing INT8 format.
+
+All inputs and outputs are aggregate and offline-friendly. Dataset sources are
+represented by IDs, licenses, revisions, and hashes; safety-sweep evidence uses
+counts, offsets, hashes, and its patterns version. Raw identifiers, source
+records, restricted dataset payloads, and signing secrets are never copied into
+the release package.
+
 ## Metric Bundle
 
 | Metric | Path | Gating? | Description |
@@ -27,6 +142,77 @@ with license-boundary guidance.
 | Latency count | `latency.count` | No | Number of steady-state fixtures (excludes cold start). |
 | Cold-start latency | `latency.cold_start_ms` | No | Wall-clock latency of the first fixture call in ms. |
 | Peak RSS | `resources.peak_rss_bytes` | No | Peak resident set size in bytes during the run. |
+
+## Signed relation scorecard contract
+
+The committed synthetic relation gold is part of the normal suite-runner flow.
+Selecting `suite="relations"` makes `run_suite` load the relation schema rather
+than the span schema, run the relation gate, and return a signed
+`RelationScorecard`. `run_relation_suite` exposes the same flow directly when a
+caller needs to supply a signing key, key id, or baseline explicitly.
+
+The fixture file is JSONL with one schema-version `1` document per line. Every
+row requires a globally unique `id`, source `text`, `metadata.synthetic=true`,
+and non-empty `entities` and `relations` arrays. Entity rows require unique
+`id`, `start`, `end`, and `label` fields. Relation rows require unique `id`, a
+normalized `type`, `head` and `tail` entity references, and a `scope` of either
+`sentence` or `document`. Optional `traps` rows require an `id`, a `kind`
+of `assertion` or `temporal`, one or more known `relation_ids`, and
+`zero_tolerance=true`. The loader rejects duplicate fixture, entity, or relation
+ids; invalid offsets; unknown references; unsupported versions; and
+non-synthetic rows before scoring.
+
+```python
+from openmed.eval import run_relation_suite
+
+scorecard = run_relation_suite(
+    model_name="local-relation-model",
+    runner=relation_runner,
+    signing_key=local_release_key,
+    output_json="evidence/relation-scorecard.json",
+    output_markdown="evidence/relation-scorecard.md",
+)
+
+assert scorecard.verify(local_release_key)
+model_card_block = scorecard.model_card_evidence()
+```
+
+The JSON artifact type is `openmed.eval.relation_scorecard`, schema version `1`.
+Its signed payload contains:
+
+- strict and relaxed precision, recall, and F1, with relation-type, scope, and
+  language breakdowns;
+- assertion- and temporal-consistency sub-scores computed over the trapped
+  relations, alongside their evaluated and leaked relation counts;
+- a SHA-256 hash of the fixture bytes after canonicalizing platform line endings
+  to LF, plus a canonical hash for every validated fixture;
+- configured assertion and temporal trap summaries, aggregate leak counts, and
+  hashes for leaked trap relations rather than relation text;
+- the complete relation regression gate result, reproducibility hash, and HMAC
+  signature.
+
+`model_card_evidence()` returns the complete signed artifact under the
+`relation_scorecard` key. Existing `ModelScorecard` consumers can instead use
+`scorecard.to_benchmark_report()`, which preserves fixture hashes and trap
+summaries in report metadata. Consumers must verify the signature and require
+`gate_passed` before publishing either form as passing evidence.
+
+The runner is fail-closed. It writes requested JSON and Markdown failure
+artifacts first, then raises `RelationGateFailure` whenever a pinned strict-F1
+comparison, required baseline, or zero-tolerance trap check fails. The
+exception carries the signed failure scorecard for archival; it is not a model
+release authorization.
+
+Every `(family, relation-type)` baseline is bound to the SHA-256 hash of the
+fixture file that produced it. A missing, malformed, or different candidate
+fixture hash quarantines the run, even when all reported F1 values are above
+their pinned floors.
+
+Future relation, event, and coreference suites should keep raw notes and mention
+surfaces out of this evidence layer. Extensions should add typed aggregate
+breakdowns and hashed fixture provenance, define task-specific trap summaries,
+and version the artifact when binary head-tail relation semantics no longer
+describe the scored object.
 
 ## Edge Metrics
 
@@ -51,6 +237,31 @@ It is **excluded** from the steady-state `p50_ms`, `p95_ms`, and `count` values.
 report = run_benchmark(fixtures, suite="my-suite", model_name="my-model", runner=runner)
 cold_ms = report.metrics["latency"]["cold_start_ms"]
 print(f"Cold-start latency: {cold_ms:.1f} ms")
+```
+
+## Family-transfer evaluation
+
+`cross_lingual_family_transfer_report` scores the bundled synthetic Indic
+donor/target gold in three modes: an untargeted multilingual baseline, Hindi
+donor-adapter zero-shot inference for Telugu, and a Telugu-adapted path. The
+same report re-scores the donor before and after adaptation so target F1 is
+published alongside an explicit donor non-regression result.
+
+The runner receives `transfer_mode`, `evaluation_role`, `family`,
+`donor_language`, `target_language`, and `adapter_language` in fixture metadata.
+It can therefore select locally provisioned model and adapter assets without a
+network call. JSON and Markdown artifacts contain only aggregate metrics,
+language codes, and donor-to-target deltas; synthetic fixture text and spans
+are excluded.
+
+```python
+from openmed.eval import cross_lingual_family_transfer_report
+
+report = cross_lingual_family_transfer_report(
+    "local-family-transfer-model",
+    runner=local_family_transfer_runner,
+)
+print(report.to_markdown())
 ```
 
 ## Grounding accuracy gate
@@ -91,3 +302,36 @@ rxnorm_en = report.system("rxnorm").language("en")
 print(rxnorm_en.top1_accuracy, rxnorm_en.top5_accuracy)
 checks = evaluate_grounding_accuracy_gate(report)
 ```
+
+## Cross-lingual grounding capstone gate
+
+The standalone `cross_lingual_grounding` suite verifies the complete lexical
+grounding path for English, Spanish, French, German, and Chinese mentions. It
+uses the bundled synthetic/permissive alias fixture for ICD-10-CM, RxNorm, and
+HPO, requires top-1 accuracy of at least `0.80` in every non-English language,
+and requires the unchanged English baseline to remain at `1.00`.
+
+`assert_cross_lingual_grounding_gate` evaluates those accuracy requirements
+together with synthetic provenance and the restricted-corpus marker scan. Its
+report contains aggregate counts and scores, not raw mentions; failure
+diagnostics likewise contain only language codes, scores, and known
+restricted-marker names. Language-aware linkers accept the source-language code
+used by the suite and stamp it on every grounded candidate for downstream audit.
+
+```python
+from openmed.eval.suites import assert_cross_lingual_grounding_gate
+
+report = assert_cross_lingual_grounding_gate()
+print(report.per_language_top1)
+```
+
+The gate is deterministic and offline. The default grounding path stays
+lexical and does not import an embedding dependency. Applications may opt in to
+a separately provisioned local multilingual embedding backend for zero-alias
+fallback; remote model identifiers are rejected rather than downloaded.
+
+!!! warning "Synthetic/permissive data only"
+    The committed fixture must remain synthetic or permissively licensed.
+    UMLS, SNOMED CT, MIMIC, i2b2, n2c2, CPT, and other restricted or DUA-bound
+    assets must stay user supplied and out of process; do not copy their text
+    into alias tables, fixtures, logs, or gate diagnostics.

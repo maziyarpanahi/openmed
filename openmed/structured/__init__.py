@@ -4,6 +4,14 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .consistency import (
+    CrossModalConsistencyReport,
+    SubjectConsistencyManifest,
+    SubjectTableDeidentificationResult,
+    assert_cross_modal_consistency,
+    deidentify_subject_column,
+    verify_cross_modal_consistency,
+)
 from .discharge_summary import (
     REQUIRED_DISCHARGE_SLOTS,
     DischargeSlotName,
@@ -21,8 +29,12 @@ from .flowsheet import (
 )
 from .generalize import (
     DEFAULT_TARGET_K,
+    DEFAULT_TARGET_L,
+    DEFAULT_TARGET_T,
     MANIFEST_SCHEMA_VERSION,
     MODEL_K_ANON,
+    REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP,
+    REFERENCE_SUPPRESSION_RATE_CAP,
     SUPPORTED_MODELS,
     AnonymizationError,
     AnonymizationResult,
@@ -30,6 +42,7 @@ from .generalize import (
 )
 from .hierarchies import (
     COLUMN_TYPE_AGE,
+    COLUMN_TYPE_CLINICAL_CODE,
     COLUMN_TYPE_DATE,
     COLUMN_TYPE_ZIP,
     HIERARCHY_SCHEMA_VERSION,
@@ -63,6 +76,7 @@ from .qi_detect import (
     DiscoveryConfigurationError,
     scan_table,
 )
+from .reid_report import reid_report
 from .relational import (
     RELATIONAL_ADVISORY,
     ColumnRef,
@@ -103,9 +117,12 @@ from .tables import (
 
 __all__ = [
     "COLUMN_TYPE_AGE",
+    "COLUMN_TYPE_CLINICAL_CODE",
     "COLUMN_TYPE_DATE",
     "COLUMN_TYPE_ZIP",
     "DEFAULT_TARGET_K",
+    "DEFAULT_TARGET_L",
+    "DEFAULT_TARGET_T",
     "FLOWSHEET_ADVISORY",
     "HIERARCHY_SCHEMA_VERSION",
     "LAB_PANEL_ADVISORY",
@@ -114,6 +131,8 @@ __all__ = [
     "PANEL_ORDER",
     "RELATIONAL_ADVISORY",
     "REQUIRED_DISCHARGE_SLOTS",
+    "REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP",
+    "REFERENCE_SUPPRESSION_RATE_CAP",
     "SUPPORTED_COLUMN_TYPES",
     "SUPPORTED_MODELS",
     "AnalyteRow",
@@ -122,6 +141,7 @@ __all__ = [
     "ColumnClassification",
     "ColumnRef",
     "ColumnRole",
+    "CrossModalConsistencyReport",
     "DanglingForeignKeyError",
     "DateColumn",
     "DischargeSlotName",
@@ -152,6 +172,8 @@ __all__ = [
     "SUPPORTED_STREAMING_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
     "StreamingKanonDecision",
+    "SubjectConsistencyManifest",
+    "SubjectTableDeidentificationResult",
     "SurrogateManifest",
     "TABLE_ADVISORY",
     "Table",
@@ -160,17 +182,20 @@ __all__ = [
     "TableRoleScan",
     "TimeSeriesPoint",
     "anonymize_table",
+    "assert_cross_modal_consistency",
     "build_enforcement_hierarchies",
     "canonical_analyte",
     "cell_at",
     "canonical_discharge_slot",
     "deidentify_linked_tables",
+    "deidentify_subject_column",
     "describe_level",
     "generalize_value",
     "get_hierarchy",
     "max_level",
     "parse_lab_report",
     "read_table",
+    "reid_report",
     "scan_column_roles",
     "scan_table",
     "stream_deidentify_table",
@@ -179,5 +204,6 @@ __all__ = [
     "structure_lab_panels",
     "structure_table",
     "to_enforce_kanon_hierarchy",
+    "verify_cross_modal_consistency",
     "write_table",
 ]

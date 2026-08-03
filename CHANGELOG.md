@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added offline family-transfer adapter routing that prefers installed target
+  adapters, falls back to compatible donor adapters with scored provenance,
+  and returns explicit unsupported or unavailable routing failures (#1331).
+- Completed clinical temporal timeline composition with DCT/TIMEX anchors on
+  every ordered event, transitively reduced public TLINK graphs, metric-ready
+  edge keys, and retained/pruned privacy-safe decision provenance (#1253).
+- Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
+  consistency scoring, a zero-violation blocking gate, and synthetic
+  discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and
+  contradiction-trap coverage (#1309).
+- Added deterministic OncoTree tumor-type mapping
+  (`openmed.clinical.load_oncotree`, `map_tumor_type`) against a
+  caller-supplied local release snapshot (path / `OPENMED_ONCOTREE_PATH` and
+  version / `OPENMED_ONCOTREE_VERSION`; nothing is bundled or downloaded). The
+  snapshot must be a flat JSON list of tumor-type nodes; nested OncoTree tree
+  dumps are unsupported. Exact and normalized name/code lookup supports an
+  optional caller-supplied `synonyms` list and indexes history and revocation
+  aliases with current codes winning collisions; unmatched or ambiguous
+  mentions stay unmapped with a reason (no fuzzy/lexical fallback).
+  Results are version-stamped `OncoTreeMapping` values. Includes synthetic
+  golden fixtures and `oncotree_top1_accuracy` evaluation support.
+- Added an experimental `yasbd` sentence-segmentation backend selectable via
+  `segment_text(..., backend="yasbd")` and
+  `analyze_text(..., sentence_backend="yasbd")`, backed by the optional
+  `yasbd-lib` extra. The default routing and core dependency set remain
+  unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
+  contract, with explicit errors for missing dependencies, unknown backends,
+  and conflicting preconstructed segmenters (#1848).
+
 ### Fixed
 
 - Fixed the PySpark batch de-identification adapter so

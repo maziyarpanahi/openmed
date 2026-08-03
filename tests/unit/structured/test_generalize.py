@@ -11,13 +11,17 @@ levels and counts in the manifest (never raw values), and is deterministic.
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 
 import pytest
 
+from openmed.core.date_shift import stable_offset_for
 from openmed.risk.kanon import kanon_report
 from openmed.structured import (
     MANIFEST_SCHEMA_VERSION,
     MODEL_K_ANON,
+    REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP,
+    REFERENCE_SUPPRESSION_RATE_CAP,
     SUPPORTED_MODELS,
     AnonymizationError,
     AnonymizationResult,
@@ -93,6 +97,31 @@ def test_respects_suppression_bound():
     assert report["k"] >= 4
 
 
+def test_manifest_records_nonzero_row_suppression_per_column():
+    rows = [{"age": age} for age in (20, 20, 30, 30, 99)]
+    result = anonymize_table(rows, {"age": "age"}, k=2, suppression_limit=1)
+
+    assert result.manifest["suppressed_count"] == 1
+    assert result.manifest["columns"][0]["suppression_count"] == 1
+    assert result.manifest["utility"]["suppression_rate"] == pytest.approx(0.2)
+
+
+def test_reference_fixture_stays_below_documented_utility_caps():
+    result = anonymize_table(
+        _mixed_table(),
+        {"age": "age", "zip": "zip"},
+        k=4,
+        suppression_rate=REFERENCE_SUPPRESSION_RATE_CAP,
+    )
+
+    utility = result.manifest["utility"]
+    assert (
+        utility["average_generalization_height"]
+        <= REFERENCE_AVERAGE_GENERALIZATION_HEIGHT_CAP
+    )
+    assert utility["suppression_rate"] <= REFERENCE_SUPPRESSION_RATE_CAP
+
+
 def test_infeasible_when_k_exceeds_row_count():
     # Even the fully suppressed ceiling is a single class of size ``n``; a target
     # k above the row count cannot be reached at any suppression bound, and the
@@ -132,6 +161,100 @@ def test_declarative_rung_names_are_the_family_keys():
     }
 
 
+def test_clinical_codes_roll_up_only_through_caller_supplied_parent_data():
+    rows = [
+        {"code": "A1", "outcome": "x"},
+        {"code": "A2", "outcome": "y"},
+        {"code": "B1", "outcome": "x"},
+        {"code": "B2", "outcome": "y"},
+    ]
+    parent_chains = {
+        "A1": ("A", "ROOT"),
+        "A2": ("A", "ROOT"),
+        "B1": ("B", "ROOT"),
+        "B2": ("B", "ROOT"),
+    }
+
+    result = anonymize_table(
+        rows,
+        {"code": "clinical_code"},
+        k=2,
+        clinical_code_hierarchies={"code": parent_chains},
+    )
+
+    assert [record["code"] for record in result.records] == ["A", "A", "B", "B"]
+    assert result.manifest["columns"][0]["level_name"] == "clinical_code:parent_1"
+    assert result.manifest["suppressed_count"] == 0
+
+
+def test_optional_l_and_t_targets_are_enforced_with_compact_aliases():
+    rows = [
+        {"age": 20, "diagnosis": "x"},
+        {"age": 21, "diagnosis": "y"},
+        {"age": 30, "diagnosis": "x"},
+        {"age": 31, "diagnosis": "y"},
+    ]
+    result = anonymize_table(
+        rows,
+        {"age": "age"},
+        sensitive_attributes=["diagnosis"],
+        k=2,
+        l=2,
+        t=0.0,
+    )
+
+    report = kanon_report(
+        list(result.records),
+        quasi_identifiers=["age"],
+        sensitive_attributes=["diagnosis"],
+    )
+    assert report["k"] >= 2
+    for equivalence_class in report["equivalence_classes"]:
+        assert equivalence_class["l_diversity"]["diagnosis"]["distinct"] >= 2
+        assert equivalence_class["t_closeness"]["diagnosis"] <= 0.0
+    assert result.manifest["target_l"] == 2
+    assert result.manifest["target_t"] == 0.0
+
+
+def test_date_qis_use_one_core_offset_per_subject_and_remove_subject_id():
+    rows = [
+        {
+            "patient_id": "patient-a",
+            "visit_date": "2025-01-10",
+            "discharge_date": "2025-01-12",
+        },
+        {
+            "patient_id": "patient-a",
+            "visit_date": "2025-02-20",
+            "discharge_date": "2025-02-25",
+        },
+    ]
+    secret = "synthetic-date-shift-secret"
+    result = anonymize_table(
+        rows,
+        {"visit_date": "date", "discharge_date": "date"},
+        k=1,
+        subject_id_column="patient_id",
+        date_shift_secret=secret,
+        date_shift_max_days=30,
+    )
+
+    offset = stable_offset_for("patient-a", max_days=30, secret=secret)
+    for column in ("visit_date", "discharge_date"):
+        expected = [
+            (date.fromisoformat(row[column]) + timedelta(days=offset)).isoformat()
+            for row in rows
+        ]
+        assert [record[column] for record in result.records] == expected
+    assert all("patient_id" not in record for record in result.records)
+    assert result.manifest["date_shift"] == {
+        "applied": True,
+        "columns": ["visit_date", "discharge_date"],
+        "max_days": 30,
+        "subject_identifier_removed": True,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Manifest records levels and counts, never raw values                         #
 # --------------------------------------------------------------------------- #
@@ -153,8 +276,10 @@ def test_manifest_records_levels_and_suppression_count():
             "level",
             "level_name",
             "loss",
+            "suppression_count",
         }
         assert isinstance(column["level"], int)
+        assert column["suppression_count"] == manifest["suppressed_count"]
 
 
 def test_manifest_has_no_raw_values():
@@ -180,9 +305,27 @@ def test_identical_inputs_yield_identical_output():
 
     assert first.records == second.records
     assert first.manifest == second.manifest
+    assert first.manifest["output_hash"] == second.manifest["output_hash"]
     assert json.dumps(first.manifest, sort_keys=True) == json.dumps(
         second.manifest, sort_keys=True
     )
+
+
+def test_identical_seed_and_date_inputs_yield_identical_output_hash():
+    rows = [
+        {"patient_id": 7, "visit_date": "2025-03-01"},
+        {"patient_id": 7, "visit_date": "2025-03-11"},
+    ]
+    kwargs = {
+        "k": 1,
+        "subject_id_column": "patient_id",
+        "seed": 744,
+    }
+    first = anonymize_table(rows, {"visit_date": "date"}, **kwargs)
+    second = anonymize_table(rows, {"visit_date": "date"}, **kwargs)
+
+    assert first.records == second.records
+    assert first.manifest["output_hash"] == second.manifest["output_hash"]
 
 
 # --------------------------------------------------------------------------- #
@@ -227,6 +370,22 @@ def test_unknown_model_is_rejected():
 def test_unknown_column_type_is_rejected():
     with pytest.raises(AnonymizationError):
         anonymize_table(_mixed_table(), {"age": "salary"})
+
+
+def test_clinical_code_qi_requires_caller_supplied_parent_data():
+    with pytest.raises(AnonymizationError, match="parent-chain data"):
+        anonymize_table([{"code": "A1"}, {"code": "A2"}], {"code": "clinical_code"})
+
+
+def test_date_configuration_fails_closed_without_echoing_source_value():
+    source_value = "2099-12-31"
+    with pytest.raises(AnonymizationError) as raised:
+        anonymize_table(
+            [{"patient_id": "synthetic-subject", "visit_date": source_value}],
+            {"visit_date": "date"},
+            subject_id_column="patient_id",
+        )
+    assert source_value not in str(raised.value)
 
 
 def test_missing_quasi_identifier_column_is_rejected():

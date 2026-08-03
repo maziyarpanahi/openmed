@@ -9,6 +9,7 @@ from .audit_chain import (
     append_to_chain_file,
     verify_chain,
 )
+from .budget import BudgetExceededError, RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
     OpenMedConfig,
@@ -62,6 +63,15 @@ from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
 from .redaction_preview import redaction_preview, render_redaction_preview
+from .review_workflow import (
+    ReviewFeedback,
+    ReviewItem,
+    ReviewQueue,
+    append_feedback,
+    build_review_queue,
+    critical_labels,
+    record_review_decision,
+)
 from .rtl_render import (
     BIDI_CONTROL_CHARS,
     RTL_SCRIPTS,
@@ -92,8 +102,11 @@ from .script_detect import (
 )
 from .surrogate_vault import (
     ENCRYPTION_SCHEME,
+    SUBJECT_SURROGATE_LABEL,
+    SUBJECT_SURROGATE_LANG,
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
+    SubjectResolutionError,
     SurrogateEntry,
     SurrogateKey,
     SurrogateSource,
@@ -123,6 +136,13 @@ __all__ = [
     "verify_chain",
     "redaction_preview",
     "render_redaction_preview",
+    "ReviewQueue",
+    "ReviewItem",
+    "ReviewFeedback",
+    "build_review_queue",
+    "record_review_decision",
+    "append_feedback",
+    "critical_labels",
     "BIDI_CONTROL_CHARS",
     "RTL_SCRIPTS",
     "RenderedRedaction",
@@ -140,6 +160,9 @@ __all__ = [
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "ENCRYPTION_SCHEME",
+    "SUBJECT_SURROGATE_LABEL",
+    "SUBJECT_SURROGATE_LANG",
+    "SubjectResolutionError",
     "IndicNameNormalizer",
     "canonical_indic_name_key",
     "indic_names_match",
@@ -169,6 +192,9 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "RequestBudget",
+    "BudgetExceededError",
+    "coerce_budget",
     "prefetch_model",
     "list_cached_models",
     "clear_cached_model",

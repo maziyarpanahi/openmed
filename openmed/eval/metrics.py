@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import random
-from collections import defaultdict
+import re
+import unicodedata
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from math import ceil, isfinite
@@ -17,7 +20,63 @@ from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+PIPELINE_EVAL_STAGES: tuple[str, ...] = (
+    "deid",
+    "ner",
+    "assertion",
+    "grounding",
+    "fhir",
+)
+PIPELINE_STAGE_FACT_FIELDS: Mapping[str, tuple[str, ...]] = {
+    "deid": (),
+    "ner": ("start", "end", "label"),
+    "assertion": ("start", "end", "label", "assertion"),
+    "grounding": (
+        "start",
+        "end",
+        "label",
+        "assertion",
+        "code_system",
+        "code",
+    ),
+    "fhir": (
+        "start",
+        "end",
+        "label",
+        "assertion",
+        "code_system",
+        "code",
+        "resource_type",
+    ),
+}
+FAITHFULNESS_SCHEMA_VERSION = "openmed.eval.span_grounded_faithfulness.v1"
 MIXED_SCRIPT_LEAKAGE_CEILING = 0.01
+TEMPORAL_AWARENESS_F1_FLOOR = 0.75
+TEMPORAL_CONSISTENCY_VIOLATION_CEILING = 0
+TEMPORAL_RELATION_LABELS: tuple[str, ...] = (
+    "BEFORE",
+    "AFTER",
+    "OVERLAP",
+    "CONTAINS",
+    "BEGINS_ON",
+    "ENDS_ON",
+)
+_TEMPORAL_TRANSITIVE_LABELS = frozenset({"BEFORE", "CONTAINS"})
+_TEMPORAL_PARTIAL_ORDER_LABELS = frozenset({"BEFORE", "CONTAINS"})
+RADIOLOGY_ENTITY_ANATOMY = "ANATOMY"
+RADIOLOGY_ENTITY_OBSERVATION = "OBSERVATION"
+RADIOLOGY_ENTITY_TYPES: tuple[str, ...] = (
+    RADIOLOGY_ENTITY_ANATOMY,
+    RADIOLOGY_ENTITY_OBSERVATION,
+)
+RADIOLOGY_UNCERTAINTY_PRESENT = "present"
+RADIOLOGY_UNCERTAINTY_ABSENT = "absent"
+RADIOLOGY_UNCERTAINTY_UNCERTAIN = "uncertain"
+RADIOLOGY_UNCERTAINTY_CLASSES: tuple[str, ...] = (
+    RADIOLOGY_UNCERTAINTY_PRESENT,
+    RADIOLOGY_UNCERTAINTY_ABSENT,
+    RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+)
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -144,6 +203,154 @@ class F1Metrics:
         }
 
     def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class CoreferenceClusteringScore:
+    """Documented B-cubed proxy score for coreference clustering.
+
+    Precision and recall are averaged per mention from the overlap between its
+    predicted and gold clusters; ``f1`` is their harmonic mean. This transparent
+    proxy is used instead of the full CoNLL MUC/B3/CEAF average for the small,
+    synthetic event-coreference gate.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    metric: str
+    item_count: int
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        """Return a JSON-compatible metric payload."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "metric": self.metric,
+            "item_count": self.item_count,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class TemporalAwarenessMetrics:
+    """Closure-aware precision, recall, and F1 over reduced TLINK graphs.
+
+    Precision checks reduced predicted relations against the gold closure;
+    recall checks reduced gold relations against the predicted closure. The two
+    match counts are kept separately because closure-aware scoring does not
+    necessarily have one symmetric true-positive count.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    precision_matches: int
+    recall_matches: int
+    predicted_reduced_relations: int
+    gold_reduced_relations: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        """Return aggregate counts without node ids or source text."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "precision_matches": self.precision_matches,
+            "recall_matches": self.recall_matches,
+            "predicted_reduced_relations": self.predicted_reduced_relations,
+            "gold_reduced_relations": self.gold_reduced_relations,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class PipelineFact:
+    """One traceable clinical fact used by the end-to-end pipeline evaluator.
+
+    The record intentionally excludes mention text. Original-note offsets and a
+    stable fixture-local ``fact_id`` let stages preserve provenance without
+    placing raw clinical text in metrics, attribution reports, or gate evidence.
+    Fields become evaluable progressively from NER through FHIR export.
+    """
+
+    fact_id: str
+    start: int
+    end: int
+    label: str
+    assertion: str = ""
+    code_system: str = ""
+    code: str = ""
+    resource_type: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.fact_id.strip():
+            raise ValueError("pipeline facts require a non-empty fact_id")
+        if self.start < 0 or self.end < self.start:
+            raise ValueError("pipeline fact offsets are inconsistent")
+        if not self.label.strip():
+            raise ValueError("pipeline facts require a non-empty label")
+
+    def to_dict(self) -> dict[str, int | str]:
+        """Return a deterministic, raw-text-free fact payload."""
+
+        return {
+            "assertion": self.assertion,
+            "code": self.code,
+            "code_system": self.code_system,
+            "end": self.end,
+            "fact_id": self.fact_id,
+            "label": self.label,
+            "resource_type": self.resource_type,
+            "start": self.start,
+        }
+
+    def match_key(self) -> tuple[str | int, ...]:
+        """Return the exact fact-level matching key used for final F1."""
+
+        return (
+            self.fact_id,
+            self.start,
+            self.end,
+            self.label,
+            self.assertion,
+            self.code_system,
+            self.code,
+            self.resource_type,
+        )
+
+
+@dataclass(frozen=True)
+class UncertaintyAccuracyMetrics:
+    """Finding-level uncertainty accuracy and per-class counts."""
+
+    accuracy: float
+    correct: int
+    total: int
+    per_class: Mapping[str, Mapping[str, int | float]]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a stable JSON-ready metric payload."""
+        per_class = {
+            uncertainty: dict(values)
+            for uncertainty, values in sorted(self.per_class.items())
+        }
+        return {
+            "accuracy": self.accuracy,
+            "correct": self.correct,
+            "total": self.total,
+            "per_class": per_class,
+        }
+
+    def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
 
 
@@ -417,7 +624,7 @@ class CriticalFindingRecallMetrics:
 
 @dataclass(frozen=True)
 class ConsistencyMetric:
-    """Consistency score with concrete violation counts."""
+    """Consistency score with PHI-free violation details."""
 
     score: float
     consistent: int
@@ -430,6 +637,35 @@ class ConsistencyMetric:
             "consistent": self.consistent,
             "total": self.total,
             "violations": self.violations,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class TemporalConsistencyGateResult:
+    """Merge-blocking temporal-awareness and closure-consistency verdict."""
+
+    passed: bool
+    blocking: bool
+    awareness: TemporalAwarenessMetrics
+    consistency: ConsistencyMetric
+    awareness_floor: float = TEMPORAL_AWARENESS_F1_FLOOR
+    violation_ceiling: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING
+    failure_reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, raw-text-free gate payload."""
+
+        return {
+            "awareness": self.awareness.to_dict(),
+            "awareness_floor": self.awareness_floor,
+            "blocking": self.blocking,
+            "consistency": self.consistency.to_dict(),
+            "failure_reasons": list(self.failure_reasons),
+            "passed": self.passed,
+            "violation_ceiling": self.violation_ceiling,
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -590,6 +826,93 @@ class CoverageGap:
         return self.to_dict()[key]
 
 
+@dataclass(frozen=True)
+class FaithfulnessFinding:
+    """One extracted fact that is not grounded in its declared source span."""
+
+    fact_id: str
+    fact_type: str
+    reason: str
+    fixture_id: str = ""
+    start: int | None = None
+    end: int | None = None
+    support_text: str = ""
+    value_hash: str = ""
+    value_length: int = 0
+    support_text_hash: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_dict(self, *, include_span_text: bool = False) -> dict[str, Any]:
+        """Return a deterministic JSON-ready finding payload."""
+
+        payload: dict[str, Any] = {
+            "fact_id": self.fact_id,
+            "fact_type": self.fact_type,
+            "reason": self.reason,
+            "value_hash": self.value_hash,
+            "value_length": int(self.value_length),
+        }
+        if self.fixture_id:
+            payload["fixture_id"] = self.fixture_id
+        if self.start is not None:
+            payload["start"] = int(self.start)
+        if self.end is not None:
+            payload["end"] = int(self.end)
+        if self.support_text_hash:
+            payload["support_text_hash"] = self.support_text_hash
+        if include_span_text and self.support_text:
+            payload["span_text"] = self.support_text
+        if self.metadata:
+            payload["metadata"] = _plain(self.metadata)
+        return payload
+
+
+@dataclass(frozen=True)
+class FaithfulnessMetrics:
+    """Ungrounded-fact rate and per-type breakdown for extracted facts."""
+
+    ungrounded_fact_rate: float
+    ungrounded_facts: int
+    total_facts: int
+    by_fact_type: Mapping[str, Mapping[str, int | float]]
+    findings: tuple[FaithfulnessFinding, ...] = ()
+    schema_version: str = FAITHFULNESS_SCHEMA_VERSION
+
+    def to_dict(
+        self,
+        *,
+        include_findings: bool = True,
+        include_span_text: bool = False,
+    ) -> dict[str, Any]:
+        """Return a deterministic JSON-ready metric payload."""
+
+        payload: dict[str, Any] = {
+            "by_fact_type": {
+                str(fact_type): {
+                    "rate": float(values.get("rate", 0.0)),
+                    "total": int(values.get("total", 0)),
+                    "ungrounded": int(values.get("ungrounded", 0)),
+                }
+                for fact_type, values in sorted(
+                    self.by_fact_type.items(), key=lambda item: str(item[0])
+                )
+            },
+            "schema_version": self.schema_version,
+            "total_facts": int(self.total_facts),
+            "ungrounded_fact_rate": float(self.ungrounded_fact_rate),
+            "ungrounded_facts": int(self.ungrounded_facts),
+        }
+        if include_findings:
+            payload["ungrounded_fact_examples"] = [
+                finding.to_dict(include_span_text=include_span_text)
+                for finding in self.findings
+            ]
+        return payload
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
 def normalize_eval_span(
     span: Any,
     *,
@@ -681,6 +1004,387 @@ def normalize_eval_spans(
         )
         for span in spans
     ]
+
+
+def compute_span_grounded_faithfulness(
+    facts: Iterable[Any],
+    *,
+    source_text: str,
+    fixture_id: str = "",
+) -> FaithfulnessMetrics:
+    """Score whether extracted facts are anchored to source text spans.
+
+    A fact is grounded only when it has at least one non-empty in-bounds
+    supporting span, any declared span text exactly matches the source
+    characters at those offsets, and the asserted surface form can be
+    reconstructed from the span under conservative text normalization.
+    """
+
+    text = str(source_text)
+    totals: defaultdict[str, int] = defaultdict(int)
+    ungrounded: defaultdict[str, int] = defaultdict(int)
+    findings: list[FaithfulnessFinding] = []
+
+    for index, fact in enumerate(facts):
+        data = _fact_mapping(fact)
+        fact_id = _fact_id(data, index)
+        fact_type = _fact_type(data)
+        totals[fact_type] += 1
+
+        finding = _faithfulness_finding_for_fact(
+            data,
+            source_text=text,
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=str(data.get("fixture_id") or fixture_id or ""),
+        )
+        if finding is not None:
+            ungrounded[fact_type] += 1
+            findings.append(finding)
+
+    total_facts = sum(totals.values())
+    ungrounded_facts = len(findings)
+    keys = sorted(set(totals) | set(ungrounded))
+    by_fact_type = {
+        key: {
+            "rate": _safe_rate(ungrounded[key], totals[key], 0.0),
+            "total": totals[key],
+            "ungrounded": ungrounded[key],
+        }
+        for key in keys
+    }
+    return FaithfulnessMetrics(
+        ungrounded_fact_rate=_safe_rate(ungrounded_facts, total_facts, 0.0),
+        ungrounded_facts=ungrounded_facts,
+        total_facts=total_facts,
+        by_fact_type=by_fact_type,
+        findings=tuple(findings),
+    )
+
+
+def merge_faithfulness_metrics(
+    metrics: Iterable[FaithfulnessMetrics | Mapping[str, Any]],
+) -> FaithfulnessMetrics:
+    """Merge per-document faithfulness metrics into one corpus payload."""
+
+    totals: defaultdict[str, int] = defaultdict(int)
+    ungrounded: defaultdict[str, int] = defaultdict(int)
+    findings: list[FaithfulnessFinding] = []
+
+    for item in metrics:
+        metric = item if isinstance(item, FaithfulnessMetrics) else None
+        payload = metric.to_dict() if metric is not None else _mapping_from_any(item)
+        for fact_type, values in (_read_mapping(payload, "by_fact_type") or {}).items():
+            if not isinstance(values, Mapping):
+                continue
+            totals[str(fact_type)] += int(values.get("total") or 0)
+            ungrounded[str(fact_type)] += int(values.get("ungrounded") or 0)
+        if metric is not None:
+            findings.extend(metric.findings)
+
+    total_facts = sum(totals.values())
+    ungrounded_facts = sum(ungrounded.values())
+    keys = sorted(set(totals) | set(ungrounded))
+    return FaithfulnessMetrics(
+        ungrounded_fact_rate=_safe_rate(ungrounded_facts, total_facts, 0.0),
+        ungrounded_facts=ungrounded_facts,
+        total_facts=total_facts,
+        by_fact_type={
+            key: {
+                "rate": _safe_rate(ungrounded[key], totals[key], 0.0),
+                "total": totals[key],
+                "ungrounded": ungrounded[key],
+            }
+            for key in keys
+        },
+        findings=tuple(findings),
+    )
+
+
+def normalize_radiology_uncertainty(value: Any) -> str:
+    """Normalize a RadGraph-style finding uncertainty label.
+
+    Args:
+        value: A present, absent, or uncertain assertion label. RadGraph's
+            ``definitely present`` and ``definitely absent`` spellings are also
+            accepted.
+
+    Returns:
+        One of :data:`RADIOLOGY_UNCERTAINTY_CLASSES`.
+
+    Raises:
+        ValueError: If *value* is missing or is not a supported uncertainty.
+    """
+    normalized = "_".join(str(value or "").strip().casefold().replace("-", " ").split())
+    aliases = {
+        "affirmed": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "definitely_present": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "positive": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "present": RADIOLOGY_UNCERTAINTY_PRESENT,
+        "absent": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "definitely_absent": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "negated": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "negative": RADIOLOGY_UNCERTAINTY_ABSENT,
+        "possible": RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+        "uncertain": RADIOLOGY_UNCERTAINTY_UNCERTAIN,
+    }
+    try:
+        return aliases[normalized]
+    except KeyError as exc:
+        allowed = ", ".join(RADIOLOGY_UNCERTAINTY_CLASSES)
+        raise ValueError(
+            f"radiology uncertainty {value!r} must be one of: {allowed}"
+        ) from exc
+
+
+def normalize_radiology_entity(
+    entity: Any,
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> EvalSpan:
+    """Normalize an observation or anatomy entity without PHI-label coercion.
+
+    RadGraph entity labels are clinical evaluation labels rather than the
+    de-identification taxonomy used by :func:`normalize_eval_span`. Finding
+    uncertainty is retained in ``metadata["uncertainty"]``.
+    """
+    if isinstance(entity, EvalSpan):
+        data: Mapping[str, Any] = {
+            "start": entity.start,
+            "end": entity.end,
+            "label": entity.label,
+            "text": entity.text,
+            "language": entity.language,
+            "device": entity.device,
+            "metadata": entity.metadata,
+        }
+    else:
+        data = entity if isinstance(entity, Mapping) else vars(entity)
+
+    metadata_value = _read_mapping(data, "metadata") or {}
+    if not isinstance(metadata_value, Mapping):
+        raise ValueError("radiology entity metadata must be a mapping")
+    metadata = dict(metadata_value)
+
+    start = _read_int(data, "start")
+    end = _read_int(data, "end")
+    if start is None or end is None:
+        raise ValueError(f"radiology entity must include integer offsets: {entity!r}")
+    if start < 0 or end <= start:
+        raise ValueError(f"invalid radiology entity offsets: {start}:{end}")
+    if source_text is not None and end > len(source_text):
+        raise ValueError(
+            f"radiology entity offsets {start}:{end} exceed text length "
+            f"{len(source_text)}"
+        )
+
+    raw_label = str(
+        _read_value(data, "label")
+        or _read_value(data, "entity_type")
+        or _read_value(data, "type")
+        or ""
+    ).strip()
+    label_parts = raw_label.split("::", 1)
+    compact_label = label_parts[0].strip().upper().replace("_", "-")
+    radgraph_labels = {
+        "ANAT-DP": (RADIOLOGY_ENTITY_ANATOMY, RADIOLOGY_UNCERTAINTY_PRESENT),
+        "OBS-DA": (RADIOLOGY_ENTITY_OBSERVATION, RADIOLOGY_UNCERTAINTY_ABSENT),
+        "OBS-DP": (RADIOLOGY_ENTITY_OBSERVATION, RADIOLOGY_UNCERTAINTY_PRESENT),
+        "OBS-U": (RADIOLOGY_ENTITY_OBSERVATION, RADIOLOGY_UNCERTAINTY_UNCERTAIN),
+    }
+    label_uncertainty: str | None = None
+    if compact_label in radgraph_labels:
+        label, label_uncertainty = radgraph_labels[compact_label]
+    else:
+        label_key = "_".join(
+            label_parts[0].replace("-", " ").strip().casefold().split()
+        )
+        if label_key in {"anatomical", "anatomy", "body_site"}:
+            label = RADIOLOGY_ENTITY_ANATOMY
+        elif label_key in {"condition", "finding", "observation"}:
+            label = RADIOLOGY_ENTITY_OBSERVATION
+        else:
+            allowed = ", ".join(RADIOLOGY_ENTITY_TYPES)
+            raise ValueError(
+                f"radiology entity label {raw_label!r} must be one of: {allowed}"
+            )
+
+    raw_uncertainty = (
+        _read_value(data, "uncertainty")
+        or _read_value(data, "assertion")
+        or _read_value(data, "status")
+    )
+    if raw_uncertainty is None:
+        raw_uncertainty = metadata.get("uncertainty") or metadata.get("assertion")
+    if raw_uncertainty is None and len(label_parts) == 2:
+        raw_uncertainty = label_parts[1]
+    if raw_uncertainty is None:
+        raw_uncertainty = label_uncertainty
+    if raw_uncertainty is not None:
+        metadata["uncertainty"] = normalize_radiology_uncertainty(raw_uncertainty)
+
+    raw_language = (
+        _read_value(data, "language")
+        or _read_value(data, "lang")
+        or metadata.get("language")
+        or default_language
+    )
+    raw_device = _read_value(data, "device") or metadata.get("device") or default_device
+    raw_text = _read_value(data, "text") or _read_value(data, "tokens")
+    if raw_text is None and source_text is not None:
+        raw_text = source_text[start:end]
+    if source_text is not None and raw_text and source_text[start:end] != str(raw_text):
+        raise ValueError(f"radiology entity text mismatch at offsets {start}:{end}")
+
+    return EvalSpan(
+        start=start,
+        end=end,
+        label=label,
+        text=str(raw_text or ""),
+        language=str(raw_language),
+        device=str(raw_device),
+        metadata=metadata,
+    )
+
+
+def normalize_radiology_entities(
+    entities: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> list[EvalSpan]:
+    """Normalize radiology observation and anatomy entities for evaluation."""
+    return [
+        normalize_radiology_entity(
+            entity,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        )
+        for entity in entities
+    ]
+
+
+def compute_radiology_uncertainty_accuracy(
+    gold_entities: Iterable[Any],
+    predicted_entities: Iterable[Any],
+    *,
+    match: str = "relaxed",
+) -> UncertaintyAccuracyMetrics:
+    """Compute finding-level uncertainty accuracy with per-class breakdowns.
+
+    Missing or boundary-mismatched predicted findings count as incorrect. Extra
+    predictions are handled by entity F1 and do not change the gold-finding
+    denominator for this classification metric.
+    """
+    if match not in {"strict", "relaxed"}:
+        raise ValueError("radiology uncertainty match must be strict or relaxed")
+    gold = normalize_radiology_entities(gold_entities)
+    predicted = normalize_radiology_entities(predicted_entities)
+    gold_findings = [
+        entity for entity in gold if entity.label == RADIOLOGY_ENTITY_OBSERVATION
+    ]
+    predicted_findings = [
+        entity for entity in predicted if entity.label == RADIOLOGY_ENTITY_OBSERVATION
+    ]
+    matched_predictions: set[int] = set()
+    correct_by_class: defaultdict[str, int] = defaultdict(int)
+    total_by_class: defaultdict[str, int] = defaultdict(int)
+
+    for gold_entity in gold_findings:
+        raw_gold_uncertainty = gold_entity.metadata.get("uncertainty")
+        if raw_gold_uncertainty is None:
+            raise ValueError("gold observation must include radiology uncertainty")
+        gold_uncertainty = normalize_radiology_uncertainty(raw_gold_uncertainty)
+        total_by_class[gold_uncertainty] += 1
+        candidates = [
+            (index, prediction)
+            for index, prediction in enumerate(predicted_findings)
+            if index not in matched_predictions
+            and _radiology_entity_matches(gold_entity, prediction, match=match)
+        ]
+        if not candidates:
+            continue
+        best_index, best_prediction = max(
+            candidates,
+            key=lambda item: _overlap_len(gold_entity, item[1]),
+        )
+        matched_predictions.add(best_index)
+        raw_prediction_uncertainty = best_prediction.metadata.get("uncertainty")
+        if raw_prediction_uncertainty is None:
+            continue
+        if (
+            normalize_radiology_uncertainty(raw_prediction_uncertainty)
+            == gold_uncertainty
+        ):
+            correct_by_class[gold_uncertainty] += 1
+
+    total = sum(total_by_class.values())
+    correct = sum(correct_by_class.values())
+    per_class = {
+        uncertainty: {
+            "accuracy": _safe_rate(
+                correct_by_class[uncertainty],
+                total_by_class[uncertainty],
+                zero_denominator=1.0,
+            ),
+            "correct": correct_by_class[uncertainty],
+            "total": total_by_class[uncertainty],
+        }
+        for uncertainty in RADIOLOGY_UNCERTAINTY_CLASSES
+    }
+    return UncertaintyAccuracyMetrics(
+        accuracy=_safe_rate(correct, total, zero_denominator=1.0),
+        correct=correct,
+        total=total,
+        per_class=per_class,
+    )
+
+
+def compute_radiology_entity_relation_metrics(
+    gold_entities: Iterable[Any],
+    predicted_entities: Iterable[Any],
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+) -> dict[str, Any]:
+    """Score RadGraph-style entities, relations, and finding uncertainty."""
+    from openmed.eval.relation_metrics import compute_relation_metrics
+
+    gold = normalize_radiology_entities(gold_entities)
+    predicted = normalize_radiology_entities(predicted_entities)
+    relation_metrics = compute_relation_metrics(gold_relations, predicted_relations)
+    return {
+        "entity": {
+            "relaxed": compute_relaxed_span_f1(gold, predicted).to_dict(),
+            "strict": compute_exact_span_f1(gold, predicted).to_dict(),
+        },
+        "relation": {
+            "counts": relation_metrics["counts"],
+            "per_relation_type": relation_metrics["by_type"],
+            "relaxed": relation_metrics["relaxed"],
+            "strict": relation_metrics["strict"],
+        },
+        "uncertainty": compute_radiology_uncertainty_accuracy(
+            gold,
+            predicted,
+        ).to_dict(),
+    }
+
+
+def _radiology_entity_matches(
+    gold: EvalSpan,
+    predicted: EvalSpan,
+    *,
+    match: str,
+) -> bool:
+    if gold.label != predicted.label:
+        return False
+    if match == "strict":
+        return gold.start == predicted.start and gold.end == predicted.end
+    return _overlap_len(gold, predicted) > 0
 
 
 def compute_leakage_rate(
@@ -1081,6 +1785,42 @@ def compute_critical_finding_recall(
     )
 
 
+def compute_coreference_clustering_score(
+    predicted: Mapping[Any, str],
+    gold: Mapping[Any, str],
+    *,
+    metric: str = "bcubed",
+) -> CoreferenceClusteringScore:
+    """Score clusters with the documented mention-averaged B-cubed proxy.
+
+    ``predicted`` and ``gold`` must label the same mention keys. For every
+    mention, B-cubed precision is the fraction of its predicted cluster that is
+    in its gold cluster, and recall is the fraction of its gold cluster recovered
+    by the prediction. The returned F1 is the harmonic mean of the averages.
+
+    Args:
+        predicted: Mention key to predicted cluster id.
+        gold: The same mention keys mapped to gold cluster ids.
+        metric: Metric selector. Only ``"bcubed"`` is supported.
+
+    Returns:
+        Precision, recall, F1, metric name, and scored mention count.
+    """
+
+    if metric != "bcubed":
+        raise ValueError("only the documented 'bcubed' coreference proxy is supported")
+    from openmed.clinical.coref import bcubed_precision_recall_f1
+
+    score = bcubed_precision_recall_f1(predicted, gold)
+    return CoreferenceClusteringScore(
+        precision=score.precision,
+        recall=score.recall,
+        f1=score.f1,
+        metric=metric,
+        item_count=len(gold),
+    )
+
+
 def compute_exact_span_f1(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -1117,6 +1857,116 @@ def compute_exact_span_f1(
                 true_positives += 1
                 break
     return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def normalize_pipeline_fact(value: PipelineFact | Mapping[str, Any]) -> PipelineFact:
+    """Normalize one raw-text-free end-to-end fact record.
+
+    Args:
+        value: A :class:`PipelineFact` or mapping carrying stable source offsets,
+            a fixture-local fact id, and progressively populated clinical fields.
+
+    Returns:
+        A validated :class:`PipelineFact`.
+    """
+
+    if isinstance(value, PipelineFact):
+        return value
+    if not isinstance(value, Mapping):
+        raise TypeError("pipeline facts must be mappings or PipelineFact instances")
+
+    assertion = value.get("assertion")
+    if isinstance(assertion, Mapping):
+        assertion = "|".join(
+            f"{key}={assertion[key]}" for key in sorted(assertion, key=str)
+        )
+    return PipelineFact(
+        fact_id=str(value.get("fact_id") or value.get("id") or ""),
+        start=int(value.get("start", 0)),
+        end=int(value.get("end", value.get("start", 0))),
+        label=str(value.get("label") or value.get("type") or ""),
+        assertion=str(
+            assertion
+            if assertion is not None
+            else value.get("polarity") or value.get("assertion_status") or ""
+        ),
+        code_system=str(value.get("code_system") or value.get("system") or ""),
+        code=str(value.get("code") or value.get("concept_code") or ""),
+        resource_type=str(
+            value.get("resource_type") or value.get("fhir_resource_type") or ""
+        ),
+    )
+
+
+def normalize_pipeline_facts(
+    values: Iterable[PipelineFact | Mapping[str, Any]],
+) -> tuple[PipelineFact, ...]:
+    """Normalize a stage's facts and reject ambiguous duplicate ids."""
+
+    facts = tuple(normalize_pipeline_fact(value) for value in values)
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for fact in facts:
+        if fact.fact_id in seen:
+            duplicates.add(fact.fact_id)
+        seen.add(fact.fact_id)
+    if duplicates:
+        rendered = ", ".join(sorted(duplicates))
+        raise ValueError(f"duplicate pipeline fact id(s): {rendered}")
+    return facts
+
+
+def pipeline_fact_mismatch_fields(
+    gold: PipelineFact | Mapping[str, Any],
+    predicted: PipelineFact | Mapping[str, Any],
+    *,
+    stage: str,
+) -> tuple[str, ...]:
+    """Return fields first evaluable at ``stage`` that disagree with gold."""
+
+    if stage not in PIPELINE_STAGE_FACT_FIELDS:
+        allowed = ", ".join(PIPELINE_EVAL_STAGES)
+        raise ValueError(f"unknown pipeline stage {stage!r}; expected one of {allowed}")
+    expected = normalize_pipeline_fact(gold)
+    observed = normalize_pipeline_fact(predicted)
+    return tuple(
+        field_name
+        for field_name in PIPELINE_STAGE_FACT_FIELDS[stage]
+        if getattr(expected, field_name) != getattr(observed, field_name)
+    )
+
+
+def compute_fact_level_f1(
+    gold_facts: Iterable[PipelineFact | Mapping[str, Any]],
+    predicted_facts: Iterable[PipelineFact | Mapping[str, Any]],
+) -> F1Metrics:
+    """Compute exact end-to-end F1 over structured clinical facts.
+
+    Matching includes the stable fact id, original-note offsets, NER label,
+    assertion, terminology code, and FHIR resource type. Consequently a fact
+    corrupted by any pipeline stage is not counted as a true positive.
+    """
+
+    gold = normalize_pipeline_facts(gold_facts)
+    predicted = normalize_pipeline_facts(predicted_facts)
+    gold_keys = Counter(fact.match_key() for fact in gold)
+    predicted_keys = Counter(fact.match_key() for fact in predicted)
+    true_positives = sum((gold_keys & predicted_keys).values())
+    return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def merge_fact_level_f1(metrics: Iterable[F1Metrics]) -> F1Metrics:
+    """Merge per-fixture fact metrics without matching facts across fixtures."""
+
+    values = tuple(metrics)
+    true_positives = sum(metric.true_positives for metric in values)
+    predicted_count = sum(
+        metric.true_positives + metric.false_positives for metric in values
+    )
+    gold_count = sum(
+        metric.true_positives + metric.false_negatives for metric in values
+    )
+    return _f1_from_counts(true_positives, predicted_count, gold_count)
 
 
 def compute_relaxed_span_f1(
@@ -1440,37 +2290,57 @@ def bootstrap_abstention_residual_risk(
 def compute_date_shift_consistency(
     original_dates: Sequence[str],
     shifted_dates: Sequence[str],
+    *,
+    patient_ids: Sequence[str] | None = None,
 ) -> ConsistencyMetric:
-    """Score whether date replacements use one consistent day offset."""
+    """Score non-zero, patient-consistent date replacement offsets.
+
+    A patient may have a different shift from another patient, but every date
+    belonging to the same patient must use the same non-zero day offset. This
+    also preserves within-patient intervals and rejects real dates that survive
+    unchanged. Violation details contain only input positions and reason codes.
+    """
     if len(original_dates) != len(shifted_dates):
         raise ValueError("original_dates and shifted_dates must have the same length")
-    parsed: list[tuple[str, str, int]] = []
+    if patient_ids is not None and len(patient_ids) != len(original_dates):
+        raise ValueError("patient_ids and original_dates must have the same length")
+
+    groups = (
+        tuple(str(patient_id) for patient_id in patient_ids)
+        if patient_ids is not None
+        else ("default",) * len(original_dates)
+    )
+    parsed_by_patient: defaultdict[str, list[tuple[int, int]]] = defaultdict(list)
     violations: dict[str, list[str]] = {}
-    for original, shifted in zip(original_dates, shifted_dates):
+    for index, (original, shifted, patient_id) in enumerate(
+        zip(original_dates, shifted_dates, groups, strict=True)
+    ):
         original_date = _parse_date(original)
         shifted_date = _parse_date(shifted)
         if original_date is None or shifted_date is None:
-            violations.setdefault(original, []).append(shifted)
+            violations[f"date_index:{index}"] = ["unparseable_date"]
             continue
-        parsed.append((original, shifted, (shifted_date - original_date).days))
+        delta = (shifted_date - original_date).days
+        if delta == 0:
+            violations[f"date_index:{index}"] = ["unchanged_date"]
+            continue
+        parsed_by_patient[patient_id].append((index, delta))
 
     if not original_dates:
         return ConsistencyMetric(score=1.0, consistent=0, total=0, violations={})
-    if not parsed:
-        return ConsistencyMetric(
-            score=0.0,
-            consistent=0,
-            total=len(original_dates),
-            violations=violations,
-        )
 
-    expected = parsed[0][2]
     consistent = 0
-    for original, shifted, delta in parsed:
-        if delta == expected:
-            consistent += 1
-        else:
-            violations.setdefault(original, []).append(shifted)
+    for rows in parsed_by_patient.values():
+        delta_counts = Counter(delta for _, delta in rows)
+        expected = min(
+            delta_counts,
+            key=lambda delta: (-delta_counts[delta], delta),
+        )
+        for index, delta in rows:
+            if delta == expected:
+                consistent += 1
+            else:
+                violations[f"date_index:{index}"] = ["inconsistent_shift"]
     return ConsistencyMetric(
         score=_safe_rate(consistent, len(original_dates), zero_denominator=1.0),
         consistent=consistent,
@@ -1482,28 +2352,282 @@ def compute_date_shift_consistency(
 def compute_surrogate_consistency(
     originals: Sequence[str],
     surrogates: Sequence[str],
+    *,
+    document_ids: Sequence[str] | None = None,
+    checksum_valid: Sequence[bool | None] | None = None,
 ) -> ConsistencyMetric:
-    """Score whether repeated source values map to stable surrogates."""
+    """Score document-local surrogate stability and optional ID validity.
+
+    Repeated source values must map to one non-empty surrogate within a
+    document. Callers that validate checksum-bearing identifiers can provide a
+    parallel ``checksum_valid`` sequence; any explicit ``False`` verdict makes
+    that entity group inconsistent. Violation details contain no source or
+    surrogate values.
+    """
     if len(originals) != len(surrogates):
         raise ValueError("originals and surrogates must have the same length")
-    groups: defaultdict[str, list[str]] = defaultdict(list)
-    for original, surrogate in zip(originals, surrogates):
-        groups[original].append(surrogate)
+    if document_ids is not None and len(document_ids) != len(originals):
+        raise ValueError("document_ids and originals must have the same length")
+    if checksum_valid is not None and len(checksum_valid) != len(originals):
+        raise ValueError("checksum_valid and originals must have the same length")
+
+    documents = (
+        tuple(str(document_id) for document_id in document_ids)
+        if document_ids is not None
+        else ("default",) * len(originals)
+    )
+    checksum_verdicts = (
+        tuple(checksum_valid)
+        if checksum_valid is not None
+        else (None,) * len(originals)
+    )
+    groups: defaultdict[tuple[str, str], list[tuple[int, str, bool | None]]] = (
+        defaultdict(list)
+    )
+    for index, (document_id, original, surrogate, checksum_verdict) in enumerate(
+        zip(documents, originals, surrogates, checksum_verdicts, strict=True)
+    ):
+        if checksum_verdict is not None and not isinstance(checksum_verdict, bool):
+            raise ValueError("checksum_valid values must be bool or None")
+        groups[(document_id, original)].append(
+            (index, str(surrogate), checksum_verdict)
+        )
 
     violations: dict[str, list[str]] = {}
     consistent = 0
-    for original, values in groups.items():
-        unique_values = sorted(set(values))
-        if len(unique_values) == 1:
+    for values in groups.values():
+        violation_codes: list[str] = []
+        surrogates_for_group = [surrogate for _, surrogate, _ in values]
+        if any(not surrogate for surrogate in surrogates_for_group):
+            violation_codes.append("missing_surrogate")
+        if len(set(surrogates_for_group)) != 1:
+            violation_codes.append("inconsistent_surrogate")
+        if any(checksum_verdict is False for _, _, checksum_verdict in values):
+            violation_codes.append("checksum_invalid")
+        if not violation_codes:
             consistent += 1
         else:
-            violations[original] = unique_values
+            violations[f"entity_group:{values[0][0]}"] = violation_codes
     return ConsistencyMetric(
         score=_safe_rate(consistent, len(groups), zero_denominator=1.0),
         consistent=consistent,
         total=len(groups),
         violations=violations,
     )
+
+
+def normalize_temporal_edges(edges: Any) -> tuple[tuple[str, str, str], ...]:
+    """Return canonical ``(label, head, tail)`` keys for temporal edges.
+
+    ``AFTER(a, b)`` becomes ``BEFORE(b, a)`` and symmetric ``OVERLAP``
+    endpoints are ordered deterministically. Inputs may be compact triples,
+    edge mappings, temporal candidate objects, or a decoded ``SpanGraph``.
+    Duplicate relations are removed.
+
+    Args:
+        edges: Temporal edge records or a decoded graph exposing ``edge_keys``.
+
+    Returns:
+        Unique canonical temporal edge keys in deterministic order.
+
+    Raises:
+        TypeError: If ``edges`` is not an edge iterable or decoded graph.
+        ValueError: If an edge label or endpoint is invalid.
+    """
+
+    values = _temporal_edge_values(edges)
+    normalized = {_normalize_temporal_edge(value) for value in values}
+    return tuple(sorted(normalized))
+
+
+def compute_temporal_awareness_f1(
+    gold_edges: Any,
+    predicted_edges: Any,
+) -> TemporalAwarenessMetrics:
+    """Score closure-aware TLINK precision/recall over reduced graphs.
+
+    This follows temporal-awareness evaluation: reduced system relations are
+    checked against the gold closure for precision, while reduced gold
+    relations are checked against the system closure for recall. ``BEFORE``
+    and ``CONTAINS`` are transitively closed; the other supported TLINK labels
+    remain exact directed relations after inverse/symmetric normalization.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+
+    Returns:
+        Closure-aware precision, recall, F1, and reduced-graph counts.
+    """
+
+    gold_reduced = _reduce_temporal_edges(normalize_temporal_edges(gold_edges))
+    predicted_reduced = _reduce_temporal_edges(
+        normalize_temporal_edges(predicted_edges)
+    )
+    gold_closure = _temporal_labeled_closure(gold_reduced)
+    predicted_closure = _temporal_labeled_closure(predicted_reduced)
+
+    precision_matches = len(set(predicted_reduced) & gold_closure)
+    recall_matches = len(set(gold_reduced) & predicted_closure)
+    precision = _safe_rate(
+        precision_matches,
+        len(predicted_reduced),
+        zero_denominator=1.0,
+    )
+    recall = _safe_rate(
+        recall_matches,
+        len(gold_reduced),
+        zero_denominator=1.0,
+    )
+    f1 = (
+        0.0
+        if precision + recall == 0.0
+        else 2.0 * precision * recall / (precision + recall)
+    )
+    return TemporalAwarenessMetrics(
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        precision_matches=precision_matches,
+        recall_matches=recall_matches,
+        predicted_reduced_relations=len(predicted_reduced),
+        gold_reduced_relations=len(gold_reduced),
+    )
+
+
+def compute_temporal_closure_consistency(edges: Any) -> ConsistencyMetric:
+    """Score whether the partial-order transitive closure is contradiction-free.
+
+    The consistency graph mirrors temporal decoding by treating ``BEFORE`` and
+    ``CONTAINS`` as strict partial-order edges. A closure relation is a
+    violation when it reaches itself or its reverse is also reachable.
+    Violation details contain stable aggregate indexes and reason codes only,
+    never caller-provided node ids or clinical text.
+
+    Args:
+        edges: TLINK records or a decoded temporal graph.
+
+    Returns:
+        A consistency score with PHI-safe closure-violation details.
+    """
+
+    normalized = normalize_temporal_edges(edges)
+    order_pairs = {
+        (head, tail)
+        for label, head, tail in normalized
+        if label in _TEMPORAL_PARTIAL_ORDER_LABELS
+    }
+    closure = _temporal_pair_closure(order_pairs)
+    inconsistent = {
+        pair for pair in closure if pair[0] == pair[1] or (pair[1], pair[0]) in closure
+    }
+    violations: dict[str, list[str]] = {}
+    for index, (head, tail) in enumerate(sorted(inconsistent)):
+        reason = (
+            "self_reachability_in_transitive_closure"
+            if head == tail
+            else "reverse_reachability_in_transitive_closure"
+        )
+        violations[f"closure_relation:{index}"] = [reason]
+
+    total = len(closure)
+    consistent = total - len(inconsistent)
+    return ConsistencyMetric(
+        score=_safe_rate(consistent, total, zero_denominator=1.0),
+        consistent=consistent,
+        total=total,
+        violations=violations,
+    )
+
+
+def evaluate_temporal_consistency_gate(
+    gold_edges: Any,
+    predicted_edges: Any,
+    *,
+    minimum_awareness_f1: float = TEMPORAL_AWARENESS_F1_FLOOR,
+    maximum_consistency_violations: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING,
+) -> TemporalConsistencyGateResult:
+    """Evaluate the merge-blocking TLINK quality and consistency gate.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+        minimum_awareness_f1: Inclusive temporal-awareness F1 floor.
+        maximum_consistency_violations: Inclusive closure-violation ceiling.
+
+    Returns:
+        A blocking pass/fail verdict with aggregate metric evidence.
+
+    Raises:
+        ValueError: If either gate threshold is invalid.
+    """
+
+    if not isfinite(float(minimum_awareness_f1)) or not (
+        0.0 <= minimum_awareness_f1 <= 1.0
+    ):
+        raise ValueError("minimum_awareness_f1 must be finite and between 0 and 1")
+    if (
+        isinstance(maximum_consistency_violations, bool)
+        or not isinstance(maximum_consistency_violations, int)
+        or maximum_consistency_violations < 0
+    ):
+        raise ValueError("maximum_consistency_violations must be a non-negative int")
+
+    gold = normalize_temporal_edges(gold_edges)
+    predicted = normalize_temporal_edges(predicted_edges)
+    awareness = compute_temporal_awareness_f1(gold, predicted)
+    consistency = compute_temporal_closure_consistency(predicted)
+    failure_reasons: list[str] = []
+    if awareness.f1 < minimum_awareness_f1:
+        failure_reasons.append("temporal_awareness_f1_below_floor")
+    if len(consistency.violations) > maximum_consistency_violations:
+        failure_reasons.append("transitive_closure_violation")
+    return TemporalConsistencyGateResult(
+        passed=not failure_reasons,
+        blocking=True,
+        awareness=awareness,
+        consistency=consistency,
+        awareness_floor=float(minimum_awareness_f1),
+        violation_ceiling=maximum_consistency_violations,
+        failure_reasons=tuple(failure_reasons),
+    )
+
+
+def assert_temporal_consistency_gate(
+    gold_edges: Any,
+    predicted_edges: Any,
+    *,
+    minimum_awareness_f1: float = TEMPORAL_AWARENESS_F1_FLOOR,
+    maximum_consistency_violations: int = TEMPORAL_CONSISTENCY_VIOLATION_CEILING,
+) -> TemporalConsistencyGateResult:
+    """Return the gate result or raise a PHI-safe merge-blocking assertion.
+
+    Args:
+        gold_edges: Gold TLINK records or a decoded gold graph.
+        predicted_edges: Predicted TLINK records or a decoded system graph.
+        minimum_awareness_f1: Inclusive temporal-awareness F1 floor.
+        maximum_consistency_violations: Inclusive closure-violation ceiling.
+
+    Returns:
+        The passing temporal consistency gate result.
+
+    Raises:
+        AssertionError: If awareness is below the floor or closure is invalid.
+        ValueError: If either gate threshold is invalid.
+    """
+
+    result = evaluate_temporal_consistency_gate(
+        gold_edges,
+        predicted_edges,
+        minimum_awareness_f1=minimum_awareness_f1,
+        maximum_consistency_violations=maximum_consistency_violations,
+    )
+    if not result.passed:
+        reasons = ", ".join(result.failure_reasons)
+        raise AssertionError(
+            f"merge-blocking temporal consistency gate failed: {reasons}"
+        )
+    return result
 
 
 def compute_latency_summary(latencies_ms: Sequence[int | float]) -> LatencyMetrics:
@@ -1679,6 +2803,13 @@ def compute_metrics_bundle(
     cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
     model_size_bytes: int | None = None,
+    original_dates: Sequence[str] = (),
+    shifted_dates: Sequence[str] = (),
+    date_patient_ids: Sequence[str] | None = None,
+    surrogate_originals: Sequence[str] = (),
+    surrogates: Sequence[str] = (),
+    surrogate_document_ids: Sequence[str] | None = None,
+    surrogate_checksum_valid: Sequence[bool | None] | None = None,
     abstention_thresholds: Any | None = None,
     abstention_confidence_threshold: float = 0.0,
     abstention_model_id: str | None = None,
@@ -1686,6 +2817,7 @@ def compute_metrics_bundle(
     abstention_confidence_level: float | None = None,
     abstention_bootstrap_resamples: int = 0,
     abstention_seed: int = 0,
+    extracted_facts: Iterable[Any] | None = None,
     default_language: str = "en",
     default_device: str = "cpu",
     source_text: str | None = None,
@@ -1757,7 +2889,25 @@ def compute_metrics_bundle(
             peak_rss_bytes=peak_rss_bytes,
             model_size_bytes=model_size_bytes,
         ).to_dict(),
+        "date_shift_consistency": compute_date_shift_consistency(
+            original_dates,
+            shifted_dates,
+            patient_ids=date_patient_ids,
+        ).to_dict(),
+        "surrogate_consistency": compute_surrogate_consistency(
+            surrogate_originals,
+            surrogates,
+            document_ids=surrogate_document_ids,
+            checksum_valid=surrogate_checksum_valid,
+        ).to_dict(),
     }
+    if extracted_facts is not None:
+        if source_text is None:
+            raise ValueError("source_text is required when extracted_facts is provided")
+        metrics["faithfulness"] = compute_span_grounded_faithfulness(
+            extracted_facts,
+            source_text=source_text,
+        ).to_dict()
     if extraction_outputs is not None:
         metrics["extraction_reemission_leakage"] = (
             compute_extraction_reemission_leakage(
@@ -2442,6 +3592,30 @@ def tnm_field_accuracy(
     }
 
 
+def oncotree_top1_accuracy(
+    predicted: Iterable[Mapping[str, Any]],
+    gold: Iterable[Mapping[str, Any]],
+) -> RateMetric:
+    """Top-1 OncoTree code accuracy against gold mappings.
+
+    ``predicted`` and ``gold`` are parallel iterables of mapping rows, each
+    carrying a ``code`` field. A hit requires exact equality of predicted and
+    gold codes; ``None == None`` counts as correct so intentional unmapped rows
+    are not penalized. Mapper-agnostic: callers pass already-produced mappings.
+    """
+    correct = 0
+    total = 0
+    for predicted_row, gold_row in zip(predicted, gold, strict=True):
+        total += 1
+        if predicted_row.get("code") == gold_row.get("code"):
+            correct += 1
+    return RateMetric(
+        rate=_safe_rate(correct, total, zero_denominator=1.0),
+        numerator=correct,
+        denominator=total,
+    )
+
+
 def _normalize_trend_entity(value: Any) -> str:
     return " ".join(str(value or "").split()).casefold()
 
@@ -2897,6 +4071,308 @@ def _positions_for_spans(spans: Sequence[EvalSpan]) -> set[int]:
     return positions
 
 
+def _faithfulness_finding_for_fact(
+    data: Mapping[str, Any],
+    *,
+    source_text: str,
+    fact_id: str,
+    fact_type: str,
+    fixture_id: str,
+) -> FaithfulnessFinding | None:
+    value = _fact_value(data)
+    value_hash = _hash_text(value)
+    value_length = len(value)
+    metadata = _fact_provenance(data)
+
+    if not value.strip():
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            reason="missing_fact_value",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    supports = _support_span_candidates(data)
+    if not supports:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            reason="missing_supporting_span",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    first_failure: FaithfulnessFinding | None = None
+    for support in supports:
+        finding = _support_failure(
+            support,
+            source_text=source_text,
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            value=value,
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+        if finding is None:
+            return None
+        if first_failure is None:
+            first_failure = finding
+    return first_failure
+
+
+def _support_failure(
+    support: Mapping[str, Any],
+    *,
+    source_text: str,
+    fact_id: str,
+    fact_type: str,
+    fixture_id: str,
+    value: str,
+    value_hash: str,
+    value_length: int,
+    metadata: Mapping[str, Any],
+) -> FaithfulnessFinding | None:
+    start = _read_int(support, "start")
+    end = _read_int(support, "end")
+    if start is None or end is None:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            reason="missing_supporting_span_offsets",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+    if start < 0 or end > len(source_text) or start >= end:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            start=start,
+            end=end,
+            reason="supporting_span_out_of_bounds",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    source_span = source_text[start:end]
+    declared_text = _support_declared_text(support)
+    if declared_text is not None and declared_text != source_span:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            start=start,
+            end=end,
+            support_text=source_span,
+            support_text_hash=_hash_text(source_span),
+            reason="supporting_span_text_mismatch",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    if _span_reconstructs_value(value, source_span):
+        return None
+
+    reason = (
+        "supporting_span_does_not_cover_value"
+        if _span_reconstructs_value(value, source_text)
+        else "fabricated_or_paraphrase_only_value"
+    )
+    return FaithfulnessFinding(
+        fact_id=fact_id,
+        fact_type=fact_type,
+        fixture_id=fixture_id,
+        start=start,
+        end=end,
+        support_text=source_span,
+        support_text_hash=_hash_text(source_span),
+        reason=reason,
+        value_hash=value_hash,
+        value_length=value_length,
+        metadata=metadata,
+    )
+
+
+def _support_span_candidates(data: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    candidates: list[Mapping[str, Any]] = []
+    if _read_int(data, "start") is not None or _read_int(data, "end") is not None:
+        candidates.append(data)
+
+    for key in (
+        "supporting_span",
+        "support_span",
+        "source_span",
+        "evidence_span",
+        "span",
+        "source",
+        "support",
+    ):
+        candidates.extend(_coerce_support_spans(data.get(key)))
+    for key in (
+        "supporting_spans",
+        "support_spans",
+        "source_spans",
+        "evidence_spans",
+        "evidence",
+        "provenance",
+    ):
+        candidates.extend(_coerce_support_spans(data.get(key)))
+    return candidates
+
+
+def _coerce_support_spans(value: Any) -> list[Mapping[str, Any]]:
+    if isinstance(value, Mapping):
+        if _read_int(value, "start") is not None or _read_int(value, "end") is not None:
+            return [value]
+        spans: list[Mapping[str, Any]] = []
+        for key in ("span", "source_span", "supporting_span", "spans"):
+            spans.extend(_coerce_support_spans(value.get(key)))
+        return spans
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        spans = []
+        for item in value:
+            spans.extend(_coerce_support_spans(item))
+        return spans
+    return []
+
+
+def _support_declared_text(support: Mapping[str, Any]) -> str | None:
+    for key in (
+        "span_text",
+        "support_text",
+        "source_text",
+        "evidence_text",
+        "surface",
+        "text",
+    ):
+        value = support.get(key)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _span_reconstructs_value(value: str, span_text: str) -> bool:
+    normalized_value = _normalize_fact_surface(value)
+    normalized_span = _normalize_fact_surface(span_text)
+    if not normalized_value:
+        return False
+    if normalized_value in normalized_span:
+        return True
+
+    compact_value = _compact_fact_surface(value)
+    compact_span = _compact_fact_surface(span_text)
+    return bool(compact_value and compact_value in compact_span)
+
+
+def _fact_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    try:
+        return vars(value)
+    except TypeError:
+        return {"value": value}
+
+
+def _mapping_from_any(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        payload = value.to_dict()
+        return payload if isinstance(payload, Mapping) else {}
+    try:
+        return vars(value)
+    except TypeError:
+        return {}
+
+
+def _fact_id(data: Mapping[str, Any], index: int) -> str:
+    for key in ("fact_id", "id", "uid"):
+        value = data.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return f"fact-{index}"
+
+
+def _fact_type(data: Mapping[str, Any]) -> str:
+    for key in (
+        "fact_type",
+        "type",
+        "kind",
+        "category",
+        "label",
+        "entity_type",
+        "relation_type",
+        "concept_type",
+    ):
+        value = data.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return "fact"
+
+
+def _fact_value(data: Mapping[str, Any]) -> str:
+    for key in (
+        "value",
+        "surface_form",
+        "surface",
+        "text",
+        "display",
+        "name",
+        "normalized_value",
+        "code",
+    ):
+        value = data.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return ""
+
+
+def _fact_provenance(data: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = data.get("metadata")
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    result: dict[str, Any] = {}
+    for key in ("source", "stage", "model", "system"):
+        value = data.get(key) or metadata.get(key)
+        if value is not None and str(value).strip():
+            result[key] = str(value)
+    return result
+
+
+def _normalize_fact_surface(value: str) -> str:
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    text = re.sub(r"[^\w]+", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _compact_fact_surface(value: str) -> str:
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    return re.sub(r"[^\w]+", "", text, flags=re.UNICODE)
+
+
+def _hash_text(value: str) -> str:
+    return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _plain(value[key]) for key in sorted(value, key=str)}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
+
+
 def _slice_keys(
     required: Iterable[str],
     *maps: Mapping[str, Any],
@@ -2923,6 +4399,139 @@ def _rate_map(
 
 def _count_map(keys: Iterable[str], counts: Mapping[str, int]) -> dict[str, int]:
     return {key: int(counts.get(key, 0)) for key in keys}
+
+
+def _temporal_edge_values(edges: Any) -> tuple[Any, ...]:
+    edge_keys = getattr(edges, "edge_keys", None)
+    if callable(edge_keys):
+        return tuple(edge_keys())
+    if isinstance(edges, Mapping):
+        return (edges,)
+    if _is_temporal_edge_triple(edges):
+        return (edges,)
+    if isinstance(edges, str | bytes) or not isinstance(edges, Iterable):
+        raise TypeError("temporal edges must be an iterable or decoded graph")
+    return tuple(edges)
+
+
+def _is_temporal_edge_triple(value: Any) -> bool:
+    return (
+        isinstance(value, Sequence)
+        and not isinstance(value, str | bytes)
+        and len(value) == 3
+        and isinstance(value[0], str)
+    )
+
+
+def _normalize_temporal_edge(edge: Any) -> tuple[str, str, str]:
+    if _is_temporal_edge_triple(edge):
+        relation_type, head, tail = edge
+    else:
+        data = edge
+        nested_edge = _temporal_field(data, "edge")
+        if (
+            nested_edge is not None
+            and _temporal_field(data, "label", "type", "relation_type") is None
+        ):
+            data = nested_edge
+        relation_type = _temporal_field(data, "label", "type", "relation_type")
+        head = _temporal_field(data, "head", "source", "source_id")
+        tail = _temporal_field(data, "tail", "target", "target_id")
+
+    label = re.sub(r"[^A-Z0-9]+", "_", str(relation_type or "").upper()).strip("_")
+    if label not in TEMPORAL_RELATION_LABELS:
+        raise ValueError("unsupported temporal relation label")
+    head_id = _temporal_node_id(head)
+    tail_id = _temporal_node_id(tail)
+    if label == "AFTER":
+        label = "BEFORE"
+        head_id, tail_id = tail_id, head_id
+    elif label == "OVERLAP" and tail_id < head_id:
+        head_id, tail_id = tail_id, head_id
+    return label, head_id, tail_id
+
+
+def _temporal_field(value: Any, *names: str) -> Any:
+    if isinstance(value, Mapping):
+        for name in names:
+            if name in value:
+                return value[name]
+        return None
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    return None
+
+
+def _temporal_node_id(value: Any) -> str:
+    if isinstance(value, str):
+        node_id = value
+    else:
+        node_id = _temporal_field(value, "span_id", "node_id", "id")
+    normalized = str(node_id or "").strip()
+    if not normalized:
+        raise ValueError("temporal edge endpoints require non-empty node ids")
+    return normalized
+
+
+def _reduce_temporal_edges(
+    edges: Iterable[tuple[str, str, str]],
+) -> tuple[tuple[str, str, str], ...]:
+    kept = set(edges)
+    for label in sorted(_TEMPORAL_TRANSITIVE_LABELS):
+        for edge in sorted(item for item in kept if item[0] == label):
+            kept.remove(edge)
+            pairs = {
+                (head, tail) for edge_label, head, tail in kept if edge_label == label
+            }
+            if edge[2] not in _temporal_reachable(edge[1], pairs):
+                kept.add(edge)
+    return tuple(sorted(kept))
+
+
+def _temporal_labeled_closure(
+    edges: Iterable[tuple[str, str, str]],
+) -> set[tuple[str, str, str]]:
+    closure = set(edges)
+    for label in _TEMPORAL_TRANSITIVE_LABELS:
+        pairs = {
+            (head, tail) for edge_label, head, tail in closure if edge_label == label
+        }
+        closure.update(
+            (label, head, tail) for head, tail in _temporal_pair_closure(pairs)
+        )
+    return closure
+
+
+def _temporal_pair_closure(
+    pairs: Iterable[tuple[str, str]],
+) -> set[tuple[str, str]]:
+    materialized = set(pairs)
+    nodes = {node for pair in materialized for node in pair}
+    closure: set[tuple[str, str]] = set()
+    for source in nodes:
+        closure.update(
+            (source, target) for target in _temporal_reachable(source, materialized)
+        )
+    return closure
+
+
+def _temporal_reachable(
+    source: str,
+    pairs: Iterable[tuple[str, str]],
+) -> set[str]:
+    adjacency: defaultdict[str, set[str]] = defaultdict(set)
+    for head, tail in pairs:
+        adjacency[head].add(tail)
+    reachable: set[str] = set()
+    stack = list(adjacency.get(source, ()))
+    while stack:
+        target = stack.pop()
+        if target in reachable:
+            continue
+        reachable.add(target)
+        stack.extend(adjacency.get(target, ()))
+    return reachable
 
 
 def _parse_date(value: str) -> date | None:
@@ -3198,14 +4807,31 @@ __all__ = [
     "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
     "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
+    "PIPELINE_EVAL_STAGES",
+    "PIPELINE_STAGE_FACT_FIELDS",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
+    "TEMPORAL_AWARENESS_F1_FLOOR",
+    "TEMPORAL_CONSISTENCY_VIOLATION_CEILING",
+    "TEMPORAL_RELATION_LABELS",
+    "RADIOLOGY_ENTITY_ANATOMY",
+    "RADIOLOGY_ENTITY_OBSERVATION",
+    "RADIOLOGY_ENTITY_TYPES",
+    "RADIOLOGY_UNCERTAINTY_ABSENT",
+    "RADIOLOGY_UNCERTAINTY_CLASSES",
+    "RADIOLOGY_UNCERTAINTY_PRESENT",
+    "RADIOLOGY_UNCERTAINTY_UNCERTAIN",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
     "CriticalFindingRecallMetrics",
     "EvalSpan",
+    "PipelineFact",
     "RateMetric",
     "F1Metrics",
+    "CoreferenceClusteringScore",
+    "TemporalAwarenessMetrics",
+    "TemporalConsistencyGateResult",
+    "UncertaintyAccuracyMetrics",
     "LeakageMetrics",
     "MixedScriptLeakageMetrics",
     "RecallSlices",
@@ -3216,15 +4842,31 @@ __all__ = [
     "ReliabilityBin",
     "PairedSignificance",
     "CoverageGap",
+    "FAITHFULNESS_SCHEMA_VERSION",
+    "FaithfulnessFinding",
+    "FaithfulnessMetrics",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "normalize_pipeline_fact",
+    "normalize_pipeline_facts",
+    "pipeline_fact_mismatch_fields",
+    "compute_span_grounded_faithfulness",
+    "merge_faithfulness_metrics",
+    "normalize_radiology_entity",
+    "normalize_radiology_entities",
+    "normalize_radiology_uncertainty",
     "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
     "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
+    "compute_coreference_clustering_score",
     "compute_recall_slices",
     "compute_exact_span_f1",
+    "compute_fact_level_f1",
+    "merge_fact_level_f1",
+    "compute_radiology_entity_relation_metrics",
+    "compute_radiology_uncertainty_accuracy",
     "section_boundary_accuracy",
     "stated_category_accuracy",
     "radiology_finding_tuple_f1",
@@ -3232,6 +4874,7 @@ __all__ = [
     "hgvs_field_accuracy",
     "TNM_FIELDS",
     "tnm_field_accuracy",
+    "oncotree_top1_accuracy",
     "trend_direction_accuracy",
     "trend_grouping_accuracy",
     "compute_relaxed_span_f1",
@@ -3240,6 +4883,11 @@ __all__ = [
     "compute_abstention_metrics",
     "compute_date_shift_consistency",
     "compute_surrogate_consistency",
+    "normalize_temporal_edges",
+    "compute_temporal_awareness_f1",
+    "compute_temporal_closure_consistency",
+    "evaluate_temporal_consistency_gate",
+    "assert_temporal_consistency_gate",
     "compute_latency_summary",
     "compute_resource_metrics",
     "coverage_gaps_by_language",

@@ -197,6 +197,115 @@ not serialize profile keys, cell values, privacy-unit identifiers, or source
 paths. The integrity digest detects mutation; use an external signature when
 authenticity or provenance matters.
 
+### Longitudinal cross-document linkage
+
+`longitudinal_risk_report()` measures whether stable evidence can cluster two
+or more de-identified notes back to the same privacy unit. Run it only after
+free text and structured fields have passed direct-identifier de-identification.
+Each input note needs a stable source-side patient key and may provide age,
+rare-condition, and surrogate evidence in its fields or audit spans. The key is
+converted to an HMAC-SHA256 patient pseudonym before it enters the report; note
+identifiers and evidence values are also HMAC digests. Supply an installation-
+specific HMAC key through a secret-management channel and do not publish it.
+
+The current estimator deliberately uses a conservative patient-level bound. A
+patient with fewer than two notes, or without a stable attack fingerprint, has
+a bound of `0.0`. A patient with reusable surrogate evidence, an age trajectory,
+or rare-attribute evidence has a bound of `1.0`. The report's
+`linkage_success_upper_bound` is the maximum patient bound, so adding documents
+cannot lower it. This is a safety upper bound, not a calibrated probability or
+the observed success rate of a particular attacker.
+
+```python
+from openmed.risk import longitudinal_risk_report
+
+linkage_report = longitudinal_risk_report(
+    deidentified_notes,
+    hmac_key=longitudinal_hmac_key,
+    patient_key_fields=("patient_id",),
+)
+```
+
+The report schema is versioned independently of the dashboard:
+
+| Field | Meaning |
+| --- | --- |
+| `schema_version` | Currently `1`. Consumers must reject unknown versions. |
+| `patient_count`, `document_count` | Number of pseudonymous patients and de-identified notes assessed. |
+| `linkage_success_upper_bound` | Maximum conservative patient-level bound. |
+| `mean_patient_linkage_upper_bound` | Arithmetic mean of the patient bounds. |
+| `linkable_patient_count` | Patients whose bound is greater than zero. |
+| `residual_direct_identifier_leakage` | Fraction of notes with detected residual direct identifiers. |
+| `residual_direct_identifier_leakage_count` | Total residual direct-identifier findings. |
+| `patient_risks` | Per-patient hashed breakdown used to validate the aggregate values. |
+| `high_risk_patients` | Rows tied at the nonzero maximum bound. Empty when the maximum is zero. |
+
+Each `patient_risks` row contains `patient_pseudonym`, document, evidence, and
+direct-identifier counts, its linkage bound, aggregate stable-surrogate, age,
+rare-attribute, and category counts, a hashed attack fingerprint, and hashed
+evidence references. Evidence references contain a note index, note and value
+digests, and optional start/end offsets and section metadata. They never contain
+the evidence value. The dashboard and signed gate apply a narrower allowlist:
+only digests, offsets, counts, and scores are retained; category, source,
+section, and any unknown fields are discarded.
+
+Add the panel to either existing HTML dashboard with the optional
+`longitudinal` argument. The aggregate release dashboard is the appropriate
+choice for expert-review handoff:
+
+```python
+from pathlib import Path
+
+from openmed.risk import render_release_assessment_dashboard
+
+dashboard_html = render_release_assessment_dashboard(
+    release_assessment,
+    longitudinal=linkage_report,
+)
+Path("longitudinal-release-dashboard.html").write_text(
+    dashboard_html,
+    encoding="utf-8",
+)
+```
+
+The panel shows corpus counts and upper bounds, then the highest-risk cohort and
+its hashed evidence. It validates every displayed digest, integer, offset, and
+probability and ignores all other input fields. Omitting `longitudinal` preserves
+the previous dashboard output.
+
+For release, first run the focused check, then attach the same report to the
+complete benchmark evidence under `metrics.longitudinal_linkage_risk` and use
+the normal signed release gate. The default linkage ceiling is zero; a caller
+may choose another ceiling only under a documented release policy.
+
+```python
+from openmed.eval import ReleaseGate, evaluate_cross_document_linkage_gate
+
+linkage_check = evaluate_cross_document_linkage_gate(
+    linkage_report,
+    ceiling=approved_linkage_ceiling,
+)
+if not linkage_check.passed:
+    raise RuntimeError(linkage_check.reason)
+
+benchmark_payload = benchmark_report.to_dict()
+benchmark_payload["metrics"]["longitudinal_linkage_risk"] = linkage_report
+signed_verdict = ReleaseGate(
+    cross_document_linkage_ceiling=approved_linkage_ceiling,
+    signing_key=release_signing_key,
+).evaluate(benchmark_payload, baseline_evidence)
+if not signed_verdict.verify(release_signing_key):
+    raise RuntimeError("Release-gate signature verification failed")
+```
+
+A passing bound means only that no modeled fingerprint exceeded the configured
+ceiling in the supplied corpus. It does not model cross-institution linkage,
+unknown auxiliary data, errors in the patient key, or attacks using signals the
+extractor did not capture. An empty highest-risk cohort is not proof of zero
+re-identification risk. Keep the report and dashboard under the same release-
+governance controls as other hashed evidence, because stable digests can still
+support correlation.
+
 ## Run the synthetic example
 
 The repository includes a fully offline walkthrough with fabricated patients:

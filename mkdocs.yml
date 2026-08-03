@@ -41,9 +41,11 @@ nav:
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
       - Indic Encoder Backbones: indic-encoders.md
+      - Indic NER Checkpoint Compatibility: indic-ner-checkpoints.md
       - Tokenizer Script Coverage: model-tokenizer-script-coverage.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
@@ -67,6 +69,7 @@ nav:
       - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Experiencer Refinement: clinical/experiencer-refinement.md
@@ -89,6 +92,7 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - Haystack Redaction Component: integrations-haystack.md
       - LlamaIndex Redaction Postprocessor: integrations-llamaindex.md
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
@@ -99,6 +103,7 @@ nav:
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
+      - Public API Deprecation Policy: compliance/api-deprecation-policy.md
       - Pan-African Malabo Baseline: compliance/africa-malabo-baseline.md
       - Egypt PDPL & Morocco Law 09-08: compliance/north-africa-pdpl-0908-checklist.md
       - Africa Data-Residency Guide: compliance/africa-data-residency-guide.md
@@ -179,13 +184,6 @@ theme:
   favicon: assets/openmed-favicon.svg
   font: false
   palette:
-    - media: "(prefers-color-scheme)"
-      scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-auto
-        name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: custom
@@ -199,7 +197,7 @@ theme:
       accent: custom
       toggle:
         icon: material/weather-night
-        name: Switch to system theme
+        name: Switch to light mode
   features:
     - navigation.sections
     - navigation.tabs

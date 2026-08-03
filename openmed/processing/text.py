@@ -5,11 +5,147 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
+
+MAX_PII_INPUT_BYTES = 8 * 1024 * 1024
+MAX_PII_COMBINING_SEQUENCE = 64
+MAX_PII_FORMAT_SEQUENCE = 256
+MAX_PII_CONTROL_SEQUENCE = 256
+MAX_PII_CONTROL_CHARACTERS = 4096
+
+
+class InputError(ValueError):
+    """Base class for fail-closed errors caused by untrusted PII input."""
+
+    reason = "input_rejected"
+
+
+class InputTypeError(InputError):
+    """Raised when PII input is not text or a supported bytes-like value."""
+
+    reason = "input_type"
+
+
+class InputEncodingError(InputError):
+    """Raised when PII input is not strict, well-formed UTF-8 text."""
+
+    reason = "input_encoding"
+
+
+class InputSizeError(InputError):
+    """Raised before normalization when PII input crosses its byte budget."""
+
+    reason = "input_size"
+
+
+class InputComplexityError(InputError):
+    """Raised when Unicode structure exceeds a bounded normalization budget."""
+
+    reason = "input_complexity"
+
+
+def validate_pii_input(text: Any) -> str:
+    """Return bounded UTF-8 text safe to pass to PII normalization.
+
+    The check runs before normalization allocates offset maps. It accepts
+    ordinary :class:`str` input and strict UTF-8 bytes-like values, rejects a
+    payload larger than :data:`MAX_PII_INPUT_BYTES`, and bounds adversarial
+    runs of combining marks, format controls, and non-whitespace controls.
+    Raised errors never contain source text.
+
+    Args:
+        text: Untrusted text or strict UTF-8 bytes-like input.
+
+    Returns:
+        A validated Unicode string.
+
+    Raises:
+        InputError: If the value cannot be normalized within the fixed budget.
+    """
+
+    if isinstance(text, memoryview):
+        byte_length = text.nbytes
+        if byte_length > MAX_PII_INPUT_BYTES:
+            raise InputSizeError("PII input exceeds the configured byte limit")
+        payload = bytes(text)
+        try:
+            value = payload.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            raise InputEncodingError("PII byte input must be strict UTF-8") from None
+    elif isinstance(text, (bytes, bytearray)):
+        if len(text) > MAX_PII_INPUT_BYTES:
+            raise InputSizeError("PII input exceeds the configured byte limit")
+        try:
+            value = bytes(text).decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            raise InputEncodingError("PII byte input must be strict UTF-8") from None
+    elif isinstance(text, str):
+        value = text
+    else:
+        raise InputTypeError("PII input must be text or a bytes-like value")
+
+    # UTF-8 uses at least one byte per code point, so this avoids materializing
+    # an encoded copy for obviously oversized ASCII input such as the 10 MiB
+    # regression case.
+    if len(value) > MAX_PII_INPUT_BYTES:
+        raise InputSizeError("PII input exceeds the configured byte limit")
+    try:
+        byte_length = len(value.encode("utf-8", errors="strict"))
+    except UnicodeEncodeError:
+        raise InputEncodingError(
+            "PII text contains an invalid Unicode scalar"
+        ) from None
+    if byte_length > MAX_PII_INPUT_BYTES:
+        raise InputSizeError("PII input exceeds the configured byte limit")
+
+    _validate_pii_unicode_complexity(value)
+    return value
+
+
+def _validate_pii_unicode_complexity(text: str) -> None:
+    combining_run = 0
+    format_run = 0
+    control_run = 0
+    control_count = 0
+
+    for char in text:
+        category = unicodedata.category(char)
+
+        if category.startswith("M"):
+            combining_run += 1
+            if combining_run > MAX_PII_COMBINING_SEQUENCE:
+                raise InputComplexityError(
+                    "PII input contains an excessive combining-mark sequence"
+                )
+        else:
+            combining_run = 0
+
+        if category == "Cf":
+            format_run += 1
+            if format_run > MAX_PII_FORMAT_SEQUENCE:
+                raise InputComplexityError(
+                    "PII input contains an excessive format-control sequence"
+                )
+        else:
+            format_run = 0
+
+        if category == "Cc" and char not in {"\t", "\n", "\r"}:
+            control_count += 1
+            control_run += 1
+            if (
+                control_count > MAX_PII_CONTROL_CHARACTERS
+                or control_run > MAX_PII_CONTROL_SEQUENCE
+            ):
+                raise InputComplexityError(
+                    "PII input contains excessive control characters"
+                )
+        else:
+            control_run = 0
 
 
 INDIC_SCRIPTS = (
@@ -736,6 +872,7 @@ def normalize_indic_text(
     so ISCII round trips remain byte-identical.
     """
 
+    text = validate_pii_input(text)
     if char_origins is None:
         char_origins = tuple((index, index + 1) for index in range(len(text)))
     if len(char_origins) != len(text):
@@ -1035,6 +1172,164 @@ class TextProcessor:
             entities[key] = list(set(entities[key]))
 
         return entities
+
+
+@dataclass(frozen=True)
+class BoilerplateSuppressionResult:
+    """Clinical records retained after optional annotation-based suppression.
+
+    ``provenance`` contains counts and a fixed policy name only. It never
+    includes entity text, annotation source identifiers, or source surfaces.
+    """
+
+    records: tuple[object, ...]
+    provenance: Mapping[str, object]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provenance", dict(self.provenance))
+
+
+def apply_boilerplate_suppression(
+    records: Iterable[object],
+    annotations: Iterable[object] = (),
+    *,
+    suppress_boilerplate: bool = False,
+) -> BoilerplateSuppressionResult:
+    """Drop records fully contained by boilerplate/copy-forward annotations.
+
+    Suppression is opt-in and conservative. Records without valid offsets, or
+    records that only partially overlap an annotation, are retained. The
+    original records and annotations are never mutated.
+
+    Args:
+        records: Extracted entity mappings or objects with ``start``/``end``,
+            ``start_char``/``end_char``, or an ``offset``/``offsets`` pair.
+        annotations: Boilerplate or copy-forward span mappings/objects.
+        suppress_boilerplate: Whether to apply the drop policy. Defaults to
+            ``False`` so existing extraction behavior remains unchanged.
+
+    Returns:
+        Retained records and PHI-free aggregate suppression provenance.
+
+    Raises:
+        TypeError: If either input is a string/bytes value or suppression is
+            not a boolean.
+        ValueError: If a relevant annotation has malformed offsets.
+    """
+
+    if not isinstance(suppress_boilerplate, bool):
+        raise TypeError("suppress_boilerplate must be a boolean")
+    materialized_records = _materialize_suppression_items(records, label="records")
+    materialized_annotations = _materialize_suppression_items(
+        annotations, label="annotations"
+    )
+    flagged_spans = tuple(
+        span
+        for annotation in materialized_annotations
+        if (span := _suppression_annotation_span(annotation)) is not None
+    )
+
+    retained: list[object] = []
+    suppressed_count = 0
+    for record in materialized_records:
+        record_span = _record_span(record)
+        suppress = (
+            suppress_boilerplate
+            and record_span is not None
+            and any(
+                annotation_start <= record_span[0] and record_span[1] <= annotation_end
+                for annotation_start, annotation_end in flagged_spans
+            )
+        )
+        if suppress:
+            suppressed_count += 1
+        else:
+            retained.append(record)
+
+    provenance: dict[str, object] = {
+        "enabled": suppress_boilerplate,
+        "policy": "drop_fully_contained",
+        "input_entity_count": len(materialized_records),
+        "retained_entity_count": len(retained),
+        "suppressed_entity_count": suppressed_count,
+        "annotation_count": len(flagged_spans),
+    }
+    return BoilerplateSuppressionResult(
+        records=tuple(retained),
+        provenance=provenance,
+    )
+
+
+def _materialize_suppression_items(
+    values: Iterable[object],
+    *,
+    label: str,
+) -> tuple[object, ...]:
+    if isinstance(values, (str, bytes)):
+        raise TypeError(f"{label} must be an iterable of records")
+    try:
+        return tuple(values)
+    except TypeError:
+        raise TypeError(f"{label} must be an iterable of records") from None
+
+
+def _suppression_annotation_span(annotation: object) -> tuple[int, int] | None:
+    annotation_type = _suppression_field(annotation, "type")
+    if annotation_type not in {"boilerplate", "copy_forward"}:
+        return None
+    start = _suppression_field(annotation, "start")
+    end = _suppression_field(annotation, "end")
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or start < 0
+        or end <= start
+    ):
+        raise ValueError("suppression annotations require valid integer offsets")
+    return start, end
+
+
+def _record_span(record: object) -> tuple[int, int] | None:
+    for start_key, end_key in (
+        ("start", "end"),
+        ("start_char", "end_char"),
+        ("start_offset", "end_offset"),
+    ):
+        start = _suppression_field(record, start_key)
+        end = _suppression_field(record, end_key)
+        if start is not None or end is not None:
+            return _validated_record_span(start, end)
+
+    for pair_key in ("offset", "offsets"):
+        pair = _suppression_field(record, pair_key)
+        if pair is not None:
+            if not isinstance(pair, Sequence) or isinstance(pair, (str, bytes)):
+                return None
+            if len(pair) != 2:
+                return None
+            return _validated_record_span(pair[0], pair[1])
+    return None
+
+
+def _validated_record_span(start: object, end: object) -> tuple[int, int] | None:
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or start < 0
+        or end < start
+    ):
+        return None
+    return start, end
+
+
+def _suppression_field(source: object, field_name: str) -> object | None:
+    if isinstance(source, Mapping):
+        return source.get(field_name)
+    return getattr(source, field_name, None)
 
 
 def preprocess_text(

@@ -14,6 +14,7 @@ from openmed.risk import (
     assess_release,
     enforce_kanon,
     kanon_report,
+    longitudinal_risk_report,
     render_release_assessment_dashboard,
     render_risk_dashboard,
     risk_report,
@@ -98,6 +99,34 @@ def _release_policy() -> AnonymityPolicy:
         privacy_unit="patient_id",
         target_k=2,
     )
+
+
+def _sample_longitudinal_risk() -> dict[str, object]:
+    report = longitudinal_risk_report(
+        [
+            {
+                "patient_id": "synthetic-subject-001",
+                "record_id": f"synthetic-note-{index}",
+                "text": "Synthetic follow-up note.",
+                "audit_spans": [
+                    {
+                        "canonical_label": "SYNTHETIC_SURROGATE",
+                        "surrogate": "synthetic-surrogate-a",
+                        "start": 0,
+                        "end": 9,
+                    }
+                ],
+            }
+            for index in (1, 2)
+        ],
+        hmac_key="synthetic-dashboard-key",
+    )
+    report["raw_note"] = "raw-top-level-canary"
+    report["patient_risks"][0]["raw_patient_key"] = "raw-patient-canary"
+    report["patient_risks"][0]["evidence"][0]["source"] = "raw-source-canary"
+    report["patient_risks"][0]["evidence"][0]["category"] = "raw-category-canary"
+    report["patient_risks"][0]["evidence"][0]["section"] = "raw-section-canary"
+    return report
 
 
 def test_render_risk_dashboard_returns_self_contained_html_document():
@@ -278,6 +307,69 @@ def test_release_assessment_dashboard_renders_only_allowlisted_aggregates():
     _assert_balanced_html(html)
 
 
+def test_release_dashboard_adds_privacy_safe_longitudinal_linkage_panel():
+    longitudinal = _sample_longitudinal_risk()
+    high_risk = longitudinal["patient_risks"][0]
+
+    html = render_release_assessment_dashboard(
+        assess_release(_release_rows(), _release_policy()),
+        longitudinal=longitudinal,
+    )
+
+    assert "Longitudinal Linkage Risk" in html
+    assert "Highest-Risk Cohort" in html
+    assert "Maximum linkage bound" in html
+    assert "100.0%" in html
+    assert high_risk["patient_pseudonym"] in html
+    assert high_risk["evidence"][0]["note_hash"] in html
+    assert high_risk["evidence"][0]["value_hash"] in html
+    assert ">0</td>" in html
+    assert ">9</td>" in html
+    for canary in (
+        "synthetic-subject-001",
+        "synthetic-note-1",
+        "synthetic-surrogate-a",
+        "raw-top-level-canary",
+        "raw-patient-canary",
+        "raw-source-canary",
+        "raw-category-canary",
+        "raw-section-canary",
+    ):
+        assert canary not in html
+    _assert_balanced_html(html)
+
+
+def test_legacy_dashboard_output_is_unchanged_when_longitudinal_is_omitted():
+    risk = _sample_risk()
+
+    default_html = render_risk_dashboard(risk)
+    explicit_html = render_risk_dashboard(risk, longitudinal=None)
+    longitudinal_html = render_risk_dashboard(
+        risk,
+        longitudinal=_sample_longitudinal_risk(),
+    )
+
+    assert explicit_html == default_html
+    assert "Longitudinal Linkage Risk" not in default_html
+    assert "Longitudinal Linkage Risk" in longitudinal_html
+
+
+def test_longitudinal_panel_fails_closed_without_echoing_malformed_values():
+    longitudinal = _sample_longitudinal_risk()
+    longitudinal["patient_count"] = "raw-numeric-field-canary"
+    longitudinal["patient_risks"][0]["patient_pseudonym"] = "raw-hash-canary"
+
+    html = render_release_assessment_dashboard(
+        assess_release(_release_rows(), _release_policy()),
+        longitudinal=longitudinal,
+    )
+
+    assert "Longitudinal linkage evidence is unavailable or malformed" in html
+    assert "raw-numeric-field-canary" not in html
+    assert "raw-hash-canary" not in html
+    assert "Highest-Risk Cohort" not in html
+
+
 def test_anonymization_dashboard_never_traverses_sensitive_records():
     result = anonymize_release(_release_rows(), _release_policy())
     assert any(
@@ -440,10 +532,16 @@ def test_write_release_assessment_dashboard_writes_safe_balanced_html(tmp_path):
     result = anonymize_release(_release_rows(), _release_policy())
     path = tmp_path / "release-assessment.html"
 
-    returned = write_release_assessment_dashboard(result, path)
+    returned = write_release_assessment_dashboard(
+        result,
+        path,
+        longitudinal=_sample_longitudinal_risk(),
+    )
 
     assert returned == path
     html = path.read_text(encoding="utf-8")
     assert "Aggregate evidence only" in html
+    assert "Longitudinal Linkage Risk" in html
     assert "raw-qi-value-canary" not in html
+    assert "raw-patient-canary" not in html
     _assert_balanced_html(html)

@@ -1,4 +1,8 @@
-"""Re-identification risk package for section 4.2."""
+"""Re-identification risk package for section 4.2.
+
+Intended contents include quasi-identifier detection, uniqueness/k-anonymity
+measurement, and adversarial re-identification analysis.
+"""
 
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
@@ -62,9 +66,11 @@ from .reid import (
     LongitudinalNote,
     LongitudinalPatient,
     build_longitudinal_corpus,
+    cross_modal_linkage_risk_report,
     longitudinal_attack_fingerprint,
     longitudinal_risk_report,
     quasi_identifier_key,
+    quasi_identifier_key_bytes,
     risk_report,
 )
 from .release import (
@@ -136,6 +142,7 @@ __all__ = [
     "assess_population_risk",
     "budget_for_policy",
     "build_longitudinal_corpus",
+    "cross_modal_linkage_risk_report",
     "epsilon_policy_for",
     "evaluate_budget",
     "load_epsilon_policies",
@@ -143,6 +150,7 @@ __all__ = [
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
     "quasi_identifier_key",
+    "quasi_identifier_key_bytes",
     "risk_report",
     "sample_synthetic_table",
     "tabular_fidelity_report",

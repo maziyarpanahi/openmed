@@ -79,8 +79,12 @@ class OpenMedKit(
 
         val chunkEntities = chunks.flatMap { chunk ->
             val chunkText = text.substring(chunk.start, chunk.end)
+            val baseScalarOffset = UnicodeOffsetContract.utf16ToScalarOffset(
+                text,
+                chunk.start,
+            )
             extractPii(chunkText, confidenceThreshold, useSmartMerging)
-                .mapNotNull { it.offsetBy(chunk.start, text) }
+                .mapNotNull { it.offsetBy(baseScalarOffset, text) }
         }
 
         val repaired = SpanRepair.repair(
@@ -448,12 +452,14 @@ private data class LabeledPattern(
         return regex.findAll(text).mapNotNull { match ->
             val group = match.groups[groupIndex] ?: return@mapNotNull null
             val range = group.range
+            val utf16Start = range.first
+            val utf16End = range.last + 1
             EntityPrediction(
                 label = label,
-                text = text.substring(range.first, range.last + 1),
+                text = text.substring(utf16Start, utf16End),
                 confidence = 1.0f,
-                start = range.first,
-                end = range.last + 1,
+                start = UnicodeOffsetContract.utf16ToScalarOffset(text, utf16Start),
+                end = UnicodeOffsetContract.utf16ToScalarOffset(text, utf16End),
             )
         }.toList()
     }
@@ -480,11 +486,15 @@ private fun EntityPrediction.offsetBy(
 ): EntityPrediction? {
     val start = start + baseOffset
     val end = end + baseOffset
-    if (start < 0 || end <= start || end > sourceText.length) {
+    if (
+        start < 0 ||
+        end <= start ||
+        end > UnicodeOffsetContract.scalarLength(sourceText)
+    ) {
         return null
     }
     return copy(
-        text = sourceText.substring(start, end),
+        text = UnicodeOffsetContract.substring(sourceText, start, end),
         start = start,
         end = end,
     )

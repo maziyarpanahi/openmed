@@ -135,6 +135,11 @@ def _lazy_api():
 
 Handler = Callable[[argparse.Namespace], int]
 
+
+class _UnavailableCommandError(NotImplementedError):
+    """Signal that a recovered CLI command has no current implementation."""
+
+
 COMPLIANCE_CAVEAT = (
     "No de-identification tool can guarantee compliance or zero residual risk. "
     "Validate locally before any production or clinical use."
@@ -333,10 +338,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_deid_command(subparsers)
     _add_redact_dataset_command(subparsers)
     _add_pii_command(subparsers)
+    _add_tui_command(subparsers)
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
     _add_policy_command(subparsers)
+    _add_export_command(subparsers)
     _add_fhir_command(subparsers)
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
@@ -557,6 +564,27 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         help="Commit progress after this many items (default: 10).",
     )
     batch_parser.set_defaults(handler=_handle_batch)
+
+
+def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
+    """Restore the historical TUI command without reviving its removed backend."""
+
+    tui_parser = subparsers.add_parser(
+        "tui",
+        help="Launch the historical interactive terminal UI.",
+    )
+    tui_parser.add_argument(
+        "--model",
+        default=None,
+        help="Model registry key or Hugging Face identifier.",
+    )
+    tui_parser.add_argument(
+        "--confidence-threshold",
+        type=_unit_interval_float,
+        default=0.5,
+        help="Minimum confidence score for predictions (default: 0.5).",
+    )
+    tui_parser.set_defaults(handler=_handle_tui)
 
 
 def _add_deid_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1485,12 +1513,88 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         help="Optional vocabulary version recorded in SOURCE_TO_CONCEPT_MAP rows.",
     )
     load_parser.add_argument(
+        "--mode",
+        choices=("append", "replace-by-note"),
+        default="append",
+        help=(
+            "Append idempotently or replace rows for incoming note hashes "
+            "(default: append)."
+        ),
+    )
+    load_parser.add_argument(
         "--validate",
         dest="validate",
         action="store_true",
         help="Validate CDM constraints and report PHI-free violation counts.",
     )
     load_parser.set_defaults(handler=_handle_omop_load)
+
+
+def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add clinical export commands."""
+
+    export_parser = subparsers.add_parser("export", help="Clinical export utilities.")
+    export_sub = export_parser.add_subparsers(dest="export_command")
+
+    openehr_parser = export_sub.add_parser(
+        "openehr",
+        help="Serialize grounded clinical entities into openEHR flat JSON.",
+    )
+    openehr_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="JSON result file containing grounded clinical entities.",
+    )
+    openehr_parser.add_argument(
+        "--template",
+        type=Path,
+        required=True,
+        help="EHRbase WebTemplate JSON or allowed-path template manifest.",
+    )
+    openehr_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path to write the openEHR flat COMPOSITION JSON.",
+    )
+    openehr_parser.add_argument(
+        "--doc-id",
+        default=None,
+        help="Stable source document id; defaults to the input payload id.",
+    )
+    openehr_parser.add_argument(
+        "--source-text-file",
+        type=Path,
+        default=None,
+        help="Optional de-identified note text file for offset validation.",
+    )
+    openehr_parser.add_argument(
+        "--composer",
+        default="OpenMed",
+        help="Composer name for openEHR context.",
+    )
+    openehr_parser.add_argument(
+        "--language",
+        default="en",
+        help="ISO language code for openEHR context.",
+    )
+    openehr_parser.add_argument(
+        "--territory",
+        default="US",
+        help="ISO territory code for openEHR context.",
+    )
+    openehr_parser.add_argument(
+        "--time",
+        default=None,
+        help="Composition timestamp; defaults to the current UTC time.",
+    )
+    openehr_parser.add_argument(
+        "--vocabulary-key",
+        default=None,
+        help="Enable caller-supplied terminology codings when present.",
+    )
+    openehr_parser.set_defaults(handler=_handle_export_openehr)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1920,6 +2024,23 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Use the approved-access full SHIELD corpus instead of the public sample.",
     )
+    pii_parser.add_argument(
+        "--checkpoint-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Checkpoint JSON or JSONL for the named clinical PHI flagship. "
+            "This enables manifest-linked SHIELD comparison evidence."
+        ),
+    )
+    pii_parser.add_argument(
+        "--checkpoint-manifest-ref",
+        default=None,
+        help=(
+            "Stable repository or publication link to --checkpoint-manifest, "
+            "recorded in the BenchmarkReport."
+        ),
+    )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
     clinical_parser = benchmark_sub.add_parser(
@@ -2181,6 +2302,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         return handler(args)
+    except _UnavailableCommandError as exc:
+        error = CliError(
+            str(exc),
+            code="not_implemented",
+            exit_code=EXIT_ERROR,
+        )
+        return emit_error(args, error)
     except CliError as exc:
         return emit_error(args, exc)
     except Exception as exc:
@@ -2369,6 +2497,13 @@ def _handle_batch(args: argparse.Namespace) -> int:
 
     emit(args, payload, human=human)
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_tui(args: argparse.Namespace) -> int:
+    raise _UnavailableCommandError(
+        "The historical OpenMed TUI is not implemented because its backend "
+        "was removed; use 'openmed --help' for supported commands."
+    )
 
 
 def _handle_redact_dataset(args: argparse.Namespace) -> int:
@@ -3849,10 +3984,12 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         write_omop_sqlite,
     )
 
+    load_mode = args.mode.replace("-", "_")
     try:
         tables = load_grounded_jsonl(
             args.input,
             vocabulary_version=args.vocabulary_version,
+            mode=load_mode,
         )
     except FileNotFoundError:
         raise CliError(
@@ -3880,7 +4017,11 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
             "parquet": write_omop_parquet,
         }
         try:
-            connection = writers[args.writer](tables, str(args.target))
+            connection = writers[args.writer](
+                tables,
+                str(args.target),
+                mode=load_mode,
+            )
             if hasattr(connection, "close"):
                 connection.close()
         except ImportError as exc:
@@ -3901,11 +4042,13 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         "input": str(args.input),
         "target": str(args.target) if args.target is not None else None,
         "writer": args.writer if args.target is not None else None,
+        "mode": tables.summary.mode,
         "vocabulary_version": args.vocabulary_version,
         "row_counts": dict(summary.row_counts),
         "rejection_counts": dict(summary.rejection_counts),
         "rejected_spans": [span.to_dict() for span in summary.rejected_spans],
         "source_note_hashes": list(summary.source_note_hashes),
+        "changed_note_hashes": list(summary.changed_note_hashes),
     }
 
     if args.validate:
@@ -3924,6 +4067,133 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
     rejected_total = sum(payload["rejection_counts"].values())
     human = f"Loaded {args.input} -> {counts} ({rejected_total} rejected span(s))"
     return emit(args, payload, human=human)
+
+
+def _handle_export_openehr(args: argparse.Namespace) -> int:
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        entities = _extract_clinical_entities(payload)
+        source_text = _extract_openehr_source_text(payload)
+        if args.source_text_file is not None:
+            source_text = args.source_text_file.read_text(encoding="utf-8")
+        doc_id = args.doc_id or _extract_doc_id(payload)
+
+        from ..clinical.exporters.openehr import to_openehr_composition
+
+        composition = to_openehr_composition(
+            entities,
+            operational_template=args.template,
+            doc_id=doc_id,
+            source_text=source_text,
+            composer_name=args.composer,
+            language=args.language,
+            territory=args.territory,
+            time=args.time,
+            vocabulary_key=args.vocabulary_key,
+        )
+        args.output.write_text(
+            json.dumps(composition, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except FileNotFoundError as exc:
+        raise CliError(
+            f"Input file not found: {exc.filename}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        )
+    except OSError as exc:
+        raise CliError(
+            f"Failed to read or write openEHR COMPOSITION: {exc}",
+            code="io_error",
+            exit_code=EXIT_ERROR,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to assemble openEHR COMPOSITION: {exc}",
+            code="assemble_failed",
+            exit_code=EXIT_ERROR,
+        )
+
+    result = {
+        "output": str(args.output),
+        "entity_count": len(entities),
+        "coded_element_count": sum(path.endswith("|code") for path in composition),
+    }
+    return emit(
+        args,
+        result,
+        human=f"openEHR COMPOSITION written to: {args.output}",
+    )
+
+
+def _extract_doc_id(payload: Any) -> str:
+    """Return the stable source document id carried by a result payload."""
+
+    if isinstance(payload, MappingABC):
+        for key in ("doc_id", "document_id", "id"):
+            value = payload.get(key)
+            if isinstance(value, (str, int)) and str(value):
+                return str(value)
+    return "openmed-document"
+
+
+def _extract_clinical_entities(payload: Any) -> list[Any]:
+    entities = _find_clinical_entities_payload(payload)
+    if not isinstance(entities, list):
+        raise ValueError("clinical entities must be a JSON array")
+    normalized: list[Any] = []
+    for index, entity in enumerate(entities):
+        if not isinstance(entity, MappingABC):
+            raise ValueError(f"clinical entity at index {index} must be a JSON object")
+        normalized.append(dict(entity))
+    return normalized
+
+
+def _find_clinical_entities_payload(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, MappingABC):
+        raise ValueError(
+            "openEHR input must be a JSON array of clinical entities or a result object"
+        )
+
+    for key in ("entities", "clinical_entities", "clinicalEntities"):
+        if key in payload:
+            return payload[key]
+
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("entities", "clinical_entities", "clinicalEntities"):
+            if key in result_payload:
+                return result_payload[key]
+
+    raise ValueError(
+        "openEHR input must contain grounded clinical entities under "
+        "'entities' or 'clinical_entities'"
+    )
+
+
+def _extract_openehr_source_text(payload: Any) -> str | None:
+    if not isinstance(payload, MappingABC):
+        return None
+    for key in ("source_text", "text", "note", "narrative"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("source_text", "text", "note", "narrative"):
+            value = result_payload.get(key)
+            if isinstance(value, str):
+                return value
+    return None
 
 
 def _extract_fhir_doc_id(payload: Any) -> str:
@@ -4032,8 +4302,14 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
 
+    from openmed.eval.datasets import CLINICAL_PRIVACY_MODEL_ID
     from openmed.eval.harness import run_benchmark
-    from openmed.eval.suites import SHIELD, load_suite_fixtures, suite_metadata
+    from openmed.eval.suites import (
+        SHIELD,
+        load_suite_fixtures,
+        run_clinical_phi_shield_benchmark,
+        suite_metadata,
+    )
 
     try:
         models = _parse_model_args(args.models or [])
@@ -4047,6 +4323,39 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
         )
 
     suite = str(args.suite or SHIELD)
+    if args.checkpoint_manifest_ref and args.checkpoint_manifest is None:
+        raise CliError(
+            "--checkpoint-manifest-ref requires --checkpoint-manifest.",
+            code="invalid_argument",
+            exit_code=EXIT_USAGE,
+        )
+    if args.checkpoint_manifest is not None:
+        if suite != SHIELD:
+            raise CliError(
+                "--checkpoint-manifest is supported only for the SHIELD suite.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
+        if args.full_shield:
+            raise CliError(
+                "The clinical PHI flagship report uses the public SHIELD sample; "
+                "do not combine --checkpoint-manifest with --full-shield.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
+        if len(models) != 1 or models[0] != CLINICAL_PRIVACY_MODEL_ID:
+            raise CliError(
+                "--checkpoint-manifest requires exactly the named model "
+                f"{CLINICAL_PRIVACY_MODEL_ID!r}.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
+        if not args.checkpoint_manifest_ref:
+            raise CliError(
+                "--checkpoint-manifest-ref is required for reproducible evidence.",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            )
     try:
         if suite == SHIELD:
             use_sample = not bool(args.full_shield)
@@ -4066,16 +4375,33 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     metadata.setdefault("benchmark_domain", "pii")
     metadata.setdefault("source_suite", suite)
 
-    reports = [
-        run_benchmark(
-            fixtures,
-            suite=suite,
-            model_name=model,
-            device=args.device,
-            metadata=metadata,
-        )
-        for model in models
-    ]
+    if args.checkpoint_manifest is not None:
+        try:
+            reports = [
+                run_clinical_phi_shield_benchmark(
+                    fixtures,
+                    checkpoint_manifest=args.checkpoint_manifest,
+                    checkpoint_manifest_ref=args.checkpoint_manifest_ref,
+                    device=args.device,
+                )
+            ]
+        except ValueError as exc:
+            raise CliError(
+                f"Invalid clinical PHI checkpoint evidence: {exc}",
+                code="invalid_argument",
+                exit_code=EXIT_USAGE,
+            ) from exc
+    else:
+        reports = [
+            run_benchmark(
+                fixtures,
+                suite=suite,
+                model_name=model,
+                device=args.device,
+                metadata=metadata,
+            )
+            for model in models
+        ]
     if len(reports) == 1:
         payload: Any = reports[0].to_dict()
     else:

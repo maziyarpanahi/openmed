@@ -52,11 +52,27 @@ Required fields:
   it must note that the synthetic set is an assistive safety probe, not
   clinical ground truth.
 
-The package loader validates offsets, canonical labels, synthetic markers,
-expected output, hard-negative candidate metadata, critical-finding disclaimers,
-and language coverage. The JSON and JSONL files are also compatible with
-`openmed.eval.harness.load_fixtures`; golden-specific expected output remains
-available through each fixture's metadata.
+The package loader validates unique fixture IDs, offsets, canonical labels,
+synthetic markers, expected output, hard-negative candidate metadata,
+critical-finding disclaimers, and language coverage. The JSON and JSONL files
+are also compatible with `openmed.eval.harness.load_fixtures`; golden-specific
+expected output remains available through each fixture's metadata.
+
+## Temporal TLINK Fixtures
+
+`fixtures/temporal_tlinks.jsonl` contains hand-authored, synthetic-only
+discharge-summary-style notes for temporal graph evaluation. Each row declares
+EVENT/TIMEX offsets, normalized time values, strict TLINK gold, its reduced
+graph reference, scored decoder candidates, and contradiction-trap candidate
+ids. DCT anchoring, EVENT-TIMEX links, EVENT-EVENT ordering, transitive
+reduction, and weaker reverse-order traps are all represented.
+
+Load and validate this specialized schema with
+`openmed.eval.suites.temporal_tlinks.load_temporal_tlink_fixtures`. The loader
+requires `metadata.synthetic=true` and `metadata.contains_real_phi=false`,
+checks all offsets and references, and rejects inconsistent reduced gold. The
+suite reports aggregate relation counts and PHI-safe reason codes only; no note
+text or graph node ids appear in its gate artifacts.
 
 ## India Clinical De-Identification Corpus
 
@@ -77,6 +93,19 @@ golden loader because its richer corpus schema is validated separately.
 The corpus contains no real PHI, production data, restricted corpus material,
 or DUA data. It is an assist-only, non-decisional evaluation fixture, not
 clinical ground truth, and must not be used to make patient-care decisions.
+
+## Joint Entity and Relation Fixtures
+
+`fixtures/joint_entity_relation.jsonl` contains synthetic encoder states,
+token-to-character offsets, entity spans, typed relations, and explicit
+boundary, over-generation, and distractor traps for the backend-neutral joint
+span-pair head. Every row sets `metadata.synthetic=true` and
+`metadata.contains_real_phi=false`.
+
+The specialized fixture is intentionally excluded from the generic
+de-identification loader. Its states are small deterministic vectors used to
+measure combined entity-and-relation micro-F1, endpoint-confidence suppression,
+span-graph schema integrity, and false-positive relations on negative pairs.
 
 ## Relation Gold Fixtures
 
@@ -145,3 +174,13 @@ and Hindi relation examples. They reuse canonical NER labels, carry registry
 version `1`, and are scored separately through the relation metric's
 `by_language`/`per_language` payloads. No CMeIE or other external corpus text is
 bundled.
+
+## Radiology Entity-and-Relation Fixtures
+
+`fixtures/radiology_entity_relations.jsonl` contains hand-authored synthetic
+radiology reports with `OBSERVATION` and `ANATOMY` spans, present/absent/uncertain
+finding labels, and `LOCATED_AT`, `MODIFY`, and `SUGGESTIVE_OF` relations. The
+dedicated loader rejects any committed row that is not explicitly marked
+synthetic or lacks the required not-a-medical-device disclaimer. These rows are
+offline evaluation probes for clinician-reviewed systems, not clinical ground
+truth, patient-care guidance, RadGraph/MIMIC-CXR content, or other DUA data.

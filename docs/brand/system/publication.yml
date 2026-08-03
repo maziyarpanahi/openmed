@@ -113,9 +113,11 @@ classification:
     - model-registry.md
     - model-manifest.md
     - indic-encoders.md
+    - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
     - clinical/context-and-extraction.md
+    - clinical/concept-grounding.md
     - clinical/abbreviation-disambiguation.md
     - clinical/coreference.md
     - clinical/temporal-normalization.md
@@ -139,6 +141,7 @@ classification:
     - multimodal/epub-extraction.md
     - testing.md
     - eval-harness.md
+    - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - clinical/experiencer-refinement.md
@@ -160,6 +163,7 @@ classification:
     - security/no-raw-phi-logging.md
     - security/tamper-evident-audit-log.md
     - integrations-langchain.md
+    - integrations-haystack.md
     - integrations-llamaindex.md
     - integrations/columnar-redactor.md
     - integrations/lakehouse-redaction.md
@@ -170,6 +174,7 @@ classification:
     - spacy-component.md
     - hl7v2-deidentification.md
     - compliance.md
+    - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md
     - compliance/north-africa-pdpl-0908-checklist.md
     - compliance/africa-data-residency-guide.md

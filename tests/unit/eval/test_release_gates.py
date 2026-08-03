@@ -11,8 +11,12 @@ from openmed.compliance import (
     build_release_expert_review_evidence,
 )
 from openmed.core.audit import stable_hash
+from openmed.core.baseline import relation_baseline_key
 from openmed.eval import release_gates
-from openmed.eval.metrics import compute_metrics_bundle
+from openmed.eval.metrics import (
+    compute_metrics_bundle,
+    compute_span_grounded_faithfulness,
+)
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -24,10 +28,14 @@ from openmed.eval.surrogate_quality import load_surrogate_quality_records
 from openmed.risk import (
     AnonymityPolicy,
     anonymize_release,
+    longitudinal_risk_report,
     validate_released_output,
 )
 
 SIGNING_KEY = "unit-release-key"
+RELATION_FIXTURE_HASH = (
+    "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187"
+)
 
 
 def _calibration_files(tmp_path: Path) -> tuple[Path, Path]:
@@ -175,6 +183,30 @@ def _conformal_report(*, coverage: float = 0.95) -> dict[str, object]:
     }
 
 
+def _grounding_report(*, accuracy: float = 0.90, coverage: float = 0.72):
+    return {
+        "schema_version": 1,
+        "artifact_type": "openmed.grounding.calibration.report",
+        "minimum_accuracy": 0.85,
+        "minimum_coverage": 0.70,
+        "vocabularies": {
+            "RXNORM": {
+                "operating_point": {
+                    "system": "RXNORM",
+                    "threshold": 0.80,
+                    "accuracy": accuracy,
+                    "coverage": coverage,
+                    "accepted_count": int(coverage * 100),
+                    "total_count": 100,
+                    "passed": accuracy >= 0.85 and coverage >= 0.70,
+                },
+                "reliability_diagram": [],
+                "coverage_accuracy_curve": [],
+            }
+        },
+    }
+
+
 def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
@@ -224,6 +256,33 @@ def _structured_release_evidence(
     )
 
 
+def _synthetic_longitudinal_records(
+    *,
+    diversified_surrogates: bool,
+) -> list[dict[str, object]]:
+    surrogate_values = (
+        ("synthetic-surrogate-a", "synthetic-surrogate-b")
+        if diversified_surrogates
+        else ("synthetic-surrogate-a", "synthetic-surrogate-a")
+    )
+    return [
+        {
+            "patient_id": "synthetic-subject-001",
+            "record_id": f"synthetic-note-{index}",
+            "text": "Synthetic follow-up note.",
+            "audit_spans": [
+                {
+                    "canonical_label": "SYNTHETIC_SURROGATE",
+                    "surrogate": surrogate,
+                    "start": 0,
+                    "end": 9,
+                }
+            ],
+        }
+        for index, surrogate in enumerate(surrogate_values, start=1)
+    ]
+
+
 def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, object]:
     strict = {
         "confidence_interval": {
@@ -264,6 +323,52 @@ def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, 
             "relaxed": relaxed,
             "strict": strict,
         }
+    }
+
+
+def _relation_golden_metric(
+    *,
+    strict_by_type: dict[str, float] | None = None,
+    assertion_leaks: int = 0,
+    temporal_leaks: int = 0,
+    fixture_hash: str = RELATION_FIXTURE_HASH,
+) -> dict[str, object]:
+    strict_by_type = strict_by_type or {
+        "ASSERTED_ABSENT": 1.0,
+        "TEMPORALLY_BEFORE": 1.0,
+        "TREATS": 1.0,
+    }
+    return {
+        "relation_golden": {
+            "by_type": {
+                relation_type: {"strict": {"f1": strict_f1}}
+                for relation_type, strict_f1 in strict_by_type.items()
+            },
+            "fixture_set_hash": fixture_hash,
+            "trap_leaks": {
+                "assertion": assertion_leaks,
+                "temporal": temporal_leaks,
+            },
+        }
+    }
+
+
+def _relation_golden_baseline_store() -> dict[str, object]:
+    entries: dict[str, object] = {}
+    for relation_type in ("ASSERTED_ABSENT", "TEMPORALLY_BEFORE", "TREATS"):
+        key = relation_baseline_key("Relation", relation_type)
+        entries[key] = {
+            "family": "Relation",
+            "fixture_hash": RELATION_FIXTURE_HASH,
+            "key": key,
+            "relation_type": relation_type,
+            "strict_f1": 1.0,
+            "tolerance": 0.01,
+        }
+    return {
+        "entries": {},
+        "relation_golden": {"entries": entries, "schema_version": 1},
+        "schema_version": 1,
     }
 
 
@@ -478,6 +583,155 @@ def test_g9_relation_gate_passes_at_configured_lower_ci_floor(
     )
 
 
+def test_relation_golden_gate_passes_at_pinned_tolerance_and_is_signed(
+    tmp_path: Path,
+) -> None:
+    metrics = _relation_golden_metric(
+        strict_by_type={
+            "ASSERTED_ABSENT": 0.99,
+            "TEMPORALLY_BEFORE": 0.99,
+            "TREATS": 0.99,
+        }
+    )
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=metrics,
+        )
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["comparisons"]["TREATS"]["minimum"] == 0.99
+    assert check.details["trap_tolerance"] == {"assertion": 0, "temporal": 0}
+
+    restored = GateReport.from_json(result.to_json())
+    restored_check = _check(restored, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert restored.verify(SIGNING_KEY)
+    assert restored_check.details == check.details
+
+
+def test_relation_golden_gate_quarantines_strict_f1_regression(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(
+                strict_by_type={
+                    "ASSERTED_ABSENT": 1.0,
+                    "TEMPORALLY_BEFORE": 1.0,
+                    "TREATS": 0.989,
+                }
+            ),
+        ),
+        _relation_golden_baseline_store(),
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    regression = check.details["violations"]["strict_f1_regressions"]["TREATS"]
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert regression["candidate"] == 0.989
+    assert regression["minimum"] == 0.99
+
+
+def test_relation_golden_gate_quarantines_fixture_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    candidate_hash = f"sha256:{'0' * 64}"
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(fixture_hash=candidate_hash),
+        ),
+        _relation_golden_baseline_store(),
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    mismatches = check.details["violations"]["fixture_hash_mismatches"]
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.reason == "relation golden fixture hash does not match pinned baseline"
+    assert set(mismatches) == {
+        "ASSERTED_ABSENT",
+        "TEMPORALLY_BEFORE",
+        "TREATS",
+    }
+    assert mismatches["TREATS"] == {
+        "baseline": RELATION_FIXTURE_HASH,
+        "candidate": candidate_hash,
+    }
+
+
+def test_relation_golden_gate_quarantines_missing_type_baseline(
+    tmp_path: Path,
+) -> None:
+    baseline = _relation_golden_baseline_store()
+    del baseline["relation_golden"]["entries"]["relation::treats"]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(),
+        ),
+        baseline,
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["violations"]["missing_baselines"] == ["TREATS"]
+
+
+@pytest.mark.parametrize("trap_kind", release_gates.RELATION_GOLDEN_TRAP_KINDS)
+def test_relation_golden_gate_hard_fails_on_any_trap_leak(
+    tmp_path: Path,
+    trap_kind: str,
+) -> None:
+    trap_counts = {"assertion_leaks": 0, "temporal_leaks": 0}
+    trap_counts[f"{trap_kind}_leaks"] = 1
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(**trap_counts),
+        ),
+        _relation_golden_baseline_store(),
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.reason == "zero-tolerance assertion or temporal trap leak"
+    assert check.details["violations"]["trap_leaks"] == {trap_kind: 1}
+
+
 def test_gate_report_from_json_rejects_malformed_payload() -> None:
     with pytest.raises(ValueError, match="Invalid JSON for GateReport"):
         GateReport.from_json("{")
@@ -568,6 +822,90 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
 
     assert result.decision == QUARANTINED
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
+
+
+def test_g10_faithfulness_gate_passes_grounded_outputs(tmp_path: Path) -> None:
+    text = "Patient has hypertension."
+    start = text.index("hypertension")
+    faithfulness = compute_span_grounded_faithfulness(
+        [
+            {
+                "fact_type": "diagnosis",
+                "value": "hypertension",
+                "supporting_span": {
+                    "start": start,
+                    "end": start + len("hypertension"),
+                },
+            }
+        ],
+        source_text=text,
+    )
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"faithfulness": faithfulness.to_dict()},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert faithfulness.ungrounded_fact_rate == 0.0
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["ungrounded_fact_rate"] == pytest.approx(0.0)
+
+
+def test_g10_faithfulness_gate_quarantines_fabricated_facts(
+    tmp_path: Path,
+) -> None:
+    text = "Patient has hypertension."
+    start = text.index("hypertension")
+    faithfulness = compute_span_grounded_faithfulness(
+        [
+            {
+                "fact_type": "diagnosis",
+                "value": "pneumonia",
+                "supporting_span": {
+                    "start": start,
+                    "end": start + len("hypertension"),
+                },
+            }
+        ],
+        source_text=text,
+    )
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"faithfulness": faithfulness.to_dict()},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert faithfulness.ungrounded_fact_rate > 0.0
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "ungrounded-fact rate exceeds hard ceiling"
+    assert check.details["violations"]["ungrounded_fact_rate"]["observed"] == 1.0
+
+
+@pytest.mark.parametrize("rate", [-0.01, 1.01])
+def test_g10_faithfulness_gate_rejects_invalid_rates(
+    tmp_path: Path,
+    rate: float,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"faithfulness": {"ungrounded_fact_rate": rate}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "ungrounded-fact rate must be between zero and one"
 
 
 def test_extraction_reemission_critical_identifier_forces_quarantine(
@@ -875,6 +1213,78 @@ def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
     assert check.details["violations"]["SSN:en"]["coverage"] == pytest.approx(0.80)
 
 
+def test_grounding_coverage_gate_accepts_documented_operating_point(
+    tmp_path: Path,
+) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metadata_updates={"grounding_calibration": _grounding_report()},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is True
+    assert check.details["vocabularies"]["RXNORM"]["coverage"] == pytest.approx(0.72)
+
+
+def test_grounding_coverage_gate_reads_offline_report_artifact(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "grounding-calibration.json"
+    report_path.write_text(json.dumps(_grounding_report()), encoding="utf-8")
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "grounding_calibration_report_path": str(report_path),
+                "require_grounding_coverage": True,
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is True
+    assert check.details["explicit"] is True
+    assert check.details["required"] is True
+
+
+def test_grounding_coverage_gate_blocks_accuracy_below_coverage_target(
+    tmp_path: Path,
+) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "grounding_calibration": _grounding_report(
+                    accuracy=0.84,
+                    coverage=0.72,
+                )
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is False
+    assert "RXNORM" in check.details["violations"]
+
+
+def test_required_grounding_coverage_gate_fails_closed_when_missing(
+    tmp_path: Path,
+) -> None:
+    result = _gate().preview(
+        _report(tmp_path, metadata_updates={"require_grounding_coverage": True}),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is False
+    assert check.reason == "grounding calibration report is required"
+
+
 def test_g4_blocks_only_the_offending_quantized_format(tmp_path: Path) -> None:
     int8 = _gate().evaluate(
         _report(
@@ -1118,6 +1528,114 @@ def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> 
     assert result.decision == RELEASABLE
     assert calls == {"strict": 1}
     assert _check(result, "G8").details["spans_checked"] == 3
+
+
+def test_cross_document_linkage_gate_signs_blocked_and_mitigated_verdicts(
+    tmp_path: Path,
+) -> None:
+    overlinked = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=False),
+        hmac_key="synthetic-release-gate-key",
+    )
+    mitigated = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=True),
+        hmac_key="synthetic-release-gate-key",
+    )
+
+    blocked = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"longitudinal_linkage_risk": overlinked},
+        ),
+        _baseline(),
+    )
+    releasable = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"longitudinal_linkage_risk": mitigated},
+        ),
+        _baseline(),
+    )
+
+    blocked_check = _check(blocked, release_gates.CROSS_DOCUMENT_LINKAGE_GATE)
+    releasable_check = _check(
+        releasable,
+        release_gates.CROSS_DOCUMENT_LINKAGE_GATE,
+    )
+    assert overlinked["linkage_success_upper_bound"] == pytest.approx(1.0)
+    assert mitigated["linkage_success_upper_bound"] == pytest.approx(0.0)
+    assert blocked.decision == QUARANTINED
+    assert blocked.verify(SIGNING_KEY)
+    assert GateReport.from_json(blocked.to_json()).verify(SIGNING_KEY)
+    assert blocked_check.passed is False
+    assert releasable.decision == RELEASABLE
+    assert releasable.verify(SIGNING_KEY)
+    assert releasable_check.passed is True
+
+    serialized = blocked.to_json()
+    assert "synthetic-subject-001" not in serialized
+    assert "synthetic-note-1" not in serialized
+    assert "synthetic-surrogate-a" not in serialized
+    assert blocked_check.details["evidence_hash"].startswith("sha256:")
+    assert blocked_check.details["high_risk_evidence"]
+    assert all(
+        {"start", "end"}.issubset(item)
+        for item in blocked_check.details["high_risk_evidence"]
+    )
+    assert all(
+        set(item)
+        <= {
+            "patient_hash",
+            "note_index",
+            "note_hash",
+            "value_hash",
+            "start",
+            "end",
+        }
+        for item in blocked_check.details["high_risk_evidence"]
+    )
+
+
+def test_cross_document_linkage_gate_discards_raw_fields_from_signed_evidence() -> None:
+    evidence = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=True),
+        hmac_key="synthetic-release-gate-key",
+    )
+    evidence["patient_risks"][0]["raw_note"] = "synthetic-private-canary"
+
+    check = release_gates.evaluate_cross_document_linkage_gate(evidence)
+
+    assert check.passed is True
+    assert check.details["evidence_valid"] is True
+    assert check.details["evidence_hash"].startswith("sha256:")
+    assert "synthetic-private-canary" not in json.dumps(check.to_dict())
+
+
+def test_cross_document_linkage_gate_honors_configured_ceiling(
+    tmp_path: Path,
+) -> None:
+    evidence = longitudinal_risk_report(
+        _synthetic_longitudinal_records(diversified_surrogates=False),
+        hmac_key="synthetic-release-gate-key",
+    )
+    gate = ReleaseGate(
+        signing_key=SIGNING_KEY,
+        cross_document_linkage_ceiling=1.0,
+    )
+
+    report = gate.evaluate(
+        _report(
+            tmp_path,
+            metric_updates={"longitudinal_linkage_risk": evidence},
+        ),
+        _baseline(),
+    )
+    check = _check(report, release_gates.CROSS_DOCUMENT_LINKAGE_GATE)
+
+    assert report.decision == RELEASABLE
+    assert report.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["linkage_ceiling"] == pytest.approx(1.0)
 
 
 def test_k_floor_release_gate_passes_signed_enforcement_evidence(

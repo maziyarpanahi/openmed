@@ -57,6 +57,13 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
+    - name: Assert built wheel contains no restricted vocabulary data
+      run: |
+        python -m pip install build
+        python -m build --wheel --outdir "$RUNNER_TEMP/openmed-wheel"
+        python scripts/release/check_license_policy.py \
+          --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
+
     - name: Validate GitHub Actions references
       run: |
         python scripts/release/check_github_actions_refs.py
@@ -96,6 +103,56 @@ jobs:
           echo "::error title=README translation drift::One or more README translations are stale. Review them using docs/i18n/glossary.md, then refresh the committed section manifest."
           exit 1
         fi
+
+  grounding-export-validation:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install validation dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Fetch pinned HL7 FHIR validator
+      run: |
+        curl --fail --location --retry 3 \
+          https://github.com/hapifhir/org.hl7.fhir.core/releases/download/6.8.1/validator_cli.jar \
+          --output "$RUNNER_TEMP/validator_cli.jar"
+        echo "7d05b31196557a8ed2748d3c8a1646deba9b6600f5b6946be598949bd11eefe2  $RUNNER_TEMP/validator_cli.jar" \
+          | sha256sum --check --strict
+
+    - name: Validate synthetic FHIR and OMOP grounding exports
+      run: |
+        uv run python -m openmed.eval.suites.grounding_export \
+          --validator-jar "$RUNNER_TEMP/validator_cli.jar" \
+          --output grounding-export-validation.json
+
+    - name: Upload grounding export validation report
+      if: always() && hashFiles('grounding-export-validation.json') != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: grounding-export-validation
+        path: grounding-export-validation.json
 
   lockfile-drift:
     runs-on: ubuntu-latest
@@ -147,6 +204,10 @@ jobs:
     - name: Check Ruff formatting
       run: |
         uv run ruff format --check .
+
+    - name: Enforce public API backwards-compatibility policy
+      run: |
+        uv run python scripts/release/check_public_api.py
 
     - name: Type-check annotated public modules
       run: |
@@ -317,6 +378,37 @@ jobs:
       run: |
         pytest tests/unit/interop/test_spacy_component.py -q
 
+  yasbd-integration:
+    needs: [repo-policy, lint]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install YASBD integration dependencies
+      run: |
+        uv sync --frozen --extra dev --extra yasbd --python ${{ matrix.python-version }}
+
+    - name: Test the real YASBD adapter and sentence API
+      run: |
+        uv run pytest tests/unit/processing/test_sentences.py tests/unit/test_core.py \
+          -q -k "yasbd or sentence"
+
   i18n-cjk-indic:
     needs: [repo-policy, lint]
     if: needs.repo-policy.outputs.run-i18n-cjk-indic == 'true'
@@ -358,6 +450,7 @@ jobs:
     - test
     - security
     - spacy-integration
+    - yasbd-integration
     - i18n-cjk-indic
     if: >-
       always() &&
@@ -366,6 +459,7 @@ jobs:
       needs.test.result == 'success' &&
       needs.security.result == 'success' &&
       needs.spacy-integration.result == 'success' &&
+      needs.yasbd-integration.result == 'success' &&
       (
         needs.i18n-cjk-indic.result == 'success' ||
         needs.i18n-cjk-indic.result == 'skipped'
@@ -391,6 +485,21 @@ jobs:
       run: |
         uv run --with build python -m build
 
+    - name: Enforce wheel size budget and record language-extra footprints
+      run: |
+        python scripts/release/check_size_budget.py \
+          --skip-build \
+          --wheel-dir dist \
+          --report size-budget-report.json
+
+    - name: Install built core wheel for import budget
+      run: |
+        uv pip install --system dist/*.whl
+
+    - name: Enforce core import budget
+      run: |
+        python scripts/release/check_import_budget.py
+
     - name: Verify PEP 561 marker in built artifacts
       run: |
         python - <<'PY'
@@ -410,4 +519,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: dist-packages
-        path: dist/
+        path: |
+          dist/
+          size-budget-report.json
+      if: always()

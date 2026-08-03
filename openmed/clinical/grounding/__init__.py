@@ -1,6 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
+from .api import DEFAULT_GROUNDING_SYSTEMS, ground
 from .assertion_grounding import (
     ASSERTION_GROUNDING_ADVISORY,
     GROUNDING_ASSERTION_STATUSES,
@@ -14,6 +15,23 @@ from .assertion_grounding import (
     ground_with_context,
 )
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
+from .decompose import (
+    COMPOSITE_GROUNDING_DECISIONS,
+    CompositeChildProvenance,
+    CompositeDecompositionProvenance,
+    CompositeGroundingResult,
+    PostCoordinationRequest,
+    decompose_and_relink,
+)
+from .ecl import (
+    ECLConstraint,
+    ECLResolver,
+    ECLValidationError,
+    ECLValidationIssue,
+    ECLValidationResult,
+    ECLValidator,
+    validate_ecl_syntax,
+)
 from .embeddings import (
     AliasEncoder,
     EncoderUnavailableError,
@@ -25,12 +43,28 @@ from .index import (
     AliasEmbeddingIndex,
     DenseCandidateGenerator,
     IndexBackendUnavailableError,
+    IndexUpdateSummary,
     build_index,
     build_or_load_index,
     load_index,
     query_index,
 )
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
+from .postcoordination import (
+    POSTCOORDINATION_ATTRIBUTE_SLOTS,
+    POSTCOORDINATION_PROVENANCE_KEY,
+    ConceptReference,
+    MentionDecomposer,
+    PostCoordinationDecomposition,
+    PostCoordinationStage,
+    Refinement,
+    ResolvedRefinement,
+    RulesPostCoordinationDecomposer,
+    SnomedExpression,
+    build_expression,
+    decompose_mention,
+    is_postcoordinated_candidate,
+)
 from .provenance import (
     GROUNDING_ASSIST_ONLY_ADVISORY,
     GROUNDING_METHODS,
@@ -55,8 +89,9 @@ from .registry import (
     register_loader,
     validate_vocabulary_loader,
 )
+from .restricted import RESTRICTED_SYSTEM_URIS, UserKeyVocabularyLoader
 from .retrieval import TwoStageRetriever, retrieve_candidates
-from .types import Candidate
+from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
@@ -80,8 +115,20 @@ __all__ = [
     "AssertionGroundingStatus",
     "Candidate",
     "CandidateRankingStage",
+    "COMPOSITE_GROUNDING_DECISIONS",
+    "CompositeChildProvenance",
+    "CompositeDecompositionProvenance",
+    "CompositeGroundingResult",
     "ConceptMatch",
+    "ConceptReference",
     "DenseCandidateGenerator",
+    "DEFAULT_GROUNDING_SYSTEMS",
+    "ECLConstraint",
+    "ECLResolver",
+    "ECLValidationError",
+    "ECLValidationIssue",
+    "ECLValidationResult",
+    "ECLValidator",
     "EncoderUnavailableError",
     "FREE_VOCAB_SYSTEMS",
     "GROUNDING_ASSERTION_STATUSES",
@@ -90,21 +137,35 @@ __all__ = [
     "GROUNDING_POLICIES",
     "GroundingAlternative",
     "GroundingProvenance",
+    "GroundedSpan",
     "HashingAliasEncoder",
     "IndexBackendUnavailableError",
+    "IndexUpdateSummary",
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
     "MLXSapBERTEncoder",
+    "MentionDecomposer",
     "POLICY_DROP",
     "POLICY_STATUS",
     "POLICY_SUPPRESS",
+    "POSTCOORDINATION_ATTRIBUTE_SLOTS",
+    "POSTCOORDINATION_PROVENANCE_KEY",
+    "PostCoordinationDecomposition",
+    "PostCoordinationRequest",
+    "PostCoordinationStage",
     "RESTRICTED_VOCAB_SYSTEMS",
+    "RESTRICTED_SYSTEM_URIS",
     "RankingConfig",
+    "Refinement",
+    "ResolvedRefinement",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "RulesPostCoordinationDecomposer",
+    "SnomedExpression",
     "TwoStageRetriever",
+    "UserKeyVocabularyLoader",
     "VocabConcept",
     "VocabLoader",
     "VocabLoaderError",
@@ -120,12 +181,17 @@ __all__ = [
     "available_loaders",
     "build_index",
     "build_or_load_index",
+    "build_expression",
+    "decompose_mention",
+    "decompose_and_relink",
     "generate_candidates",
+    "ground",
     "ground_with_context",
     "get_index",
     "get_linker",
     "get_loader",
     "grounding_provenance",
+    "is_postcoordinated_candidate",
     "load_encoder",
     "load_index",
     "normalize_language",
@@ -137,5 +203,6 @@ __all__ = [
     "register_loader",
     "retrieve_candidates",
     "scan_provenance_for_raw_text",
+    "validate_ecl_syntax",
     "validate_vocabulary_loader",
 ]

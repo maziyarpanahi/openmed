@@ -90,6 +90,13 @@ from openmed.eval.suites.code_mixed_routing import (
     load_code_mixed_routing_fixtures,
     run_code_mixed_routing,
 )
+from openmed.eval.suites.composite_normalization import (
+    COMPOSITE_NORMALIZATION,
+    build_composite_normalization_gold,
+    composite_normalization_metadata,
+    evaluate_composite_normalization,
+    run_composite_normalization,
+)
 from openmed.eval.suites.cross_lingual_grounding import (
     CROSS_LINGUAL_GROUNDING,
     CROSS_LINGUAL_LANGUAGES,
@@ -97,6 +104,7 @@ from openmed.eval.suites.cross_lingual_grounding import (
     NON_ENGLISH_TOP1_FLOOR,
     CrossLingualGroundingCase,
     CrossLingualGroundingReport,
+    assert_cross_lingual_grounding_gate,
     build_fixture_grounder,
     cross_lingual_grounding_metadata,
     load_cross_lingual_grounding_fixtures,
@@ -169,6 +177,14 @@ from openmed.eval.suites.policy_compliance import (
     load_policy_compliance_fixtures,
     policy_compliance_metadata,
 )
+from openmed.eval.suites.radiology_relations import (
+    RADIOLOGY_ENTITY_RELATION,
+    RADIOLOGY_MEDICAL_DEVICE_DISCLAIMER,
+    build_radiology_entity_relation_report,
+    radiology_entity_relation_suite_metadata,
+    run_synthetic_radiology_entity_relation_eval,
+    score_radiology_entity_relation_fixtures,
+)
 from openmed.eval.suites.relations import (
     DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS,
     RELATIONS,
@@ -183,10 +199,24 @@ from openmed.eval.suites.relations import (
 from openmed.eval.suites.shield import (
     SHIELD,
     load_shield_fixtures,
+    run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
+)
+from openmed.eval.suites.temporal_tlinks import (
+    TEMPORAL_TLINK_FIXTURE_PATH,
+    TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION,
+    TemporalFixtureCandidate,
+    TemporalFixtureSpan,
+    TemporalTLinkEvaluationResult,
+    TemporalTLinkFixture,
+    assert_temporal_tlink_gate,
+    decode_temporal_tlink_fixture,
+    evaluate_temporal_tlink_fixtures,
+    load_temporal_tlink_fixtures,
 )
 
 GOLDEN = "golden"
+GROUNDING_CALIBRATION = "grounding_calibration"
 N2C2 = "n2c2"
 
 DEFAULT_SUITES: tuple[str, ...] = (
@@ -208,12 +238,13 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIAN_MULTI_ID,
     INDIC_NAME_CONSISTENCY,
 )
+SUPPORTED_SUITES: tuple[str, ...] = DEFAULT_SUITES + (GROUNDING_CALIBRATION,)
 
 
 def validate_suite_name(name: str) -> str:
     """Return *name* if it is one of the scaffolded benchmark suites."""
-    if name not in DEFAULT_SUITES:
-        allowed = ", ".join(DEFAULT_SUITES)
+    if name not in SUPPORTED_SUITES:
+        allowed = ", ".join(SUPPORTED_SUITES)
         raise ValueError(
             f"unknown benchmark suite {name!r}; expected one of: {allowed}"
         )
@@ -225,6 +256,13 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     suite = validate_suite_name(name)
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == GROUNDING_CALIBRATION:
+        from openmed.eval.suites.grounding_calibration import load_grounding_gold
+
+        path = kwargs.get("path", kwargs.get("gold_path"))
+        if path is None:
+            raise ValueError("grounding calibration suite requires path or gold_path")
+        return list(load_grounding_gold(path))
     if suite == I2B2:
         return load_i2b2_deid(
             path=kwargs.get("path"),
@@ -287,6 +325,12 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return policy_compliance_metadata(**kwargs)
     if suite == BIOMEDICAL_NER:
         return biomedical_ner_suite_metadata(**kwargs)
+    if suite == GROUNDING_CALIBRATION:
+        from openmed.eval.suites.grounding_calibration import (
+            grounding_calibration_metadata,
+        )
+
+        return grounding_calibration_metadata(**kwargs)
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
     if suite == MASAKHANER:
@@ -389,6 +433,7 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 __all__ = [
     "GOLDEN",
+    "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
     "SHIELD",
@@ -407,9 +452,17 @@ __all__ = [
     "INDIC_NAME_CONSISTENCY",
     "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
+    "RADIOLOGY_ENTITY_RELATION",
+    "RADIOLOGY_MEDICAL_DEVICE_DISCLAIMER",
     "DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS",
     "RelationFixture",
     "RelationTrap",
+    "TEMPORAL_TLINK_FIXTURE_PATH",
+    "TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION",
+    "TemporalFixtureCandidate",
+    "TemporalFixtureSpan",
+    "TemporalTLinkEvaluationResult",
+    "TemporalTLinkFixture",
     "ComparatorAdapter",
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
@@ -423,12 +476,14 @@ __all__ = [
     "NON_ENGLISH_TOP1_FLOOR",
     "CrossLingualGroundingCase",
     "CrossLingualGroundingReport",
+    "assert_cross_lingual_grounding_gate",
     "build_fixture_grounder",
     "cross_lingual_grounding_metadata",
     "load_cross_lingual_grounding_fixtures",
     "run_cross_lingual_grounding",
     "scan_restricted_corpus_markers",
     "DEFAULT_SUITES",
+    "SUPPORTED_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
@@ -454,6 +509,7 @@ __all__ = [
     "load_masakhaner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
+    "run_clinical_phi_shield_benchmark",
     "shield_suite_metadata",
     "load_policy_compliance_fixtures",
     "policy_compliance_metadata",
@@ -462,6 +518,14 @@ __all__ = [
     "relation_suite_metadata",
     "relation_trap_summary",
     "score_relation_fixtures",
+    "assert_temporal_tlink_gate",
+    "decode_temporal_tlink_fixture",
+    "evaluate_temporal_tlink_fixtures",
+    "load_temporal_tlink_fixtures",
+    "build_radiology_entity_relation_report",
+    "radiology_entity_relation_suite_metadata",
+    "run_synthetic_radiology_entity_relation_eval",
+    "score_radiology_entity_relation_fixtures",
     "run_biomedical_ner_benchmark",
     "run_masakhaner_benchmark",
     "load_naamapadam_fixtures",

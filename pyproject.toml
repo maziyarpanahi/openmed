@@ -195,6 +195,10 @@ langchain = [
   "langchain-core>=0.2,<2",
 ]
 
+haystack = [
+  "haystack-ai>=2,<3",
+]
+
 llamaindex = [
   "llama-index-core>=0.10,<1",
 ]
@@ -304,6 +308,10 @@ docs = [
   "griffe",
 ]
 
+yasbd = [
+  "yasbd-lib>=0.13.1,<0.14",
+]
+
 [project.scripts]
 openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"
@@ -358,6 +366,7 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 markers = [
   "integration: marks end-to-end or external integration tests",
   "slow: marks tests that are expected to run slowly",
+  "contract: marks property-based stage-boundary contract tests",
   "fuzz: marks property-based (Hypothesis) fuzz tests",
   "doctest_examples: runs doctest examples for targeted public modules"
 ]
