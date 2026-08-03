@@ -16,10 +16,16 @@ from .config import (
     normalize_language_code,
 )
 from .family_transfer import (
+    FamilyAdapterFallback,
+    FamilyAdapterRoute,
+    FamilyTransferAdapterUnavailableError,
+    FamilyTransferRouter,
+    UnsupportedFamilyTransferLanguageError,
     adapter_metadata_for,
     donor_languages_for,
     primary_donor_for,
     resolve_family_transfer,
+    route_family_adapter,
 )
 
 __all__ = [
@@ -30,14 +36,20 @@ __all__ = [
     "DEFAULT_TRANSFER_GRAPH",
     "PERMISSIVE_ADAPTER_LICENSES",
     "AdapterMetadata",
+    "FamilyAdapterFallback",
+    "FamilyAdapterRoute",
     "FamilyTransferConfig",
+    "FamilyTransferAdapterUnavailableError",
     "FamilyTransferResolution",
+    "FamilyTransferRouter",
     "LanguageFamily",
     "TransferEdge",
+    "UnsupportedFamilyTransferLanguageError",
     "adapter_metadata_for",
     "donor_languages_for",
     "get_family_transfer_config",
     "normalize_language_code",
     "primary_donor_for",
     "resolve_family_transfer",
+    "route_family_adapter",
 ]
