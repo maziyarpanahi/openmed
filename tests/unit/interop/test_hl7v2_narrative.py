@@ -57,6 +57,7 @@ def test_flat_oru_is_coherent_safe_and_maps_results_to_source_fields():
     assert result.text_for(result_span) == (
         "Patient [PERSON] called from [PHONE] about [ID_NUM]."
     )
+    assert ".." not in result.text
 
     glucose_offset = result.text.index("7.1")
     provenance = result.provenance_at(glucose_offset)

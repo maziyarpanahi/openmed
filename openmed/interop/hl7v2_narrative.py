@@ -522,7 +522,7 @@ def _render_items(
             value_start = cursor
             append(item.value)
             value_end = cursor
-            if mode == "flat":
+            if mode == "flat" and item.value[-1:] not in ".!?":
                 append(".")
             spans.append(
                 HL7V2FieldSpan(
