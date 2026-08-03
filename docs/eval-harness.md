@@ -239,6 +239,31 @@ cold_ms = report.metrics["latency"]["cold_start_ms"]
 print(f"Cold-start latency: {cold_ms:.1f} ms")
 ```
 
+## Family-transfer evaluation
+
+`cross_lingual_family_transfer_report` scores the bundled synthetic Indic
+donor/target gold in three modes: an untargeted multilingual baseline, Hindi
+donor-adapter zero-shot inference for Telugu, and a Telugu-adapted path. The
+same report re-scores the donor before and after adaptation so target F1 is
+published alongside an explicit donor non-regression result.
+
+The runner receives `transfer_mode`, `evaluation_role`, `family`,
+`donor_language`, `target_language`, and `adapter_language` in fixture metadata.
+It can therefore select locally provisioned model and adapter assets without a
+network call. JSON and Markdown artifacts contain only aggregate metrics,
+language codes, and donor-to-target deltas; synthetic fixture text and spans
+are excluded.
+
+```python
+from openmed.eval import cross_lingual_family_transfer_report
+
+report = cross_lingual_family_transfer_report(
+    "local-family-transfer-model",
+    runner=local_family_transfer_runner,
+)
+print(report.to_markdown())
+```
+
 ## Grounding accuracy gate
 
 `openmed/eval/grounding_accuracy.py` measures whether the sparse candidate
