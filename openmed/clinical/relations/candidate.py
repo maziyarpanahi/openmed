@@ -394,6 +394,7 @@ class MedicationRelation:
     confidence: float
     features: dict[str, float]
     normalized: dict[str, Any] | None = None
+    coreference: CoreferenceProvenance | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic dictionary representation."""
@@ -414,7 +415,73 @@ class MedicationRelation:
         }
         if self.normalized is not None:
             payload["normalized"] = dict(self.normalized)
+        if self.coreference is not None:
+            payload["coreference"] = self.coreference.to_dict()
         return payload
+
+
+@dataclass(frozen=True)
+class CoreferenceSourceReference:
+    """Privacy-safe source offsets and hash for one coreferent mention."""
+
+    start: int
+    end: int
+    text_hash: str
+
+    def __post_init__(self) -> None:
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("coreference source offsets must satisfy 0 <= start < end")
+        if re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", self.text_hash) is None:
+            raise ValueError("coreference source text_hash must be an HMAC-SHA256 hash")
+
+    def to_dict(self) -> dict[str, int | str]:
+        """Return a JSON-compatible reference without raw source text."""
+
+        return {
+            "start": self.start,
+            "end": self.end,
+            "text_hash": self.text_hash,
+        }
+
+
+@dataclass(frozen=True)
+class CoreferenceProvenance:
+    """Document-local cluster identity and safe supporting mention evidence."""
+
+    cluster_id: str
+    representative: CoreferenceSourceReference
+    supporting_mentions: tuple[CoreferenceSourceReference, ...]
+
+    def __post_init__(self) -> None:
+        if not self.cluster_id:
+            raise ValueError("coreference cluster_id must be non-empty")
+        supporting_mentions = tuple(
+            sorted(
+                self.supporting_mentions,
+                key=lambda mention: (
+                    mention.start,
+                    mention.end,
+                    mention.text_hash,
+                ),
+            )
+        )
+        offsets = [(mention.start, mention.end) for mention in supporting_mentions]
+        if len(set(offsets)) != len(offsets):
+            raise ValueError("coreference supporting mention offsets must be unique")
+        if self.representative not in supporting_mentions:
+            raise ValueError("coreference representative must be a supporting mention")
+        object.__setattr__(self, "supporting_mentions", supporting_mentions)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return deterministic cluster provenance without mention surfaces."""
+
+        return {
+            "cluster_id": self.cluster_id,
+            "representative": self.representative.to_dict(),
+            "supporting_mentions": [
+                mention.to_dict() for mention in self.supporting_mentions
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -424,6 +491,7 @@ class MedicationRelationGroup:
     medication: SpanReference
     relations: tuple[MedicationRelation, ...]
     advisory: str
+    coreference: CoreferenceProvenance | None = None
 
     @property
     def attributes(self) -> dict[MedicationAttributeType, MedicationRelation]:
@@ -434,11 +502,14 @@ class MedicationRelationGroup:
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic dictionary representation."""
 
-        return {
+        payload: dict[str, Any] = {
             "medication": self.medication.to_dict(),
             "relations": [relation.to_dict() for relation in self.relations],
             "advisory": self.advisory,
         }
+        if self.coreference is not None:
+            payload["coreference"] = self.coreference.to_dict()
+        return payload
 
 
 __all__ = [
@@ -447,6 +518,8 @@ __all__ = [
     "DRUG_TO_DURATION",
     "DRUG_TO_FREQUENCY",
     "DRUG_TO_ROUTE",
+    "CoreferenceProvenance",
+    "CoreferenceSourceReference",
     "MedicationAttributeType",
     "MedicationRelation",
     "MedicationRelationGroup",

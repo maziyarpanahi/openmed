@@ -1062,6 +1062,8 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return structured metadata retained from semantic/clinical merging."""
 
     metadata: dict[str, Any] = {}
+    if entity.get("detector_sources"):
+        metadata["detector_sources"] = list(entity["detector_sources"])
     if entity.get("source_labels"):
         metadata["semantic_merge"] = {
             "source_labels": list(entity.get("source_labels", ())),
@@ -1609,6 +1611,12 @@ def _entity_sources(entity: Any) -> list[str]:
         return ["safety_sweep"]
     if source == "locale_rule":
         return ["locale_rule"]
+    detector_sources = metadata.get("detector_sources")
+    if isinstance(detector_sources, (list, tuple)):
+        recorded = {str(item).strip() for item in detector_sources if str(item).strip()}
+        ordered = [item for item in ("ml", "locale_rule") if item in recorded]
+        if ordered:
+            return ordered
     return ["ml"]
 
 
@@ -1647,6 +1655,7 @@ def _detector_infos(
     pii_result: Any,
     *,
     model_name: str,
+    lang: str,
     use_safety_sweep: bool,
 ) -> list[Any]:
     from .audit import DetectorInfo
@@ -1662,6 +1671,19 @@ def _detector_infos(
             commit=metadata.get("model_commit"),
         )
     ]
+    if any(
+        "locale_rule" in _entity_sources(entity)
+        for entity in getattr(pii_result, "entities", ())
+    ):
+        detectors.append(
+            DetectorInfo(
+                source="locale_rule",
+                model_id=f"locale_rules:{lang}",
+                model_format="rules",
+                commit=None,
+                metadata={"language": lang},
+            )
+        )
     if use_safety_sweep:
         detectors.append(
             DetectorInfo(
@@ -1992,6 +2014,7 @@ def _build_audit_report(
         detectors=_detector_infos(
             pii_result,
             model_name=model_name,
+            lang=lang,
             use_safety_sweep=use_safety_sweep,
         ),
         safety_sweep=sweep_metadata,

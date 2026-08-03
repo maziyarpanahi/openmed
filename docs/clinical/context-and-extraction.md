@@ -231,6 +231,23 @@ callers that already have an experiencer layer.
 
 ## Assertion Records
 
+`assert_context(text, spans)` is the document-level API. It returns copied span
+mappings with `negation`, `uncertainty`, `experiencer`, and `temporality`, and
+also places those fields under `metadata["clinical_context"]` for compatibility
+with formatted NER results. Input spans are not mutated.
+
+```python
+from openmed.clinical import assert_context
+
+text = "No evidence of pneumonia."
+start = text.index("pneumonia")
+[span] = assert_context(
+    text,
+    [{"text": "pneumonia", "start": start, "end": start + 9}],
+)
+print(span["negation"])
+```
+
 `assert_context_axes()` returns a compact `ClinicalAssertion` for downstream
 grounding. It deliberately does not build FHIR, OMOP, or other clinical records
 by itself.

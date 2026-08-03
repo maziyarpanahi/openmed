@@ -31,6 +31,27 @@ def _prediction(text: str) -> PredictionResult:
     )
 
 
+def _locale_prediction(text: str, *, with_model_fragment: bool) -> PredictionResult:
+    entities = []
+    if with_model_fragment:
+        start = text.index("01")
+        entities.append(
+            EntityPrediction(
+                text="01",
+                label="DATE",
+                start=start,
+                end=start + 2,
+                confidence=0.95,
+            )
+        )
+    return PredictionResult(
+        text=text,
+        entities=entities,
+        model_name="synthetic-locale-model",
+        timestamp=datetime.now().isoformat(),
+    )
+
+
 @patch("openmed.core.pii.extract_pii")
 def test_deidentify_audit_report_records_ml_and_safety_sweep_provenance(mock_extract):
     text = "Patient John Doe emailed jane.patient@example.com."
@@ -57,6 +78,46 @@ def test_deidentify_audit_report_records_ml_and_safety_sweep_provenance(mock_ext
     assert email_span.canonical_label == "EMAIL"
     assert email_span.evidence["metadata"]["patterns_version"] == "safety-sweep-v1"
     assert "jane.patient@example.com" not in report.export_review_bundle_json()
+
+
+@patch("openmed.analyze_text")
+def test_audit_records_semantic_only_locale_rule_provenance(mock_analyze):
+    text = "DOB: 01/15/1970"
+    mock_analyze.return_value = _locale_prediction(text, with_model_fragment=False)
+
+    report = deidentify(
+        text,
+        model_name="synthetic-locale-model",
+        method="mask",
+        use_safety_sweep=False,
+        audit=True,
+    )
+
+    assert len(report.spans) == 1
+    assert report.spans[0].sources == ["locale_rule"]
+    assert report.spans[0].evidence["metadata"]["detector_sources"] == ["locale_rule"]
+    locale_detector = next(
+        detector for detector in report.detectors if detector.source == "locale_rule"
+    )
+    assert locale_detector.model_id == "locale_rules:en"
+    assert locale_detector.model_format == "rules"
+
+
+@patch("openmed.analyze_text")
+def test_audit_records_ml_and_locale_rule_for_expanded_spans(mock_analyze):
+    text = "DOB: 01/15/1970"
+    mock_analyze.return_value = _locale_prediction(text, with_model_fragment=True)
+
+    report = deidentify(
+        text,
+        model_name="synthetic-locale-model",
+        method="mask",
+        use_safety_sweep=False,
+        audit=True,
+    )
+
+    assert len(report.spans) == 1
+    assert report.spans[0].sources == ["ml", "locale_rule"]
 
 
 @patch("openmed.core.pii.extract_pii")

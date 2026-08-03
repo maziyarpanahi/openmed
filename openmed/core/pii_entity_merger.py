@@ -930,6 +930,7 @@ def merge_entities_with_semantic_units(
                     "merged_from": len(overlapping),
                     "source_labels": source_labels,
                     "mixed_label_union": mixed_label_union,
+                    "detector_sources": ["ml", "locale_rule"],
                 }
             )
 
@@ -947,6 +948,7 @@ def merge_entities_with_semantic_units(
                     "merged_from": 0,
                     "source_labels": [str(unit_type)],
                     "mixed_label_union": False,
+                    "detector_sources": ["locale_rule"],
                 }
             )
 
@@ -1019,6 +1021,14 @@ def _coalesce_overlapping_merged_entities(
                 if label
             }
         )
+        detector_sources = sorted(
+            {
+                str(source)
+                for entity in cluster
+                for source in entity.get("detector_sources", ["ml"])
+                if source
+            }
+        )
         result.append(
             {
                 "entity_type": winner["entity_type"],
@@ -1034,6 +1044,7 @@ def _coalesce_overlapping_merged_entities(
                     {normalize_label(label) for label in source_labels}
                 )
                 > 1,
+                "detector_sources": detector_sources,
             }
         )
 
@@ -1141,6 +1152,14 @@ def _bridge_india_spans(
             if label
         }
     )
+    detector_sources = sorted(
+        {
+            str(source)
+            for entity in (left, right)
+            for source in entity.get("detector_sources", ["ml"])
+            if source
+        }
+    )
     return {
         "entity_type": max(
             (left, right),
@@ -1155,6 +1174,7 @@ def _bridge_india_spans(
         "source_labels": source_labels,
         "mixed_label_union": len({normalize_label(label) for label in source_labels})
         > 1,
+        "detector_sources": detector_sources,
         "india_clinical_merge": {
             "script_boundary_bridge": True,
             "transliteration_pair": True,

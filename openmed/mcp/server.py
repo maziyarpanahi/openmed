@@ -1388,7 +1388,7 @@ def build_mcp_tool_handlers(
     of registered tool names matches the canonical registry specs.
     """
 
-    return {
+    handlers: dict[str, Callable[..., Dict[str, Any]]] = {
         "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
             **kwargs,
             runtime_provider=runtime_provider,
@@ -1436,6 +1436,8 @@ def build_mcp_tool_handlers(
         ),
         "openmed_search_models": lambda **kwargs: openmed_search_models(**kwargs),
     }
+    handlers.update(TOOL_REGISTRY.registered_handlers())
+    return handlers
 
 
 # Canonical set of MCP-exposed tool names, kept in sync with TOOL_REGISTRY by

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+from openmed.clinical import CoreferenceChain
 from openmed.clinical.context import (
     CERTAIN,
     FAMILY_EXPERIENCER,
@@ -12,11 +16,21 @@ from openmed.clinical.context import (
 )
 from openmed.clinical.exporters import (
     CORE_OMOP_TABLES,
+    COREFERENCE_EVIDENCE_EXTENSION_URL,
     achilles_smoke_check,
     to_fhir,
     to_omop,
 )
 from openmed.clinical.grounding import Candidate, GroundedSpan
+from openmed.core.schemas import OpenMedSpan, hmac_text_hash
+
+_COREFERENCE_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
+    / "clinical"
+    / "medication_coreference_collapse.json"
+)
+_SYNTHETIC_HASH_SECRET = "synthetic-medication-coreference-secret"
 
 
 def _span(
@@ -74,6 +88,47 @@ def _spans() -> tuple[GroundedSpan, ...]:
     )
 
 
+def _coreference_chain(case: dict) -> CoreferenceChain:
+    members = tuple(
+        OpenMedSpan(
+            doc_id=case["document_id"],
+            start=mention["start"],
+            end=mention["end"],
+            text_hash=hmac_text_hash(
+                case["text"][mention["start"] : mention["end"]],
+                _SYNTHETIC_HASH_SECRET,
+            ),
+            entity_type="DRUG",
+            canonical_label="MEDICATION",
+        )
+        for mention in case["mentions"]
+    )
+    return CoreferenceChain(
+        chain_id="coref-synthetic-medication",
+        members=members,
+        representative=members[case["representative_index"]],
+        confidence=0.98,
+    )
+
+
+def _fhir_source_evidence(extension: dict) -> tuple[int, int, str]:
+    values = {
+        item["url"]: item.get("valueUnsignedInt", item.get("valueString"))
+        for item in extension["extension"]
+    }
+    return values["start"], values["end"], values["textHash"]
+
+
+def _string_values(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [item for child in value.values() for item in _string_values(child)]
+    if isinstance(value, list):
+        return [item for child in value for item in _string_values(child)]
+    return []
+
+
 def test_to_fhir_emits_valid_core_r4_resource_shapes() -> None:
     bundle = to_fhir(
         _spans(),
@@ -101,6 +156,67 @@ def test_to_fhir_emits_valid_core_r4_resource_shapes() -> None:
     assert resources[0]["code"]["coding"][0]["version"] == "synthetic-v1"
     assert to_fhir(_spans(), document_id="synthetic-doc") == to_fhir(
         _spans(), document_id="synthetic-doc"
+    )
+
+
+def test_to_fhir_collapses_five_coreferent_medication_surfaces() -> None:
+    case = json.loads(_COREFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    chain = _coreference_chain(case)
+    grounding = case["grounding"]
+    candidate = Candidate(
+        system=grounding["system"],
+        code=grounding["code"],
+        display=grounding["display"],
+        score=0.99,
+        source="synthetic",
+        matched_alias=grounding["display"],
+        match_kind="exact",
+        vocab_version="synthetic-v1",
+    )
+    spans = tuple(
+        GroundedSpan(
+            text=mention["surface"],
+            start=mention["start"],
+            end=mention["end"],
+            candidates=(candidate,),
+            canonical_label="MEDICATION",
+        )
+        for mention in case["mentions"]
+    )
+
+    bundle = to_fhir(
+        spans,
+        document_id=case["document_id"],
+        coreference_chains=(chain,),
+    )
+
+    assert bundle is not None
+    assert len(bundle["entry"]) == 1
+    statement = bundle["entry"][0]["resource"]
+    assert statement["resourceType"] == case["expected_resource_type"]
+    evidence = next(
+        extension
+        for extension in statement["extension"]
+        if extension["url"] == COREFERENCE_EVIDENCE_EXTENSION_URL
+    )
+    supporting = [
+        item for item in evidence["extension"] if item["url"] == "supportingMention"
+    ]
+    assert len(supporting) == len(case["mentions"]) == 5
+    assert [_fhir_source_evidence(item) for item in supporting] == [
+        (member.start, member.end, member.text_hash) for member in chain.members
+    ]
+
+    evidence_values = {value.casefold() for value in _string_values(evidence)}
+    for mention in case["mentions"]:
+        assert mention["surface"].casefold() not in evidence_values
+    assert (
+        to_fhir(
+            reversed(spans),
+            document_id=case["document_id"],
+            coreference_chains=(chain,),
+        )
+        == bundle
     )
 
 

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import pytest
+
+import openmed.interop as interop
 
 OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "duckdb",
@@ -28,6 +31,13 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "scrubadub",
     "spacy",
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_runtime_plugin_adapters():
+    interop._reset_plugin_adapters_for_tests()
+    yield
+    interop._reset_plugin_adapters_for_tests()
 
 
 def _clear_optional_adapter_modules() -> None:
@@ -111,6 +121,77 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("zh").extra == "zh"
     assert "openmed.interop.icd11_api" not in sys.modules
     assert not any(_is_optional_adapter_module(name) for name in sys.modules)
+
+
+def test_sdk_adapters_and_exporters_share_registry_with_explicit_policy_opt_in(
+    monkeypatch,
+):
+    class SyntheticAdapter:
+        def to_openmed_spans(self, payload, **kwargs):
+            del payload, kwargs
+            return ()
+
+        def from_openmed_spans(self, spans, **kwargs):
+            del spans, kwargs
+            return {"schema": "synthetic-adapter.v1"}
+
+    class SyntheticExporter:
+        def export(self, spans, **kwargs):
+            del spans, kwargs
+            return {"schema": "synthetic-exporter.v1"}
+
+    def registration(component_id, kind, component, *, opted_in=False):
+        metadata = SimpleNamespace(
+            plugin_id="synthetic-interop-plugin",
+            component_id=component_id,
+            qualified_id=f"synthetic-interop-plugin:{component_id}",
+            kind=kind,
+            name=f"Synthetic {kind}",
+            description=f"Offline synthetic {kind}",
+        )
+        return SimpleNamespace(
+            metadata=metadata,
+            component=component,
+            loaded_by_policy_opt_in=opted_in,
+        )
+
+    adapter = registration(
+        "record-adapter",
+        "interop_adapter",
+        SyntheticAdapter(),
+    )
+    restricted_exporter = registration(
+        "restricted-exporter",
+        "exporter",
+        SyntheticExporter(),
+        opted_in=True,
+    )
+
+    def fake_iter_sdk_plugins(**policy):
+        registrations = [adapter]
+        if "synthetic-interop-plugin:restricted-exporter" in policy["opt_in_plugins"]:
+            registrations.append(restricted_exporter)
+        return tuple(registrations)
+
+    monkeypatch.setattr(interop, "_iter_sdk_plugins", fake_iter_sdk_plugins)
+
+    default_specs = interop.discover_plugin_adapters()
+    assert [spec.qualified_id for spec in default_specs] == [
+        "synthetic-interop-plugin:record-adapter"
+    ]
+    assert "synthetic-interop-plugin:restricted-exporter" not in (
+        interop.available_adapters()
+    )
+
+    interop.discover_plugin_adapters(
+        opt_in_plugins=("synthetic-interop-plugin:restricted-exporter",)
+    )
+
+    exporter_name = "synthetic-interop-plugin:restricted-exporter"
+    assert exporter_name in interop.available_adapters()
+    assert interop.adapter_spec(exporter_name).kind == "exporter"
+    assert interop.adapter_spec(exporter_name).loaded_by_policy_opt_in is True
+    assert interop.get_adapter(exporter_name) is restricted_exporter.component
 
 
 def test_presidio_adapter_missing_extra_raises_clear_import_error(monkeypatch):
