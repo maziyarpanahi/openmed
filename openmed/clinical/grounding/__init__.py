@@ -1,7 +1,7 @@
 """Vocabulary loading and linker helpers for clinical concept grounding."""
 
 from . import linkers as _linkers  # noqa: F401
-from .api import DEFAULT_GROUNDING_SYSTEMS, ground
+from .api import DEFAULT_GROUNDING_SYSTEMS, ground, ground_payload
 from .assertion_grounding import (
     ASSERTION_GROUNDING_ADVISORY,
     GROUNDING_ASSERTION_STATUSES,
@@ -59,11 +59,13 @@ from .registry import (
 )
 from .restricted import RESTRICTED_SYSTEM_URIS, UserKeyVocabularyLoader
 from .retrieval import TwoStageRetriever, retrieve_candidates
+from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
 from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
     RESTRICTED_VOCAB_SYSTEMS,
     RestrictedVocabularyError,
+    SnapshotManifest,
     VocabConcept,
     VocabLoader,
     VocabLoaderError,
@@ -107,10 +109,13 @@ __all__ = [
     "POLICY_SUPPRESS",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RESTRICTED_SYSTEM_URIS",
+    "RESTRICTED_SYSTEMS",
     "RankingConfig",
     "RestrictedVocabularyError",
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
+    "SYSTEM_URIS",
+    "SnapshotManifest",
     "TwoStageRetriever",
     "UserKeyVocabularyLoader",
     "VocabConcept",
@@ -130,6 +135,7 @@ __all__ = [
     "build_or_load_index",
     "generate_candidates",
     "ground",
+    "ground_payload",
     "ground_with_context",
     "get_index",
     "get_linker",
@@ -146,5 +152,7 @@ __all__ = [
     "register_loader",
     "retrieve_candidates",
     "scan_provenance_for_raw_text",
+    "canonical_system",
+    "system_uri",
     "validate_vocabulary_loader",
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -67,6 +68,7 @@ from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
     DeidentifyJobRequest,
+    GroundRequest,
     ModelUnloadRequest,
     OmopLoadRequest,
     PIIDeidentifyRequest,
@@ -112,6 +114,7 @@ _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
+_GROUNDING_CACHE_ENV_VAR = "OPENMED_GROUNDING_CACHE_DIR"
 
 
 @dataclass(frozen=True)
@@ -199,6 +202,30 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
             "by_reason": by_reason,
         }
     return response
+
+
+def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
+    """Build the shared offline grounding response without logging inputs."""
+
+    from openmed.clinical.grounding import (
+        RankingConfig,
+        VocabLoader,
+        ground_payload,
+    )
+
+    loader = VocabLoader(
+        cache_dir=os.getenv(_GROUNDING_CACHE_ENV_VAR),
+        local_only=payload.offline,
+    )
+    spans: Any = payload.entities if payload.entities is not None else payload.text
+    return ground_payload(
+        spans,
+        systems=payload.systems,
+        loader=loader,
+        config=RankingConfig(k=payload.top_k),
+        source_language=payload.source_language,
+        offline=payload.offline,
+    )
 
 
 def _error_response(
@@ -1019,6 +1046,46 @@ def create_app() -> FastAPI:
             },
         ):
             return await run_in_threadpool(_omop_load_summary, payload)
+
+    @app.post("/ground")
+    async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
+        """Ground text or pre-extracted entities against local snapshots."""
+
+        try:
+            return await run_in_threadpool(_ground_summary, payload)
+        except Exception as exc:
+            from openmed.clinical.grounding import (
+                RestrictedVocabularyError,
+                VocabLoaderError,
+            )
+            from openmed.core.offline import OfflineModeError
+
+            if isinstance(exc, RestrictedVocabularyError):
+                return _error_response(
+                    400,
+                    "restricted_terminology_unconfigured",
+                    "Restricted terminology requires a configured user-supplied "
+                    "out-of-process endpoint.",
+                )
+            if isinstance(exc, OfflineModeError):
+                return _error_response(
+                    503,
+                    "offline_snapshot_unavailable",
+                    "The requested vocabulary snapshot is unavailable offline.",
+                )
+            if isinstance(exc, VocabLoaderError):
+                return _error_response(
+                    400,
+                    "snapshot_invalid",
+                    "The requested vocabulary snapshot could not be verified.",
+                )
+            if isinstance(exc, (TypeError, ValueError)):
+                return _error_response(
+                    400,
+                    "grounding_invalid_request",
+                    "The grounding request is invalid.",
+                )
+            raise
 
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(
