@@ -17,6 +17,7 @@ import logging
 import os
 import shutil
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -56,6 +57,11 @@ from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
     export_transformersjs_bundle,
+)
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
+    validate_segmenter_resources,
 )
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
@@ -232,6 +238,7 @@ def export_onnx(
         model_id,
         cache_dir=cache_dir,
     )
+    model.to(dtype=torch.float32)
     model.eval()
 
     sample = tokenizer(
@@ -288,13 +295,15 @@ def export_onnx(
                 profile=profile,
             )
         )
-        torch.onnx.export(
-            wrapper,
-            example_inputs,
-            str(output_path),
-            **export_kwargs,
-        )
+        with _onnx_export_compatibility(model, torch):
+            torch.onnx.export(
+                wrapper,
+                example_inputs,
+                str(output_path),
+                **export_kwargs,
+            )
 
+    _consolidate_external_onnx_data(output_path)
     _check_onnx_model(output_path)
     return output_path
 
@@ -320,8 +329,12 @@ def export_webgpu(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model = onnx.load(str(onnx_path))
-    fp16_model = convert_float_to_float16(model, keep_io_types=keep_io_types)
+    model = onnx.load(str(onnx_path), load_external_data=False)
+    fp16_model = convert_float_to_float16(
+        str(onnx_path),
+        keep_io_types=keep_io_types,
+    )
+    _copy_missing_model_metadata(fp16_model, model)
     onnx.save(fp16_model, str(output_path))
     _check_onnx_model(output_path)
     return output_path
@@ -354,6 +367,7 @@ def convert(
     publish_token_env: str = "HF_WRITE_TOKEN",
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
+    segmenter_id: str | None = None,
 ) -> OnnxConversionResult:
     """Export ONNX artifacts and optionally publish the resulting directory."""
 
@@ -401,6 +415,12 @@ def convert(
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
+        require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
+    )
+    segmenter = (
+        package_segmenter_resources(output_dir, segmenter_id)
+        if segmenter_id is not None
+        else None
     )
     if should_optimize_onnx and unoptimized_path is not None:
         optimization_manifest = optimize_onnx_graph(
@@ -537,6 +557,7 @@ def convert(
             tokenizer_source=output_dir,
             config_source=output_dir / "config.json",
             update_manifest=False,
+            segmenter_id=segmenter_id,
         )
         artifacts.append(
             ExportArtifact(
@@ -587,6 +608,7 @@ def convert(
         shape_buckets=shape_bucket_config,
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
+        segmenter=segmenter,
     )
     if recall_report is not None:
         apply_int8_recall_certification(
@@ -629,6 +651,7 @@ def save_source_assets(
     cache_dir: str | None = None,
     max_seq_length: int = 512,
     require_id2label: bool = False,
+    require_tokenizer_json: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     """Save config, labels, and tokenizer assets beside exported artifacts."""
 
@@ -666,11 +689,20 @@ def save_source_assets(
         tokenizer.save_pretrained(output_dir)
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
+        if require_tokenizer_json:
+            raise RuntimeError(
+                f"Android ONNX export requires tokenizer.json for {model_id}"
+            ) from exc
         logger.warning(
             "Could not save tokenizer assets for %s into %s: %s",
             model_id,
             output_dir,
             exc,
+        )
+
+    if require_tokenizer_json and not (output_dir / "tokenizer.json").is_file():
+        raise RuntimeError(
+            f"Android ONNX export requires tokenizer.json for {model_id}"
         )
 
     return config, tokenizer_files
@@ -688,6 +720,7 @@ def write_export_manifest(
     shape_buckets: ShapeBucketConfig | Mapping[str, Any] | None = None,
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
 
@@ -729,11 +762,33 @@ def write_export_manifest(
             "files": list(tokenizer_files or find_tokenizer_files(output_dir)),
         },
     }
+    if segmenter is not None:
+        manifest["segmenter"] = dict(segmenter)
 
     manifest_path = output_dir / MANIFEST_FILENAME
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
+    validate_onnx_bundle(output_dir)
     return manifest_path
+
+
+def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
+    """Validate optional manifest-declared resources in an ONNX bundle."""
+
+    root = Path(output_dir)
+    manifest_path = root / MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        raise ValueError(f"ONNX bundle is missing {MANIFEST_FILENAME}: {root}")
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict):
+        raise ValueError("ONNX manifest must be a JSON object")
+    segmenter = manifest.get("segmenter")
+    if segmenter is not None:
+        if not isinstance(segmenter, Mapping):
+            raise ValueError("ONNX segmenter descriptor must be an object")
+        validate_segmenter_resources(root, segmenter)
+    return manifest
 
 
 def optimize_onnx_graph(
@@ -1274,8 +1329,95 @@ def _check_onnx_model(path: Path) -> None:
             "onnx is required to validate exported artifacts. "
             "Install with: pip install openmed[onnx]"
         ) from exc
-    model = onnx.load(str(path))
-    onnx.checker.check_model(model)
+    onnx.checker.check_model(str(path))
+
+
+def _consolidate_external_onnx_data(path: Path) -> None:
+    """Store large-model external tensors in one deterministic sidecar file."""
+
+    try:
+        import onnx
+    except ImportError:
+        return
+
+    metadata_model = onnx.load(str(path), load_external_data=False)
+    old_locations = {
+        item.value
+        for tensor in metadata_model.graph.initializer
+        for item in tensor.external_data
+        if item.key == "location" and item.value
+    }
+    if not old_locations:
+        return
+
+    sidecar_name = f"{path.name}.data"
+    sidecar_path = path.parent / sidecar_name
+    temporary_dir = path.parent / f".{path.name}.consolidated"
+    temporary_path = temporary_dir / path.name
+    temporary_sidecar = temporary_dir / sidecar_name
+    backup_sidecar = temporary_dir / f"{sidecar_name}.original"
+    model = onnx.load(str(path), load_external_data=True)
+    shutil.rmtree(temporary_dir, ignore_errors=True)
+    temporary_dir.mkdir()
+
+    try:
+        onnx.save_model(
+            model,
+            str(temporary_path),
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=sidecar_name,
+            size_threshold=0,
+            convert_attribute=False,
+        )
+        if not temporary_path.is_file() or not temporary_sidecar.is_file():
+            raise RuntimeError("ONNX external-data consolidation was incomplete")
+
+        if sidecar_path.exists():
+            sidecar_path.replace(backup_sidecar)
+        try:
+            temporary_sidecar.replace(sidecar_path)
+            temporary_path.replace(path)
+        except Exception:
+            sidecar_path.unlink(missing_ok=True)
+            if backup_sidecar.exists():
+                backup_sidecar.replace(sidecar_path)
+            raise
+    finally:
+        shutil.rmtree(temporary_dir, ignore_errors=True)
+
+    for location in old_locations - {sidecar_name}:
+        old_path = (path.parent / location).resolve(strict=False)
+        if old_path.parent == path.parent.resolve(strict=False):
+            old_path.unlink(missing_ok=True)
+
+
+def _copy_missing_model_metadata(target: Any, source: Any) -> None:
+    if not getattr(target, "ir_version", None) and getattr(source, "ir_version", None):
+        target.ir_version = source.ir_version
+
+    for field in ("producer_name", "producer_version", "domain", "doc_string"):
+        if not getattr(target, field, None) and getattr(source, field, None):
+            setattr(target, field, getattr(source, field))
+    if not getattr(target, "model_version", None) and getattr(
+        source, "model_version", None
+    ):
+        target.model_version = source.model_version
+
+    target_opsets = getattr(target, "opset_import", None)
+    source_opsets = getattr(source, "opset_import", None)
+    if target_opsets is not None and source_opsets is not None and not target_opsets:
+        target_opsets.extend(source_opsets)
+
+    target_graph = getattr(target, "graph", None)
+    source_graph = getattr(source, "graph", None)
+    if (
+        target_graph is not None
+        and source_graph is not None
+        and not getattr(target_graph, "name", None)
+        and getattr(source_graph, "name", None)
+    ):
+        target_graph.name = source_graph.name
 
 
 def _dedupe_keep_order(items: Sequence[str]) -> list[str]:
@@ -1395,6 +1537,34 @@ def _dynamic_export_kwargs(
     return {"dynamic_axes": dynamic_axes}
 
 
+@contextmanager
+def _onnx_export_compatibility(model: Any, torch_module: Any):
+    """Apply narrowly scoped exporter compatibility fixes for known families."""
+
+    if getattr(getattr(model, "config", None), "model_type", None) != "longformer":
+        yield
+        return
+
+    from transformers.models.longformer import modeling_longformer
+
+    original = modeling_longformer.create_bidirectional_mask
+
+    def legacy_bidirectional_mask(
+        *,
+        inputs_embeds: Any,
+        attention_mask: Any,
+        **_: Any,
+    ) -> Any:
+        mask = attention_mask[:, None, None, :].to(dtype=inputs_embeds.dtype)
+        return (1.0 - mask) * torch_module.finfo(inputs_embeds.dtype).min
+
+    modeling_longformer.create_bidirectional_mask = legacy_bidirectional_mask
+    try:
+        yield
+    finally:
+        modeling_longformer.create_bidirectional_mask = original
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert a Hugging Face token-classification model to ONNX artifacts",
@@ -1503,6 +1673,12 @@ def main() -> None:
         help="Synthetic note used for export and runtime verification",
     )
     parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    parser.add_argument(
         "--eval-suite",
         default=None,
         help="Benchmark fixture JSON/JSONL used to certify android INT8 recall",
@@ -1578,6 +1754,7 @@ def main() -> None:
         validation_lengths=_parse_int_tuple(args.validation_lengths),
         cache_dir=args.cache_dir,
         sample_text=args.sample_text,
+        segmenter_id=args.segmenter,
         eval_suite_path=args.eval_suite,
         recall_delta_report_path=args.recall_delta_report,
         publish_to_hub=args.publish_to_hub,

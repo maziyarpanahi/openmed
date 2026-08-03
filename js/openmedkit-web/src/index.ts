@@ -21,7 +21,9 @@ export type {
   DeidentifyOptions,
   ExtractPiiOptions,
   LoadModelOptions,
+  LoadOnnxModelOptions,
   ModelLoader,
+  OpenMedOnnxVariant,
   OpenMedDeidentifyResult,
   OpenMedSpan,
   PolicyLabel,
@@ -43,6 +45,7 @@ export {
 } from "./decoder";
 export {
   isLocalModelReference,
+  loadOnnxModel,
   loadTokenClassificationPipeline,
 } from "./model-loader";
 export {

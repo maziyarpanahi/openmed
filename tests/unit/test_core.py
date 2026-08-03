@@ -161,6 +161,7 @@ class TestModelLoader:
         )
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.pipeline")
     def test_create_pipeline_uses_local_files_only_for_local_path(
         self,
@@ -177,7 +178,9 @@ class TestModelLoader:
 
         kwargs = mock_pipeline.call_args.kwargs
         assert kwargs["model"] == str(model_dir)
-        assert kwargs["local_files_only"] is True
+        assert "local_files_only" not in kwargs
+        assert kwargs["model_kwargs"]["local_files_only"] is True
+        assert kwargs["model_kwargs"]["cache_dir"] == loader.config.cache_dir
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
     @patch("openmed.core.models.AutoTokenizer")
@@ -437,6 +440,129 @@ class TestAnalyzeTextBehaviour:
         assert pipeline.tokenizer.model_max_length == 384
 
     @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_forwards_explicit_sentence_backend(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.return_value = [SentenceSpan("sample text", 0, 11)]
+
+        from openmed import analyze_text
+
+        analyze_text(
+            "sample text",
+            model_name="model",
+            sentence_backend="yasbd",
+        )
+
+        mock_segment_text.assert_called_once_with(
+            "sample text",
+            language="en",
+            clean=False,
+            segmenter=None,
+            backend="yasbd",
+        )
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_explicit_yasbd_missing_dependency_fails_clearly(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.side_effect = ImportError(
+            "Install the optional extra with `pip install 'openmed[yasbd]'`."
+        )
+
+        from openmed import analyze_text
+
+        with pytest.raises(ImportError, match=r"openmed\[yasbd\]"):
+            analyze_text(
+                "sample text",
+                model_name="model",
+                sentence_backend="yasbd",
+            )
+
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
+    def test_analyze_text_auto_keeps_optional_sentence_fallback(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+        mock_segment_text.side_effect = ImportError("pySBD unavailable")
+
+        from openmed import analyze_text
+
+        result = analyze_text("sample text", model_name="model")
+
+        assert result.metadata["sentence_detection"] is False
+
+    @pytest.mark.parametrize("use_medical_tokenizer", [False, True])
+    @patch("openmed.processing.sentences.segment_text")
+    def test_aggregated_entity_is_split_at_sentence_and_line_boundaries(
+        self,
+        mock_segment_text,
+        use_medical_tokenizer,
+    ):
+        text = "Cyclopalm\nOndam"
+        mock_segment_text.return_value = [
+            SentenceSpan("Cyclopalm", 0, 9),
+            SentenceSpan("Ondam", 10, 15),
+        ]
+
+        loader = Mock()
+        loader.config = OpenMedConfig(use_medical_tokenizer=use_medical_tokenizer)
+        pipeline = Mock(
+            return_value=[
+                {
+                    "entity_group": "CHEM",
+                    "score": 0.954,
+                    "word": text,
+                    "start": 0,
+                    "end": len(text),
+                }
+            ]
+        )
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+
+        from openmed import analyze_text
+
+        result = analyze_text(text, model_name="model", loader=loader)
+
+        assert [
+            (entity.text, entity.start, entity.end) for entity in result.entities
+        ] == [
+            ("Cyclopalm", 0, 9),
+            ("Ondam", 10, 15),
+        ]
+        assert [entity.metadata["sentence_index"] for entity in result.entities] == [
+            0,
+            1,
+        ]
+
+    @patch("openmed.processing.sentences.segment_text")
     @patch("openmed.format_predictions")
     @patch("openmed.ModelLoader")
     def test_sentence_detection_batches_large_inputs(
@@ -527,6 +653,7 @@ class TestAnalyzeTextBehaviour:
             loader.load_model("nonexistent-model")
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.pipeline")
     def test_create_pipeline(self, mock_pipeline):
         """Test pipeline creation."""
@@ -549,6 +676,7 @@ class TestAnalyzeTextBehaviour:
             mock_pipeline.assert_called_once()
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.pipeline")
     def test_create_pipeline_reuses_cached_pipeline(self, mock_pipeline):
         """Repeated pipeline creation should reuse the cached pipeline."""

@@ -117,7 +117,25 @@ def _tool_handler(
         ),
         "openmed_risk_score": lambda **kwargs: mcp_server.openmed_risk_score(**kwargs),
         "openmed_clinical_pipeline": (
-            lambda **kwargs: mcp_server.openmed_clinical_pipeline(**kwargs)
+            lambda **kwargs: mcp_server.openmed_clinical_pipeline(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
+        ),
+        "openmed_fhir_bundle": lambda **kwargs: mcp_server.openmed_fhir_bundle(
+            **kwargs
+        ),
+        "openmed_risk_report": lambda **kwargs: mcp_server.openmed_risk_report(
+            **kwargs
+        ),
+        "openmed_signed_audit_report": (
+            lambda **kwargs: mcp_server.openmed_signed_audit_report(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
+        ),
+        "openmed_search_models": lambda **kwargs: mcp_server.openmed_search_models(
+            **kwargs
         ),
     }
     try:

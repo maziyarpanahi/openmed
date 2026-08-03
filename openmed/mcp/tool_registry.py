@@ -9,7 +9,13 @@ from dataclasses import dataclass
 from inspect import Parameter, Signature
 from typing import Any, Optional
 
-from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
+from openmed.core.schemas import load_schema
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
@@ -19,7 +25,7 @@ _SEMVER_RE = re.compile(
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
 _STABILITY_VALUES = frozenset({"experimental", "stable", "deprecated"})
-_CLINICAL_STAGE_VALUES = (
+CLINICAL_STAGE_ORDER = (
     "detect",
     "context",
     "sections",
@@ -86,6 +92,11 @@ class ToolSpec:
     version: str = "1.0.0"
     stability: str = "stable"
     parameters: Sequence[ToolParameter] = ()
+    title: str = ""
+    read_only_hint: bool = False
+    destructive_hint: bool = True
+    idempotent_hint: bool = False
+    open_world_hint: bool = True
 
     def __post_init__(self) -> None:
         """Normalize mutable inputs and validate core metadata."""
@@ -97,6 +108,10 @@ class ToolSpec:
             raise ValueError(
                 f"tool spec {self.name!r} stability must be one of {known}"
             )
+        title = self.title.strip()
+        if not title:
+            title = self.name.removeprefix("openmed_").replace("_", " ").title()
+        object.__setattr__(self, "title", title)
         object.__setattr__(self, "input_schema", deepcopy(dict(self.input_schema)))
         object.__setattr__(self, "output_schema", deepcopy(dict(self.output_schema)))
         object.__setattr__(self, "parameters", tuple(self.parameters))
@@ -109,6 +124,44 @@ class ToolSpec:
             [parameter.signature_parameter() for parameter in self.parameters],
             return_annotation=dict[str, Any],
         )
+
+    def annotations(self) -> JsonObject:
+        """Return MCP-compatible behavioral annotations for this tool."""
+
+        return {
+            "title": self.title,
+            "readOnlyHint": self.read_only_hint,
+            "destructiveHint": self.destructive_hint,
+            "idempotentHint": self.idempotent_hint,
+            "openWorldHint": self.open_world_hint,
+        }
+
+    def mcp_output_schema(self) -> JsonSchema:
+        """Return the MCP result schema, including structured failures."""
+
+        return {
+            "type": "object",
+            "anyOf": [
+                deepcopy(dict(self.output_schema)),
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "error": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "code": {"type": "string"},
+                                "message": {"type": "string"},
+                            },
+                            "required": ["code", "message"],
+                        },
+                        "is_error": {"type": "boolean", "const": True},
+                    },
+                    "required": ["error", "is_error"],
+                },
+            ],
+        }
 
     def document(self) -> JsonObject:
         """Return a machine-readable schema document for this tool."""
@@ -123,13 +176,107 @@ class ToolSpec:
         }
 
 
+@dataclass(frozen=True)
+class WorkflowArtifactSpec:
+    """Registered schema for one discoverable workflow artifact."""
+
+    name: str
+    schema_id: str
+    schema: Mapping[str, Any]
+    source_tool: str
+
+    def __post_init__(self) -> None:
+        """Detach the stored schema from caller-owned mutable mappings."""
+
+        object.__setattr__(self, "schema", deepcopy(dict(self.schema)))
+
+    def document(self, *, include_schema: bool = False) -> JsonObject:
+        """Return discovery metadata and, optionally, the full JSON schema."""
+
+        payload: JsonObject = {
+            "name": self.name,
+            "schema_id": self.schema_id,
+            "source_tool": self.source_tool,
+        }
+        if include_schema:
+            payload["schema"] = deepcopy(dict(self.schema))
+        return payload
+
+
+@dataclass(frozen=True)
+class WorkflowSpec:
+    """Discovery contract for an MCP prompt/resource workflow."""
+
+    name: str
+    description: str
+    prompt_name: str
+    resource_uri: str
+    fixture_uri: str
+    stage_order: Sequence[str]
+    tools: Sequence[str]
+    artifacts: Sequence[WorkflowArtifactSpec]
+    version: str = "1.0.0"
+    default_execution: str = "local"
+
+    def __post_init__(self) -> None:
+        """Normalize sequence fields and validate discoverable identifiers."""
+
+        if not _SEMVER_RE.match(self.version):
+            raise ValueError(f"workflow spec {self.name!r} has invalid semver")
+        if not self.prompt_name or not self.resource_uri or not self.fixture_uri:
+            raise ValueError(f"workflow spec {self.name!r} is not discoverable")
+        stage_order = tuple(self.stage_order)
+        artifacts = tuple(self.artifacts)
+        if tuple(artifact.name for artifact in artifacts) != stage_order:
+            raise ValueError(
+                f"workflow spec {self.name!r} artifact order must match stage order"
+            )
+        object.__setattr__(self, "stage_order", stage_order)
+        object.__setattr__(self, "tools", tuple(self.tools))
+        object.__setattr__(self, "artifacts", artifacts)
+
+    def artifact(self, name: str) -> WorkflowArtifactSpec:
+        """Return the registered artifact schema named *name*."""
+
+        for artifact in self.artifacts:
+            if artifact.name == name:
+                return artifact
+        raise KeyError(f"unknown workflow artifact {self.name!r} {name!r}")
+
+    def document(self, *, include_schemas: bool = False) -> JsonObject:
+        """Return the workflow's machine-readable discovery document."""
+
+        return {
+            "name": self.name,
+            "description": self.description,
+            "version": self.version,
+            "prompt_name": self.prompt_name,
+            "resource_uri": self.resource_uri,
+            "fixture_uri": self.fixture_uri,
+            "default_execution": self.default_execution,
+            "stage_order": list(self.stage_order),
+            "tools": list(self.tools),
+            "artifacts": [
+                artifact.document(include_schema=include_schemas)
+                for artifact in self.artifacts
+            ],
+        }
+
+
 class ToolRegistry:
     """In-memory registry of named, versioned tool specifications."""
 
-    def __init__(self, specs: Iterable[ToolSpec] = ()) -> None:
+    def __init__(
+        self,
+        specs: Iterable[ToolSpec] = (),
+        workflows: Iterable[WorkflowSpec] = (),
+    ) -> None:
         self._specs: dict[tuple[str, str], ToolSpec] = {}
+        self._workflows: dict[tuple[str, str], WorkflowSpec] = {}
         for spec in specs:
             self.register(spec)
+        for workflow in workflows:
+            self.register_workflow(workflow)
 
     def register(self, spec: ToolSpec) -> None:
         """Register one tool spec version."""
@@ -138,6 +285,20 @@ class ToolRegistry:
         if key in self._specs:
             raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
         self._specs[key] = spec
+
+    def register_workflow(self, spec: WorkflowSpec) -> None:
+        """Register one discoverable workflow spec version."""
+
+        key = (spec.name, spec.version)
+        if key in self._workflows:
+            raise ValueError(f"duplicate workflow spec {spec.name!r} {spec.version!r}")
+        unknown_tools = set(spec.tools) - {tool.name for tool in self._specs.values()}
+        if unknown_tools:
+            unknown = ", ".join(sorted(unknown_tools))
+            raise ValueError(
+                f"workflow spec {spec.name!r} references unknown tools: {unknown}"
+            )
+        self._workflows[key] = spec
 
     def get(self, name: str, version: str | None = None) -> ToolSpec:
         """Return one spec by name and optional version."""
@@ -169,12 +330,37 @@ class ToolRegistry:
             )
         )
 
+    def get_workflow(self, name: str, version: str | None = None) -> WorkflowSpec:
+        """Return one workflow spec by name and optional version."""
+
+        if version is not None:
+            try:
+                return self._workflows[(name, version)]
+            except KeyError as exc:
+                raise KeyError(f"unknown workflow spec {name!r} {version!r}") from exc
+
+        candidates = [spec for spec in self._workflows.values() if spec.name == name]
+        if not candidates:
+            raise KeyError(f"unknown workflow spec {name!r}")
+        return max(candidates, key=lambda spec: _semver_key(spec.version))
+
+    def workflow_specs(self) -> tuple[WorkflowSpec, ...]:
+        """Return all workflow specs sorted by name and semantic version."""
+
+        return tuple(
+            sorted(
+                self._workflows.values(),
+                key=lambda spec: (spec.name, _semver_key(spec.version)),
+            )
+        )
+
     def document(self) -> JsonObject:
         """Return the generated machine-readable registry document."""
 
         return {
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
             "tools": [spec.document() for spec in self.all_specs()],
+            "workflows": [spec.document() for spec in self.workflow_specs()],
         }
 
 
@@ -228,6 +414,30 @@ def validate_registered_tool_output(name: str, payload: Any) -> JsonObject:
     """Validate an output payload against the latest registered spec for *name*."""
 
     return validate_tool_output(TOOL_REGISTRY.get(name), payload)
+
+
+def validate_registered_workflow_artifact(
+    workflow_name: str,
+    artifact_name: str,
+    payload: Any,
+) -> JsonObject:
+    """Validate one artifact against its registered workflow schema."""
+
+    workflow = TOOL_REGISTRY.get_workflow(workflow_name)
+    artifact = workflow.artifact(artifact_name)
+    errors: list[str] = []
+    _validate_schema(payload, artifact.schema, "$", errors)
+    if errors:
+        preview = "; ".join(errors[:4])
+        raise ToolSchemaValidationError(
+            f"{workflow.name}.{artifact.name} failed schema "
+            f"{artifact.schema_id}: {preview}"
+        )
+    if not isinstance(payload, Mapping):
+        raise ToolSchemaValidationError(
+            f"{workflow.name}.{artifact.name} must be an object"
+        )
+    return dict(payload)
 
 
 def validate_tool_output(spec: ToolSpec, payload: Any) -> JsonObject:
@@ -538,6 +748,16 @@ def _array(items: Mapping[str, Any]) -> JsonSchema:
     return {"type": "array", "items": dict(items)}
 
 
+def _openmed_span_schema() -> JsonSchema:
+    """Return the canonical span schema for a nested tool contract."""
+
+    schema = load_schema("span")
+    for metadata_key in ("$id", "$schema", "schema_version", "title"):
+        schema.pop(metadata_key, None)
+    schema["properties"]["canonical_label"]["enum"] = sorted(CANONICAL_LABELS)
+    return schema
+
+
 def _parameter(
     name: str,
     schema: Mapping[str, Any],
@@ -604,7 +824,7 @@ _KEEP_ALIVE_PARAMETER = _parameter(
 )
 _LANG_PARAMETER = _parameter(
     "lang",
-    _schema("string", enum=sorted(SUPPORTED_LANGUAGES)),
+    _schema("string", enum=sorted(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)),
     str,
     "en",
     "PII language code.",
@@ -790,104 +1010,97 @@ _WORKFLOW_RESULT_OUTPUT = _object(
         "trace",
     ),
 )
-_OPENMED_SPAN_OUTPUT = _object(
-    properties={
-        "schema_version": _schema("integer"),
-        "doc_id": _schema("string"),
-        "start": _schema("integer", minimum=0),
-        "end": _schema("integer", minimum=0),
-        "text_hash": _schema("string"),
-        "entity_type": _schema("string"),
-        "canonical_label": _schema("string"),
-        "policy_label": _schema("string"),
-        "regulatory_tags": _array(_schema("string")),
-        "score": _nullable("number", minimum=0.0, maximum=1.0),
-        "detector": _nullable("string"),
-        "evidence": _object(),
-        "action": _schema("string"),
-        "replacement": _nullable("string"),
-        "reversible_id": _nullable("string"),
-        "section": _nullable("string"),
-        "metadata": _object(),
-    },
-    required=(
-        "schema_version",
-        "doc_id",
-        "start",
-        "end",
-        "text_hash",
-        "entity_type",
-        "canonical_label",
-        "policy_label",
-        "regulatory_tags",
-        "score",
-        "detector",
-        "evidence",
-        "action",
-        "replacement",
-        "reversible_id",
-        "section",
-        "metadata",
-    ),
-    additional=False,
+_OPENMED_SPAN_OUTPUT = _openmed_span_schema()
+_CLINICAL_STAGE_SCHEMA = _schema(
+    "string",
+    enum=list(CLINICAL_STAGE_ORDER),
 )
-_STRUCTURED_ERROR_OUTPUT = _object(
+_CLINICAL_CONTRACT_ERROR_OUTPUT = _object(
     properties={
         "code": _schema("string"),
         "message": _schema("string"),
-        "stage": _nullable("string"),
+        "stage": _nullable(
+            "string",
+            enum=[*CLINICAL_STAGE_ORDER, None],
+        ),
         "details": _object(),
     },
     required=("code", "message", "stage", "details"),
+    additional=False,
 )
-_ERROR_OR_NULL = {"anyOf": [_STRUCTURED_ERROR_OUTPUT, _schema("null")]}
+_CLINICAL_ERROR_OR_NULL = {"anyOf": [_CLINICAL_CONTRACT_ERROR_OUTPUT, _schema("null")]}
 _CLINICAL_TRACE_OUTPUT = _object(
     properties={
-        "stage": _schema("string", enum=_CLINICAL_STAGE_VALUES),
-        "status": _schema("string"),
-        "duration_ms": _nullable("number"),
+        "stage": _CLINICAL_STAGE_SCHEMA,
+        "status": _schema("string", enum=["planned", "completed"]),
     },
     required=("stage", "status"),
+    additional=False,
 )
 _GROUND_OUTPUT = _object(
     properties={
         "schema_version": _schema("string", enum=["openmed.ground.v1"]),
-        "status": _schema("string", enum=["completed", "failed", "unimplemented"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
         "spans": _array(_OPENMED_SPAN_OUTPUT),
         "grounded_concepts": _array(_object()),
-        "error": _ERROR_OR_NULL,
+        "error": _CLINICAL_ERROR_OR_NULL,
     },
     required=("schema_version", "status", "spans", "grounded_concepts", "error"),
+    additional=False,
 )
 _EXPORT_FHIR_OUTPUT = _object(
     properties={
         "schema_version": _schema("string", enum=["openmed.export_fhir.v1"]),
-        "status": _schema("string", enum=["completed", "failed", "unimplemented"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
         "bundle": _object(),
         "resource_count": _schema("integer", minimum=0),
-        "error": _ERROR_OR_NULL,
+        "error": _CLINICAL_ERROR_OR_NULL,
     },
-    required=("schema_version", "status", "bundle", "resource_count", "error"),
+    required=(
+        "schema_version",
+        "status",
+        "spans",
+        "bundle",
+        "resource_count",
+        "error",
+    ),
+    additional=False,
 )
 _RISK_SCORE_OUTPUT = _object(
     properties={
         "schema_version": _schema("string", enum=["openmed.risk_score.v1"]),
-        "status": _schema("string", enum=["completed", "failed", "unimplemented"]),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "unimplemented"],
+        ),
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
         "risk_report": _object(),
-        "error": _ERROR_OR_NULL,
+        "error": _CLINICAL_ERROR_OR_NULL,
     },
-    required=("schema_version", "status", "risk_report", "error"),
+    required=("schema_version", "status", "spans", "risk_report", "error"),
+    additional=False,
 )
 _CLINICAL_PIPELINE_OUTPUT = _object(
     properties={
-        "schema_version": _schema("string", enum=["openmed.clinical_pipeline.v1"]),
-        "status": _schema(
-            "string", enum=["planned", "completed", "rejected", "failed"]
+        "schema_version": _schema(
+            "string",
+            enum=["openmed.clinical_pipeline.v1"],
         ),
-        "stages": _array(_schema("string", enum=_CLINICAL_STAGE_VALUES)),
+        "status": _schema(
+            "string",
+            enum=["planned", "completed", "rejected", "failed"],
+        ),
+        "stages": _array(_CLINICAL_STAGE_SCHEMA),
         "artifacts": _object(),
         "final_output": {},
-        "error": _ERROR_OR_NULL,
+        "error": _CLINICAL_ERROR_OR_NULL,
         "trace": _array(_CLINICAL_TRACE_OUTPUT),
     },
     required=(
@@ -899,47 +1112,265 @@ _CLINICAL_PIPELINE_OUTPUT = _object(
         "error",
         "trace",
     ),
+    additional=False,
+)
+_DEIDENTIFIED_HANDOFF_OUTPUT = _object(
+    properties={
+        "schema_version": _schema(
+            "string",
+            enum=["openmed.deidentified_handoff.v1"],
+        ),
+        "deidentified_text": _schema("string"),
+        "source_text_hash": _schema("string"),
+    },
+    required=("schema_version", "deidentified_text", "source_text_hash"),
+    additional=False,
+)
+_DETECT_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "model_name": _schema("string"),
+        "entity_count": _schema("integer", minimum=0),
+    },
+    required=("spans", "model_name", "entity_count"),
+    additional=False,
+)
+_CONTEXT_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "context_count": _schema("integer", minimum=0),
+    },
+    required=("spans", "context_count"),
+    additional=False,
+)
+_SECTION_ARTIFACT_OUTPUT = _object(
+    properties={
+        "label": _schema("string"),
+        "start": _schema("integer", minimum=0),
+        "end": _schema("integer", minimum=0),
+    },
+    required=("label", "start", "end"),
+)
+_SECTIONS_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "sections": _array(_SECTION_ARTIFACT_OUTPUT),
+    },
+    required=("spans", "sections"),
+    additional=False,
+)
+_RELATIONS_ARTIFACT_OUTPUT = _object(
+    properties={
+        "spans": _array(_OPENMED_SPAN_OUTPUT),
+        "relations": _array(_object()),
+    },
+    required=("spans", "relations"),
+    additional=False,
 )
 _SPAN_ARRAY_OR_NULL = {"anyOf": [_array(_OPENMED_SPAN_OUTPUT), _schema("null")]}
 _STRING_ARRAY_OR_NULL = {"anyOf": [_array(_schema("string")), _schema("null")]}
 _OBJECT_ARRAY_OR_NULL = {"anyOf": [_array(_object()), _schema("null")]}
 _CLINICAL_STAGES_PARAMETER = _parameter(
     "stages",
-    _array(_schema("string", enum=_CLINICAL_STAGE_VALUES)),
+    {
+        "type": "array",
+        "items": _CLINICAL_STAGE_SCHEMA,
+        "minItems": 1,
+        "uniqueItems": True,
+    },
     list[str],
     description=(
-        "Declared clinical workflow stages in canonical order: "
-        "detect, context, sections, relations, ground, export, risk."
+        "Clinical workflow stages in canonical order: detect, context, sections, "
+        "relations, ground, export, risk."
     ),
 )
 _CLINICAL_SPANS_PARAMETER = _parameter(
     "spans",
     _array(_OPENMED_SPAN_OUTPUT),
     list[dict[str, Any]],
-    description="Canonical OpenMedSpan artifacts to process.",
+    description="Canonical, text-free OpenMedSpan artifacts to process.",
+)
+_FHIR_RESOURCE_SCHEMA = _object(
+    properties={"resourceType": _schema("string")},
+    required=("resourceType",),
+    additional=True,
+)
+_FHIR_BUNDLE_ENTRY_OUTPUT = _object(
+    properties={
+        "fullUrl": _schema("string"),
+        "resource": _object(),
+        "request": _nullable("object"),
+    },
+    required=("fullUrl", "resource"),
+)
+_FHIR_BUNDLE_OUTPUT = _object(
+    properties={
+        "resourceType": _schema("string", enum=["Bundle"]),
+        "type": _schema("string"),
+        "entry": _array(_FHIR_BUNDLE_ENTRY_OUTPUT),
+    },
+    required=("resourceType", "type", "entry"),
+)
+_QUASI_IDENTIFIER_OUTPUT = _object(
+    properties={
+        "record_index": _schema("integer"),
+        "record_id": _nullable("string"),
+        "category": _schema("string"),
+        "value": _schema("string"),
+        "normalized_value": _schema("string"),
+        "source": _schema("string"),
+        "start": _nullable("integer"),
+        "end": _nullable("integer"),
+        "section": _nullable("string"),
+    },
+    required=(
+        "record_index",
+        "record_id",
+        "category",
+        "value",
+        "normalized_value",
+        "source",
+        "start",
+        "end",
+        "section",
+    ),
+)
+_QUASI_IDENTIFIER_KEY_OUTPUT = _object(
+    properties={
+        "category": _schema("string"),
+        "values": _array(_schema("string")),
+    },
+    required=("category", "values"),
+)
+_SINGLETON_RECORD_OUTPUT = _object(
+    properties={
+        "record_index": _schema("integer"),
+        "record_id": _nullable("string"),
+        "effective_k": _schema("integer"),
+        "quasi_identifier_key": _array(_QUASI_IDENTIFIER_KEY_OUTPUT),
+    },
+    required=(
+        "record_index",
+        "record_id",
+        "effective_k",
+        "quasi_identifier_key",
+    ),
+)
+_RISK_REPORT_OUTPUT = _object(
+    properties={
+        "leakage_rate": _schema("number"),
+        "reid_rate": _schema("number"),
+        "k_min": _schema("integer"),
+        "singleton_records": _array(_SINGLETON_RECORD_OUTPUT),
+        "quasi_identifiers": _array(_QUASI_IDENTIFIER_OUTPUT),
+    },
+    required=(
+        "leakage_rate",
+        "reid_rate",
+        "k_min",
+        "singleton_records",
+        "quasi_identifiers",
+    ),
+)
+_AUDIT_SPAN_OUTPUT = _object(
+    properties={
+        "start": _schema("integer"),
+        "end": _schema("integer"),
+        "label": _schema("string"),
+        "canonical_label": _schema("string"),
+        "sources": _array(_schema("string")),
+        "confidence": _schema("number"),
+        "threshold": _schema("number"),
+        "action": _schema("string"),
+        "surrogate": _nullable("string"),
+        "text_hash": _schema("string"),
+        "evidence": _object(),
+        "context": _object(),
+    },
+    required=(
+        "start",
+        "end",
+        "label",
+        "canonical_label",
+        "sources",
+        "confidence",
+        "threshold",
+        "action",
+        "surrogate",
+        "text_hash",
+    ),
+)
+_AUDIT_SIGNATURE_OUTPUT = _object(
+    properties={
+        "key_id": _schema("string"),
+        "algorithm": _schema("string"),
+        "value": _schema("string"),
+    },
+    required=("key_id", "algorithm", "value"),
+)
+_SIGNED_AUDIT_REPORT_OUTPUT = _object(
+    properties={
+        "policy": _schema("string"),
+        "resolved_profile": _object(),
+        "detectors": _array(_object()),
+        "safety_sweep": _object(),
+        "spans": _array(_AUDIT_SPAN_OUTPUT),
+        "thresholds": _object(),
+        "residual_risk": _object(),
+        "openmed_version": _schema("string"),
+        "manifest_hash": _schema("string"),
+        "document_length": _schema("integer"),
+        "input_hash": _schema("string"),
+        "deidentified_text_hash": _schema("string"),
+        "repro_hash": _schema("string"),
+        "signature": _AUDIT_SIGNATURE_OUTPUT,
+    },
+    required=(
+        "policy",
+        "spans",
+        "openmed_version",
+        "manifest_hash",
+        "document_length",
+        "input_hash",
+        "deidentified_text_hash",
+        "repro_hash",
+        "signature",
+    ),
 )
 
 
 def _tool_spec(
     *,
     name: str,
+    title: str,
     description: str,
     parameters: Sequence[ToolParameter],
     output_schema: Mapping[str, Any],
+    read_only_hint: bool,
+    destructive_hint: bool = False,
+    idempotent_hint: bool = True,
+    open_world_hint: bool = False,
 ) -> ToolSpec:
     return ToolSpec(
         name=name,
+        title=title,
         description=description,
         input_schema=input_schema(parameters),
         output_schema=output_schema,
         parameters=parameters,
+        read_only_hint=read_only_hint,
+        destructive_hint=destructive_hint,
+        idempotent_hint=idempotent_hint,
+        open_world_hint=open_world_hint,
     )
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
     _tool_spec(
         name="openmed_analyze_text",
+        title="Analyze Clinical Text",
         description="Run OpenMed named-entity recognition on clinical text.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _MODEL_NAME_PARAMETER,
@@ -961,7 +1392,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_extract_pii",
+        title="Extract PII and PHI",
         description="Extract PII/PHI entities from clinical text.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _PII_MODEL_NAME_PARAMETER,
@@ -975,7 +1408,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_deidentify",
+        title="De-identify Clinical Text",
         description="De-identify text by masking, removing, replacing, hashing, or shifting.",
+        read_only_hint=True,
         parameters=(
             _TEXT_PARAMETER,
             _parameter(
@@ -1002,7 +1437,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_list_models",
+        title="List Available Models",
         description="List OpenMed model registry entries.",
+        read_only_hint=True,
         parameters=(
             _parameter("category", _nullable("string"), Optional[str], None),
             _parameter("pii_language", _nullable("string"), Optional[str], None),
@@ -1012,19 +1449,25 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_list_pii_languages",
+        title="List PII Languages",
         description="List supported PII languages and default models.",
+        read_only_hint=True,
         parameters=(),
         output_schema=_LIST_PII_LANGUAGES_OUTPUT,
     ),
     _tool_spec(
         name="openmed_loaded_models",
+        title="List Loaded Models",
         description="Return currently loaded model resources.",
+        read_only_hint=True,
         parameters=(),
         output_schema=_GENERIC_OBJECT_OUTPUT,
     ),
     _tool_spec(
         name="openmed_unload_model",
+        title="Unload Model",
         description="Unload one inactive model, or all inactive models.",
+        read_only_hint=False,
         parameters=(
             _parameter("model_name", _nullable("string"), Optional[str], None),
             _parameter("all_models", _schema("boolean"), bool, False),
@@ -1033,10 +1476,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_run_workflow",
+        title="Run Clinical Workflow",
         description=(
             "Run a stateful multi-step OpenMed workflow with server-side "
             "intermediate handles and PHI-safe egress."
         ),
+        read_only_hint=False,
         parameters=(
             _parameter("pipeline", _object(), dict[str, Any]),
             _parameter("session_id", _nullable("string"), Optional[str], None),
@@ -1046,10 +1491,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_ground",
+        title="Ground Clinical Spans",
         description=(
-            "Contract for grounding canonical OpenMedSpan artifacts to clinical "
-            "coding systems."
+            "Ground canonical OpenMedSpan artifacts to clinical coding systems."
         ),
+        read_only_hint=True,
+        open_world_hint=True,
         parameters=(
             _CLINICAL_SPANS_PARAMETER,
             _parameter(
@@ -1071,16 +1518,16 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                 _schema("boolean"),
                 bool,
                 False,
-                "Reserve external-LLM routing for privacy-gateway mediated flows.",
+                "Reserve privacy-gateway-mediated external LLM grounding.",
             ),
         ),
         output_schema=_GROUND_OUTPUT,
     ),
     _tool_spec(
         name="openmed_export_fhir",
-        description=(
-            "Contract for exporting canonical OpenMedSpan artifacts to a FHIR Bundle."
-        ),
+        title="Export Clinical Spans to FHIR",
+        description="Export canonical OpenMedSpan artifacts to a FHIR Bundle.",
+        read_only_hint=True,
         parameters=(
             _CLINICAL_SPANS_PARAMETER,
             _parameter(
@@ -1102,10 +1549,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_risk_score",
+        title="Score Clinical Re-identification Risk",
         description=(
-            "Contract for residual re-identification risk scoring over "
-            "de-identified clinical artifacts."
+            "Score residual re-identification risk over de-identified clinical "
+            "artifacts."
         ),
+        read_only_hint=True,
         parameters=(
             _CLINICAL_SPANS_PARAMETER,
             _parameter(
@@ -1120,7 +1569,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                 _OBJECT_ARRAY_OR_NULL,
                 Optional[list[dict[str, Any]]],
                 None,
-                "Optional tabular records for residual-risk scoring.",
+                "Optional structured records for residual-risk scoring.",
             ),
             _parameter(
                 "quasi_identifiers",
@@ -1134,11 +1583,13 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     _tool_spec(
         name="openmed_clinical_pipeline",
+        title="Plan Clinical Pipeline",
         description=(
-            "Plan and validate a composable clinical workflow over "
-            "de-identification, extraction, grounding, FHIR export, and risk "
-            "stages."
+            "Plan and validate declarative clinical stages without silently "
+            "reordering them."
         ),
+        read_only_hint=True,
+        open_world_hint=True,
         parameters=(
             _CLINICAL_STAGES_PARAMETER,
             _parameter(
@@ -1146,7 +1597,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                 _nullable("string"),
                 Optional[str],
                 None,
-                "Optional raw clinical text for future pipeline execution.",
+                "Optional clinical text reserved for later pipeline execution.",
             ),
             _parameter(
                 "spans",
@@ -1157,9 +1608,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             ),
             _parameter(
                 "options",
-                _object(),
-                dict[str, Any],
-                {},
+                _nullable("object"),
+                Optional[dict[str, Any]],
+                None,
                 "Execution options reserved for later pipeline handlers.",
             ),
             _parameter(
@@ -1167,18 +1618,215 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                 _schema("boolean"),
                 bool,
                 False,
-                "Reserve external-LLM routing for privacy-gateway mediated flows.",
+                "Reserve external LLM routing through the privacy gateway.",
             ),
             _parameter("session_id", _nullable("string"), Optional[str], None),
             _parameter("workflow_id", _nullable("string"), Optional[str], None),
         ),
         output_schema=_CLINICAL_PIPELINE_OUTPUT,
     ),
+    _tool_spec(
+        name="openmed_fhir_bundle",
+        title="Assemble FHIR Bundle",
+        description="Assemble FHIR resources into a R4 bundle. ",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "resources", _array(_FHIR_RESOURCE_SCHEMA), list[dict[str, Any]]
+            ),
+            _parameter("doc_id", _schema("string"), str, "openmed-document"),
+            _parameter(
+                "bundle_type",
+                _schema(
+                    "string",
+                    enum=["transaction", "batch", "collection"],
+                ),
+                str,
+                "transaction",
+            ),
+        ),
+        output_schema=_FHIR_BUNDLE_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_risk_report",
+        title="Score Re-identification Risk",
+        description="Reidentification risk for de-identified text",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "deidentified",
+                {},
+                Any,
+            ),
+            _parameter(
+                "original",
+                _nullable("object"),
+                Optional[Any],
+                None,
+            ),
+            _parameter(
+                "aux",
+                _nullable("object"),
+                Optional[Any],
+                None,
+            ),
+        ),
+        output_schema=_RISK_REPORT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_signed_audit_report",
+        title="Generate Signed Audit Report",
+        description="Run deidentification with auditing set as True and return a signed audit report",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _TEXT_PARAMETER,
+            _parameter(
+                "method",
+                _schema(
+                    "string",
+                    enum=["hash", "mask", "remove", "replace", "shift_dates"],
+                ),
+                str,
+                "mask",
+            ),
+            _PII_MODEL_NAME_PARAMETER,
+            _DEID_CONFIDENCE_PARAMETER,
+            _LANG_PARAMETER,
+            _parameter(
+                "signing_key",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter("key_id", _schema("string"), str, "release"),
+            _KEEP_ALIVE_PARAMETER,
+        ),
+        output_schema=_SIGNED_AUDIT_REPORT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_search_models",
+        title="Search Available Models",
+        description="Search OpenMed models from the canonical manifest by category, "
+        "license, size and language.",
+        read_only_hint=True,
+        destructive_hint=False,
+        open_world_hint=False,
+        parameters=(
+            _parameter(
+                "category",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter(
+                "language",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter(
+                "max_size_mb",
+                _nullable("number", minimum=0.0),
+                Optional[float],
+                None,
+            ),
+            _parameter(
+                "license",
+                _nullable("string"),
+                Optional[str],
+                None,
+            ),
+            _parameter("limit", _schema("integer", minimum=0), int, 50),
+        ),
+        output_schema=_LIST_MODELS_OUTPUT,
+    ),
 )
 
-TOOL_REGISTRY = ToolRegistry(TOOL_SPECS)
+CLINICAL_WORKFLOW_NAME = "openmed_clinical_workflow"
+CLINICAL_WORKFLOW_SPEC = WorkflowSpec(
+    name=CLINICAL_WORKFLOW_NAME,
+    description=(
+        "Local-first de-identification, clinical extraction, grounding, FHIR "
+        "export, and residual-risk workflow with PHI-safe intermediate artifacts."
+    ),
+    prompt_name="openmed-clinical-workflow",
+    resource_uri="openmed://clinical-workflow",
+    fixture_uri="openmed://clinical-workflow/golden-agent-run",
+    stage_order=("deidentify", *CLINICAL_STAGE_ORDER),
+    tools=(
+        "openmed_deidentify",
+        "openmed_clinical_pipeline",
+        "openmed_ground",
+        "openmed_export_fhir",
+        "openmed_risk_score",
+    ),
+    artifacts=(
+        WorkflowArtifactSpec(
+            name="deidentify",
+            schema_id="openmed.deidentified_handoff.v1",
+            schema=_DEIDENTIFIED_HANDOFF_OUTPUT,
+            source_tool="openmed_deidentify",
+        ),
+        WorkflowArtifactSpec(
+            name="detect",
+            schema_id="openmed.clinical_artifact.detect.v1",
+            schema=_DETECT_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="context",
+            schema_id="openmed.clinical_artifact.context.v1",
+            schema=_CONTEXT_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="sections",
+            schema_id="openmed.clinical_artifact.sections.v1",
+            schema=_SECTIONS_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="relations",
+            schema_id="openmed.clinical_artifact.relations.v1",
+            schema=_RELATIONS_ARTIFACT_OUTPUT,
+            source_tool="openmed_clinical_pipeline",
+        ),
+        WorkflowArtifactSpec(
+            name="ground",
+            schema_id="openmed.ground.v1",
+            schema=_GROUND_OUTPUT,
+            source_tool="openmed_ground",
+        ),
+        WorkflowArtifactSpec(
+            name="export",
+            schema_id="openmed.export_fhir.v1",
+            schema=_EXPORT_FHIR_OUTPUT,
+            source_tool="openmed_export_fhir",
+        ),
+        WorkflowArtifactSpec(
+            name="risk",
+            schema_id="openmed.risk_score.v1",
+            schema=_RISK_SCORE_OUTPUT,
+            source_tool="openmed_risk_score",
+        ),
+    ),
+)
+
+TOOL_REGISTRY = ToolRegistry(
+    TOOL_SPECS,
+    workflows=(CLINICAL_WORKFLOW_SPEC,),
+)
 
 __all__ = [
+    "CLINICAL_STAGE_ORDER",
+    "CLINICAL_WORKFLOW_NAME",
+    "CLINICAL_WORKFLOW_SPEC",
     "TOOL_REGISTRY",
     "TOOL_SPECS",
     "ToolCompatibilityError",
@@ -1186,6 +1834,8 @@ __all__ = [
     "ToolRegistry",
     "ToolSchemaValidationError",
     "ToolSpec",
+    "WorkflowArtifactSpec",
+    "WorkflowSpec",
     "check_tool_registry_compatibility",
     "input_schema",
     "invoke_tool",
@@ -1195,5 +1845,6 @@ __all__ = [
     "render_presidio_tool_definitions",
     "render_tool_registry_document",
     "validate_registered_tool_output",
+    "validate_registered_workflow_artifact",
     "validate_tool_output",
 ]

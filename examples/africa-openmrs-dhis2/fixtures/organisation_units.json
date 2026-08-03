@@ -1,0 +1,43 @@
+{
+  "organisationUnits": [
+    {
+      "id": "ouCountryFiction",
+      "level": 1
+    },
+    {
+      "id": "ouProvinceLake",
+      "level": 2,
+      "parent": {
+        "id": "ouCountryFiction"
+      }
+    },
+    {
+      "id": "ouDistrictMtoni",
+      "level": 3,
+      "parent": {
+        "id": "ouProvinceLake"
+      }
+    },
+    {
+      "id": "ouFacilityKijani",
+      "level": 4,
+      "parent": {
+        "id": "ouDistrictMtoni"
+      }
+    },
+    {
+      "id": "ouFacilityMawingu",
+      "level": 4,
+      "parent": {
+        "id": "ouDistrictMtoni"
+      }
+    },
+    {
+      "id": "ouFacilityTumaini",
+      "level": 4,
+      "parent": {
+        "id": "ouDistrictMtoni"
+      }
+    }
+  ]
+}

@@ -1,14 +1,64 @@
 name: Release Gates
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       candidate:
-        description: Path to the candidate benchmark report JSON.
+        description: Path to the staged candidate BenchmarkReport JSON.
         required: false
         default: artifacts/release-candidate.json
+      shield_candidate:
+        description: Path to the staged public SHIELD BenchmarkReport JSON.
+        required: false
+        default: artifacts/release-candidate-shield.json
+      staged_manifest:
+        description: Candidate models.jsonl staged before any pointer promotion.
+        required: false
+        default: artifacts/staged-models.jsonl
+      benchmark_model:
+        description: Model id or staged model path to benchmark; defaults to candidate model_name.
+        required: false
+        default: ""
+      benchmark_device:
+        description: Device label recorded by the golden and SHIELD benchmark runs.
+        required: false
+        default: cpu
+      api_base_ref:
+        description: Git ref used as the public API compatibility baseline.
+        required: false
+        default: v1.9.1
+      migration_guide:
+        description: Migration guide required for the release.
+        required: false
+        default: docs/migration/1.9-to-2.0.md
+      release_version:
+        description: Version recorded in the readiness report.
+        required: false
+        default: 2.0.0
+      rollback_family:
+        description: Family supplied by an automated status monitor for rollback.
+        required: false
+        default: ""
+      rollback_tier:
+        description: Tier supplied with rollback_family.
+        required: false
+        default: ""
+      rollback_format:
+        description: Format supplied with rollback_family.
+        required: false
+        default: ""
+  repository_dispatch:
+    types:
+      - release-status-regression
   schedule:
     - cron: "17 3 * * *"
+
+concurrency:
+  group: release-gates-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -16,59 +66,665 @@ permissions:
 
 jobs:
   release-gates:
+    if: >-
+      github.event_name != 'repository_dispatch' &&
+      github.event.inputs.rollback_family == ''
     runs-on: ubuntu-latest
     env:
       CANDIDATE_REPORT: ${{ github.event.inputs.candidate || 'artifacts/release-candidate.json' }}
+      SHIELD_REPORT: ${{ github.event.inputs.shield_candidate || 'artifacts/release-candidate-shield.json' }}
+      STAGED_MANIFEST: ${{ github.event.inputs.staged_manifest || 'artifacts/staged-models.jsonl' }}
+      BENCHMARK_MODEL: ${{ github.event.inputs.benchmark_model || '' }}
+      BENCHMARK_DEVICE: ${{ github.event.inputs.benchmark_device || 'cpu' }}
+      API_BASE_REF: ${{ github.event.inputs.api_base_ref || 'v1.9.1' }}
+      MIGRATION_GUIDE: ${{ github.event.inputs.migration_guide || 'docs/migration/1.9-to-2.0.md' }}
+      RELEASE_VERSION: ${{ github.event.inputs.release_version || (github.event_name == 'push' && github.ref_name) || '2.0.0' }}
+      RELEASE_STAGE: ${{ github.workspace }}/release-stage
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[hf,zh,indic]" pytest
 
-      - name: Check for candidate report
+      - name: Run Chinese and Indic throughput benchmark
+        id: i18n_benchmark
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.i18n_throughput \
+            --output i18n-throughput-report.json
+
+      - name: Enforce Chinese and Indic throughput gates
+        if: steps.i18n_benchmark.outcome == 'success'
+        id: i18n_throughput
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_gates \
+            --throughput-candidate i18n-throughput-report.json \
+            --baseline-store gates/baseline.json \
+            --output i18n-throughput-gate.json
+
+      - name: Upload Chinese and Indic throughput evidence
+        if: always() && hashFiles('i18n-throughput-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: i18n-throughput
+          path: |
+            i18n-throughput-report.json
+            i18n-throughput-gate.json
+
+      - name: Run grounding accuracy gate
+        id: grounding
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_gates \
+            --grounding \
+            --output grounding-accuracy-gate.json
+
+      - name: Upload grounding accuracy gate report
+        if: always() && hashFiles('grounding-accuracy-gate.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: grounding-accuracy-gate
+          path: grounding-accuracy-gate.json
+
+      - name: Check API migration guide completeness
+        if: startsWith(github.ref, 'refs/tags/v1.9.')
+        run: |
+          python scripts/release/api_surface_diff.py \
+            v1.8.0 "$GITHUB_SHA" \
+            --json "$RUNNER_TEMP/api-surface-diff.json" \
+            --check docs/migration/1.8-to-1.9.md
+          echo "API migration guide completeness gate passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check for complete staged candidate
         id: check-candidate
         run: |
-          if [ -f "$CANDIDATE_REPORT" ]; then
+          if [ -f "$CANDIDATE_REPORT" ] && \
+             [ -f "$SHIELD_REPORT" ] && \
+             [ -f "$STAGED_MANIFEST" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "No candidate report found at $CANDIDATE_REPORT — skipping release gates."
+            echo "No complete staged candidate was found; no promotion is possible."
           fi
 
-      - name: Run release gates
+      - name: Stage candidate before evaluation
         if: steps.check-candidate.outputs.exists == 'true'
+        run: |
+          mkdir -p "$RELEASE_STAGE"
+          cp "$CANDIDATE_REPORT" "$RELEASE_STAGE/candidate-template.json"
+          cp "$SHIELD_REPORT" "$RELEASE_STAGE/shield-template.json"
+          cp "$STAGED_MANIFEST" "$RELEASE_STAGE/models.jsonl"
+
+      - name: Resolve staged benchmark model
+        if: steps.check-candidate.outputs.exists == 'true'
+        id: benchmark-target
+        env:
+          OUTPUT_PATH: ${{ github.workspace }}/release-stage/candidate-template.json
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          candidate = json.loads(Path(os.environ["OUTPUT_PATH"]).read_text())
+          metadata = candidate.get("metadata") or {}
+          model = (
+              os.environ.get("BENCHMARK_MODEL")
+              or metadata.get("benchmark_model")
+              or candidate.get("model_name")
+          )
+          if not isinstance(model, str) or not model.strip():
+              raise SystemExit("candidate does not identify a benchmark model")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"model={model.strip()}\n")
+          PY
+
+      - name: Run golden and public SHIELD benchmarks
+        if: steps.check-candidate.outputs.exists == 'true'
+        id: daily-benchmarks
+        continue-on-error: true
+        env:
+          CANDIDATE_MODEL: ${{ steps.benchmark-target.outputs.model }}
+        run: |
+          openmed benchmark pii \
+            --suite golden \
+            --models "$CANDIDATE_MODEL" \
+            --device "$BENCHMARK_DEVICE" \
+            --output "$RELEASE_STAGE/golden-report.json"
+          openmed benchmark pii \
+            --suite shield \
+            --models "$CANDIDATE_MODEL" \
+            --device "$BENCHMARK_DEVICE" \
+            --output "$RELEASE_STAGE/shield-report.json"
+
+      - name: Bind staged benchmark evidence to candidate manifest
+        if: >-
+          steps.check-candidate.outputs.exists == 'true' &&
+          steps.daily-benchmarks.outcome == 'success'
+        id: bind-evidence
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from openmed.core.audit import stable_hash
+
+          stage = Path(os.environ["RELEASE_STAGE"])
+          template = json.loads((stage / "candidate-template.json").read_text())
+          shield_template = json.loads((stage / "shield-template.json").read_text())
+          golden = json.loads((stage / "golden-report.json").read_text())
+          shield = json.loads((stage / "shield-report.json").read_text())
+          if golden.get("suite") != "golden":
+              raise SystemExit("daily candidate must produce the golden suite")
+          if shield.get("suite") != "shield":
+              raise SystemExit("daily candidate must produce public SHIELD evidence")
+          if shield_template.get("suite") != "shield":
+              raise SystemExit("staged SHIELD template must identify the shield suite")
+
+          shield_metadata = dict(shield.get("metadata") or {})
+          shield_metadata["staged_template_hash"] = stable_hash(shield_template)
+          shield["metadata"] = shield_metadata
+          (stage / "shield-report.json").write_text(
+              json.dumps(shield, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          rows = [
+              json.loads(line)
+              for line in (stage / "models.jsonl").read_text().splitlines()
+              if line.strip()
+          ]
+          template_metadata = dict(template.get("metadata") or {})
+          repo_id = str(
+              template_metadata.get("repo_id")
+              or template.get("repo_id")
+              or template.get("model_name")
+              or ""
+          )
+          row = next((item for item in rows if item.get("repo_id") == repo_id), None)
+          if row is None:
+              raise SystemExit(f"staged manifest has no row for {repo_id!r}")
+
+          metrics = dict(template.get("metrics") or {})
+          metrics.update(golden.get("metrics") or {})
+          metadata = dict(golden.get("metadata") or {})
+          metadata.update(template_metadata)
+          metadata.update(
+              {
+                  "repo_id": row["repo_id"],
+                  "family": row["family"],
+                  "tier": row.get("tier"),
+                  "param_count": row.get("param_count"),
+                  "format": metadata.get("format") or golden.get("device"),
+                  "eval_set_hash": stable_hash(
+                      {"golden": golden, "shield": shield}
+                  ),
+                  "leakage_fixture_hash": stable_hash(
+                      {
+                          "golden_fixture_ids": (golden.get("metadata") or {}).get(
+                              "fixture_ids", []
+                          ),
+                          "shield_fixture_ids": (shield.get("metadata") or {}).get(
+                              "fixture_ids", []
+                          ),
+                      }
+                  ),
+                  "manifest_path": str(stage / "models.jsonl"),
+                  "require_manifest_row": True,
+              }
+          )
+          payload = dict(template)
+          payload.update(
+              {
+                  "suite": "golden",
+                  "model_name": row["repo_id"],
+                  "device": metadata["format"],
+                  "fixture_count": golden.get("fixture_count", 0),
+                  "metrics": metrics,
+                  "metadata": metadata,
+              }
+          )
+          (stage / "gate-candidate.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Compare public SHIELD leakage to last green
+        if: steps.bind-evidence.outcome == 'success'
+        id: shield-gate
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from openmed.core.baseline import get_baseline
+          from openmed.eval.release_gates import RESIDUAL_LEAKAGE_SOFT_CEILING
+
+          stage = Path(os.environ["RELEASE_STAGE"])
+          candidate = json.loads((stage / "gate-candidate.json").read_text())
+          shield = json.loads((stage / "shield-report.json").read_text())
+          metadata = candidate["metadata"]
+          metrics = shield.get("metrics") or {}
+          leakage = metrics.get("leakage") or {}
+          comparison = metrics.get("shield_comparison") or {}
+          aggregate = comparison.get("aggregate") or {}
+          observed = leakage.get("overall", aggregate.get("leakage"))
+          if isinstance(observed, bool) or not isinstance(observed, (int, float)):
+              raise SystemExit("public SHIELD report has no aggregate leakage rate")
+
+          baseline = get_baseline(
+              metadata["family"],
+              metadata.get("tier"),
+              metadata["format"],
+              path="gates/baseline.json",
+          )
+          baseline_metrics = (baseline or {}).get("metrics") or {}
+          public_shield = baseline_metrics.get("public_shield") or {}
+          baseline_leakage = (public_shield.get("leakage") or {}).get("overall")
+          limit = RESIDUAL_LEAKAGE_SOFT_CEILING
+          if isinstance(baseline_leakage, (int, float)) and not isinstance(
+              baseline_leakage, bool
+          ):
+              limit = min(limit, float(baseline_leakage))
+          passed = float(observed) <= limit
+          report = {
+              "baseline_key": (baseline or {}).get("key"),
+              "decision": "RELEASABLE" if passed else "QUARANTINED",
+              "gate": "public_shield_leakage_regression",
+              "limit": limit,
+              "observed": float(observed),
+              "passed": passed,
+          }
+          (stage / "shield-gate-report.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          if not passed:
+              raise SystemExit("public SHIELD leakage regressed beyond last green")
+          PY
+
+      - name: Run release gates
+        if: >-
+          steps.bind-evidence.outcome == 'success' &&
+          steps.shield-gate.outcome == 'success'
         id: gates
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python -m openmed.eval.release_gates \
-            --candidate "$CANDIDATE_REPORT" \
+            --candidate "$RELEASE_STAGE/gate-candidate.json" \
+            --baseline-store gates/baseline.json \
             --output release-gate-report.json \
             --issue-on-failure \
+            --tracking-issue-title "Daily release candidate quarantined" \
             --repo "$GITHUB_REPOSITORY"
 
-      - name: Upload gate report
-        if: always() && steps.check-candidate.outputs.exists == 'true' && hashFiles('release-gate-report.json') != ''
+      - name: Upload gate evidence
+        if: always() && steps.check-candidate.outputs.exists == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: release-gate-report
-          path: release-gate-report.json
+          if-no-files-found: error
+          path: |
+            release-gate-report.json
+            release-stage/candidate-template.json
+            release-stage/shield-template.json
+            release-stage/models.jsonl
+            release-stage/gate-candidate.json
+            release-stage/golden-report.json
+            release-stage/shield-report.json
+            release-stage/shield-gate-report.json
 
-      - name: Publish candidate
+      - name: Generate API compatibility evidence
         if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome == 'success'
+        id: api_compat
+        continue-on-error: true
         run: |
-          echo "Release gates passed; publish step is unblocked."
+          mkdir -p "$RUNNER_TEMP/release-readiness"
+          python scripts/release/api_surface_diff.py \
+            "$API_BASE_REF" "$GITHUB_SHA" \
+            --json "$RUNNER_TEMP/release-readiness/api-compat-report.json"
+
+      - name: Run end-to-end golden suite
+        if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome == 'success'
+        id: e2e_golden
+        continue-on-error: true
+        run: |
+          python -m pytest \
+            tests/integration/test_end_to_end.py \
+            tests/unit/eval/test_golden_fixtures.py \
+            tests/unit/eval/test_i18n_golden_fixtures.py \
+            -q
+          printf '%s\n' \
+            '{"passed":true,"suite":"golden_v2"}' \
+            > "$RUNNER_TEMP/release-readiness/e2e-golden-report.json"
+
+      - name: Run release-readiness gate
+        if: >-
+          steps.check-candidate.outputs.exists == 'true' &&
+          steps.gates.outcome == 'success' &&
+          steps.api_compat.outcome == 'success' &&
+          steps.e2e_golden.outcome == 'success'
+        id: readiness
+        continue-on-error: true
+        run: |
+          python -m openmed.eval.release_readiness \
+            --gate-report release-gate-report.json \
+            --migration-guide "$MIGRATION_GUIDE" \
+            --api-compat-report "$RUNNER_TEMP/release-readiness/api-compat-report.json" \
+            --e2e-report "$RUNNER_TEMP/release-readiness/e2e-golden-report.json" \
+            --version "${RELEASE_VERSION#v}" \
+            --output release-readiness-report.json \
+            --json
+
+      - name: Upload release-readiness report
+        if: always() && hashFiles('release-readiness-report.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-readiness-report
+          path: release-readiness-report.json
+
+      - name: Promote staged manifest and write last-green baseline
+        if: >-
+          steps.i18n_benchmark.outcome == 'success' &&
+          steps.i18n_throughput.outcome == 'success' &&
+          steps.grounding.outcome == 'success' &&
+          steps.check-candidate.outputs.exists == 'true' &&
+          steps.daily-benchmarks.outcome == 'success' &&
+          steps.bind-evidence.outcome == 'success' &&
+          steps.shield-gate.outcome == 'success' &&
+          steps.gates.outcome == 'success' &&
+          steps.api_compat.outcome == 'success' &&
+          steps.e2e_golden.outcome == 'success' &&
+          steps.readiness.outcome == 'success'
+        id: promote
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          from openmed.core.baseline import update_baseline_entry
+          from openmed.eval.release_gates import GateReport, RELEASABLE
+
+          stage = Path(os.environ["RELEASE_STAGE"])
+          gate = GateReport.from_json(Path("release-gate-report.json").read_text())
+          if gate.recompute_repro_hash() != gate.repro_hash:
+              raise SystemExit("refusing to promote a modified gate report")
+          if gate.decision != RELEASABLE:
+              raise SystemExit("refusing to promote a quarantined gate report")
+
+          rows = [
+              json.loads(line)
+              for line in (stage / "models.jsonl").read_text().splitlines()
+              if line.strip()
+          ]
+          row = next((item for item in rows if item.get("repo_id") == gate.repo_id), None)
+          if row is None:
+              raise SystemExit("green gate report is absent from staged manifest")
+          if row.get("reproducibility_hash") in {None, ""}:
+              raise SystemExit("staged manifest row has no reproducibility_hash")
+
+          candidate = json.loads((stage / "gate-candidate.json").read_text())
+          shield = json.loads((stage / "shield-report.json").read_text())
+          metrics = dict(candidate.get("metrics") or {})
+          metrics["public_shield"] = shield.get("metrics") or {}
+
+          shutil.copyfile(stage / "models.jsonl", "models.jsonl")
+          update_baseline_entry(
+              "gates/baseline.json",
+              family=gate.family,
+              tier=gate.tier,
+              format_name=gate.format,
+              metrics=metrics,
+              reproducibility_hash=str(row["reproducibility_hash"]),
+              repo_id=gate.repo_id,
+              source_model_id=str(row.get("base_model") or gate.repo_id),
+              released=(str(row["released"]) if row.get("released") else None),
+              git_sha=os.environ["GITHUB_SHA"],
+              metadata={"gate_report_hash": gate.repro_hash},
+          )
+          slug = "-".join(
+              str(value).lower().replace("_", "-")
+              for value in (gate.family, gate.tier or "none", gate.format)
+          )
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"repo_id={gate.repo_id}\n")
+              out.write(f"card_slug={slug}\n")
+          PY
+
+      - name: Regenerate green trust artifacts from manifest
+        if: steps.promote.outcome == 'success'
+        run: |
+          mkdir -p docs/model-cards
+          python scripts/release/build_model_card.py \
+            --manifest models.jsonl \
+            --repo-id "${{ steps.promote.outputs.repo_id }}" \
+            --gate-report release-gate-report.json \
+            --output "docs/model-cards/${{ steps.promote.outputs.card_slug }}.md" \
+            --datasheet-output "docs/model-cards/${{ steps.promote.outputs.card_slug }}.datasheet.json"
+          python scripts/status/generate_status.py \
+            --manifest models.jsonl \
+            --baseline gates/baseline.json \
+            --report "$RELEASE_STAGE/gate-candidate.json" \
+            --report "$RELEASE_STAGE/shield-report.json" \
+            --benchmarks-dir docs/benchmarks \
+            --leaderboard-dir docs/leaderboard \
+            --output docs/status/index.md \
+            --smoke-status green
+
+      - name: Publish green promotion bundle
+        if: steps.promote.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: green-release-promotion
+          if-no-files-found: error
+          path: |
+            models.jsonl
+            gates/baseline.json
+            release-gate-report.json
+            release-readiness-report.json
+            docs/model-cards/
+            docs/benchmarks/
+            docs/leaderboard/
+            docs/status/index.md
+
+      - name: Run nightly full suite and status monitor
+        if: github.event_name == 'schedule'
+        id: nightly-monitor
+        continue-on-error: true
+        run: |
+          python -m pytest tests/ -q
+          python scripts/status/generate_status.py \
+            --manifest models.jsonl \
+            --baseline gates/baseline.json \
+            --benchmarks-dir "$RUNNER_TEMP/nightly/benchmarks" \
+            --leaderboard-dir "$RUNNER_TEMP/nightly/leaderboard" \
+            --output "$RUNNER_TEMP/nightly/status.md" \
+            --smoke-status green
+
+      - name: Upload nightly status monitor
+        if: always() && github.event_name == 'schedule'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-release-status
+          path: ${{ runner.temp }}/nightly/
+
+      - name: Quarantine incomplete or failing candidate
+        if: >-
+          always() &&
+          (
+            (
+              github.event_name == 'workflow_dispatch' &&
+              steps.check-candidate.outputs.exists != 'true'
+            ) ||
+            (
+              steps.check-candidate.outputs.exists == 'true' &&
+              (
+                steps.i18n_benchmark.outcome != 'success' ||
+                steps.i18n_throughput.outcome != 'success' ||
+                steps.grounding.outcome != 'success' ||
+                steps.daily-benchmarks.outcome != 'success' ||
+                steps.bind-evidence.outcome != 'success' ||
+                steps.shield-gate.outcome != 'success' ||
+                (
+                  steps.gates.outcome == 'success' &&
+                  (
+                    steps.api_compat.outcome != 'success' ||
+                    steps.e2e_golden.outcome != 'success' ||
+                    steps.readiness.outcome != 'success'
+                  )
+                )
+              )
+            )
+          )
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Daily release candidate quarantined"
+          body_file="$RUNNER_TEMP/release-quarantine.md"
+          {
+            echo "## Summary"
+            echo
+            echo "The daily release candidate was quarantined before promotion."
+            echo
+            echo "## Evidence"
+            echo
+            echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+            echo "- Git SHA: \`$GITHUB_SHA\`"
+            echo "- Golden + SHIELD benchmark: \`${{ steps.daily-benchmarks.outcome }}\`"
+            echo "- Public SHIELD regression gate: \`${{ steps.shield-gate.outcome }}\`"
+            echo "- Signed release gate: \`${{ steps.gates.outcome }}\`"
+            echo "- Release readiness: \`${{ steps.readiness.outcome }}\`"
+            echo
+            echo "No manifest pointer or last-green baseline was changed."
+          } > "$body_file"
+          issue_number=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search "$title in:title" \
+            --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" \
+            | head -1)
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body-file "$body_file"
+          else
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$title" \
+              --body-file "$body_file"
+          fi
 
       - name: Fail closed
-        if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome != 'success'
+        if: >-
+          always() &&
+          (
+            steps.i18n_benchmark.outcome != 'success' ||
+            steps.i18n_throughput.outcome != 'success' ||
+            steps.grounding.outcome != 'success' ||
+            steps.nightly-monitor.outcome == 'failure' ||
+            (
+              github.event_name == 'workflow_dispatch' &&
+              steps.check-candidate.outputs.exists != 'true'
+            ) ||
+            (
+              steps.check-candidate.outputs.exists == 'true' &&
+              (
+                steps.daily-benchmarks.outcome != 'success' ||
+                steps.bind-evidence.outcome != 'success' ||
+                steps.shield-gate.outcome != 'success' ||
+                steps.gates.outcome != 'success' ||
+                steps.api_compat.outcome != 'success' ||
+                steps.e2e_golden.outcome != 'success' ||
+                steps.readiness.outcome != 'success'
+              )
+            )
+          )
         run: |
           exit 1
+
+  rollback-regression:
+    if: >-
+      github.event_name == 'repository_dispatch' ||
+      github.event.inputs.rollback_family != ''
+    runs-on: ubuntu-latest
+    env:
+      ROLLBACK_FAMILY: ${{ github.event.client_payload.family || github.event.inputs.rollback_family }}
+      ROLLBACK_TIER: ${{ github.event.client_payload.tier || github.event.inputs.rollback_tier }}
+      ROLLBACK_FORMAT: ${{ github.event.client_payload.format || github.event.inputs.rollback_format }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Roll back status regression within SLO
+        id: rollback
+        run: |
+          if [ -z "$ROLLBACK_FAMILY" ] || \
+             [ -z "$ROLLBACK_TIER" ] || \
+             [ -z "$ROLLBACK_FORMAT" ]; then
+            echo "Status regression dispatch must identify family, tier, and format."
+            exit 1
+          fi
+          started_at=$(date +%s)
+          openmed release rollback "$ROLLBACK_FAMILY" \
+            --tier "$ROLLBACK_TIER" \
+            --format "$ROLLBACK_FORMAT" \
+            --reason "nightly full-suite or status-monitor regression"
+          elapsed_seconds=$(($(date +%s) - started_at))
+          echo "elapsed_seconds=$elapsed_seconds" >> "$GITHUB_OUTPUT"
+          if [ "$elapsed_seconds" -ge 600 ]; then
+            echo "Rollback exceeded the 10-minute SLO."
+            exit 1
+          fi
+
+      - name: Regenerate rollback trust artifacts
+        run: |
+          python scripts/status/generate_status.py \
+            --manifest models.jsonl \
+            --baseline gates/baseline.json \
+            --benchmarks-dir docs/benchmarks \
+            --leaderboard-dir docs/leaderboard \
+            --output docs/status/index.md \
+            --smoke-status red \
+            --smoke-failure-reason "Automated rollback after a release regression."
+
+      - name: Publish rollback bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-rollback
+          if-no-files-found: error
+          path: |
+            models.jsonl
+            gates/rollback-log.jsonl
+            docs/model-cards/
+            docs/benchmarks/
+            docs/leaderboard/
+            docs/status/index.md

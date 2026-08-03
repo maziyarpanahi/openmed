@@ -12,6 +12,7 @@ class TestEndToEndAnalysis:
     """Test end-to-end analysis workflows."""
 
     @pytest.mark.integration
+    @patch("openmed.core.backends._module_available", lambda _: True)
     @patch("openmed.core.models.HF_AVAILABLE", True)
     @patch("openmed.core.models.pipeline")
     @patch("openmed.core.models.AutoConfig")

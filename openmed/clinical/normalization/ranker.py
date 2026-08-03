@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from typing import TYPE_CHECKING, Any
 
 from .backend import (
     SYNTHETIC_CONCEPTS,
@@ -15,18 +16,44 @@ from .backend import (
     normalize_surface,
     validate_backend_identity,
 )
-from .cache import ConceptNormalizationCache
+from .cache import ConceptNormalizationCache, RankedCandidateCache
+
+if TYPE_CHECKING:
+    from openmed.clinical.context import RerankContext
+    from openmed.clinical.grounding.types import Candidate
 
 __all__ = [
     "CandidateProvenance",
     "ConceptNormalizer",
+    "DEFAULT_RRF_K",
+    "DEFAULT_SOURCE_WEIGHTS",
     "NormalizationEvaluationResult",
     "NormalizationGoldCase",
+    "RankedCandidate",
     "RankedConcept",
     "SYNTHETIC_GOLD_SET",
+    "SourceContribution",
     "evaluate_normalization_gold",
     "generate_query_variants",
+    "rank_candidates",
 ]
+
+#: Reciprocal-rank-fusion damping constant. The documented default follows the
+#: standard RRF recommendation and keeps single-rank differences small so a
+#: concept ranked well by two sources outranks one ranked highly by only one.
+DEFAULT_RRF_K = 60
+#: Default per-source fusion weights. Sparse (lexical) and dense (semantic)
+#: channels contribute equally; callers may reweight per source.
+DEFAULT_SOURCE_WEIGHTS: dict[str, float] = {"sparse": 1.0, "dense": 1.0}
+#: Additive bonus applied when a candidate matches the section's preferred
+#: concepts. Sized as one RRF step so it resolves same-surface collisions
+#: (near-tied fused scores) without overriding a clear multi-rank lead.
+DEFAULT_SECTION_WEIGHT = 1.0 / DEFAULT_RRF_K
+#: Additive weight for the assertion-axis feature. The feature is uniform across
+#: a mention's candidates, so it is recorded for audit without reordering them.
+DEFAULT_ASSERTION_WEIGHT = 0.01
+#: Source tag used when a candidate carries no explicit ``source``.
+_UNKNOWN_SOURCE = "unknown"
 
 
 DEFAULT_ABBREVIATION_EXPANSIONS: dict[str, tuple[str, ...]] = {
@@ -469,3 +496,261 @@ def _validate_offsets(start: int | None, end: int | None) -> None:
         raise ValueError("start and end offsets must be provided together")
     if start < 0 or end < start:
         raise ValueError("start/end offsets must be non-negative and ordered")
+
+
+@dataclass(frozen=True)
+class SourceContribution:
+    """One source's contribution to a fused candidate score.
+
+    ``source`` names the generator ("sparse" or "dense"), ``rank`` is the
+    candidate's zero-based position within that source's list, ``weight`` is the
+    source's fusion weight, and ``rrf`` is the reciprocal-rank-fusion term
+    ``weight / (rrf_k + rank + 1)`` that this source added to the fused score.
+    """
+
+    source: str
+    rank: int
+    weight: float
+    rrf: float
+
+
+@dataclass(frozen=True)
+class RankedCandidate:
+    """A reranked grounding candidate with fused score and source attribution.
+
+    ``candidate`` is the winning :class:`~openmed.clinical.grounding.types.Candidate`
+    for its ``(system, code)`` key, ``fused_score`` is the reciprocal-rank-fusion
+    score plus context adjustments, ``contributions`` records each source's
+    per-rank term, ``features`` carries the context feature values folded into
+    the score, and ``sources`` lists which retrieval sources returned the
+    concept (its cross-source attribution).
+    """
+
+    candidate: "Candidate"
+    fused_score: float
+    contributions: tuple[SourceContribution, ...]
+    features: tuple[tuple[str, float], ...]
+    sources: tuple[str, ...]
+
+    @property
+    def concept_key(self) -> tuple[str, str]:
+        """Return the ``(system, code)`` identity of the ranked concept."""
+
+        return (self.candidate.system, self.candidate.code)
+
+    @property
+    def feature_map(self) -> dict[str, float]:
+        """Return the context features as a JSON-friendly mapping."""
+
+        return dict(self.features)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a user-facing JSON-ready ranked grounding record."""
+
+        return {
+            "candidate": self.candidate.to_dict(),
+            "fused_score": self.fused_score,
+            "contributions": [
+                {
+                    "source": contribution.source,
+                    "rank": contribution.rank,
+                    "weight": contribution.weight,
+                    "rrf": contribution.rrf,
+                }
+                for contribution in self.contributions
+            ],
+            "features": self.feature_map,
+            "sources": list(self.sources),
+        }
+
+
+def _rerank_fingerprint(
+    context: "RerankContext | None",
+    weights: Mapping[str, float],
+    rrf_k: int,
+    section_weight: float,
+    assertion_weight: float,
+    source_language: str | None,
+) -> dict[str, Any]:
+    """Identity of everything besides the mention/vocab that determines a rerank
+    result: the context (section, assertion, preferred concepts) and the fusion
+    parameters. Folded into the cache key so a shared cache never serves a
+    ranking computed under a different section or parameter set. Sorted
+    throughout to stay byte-for-byte deterministic across runs."""
+
+    ctx: dict[str, Any] | None = None
+    if context is not None:
+        ctx = {
+            "section": context.canonical_section,
+            "assertion": (
+                context.assertion.to_dict() if context.assertion is not None else None
+            ),
+            "preferred": sorted(context.preferred_concepts),
+        }
+    return {
+        "context": ctx,
+        "rrf_k": rrf_k,
+        "weights": sorted((str(key), float(value)) for key, value in weights.items()),
+        "section_weight": float(section_weight),
+        "assertion_weight": float(assertion_weight),
+        "source_language": source_language,
+    }
+
+
+def rank_candidates(
+    mention: str,
+    context: "RerankContext | None",
+    candidates: "Iterable[Candidate]",
+    *,
+    rrf_k: int = DEFAULT_RRF_K,
+    source_weights: Mapping[str, float] | None = None,
+    section_weight: float = DEFAULT_SECTION_WEIGHT,
+    assertion_weight: float = DEFAULT_ASSERTION_WEIGHT,
+    cache: RankedCandidateCache | None = None,
+    vocab_version: str | None = None,
+    source_language: str | None = None,
+) -> tuple[RankedCandidate, ...]:
+    """Fuse sparse and dense candidates into a reranked concept list.
+
+    Candidates are partitioned by their ``source`` tag ("sparse"/"dense"),
+    ranked within each source by the order given, and fused with reciprocal-rank
+    fusion: a concept's fused score is the sum over the sources that returned it
+    of ``weight / (rrf_k + rank + 1)``. Two optional context features from
+    ``context`` are added: a section-match bonus (``section_weight``) when the
+    concept is preferred in the current section — the signal that resolves a
+    same-surface collision to the section-appropriate sense — and a uniform
+    assertion-present adjustment (``assertion_weight``) recorded for audit.
+
+    Concepts are de-duplicated per ``(system, code)`` keeping the strongest
+    original candidate, then ordered deterministically by fused score descending
+    with a stable ``(system, code)`` tie-break, so the output is byte-for-byte
+    reproducible across runs. When no dense candidates are present the result
+    reduces to the sparse-only order: fusion over a single source preserves that
+    source's ranking, so ranking degrades gracefully to the lexical baseline.
+
+    Args:
+        mention: Surface span text being grounded (used only for cache keying).
+        context: Optional section/assertion payload; ``None`` disables the
+            context features (pure sparse+dense fusion).
+        candidates: Merged sparse and/or dense candidates. Each source's
+            candidates are consumed in the order given as that source's ranking.
+        rrf_k: Reciprocal-rank-fusion damping constant.
+        source_weights: Per-source fusion weights; merged over the defaults.
+        section_weight: Weight of the section-match feature.
+        assertion_weight: Weight of the assertion-present feature.
+        cache: Optional cache; a hit for the same mention, vocab version,
+            context, and fusion parameters is returned without recomputation.
+        vocab_version: Vocabulary version for cache keying; required to use
+            ``cache``.
+        source_language: Normalized source language for cache isolation.
+
+    Returns:
+        A deterministically ordered tuple of :class:`RankedCandidate`.
+    """
+
+    if rrf_k < 0:
+        raise ValueError("rrf_k must be non-negative")
+
+    weights = {**DEFAULT_SOURCE_WEIGHTS, **(source_weights or {})}
+
+    use_cache = cache is not None and vocab_version is not None
+    fingerprint = (
+        _rerank_fingerprint(
+            context,
+            weights,
+            rrf_k,
+            section_weight,
+            assertion_weight,
+            source_language,
+        )
+        if use_cache
+        else None
+    )
+    if use_cache:
+        cached = cache.get(mention, vocab_version, fingerprint)  # type: ignore[union-attr, arg-type]
+        if cached is not None:
+            return cached
+
+    # Per-source rank (first occurrence wins) and the strongest candidate per key.
+    per_source_rank: dict[str, dict[tuple[str, str], int]] = {}
+    best_candidate: dict[tuple[str, str], Candidate] = {}
+    for candidate in candidates:
+        key = (candidate.system, candidate.code)
+        source = candidate.source or _UNKNOWN_SOURCE
+        ranks = per_source_rank.setdefault(source, {})
+        if key not in ranks:
+            ranks[key] = len(ranks)
+        previous = best_candidate.get(key)
+        if previous is None or _candidate_preference(candidate) > _candidate_preference(
+            previous
+        ):
+            best_candidate[key] = candidate
+
+    assertion_feature = context.assertion_present() if context is not None else 1.0
+
+    ranked: list[RankedCandidate] = []
+    for key, candidate in best_candidate.items():
+        contributions: list[SourceContribution] = []
+        rrf_total = 0.0
+        for source in sorted(per_source_rank):
+            ranks = per_source_rank[source]
+            if key not in ranks:
+                continue
+            weight = weights.get(source, 1.0)
+            rank = ranks[key]
+            rrf = weight / (rrf_k + rank + 1)
+            rrf_total += rrf
+            contributions.append(
+                SourceContribution(
+                    source=source,
+                    rank=rank,
+                    weight=weight,
+                    rrf=round(rrf, 9),
+                )
+            )
+        section_feature = (
+            context.section_match(candidate.system, candidate.code)
+            if context is not None
+            else 0.0
+        )
+        fused = (
+            rrf_total
+            + section_weight * section_feature
+            + assertion_weight * assertion_feature
+        )
+        features = (
+            ("assertion_present", assertion_feature),
+            ("rrf", round(rrf_total, 9)),
+            ("section_match", section_feature),
+        )
+        ranked.append(
+            RankedCandidate(
+                candidate=candidate,
+                fused_score=round(fused, 9),
+                contributions=tuple(contributions),
+                features=features,
+                sources=tuple(contribution.source for contribution in contributions),
+            )
+        )
+
+    ranked.sort(key=_rerank_sort_key)
+    result = tuple(ranked)
+    if use_cache:
+        cache.set(mention, vocab_version, result, fingerprint)  # type: ignore[union-attr, arg-type]
+    return result
+
+
+def _candidate_preference(candidate: "Candidate") -> tuple[float, int, int]:
+    """Order key selecting the representative candidate for a concept key."""
+
+    exact = 1 if candidate.match_kind == "exact" else 0
+    sparse = 1 if candidate.source == "sparse" else 0
+    return (candidate.score, exact, sparse)
+
+
+def _rerank_sort_key(candidate: RankedCandidate) -> tuple[float, str, str]:
+    return (
+        -candidate.fused_score,
+        candidate.candidate.system,
+        candidate.candidate.code,
+    )

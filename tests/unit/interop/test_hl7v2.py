@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from openmed.interop import adapter_spec, available_adapters, get_adapter
 from openmed.interop.hl7v2 import (
     DEFAULT_FIELD_MAP,
@@ -42,6 +44,12 @@ def test_registry_loads_hl7v2_adapter_lazily():
     assert "hl7v2" in available_adapters()
     assert adapter_spec("hl7v2").description.startswith("HL7 v2")
     assert hasattr(adapter, "redact_hl7v2")
+
+
+@pytest.mark.parametrize("message", ["MSH|", "MSH|^", "MSH|^~\\&X|"])
+def test_parser_rejects_invalid_msh_2_length(message: str) -> None:
+    with pytest.raises(ValueError, match="exactly four encoding characters"):
+        parse_hl7v2(message)
 
 
 def test_redacts_synthetic_adt_pid_and_nk1_fields():

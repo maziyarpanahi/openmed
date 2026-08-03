@@ -39,6 +39,9 @@ def test_deidentify_dicom_headers_removes_phi_and_remaps_uids(tmp_path: Path):
     assert redacted.PatientBirthDate == ""
     assert redacted.InstitutionName == ""
     assert str(redacted.ReferringPhysicianName) == ""
+    assert str(redacted.StudyDescription) == ""
+    assert str(redacted.ReferencedStudySequence[0].StudyDescription) == ""
+    assert str(redacted.ReferencedStudySequence[0].SeriesDescription) == ""
     assert (0x0011, 0x1010) not in redacted
 
     assert redacted.StudyInstanceUID != STUDY_UID
@@ -156,8 +159,11 @@ def _write_synthetic_dicom(path: Path) -> Path:
     dataset.SeriesDate = "20200111"
     dataset.ContentDate = "20200131"
     dataset.StudyTime = "121314"
+    dataset.StudyDescription = "Case for MRN-12345 / DOE Jane"
     dataset.ReferencedStudySequence = Sequence([Dataset()])
     dataset.ReferencedStudySequence[0].ReferencedSOPInstanceUID = SOP_UID
+    dataset.ReferencedStudySequence[0].StudyDescription = "Copy of DOE^Jane"
+    dataset.ReferencedStudySequence[0].SeriesDescription = "Copy of Smith Alice"
     dataset.add_new((0x0011, 0x0010), "LO", "OPENMED_PRIVATE")
     dataset.add_new((0x0011, 0x1010), "LO", "PRIVATE PATIENT NOTE")
     dataset.save_as(path, enforce_file_format=True)
