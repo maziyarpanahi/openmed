@@ -49,6 +49,17 @@ from .index import (
     load_index,
     query_index,
 )
+from .loaders import (
+    ICD10CM_CODE_PATTERN,
+    ICD10CM_LICENSE_NOTE,
+    ICD10CM_SYSTEM_URI,
+    Icd10cmCode,
+    ICD10CMLoader,
+    Icd10cmLoader,
+    Icd10cmLoaderError,
+    ICD10CMVocabularyLoader,
+    Icd10cmVocabularyLoader,
+)
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .postcoordination import (
     POSTCOORDINATION_ATTRIBUTE_SLOTS,
@@ -142,6 +153,15 @@ __all__ = [
     "IndexBackendUnavailableError",
     "IndexUpdateSummary",
     "InvalidVocabularyLoaderError",
+    "ICD10CM_CODE_PATTERN",
+    "ICD10CM_LICENSE_NOTE",
+    "ICD10CM_SYSTEM_URI",
+    "ICD10CMLoader",
+    "ICD10CMVocabularyLoader",
+    "Icd10cmCode",
+    "Icd10cmLoader",
+    "Icd10cmLoaderError",
+    "Icd10cmVocabularyLoader",
     "LexicalConcept",
     "LexicalMatcher",
     "MLXSapBERTEncoder",
