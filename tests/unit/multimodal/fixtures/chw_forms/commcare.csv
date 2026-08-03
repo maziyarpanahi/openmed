@@ -1,0 +1,3 @@
+form.meta.instanceID,form.meta.deviceID,form.case.@case_id,form.patient.name,form.patient.mobile,form.patient.national_id,form.patient.gps,form.symptoms,form.counselling_notes,form.children.name,form.children.status
+uuid:commcare-csv-873-001,commcare-csv-device-873-001,commcare-case-873-001,Lindiwe Dlamini,+27821234567,ZA-873-001,-26.204103 28.047305 1753 6,fever_cough,Lindiwe Dlamini received counselling,Sipho Dlamini,enrolled
+uuid:commcare-csv-873-001,commcare-csv-device-873-001,commcare-case-873-001,Lindiwe Dlamini,+27821234567,ZA-873-001,-26.204103 28.047305 1753 6,fever_cough,Follow-up for Lindiwe Dlamini,Zola Dlamini,referred

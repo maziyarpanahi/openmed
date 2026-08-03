@@ -57,6 +57,33 @@ class SectionRecallMetrics:
 
 
 @dataclass(frozen=True)
+class SectionDetectionMetrics:
+    """Boundary and label metrics for detected clinical sections."""
+
+    boundary_recall: float
+    label_precision: float
+    label_recall: float
+    label_f1: float
+    gold_sections: int
+    predicted_sections: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        """Return a deterministic JSON-ready metric payload."""
+
+        return {
+            "boundary_recall": self.boundary_recall,
+            "gold_sections": self.gold_sections,
+            "label_f1": self.label_f1,
+            "label_precision": self.label_precision,
+            "label_recall": self.label_recall,
+            "predicted_sections": self.predicted_sections,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class SectionRecallReport:
     """Serializable per-section character recall report."""
 
@@ -213,6 +240,40 @@ def compute_section_recall(
         per_section=per_section,
         overall=overall,
         worst_sections=worst_sections,
+    )
+
+
+def compute_section_detection_metrics(
+    note: str,
+    gold_sections: Iterable[Any],
+    predicted_sections: Iterable[Any],
+) -> SectionDetectionMetrics:
+    """Score exact section boundary recall and canonical label F1."""
+
+    gold = _normalize_sections(gold_sections, note_length=len(note))
+    predicted = _normalize_sections(predicted_sections, note_length=len(note))
+
+    gold_boundaries = {(section.start, section.end) for section in gold}
+    predicted_boundaries = {(section.start, section.end) for section in predicted}
+    boundary_true_positive = len(gold_boundaries & predicted_boundaries)
+    boundary_recall = _safe_rate(boundary_true_positive, len(gold_boundaries))
+
+    gold_labeled = {(section.name, section.start, section.end) for section in gold}
+    predicted_labeled = {
+        (section.name, section.start, section.end) for section in predicted
+    }
+    label_true_positive = len(gold_labeled & predicted_labeled)
+    label_precision = _safe_rate(label_true_positive, len(predicted_labeled))
+    label_recall = _safe_rate(label_true_positive, len(gold_labeled))
+    label_f1 = _f1(label_precision, label_recall)
+
+    return SectionDetectionMetrics(
+        boundary_recall=boundary_recall,
+        label_precision=label_precision,
+        label_recall=label_recall,
+        label_f1=label_f1,
+        gold_sections=len(gold),
+        predicted_sections=len(predicted),
     )
 
 
@@ -459,10 +520,24 @@ def _format_rate(value: float) -> str:
     return f"{value:.6f}"
 
 
+def _safe_rate(numerator: int | float, denominator: int | float) -> float:
+    if denominator == 0:
+        return 1.0
+    return float(numerator) / float(denominator)
+
+
+def _f1(precision: float, recall: float) -> float:
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
 __all__ = [
     "UNSECTIONED_SECTION",
+    "SectionDetectionMetrics",
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
+    "compute_section_detection_metrics",
     "compute_section_recall",
 ]

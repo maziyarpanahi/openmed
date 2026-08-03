@@ -7,8 +7,77 @@ from typing import Any, Callable
 
 from openmed.core.labels import normalize_label
 from openmed.core.pii import PIIEntity
+from openmed.core.surrogate_vault import SurrogateSource, SurrogateVault
 
 Merger = Callable[..., list[dict[str, Any]]]
+
+
+def subject_identifier_sources(
+    detected_identifiers: Sequence[PIIEntity | Mapping[str, Any]],
+    *,
+    lang: str = "en",
+) -> tuple[SurrogateSource, ...]:
+    """Convert caller-confirmed note identifiers into in-memory vault aliases.
+
+    This helper performs no subject matching. Callers must pass only detected
+    identifiers that they have already reconciled to the same structured
+    subject. The returned raw surfaces are intended for immediate in-memory use
+    by :meth:`SurrogateVault.resolve_subject` and must not be logged or audited.
+    """
+
+    sources: list[SurrogateSource] = []
+    seen: set[tuple[str, str, str]] = set()
+    for identifier in detected_identifiers:
+        if not isinstance(identifier, (PIIEntity, Mapping)):
+            raise TypeError("detected identifiers must be PII entities or mappings")
+        surface = value(identifier, "original_text") or value(identifier, "text")
+        source_label = next(
+            (
+                candidate
+                for field in ("canonical_label", "entity_type", "label")
+                if (candidate := value(identifier, field))
+            ),
+            None,
+        )
+        source_lang = str(value(identifier, "lang", lang) or lang)
+        if surface is None or not str(surface) or source_label is None:
+            raise ValueError("detected identifiers must include text and a label")
+        item = (
+            str(surface),
+            normalize_label(str(source_label), source_lang),
+            source_lang,
+        )
+        if item in seen:
+            continue
+        seen.add(item)
+        sources.append(
+            SurrogateSource(
+                source_text=item[0],
+                label=item[1],
+                lang=item[2],
+            )
+        )
+    return tuple(sources)
+
+
+def resolve_subject_surrogate(
+    detected_identifiers: Sequence[PIIEntity | Mapping[str, Any]],
+    *,
+    structured_identifier: str,
+    vault: SurrogateVault,
+    lang: str = "en",
+) -> str:
+    """Bind confirmed note identifiers to a structured subject surrogate.
+
+    Seeding the ordinary PERSON or ID_NUM vault keys before text replacement
+    means a later ``deidentify(..., surrogate_vault=vault)`` call reuses the
+    same surrogate emitted for the structured subject column.
+    """
+
+    return vault.resolve_subject(
+        structured_identifier,
+        aliases=subject_identifier_sources(detected_identifiers, lang=lang),
+    )
 
 
 def value(result: Any, names: str | Sequence[str], default: Any = None) -> Any:

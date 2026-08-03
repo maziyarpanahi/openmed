@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import ID_SUBTYPE_NPI
-from openmed.core.pii import deidentify
+from openmed.core.pii import _apply_safety_sweep_to_result, deidentify
 from openmed.core.pii_entity_merger import PIIPattern
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.safety_sweep import (
@@ -171,6 +171,29 @@ def test_safety_sweep_resolves_overlapping_existing_spans():
 
     assert detect_overlapping_entities(entities) == []
     assert [entity.label for entity in entities] == ["SSN"]
+
+
+def test_safety_sweep_counts_added_spans_independently_of_overlap_resolution():
+    text = "Patient SSN 123-45-6789. Email jane.patient@example.com."
+    broad = _entity_for(text, "Patient SSN 123-45-6789", label="OTHER")
+    sensitive = _entity_for(text, "123-45-6789", label="SSN")
+    pii_result = PredictionResult(
+        text=text,
+        entities=[broad, sensitive],
+        model_name="stub",
+        timestamp=datetime.now().isoformat(),
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        text,
+        pii_result,
+        lang="en",
+    )
+
+    assert added_count == 1
+    assert swept_result.metadata["safety_sweep"]["spans_added"] == 1
+    assert "email" in _swept_by_label(swept_result.entities)
+    assert detect_overlapping_entities(swept_result.entities) == []
 
 
 @patch("openmed.core.pii.extract_pii")

@@ -1,0 +1,63 @@
+{
+  "template_version": 1,
+  "template_id": "africa-data-residency",
+  "disclaimer": "Decision-support evidence only; this attestation is not legal advice, a regulator filing, or a certification of compliance.",
+  "profiles": [
+    {
+      "id": "rwanda-law-058-2021",
+      "jurisdiction": "Rwanda",
+      "country_code": "RW",
+      "legal_reference": "Law No. 058/2021, Articles 48-50",
+      "source_url": "https://dpo.gov.rw/fileadmin/DPO/Law_relating_to_the_protection_of_personal_data_and_privacy.pdf",
+      "policy_profile": "strict_no_leak",
+      "attestation_title": "Rwanda host-local processing attestation",
+      "residency_statement": "This artifact records host-local de-identification evidence that an organization can use when assessing Rwanda's rules for transfers and storage outside Rwanda. It does not establish whether every system in the organization's wider data flow stores personal data in Rwanda.",
+      "host_local_statement": "OpenMed reports that the de-identification computation ran in-process on the host. The attestation does not name the host and contains no source document content.",
+      "offline_enabled_statement": "The captured run evidence records OpenMed local-only mode and all bundled dependency offline flags as enabled. Confirm operating-system and network controls separately.",
+      "offline_disabled_statement": "The captured run evidence does not contain a complete OpenMed offline assertion. Treat the artifact as host-local processing evidence, not proof of an air-gapped or no-egress deployment.",
+      "guide_field": "residency_statement"
+    },
+    {
+      "id": "ethiopia-proclamation-1321-2024",
+      "jurisdiction": "Ethiopia",
+      "country_code": "ET",
+      "legal_reference": "Personal Data Protection Proclamation No. 1321/2024, Articles 18-22",
+      "source_url": "https://pdp.eca.et/files/pdfs/pdp-proclamation/pdp_personal_data_protection_proclamation_No_1321_2024.pdf",
+      "policy_profile": "strict_no_leak",
+      "attestation_title": "Ethiopia host-local processing attestation",
+      "residency_statement": "This artifact records host-local de-identification evidence that an organization can use when assessing Ethiopia's local-storage and cross-border transfer rules, including the local-server requirement for personal data collected or obtained locally and prior approval for cross-border transfer of sensitive personal data. It does not replace an Authority determination or approval.",
+      "host_local_statement": "OpenMed reports that the de-identification computation ran in-process on the host. The attestation does not name the host and contains no source document content.",
+      "offline_enabled_statement": "The captured run evidence records OpenMed local-only mode and all bundled dependency offline flags as enabled. Confirm operating-system and network controls separately.",
+      "offline_disabled_statement": "The captured run evidence does not contain a complete OpenMed offline assertion. Treat the artifact as host-local processing evidence, not proof of an air-gapped or no-egress deployment.",
+      "guide_field": "residency_statement"
+    },
+    {
+      "id": "kenya-dpa-2019",
+      "jurisdiction": "Kenya",
+      "country_code": "KE",
+      "legal_reference": "Data Protection Act No. 24 of 2019, sections 48-50",
+      "source_url": "https://new.kenyalaw.org/akn/ke/act/2019/24/eng@2022-12-31",
+      "policy_profile": "strict_no_leak",
+      "attestation_title": "Kenya host-local processing attestation",
+      "residency_statement": "This artifact records host-local de-identification evidence that an organization can use when assessing Kenya's safeguards, consent, and prescribed-local-processing requirements for transfers outside Kenya. It does not determine whether a transfer exception or prescribed category applies.",
+      "host_local_statement": "OpenMed reports that the de-identification computation ran in-process on the host. The attestation does not name the host and contains no source document content.",
+      "offline_enabled_statement": "The captured run evidence records OpenMed local-only mode and all bundled dependency offline flags as enabled. Confirm operating-system and network controls separately.",
+      "offline_disabled_statement": "The captured run evidence does not contain a complete OpenMed offline assertion. Treat the artifact as host-local processing evidence, not proof of an air-gapped or no-egress deployment.",
+      "guide_field": "residency_statement"
+    },
+    {
+      "id": "egypt-pdpl-151-2020",
+      "jurisdiction": "Egypt",
+      "country_code": "EG",
+      "legal_reference": "Personal Data Protection Law No. 151 of 2020, Articles 14-16",
+      "source_url": "https://sis.gov.eg/ar/%D8%A7%D9%84%D8%B1%D8%A6%D8%A7%D8%B3%D8%A9/%D8%B4%D8%A6%D9%88%D9%86-%D8%AF%D8%A7%D8%AE%D9%84%D9%8A%D8%A9/%D8%A7%D9%84%D9%82%D8%B1%D8%A7%D8%B1%D8%A7%D8%AA-%D8%A7%D9%84%D8%B1%D8%A6%D8%A7%D8%B3%D9%8A%D8%A9/%D8%A7%D9%84%D8%B1%D8%A6%D9%8A%D8%B3-%D8%A7%D9%84%D8%B3%D9%8A%D8%B3%D9%89%D9%8A-%D9%8A-%D8%B5%D8%AF-%D9%82-%D8%B9%D9%84%D9%89-%D9%82%D8%A7%D9%86%D9%88%D9%86-%D8%AD%D9%85%D8%A7%D9%8A%D8%A9-%D8%A7%D9%84%D8%A8%D9%8A%D8%A7%D9%86%D8%A7%D8%AA-%D8%A7%D9%84%D8%B4%D8%AE%D8%B5%D9%8A%D8%A9/",
+      "policy_profile": "strict_no_leak",
+      "attestation_title": "Egypt host-local processing attestation",
+      "residency_statement": "This artifact records host-local de-identification evidence that an organization can use when assessing Egypt's licensing or authorization rules for cross-border transfer, storage, sharing, or processing. It is not a licence, permit, or adequacy decision from the Personal Data Protection Center.",
+      "host_local_statement": "OpenMed reports that the de-identification computation ran in-process on the host. The attestation does not name the host and contains no source document content.",
+      "offline_enabled_statement": "The captured run evidence records OpenMed local-only mode and all bundled dependency offline flags as enabled. Confirm operating-system and network controls separately.",
+      "offline_disabled_statement": "The captured run evidence does not contain a complete OpenMed offline assertion. Treat the artifact as host-local processing evidence, not proof of an air-gapped or no-egress deployment.",
+      "guide_field": "residency_statement"
+    }
+  ]
+}

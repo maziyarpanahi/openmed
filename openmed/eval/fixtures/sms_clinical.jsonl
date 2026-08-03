@@ -1,0 +1,12 @@
+{"id":"sms-001","language":"en","synthetic":true,"text":"Amina Example, your clinic visit is Tue 14 May at 09:30. Reply YES to confirm. Call 555-0101 if you need to reschedule."}
+{"id":"sms-002","language":"en","synthetic":true,"text":"Patient Jordan Sample (MRN TEST-00421) should continue amoxicillin 500 mg three times daily through Friday."}
+{"id":"sms-003","language":"en","synthetic":true,"text":"Synthetic lab notice for Casey Demo: HbA1c 7.2%. Please book a routine review using casey.demo@example.org."}
+{"id":"sms-004","language":"en","synthetic":true,"text":"Discharge follow-up: Taylor Example reports no fever and pain 2/10. Review at North Clinic on 2026-08-04."}
+{"id":"sms-005","language":"en","synthetic":true,"text":"Reminder for Morgan Test: bring inhaler and medication list to the respiratory clinic at 10:15 tomorrow."}
+{"id":"sms-006","language":"en","synthetic":true,"text":"Synthetic referral REF-1006: Priya Example, cardiology triage received your request. No urgent action is required."}
+{"id":"sms-007","language":"en","synthetic":true,"text":"Alex Sample called from 555-0117 about dizziness after the morning dose. A clinician will return the call today."}
+{"id":"sms-008","language":"en","synthetic":true,"text":"For demo patient Sam Example only: blood pressure 128/78, pulse 72. Continue the current monitoring plan."}
+{"id":"sms-009","language":"en","synthetic":true,"text":"Imaging reminder for Lee Sample, test record IMG-009: arrive at Example Hospital reception by 13:45."}
+{"id":"sms-010","language":"en","synthetic":true,"text":"Nora Example's synthetic prescription is ready at Demo Pharmacy, 10 Sample Road. Reference RX-0010."}
+{"id":"sms-011","language":"en","synthetic":true,"text":"Test patient Omar Sample: fasting glucose check due Monday. Do not eat after 22:00 Sunday; water is allowed."}
+{"id":"sms-012","language":"en","synthetic":true,"text":"Care-team demo: Mei Example prefers contact by mei.example@example.org. Next review is 2026-09-18."}
