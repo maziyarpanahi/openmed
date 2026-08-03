@@ -322,6 +322,24 @@ def _render_registry_cards(
             card = render_model_card(row)
             if generated_notice not in card:
                 raise ValueError("model-card generator notice is missing")
+            title = f"{family} {pointer_name.replace('_', '-')} registry checkpoint"
+            description = (
+                f"Manifest-backed model metadata for the OpenMed {family} "
+                f"{pointer_name.replace('_', '-')} registry pointer targeting "
+                f"{repo_id}."
+            )
+            frontmatter_end = "\n---\n"
+            if frontmatter_end not in card:
+                raise ValueError("model-card front matter is missing")
+            card = card.replace(
+                frontmatter_end,
+                (
+                    f"\ntitle: {json.dumps(title)}"
+                    f"\ndescription: {json.dumps(description)}"
+                    f"{frontmatter_end}"
+                ),
+                1,
+            )
             cards[f"{family_slug}-{pointer_name.replace('_', '-')}.md"] = card.replace(
                 generated_notice,
                 generated_notice + marker,
