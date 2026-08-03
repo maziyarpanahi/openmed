@@ -1692,6 +1692,7 @@ def run_benchmark(
         abstention_seed=abstention_seed,
         default_device=device,
         source_text=corpus_text,
+        **_consistency_metric_inputs(fixtures),
     )
     faithfulness_metrics = [
         compute_span_grounded_faithfulness(
@@ -3558,6 +3559,76 @@ def _fixture_extracted_facts(fixture: BenchmarkFixture) -> list[Any]:
         ):
             return list(value)
     return []
+
+
+def _consistency_metric_inputs(
+    fixtures: Sequence[BenchmarkFixture],
+) -> dict[str, Any]:
+    original_dates: list[str] = []
+    shifted_dates: list[str] = []
+    date_patient_ids: list[str] = []
+    surrogate_originals: list[str] = []
+    surrogates: list[str] = []
+    surrogate_document_ids: list[str] = []
+    surrogate_checksum_valid: list[bool | None] = []
+
+    for fixture in fixtures:
+        date_chain = fixture.metadata.get("date_chain")
+        if date_chain is not None:
+            if not isinstance(date_chain, Mapping):
+                raise ValueError("fixture date_chain metadata must be a mapping")
+            fixture_originals = date_chain.get("original_dates", ())
+            fixture_shifted = date_chain.get("shifted_dates", ())
+            if not _is_metadata_sequence(
+                fixture_originals
+            ) or not _is_metadata_sequence(fixture_shifted):
+                raise ValueError("fixture date_chain dates must be lists or tuples")
+            if len(fixture_originals) != len(fixture_shifted):
+                raise ValueError(
+                    "fixture date_chain original_dates and shifted_dates must align"
+                )
+            patient_id = str(
+                date_chain.get("patient_id")
+                or fixture.metadata.get("patient_id")
+                or fixture.fixture_id
+            )
+            original_dates.extend(str(value) for value in fixture_originals)
+            shifted_dates.extend(str(value) for value in fixture_shifted)
+            date_patient_ids.extend([patient_id] * len(fixture_originals))
+
+        surrogate_pairs = fixture.metadata.get("surrogate_pairs", ())
+        if not _is_metadata_sequence(surrogate_pairs):
+            raise ValueError("fixture surrogate_pairs metadata must be a list or tuple")
+        for pair in surrogate_pairs:
+            if not isinstance(pair, Mapping):
+                raise ValueError("fixture surrogate pairs must be mappings")
+            if "original" not in pair or "surrogate" not in pair:
+                raise ValueError(
+                    "fixture surrogate pairs require original and surrogate values"
+                )
+            checksum_verdict = pair.get("checksum_valid")
+            if checksum_verdict is not None and not isinstance(checksum_verdict, bool):
+                raise ValueError("surrogate checksum_valid must be bool or null")
+            surrogate_originals.append(str(pair["original"]))
+            surrogates.append(str(pair["surrogate"]))
+            surrogate_document_ids.append(
+                str(pair.get("document_id") or fixture.fixture_id)
+            )
+            surrogate_checksum_valid.append(checksum_verdict)
+
+    return {
+        "original_dates": original_dates,
+        "shifted_dates": shifted_dates,
+        "date_patient_ids": date_patient_ids,
+        "surrogate_originals": surrogate_originals,
+        "surrogates": surrogates,
+        "surrogate_document_ids": surrogate_document_ids,
+        "surrogate_checksum_valid": surrogate_checksum_valid,
+    }
+
+
+def _is_metadata_sequence(value: Any) -> bool:
+    return isinstance(value, list | tuple)
 
 
 def _relation_corpus_relations(
