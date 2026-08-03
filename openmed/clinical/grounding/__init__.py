@@ -15,6 +15,14 @@ from .assertion_grounding import (
     ground_with_context,
 )
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
+from .decompose import (
+    COMPOSITE_GROUNDING_DECISIONS,
+    CompositeChildProvenance,
+    CompositeDecompositionProvenance,
+    CompositeGroundingResult,
+    PostCoordinationRequest,
+    decompose_and_relink,
+)
 from .embeddings import (
     AliasEncoder,
     EncoderUnavailableError,
@@ -83,6 +91,10 @@ __all__ = [
     "AssertionGroundingStatus",
     "Candidate",
     "CandidateRankingStage",
+    "COMPOSITE_GROUNDING_DECISIONS",
+    "CompositeChildProvenance",
+    "CompositeDecompositionProvenance",
+    "CompositeGroundingResult",
     "ConceptMatch",
     "DenseCandidateGenerator",
     "DEFAULT_GROUNDING_SYSTEMS",
@@ -105,6 +117,7 @@ __all__ = [
     "POLICY_DROP",
     "POLICY_STATUS",
     "POLICY_SUPPRESS",
+    "PostCoordinationRequest",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RESTRICTED_SYSTEM_URIS",
     "RankingConfig",
@@ -128,6 +141,7 @@ __all__ = [
     "available_loaders",
     "build_index",
     "build_or_load_index",
+    "decompose_and_relink",
     "generate_candidates",
     "ground",
     "ground_with_context",
