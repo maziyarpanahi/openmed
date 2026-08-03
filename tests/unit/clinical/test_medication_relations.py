@@ -9,8 +9,11 @@ from openmed.clinical import (
     MEDICATION_LINK_ADVISORY,
     CoreferenceChain,
     MedicationRelationScorer,
+    extract_medication_relations,
     link_medication_attributes,
+    reconstruct_medication_statements,
 )
+from openmed.clinical.sections import detect_sections
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash
 
 FIXTURE = (
@@ -118,8 +121,124 @@ def test_public_api_docstring_and_advisory_include_clinical_disclaimer() -> None
 def test_default_scorer_loads_versioned_config_resource() -> None:
     scorer = MedicationRelationScorer.from_default_config()
 
-    assert scorer.config["version"] == 1
+    assert scorer.config["version"] == 2
     assert "drug_to_frequency" in scorer.config["relations"]
+
+
+def test_extract_medication_relations_binds_canonical_regimen_attributes() -> None:
+    text = "lisinopril 10 mg PO daily"
+    spans = [
+        _span(text, "lisinopril", "MEDICATION"),
+        _span(text, "10 mg", "DOSAGE"),
+        _span(text, "PO", "ROUTE"),
+        _span(text, "daily", "FREQUENCY"),
+    ]
+
+    relations = extract_medication_relations(text, spans)
+
+    assert [(relation.type, relation.tail.text) for relation in relations] == [
+        ("dose", "10 mg"),
+        ("route", "PO"),
+        ("frequency", "daily"),
+    ]
+    assert all(relation.head.text == "lisinopril" for relation in relations)
+    assert all(0 < relation.score <= 1 for relation in relations)
+
+
+def test_extract_medication_relations_supports_every_attribute_type() -> None:
+    cases = (
+        ("1 tablet", "DOSAGE", "dose"),
+        ("PO", "ROUTE", "route"),
+        ("daily", "FREQUENCY", "frequency"),
+        ("for 5 days", "DURATION", "duration"),
+        ("tablet", "FORM", "form"),
+        ("10 mg", "STRENGTH", "strength"),
+        ("hypertension", "INDICATION", "indication"),
+    )
+
+    for tail, label, relation_type in cases:
+        text = f"Lisinopril {tail}"
+        relations = extract_medication_relations(
+            text,
+            [
+                _span(text, "Lisinopril", "MEDICATION"),
+                _span(text, tail, label),
+            ],
+        )
+
+        assert [(relation.type, relation.tail.text) for relation in relations] == [
+            (relation_type, tail)
+        ]
+
+
+def test_multi_medication_line_keeps_each_regimen_separate() -> None:
+    text = "aspirin 81 mg daily; metformin 500 mg BID"
+    spans = [
+        _span(text, "aspirin", "MEDICATION"),
+        _span(text, "81 mg", "DOSAGE"),
+        _span(text, "daily", "FREQUENCY"),
+        _span(text, "metformin", "MEDICATION"),
+        _span(text, "500 mg", "DOSAGE"),
+        _span(text, "BID", "FREQUENCY"),
+    ]
+
+    relations = extract_medication_relations(text, spans)
+
+    assert {
+        (relation.head.text, relation.type, relation.tail.text)
+        for relation in relations
+    } == {
+        ("aspirin", "dose", "81 mg"),
+        ("aspirin", "frequency", "daily"),
+        ("metformin", "dose", "500 mg"),
+        ("metformin", "frequency", "BID"),
+    }
+
+
+def test_attribute_outside_medication_clause_and_section_is_dropped() -> None:
+    text = "MEDICATIONS:\nLisinopril\nA/P:\nDaily"
+    spans = [
+        _span(text, "Lisinopril", "MEDICATION"),
+        _span(text, "Daily", "FREQUENCY"),
+    ]
+
+    relations = extract_medication_relations(
+        text,
+        spans,
+        sections=detect_sections(text),
+    )
+
+    assert relations == ()
+
+
+def test_relations_reconstruct_one_statement_record_per_regimen() -> None:
+    text = "aspirin 81 mg daily for headache; metformin 500 mg BID"
+    spans = [
+        _span(text, "aspirin", "MEDICATION"),
+        _span(text, "81 mg", "DOSAGE"),
+        _span(text, "daily", "FREQUENCY"),
+        _span(text, "headache", "INDICATION"),
+        _span(text, "metformin", "MEDICATION"),
+        _span(text, "500 mg", "DOSAGE"),
+        _span(text, "BID", "FREQUENCY"),
+    ]
+
+    statements = reconstruct_medication_statements(
+        extract_medication_relations(text, spans)
+    )
+
+    assert [statement.medication.text for statement in statements] == [
+        "aspirin",
+        "metformin",
+    ]
+    assert statements[0].record_type == "MedicationStatement"
+    assert statements[0].dosage["dose"].text == "81 mg"
+    assert statements[0].dosage["frequency"].text == "daily"
+    assert statements[0].indication is not None
+    assert statements[0].indication.text == "headache"
+    assert statements[1].dosage["dose"].text == "500 mg"
+    assert statements[1].dosage["frequency"].text == "BID"
+    assert statements[0].to_dict()["record_type"] == "MedicationStatement"
 
 
 def test_coreferent_medication_heads_collapse_with_safe_supporting_evidence() -> None:
@@ -178,6 +297,17 @@ def _coreference_chain(case: dict) -> CoreferenceChain:
         representative=members[case["representative_index"]],
         confidence=0.98,
     )
+
+
+def _span(text: str, surface: str, label: str) -> dict[str, object]:
+    start = text.index(surface)
+    return {
+        "text": surface,
+        "label": label,
+        "start": start,
+        "end": start + len(surface),
+        "score": 1.0,
+    }
 
 
 def _string_values(value: object) -> list[str]:
