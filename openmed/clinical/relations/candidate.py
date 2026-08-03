@@ -31,6 +31,14 @@ MedicationRelationType = Literal[
     "drug_to_strength",
     "drug_to_indication",
 ]
+ProblemAttributeType = Literal["severity", "body_site", "status"]
+ProblemRelationType = Literal[
+    "problem_to_severity",
+    "problem_to_body_site",
+    "problem_to_status",
+]
+RelationAttributeType = MedicationAttributeType | ProblemAttributeType
+RelationType = MedicationRelationType | ProblemRelationType
 
 RELATION_SCHEMA_VERSION = 2
 DRUG_TO_DOSE: MedicationRelationType = "drug_to_dose"
@@ -63,6 +71,15 @@ ATTRIBUTE_RELATION_TYPES: dict[MedicationAttributeType, MedicationRelationType] 
     attribute_type: relation_type
     for relation_type, attribute_type in RELATION_ATTRIBUTE_TYPES.items()
 }
+PROBLEM_ATTRIBUTE_RELATION_TYPES: dict[ProblemAttributeType, ProblemRelationType] = {
+    "severity": "problem_to_severity",
+    "body_site": "problem_to_body_site",
+    "status": "problem_to_status",
+}
+_ALL_ATTRIBUTE_RELATION_TYPES: dict[RelationAttributeType, RelationType] = {
+    **ATTRIBUTE_RELATION_TYPES,
+    **PROBLEM_ATTRIBUTE_RELATION_TYPES,
+}
 
 
 @dataclass(frozen=True)
@@ -75,6 +92,7 @@ class SpanReference:
     end: int
     score: float
     section: str | None = None
+    derived: bool = False
 
     @classmethod
     def from_entity(
@@ -117,6 +135,8 @@ class SpanReference:
         }
         if self.section is not None:
             payload["section"] = self.section
+        if self.derived:
+            payload["derived"] = True
         return payload
 
 
@@ -668,26 +688,32 @@ class MedicationRelation:
 
 @dataclass(frozen=True)
 class Relation:
-    """Public medication relation tuple with a bounded confidence score."""
+    """Public clinical relation tuple with a bounded confidence score.
+
+    Source-backed tails round-trip through ``start``/``end``. A derived tail,
+    such as status consumed from clinical context metadata, carries
+    ``derived=True`` and reuses its head offsets as provenance rather than
+    claiming that the normalized status value occurs literally in the text.
+    """
 
     head: SpanReference
-    type: MedicationAttributeType
+    type: RelationAttributeType
     tail: SpanReference
     score: float
 
     def __post_init__(self) -> None:
         """Validate the generic relation confidence contract."""
 
-        if self.type not in ATTRIBUTE_RELATION_TYPES:
-            raise ValueError(f"unsupported medication relation type: {self.type!r}")
+        if self.type not in _ALL_ATTRIBUTE_RELATION_TYPES:
+            raise ValueError(f"unsupported clinical relation type: {self.type!r}")
         if not 0.0 <= self.score <= 1.0:
             raise ValueError("relation score must be between 0 and 1")
 
     @property
-    def relation_type(self) -> MedicationRelationType:
-        """Return the medication-specific edge label."""
+    def relation_type(self) -> RelationType:
+        """Return the head-specific edge label."""
 
-        return ATTRIBUTE_RELATION_TYPES[self.type]
+        return _ALL_ATTRIBUTE_RELATION_TYPES[self.type]
 
     def to_dict(self) -> dict[str, Any]:
         """Return the roadmap relation shape as a deterministic mapping."""
@@ -807,10 +833,15 @@ __all__ = [
     "MedicationRelation",
     "MedicationRelationGroup",
     "MedicationRelationType",
+    "ProblemAttributeType",
+    "ProblemRelationType",
     "JointSpanCandidate",
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
+    "RelationAttributeType",
+    "RelationType",
+    "PROBLEM_ATTRIBUTE_RELATION_TYPES",
     "RelationCandidateBatch",
     "RelationCandidateRule",
     "RelationCandidate",
