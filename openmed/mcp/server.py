@@ -29,7 +29,13 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
 )
 from openmed.core.schemas import OpenMedSpan
+from openmed.mcp.clinical_workflow import (
+    clinical_workflow_resource_document,
+    load_golden_agent_run,
+    render_clinical_workflow_prompt,
+)
 from openmed.mcp.tool_registry import (
+    CLINICAL_WORKFLOW_SPEC,
     TOOL_REGISTRY,
     ToolSchemaValidationError,
     ToolSpec,
@@ -893,7 +899,12 @@ def _clinical_detect_stage(
     """Run local detection and convert results to canonical text-free spans."""
 
     if artifact.spans:
-        return {"spans": artifact.public_spans()}
+        spans = artifact.public_spans()
+        return {
+            "spans": spans,
+            "model_name": "provided-openmed-spans",
+            "entity_count": len(spans),
+        }
     if artifact.text is None:
         raise ValueError("the detect stage requires text or canonical spans")
 
@@ -1377,7 +1388,7 @@ def build_mcp_tool_handlers(
     of registered tool names matches the canonical registry specs.
     """
 
-    return {
+    handlers: dict[str, Callable[..., Dict[str, Any]]] = {
         "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
             **kwargs,
             runtime_provider=runtime_provider,
@@ -1425,6 +1436,8 @@ def build_mcp_tool_handlers(
         ),
         "openmed_search_models": lambda **kwargs: openmed_search_models(**kwargs),
     }
+    handlers.update(TOOL_REGISTRY.registered_handlers())
+    return handlers
 
 
 # Canonical set of MCP-exposed tool names, kept in sync with TOOL_REGISTRY by
@@ -1493,6 +1506,22 @@ def _register_resources(
         return _json_resource(render_tool_registry_document())
 
     @server.resource(
+        CLINICAL_WORKFLOW_SPEC.resource_uri,
+        name="OpenMed canonical clinical workflow",
+        mime_type="application/json",
+    )
+    def _clinical_workflow_resource() -> str:
+        return _json_resource(clinical_workflow_resource_document())
+
+    @server.resource(
+        CLINICAL_WORKFLOW_SPEC.fixture_uri,
+        name="OpenMed synthetic clinical workflow golden run",
+        mime_type="application/json",
+    )
+    def _clinical_workflow_fixture_resource() -> str:
+        return _json_resource(load_golden_agent_run())
+
+    @server.resource(
         "openmed://health",
         name="OpenMed health",
         mime_type="application/json",
@@ -1502,6 +1531,17 @@ def _register_resources(
 
 
 def _register_prompts(server: Any) -> None:
+    @server.prompt(name=CLINICAL_WORKFLOW_SPEC.prompt_name)
+    def _clinical_workflow_prompt(
+        text: str = (
+            "Synthetic subject Cedar Example, record SYN-1303-ALPHA, reports "
+            "aster syndrome."
+        ),
+    ) -> str:
+        """Prompt an agent to use the canonical local clinical workflow."""
+
+        return render_clinical_workflow_prompt(text)
+
     @server.prompt(name="openmed-clinical-ner")
     def _clinical_ner_prompt(
         text: str = "Patient received 75mg clopidogrel for NSTEMI.",

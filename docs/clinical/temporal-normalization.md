@@ -88,3 +88,34 @@ network access, reads no environment state, emits no logs, and never defaults
 to the wall clock. Temporal spans can contain sensitive dates, so callers
 should apply the same PHI handling policy to returned values as to the source
 document.
+
+## Anchor EVENT spans to document time
+
+Use `anchor_events` to attach already-extracted EVENT spans to the nearest
+resolved DATE or TIME in the same sentence. Relative TIMEX values are resolved
+against the required document creation time (DCT). Events without a usable
+nearby TIMEX receive an explicit `dct_fallback` anchor.
+
+```python
+from openmed.clinical import anchor_events
+
+text = "Fever started 3 days ago."
+result = anchor_events(
+    text,
+    event_spans=[(6, 13)],
+    document_creation_time="2026-06-15",
+    timex_spans=[(14, 24)],
+)
+
+result.anchors[0].anchor_value
+# "2026-06-12"
+result.anchors[0].dct_position
+# "before"
+```
+
+When `timex_spans` is omitted, local deterministic detection supplies TIMEX
+offsets. Passing an empty iterable disables detection. Supplied
+`NormalizedTimex` records retain their resolved values rather than being
+normalized again. The anchoring result does not retain raw EVENT or TIMEX
+text: source evidence is represented by inclusive/exclusive offsets and
+SHA-256 hashes only.

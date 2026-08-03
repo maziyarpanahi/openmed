@@ -770,3 +770,38 @@ def test_invalid_intermediate_span_stops_downstream_work_without_echoing() -> No
     assert result["artifacts"] == {}
     assert calls == {"context": 1}
     assert private_marker not in json.dumps(result, sort_keys=True)
+
+
+def test_invalid_intermediate_artifact_schema_stops_downstream_work() -> None:
+    calls: Counter[str] = Counter()
+
+    def context_stage(artifact: Any, options: Any) -> dict[str, Any]:
+        del artifact, options
+        calls["context"] += 1
+        return {"spans": [SYNTHETIC_CLINICAL_SPAN]}
+
+    def sections_stage(artifact: Any, options: Any) -> dict[str, Any]:
+        del artifact, options
+        calls["sections"] += 1
+        return {"spans": [SYNTHETIC_CLINICAL_SPAN], "sections": []}
+
+    result = execute_clinical_pipeline(
+        ["context", "sections"],
+        text=None,
+        spans=[SYNTHETIC_CLINICAL_SPAN],
+        stage_handlers={
+            "context": context_stage,
+            "sections": sections_stage,
+        },
+    )
+
+    assert result["status"] == "failed"
+    assert result["error"] == {
+        "code": "stage_execution_failed",
+        "message": "A clinical pipeline stage failed.",
+        "stage": "context",
+        "details": {"error_type": "ToolSchemaValidationError"},
+    }
+    assert result["artifacts"] == {}
+    assert result["trace"] == []
+    assert calls == {"context": 1}
