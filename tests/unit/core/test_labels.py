@@ -9,17 +9,24 @@ from openmed.core.labels import (
     AGE,
     AIRWAY_MANAGEMENT,
     AMOUNT,
+    ANATOMY,
     ANESTHESIA_TYPE,
     ANESTHETIC_AGENT,
     ANTIBIOTIC,
     API_KEY,
     ASA_CLASS,
     BIC,
+    BIOMARKER,
+    BIOMEDICAL_LABEL_KIND,
+    BIOMEDICAL_LABELS,
     BITCOIN_ADDRESS,
     BODY_SITE,
     BUILDING_NUMBER,
+    CANCER,
     CANONICAL_LABELS,
     CARE_INTERVENTION,
+    CELL,
+    CHEMICAL,
     CKD_STAGE,
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
@@ -34,8 +41,11 @@ from openmed.core.labels import (
     DEVICE,
     DIALYSIS_MODALITY,
     DIET_TYPE,
+    DISEASE,
+    DNA,
     DOSAGE,
     DOSE_NUMBER,
+    DRUG,
     DURATION,
     DYSPNEA_GRADE,
     EMAIL,
@@ -48,6 +58,8 @@ from openmed.core.labels import (
     FORM,
     FREQUENCY,
     GENDER,
+    GENE,
+    GENE_OR_GENE_PRODUCT,
     GENE_SYMBOL,
     GI_SCORE,
     GI_SYMPTOM,
@@ -73,6 +85,7 @@ from openmed.core.labels import (
     JOB_TITLE,
     LAB_TEST,
     LAB_VALUE,
+    LABEL_METADATA,
     LAST_NAME,
     LINE_DRAIN_TUBE,
     LITECOIN_ADDRESS,
@@ -87,23 +100,30 @@ from openmed.core.labels import (
     NUTRITIONAL_STATUS,
     OCCUPATION,
     ORDINAL_DIRECTION,
+    ORGAN,
+    ORGANISM,
     ORGANIZATION,
     OTHER,
     OXYGEN_SUPPORT,
     PASSWORD,
+    PATHOLOGY,
     PERSON,
     PHONE,
+    PII_LABEL_KIND,
     PIN,
     POLYP_DESCRIPTOR,
     PREFIX,
     PROBLEM,
     PROCEDURE,
+    PROTEIN,
     PROTEIN_CHANGE,
     REFERENCE_RANGE,
     RENAL_FUNCTION_MEASURE,
     RESPIRATORY_FINDING,
+    RNA,
     ROUTE,
     SEVERITY,
+    SPECIES,
     SPIROMETRY_MEASURE,
     SSN,
     STREET_ADDRESS,
@@ -111,6 +131,7 @@ from openmed.core.labels import (
     SUSCEPTIBILITY,
     THYROID_MEASURE,
     TIME,
+    TISSUE,
     UNIT,
     URINE_FINDING,
     URL,
@@ -126,6 +147,7 @@ from openmed.core.labels import (
     ZYGOSITY,
     hipaa_class_for,
     id_subtype_for,
+    label_kind_for,
     normalize_label,
     policy_label_for,
     risk_level_for,
@@ -444,6 +466,82 @@ class TestRegistryCoverage:
             )
 
 
+class TestBiomedicalEntityLabels:
+    """Canonical labels shared by the shipped biomedical NER families."""
+
+    EXPECTED_LABELS = frozenset(
+        {
+            DISEASE,
+            CONDITION,
+            DRUG,
+            CHEMICAL,
+            GENE_OR_GENE_PRODUCT,
+            GENE,
+            PROTEIN,
+            DNA,
+            RNA,
+            ANATOMY,
+            ORGAN,
+            TISSUE,
+            CELL,
+            CANCER,
+            SPECIES,
+            ORGANISM,
+            PATHOLOGY,
+            BIOMARKER,
+        }
+    )
+
+    def test_biomedical_taxonomy_is_canonical_and_round_trips(self):
+        assert BIOMEDICAL_LABELS == self.EXPECTED_LABELS
+        assert BIOMEDICAL_LABELS <= CANONICAL_LABELS
+        for label in BIOMEDICAL_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        ("alias", "expected"),
+        [
+            ("simple_chemical", CHEMICAL),
+            ("CHEM", CHEMICAL),
+            ("amino_acid", CHEMICAL),
+            ("gene_or_gene_product", GENE_OR_GENE_PRODUCT),
+            ("GENE OR GENE PRODUCT", GENE_OR_GENE_PRODUCT),
+            ("cell_line", CELL),
+            ("cellular_component", CELL),
+            ("protein_complex", PROTEIN),
+            ("protein_familiy_or_group", PROTEIN),
+            ("organism_subdivision", ORGANISM),
+            ("organism_substance", ORGANISM),
+            ("pathological_formation", PATHOLOGY),
+        ],
+    )
+    def test_family_native_aliases_normalize(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_biomedical_labels_are_non_pii_and_have_no_identifier_tags(self):
+        for label in BIOMEDICAL_LABELS:
+            metadata = LABEL_METADATA[label]
+            assert label_kind_for(label) == BIOMEDICAL_LABEL_KIND
+            assert metadata["policy_label"] == CLINICAL_CONCEPT
+            assert {"hipaa_tags", "identifier_tags", "regulatory_tags"}.isdisjoint(
+                metadata
+            )
+
+    def test_existing_pii_labels_and_aliases_are_unchanged(self):
+        expected = {
+            "first_name": FIRST_NAME,
+            "B-EMAIL": EMAIL,
+            "phone_number": PHONE,
+            "date_of_birth": DATE_OF_BIRTH,
+            "medical_record_number": ID_NUM,
+            "ssn": SSN,
+            "street_address": STREET_ADDRESS,
+        }
+        for alias, canonical in expected.items():
+            assert normalize_label(alias) == canonical
+            assert label_kind_for(canonical) == PII_LABEL_KIND
+
+
 class TestClinicalConceptLabels:
     """Clinical-concept canonical labels added for grounding (issue #266)."""
 
@@ -460,20 +558,20 @@ class TestClinicalConceptLabels:
     @pytest.mark.parametrize(
         "alias,expected",
         [
-            ("disease", CONDITION),
+            ("disease", DISEASE),
             ("diagnosis", PROBLEM),
             ("finding", CONDITION),
-            ("drug", MEDICATION),
+            ("drug", DRUG),
             ("medication", MEDICATION),
-            ("chemical", MEDICATION),
+            ("chemical", CHEMICAL),
             ("test", LAB_TEST),
             ("measurement", LAB_TEST),
             ("analyte", LAB_TEST),
             ("surgery", PROCEDURE),
             ("procedure", PROCEDURE),
             ("operation", PROCEDURE),
-            ("anatomy", BODY_SITE),
-            ("organ", BODY_SITE),
+            ("anatomy", ANATOMY),
+            ("organ", ORGAN),
             ("body site", BODY_SITE),
         ],
     )
@@ -783,6 +881,7 @@ class TestClinicalLabelsAreAdditive:
 
     NEW_LABELS = frozenset(
         {
+            *BIOMEDICAL_LABELS,
             CONDITION,
             MEDICATION,
             LAB_TEST,
@@ -963,7 +1062,7 @@ class TestClinicalLabelsAreAdditive:
         "imei": IMEI,
         "microorganism": MICROORGANISM,
         "microbe": MICROORGANISM,
-        "organism": MICROORGANISM,
+        "organism": ORGANISM,
         "pathogen": MICROORGANISM,
         "antibiotic": ANTIBIOTIC,
         "antimicrobial": ANTIBIOTIC,

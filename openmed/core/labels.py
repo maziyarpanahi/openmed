@@ -1,4 +1,4 @@
-"""Canonical PII/PHI label taxonomy.
+"""Canonical PII/PHI and biomedical label taxonomy.
 
 Different OpenMed PII model families use different label-naming conventions:
 
@@ -8,6 +8,8 @@ Different OpenMed PII model families use different label-naming conventions:
   ``DATEOFBIRTH``).
 - The privacy-filter family emits BIOES-tagged labels (``B-NAME``,
   ``I-EMAIL``, ``E-ADDRESS``, ``S-PHONE``).
+- Biomedical NER families emit uppercase and snake-case concepts
+  (``DISEASE``, ``simple_chemical``, ``gene_or_gene_product``).
 
 This module provides a single ``CANONICAL_LABELS`` taxonomy in
 ``UPPER_SNAKE_CASE`` and a ``normalize_label`` helper that maps any of the
@@ -97,6 +99,25 @@ MICROORGANISM: Final = "MICROORGANISM"
 ANTIBIOTIC: Final = "ANTIBIOTIC"
 SUSCEPTIBILITY: Final = "SUSCEPTIBILITY"
 
+#: Biomedical entities emitted by the shipped NER model families.
+DISEASE: Final = "DISEASE"
+DRUG: Final = "DRUG"
+CHEMICAL: Final = "CHEMICAL"
+GENE_OR_GENE_PRODUCT: Final = "GENE_OR_GENE_PRODUCT"
+GENE: Final = "GENE"
+PROTEIN: Final = "PROTEIN"
+DNA: Final = "DNA"
+RNA: Final = "RNA"
+ANATOMY: Final = "ANATOMY"
+ORGAN: Final = "ORGAN"
+TISSUE: Final = "TISSUE"
+CELL: Final = "CELL"
+CANCER: Final = "CANCER"
+SPECIES: Final = "SPECIES"
+ORGANISM: Final = "ORGANISM"
+PATHOLOGY: Final = "PATHOLOGY"
+BIOMARKER: Final = "BIOMARKER"
+
 #: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO)
 CONDITION: Final = "CONDITION"
 MEDICATION: Final = "MEDICATION"
@@ -105,6 +126,30 @@ PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
 #: Procedure-record device concepts (issue #313)
 DEVICE: Final = "DEVICE"
+
+#: Canonical non-identifier labels shared by the biomedical NER families.
+BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        DISEASE,
+        CONDITION,
+        DRUG,
+        CHEMICAL,
+        GENE_OR_GENE_PRODUCT,
+        GENE,
+        PROTEIN,
+        DNA,
+        RNA,
+        ANATOMY,
+        ORGAN,
+        TISSUE,
+        CELL,
+        CANCER,
+        SPECIES,
+        ORGANISM,
+        PATHOLOGY,
+        BIOMARKER,
+    }
+)
 
 #: Relation-extraction head and attribute concepts (issue #252)
 PROBLEM: Final = "PROBLEM"
@@ -327,6 +372,23 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         MICROORGANISM,
         ANTIBIOTIC,
         SUSCEPTIBILITY,
+        DISEASE,
+        DRUG,
+        CHEMICAL,
+        GENE_OR_GENE_PRODUCT,
+        GENE,
+        PROTEIN,
+        DNA,
+        RNA,
+        ANATOMY,
+        ORGAN,
+        TISSUE,
+        CELL,
+        CANCER,
+        SPECIES,
+        ORGANISM,
+        PATHOLOGY,
+        BIOMARKER,
         CONDITION,
         MEDICATION,
         LAB_TEST,
@@ -407,6 +469,9 @@ DIRECT_IDENTIFIER: Final = "DIRECT_IDENTIFIER"
 QUASI_IDENTIFIER: Final = "QUASI_IDENTIFIER"
 SENSITIVE_ATTRIBUTE: Final = "SENSITIVE_ATTRIBUTE"
 CLINICAL_CONCEPT: Final = "CLINICAL_CONCEPT"
+PII_LABEL_KIND: Final = "PII"
+BIOMEDICAL_LABEL_KIND: Final = "BIOMEDICAL"
+LABEL_KINDS: Final[FrozenSet[str]] = frozenset({PII_LABEL_KIND, BIOMEDICAL_LABEL_KIND})
 POLICY_LABELS: Final[FrozenSet[str]] = frozenset(
     {
         DIRECT_IDENTIFIER,
@@ -530,6 +595,11 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             ID_NUM,
             EYE_COLOR,
             HEIGHT,
+            GENE_OR_GENE_PRODUCT,
+            GENE,
+            PROTEIN,
+            DNA,
+            RNA,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -545,6 +615,23 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             MICROORGANISM,
             ANTIBIOTIC,
             SUSCEPTIBILITY,
+            DISEASE,
+            DRUG,
+            CHEMICAL,
+            GENE_OR_GENE_PRODUCT,
+            GENE,
+            PROTEIN,
+            DNA,
+            RNA,
+            ANATOMY,
+            ORGAN,
+            TISSUE,
+            CELL,
+            CANCER,
+            SPECIES,
+            ORGANISM,
+            PATHOLOGY,
+            BIOMARKER,
             CONDITION,
             MEDICATION,
             LAB_TEST,
@@ -622,6 +709,11 @@ def _label_metadata(
     system_hints: tuple[str, ...] = _NO_SYSTEM_HINTS,
 ) -> Mapping[str, object]:
     return {
+        "kind": (
+            BIOMEDICAL_LABEL_KIND
+            if policy_label == CLINICAL_CONCEPT
+            else PII_LABEL_KIND
+        ),
         "policy_label": policy_label,
         "risk_level": risk_level,
         "system_hints": system_hints,
@@ -692,6 +784,24 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     MICROORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     ANTIBIOTIC: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
     SUSCEPTIBILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    # Biomedical NER family concepts
+    DISEASE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
+    DRUG: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    CHEMICAL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    GENE_OR_GENE_PRODUCT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    GENE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    PROTEIN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DNA: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    RNA: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ANATOMY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ORGAN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    TISSUE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CELL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CANCER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
+    SPECIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PATHOLOGY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
+    BIOMARKER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     # Clinical concepts
     CONDITION: _label_metadata(
         CLINICAL_CONCEPT,
@@ -895,6 +1005,25 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     MICROORGANISM: HIPAA_UNIQUE_IDENTIFIER,
     ANTIBIOTIC: HIPAA_UNIQUE_IDENTIFIER,
     SUSCEPTIBILITY: HIPAA_UNIQUE_IDENTIFIER,
+    # Biomedical NER family concepts. These compatibility cross-map entries
+    # support Safe Harbor reporting; the labels remain non-PII by kind.
+    DISEASE: HIPAA_UNIQUE_IDENTIFIER,
+    DRUG: HIPAA_UNIQUE_IDENTIFIER,
+    CHEMICAL: HIPAA_UNIQUE_IDENTIFIER,
+    GENE_OR_GENE_PRODUCT: HIPAA_UNIQUE_IDENTIFIER,
+    GENE: HIPAA_UNIQUE_IDENTIFIER,
+    PROTEIN: HIPAA_UNIQUE_IDENTIFIER,
+    DNA: HIPAA_UNIQUE_IDENTIFIER,
+    RNA: HIPAA_UNIQUE_IDENTIFIER,
+    ANATOMY: HIPAA_UNIQUE_IDENTIFIER,
+    ORGAN: HIPAA_UNIQUE_IDENTIFIER,
+    TISSUE: HIPAA_UNIQUE_IDENTIFIER,
+    CELL: HIPAA_UNIQUE_IDENTIFIER,
+    CANCER: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIES: HIPAA_UNIQUE_IDENTIFIER,
+    ORGANISM: HIPAA_UNIQUE_IDENTIFIER,
+    PATHOLOGY: HIPAA_UNIQUE_IDENTIFIER,
+    BIOMARKER: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical concepts
     CONDITION: HIPAA_UNIQUE_IDENTIFIER,
     MEDICATION: HIPAA_UNIQUE_IDENTIFIER,
@@ -1034,6 +1163,23 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     MICROORGANISM: POPIA_HEALTH_INFORMATION,
     ANTIBIOTIC: POPIA_HEALTH_INFORMATION,
     SUSCEPTIBILITY: POPIA_HEALTH_INFORMATION,
+    DISEASE: POPIA_HEALTH_INFORMATION,
+    DRUG: POPIA_HEALTH_INFORMATION,
+    CHEMICAL: POPIA_HEALTH_INFORMATION,
+    GENE_OR_GENE_PRODUCT: POPIA_HEALTH_INFORMATION,
+    GENE: POPIA_HEALTH_INFORMATION,
+    PROTEIN: POPIA_HEALTH_INFORMATION,
+    DNA: POPIA_HEALTH_INFORMATION,
+    RNA: POPIA_HEALTH_INFORMATION,
+    ANATOMY: POPIA_HEALTH_INFORMATION,
+    ORGAN: POPIA_HEALTH_INFORMATION,
+    TISSUE: POPIA_HEALTH_INFORMATION,
+    CELL: POPIA_HEALTH_INFORMATION,
+    CANCER: POPIA_HEALTH_INFORMATION,
+    SPECIES: POPIA_HEALTH_INFORMATION,
+    ORGANISM: POPIA_HEALTH_INFORMATION,
+    PATHOLOGY: POPIA_HEALTH_INFORMATION,
+    BIOMARKER: POPIA_HEALTH_INFORMATION,
     CONDITION: POPIA_HEALTH_INFORMATION,
     MEDICATION: POPIA_HEALTH_INFORMATION,
     LAB_TEST: POPIA_HEALTH_INFORMATION,
@@ -1142,8 +1288,20 @@ def _validate_label_metadata() -> None:
             )
     for label, metadata in LABEL_METADATA.items():
         policy_label = metadata["policy_label"]
+        kind = metadata["kind"]
         risk_level = metadata["risk_level"]
         system_hints = metadata["system_hints"]
+        if kind not in LABEL_KINDS:
+            raise RuntimeError(f"{label} has invalid kind {kind!r}")
+        expected_kind = (
+            BIOMEDICAL_LABEL_KIND
+            if policy_label == CLINICAL_CONCEPT
+            else PII_LABEL_KIND
+        )
+        if kind != expected_kind:
+            raise RuntimeError(
+                f"{label} kind {kind!r} does not match policy {policy_label!r}"
+            )
         if policy_label not in POLICY_LABELS:
             raise RuntimeError(f"{label} has invalid policy_label {policy_label!r}")
         if risk_level not in RISK_LEVELS:
@@ -1357,15 +1515,53 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # Microbiology
     "microorganism": MICROORGANISM,
     "microbe": MICROORGANISM,
-    "organism": MICROORGANISM,
     "pathogen": MICROORGANISM,
     "antibiotic": ANTIBIOTIC,
     "antimicrobial": ANTIBIOTIC,
     "susceptibility": SUSCEPTIBILITY,
     "susceptibilityresult": SUSCEPTIBILITY,
+    # Biomedical NER family concepts and family-native aliases
+    "disease": DISEASE,
+    "drug": DRUG,
+    "chemical": CHEMICAL,
+    "chem": CHEMICAL,
+    "simplechemical": CHEMICAL,
+    "aminoacid": CHEMICAL,
+    "geneorgeneproduct": GENE_OR_GENE_PRODUCT,
+    "geneproduct": GENE_OR_GENE_PRODUCT,
+    "gene": GENE,
+    "protein": PROTEIN,
+    "proteincomplex": PROTEIN,
+    "proteinenum": PROTEIN,
+    "proteinenumeration": PROTEIN,
+    "proteinfamilyorgroup": PROTEIN,
+    "proteinfamiliyorgroup": PROTEIN,
+    "proteinvariant": PROTEIN,
+    "dna": DNA,
+    "rna": RNA,
+    "anatomy": ANATOMY,
+    "anatomical": ANATOMY,
+    "anatomicalsystem": ANATOMY,
+    "developinganatomicalstructure": ANATOMY,
+    "immaterialanatomicalentity": ANATOMY,
+    "multitissuestructure": TISSUE,
+    "organ": ORGAN,
+    "tissue": TISSUE,
+    "cell": CELL,
+    "cellline": CELL,
+    "celltype": CELL,
+    "cellularcomponent": CELL,
+    "cl": CELL,
+    "cancer": CANCER,
+    "species": SPECIES,
+    "organism": ORGANISM,
+    "organismsubdivision": ORGANISM,
+    "organismsubstance": ORGANISM,
+    "pathology": PATHOLOGY,
+    "pathologicalformation": PATHOLOGY,
+    "biomarker": BIOMARKER,
     # Clinical concepts
     "condition": CONDITION,
-    "disease": CONDITION,
     "diagnosis": PROBLEM,
     "ayushmorbidity": CONDITION,
     "namastemorbidity": CONDITION,
@@ -1375,10 +1571,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "syndrome": CONDITION,
     "medication": MEDICATION,
     "med": MEDICATION,
-    "drug": MEDICATION,
     "indiandrug": MEDICATION,
     "indiandrugbrand": MEDICATION,
-    "chemical": MEDICATION,
     "substance": MEDICATION,
     "labtest": LAB_TEST,
     "test": LAB_TEST,
@@ -1397,9 +1591,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "approach": OTHER,
     "bodysite": BODY_SITE,
     "bodypart": BODY_SITE,
-    "anatomy": BODY_SITE,
-    "anatomical": BODY_SITE,
-    "organ": BODY_SITE,
     # Procedure-record device concepts (issue #313)
     "device": DEVICE,
     "medicaldevice": DEVICE,
@@ -1494,7 +1685,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "painscore": OTHER,
     "skinassessment": BODY_SITE,
     # Clinical genomics
-    "gene": GENE_SYMBOL,
     "genesymbol": GENE_SYMBOL,
     "genename": GENE_SYMBOL,
     "variantdescriptor": VARIANT_DESCRIPTOR,
@@ -1781,6 +1971,12 @@ def policy_label_for(label: str, lang: str = "en") -> str:
     return cast(str, _metadata_for(label, lang=lang)["policy_label"])
 
 
+def label_kind_for(label: str, lang: str = "en") -> str:
+    """Return whether a normalized label is PII or a biomedical concept."""
+
+    return cast(str, _metadata_for(label, lang=lang)["kind"])
+
+
 def risk_level_for(label: str, lang: str = "en") -> str:
     """Return the residual-risk level for a label after canonical normalization."""
     return cast(str, _metadata_for(label, lang=lang)["risk_level"])
@@ -1815,6 +2011,7 @@ _validate_label_metadata()
 
 __all__ = [
     "CANONICAL_LABELS",
+    "BIOMEDICAL_LABELS",
     "CLINICAL_CONCEPT_LABELS",
     "NAME_BOUNDARY_REFINEMENT_LABELS",
     "normalize_label",
@@ -1848,10 +2045,13 @@ __all__ = [
     "LABEL_TO_POPIA",
     "NDPA_SENSITIVE_CLASS_LABELS",
     "POLICY_LABELS",
+    "LABEL_KINDS",
     "DIRECT_IDENTIFIER",
     "QUASI_IDENTIFIER",
     "SENSITIVE_ATTRIBUTE",
     "CLINICAL_CONCEPT",
+    "PII_LABEL_KIND",
+    "BIOMEDICAL_LABEL_KIND",
     "RISK_LEVELS",
     "RISK_LOW",
     "RISK_MEDIUM",
@@ -1869,6 +2069,7 @@ __all__ = [
     "NDPA_TRADE_UNION_MEMBERSHIPS",
     "NDPA_OTHER_COMMISSION_PRESCRIBED_DATA",
     "policy_label_for",
+    "label_kind_for",
     "risk_level_for",
     "system_hints_for",
     "hipaa_class_for",
@@ -1928,6 +2129,23 @@ __all__ = [
     "MICROORGANISM",
     "ANTIBIOTIC",
     "SUSCEPTIBILITY",
+    "DISEASE",
+    "DRUG",
+    "CHEMICAL",
+    "GENE_OR_GENE_PRODUCT",
+    "GENE",
+    "PROTEIN",
+    "DNA",
+    "RNA",
+    "ANATOMY",
+    "ORGAN",
+    "TISSUE",
+    "CELL",
+    "CANCER",
+    "SPECIES",
+    "ORGANISM",
+    "PATHOLOGY",
+    "BIOMARKER",
     "CONDITION",
     "MEDICATION",
     "LAB_TEST",
