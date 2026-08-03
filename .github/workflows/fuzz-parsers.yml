@@ -1,0 +1,42 @@
+name: Format Parser Fuzzing
+
+on:
+  schedule:
+    # Weekly, bounded exploration of untrusted document parser inputs.
+    - cron: "43 4 * * 3"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-format-parsers:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.3.2
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Run bounded format parser fuzzing
+      env:
+        HYPOTHESIS_PROFILE: fuzz-nightly
+        OPENMED_FORMAT_PARSER_TIMEOUT_SECONDS: "0.5"
+      run: |
+        uv run pytest tests/fuzz/test_format_parsers_fuzz.py -q -m fuzz

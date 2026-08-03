@@ -63,7 +63,7 @@ def _gold_labels(mentions: list[dict[str, Any]]) -> dict[tuple[str, int, int], s
 def _load_event_coref_gold() -> list[dict[str, Any]]:
     return [
         json.loads(line)
-        for line in EVENT_FIXTURE_PATH.read_text().splitlines()
+        for line in EVENT_FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
 
@@ -89,12 +89,13 @@ def _event_predicted_labels(
         _event_seed_mentions(document),
         document_text=document["text"],
         document_id=document["doc_id"],
+        hash_secret="synthetic-fixture-secret",
     )
-    labels: dict[tuple[str, int, int], str] = {}
-    for cluster in result.clusters:
-        for start, end in cluster.member_offsets:
-            labels[(cluster.document_id, start, end)] = cluster.cluster_id
-    return labels
+    return {
+        (cluster.document_id, start, end): cluster.cluster_id
+        for cluster in result.clusters
+        for start, end in cluster.member_offsets
+    }
 
 
 def test_canonicalize_mentions_expands_abbreviations_and_preserves_offsets() -> None:
@@ -207,27 +208,41 @@ def test_problem_list_coref_dedup_reduces_duplicates_without_false_merges() -> N
     assert _problem_list_pairwise_precision(deduplicated, mentions) >= 0.90
 
 
-def test_event_coreference_mentions_add_definite_np_and_pronoun_candidates() -> None:
-    document = _load_event_coref_gold()[0]
+def test_event_candidates_cover_all_event_types_and_cross_section_anaphora() -> None:
+    documents = {item["doc_id"]: item for item in _load_event_coref_gold()}
+    cross_section = documents["event-coref-cross-section"]
 
     candidates = event_coreference_mentions(
-        document["text"],
-        _event_seed_mentions(document),
-        document_id=document["doc_id"],
+        cross_section["text"],
+        _event_seed_mentions(cross_section),
+        document_id=cross_section["doc_id"],
     )
-    canonical = canonicalize_mentions(candidates, document_text=document["text"])
+    canonical = canonicalize_mentions(candidates, document_text=cross_section["text"])
     by_offset = {(mention.start, mention.end): mention for mention in canonical}
 
-    assert (60, 71) in by_offset
-    assert (87, 89) in by_offset
-    assert by_offset[(60, 71)].canonical_text == "left lower lobe mass"
-    assert by_offset[(87, 89)].canonical_text == "left lower lobe mass"
+    assert set(by_offset) == {(11, 27), (41, 43), (57, 67), (80, 82)}
+    assert by_offset[(11, 27)].semantic_type == "problem"
+    assert by_offset[(41, 43)].semantic_type == "test"
+    assert by_offset[(57, 67)].canonical_text == "left lung lesion"
+    assert by_offset[(57, 67)].canonical_section == "assessment"
+    assert by_offset[(80, 82)].canonical_text == "left lung lesion"
+
+    treatment = documents["event-coref-treatment"]
+    treatment_candidates = event_coreference_mentions(
+        treatment["text"],
+        _event_seed_mentions(treatment),
+        document_id=treatment["doc_id"],
+    )
+    assert {candidate["semantic_type"] for candidate in treatment_candidates} == {
+        "treatment"
+    }
 
 
-def test_resolve_coreference_scores_event_gold_and_keeps_clusters_sanitized() -> None:
+def test_resolve_coreference_meets_event_gold_gate_with_sanitized_output() -> None:
     predicted: dict[tuple[str, int, int], str] = {}
     gold: dict[tuple[str, int, int], str] = {}
-    for document in _load_event_coref_gold():
+    documents = _load_event_coref_gold()
+    for document in documents:
         document_predicted = _event_predicted_labels(document)
         document_gold = _event_gold_labels(document)
         assert set(document_gold).issubset(document_predicted)
@@ -239,24 +254,39 @@ def test_resolve_coreference_scores_event_gold_and_keeps_clusters_sanitized() ->
     assert score.metric == "bcubed"
     assert score.f1 >= 0.60
 
+    document = next(
+        item for item in documents if item["doc_id"] == "event-coref-treatment"
+    )
     result = resolve_coreference(
-        _event_seed_mentions(_load_event_coref_gold()[1]),
-        document_text=_load_event_coref_gold()[1]["text"],
-        document_id="event-coref-2",
+        _event_seed_mentions(document),
+        document_text=document["text"],
+        document_id=document["doc_id"],
+        hash_secret="synthetic-fixture-secret",
     )
     payload = json.dumps(result.to_dict()).casefold()
-    assert "lisinopril" not in payload
-    assert "medication" not in payload
-    assert all(cluster.member_hashes for cluster in result.clusters)
+    assert "aspirin" not in payload
+    assert "the medication" not in payload
+    assert all(
+        member_hash.startswith("hmac-sha256:")
+        for cluster in result.clusters
+        for member_hash in cluster.member_hashes
+    )
+    assert all(
+        cluster.canonical_hash.startswith("hmac-sha256:") for cluster in result.clusters
+    )
 
 
-def test_event_coreference_does_not_merge_opposite_assertion_polarity() -> None:
-    document = _load_event_coref_gold()[2]
+def test_event_coreference_keeps_opposite_assertion_polarities_apart() -> None:
+    document = next(
+        item
+        for item in _load_event_coref_gold()
+        if item["doc_id"] == "event-coref-polarity"
+    )
     predicted = _event_predicted_labels(document)
 
     assert (
         predicted[(document["doc_id"], 15, 24)]
-        != predicted[(document["doc_id"], 26, 35)]
+        != predicted[(document["doc_id"], 41, 50)]
     )
 
 

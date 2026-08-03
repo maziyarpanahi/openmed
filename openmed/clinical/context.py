@@ -36,7 +36,7 @@ Sibling axes such as experiencer and absolute-date timeline normalization
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any, Literal
@@ -45,6 +45,8 @@ from openmed.clinical.lexicons import (
     ClinicalCueLexicon,
     clinical_context_lexicon_stats,
     get_clinical_cue_lexicon,
+    normalize_section_header,
+    normalized_section_header_aliases,
 )
 
 Negation = Literal["affirmed", "negated"]
@@ -72,6 +74,11 @@ CERTAINTY_VALUES = (CERTAIN, UNCERTAIN)
 
 ContextCueCategory = Literal["historical", "hypothetical", "uncertainty", "negation"]
 ContextCueDirection = Literal["forward", "backward"]
+
+INDIA_CLINICAL_NER_DISCLAIMER = (
+    "India clinical NER output assists review and does not make clinical or "
+    "disclosure decisions."
+)
 
 _ENGLISH_CONTEXT_LEXICON = get_clinical_cue_lexicon("en")
 
@@ -234,6 +241,10 @@ _BACKWARD_CONTEXT_CUES = {
 }
 
 
+def _normalize_section_label(section: str) -> str:
+    return normalize_section_header(section)
+
+
 def _normalize_cue_text(text: str) -> str:
     return " ".join(text.casefold().split())
 
@@ -243,12 +254,13 @@ def _cue_category_lookup(
 ) -> dict[str, ContextCueCategory]:
     active_lexicon = lexicon or _ENGLISH_CONTEXT_LEXICON
     category_by_cue: dict[str, ContextCueCategory] = {}
-    for category, cues in (
+    categorized_cues: tuple[tuple[ContextCueCategory, Sequence[str]], ...] = (
         ("historical", active_lexicon.historical),
         ("hypothetical", active_lexicon.hypothetical),
         ("uncertainty", active_lexicon.uncertainty),
         ("negation", active_lexicon.negation),
-    ):
+    )
+    for category, cues in categorized_cues:
         for cue in cues:
             category_by_cue.setdefault(_normalize_cue_text(cue), category)
     return category_by_cue
@@ -291,7 +303,7 @@ CANONICAL_SECTION_LABELS = {
     "plan": ("Plan",),
 }
 
-SECTION_LABEL_ALIASES = {
+_BASE_SECTION_LABEL_ALIASES = {
     "past medical history": "past_medical_history",
     "pmh": "past_medical_history",
     "medical history": "past_medical_history",
@@ -306,6 +318,11 @@ SECTION_LABEL_ALIASES = {
     "hpi": "history_of_present_illness",
     "assessment": "assessment",
     "plan": "plan",
+}
+
+SECTION_LABEL_ALIASES = {
+    **_BASE_SECTION_LABEL_ALIASES,
+    **normalized_section_header_aliases(),
 }
 
 SECTION_CONTEXT_PRIORS = {
@@ -363,6 +380,59 @@ class ClinicalAssertion:
             "experiencer": self.experiencer,
         }
         return {key: value for key, value in values.items() if value is not None}
+
+
+@dataclass(frozen=True)
+class RerankContext:
+    """Section and assertion context consumed by grounding candidate reranking.
+
+    This payload carries the surrounding-note signals a sparse+dense reranker
+    folds into a fused score without re-running retrieval. ``section`` is the
+    raw section header the mention was found under; :attr:`canonical_section`
+    normalizes it through the same OM-086 section vocabulary as
+    ``apply_section_context``. ``assertion`` is the advisory
+    :class:`ClinicalAssertion` for the span. ``preferred_concepts`` is the set
+    of ``(system, code)`` concept keys the section makes salient (e.g. the
+    section's active problem list); a candidate whose key is in that set earns
+    a section-match adjustment, which is how a same-surface collision resolves
+    to the section-appropriate sense.
+
+    The object is deliberately advisory: it records provenance-friendly context
+    features and never constructs a FHIR, OMOP, or other grounded record.
+    """
+
+    section: str | None = None
+    assertion: ClinicalAssertion | None = None
+    preferred_concepts: frozenset[tuple[str, str]] = frozenset()
+
+    @property
+    def canonical_section(self) -> str | None:
+        """Return the canonical section key for :attr:`section`, or ``None``."""
+
+        return canonical_section_label(self.section)
+
+    def section_match(self, system: str, code: str) -> float:
+        """Return ``1.0`` when ``(system, code)`` is preferred in this section."""
+
+        if not self.preferred_concepts:
+            return 0.0
+        return 1.0 if (system, code) in self.preferred_concepts else 0.0
+
+    def assertion_present(self) -> float:
+        """Return ``1.0`` unless the span is negated or hypothetical.
+
+        A missing assertion is treated as present so the feature never penalizes
+        spans that were not assertion-analyzed.
+        """
+
+        assertion = self.assertion
+        if assertion is None:
+            return 1.0
+        if assertion.negation == NEGATED:
+            return 0.0
+        if assertion.temporality == HYPOTHETICAL:
+            return 0.0
+        return 1.0
 
 
 @dataclass(frozen=True)
@@ -430,7 +500,7 @@ class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
             pass
         return self._unhashable_lookup(span) is not None
 
-    def __iter__(self) -> Iterable[Any]:
+    def __iter__(self) -> Iterator[Any]:
         yield from super().__iter__()
         for span, _ in self._unhashable_entries:
             yield span
@@ -438,7 +508,12 @@ class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
     def __len__(self) -> int:
         return super().__len__() + len(self._unhashable_entries)
 
-    def get(
+    # ``get``/``items``/``keys``/``values`` intentionally broaden the ``dict``
+    # signatures: they must also surface the unhashable span entries kept in a
+    # side list, so they return simple iterables rather than the invariant
+    # ``dict`` view/overload types. The override incompatibility is deliberate
+    # and safe for this read-mostly result container.
+    def get(  # type: ignore[override]
         self,
         span: Any,
         default: tuple[ModifierHit, ...] | None = None,
@@ -448,15 +523,15 @@ class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
         except KeyError:
             return default
 
-    def items(self) -> Iterable[tuple[Any, tuple[ModifierHit, ...]]]:
+    def items(self) -> Iterator[tuple[Any, tuple[ModifierHit, ...]]]:  # type: ignore[override]
         yield from super().items()
         yield from self._unhashable_entries
 
-    def keys(self) -> Iterable[Any]:
+    def keys(self) -> Iterator[Any]:  # type: ignore[override]
         for span, _ in self.items():
             yield span
 
-    def values(self) -> Iterable[tuple[ModifierHit, ...]]:
+    def values(self) -> Iterator[tuple[ModifierHit, ...]]:  # type: ignore[override]
         for _, hits in self.items():
             yield hits
 
@@ -698,11 +773,6 @@ def _text_parts(
     return tuple(part for part in parts if part)
 
 
-def _normalize_section_label(section: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", " ", section.casefold()).strip()
-    return re.sub(r"\s+", " ", normalized)
-
-
 def _section_text_of(obj: Any) -> str:
     """Best-effort extraction of a section label from heterogeneous inputs."""
 
@@ -862,6 +932,7 @@ def _sentence_windows(
     text: str,
     sentences: Iterable[Any] | None,
 ) -> tuple[_SentenceWindow, ...]:
+    windows: tuple[_SentenceWindow, ...] | None
     if sentences is not None:
         windows = tuple(_coerce_sentence_windows(text, sentences))
     else:
@@ -938,7 +1009,8 @@ def _coerce_sentence_windows(
             cursor = end
         else:
             start, end = _offsets_from_obj(sentence)
-        yield _validate_offsets(text, start, end, name="sentence")
+        window_start, window_end = _validate_offsets(text, start, end, name="sentence")
+        yield _SentenceWindow(window_start, window_end)
 
 
 def _target_offsets(text: str, span: Any) -> tuple[int, int]:
@@ -1190,7 +1262,12 @@ def resolve_span_context(
     modifier_hits: Any = None,
     language: str | None = None,
 ) -> ClinicalContextResult:
-    """Return all currently implemented ConText decision axes for ``span``."""
+    """Return all currently implemented ConText decision axes for ``span``.
+
+    Registered non-English languages use only their own cue pack. When that
+    pack has no matching cue, the axes degrade to recent, certain, and
+    affirmed; absent English cues never flip a Chinese or Hindi assertion.
+    """
 
     return ClinicalContextResult(
         temporality=resolve_temporality(span, modifier_hits, language=language),
@@ -1212,13 +1289,152 @@ def assert_context_axes(
         certainty=resolve_uncertainty(span, modifier_hits, language=language),
         negation=resolve_negation(span, modifier_hits, language=language),
     )
-    return apply_section_context(span, section, assertion)
+    return apply_section_context(span, section, assertion, language=language)
+
+
+def assert_context(
+    text: str,
+    spans: Iterable[Any],
+    sentences: Iterable[Any] | None = None,
+    language: str | None = None,
+    section_experiencer: str | None = None,
+) -> list[dict[str, Any]]:
+    """Attach all four clinical context axes to extracted spans.
+
+    The returned span mappings carry ``negation``, ``uncertainty``,
+    ``experiencer``, and ``temporality`` at the top level. The same compact
+    mapping is placed under ``metadata["clinical_context"]`` so formatted NER
+    results can preserve it without changing their public entity schema.
+    Input spans are never mutated.
+
+    Args:
+        text: Source document text indexed by the span offsets.
+        spans: Span mappings, span-like objects, or strings. Offset-bearing
+            spans are preferred; a text-only span is located in ``text``.
+        sentences: Optional sentence spans used to bound cue propagation.
+        language: Optional cue-lexicon language code.
+        section_experiencer: Optional patient/family/other section prior used
+            only when no explicit experiencer cue governs a span.
+
+    Returns:
+        Copied span mappings enriched with the four context axes, in input
+        order.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    if isinstance(spans, (str, Mapping)):
+        span_list = [spans]
+    else:
+        span_list = list(spans)
+
+    scoped_hits = scan_context_cues(
+        text,
+        span_list,
+        sentences=sentences,
+        language=language,
+    )
+
+    # Imported lazily because experiencer.py reuses constants and data classes
+    # from this module.
+    from openmed.clinical.experiencer import resolve_experiencer
+
+    enriched_spans: list[dict[str, Any]] = []
+    for span in span_list:
+        start, end = _target_offsets(text, span)
+        scoped_span = {
+            "text": text[start:end],
+            "document_text": text,
+            "start": start,
+            "end": end,
+        }
+        assertion = assert_context_axes(
+            scoped_span,
+            scoped_hits[span],
+            section=_span_section(span),
+            language=language,
+        )
+        assignment = resolve_experiencer(
+            text,
+            {"start": start, "end": end},
+            section_experiencer=section_experiencer or assertion.experiencer,
+        )
+        context_fields = {
+            "negation": assertion.negation or AFFIRMED,
+            "uncertainty": assertion.certainty,
+            "experiencer": assignment.experiencer,
+            "temporality": assertion.temporality,
+        }
+
+        enriched = _span_mapping_copy(span, text=text, start=start, end=end)
+        enriched.update(context_fields)
+        raw_metadata = enriched.get("metadata")
+        if isinstance(raw_metadata, Mapping):
+            metadata = dict(raw_metadata)
+        elif raw_metadata is None:
+            metadata = {}
+        else:
+            metadata = {"value": raw_metadata}
+        metadata["clinical_context"] = dict(context_fields)
+        enriched["metadata"] = metadata
+        enriched_spans.append(enriched)
+
+    return enriched_spans
+
+
+def _span_mapping_copy(
+    span: Any,
+    *,
+    text: str,
+    start: int,
+    end: int,
+) -> dict[str, Any]:
+    """Return a detached mapping representation of a span-like value."""
+
+    if isinstance(span, Mapping):
+        return dict(span)
+
+    to_dict = getattr(span, "to_dict", None)
+    if callable(to_dict):
+        serialized = to_dict()
+        if isinstance(serialized, Mapping):
+            return dict(serialized)
+
+    fallback: dict[str, Any] = {
+        "text": text[start:end],
+        "start": start,
+        "end": end,
+    }
+    for name in ("label", "confidence"):
+        value = getattr(span, name, None)
+        if value is not None:
+            fallback[name] = value
+    return fallback
+
+
+def _span_section(span: Any) -> str | None:
+    """Return only an explicit section field from a clinical span."""
+
+    if isinstance(span, Mapping):
+        for key in ("section", "section_label", "section_name"):
+            value = span.get(key)
+            if isinstance(value, str):
+                return value
+        return None
+
+    for name in ("section", "section_label", "section_name"):
+        value = getattr(span, name, None)
+        if isinstance(value, str):
+            return value
+    return None
 
 
 def apply_section_context(
     span: Any,
     section: Any = None,
     assertion: ClinicalAssertion | None = None,
+    language: str | None = None,
 ) -> ClinicalAssertion:
     """Apply conservative section priors to a span assertion.
 
@@ -1227,12 +1443,13 @@ def apply_section_context(
     back to ``span.section`` or mapping-style ``span["section"]``. Section
     priors only fill unset/default axes for the current span and never override
     explicit in-sentence temporal cues such as ``"acute"``, ``"history of"``,
-    or ``"if"``.
+    or ``"if"``. ``language`` selects the registered cue lexicon used to
+    recognize those explicit cues; unknown codes retain the English fallback.
     """
 
     resolved_assertion = assertion or ClinicalAssertion(
-        temporality=resolve_temporality(span),
-        certainty=resolve_uncertainty(span),
+        temporality=resolve_temporality(span, language=language),
+        certainty=resolve_uncertainty(span, language=language),
     )
     canonical_section = _canonical_section_name(section) or _canonical_section_name(
         span
@@ -1244,12 +1461,12 @@ def apply_section_context(
     if not prior:
         return resolved_assertion
 
-    changes: dict[str, str] = {}
+    changes: dict[str, Any] = {}
     temporality_prior = prior.get("temporality")
     if (
         temporality_prior
         and resolved_assertion.temporality == RECENT
-        and not _has_explicit_temporality_cue(span)
+        and not _has_explicit_temporality_cue(span, language=language)
     ):
         changes["temporality"] = temporality_prior
 
@@ -1271,8 +1488,10 @@ __all__ = [
     "PSEUDO_NEGATION_CUES",
     "ClinicalContextResult",
     "ClinicalAssertion",
+    "RerankContext",
     "ContextCueCategory",
     "ContextCueDirection",
+    "INDIA_CLINICAL_NER_DISCLAIMER",
     "ModifierHit",
     "clinical_context_lexicon_stats",
     "scan_context_cues",
@@ -1300,6 +1519,7 @@ __all__ = [
     "canonical_section_name",
     "canonical_section_label",
     "apply_section_context",
+    "assert_context",
     "resolve_span_context",
     "assert_context_axes",
 ]

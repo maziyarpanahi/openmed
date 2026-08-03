@@ -15,7 +15,13 @@ from typing import Any
 from openmed.core.labels import normalize_label
 
 from ..types import Candidate
-from ..vocab import VocabConcept, VocabLoaderError, VocabularyIndex, normalize_alias
+from ..vocab import (
+    VocabConcept,
+    VocabLoaderError,
+    VocabularyIndex,
+    normalize_alias,
+    normalize_language,
+)
 
 _DEFAULT_TOP_K = 5
 _DEFAULT_MIN_SCORE = 0.6
@@ -42,6 +48,7 @@ class VocabLinker:
         min_score: float = _DEFAULT_MIN_SCORE,
         canonical_label: str | None = None,
         fuzzy: bool = True,
+        language: str | None = None,
     ) -> list[Candidate]:
         """Return ranked candidates for ``text``.
 
@@ -58,33 +65,45 @@ class VocabLinker:
         query = normalize_alias(text)
         if not query:
             return []
+        source_language = normalize_language(language)
 
         best: dict[str, Candidate] = {}
-        for concept in self._vocab.lookup_all(query):
-            self._offer(best, concept, 1.0)
+        for concept in self._vocab.lookup_all(query, language=source_language):
+            self._offer(best, concept, 1.0, source_language=source_language)
         if fuzzy:
             for entry, score in approximate_match(
-                self._vocab, query, score_cutoff=min_score * 100.0
+                self._vocab,
+                query,
+                score_cutoff=min_score * 100.0,
+                language=source_language,
             ):
                 if score >= min_score:
-                    self._offer(best, entry, score)
+                    self._offer(best, entry, score, source_language=source_language)
 
         return sorted(best.values(), key=self._rank_key)[:top_k]
 
     def _offer(
-        self, best: dict[str, Candidate], entry: VocabConcept, score: float
+        self,
+        best: dict[str, Candidate],
+        entry: VocabConcept,
+        score: float,
+        *,
+        source_language: str,
     ) -> None:
-        candidate = self._candidate(entry, score)
+        candidate = self._candidate(entry, score, source_language=source_language)
         existing = best.get(candidate.code)
         if existing is None or score > existing.score:
             best[candidate.code] = candidate
 
-    def _candidate(self, entry: VocabConcept, score: float) -> Candidate:
+    def _candidate(
+        self, entry: VocabConcept, score: float, *, source_language: str
+    ) -> Candidate:
         return Candidate(
             self.system,
             self._format_code(entry.code),
             entry.preferred_term,
             float(score),
+            source_language,
         )
 
     def _format_code(self, code: str) -> str:
@@ -97,11 +116,20 @@ class VocabLinker:
 
 
 def approximate_match(
-    vocab: VocabularyIndex, query: str, *, score_cutoff: float = 0.0
+    vocab: VocabularyIndex,
+    query: str,
+    *,
+    score_cutoff: float = 0.0,
+    language: str | None = None,
 ) -> list[tuple[VocabConcept, float]]:
     """Best rapidfuzz similarity per entry; empty when rapidfuzz is absent."""
     try:
-        matches = vocab.fuzzy_lookup(query, limit=50, score_cutoff=score_cutoff)
+        matches = vocab.fuzzy_lookup(
+            query,
+            limit=50,
+            score_cutoff=score_cutoff,
+            language=language,
+        )
     except VocabLoaderError:  # pragma: no cover - exercised without the extra
         return []
 

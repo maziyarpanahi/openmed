@@ -3,31 +3,85 @@
 from __future__ import annotations
 
 import calendar
+import heapq
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from itertools import combinations
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Literal
 
 from openmed.clinical.context import (
     reconcile_temporality_with_interval,
     resolve_temporality,
 )
+from openmed.clinical.relations.temporal import (
+    TemporalCueReference,
+    TemporalRelationCandidate,
+    TemporalRelationType,
+    TemporalSpanReference,
+    extract_tlink_candidates,
+)
+from openmed.clinical.temporal_normalizer import NormalizedTimex, normalize_temporal
 from openmed.clinical.timeline.timex import (
     TemporalExpression,
     detect_timexes,
 )
+from openmed.core.audit import hash_text
+from openmed.core.decoding import (
+    EdgeDecisionTrace,
+    SpanEdge,
+    SpanGraphConstraints,
+    SpanNode,
+    decode_span_graph,
+)
+from openmed.processing.advanced_ner import EntitySpan
 
 TIMELINE_ASSISTIVE_DISCLAIMER = (
     "Clinical timeline normalization is assistive and is not a clinical "
     "decision, diagnosis, treatment recommendation, or substitute for "
     "clinician review."
 )
+EVENT_ANCHORING_ADVISORY = (
+    "Clinical event anchoring is deterministic assistive metadata for review "
+    "and is not a clinical decision or substitute for clinician verification."
+)
 
 TimelineRelationKind = Literal["before", "after", "overlap", "unknown"]
+EventAnchorSource = Literal["timex", "dct_fallback"]
+TimelineEdgeStatus = Literal["kept", "pruned"]
+
+ORDER_EVENTS_SCHEMA_VERSION = 2
+
+_TEMPORAL_ORDER_EDGE = "TEMPORAL_PRECEDES"
+_TEMPORAL_PARTIAL_ORDER_EDGES = frozenset({_TEMPORAL_ORDER_EDGE, "CONTAINS"})
+_EVENT_SPAN_LABELS = frozenset(
+    {
+        "CONDITION",
+        "DIAGNOSIS",
+        "EVENT",
+        "FINDING",
+        "MEDICATION_EVENT",
+        "PROBLEM",
+        "PROCEDURE",
+        "SYMPTOM",
+    }
+)
+_TIMEX_SPAN_LABELS = frozenset(
+    {
+        "DATE",
+        "DURATION",
+        "SET",
+        "TEMPORAL_EXPRESSION",
+        "TIME",
+        "TIMEX",
+        "TIMEX3",
+    }
+)
 
 _ANCHOR_TERMS = {
     "admission": ("admission", "admitted", "hospitalization"),
@@ -140,6 +194,78 @@ class TimelineRelation:
 
 
 @dataclass(frozen=True)
+class TimexAnchorReference:
+    """Privacy-safe reference to a normalized TIMEX source span."""
+
+    start: int
+    end: int
+    text_hash: str
+    timex_type: str
+    normalized_value: str
+    granularity_flags: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return TIMEX metadata without raw source text."""
+
+        return {
+            "span": [self.start, self.end],
+            "start": self.start,
+            "end": self.end,
+            "text_hash": self.text_hash,
+            "type": self.timex_type,
+            "normalized_value": self.normalized_value,
+            "granularity_flags": list(self.granularity_flags),
+        }
+
+
+@dataclass(frozen=True)
+class EventTemporalAnchor:
+    """One EVENT span anchored to DCT and optionally to a resolved TIMEX."""
+
+    event_start: int
+    event_end: int
+    event_text_hash: str
+    anchor_source: EventAnchorSource
+    anchor_value: str
+    dct_position: TimelineRelationKind
+    timex: TimexAnchorReference | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return anchoring metadata containing no raw note text."""
+
+        return {
+            "event": {
+                "span": [self.event_start, self.event_end],
+                "start": self.event_start,
+                "end": self.event_end,
+                "text_hash": self.event_text_hash,
+            },
+            "anchor_source": self.anchor_source,
+            "anchor_value": self.anchor_value,
+            "dct_position": self.dct_position,
+            "timex": self.timex.to_dict() if self.timex is not None else None,
+        }
+
+
+@dataclass(frozen=True)
+class EventAnchoringResult:
+    """Privacy-safe DCT anchoring output for a collection of EVENT spans."""
+
+    document_creation_time: str
+    anchors: tuple[EventTemporalAnchor, ...]
+    disclaimer: str = EVENT_ANCHORING_ADVISORY
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return deterministic JSON-ready anchoring output."""
+
+        return {
+            "document_creation_time": self.document_creation_time,
+            "anchors": [anchor.to_dict() for anchor in self.anchors],
+            "disclaimer": self.disclaimer,
+        }
+
+
+@dataclass(frozen=True)
 class ResolvedTimeline:
     """Resolved timeline with ordered events and partial-order relations."""
 
@@ -161,6 +287,192 @@ class ResolvedTimeline:
                 else None
             ),
             "reference_date_provenance": dict(self.reference_date_provenance),
+            "disclaimer": self.disclaimer,
+        }
+
+
+@dataclass(frozen=True)
+class OrderedTimelineEvent:
+    """Privacy-safe EVENT position in a decoded document timeline."""
+
+    event_id: str
+    label: str
+    start: int
+    end: int
+    text_hash: str
+    position: int
+    confidence: float
+    anchor: EventTemporalAnchor | None = None
+
+    def __post_init__(self) -> None:
+        if not self.event_id or not self.label:
+            raise ValueError("ordered timeline event id and label must be non-empty")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("event offsets must satisfy 0 <= start < end")
+        if not self.text_hash.startswith("sha256:"):
+            raise ValueError("event text_hash must be a SHA-256 hash")
+        if self.position < 0:
+            raise ValueError("event position must be non-negative")
+        if not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError("event confidence must be between 0 and 1")
+        if self.anchor is not None and (
+            self.anchor.event_start != self.start
+            or self.anchor.event_end != self.end
+            or self.anchor.event_text_hash != self.text_hash
+        ):
+            raise ValueError("event anchor provenance must match the ordered event")
+
+    @property
+    def normalized_value(self) -> str | None:
+        """Return the normalized TIMEX or DCT fallback value, when anchored."""
+
+        return self.anchor.anchor_value if self.anchor is not None else None
+
+    @property
+    def dct_position(self) -> TimelineRelationKind | None:
+        """Return this event's temporal position relative to DCT, when known."""
+
+        return self.anchor.dct_position if self.anchor is not None else None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready event containing no raw note text."""
+
+        return {
+            "id": self.event_id,
+            "label": self.label,
+            "start": self.start,
+            "end": self.end,
+            "text_hash": self.text_hash,
+            "position": self.position,
+            "confidence": self.confidence,
+            "anchor": self.anchor.to_dict() if self.anchor is not None else None,
+        }
+
+
+@dataclass(frozen=True)
+class TimelineEdgeProvenance:
+    """Privacy-safe kept or pruned TLINK decision provenance."""
+
+    relation_type: TemporalRelationType
+    source: TemporalSpanReference
+    target: TemporalSpanReference
+    confidence: float
+    cue: TemporalCueReference
+    status: TimelineEdgeStatus
+    reason: str
+    constraint: str | None = None
+    features: Mapping[str, float] = field(default_factory=dict)
+    provenance: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError("edge confidence must be between 0 and 1")
+        if self.status not in {"kept", "pruned"}:
+            raise ValueError("edge status must be kept or pruned")
+        if not self.reason:
+            raise ValueError("edge decision reason must be non-empty")
+        object.__setattr__(
+            self,
+            "features",
+            MappingProxyType(
+                {key: float(value) for key, value in sorted(self.features.items())}
+            ),
+        )
+        object.__setattr__(
+            self,
+            "provenance",
+            MappingProxyType(dict(self.provenance)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready edge decision containing no raw note text."""
+
+        return {
+            "relation_type": self.relation_type,
+            "source": self.source.to_dict(),
+            "target": self.target.to_dict(),
+            "confidence": self.confidence,
+            "cue": self.cue.to_dict(),
+            "status": self.status,
+            "reason": self.reason,
+            "constraint": self.constraint,
+            "features": dict(self.features),
+            "provenance": dict(self.provenance),
+        }
+
+
+@dataclass(frozen=True)
+class Timeline:
+    """Cycle-free, privacy-safe ordering of supplied clinical EVENT spans."""
+
+    events: tuple[OrderedTimelineEvent, ...]
+    edges: tuple[TimelineEdgeProvenance, ...]
+    disclaimer: str = TIMELINE_ASSISTIVE_DISCLAIMER
+    schema_version: int = ORDER_EVENTS_SCHEMA_VERSION
+    document_creation_time: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.document_creation_time is None:
+            return
+        normalized_dct, _ = _coerce_document_creation_time(self.document_creation_time)
+        object.__setattr__(self, "document_creation_time", normalized_dct)
+        if any(event.anchor is None for event in self.events):
+            raise ValueError("every timeline event must be anchored when DCT is set")
+
+    @property
+    def edge_provenance(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return decisions for every retained or pruned TLINK candidate."""
+
+        return self.edges
+
+    @property
+    def kept_edges(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return TLINK candidates retained by graph decoding."""
+
+        return tuple(edge for edge in self.edges if edge.status == "kept")
+
+    @property
+    def retained_edges(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return an alias for retained TLINK candidates."""
+
+        return self.kept_edges
+
+    @property
+    def pruned_edges(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return TLINK candidates rejected by graph decoding."""
+
+        return tuple(edge for edge in self.edges if edge.status == "pruned")
+
+    @property
+    def reduced_graph(self) -> tuple[TimelineEdgeProvenance, ...]:
+        """Return the retained, transitively reduced temporal graph."""
+
+        return self.kept_edges
+
+    def edge_keys(self) -> tuple[tuple[str, str, str], ...]:
+        """Return compact retained TLINK keys for temporal evaluation."""
+
+        return tuple(
+            (edge.relation_type, edge.source.span_id, edge.target.span_id)
+            for edge in self.reduced_graph
+        )
+
+    @property
+    def is_cycle_free(self) -> bool:
+        """Return whether retained BEFORE/AFTER relations are acyclic."""
+
+        return _timeline_edges_are_acyclic(self.kept_edges)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready timeline containing no raw clinical text."""
+
+        return {
+            "schema_version": self.schema_version,
+            "document_creation_time": self.document_creation_time,
+            "events": [event.to_dict() for event in self.events],
+            "reduced_graph": [edge.to_dict() for edge in self.reduced_graph],
+            "edges": [edge.to_dict() for edge in self.edges],
+            "cycle_free": self.is_cycle_free,
             "disclaimer": self.disclaimer,
         }
 
@@ -293,6 +605,222 @@ def resolve_timeline(
     )
 
 
+def anchor_events(
+    text: str,
+    event_spans: Iterable[Mapping[str, object] | Sequence[int]],
+    document_creation_time: str | date | datetime,
+    timex_spans: Iterable[NormalizedTimex | Mapping[str, object] | Sequence[int]]
+    | None = None,
+    *,
+    max_character_distance: int = 160,
+) -> EventAnchoringResult:
+    """Anchor every supplied EVENT span to DCT and a nearby resolved TIMEX.
+
+    When ``timex_spans`` is omitted, deterministic TIMEX detection supplies
+    candidate offsets. Passing an empty iterable disables detection. Only
+    resolved ``DATE`` and ``TIME`` records can anchor an event; other or
+    unresolved TIMEX values cause a DCT fallback. Candidate links never cross
+    a sentence boundary and the nearest candidate wins deterministically.
+
+    Args:
+        text: Source document used only in memory for offsets and hashing.
+        event_spans: EVENT mappings with ``start``/``end`` offsets or two-item
+            offset sequences.
+        document_creation_time: Required ISO DCT used by relative-date
+            normalization and DCT-position calculation.
+        timex_spans: Optional normalized TIMEX records or source offsets. When
+            omitted, offsets are detected locally before normalization.
+        max_character_distance: Largest character gap allowed between an
+            EVENT and its TIMEX candidate within the same sentence.
+
+    Returns:
+        An ``EventAnchoringResult`` whose source evidence consists only of
+        offsets and hashes. Every input EVENT has exactly one output anchor.
+
+    Raises:
+        TypeError: If the text, DCT, or a span has an unsupported type.
+        ValueError: If the DCT, distance, or a span is invalid.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if isinstance(max_character_distance, bool) or max_character_distance < 0:
+        raise ValueError("max_character_distance must be non-negative")
+
+    dct_value, dct_date = _coerce_document_creation_time(document_creation_time)
+    events = tuple(
+        _coerce_source_span(span, text_length=len(text)) for span in event_spans
+    )
+    normalized_timexes = _event_anchor_timexes(
+        text,
+        timex_spans,
+        document_creation_time=document_creation_time,
+    )
+
+    anchors: list[EventTemporalAnchor] = []
+    for event_start, event_end in events:
+        timex = _nearest_event_timex(
+            text,
+            event_start=event_start,
+            event_end=event_end,
+            timexes=normalized_timexes,
+            max_character_distance=max_character_distance,
+        )
+        event_hash = hash_text(text[event_start:event_end])
+        if timex is None:
+            anchors.append(
+                EventTemporalAnchor(
+                    event_start=event_start,
+                    event_end=event_end,
+                    event_text_hash=event_hash,
+                    anchor_source="dct_fallback",
+                    anchor_value=dct_value,
+                    dct_position="overlap",
+                )
+            )
+            continue
+
+        position = _normalized_timex_dct_position(timex, dct_date)
+        if position == "unknown" or timex.value is None:
+            anchors.append(
+                EventTemporalAnchor(
+                    event_start=event_start,
+                    event_end=event_end,
+                    event_text_hash=event_hash,
+                    anchor_source="dct_fallback",
+                    anchor_value=dct_value,
+                    dct_position="overlap",
+                )
+            )
+            continue
+
+        anchors.append(
+            EventTemporalAnchor(
+                event_start=event_start,
+                event_end=event_end,
+                event_text_hash=event_hash,
+                anchor_source="timex",
+                anchor_value=timex.value,
+                dct_position=position,
+                timex=TimexAnchorReference(
+                    start=timex.start,
+                    end=timex.end,
+                    text_hash=hash_text(text[timex.start : timex.end]),
+                    timex_type=timex.timex_type,
+                    normalized_value=timex.value,
+                    granularity_flags=timex.granularity_flags,
+                ),
+            )
+        )
+
+    return EventAnchoringResult(
+        document_creation_time=dct_value,
+        anchors=tuple(anchors),
+    )
+
+
+def order_events(
+    text: str,
+    spans: Iterable[EntitySpan | Mapping[str, Any]],
+    *,
+    document_creation_time: str | date | datetime | None = None,
+) -> Timeline:
+    """Order supplied EVENT spans using privacy-safe typed TLINK candidates.
+
+    Typed candidates are converted to a single chronological edge direction
+    before the shared span-graph decoder applies acyclicity and transitive
+    reduction. ``AFTER`` candidates are therefore reversed only for decoding;
+    the public provenance retains the original relation type and source/target
+    roles. When a DCT is supplied explicitly or by an ``is_dct``/``DCT`` span,
+    every EVENT also carries its normalized TIMEX or DCT-fallback anchor.
+
+    Args:
+        text: Source clinical note used only during in-memory extraction.
+        spans: Existing EVENT and TIMEX spans with offsets into ``text``.
+        document_creation_time: Optional ISO DCT. When omitted, a span marked
+            ``is_dct=true`` or labeled ``DCT`` supplies its normalized value.
+
+    Returns:
+        A cycle-free ``Timeline``. Events contain normalized labels, offsets,
+        hashes, zero-based positions, confidence, and available DCT/TIMEX
+        anchors. Edge provenance records every kept or pruned candidate
+        without retaining raw clinical text.
+    """
+
+    span_items = tuple(spans)
+    candidates = extract_tlink_candidates(text, span_items)
+    references = {
+        reference.span_id: reference
+        for reference in _safe_ordering_span_references(text, span_items)
+    }
+    for candidate in candidates:
+        _keep_stronger_reference(references, candidate.source)
+        _keep_stronger_reference(references, candidate.target)
+
+    nodes = tuple(_timeline_span_node(reference) for reference in references.values())
+    candidate_edges = tuple(
+        _timeline_candidate_edge(candidate, candidate_index=index)
+        for index, candidate in enumerate(candidates)
+    )
+    graph = decode_span_graph(
+        nodes,
+        candidate_edges,
+        constraints=SpanGraphConstraints(
+            allowed_edge_labels={
+                _TEMPORAL_ORDER_EDGE,
+                "BEGINS_ON",
+                "CONTAINS",
+                "ENDS_ON",
+                "OVERLAP",
+            },
+            acyclic_edge_labels=_TEMPORAL_PARTIAL_ORDER_EDGES,
+            transitive_reduction_edge_labels=_TEMPORAL_PARTIAL_ORDER_EDGES,
+        ),
+    )
+
+    ordered_node_ids = _topologically_order_timeline_nodes(graph.nodes, graph.edges)
+    order_index = {node_id: index for index, node_id in enumerate(ordered_node_ids)}
+    event_references = sorted(
+        (reference for reference in references.values() if reference.role == "EVENT"),
+        key=lambda reference: order_index[reference.span_id],
+    )
+    anchoring = _order_events_anchoring(
+        text,
+        span_items,
+        tuple(references.values()),
+        document_creation_time=document_creation_time,
+    )
+    anchors_by_span = (
+        {(anchor.event_start, anchor.event_end): anchor for anchor in anchoring.anchors}
+        if anchoring is not None
+        else {}
+    )
+    events = tuple(
+        OrderedTimelineEvent(
+            event_id=reference.span_id,
+            label=reference.label,
+            start=reference.start,
+            end=reference.end,
+            text_hash=reference.text_hash,
+            position=position,
+            confidence=reference.score,
+            anchor=anchors_by_span.get((reference.start, reference.end)),
+        )
+        for position, reference in enumerate(event_references)
+    )
+    edges = _timeline_edge_provenance(graph.decisions, candidates)
+    timeline = Timeline(
+        events=events,
+        edges=edges,
+        document_creation_time=(
+            anchoring.document_creation_time if anchoring is not None else None
+        ),
+    )
+    if not timeline.is_cycle_free:  # Defensive invariant around decoder changes.
+        raise RuntimeError("decoded temporal timeline contains a cycle")
+    return timeline
+
+
 def evaluate_timeline_gold(
     cases_or_path: str | Path | Iterable[Mapping[str, Any]],
 ) -> TimelineEvaluationResult:
@@ -359,6 +887,344 @@ def evaluate_timeline_gold(
         ordering_total=ordering_total,
         failures=tuple(failures),
     )
+
+
+def _order_events_anchoring(
+    text: str,
+    spans: Sequence[EntitySpan | Mapping[str, Any]],
+    references: Sequence[TemporalSpanReference],
+    *,
+    document_creation_time: str | date | datetime | None,
+) -> EventAnchoringResult | None:
+    dct_value, dct_offsets = _order_events_dct(
+        text,
+        spans,
+        document_creation_time=document_creation_time,
+    )
+    if dct_value is None:
+        return None
+
+    event_offsets = tuple(
+        (reference.start, reference.end)
+        for reference in references
+        if reference.role == "EVENT"
+    )
+    timex_offsets = tuple(
+        (reference.start, reference.end)
+        for reference in references
+        if reference.role == "TIMEX"
+        and (reference.start, reference.end) not in dct_offsets
+    )
+    return anchor_events(
+        text,
+        event_offsets,
+        dct_value,
+        timex_offsets,
+    )
+
+
+def _order_events_dct(
+    text: str,
+    spans: Sequence[EntitySpan | Mapping[str, Any]],
+    *,
+    document_creation_time: str | date | datetime | None,
+) -> tuple[str | None, frozenset[tuple[int, int]]]:
+    supplied_value: str | None = None
+    supplied_date: date | None = None
+    if document_creation_time is not None:
+        supplied_value, supplied_date = _coerce_document_creation_time(
+            document_creation_time
+        )
+
+    inferred: list[tuple[str, date, tuple[int, int]]] = []
+    for item in spans:
+        if isinstance(item, EntitySpan):
+            label = _timeline_span_label(item.label)
+            metadata: Mapping[str, Any] = {}
+            data: Mapping[str, Any] = {}
+            start, end = item.start, item.end
+        else:
+            data = item
+            raw_metadata = data.get("metadata") or {}
+            metadata = raw_metadata if isinstance(raw_metadata, Mapping) else {}
+            label = _timeline_span_label(str(data.get("label", data.get("entity", ""))))
+
+        is_dct = (
+            label == "DCT"
+            or data.get("is_dct") is True
+            or metadata.get("is_dct") is True
+        )
+        if not is_dct:
+            continue
+        if not isinstance(item, EntitySpan):
+            start, end = _coerce_source_span(data, text_length=len(text))
+
+        raw_value = data.get(
+            "normalized_value",
+            data.get(
+                "value",
+                metadata.get("normalized_value", metadata.get("value")),
+            ),
+        )
+        if raw_value is None or not str(raw_value).strip():
+            raw_value = text[start:end]
+        inferred_value, inferred_date = _coerce_document_creation_time(str(raw_value))
+        inferred.append((inferred_value, inferred_date, (start, end)))
+
+    inferred_dates = {inferred_date for _, inferred_date, _ in inferred}
+    if len(inferred_dates) > 1:
+        raise ValueError("order_events received conflicting DCT spans")
+    if (
+        supplied_date is not None
+        and inferred_dates
+        and supplied_date not in inferred_dates
+    ):
+        raise ValueError("explicit document_creation_time conflicts with the DCT span")
+
+    dct_offsets = frozenset(offsets for _, _, offsets in inferred)
+    if supplied_value is not None:
+        return supplied_value, dct_offsets
+    if inferred:
+        return inferred[0][0], dct_offsets
+    return None, dct_offsets
+
+
+def _safe_ordering_span_references(
+    text: str,
+    spans: Sequence[EntitySpan | Mapping[str, Any]],
+) -> tuple[TemporalSpanReference, ...]:
+    references: dict[str, TemporalSpanReference] = {}
+    for item in spans:
+        if isinstance(item, TemporalSpanReference):
+            start = item.start
+            end = item.end
+            raw_label = item.label
+            score = float(item.score)
+        elif isinstance(item, EntitySpan):
+            start = item.start
+            end = item.end
+            raw_label = item.label
+            score = float(item.score)
+        else:
+            metadata = item.get("metadata") or {}
+            if not isinstance(metadata, Mapping):
+                metadata = {}
+            start = int(item.get("start", item.get("start_char", -1)))
+            end = int(item.get("end", item.get("end_char", -1)))
+            raw_label = str(item.get("label", item.get("entity", "")))
+            score = float(item.get("score", metadata.get("confidence", 1.0)))
+
+        label = _timeline_span_label(raw_label)
+        if label in _EVENT_SPAN_LABELS:
+            role: Literal["EVENT", "TIMEX"] = "EVENT"
+        elif label in _TIMEX_SPAN_LABELS:
+            role = "TIMEX"
+        else:
+            continue
+        if start < 0 or end <= start or end > len(text):
+            continue
+        if not math.isfinite(score):
+            raise ValueError("temporal span score must be finite")
+
+        reference = TemporalSpanReference(
+            span_id=f"{role.casefold()}:{label.casefold()}:{start}:{end}",
+            label=label,
+            role=role,
+            start=start,
+            end=end,
+            score=round(max(0.0, min(score, 1.0)), 6),
+            text_hash=hash_text(text[start:end]),
+        )
+        _keep_stronger_reference(references, reference)
+
+    return tuple(
+        sorted(
+            references.values(),
+            key=lambda reference: (
+                reference.start,
+                reference.end,
+                reference.label,
+                reference.span_id,
+            ),
+        )
+    )
+
+
+def _keep_stronger_reference(
+    references: dict[str, TemporalSpanReference],
+    candidate: TemporalSpanReference,
+) -> None:
+    current = references.get(candidate.span_id)
+    if current is None or candidate.score > current.score:
+        references[candidate.span_id] = candidate
+
+
+def _timeline_span_node(reference: TemporalSpanReference) -> SpanNode:
+    return SpanNode(
+        node_id=reference.span_id,
+        start=reference.start,
+        end=reference.end,
+        label=reference.role,
+        score=reference.score,
+        text_hash=reference.text_hash,
+        metadata={
+            "schema_version": ORDER_EVENTS_SCHEMA_VERSION,
+            "source_label": reference.label,
+        },
+    )
+
+
+def _timeline_candidate_edge(
+    candidate: TemporalRelationCandidate,
+    *,
+    candidate_index: int,
+) -> SpanEdge:
+    if candidate.relation_type in {"BEFORE", "AFTER"}:
+        head, tail = _chronological_endpoints(
+            candidate.relation_type,
+            candidate.source.span_id,
+            candidate.target.span_id,
+        )
+        label = _TEMPORAL_ORDER_EDGE
+    else:
+        head = candidate.source.span_id
+        tail = candidate.target.span_id
+        label = candidate.relation_type
+    return SpanEdge(
+        head=head,
+        tail=tail,
+        label=label,
+        score=candidate.confidence,
+        metadata={"candidate_index": candidate_index},
+    )
+
+
+def _timeline_edge_provenance(
+    decisions: Sequence[EdgeDecisionTrace],
+    candidates: Sequence[TemporalRelationCandidate],
+) -> tuple[TimelineEdgeProvenance, ...]:
+    provenance: list[TimelineEdgeProvenance] = []
+    for decision in decisions:
+        candidate_index = decision.edge.metadata.get("candidate_index")
+        if (
+            isinstance(candidate_index, bool)
+            or not isinstance(candidate_index, int)
+            or not 0 <= candidate_index < len(candidates)
+        ):
+            raise RuntimeError("temporal graph decision lost candidate provenance")
+        candidate = candidates[candidate_index]
+        provenance.append(
+            TimelineEdgeProvenance(
+                relation_type=candidate.relation_type,
+                source=candidate.source,
+                target=candidate.target,
+                confidence=candidate.confidence,
+                cue=candidate.cue,
+                status=decision.status,
+                reason=decision.reason,
+                constraint=decision.constraint,
+                features=candidate.features,
+                provenance={
+                    "candidate": dict(candidate.provenance),
+                    "decoder": "span_graph",
+                    "schema_version": ORDER_EVENTS_SCHEMA_VERSION,
+                },
+            )
+        )
+    return tuple(provenance)
+
+
+def _topologically_order_timeline_nodes(
+    nodes: Sequence[SpanNode],
+    edges: Sequence[SpanEdge],
+) -> tuple[str, ...]:
+    nodes_by_id = {node.node_id: node for node in nodes}
+    adjacency = {node.node_id: set() for node in nodes}
+    indegree = {node.node_id: 0 for node in nodes}
+    for edge in edges:
+        if edge.label != _TEMPORAL_ORDER_EDGE:
+            continue
+        if edge.tail in adjacency[edge.head]:
+            continue
+        adjacency[edge.head].add(edge.tail)
+        indegree[edge.tail] += 1
+
+    ready = [
+        (*_timeline_node_sort_key(node), node.node_id)
+        for node in nodes
+        if indegree[node.node_id] == 0
+    ]
+    heapq.heapify(ready)
+    ordered: list[str] = []
+    while ready:
+        *_, node_id = heapq.heappop(ready)
+        ordered.append(node_id)
+        for target_id in sorted(
+            adjacency[node_id],
+            key=lambda item: _timeline_node_sort_key(nodes_by_id[item]),
+        ):
+            indegree[target_id] -= 1
+            if indegree[target_id] == 0:
+                target = nodes_by_id[target_id]
+                heapq.heappush(
+                    ready,
+                    (*_timeline_node_sort_key(target), target.node_id),
+                )
+
+    if len(ordered) != len(nodes):
+        raise RuntimeError("decoded temporal graph contains a cycle")
+    return tuple(ordered)
+
+
+def _timeline_node_sort_key(node: SpanNode) -> tuple[int, int, str]:
+    return node.start, node.end, node.label
+
+
+def _timeline_edges_are_acyclic(
+    edges: Sequence[TimelineEdgeProvenance],
+) -> bool:
+    adjacency: dict[str, set[str]] = {}
+    indegree: dict[str, int] = {}
+    for edge in edges:
+        if edge.status != "kept" or edge.relation_type not in {"BEFORE", "AFTER"}:
+            continue
+        head, tail = _chronological_endpoints(
+            edge.relation_type,
+            edge.source.span_id,
+            edge.target.span_id,
+        )
+        adjacency.setdefault(head, set())
+        adjacency.setdefault(tail, set())
+        indegree.setdefault(head, 0)
+        indegree.setdefault(tail, 0)
+        if tail not in adjacency[head]:
+            adjacency[head].add(tail)
+            indegree[tail] += 1
+
+    ready = [node_id for node_id, degree in indegree.items() if degree == 0]
+    visited = 0
+    while ready:
+        node_id = ready.pop()
+        visited += 1
+        for target_id in adjacency[node_id]:
+            indegree[target_id] -= 1
+            if indegree[target_id] == 0:
+                ready.append(target_id)
+    return visited == len(indegree)
+
+
+def _chronological_endpoints(
+    relation_type: TemporalRelationType,
+    source_id: str,
+    target_id: str,
+) -> tuple[str, str]:
+    if relation_type == "AFTER":
+        return target_id, source_id
+    return source_id, target_id
+
+
+def _timeline_span_label(label: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", label.upper()).strip("_")
 
 
 def _resolve_interval(
@@ -676,6 +1542,177 @@ def _coerce_date(value: str | date | datetime | None) -> date | None:
     return date.fromisoformat(value)
 
 
+def _coerce_document_creation_time(
+    value: str | date | datetime,
+) -> tuple[str, date]:
+    if isinstance(value, datetime):
+        return value.isoformat(), value.date()
+    if isinstance(value, date):
+        return value.isoformat(), value
+    if not isinstance(value, str):
+        raise TypeError(
+            "document_creation_time must be an ISO string, date, or datetime"
+        )
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("document_creation_time must not be empty")
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
+            parsed_date = date.fromisoformat(normalized)
+            return parsed_date.isoformat(), parsed_date
+        parsed_datetime = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(
+            "document_creation_time must be a valid ISO date or datetime"
+        ) from exc
+    return parsed_datetime.isoformat(), parsed_datetime.date()
+
+
+def _coerce_source_span(
+    raw_span: Mapping[str, object] | Sequence[int],
+    *,
+    text_length: int,
+) -> tuple[int, int]:
+    if isinstance(raw_span, Mapping):
+        raw_start = raw_span.get("start", raw_span.get("start_char"))
+        raw_end = raw_span.get("end", raw_span.get("end_char"))
+    elif isinstance(raw_span, Sequence) and not isinstance(raw_span, (str, bytes)):
+        if len(raw_span) != 2:
+            raise ValueError("span sequences must contain exactly start and end")
+        raw_start, raw_end = raw_span
+    else:
+        raise TypeError("spans must be mappings or two-item sequences")
+    if raw_start is None or raw_end is None:
+        raise ValueError("spans require integer start and end offsets")
+    if isinstance(raw_start, bool) or isinstance(raw_end, bool):
+        raise ValueError("spans require integer start and end offsets")
+    try:
+        start = int(str(raw_start))
+        end = int(str(raw_end))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("spans require integer start and end offsets") from exc
+    if start < 0 or end <= start or end > text_length:
+        raise ValueError("span offsets must satisfy 0 <= start < end <= len(text)")
+    return start, end
+
+
+def _event_anchor_timexes(
+    text: str,
+    timex_spans: Iterable[NormalizedTimex | Mapping[str, object] | Sequence[int]]
+    | None,
+    *,
+    document_creation_time: str | date | datetime,
+) -> tuple[NormalizedTimex, ...]:
+    if timex_spans is None:
+        offsets: list[Mapping[str, object] | Sequence[int]] = [
+            (timex.start, timex.end) for timex in detect_timexes(text)
+        ]
+        records = normalize_temporal(text, offsets, document_creation_time)
+    else:
+        supplied_timexes = tuple(timex_spans)
+        offsets = [
+            timex
+            for timex in supplied_timexes
+            if not isinstance(timex, NormalizedTimex)
+        ]
+        normalized_offsets = iter(
+            normalize_temporal(text, offsets, document_creation_time)
+        )
+        records = []
+        for timex in supplied_timexes:
+            if isinstance(timex, NormalizedTimex):
+                start, end = _coerce_source_span(
+                    (timex.start, timex.end),
+                    text_length=len(text),
+                )
+                if timex.text != text[start:end]:
+                    raise ValueError(
+                        "NormalizedTimex text must match text at its source offsets"
+                    )
+                records.append(timex)
+            else:
+                records.append(next(normalized_offsets))
+    return tuple(
+        record
+        for record in records
+        if record.timex_type in {"DATE", "TIME"} and record.value is not None
+    )
+
+
+def _nearest_event_timex(
+    text: str,
+    *,
+    event_start: int,
+    event_end: int,
+    timexes: Sequence[NormalizedTimex],
+    max_character_distance: int,
+) -> NormalizedTimex | None:
+    candidates: list[tuple[tuple[int, int, int, int], NormalizedTimex]] = []
+    for timex in timexes:
+        if event_end <= timex.start:
+            distance = timex.start - event_end
+            between = text[event_end : timex.start]
+            follows_event = 1
+        elif timex.end <= event_start:
+            distance = event_start - timex.end
+            between = text[timex.end : event_start]
+            follows_event = 0
+        else:
+            distance = 0
+            between = ""
+            follows_event = 0
+        if distance > max_character_distance or re.search(r"[.!?。！？\n]", between):
+            continue
+        rank = (distance, follows_event, timex.start, timex.end)
+        candidates.append((rank, timex))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: item[0])[1]
+
+
+def _normalized_timex_dct_position(
+    timex: NormalizedTimex,
+    dct: date,
+) -> TimelineRelationKind:
+    if timex.value is None:
+        return "unknown"
+    bounds = _normalized_value_date_bounds(timex.value)
+    if bounds is None:
+        return "unknown"
+    start, end = bounds
+    if "since" in timex.granularity_flags:
+        end = max(end, dct)
+    return _interval_relation(start, end, dct, dct)
+
+
+def _normalized_value_date_bounds(value: str) -> tuple[date, date] | None:
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        parsed = date.fromisoformat(value)
+        return parsed, parsed
+    if match := re.fullmatch(r"(?P<year>\d{4})-(?P<month>\d{2})", value):
+        year = int(match.group("year"))
+        month = int(match.group("month"))
+        start = date(year, month, 1)
+        end = date(year, month, calendar.monthrange(year, month)[1])
+        return start, end
+    if match := re.fullmatch(r"(?P<year>\d{4})-W(?P<week>\d{2})", value):
+        start = date.fromisocalendar(
+            int(match.group("year")),
+            int(match.group("week")),
+            1,
+        )
+        return start, start + timedelta(days=6)
+    if re.fullmatch(r"\d{4}", value):
+        year = int(value)
+        return date(year, 1, 1), date(year, 12, 31)
+    try:
+        parsed_datetime = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    parsed_date = parsed_datetime.date()
+    return parsed_date, parsed_date
+
+
 def _sentence_windows(text: str) -> tuple[tuple[int, int], ...]:
     if not text:
         return ()
@@ -738,13 +1775,25 @@ def _rate(numerator: int, denominator: int) -> float:
 
 
 __all__ = [
+    "EVENT_ANCHORING_ADVISORY",
+    "EventAnchorSource",
+    "EventAnchoringResult",
+    "EventTemporalAnchor",
     "NormalizedInterval",
+    "ORDER_EVENTS_SCHEMA_VERSION",
+    "OrderedTimelineEvent",
     "ResolvedTimeline",
     "TIMELINE_ASSISTIVE_DISCLAIMER",
+    "Timeline",
+    "TimelineEdgeProvenance",
+    "TimelineEdgeStatus",
     "TimelineEvaluationResult",
     "TimelineEvent",
     "TimelineRelation",
     "TimelineRelationKind",
+    "TimexAnchorReference",
+    "anchor_events",
     "evaluate_timeline_gold",
+    "order_events",
     "resolve_timeline",
 ]

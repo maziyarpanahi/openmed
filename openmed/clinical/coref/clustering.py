@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -69,7 +70,7 @@ class EntityCluster:
 
 @dataclass(frozen=True)
 class ResolvedCoreferenceCluster:
-    """Privacy-safe cluster record for public document coreference output."""
+    """Privacy-safe cluster record for public event-coreference output."""
 
     cluster_id: str
     document_id: str
@@ -97,14 +98,14 @@ class ResolvedCoreferenceCluster:
 
 @dataclass(frozen=True)
 class ResolvedCoreferenceResult:
-    """Privacy-safe result returned by ``resolve_coreference``."""
+    """Privacy-safe event clusters returned by ``resolve_coreference``."""
 
     clusters: tuple[ResolvedCoreferenceCluster, ...]
     advisory: str = COREFERENCE_ADVISORY
     scorer_version: str = COMPATIBILITY_SCORER_VERSION
 
     def entity_ids_by_offset(self) -> dict[tuple[str, SpanOffset], str]:
-        """Return ``(document_id, offset) -> cluster_id`` for all members."""
+        """Return ``(document_id, offset) -> cluster_id`` for every mention."""
 
         return {
             (cluster.document_id, offset): cluster.cluster_id
@@ -230,14 +231,35 @@ def resolve_coreference(
     abbreviation_expansions: Mapping[str, str] | None = None,
     canonical_aliases: Mapping[str, str] | None = None,
     threshold: float = DEFAULT_LINK_THRESHOLD,
+    hash_secret: str | bytes | None = None,
 ) -> ResolvedCoreferenceResult:
-    """Resolve event coreference into privacy-safe document clusters.
+    """Resolve clinical event mentions into privacy-safe document clusters.
 
-    When ``document_text`` is supplied, typed PROBLEM/TEST/TREATMENT-like spans
-    are augmented with deterministic definite-NP and pronoun candidates before
-    clustering. The returned clusters contain only ids, offsets, and hashes.
+    With ``document_text``, typed PROBLEM-, TEST-, and TREATMENT-like seed
+    spans are augmented with definite-NP and pronoun candidates before
+    clustering. Public clusters retain ids, offsets, hashes, safe type metadata,
+    and counts; they never retain raw or canonical mention text.
+
+    Args:
+        mentions: Typed seed spans or candidate mappings.
+        document_text: Optional source text used to validate spans and detect
+            anaphoric candidates.
+        document_id: Fallback document id for seeds without one.
+        include_anaphora: Whether to detect definite-NP and pronoun candidates.
+        abbreviation_expansions: Optional clinical abbreviation overrides.
+        canonical_aliases: Optional local canonical-surface aliases.
+        threshold: Minimum pair compatibility score for a cluster link.
+        hash_secret: Optional HMAC key for returned content hashes. Without a
+            key, deterministic SHA-256 fingerprints are returned.
+
+    Returns:
+        Sanitized document clusters with no raw mention text.
     """
 
+    if not isinstance(document_id, str) or not document_id.strip():
+        raise ValueError("document_id must be a non-empty string")
+    if hash_secret is not None and not isinstance(hash_secret, (str, bytes)):
+        raise TypeError("hash_secret must be a string or bytes when provided")
     source_mentions: Iterable[Any]
     validation_text: str | None
     if document_text is not None:
@@ -260,7 +282,10 @@ def resolve_coreference(
         threshold=threshold,
     )
     return ResolvedCoreferenceResult(
-        clusters=tuple(_sanitize_cluster(cluster) for cluster in linked.clusters)
+        clusters=tuple(
+            _sanitize_cluster(cluster, hash_secret=hash_secret)
+            for cluster in linked.clusters
+        )
     )
 
 
@@ -596,41 +621,57 @@ def _entity_id(members: tuple[CanonicalMention, ...]) -> str:
     return f"{document_id}:entity:{digest.hexdigest()[:12]}"
 
 
-def _sanitize_cluster(cluster: EntityCluster) -> ResolvedCoreferenceCluster:
+def _sanitize_cluster(
+    cluster: EntityCluster,
+    *,
+    hash_secret: str | bytes | None,
+) -> ResolvedCoreferenceCluster:
     return ResolvedCoreferenceCluster(
         cluster_id=cluster.entity_id,
         document_id=cluster.document_id,
         semantic_type=cluster.semantic_type,
         member_offsets=cluster.member_offsets,
-        member_hashes=tuple(_mention_hash(member) for member in cluster.members),
+        member_hashes=tuple(
+            member.text_hash or _mention_hash(member, hash_secret=hash_secret)
+            for member in cluster.members
+        ),
         canonical_hash=_hash_payload(
             "canonical",
             cluster.document_id,
             cluster.canonical_text,
             cluster.semantic_type or "",
+            hash_secret=hash_secret,
         ),
         mention_count=len(cluster.member_offsets),
     )
 
 
-def _mention_hash(member: CanonicalMention) -> str:
+def _mention_hash(
+    member: CanonicalMention,
+    *,
+    hash_secret: str | bytes | None,
+) -> str:
     return _hash_payload(
         "mention",
         member.document_id,
         str(member.start),
         str(member.end),
-        member.canonical_text,
+        member.text,
         member.semantic_type or "",
         member.negation,
+        hash_secret=hash_secret,
     )
 
 
-def _hash_payload(*parts: str) -> str:
-    digest = hashlib.sha256()
-    for part in parts:
-        digest.update(b"\0")
-        digest.update(part.encode("utf-8"))
-    return digest.hexdigest()[:16]
+def _hash_payload(
+    *parts: str,
+    hash_secret: str | bytes | None,
+) -> str:
+    payload = b"".join(b"\0" + part.encode("utf-8") for part in parts)
+    if hash_secret is None:
+        return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    key = hash_secret.encode("utf-8") if isinstance(hash_secret, str) else hash_secret
+    return f"hmac-sha256:{hmac.new(key, payload, hashlib.sha256).hexdigest()}"
 
 
 __all__ = [

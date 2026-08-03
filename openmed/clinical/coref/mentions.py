@@ -19,7 +19,10 @@ from openmed.clinical.context import (
     Negation,
     apply_section_context,
     canonical_section_name,
+    resolve_negation,
+    resolve_temporality,
 )
+from openmed.clinical.sections import UNSECTIONED_SECTION, detect_sections
 
 SpanOffset = tuple[int, int]
 
@@ -57,7 +60,16 @@ DEFAULT_CANONICAL_ALIASES: dict[str, str] = {
     "sugars": "diabetes mellitus",
 }
 
-_TEXT_KEYS = ("text", "surface", "mention", "label", "name", "term", "literal", "value")
+_TEXT_KEYS = (
+    "text",
+    "surface",
+    "mention",
+    "label",
+    "name",
+    "term",
+    "literal",
+    "value",
+)
 _DOCUMENT_ID_KEYS = ("document_id", "doc_id", "source_doc_id")
 _START_KEYS = ("start", "start_char", "start_offset", "begin", "offset_start")
 _END_KEYS = ("end", "end_char", "end_offset", "stop", "offset_end")
@@ -82,10 +94,12 @@ _CANONICAL_TEXT_KEYS = (
     "referent_text",
     "antecedent_text",
 )
+_TEXT_HASH_KEYS = ("text_hash", "mention_hash", "surface_hash")
 _NEGATION_KEYS = ("negation", "polarity")
 _TEMPORALITY_KEYS = ("temporality", "temporal_status")
 _EXPERIENCER_KEYS = ("experiencer",)
 _WHITESPACE_RE = re.compile(r"\s+")
+_SAFE_TEXT_HASH_RE = re.compile(r"^(?:hmac-)?sha256:[0-9a-f]{64}$")
 _PUNCTUATION_RE = re.compile(r"[^a-z0-9/+]+")
 _POSSESSIVE_RE = re.compile(r"\b([a-z]+)'s\b")
 _LEADING_CONTEXT_RE = re.compile(
@@ -127,6 +141,7 @@ EVENT_COREFERENCE_SEMANTIC_TYPES = frozenset(
         "finding",
         "lab",
         "laboratory",
+        "lab_test",
         "medication",
         "medication_name",
         "medicine",
@@ -145,7 +160,7 @@ _EVENT_SEMANTIC_ALIASES = {
     "finding": "problem",
     "lab": "test",
     "laboratory": "test",
-    "med": "treatment",
+    "lab_test": "test",
     "medication": "treatment",
     "medication_name": "treatment",
     "medicine": "treatment",
@@ -155,7 +170,7 @@ _EVENT_SEMANTIC_ALIASES = {
     "treatment": "treatment",
 }
 _DEFINITE_EVENT_NP_RE = re.compile(
-    r"\b(?P<det>the|this|that|these|those)\s+"
+    r"\b(?:the|this|that|these|those)\s+"
     r"(?P<head>"
     r"antibiotics?|conditions?|coughs?|diseases?|drugs?|findings?|"
     r"infections?|labs?|lesions?|masses|medications?|medicines?|"
@@ -203,6 +218,7 @@ class CanonicalMention:
     system: str | None = None
     code: str | None = None
     coref_entity_id: str | None = None
+    text_hash: str | None = None
 
     @property
     def offset(self) -> SpanOffset:
@@ -302,11 +318,22 @@ def event_coreference_mentions(
     document_id: str = DEFAULT_DOCUMENT_ID,
     include_anaphora: bool = True,
 ) -> tuple[Mapping[str, Any], ...]:
-    """Return event-coreference mention candidates from typed clinical spans.
+    """Detect event-coreference candidates from typed clinical spans.
 
-    The returned records keep raw text only as an internal input to
-    canonicalization. Public coreference output is sanitized by
-    :func:`openmed.clinical.coref.resolve_coreference`.
+    Only PROBLEM-, TEST-, and TREATMENT-like seed spans are retained. When
+    requested, the detector adds conservative definite noun phrases and simple
+    pronouns that have an earlier compatible event antecedent. Raw surfaces are
+    kept only in these internal candidate records; public clustering output is
+    sanitized by :func:`openmed.clinical.coref.resolve_coreference`.
+
+    Args:
+        document_text: Source text for a single synthetic or clinical document.
+        mentions: Seed mappings or objects with event labels and source offsets.
+        document_id: Fallback id for seed spans without a document id.
+        include_anaphora: Whether to add definite-NP and pronoun candidates.
+
+    Returns:
+        Deterministically ordered candidate mappings with preserved offsets.
     """
 
     if not isinstance(document_text, str):
@@ -314,6 +341,7 @@ def event_coreference_mentions(
     if not isinstance(document_id, str) or not document_id.strip():
         raise ValueError("document_id must be a non-empty string")
 
+    sections = detect_sections(document_text)
     candidates: list[dict[str, Any]] = []
     seen_offsets: set[SpanOffset] = set()
     for raw in mentions:
@@ -321,6 +349,7 @@ def event_coreference_mentions(
             raw,
             document_text=document_text,
             document_id=document_id,
+            sections=sections,
         )
         if candidate is None:
             continue
@@ -332,7 +361,11 @@ def event_coreference_mentions(
 
     if include_anaphora and candidates:
         anchors = canonicalize_mentions(candidates, document_text=document_text)
-        for candidate in _anaphoric_event_mentions(document_text, anchors):
+        for candidate in _anaphoric_event_mentions(
+            document_text,
+            anchors,
+            sections=sections,
+        ):
             offset = (candidate["start"], candidate["end"])
             if offset in seen_offsets:
                 continue
@@ -362,8 +395,9 @@ def _coerce_mention(
     code = _clean_optional_text(_field_value(raw, _CODE_KEYS))
     coref_entity_id = _clean_optional_text(_field_value(raw, _COREF_ENTITY_KEYS))
     canonical_override = _clean_optional_text(_field_value(raw, _CANONICAL_TEXT_KEYS))
-    negation = _normalize_negation(_field_value(raw, _NEGATION_KEYS))
-    temporality = _normalize_temporality(_field_value(raw, _TEMPORALITY_KEYS))
+    text_hash = _normalize_text_hash(_field_value(raw, _TEXT_HASH_KEYS))
+    negation = _normalize_negation(_nested_field_value(raw, _NEGATION_KEYS))
+    temporality = _normalize_temporality(_nested_field_value(raw, _TEMPORALITY_KEYS))
     explicit_experiencer = _clean_optional_text(_field_value(raw, _EXPERIENCER_KEYS))
 
     assertion = apply_section_context(
@@ -407,6 +441,7 @@ def _coerce_mention(
         system=_normalize_optional_label(system),
         code=_normalize_optional_label(code),
         coref_entity_id=coref_entity_id,
+        text_hash=text_hash,
     )
 
 
@@ -415,11 +450,11 @@ def _event_mention_mapping(
     *,
     document_text: str,
     document_id: str,
+    sections: tuple[dict[str, Any], ...],
 ) -> dict[str, Any] | None:
     if raw is None:
         return None
-    raw_semantic_type = _field_value(raw, _SEMANTIC_TYPE_KEYS)
-    semantic_type = _event_semantic_type(raw_semantic_type)
+    semantic_type = _event_semantic_type_for(raw)
     if semantic_type is None:
         return None
 
@@ -432,19 +467,36 @@ def _event_mention_mapping(
         "end": end,
         "semantic_type": semantic_type,
     }
+    section = _field_value(raw, _SECTION_KEYS)
+    if section is None:
+        section = _section_for_offset(sections, start)
+    if section is not None:
+        payload["section"] = section
+
     for output_key, keys in (
-        ("section", _SECTION_KEYS),
         ("system", _SYSTEM_KEYS),
         ("code", _CODE_KEYS),
         ("coref_entity_id", _COREF_ENTITY_KEYS),
         ("canonical_text", _CANONICAL_TEXT_KEYS),
-        ("negation", _NEGATION_KEYS),
-        ("temporality", _TEMPORALITY_KEYS),
         ("experiencer", _EXPERIENCER_KEYS),
+        ("text_hash", _TEXT_HASH_KEYS),
     ):
         value = _field_value(raw, keys)
         if value is not None:
             payload[output_key] = value
+
+    negation = _nested_field_value(raw, _NEGATION_KEYS)
+    payload["negation"] = (
+        negation
+        if negation is not None
+        else resolve_negation(_context_span(document_text, text, start, end))
+    )
+    temporality = _nested_field_value(raw, _TEMPORALITY_KEYS)
+    payload["temporality"] = (
+        temporality
+        if temporality is not None
+        else resolve_temporality(_context_span(document_text, text, start, end))
+    )
     return payload
 
 
@@ -453,6 +505,8 @@ def _event_text_and_offsets(raw: Any, document_text: str) -> tuple[str, int, int
     if raw_text is not None:
         text = _clean_text(raw_text)
         start, end = _offsets_for(raw, text, document_text)
+        if document_text[start:end] != text:
+            raise ValueError("mention offsets must slice the original mention text")
         return text, start, end
 
     explicit_offset = _field_value(raw, ("offset", "span", "char_span"))
@@ -470,17 +524,25 @@ def _event_semantic_type(value: Any) -> str | None:
         return None
     if not isinstance(value, str):
         raise TypeError("event mention semantic type must be a string")
-    normalized = _normalize_optional_label(value)
-    if normalized is None:
-        return None
+    normalized = _WHITESPACE_RE.sub("_", value.strip().casefold().replace("-", "_"))
     if normalized not in EVENT_COREFERENCE_SEMANTIC_TYPES:
         return None
-    return _EVENT_SEMANTIC_ALIASES.get(normalized, normalized)
+    return _EVENT_SEMANTIC_ALIASES[normalized]
+
+
+def _event_semantic_type_for(raw: Any) -> str | None:
+    for key in _SEMANTIC_TYPE_KEYS:
+        semantic_type = _event_semantic_type(_field_value(raw, (key,)))
+        if semantic_type is not None:
+            return semantic_type
+    return None
 
 
 def _anaphoric_event_mentions(
     document_text: str,
     anchors: tuple[CanonicalMention, ...],
+    *,
+    sections: tuple[dict[str, Any], ...],
 ) -> list[dict[str, Any]]:
     mentions: list[dict[str, Any]] = []
     dynamic_anchors = list(anchors)
@@ -504,18 +566,25 @@ def _anaphoric_event_mentions(
         )
         if antecedent is None:
             continue
-        mention = {
+
+        text = document_text[start:end]
+        section = _section_for_offset(sections, start) or antecedent.section
+        context_span = _context_span(document_text, text, start, end)
+        mention: dict[str, Any] = {
             "document_id": antecedent.document_id,
-            "text": document_text[start:end],
+            "text": text,
             "start": start,
             "end": end,
             "semantic_type": antecedent.semantic_type,
-            "section": antecedent.section,
             "canonical_text": antecedent.canonical_text,
-            "negation": antecedent.negation,
-            "temporality": antecedent.temporality,
-            "experiencer": antecedent.experiencer,
+            "negation": resolve_negation(context_span),
+            "temporality": resolve_temporality(context_span),
         }
+        if section is not None:
+            mention["section"] = section
+        if section is None or section == antecedent.section:
+            mention["experiencer"] = antecedent.experiencer
+
         mentions.append(mention)
         dynamic_anchors.append(
             canonicalize_mentions((mention,), document_text=document_text)[0]
@@ -525,16 +594,10 @@ def _anaphoric_event_mentions(
 
 
 def _iter_definite_np_matches(document_text: str) -> list[tuple[int, int, str | None]]:
-    matches: list[tuple[int, int, str | None]] = []
-    for match in _DEFINITE_EVENT_NP_RE.finditer(document_text):
-        matches.append(
-            (
-                match.start(),
-                match.end(),
-                _semantic_hint_for_head(match.group("head")),
-            )
-        )
-    return matches
+    return [
+        (match.start(), match.end(), _semantic_hint_for_head(match.group("head")))
+        for match in _DEFINITE_EVENT_NP_RE.finditer(document_text)
+    ]
 
 
 def _iter_pronoun_matches(
@@ -615,8 +678,36 @@ def _is_temporal_anaphor(document_text: str, end: int) -> bool:
     return next_word in _TIME_ANAPHORA_FOLLOWERS
 
 
+def _section_for_offset(
+    sections: tuple[dict[str, Any], ...],
+    start: int,
+) -> str | None:
+    for section in sections:
+        if section["start"] <= start < section["end"]:
+            label = str(section["label"])
+            return None if label == UNSECTIONED_SECTION else label
+    return None
+
+
+def _context_span(
+    document_text: str,
+    text: str,
+    start: int,
+    end: int,
+) -> dict[str, Any]:
+    return {
+        "document_text": document_text,
+        "text": text,
+        "start": start,
+        "end": end,
+    }
+
+
 def _spans_overlap(
-    left_start: int, left_end: int, right_start: int, right_end: int
+    left_start: int,
+    left_end: int,
+    right_start: int,
+    right_end: int,
 ) -> bool:
     return max(left_start, right_start) < min(left_end, right_end)
 
@@ -639,6 +730,31 @@ def _field_value(raw: Any, keys: tuple[str, ...]) -> Any:
     return None
 
 
+def _nested_field_value(raw: Any, keys: tuple[str, ...]) -> Any:
+    value = _field_value(raw, keys)
+    if value is not None:
+        return value
+    containers: list[Any] = []
+    if isinstance(raw, Mapping):
+        containers.extend(raw.get(key) for key in ("assertion", "context", "metadata"))
+    else:
+        containers.extend(
+            getattr(raw, key, None) for key in ("assertion", "context", "metadata")
+        )
+    for container in containers:
+        if not isinstance(container, Mapping):
+            continue
+        nested = _field_value(container, keys)
+        if nested is not None:
+            return nested
+        assertion = container.get("assertion")
+        if isinstance(assertion, Mapping):
+            nested = _field_value(assertion, keys)
+            if nested is not None:
+                return nested
+    return None
+
+
 def _clean_text(value: Any) -> str:
     if not isinstance(value, str):
         raise TypeError("mention text must be a string")
@@ -655,6 +771,13 @@ def _clean_optional_text(value: Any) -> str | None:
         raise TypeError("mention metadata values must be strings when provided")
     cleaned = _WHITESPACE_RE.sub(" ", value.strip())
     return cleaned or None
+
+
+def _normalize_text_hash(value: Any) -> str | None:
+    text_hash = _clean_optional_text(value)
+    if text_hash is not None and not _SAFE_TEXT_HASH_RE.fullmatch(text_hash):
+        raise ValueError("mention text hash must be a SHA-256 or HMAC-SHA-256 digest")
+    return text_hash
 
 
 def _offsets_for(raw: Any, text: str, document_text: str | None) -> SpanOffset:
