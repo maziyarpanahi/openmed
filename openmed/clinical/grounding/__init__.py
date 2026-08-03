@@ -49,6 +49,13 @@ from .index import (
     load_index,
     query_index,
 )
+from .loaders import (
+    DEFAULT_TTY_PRIORITY,
+    RXNORM_SYSTEM_URI,
+    RxNormLoader,
+    RxNormLoaderError,
+    RxNormVocabularyLoader,
+)
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .postcoordination import (
     POSTCOORDINATION_ATTRIBUTE_SLOTS,
@@ -122,6 +129,7 @@ __all__ = [
     "ConceptMatch",
     "ConceptReference",
     "DenseCandidateGenerator",
+    "DEFAULT_TTY_PRIORITY",
     "DEFAULT_GROUNDING_SYSTEMS",
     "ECLConstraint",
     "ECLResolver",
@@ -156,6 +164,7 @@ __all__ = [
     "PostCoordinationStage",
     "RESTRICTED_VOCAB_SYSTEMS",
     "RESTRICTED_SYSTEM_URIS",
+    "RXNORM_SYSTEM_URI",
     "RankingConfig",
     "Refinement",
     "ResolvedRefinement",
@@ -163,6 +172,9 @@ __all__ = [
     "RestrictedVocabularyLoaderError",
     "SparseCandidateGenerator",
     "RulesPostCoordinationDecomposer",
+    "RxNormLoader",
+    "RxNormLoaderError",
+    "RxNormVocabularyLoader",
     "SnomedExpression",
     "TwoStageRetriever",
     "UserKeyVocabularyLoader",
