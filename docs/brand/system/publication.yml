@@ -113,6 +113,7 @@ classification:
     - model-registry.md
     - model-manifest.md
     - indic-encoders.md
+    - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
     - clinical/context-and-extraction.md

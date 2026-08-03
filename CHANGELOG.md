@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
+  consistency scoring, a zero-violation blocking gate, and synthetic
+  discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and
+  contradiction-trap coverage (#1309).
 - Added deterministic OncoTree tumor-type mapping
   (`openmed.clinical.load_oncotree`, `map_tumor_type`) against a
   caller-supplied local release snapshot (path / `OPENMED_ONCOTREE_PATH` and

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from importlib import import_module
 from inspect import Parameter, Signature
+from threading import RLock
 from typing import Any, Optional
 
 from openmed.core.labels import CANONICAL_LABELS
@@ -19,6 +22,8 @@ from openmed.core.schemas import load_schema
 
 JsonSchema = dict[str, Any]
 JsonObject = dict[str, Any]
+
+logger = logging.getLogger(__name__)
 
 _SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -97,6 +102,8 @@ class ToolSpec:
     destructive_hint: bool = True
     idempotent_hint: bool = False
     open_world_hint: bool = True
+    plugin_id: str = ""
+    plugin_component_id: str = ""
 
     def __post_init__(self) -> None:
         """Normalize mutable inputs and validate core metadata."""
@@ -107,6 +114,11 @@ class ToolSpec:
             known = ", ".join(sorted(_STABILITY_VALUES))
             raise ValueError(
                 f"tool spec {self.name!r} stability must be one of {known}"
+            )
+        if bool(self.plugin_id) != bool(self.plugin_component_id):
+            raise ValueError(
+                f"tool spec {self.name!r} plugin provenance must include "
+                "plugin_id and plugin_component_id"
             )
         title = self.title.strip()
         if not title:
@@ -166,7 +178,7 @@ class ToolSpec:
     def document(self) -> JsonObject:
         """Return a machine-readable schema document for this tool."""
 
-        return {
+        payload: JsonObject = {
             "name": self.name,
             "description": self.description,
             "version": self.version,
@@ -174,6 +186,37 @@ class ToolSpec:
             "input_schema": deepcopy(dict(self.input_schema)),
             "output_schema": deepcopy(dict(self.output_schema)),
         }
+        if self.plugin_id:
+            payload["plugin"] = {
+                "plugin_id": self.plugin_id,
+                "component_id": self.plugin_component_id,
+                "qualified_id": f"{self.plugin_id}:{self.plugin_component_id}",
+            }
+        return payload
+
+
+@dataclass(frozen=True)
+class PluginTool:
+    """One plugin-owned MCP tool specification and executable handler.
+
+    Validated SDK components expose a ``openmed_tools`` attribute or zero-arg
+    method returning one or more of these declarations. The runtime attaches
+    stable plugin provenance to the supplied :class:`ToolSpec` before adding it
+    alongside first-party tools.
+
+    Args:
+        spec: Versioned schemas and user-facing metadata for the tool.
+        handler: Callable returning an object matching ``spec.output_schema``.
+    """
+
+    spec: ToolSpec
+    handler: Callable[..., Mapping[str, Any]]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.spec, ToolSpec):
+            raise TypeError("PluginTool.spec must be a ToolSpec")
+        if not callable(self.handler):
+            raise TypeError("PluginTool.handler must be callable")
 
 
 @dataclass(frozen=True)
@@ -270,21 +313,38 @@ class ToolRegistry:
         self,
         specs: Iterable[ToolSpec] = (),
         workflows: Iterable[WorkflowSpec] = (),
+        *,
+        plugin_loader: Callable[["ToolRegistry"], Any] | None = None,
     ) -> None:
         self._specs: dict[tuple[str, str], ToolSpec] = {}
         self._workflows: dict[tuple[str, str], WorkflowSpec] = {}
+        self._handlers: dict[tuple[str, str], Callable[..., Mapping[str, Any]]] = {}
+        self._plugin_loader = plugin_loader
+        self._plugin_loader_started = False
+        self._plugin_loader_lock = RLock()
         for spec in specs:
             self.register(spec)
         for workflow in workflows:
             self.register_workflow(workflow)
 
-    def register(self, spec: ToolSpec) -> None:
+    def register(
+        self,
+        spec: ToolSpec,
+        *,
+        handler: Callable[..., Mapping[str, Any]] | None = None,
+    ) -> None:
         """Register one tool spec version."""
 
+        if not isinstance(spec, ToolSpec):
+            raise TypeError("register expects a ToolSpec")
+        if handler is not None and not callable(handler):
+            raise TypeError("tool handler must be callable")
         key = (spec.name, spec.version)
         if key in self._specs:
             raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
         self._specs[key] = spec
+        if handler is not None:
+            self._handlers[key] = handler
 
     def register_workflow(self, spec: WorkflowSpec) -> None:
         """Register one discoverable workflow spec version."""
@@ -303,6 +363,7 @@ class ToolRegistry:
     def get(self, name: str, version: str | None = None) -> ToolSpec:
         """Return one spec by name and optional version."""
 
+        self._ensure_runtime_plugins()
         if version is not None:
             try:
                 return self._specs[(name, version)]
@@ -317,12 +378,14 @@ class ToolRegistry:
     def latest_specs(self) -> tuple[ToolSpec, ...]:
         """Return the latest version of each registered tool, sorted by name."""
 
+        self._ensure_runtime_plugins()
         names = sorted({name for name, _version in self._specs})
         return tuple(self.get(name) for name in names)
 
     def all_specs(self) -> tuple[ToolSpec, ...]:
         """Return all registered specs sorted by name and semantic version."""
 
+        self._ensure_runtime_plugins()
         return tuple(
             sorted(
                 self._specs.values(),
@@ -333,6 +396,7 @@ class ToolRegistry:
     def get_workflow(self, name: str, version: str | None = None) -> WorkflowSpec:
         """Return one workflow spec by name and optional version."""
 
+        self._ensure_runtime_plugins()
         if version is not None:
             try:
                 return self._workflows[(name, version)]
@@ -347,6 +411,7 @@ class ToolRegistry:
     def workflow_specs(self) -> tuple[WorkflowSpec, ...]:
         """Return all workflow specs sorted by name and semantic version."""
 
+        self._ensure_runtime_plugins()
         return tuple(
             sorted(
                 self._workflows.values(),
@@ -357,11 +422,167 @@ class ToolRegistry:
     def document(self) -> JsonObject:
         """Return the generated machine-readable registry document."""
 
+        self._ensure_runtime_plugins()
         return {
             "schema_version": "1.1.0",
             "tools": [spec.document() for spec in self.all_specs()],
             "workflows": [spec.document() for spec in self.workflow_specs()],
         }
+
+    def handler(
+        self,
+        name: str,
+        version: str | None = None,
+    ) -> Callable[..., Mapping[str, Any]]:
+        """Return a plugin-owned handler by tool name and optional version."""
+
+        spec = self.get(name, version)
+        try:
+            return self._handlers[(spec.name, spec.version)]
+        except KeyError as exc:
+            raise KeyError(f"tool spec {spec.name!r} has no registry handler") from exc
+
+    def registered_handlers(self) -> dict[str, Callable[..., Mapping[str, Any]]]:
+        """Return handlers for the latest plugin-owned tool versions."""
+
+        self._ensure_runtime_plugins()
+        handlers: dict[str, Callable[..., Mapping[str, Any]]] = {}
+        for spec in self.latest_specs():
+            handler = self._handlers.get((spec.name, spec.version))
+            if handler is not None:
+                handlers[spec.name] = handler
+        return handlers
+
+    def _ensure_runtime_plugins(self) -> None:
+        loader = self._plugin_loader
+        if loader is None or self._plugin_loader_started:
+            return
+        with self._plugin_loader_lock:
+            if self._plugin_loader_started:
+                return
+            self._plugin_loader_started = True
+            try:
+                loader(self)
+            except Exception as exc:  # pragma: no cover - defensive plugin boundary
+                logger.warning(
+                    "Failed to wire OpenMed SDK tools: %s",
+                    exc.__class__.__name__,
+                )
+
+
+def discover_plugin_tools(
+    *,
+    registry: ToolRegistry | None = None,
+    allow_network_egress: bool = False,
+    allow_non_permissive_licenses: bool = False,
+    opt_in_plugins: Sequence[str] = (),
+) -> tuple[ToolSpec, ...]:
+    """Discover validated SDK components and register their MCP tools.
+
+    The SDK registry performs protocol and policy validation before this bridge
+    inspects a component's optional ``openmed_tools`` declarations.
+
+    Args:
+        registry: Target tool registry. Defaults to :data:`TOOL_REGISTRY`.
+        allow_network_egress: Allow SDK plugins declaring network access.
+        allow_non_permissive_licenses: Allow restricted plugin licenses.
+        opt_in_plugins: Plugin or qualified component ids explicitly enabled.
+
+    Returns:
+        Tool specs registered from accepted plugin components.
+    """
+
+    try:
+        registrations = _iter_sdk_plugins(
+            allow_network_egress=allow_network_egress,
+            allow_non_permissive_licenses=allow_non_permissive_licenses,
+            opt_in_plugins=opt_in_plugins,
+        )
+    except Exception as exc:  # pragma: no cover - defensive SDK boundary
+        logger.warning(
+            "Failed to discover OpenMed SDK tools: %s",
+            exc.__class__.__name__,
+        )
+        return ()
+    target = registry if registry is not None else TOOL_REGISTRY
+    return register_plugin_tools(registrations, registry=target)
+
+
+def register_plugin_tools(
+    registrations: Iterable[Any],
+    *,
+    registry: ToolRegistry,
+) -> tuple[ToolSpec, ...]:
+    """Register tools exposed by validated SDK component registrations."""
+
+    registered: list[ToolSpec] = []
+    for registration in registrations:
+        try:
+            declarations = _plugin_tool_declarations(registration.component)
+            metadata = registration.metadata
+            for declaration in declarations:
+                spec = replace(
+                    declaration.spec,
+                    plugin_id=metadata.plugin_id,
+                    plugin_component_id=metadata.component_id,
+                )
+                key = (spec.name, spec.version)
+                with registry._plugin_loader_lock:
+                    existing = registry._specs.get(key)
+                    if existing is None:
+                        registry.register(spec, handler=declaration.handler)
+                    elif existing != spec:
+                        raise ValueError(
+                            f"plugin tool conflicts with registered tool {spec.name!r}"
+                        )
+                registered.append(spec)
+        except Exception as exc:
+            logger.warning(
+                "Failed to wire OpenMed SDK tools for %s: %s",
+                _safe_registration_id(registration),
+                exc.__class__.__name__,
+            )
+    return tuple(registered)
+
+
+def _plugin_tool_declarations(component: Any) -> tuple[PluginTool, ...]:
+    value = getattr(component, "openmed_tools", ())
+    if callable(value) and not isinstance(value, PluginTool):
+        value = value()
+    if isinstance(value, PluginTool):
+        return (value,)
+    if value is None:
+        return ()
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, Mapping)):
+        declarations = tuple(value)
+        if any(not isinstance(item, PluginTool) for item in declarations):
+            raise TypeError("openmed_tools must contain PluginTool declarations")
+        return declarations
+    raise TypeError("openmed_tools must be a PluginTool or iterable of PluginTool")
+
+
+def _iter_sdk_plugins(**policy: Any) -> tuple[Any, ...]:
+    """Return SDK registrations without importing plugins at module import."""
+
+    try:
+        plugin_registry = import_module("openmed.plugins.registry")
+    except ModuleNotFoundError as exc:
+        if exc.name in {"openmed.plugins.protocols", "openmed.plugins.registry"}:
+            return ()
+        raise
+    return tuple(plugin_registry.iter_plugins(None, **policy))
+
+
+def _safe_registration_id(registration: Any) -> str:
+    try:
+        value = registration.metadata.qualified_id
+    except Exception:
+        return "<unknown>"
+    return value if isinstance(value, str) and value else "<unknown>"
+
+
+def _default_plugin_tool_loader(registry: ToolRegistry) -> None:
+    discover_plugin_tools(registry=registry)
 
 
 def input_schema(parameters: Sequence[ToolParameter]) -> JsonSchema:
@@ -1821,6 +2042,7 @@ CLINICAL_WORKFLOW_SPEC = WorkflowSpec(
 TOOL_REGISTRY = ToolRegistry(
     TOOL_SPECS,
     workflows=(CLINICAL_WORKFLOW_SPEC,),
+    plugin_loader=_default_plugin_tool_loader,
 )
 
 __all__ = [
@@ -1829,6 +2051,7 @@ __all__ = [
     "CLINICAL_WORKFLOW_SPEC",
     "TOOL_REGISTRY",
     "TOOL_SPECS",
+    "PluginTool",
     "ToolCompatibilityError",
     "ToolParameter",
     "ToolRegistry",
@@ -1837,6 +2060,7 @@ __all__ = [
     "WorkflowArtifactSpec",
     "WorkflowSpec",
     "check_tool_registry_compatibility",
+    "discover_plugin_tools",
     "input_schema",
     "invoke_tool",
     "render_adapter_tool_definitions",
@@ -1844,6 +2068,7 @@ __all__ = [
     "render_mcp_tool",
     "render_presidio_tool_definitions",
     "render_tool_registry_document",
+    "register_plugin_tools",
     "validate_registered_tool_output",
     "validate_registered_workflow_artifact",
     "validate_tool_output",
