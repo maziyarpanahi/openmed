@@ -1,9 +1,10 @@
 # Clinical Coreference Resolution
 
-`resolve_coreference()` groups `OpenMedSpan` mentions that refer to the same
-clinical entity in one document. It handles repeated named mentions, nominal
-references such as "the lesion" or "that medication", personal and neutral
-pronouns, and patient anchors such as "the patient".
+`resolve_coreference()` groups mentions that refer to the same clinical entity
+in one document. The established span-native form accepts fully detected
+`OpenMedSpan` records. The event-candidate form accepts PROBLEM, TEST, and
+TREATMENT seeds plus `document_text` and detects repeated strings, definite noun
+phrases, and simple neutral pronouns.
 
 !!! warning "Assistive annotations only"
     Coreference chains are deterministic heuristics for review and downstream
@@ -78,6 +79,98 @@ Each `CoreferenceChain` contains:
 
 The `span_to_chain` index maps `(doc_id, (start, end))` to `chain_id`, so review
 interfaces can recover a chain without storing a raw mention surface.
+
+## Privacy-safe Event Candidate Clustering
+
+Use the keyword-only `document_text` form to detect and cluster clinical event
+candidates. This mode is limited to PROBLEM-, TEST-, and TREATMENT-like spans;
+it does not add PII coreference or rewrite downstream event-frame heads.
+
+```python
+from openmed.clinical import resolve_coreference
+
+text = "Imaging:\nA synthetic lesion was noted.\nAssessment:\nThe lesion was stable."
+seeds = [
+    {
+        "document_id": "synthetic-note",
+        "text": "synthetic lesion",
+        "start": 11,
+        "end": 27,
+        "label": "PROBLEM",
+        "negation": "affirmed",
+    }
+]
+
+result = resolve_coreference(
+    seeds,
+    document_text=text,
+    document_id="synthetic-note",
+    hash_secret="application-owned-secret",
+)
+result.to_dict()["clusters"][0]
+# {
+#   "cluster_id": "synthetic-note:entity:...",
+#   "document_id": "synthetic-note",
+#   "semantic_type": "problem",
+#   "member_offsets": [[11, 27], [51, 61]],
+#   "member_hashes": ["hmac-sha256:...", "hmac-sha256:..."],
+#   "canonical_hash": "hmac-sha256:...",
+#   "mention_count": 2,
+#   "advisory": "...",
+# }
+```
+
+Event cluster payloads contain cluster ids, document offsets, content hashes,
+safe type metadata, counts, and the assistive-use advisory. They do not contain
+raw or canonical mention text. Supply `hash_secret` to make the content hashes
+HMAC-SHA256 values under an application-owned key. Without a key, the resolver
+returns deterministic SHA-256 fingerprints.
+
+Assertion polarity is a hard clustering boundary: an affirmed mention and a
+negated mention cannot share a cluster, even when their normalized strings are
+identical. Definite-NP and pronoun candidates inherit their antecedent identity
+only for scoring; their local assertion context is evaluated separately.
+
+### Synthetic Gold Metric
+
+The committed `event_coref.jsonl` fixture is scored with B-cubed, a documented
+proxy for the CoNLL clustering average. For each mention, precision is the
+fraction of its predicted cluster that belongs to its gold cluster, while recall
+is the fraction of its gold cluster recovered in the prediction. The metric
+averages those per-mention values and reports their harmonic-mean F1. The
+acceptance gate is B-cubed F1 >= 0.60. The fixture is wholly synthetic and covers
+repeated strings, definite noun phrases, pronouns, cross-sentence chains,
+cross-section chains, all three event families, and opposite-polarity mentions.
+
+## Attaching Event Frames to Representatives
+
+Medication-change and lab-trend extraction accept the document-local chains
+through `coreference_chains=`. TREATMENT and TEST head roles are emitted at the
+canonical representative offset while their selected local evidence remains in
+role provenance. The lower-level `attach_coreference_representatives()` helper
+applies the same behavior to PROBLEM-like roles in other event frames.
+
+```python
+from openmed.clinical import extract_medication_change_events
+
+frames = extract_medication_change_events(
+    text,
+    event_mentions,
+    coreference_chains=chains,
+)
+drug = frames[0].role_slots("drug")[0]
+
+drug.cluster_id
+# stable document-scoped chain id
+drug.provenance["coreference"]["source_spans"]
+# [{"start": ..., "end": ..., "text_hash": "hmac-sha256:..."}]
+```
+
+When repeated head slots in one frame belong to the same chain, they collapse
+to one representative slot. Attribute roles remain attached once to that
+representative. The added provenance stores only cluster ids, confidence,
+offsets, and HMAC hashes; it does not copy mention surfaces into provenance.
+Frame `value` fields retain their existing caller-visible behavior.
 
 ## Collapsing Downstream Relations and Exports
 
