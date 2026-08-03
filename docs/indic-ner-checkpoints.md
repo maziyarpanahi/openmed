@@ -69,6 +69,31 @@ not include the input string, checkpoint error detail, token surfaces, or
 credentials. Predictions serialize only offsets, canonical labels, and
 confidence values.
 
+## Synthetic robustness release gate
+
+The committed Naamapadam-style evaluation uses synthetic records only. For
+each of the 11 supported Indic languages, it retains one acceptance baseline
+and adds deterministic cases for combining marks, punctuation-adjacent spans,
+repeated entity surfaces, code mixing, and Latin/native script boundaries.
+No Naamapadam corpus row or model weight is bundled.
+
+A checkpoint is release-eligible only when all of these thresholds pass:
+
+| Gate | Threshold |
+| --- | ---: |
+| Exact-span recall for every language, across the full synthetic suite | at least `0.80` |
+| Exact-span recall for every language baseline | at least `0.80` |
+| Exact-span recall for every language and robustness slice | at least `0.80` |
+| Recall drop from a language baseline to each robustness slice | at most `0.10` |
+| Surviving PER/LOC/ORG entity surfaces after masking | `0` |
+
+In the aggregate report, `recall_delta` means baseline recall minus slice
+recall, so a positive value is a regression. Failure summaries contain only
+counts and SHA-256 fixture hashes. They never serialize fixture text, entity
+surfaces, or model inputs. The suite remains offline when a predictor is
+provided and returns a structured skip reason when optional weights are not
+configured.
+
 ## Opt-in compatibility smoke tests
 
 The real-checkpoint tests are skipped by default with the environment variable
