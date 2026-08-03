@@ -17,7 +17,10 @@ from .hard_negatives import (
     write_hard_negative_fixture_pack,
 )
 from .loader import (
+    CRITICAL_FINDINGS_CATEGORY,
     GOLDEN_CATEGORIES,
+    ConsensusDocument,
+    ConsensusRelation,
     GoldenFixture,
     benchmark_fixture_languages,
     benchmark_fixtures_by_language,
@@ -26,13 +29,18 @@ from .loader import (
     fixtures_by_language,
     list_fixture_paths,
     load_benchmark_fixtures,
+    load_consensus_corpus,
     load_golden_fixtures,
+    non_latin_golden_fixtures,
 )
 
 __all__ = [
+    "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
     "HARD_NEGATIVE_PACK_VERSION",
+    "ConsensusDocument",
+    "ConsensusRelation",
     "GoldenFixture",
     "benchmark_fixture_languages",
     "benchmark_fixtures_by_language",
@@ -49,8 +57,10 @@ __all__ = [
     "iter_synthetic_corpus_shard",
     "list_fixture_paths",
     "load_benchmark_fixtures",
+    "load_consensus_corpus",
     "load_golden_fixtures",
     "mine_hard_negative_candidates",
+    "non_latin_golden_fixtures",
     "near_duplicate_retention_rate",
     "stratified_hard_negative_sample",
     "write_hard_negative_fixture_pack",

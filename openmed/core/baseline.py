@@ -19,6 +19,10 @@ The baseline JSON schema is intentionally small and versioned:
   }
 }
 ```
+
+Relation-golden baselines are stored in an optional ``relation_golden``
+section. Its entries are keyed only by model family and normalized relation
+type so export formats share the same semantic regression threshold.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 BASELINE_SCHEMA_VERSION = 1
+RELATION_GOLDEN_SCHEMA_VERSION = 1
 BASELINE_PATH = Path(__file__).resolve().parents[2] / "gates" / "baseline.json"
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -52,6 +57,17 @@ def baseline_key(family: str, tier: str | None, format_name: str) -> str:
             _normalise_key_part(family),
             _normalise_key_part(tier or "none"),
             _normalise_key_part(format_name),
+        )
+    )
+
+
+def relation_baseline_key(family: str, relation_type: str) -> str:
+    """Return the stable key for a model-family relation baseline."""
+
+    return "::".join(
+        (
+            _normalise_key_part(family),
+            _normalise_key_part(relation_type),
         )
     )
 
@@ -188,6 +204,10 @@ def validate_baseline_store(store: Mapping[str, Any]) -> None:
     for key, entry in entries.items():
         _validate_entry(str(key), entry)
 
+    relation_golden = store.get("relation_golden")
+    if relation_golden is not None:
+        _validate_relation_golden(relation_golden)
+
 
 def _validate_entry(key: str, entry: Any) -> None:
     if not isinstance(entry, Mapping):
@@ -227,6 +247,68 @@ def _validate_entry(key: str, entry: Any) -> None:
             raise BaselineError(f"baseline entry {key!r} released must be YYYY-MM-DD")
 
 
+def _validate_relation_golden(value: Any) -> None:
+    if not isinstance(value, Mapping):
+        raise BaselineError("relation_golden must be a JSON object")
+    if value.get("schema_version") != RELATION_GOLDEN_SCHEMA_VERSION:
+        raise BaselineError(
+            f"relation_golden schema_version must be {RELATION_GOLDEN_SCHEMA_VERSION}"
+        )
+    entries = value.get("entries")
+    if not isinstance(entries, Mapping):
+        raise BaselineError("relation_golden entries must be a JSON object")
+
+    for key, entry in entries.items():
+        _validate_relation_entry(str(key), entry)
+
+
+def _validate_relation_entry(key: str, entry: Any) -> None:
+    if not isinstance(entry, Mapping):
+        raise BaselineError(f"relation baseline entry {key!r} must be a JSON object")
+
+    required = {
+        "key",
+        "family",
+        "relation_type",
+        "strict_f1",
+        "tolerance",
+        "fixture_hash",
+    }
+    missing = sorted(required - set(entry))
+    if missing:
+        raise BaselineError(
+            f"relation baseline entry {key!r} missing fields: {missing}"
+        )
+    if entry["key"] != key:
+        raise BaselineError(f"relation baseline entry {key!r} has mismatched key")
+    expected_key = relation_baseline_key(entry["family"], entry["relation_type"])
+    if expected_key != key:
+        raise BaselineError(
+            f"relation baseline entry {key!r} does not match its dimensions"
+        )
+    if not isinstance(entry["family"], str) or not entry["family"].strip():
+        raise BaselineError(f"relation baseline entry {key!r} family must be non-empty")
+    if (
+        not isinstance(entry["relation_type"], str)
+        or not entry["relation_type"].strip()
+    ):
+        raise BaselineError(
+            f"relation baseline entry {key!r} relation_type must be non-empty"
+        )
+    for field in ("strict_f1", "tolerance"):
+        metric = entry[field]
+        if (
+            isinstance(metric, bool)
+            or not isinstance(metric, (int, float))
+            or not 0.0 <= float(metric) <= 1.0
+        ):
+            raise BaselineError(
+                f"relation baseline entry {key!r} {field} must be between 0 and 1"
+            )
+    if not _SHA256_RE.fullmatch(str(entry["fixture_hash"])):
+        raise BaselineError(f"relation baseline entry {key!r} has invalid fixture_hash")
+
+
 def _normalise_key_part(value: str) -> str:
     return str(value).strip().lower().replace("_", "-") or "none"
 
@@ -238,12 +320,14 @@ def _jsonable(value: Any) -> Any:
 __all__ = [
     "BASELINE_PATH",
     "BASELINE_SCHEMA_VERSION",
+    "RELATION_GOLDEN_SCHEMA_VERSION",
     "BaselineError",
     "BaselineMiss",
     "baseline_key",
     "get_baseline",
     "load_baseline_store",
     "require_baseline",
+    "relation_baseline_key",
     "update_baseline_entry",
     "validate_baseline_store",
     "write_baseline_store",

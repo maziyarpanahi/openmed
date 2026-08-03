@@ -1,0 +1,33 @@
+{
+  "export": "messages",
+  "flow": {
+    "uuid": "11111111-2222-3333-4444-555555555555",
+    "name": "Synthetic maternal helpdesk"
+  },
+  "messages": [
+    {
+      "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeee1",
+      "urn": "tel:+254712345678",
+      "contact": {
+        "uuid": "contact-0001",
+        "name": "Amina Njeri",
+        "urn": "tel:+254712345678"
+      },
+      "direction": "in",
+      "text": "HABARI MAMA Amina Njeri call +254712345678 ID: KE123456",
+      "sent_on": "2026-07-17T09:10:11Z"
+    },
+    {
+      "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeee2",
+      "urn": "tel:+254712345678",
+      "contact": {
+        "uuid": "contact-0001",
+        "name": "Amina Njeri",
+        "urn": "tel:+254712345678"
+      },
+      "direction": "out",
+      "text": "ANC appt confirmed",
+      "sent_on": "2026-07-17T09:11:12Z"
+    }
+  ]
+}

@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence, TextIO
 
+from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit, emit_error
+
 
 def add_verify_pdf_command(subparsers: "argparse._SubParsersAction") -> None:
     """Register the ``verify-pdf`` subcommand on the top-level parser."""
@@ -68,34 +70,45 @@ def run_from_args(
 ) -> int:
     """Run redacted-PDF verification from argparse arguments."""
     stdout = stdout or sys.stdout
-    stderr = stderr or sys.stderr
 
     from openmed.multimodal.verify_pdf import verify_redacted_pdf
 
     try:
         spans = _load_spans(args.spans)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        stderr.write(f"Failed to read spans file: {exc}\n")
-        return 2
+        raise CliError(
+            f"Failed to read spans file: {exc}",
+            code="invalid_spans",
+            exit_code=EXIT_USAGE,
+        )
 
     try:
         report = verify_redacted_pdf(args.original, args.redacted, spans)
     except FileNotFoundError as exc:
-        stderr.write(f"Input PDF not found: {exc}\n")
-        return 2
+        raise CliError(
+            f"Input PDF not found: {exc}",
+            code="input_not_found",
+            exit_code=EXIT_ERROR,
+        )
     except Exception as exc:  # noqa: BLE001 - surface a clean CLI error.
-        stderr.write(f"PDF fidelity verification failed: {exc}\n")
-        return 2
+        raise CliError(
+            f"PDF fidelity verification failed: {exc}",
+            code="verification_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-    output = json.dumps(report.to_dict(), indent=2, sort_keys=True)
+    data = report.to_dict()
+    output = json.dumps(data, indent=2, sort_keys=True)
     if args.output is not None:
         try:
             args.output.write_text(output + "\n", encoding="utf-8")
         except OSError as exc:
-            stderr.write(f"Failed to write report: {exc}\n")
-            return 2
-    stdout.write(output + "\n")
-    stdout.write(report.summary() + "\n")
+            raise CliError(
+                f"Failed to write report: {exc}",
+                code="write_failed",
+                exit_code=EXIT_ERROR,
+            )
+    emit(args, data, human=output + "\n" + report.summary(), stream=stdout)
     return 0 if report.passed else 1
 
 
@@ -114,7 +127,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--output", "-o", type=Path, default=None, help="Report JSON path."
     )
     args = parser.parse_args(argv)
-    return run_from_args(args)
+    try:
+        return run_from_args(args)
+    except CliError as exc:
+        return emit_error(args, exc)
 
 
 if __name__ == "__main__":  # pragma: no cover
