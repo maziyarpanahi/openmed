@@ -660,6 +660,9 @@ def test_apply_gate_cli_rolls_back_manifest_and_regenerates_card(
     status_path = tmp_path / "release-status.json"
     tracking_log = tmp_path / "rollback-log.jsonl"
     repo_root = Path(__file__).resolve().parents[3]
+    pythonpath = os.pathsep.join(
+        value for value in (str(repo_root), os.environ.get("PYTHONPATH")) if value
+    )
 
     completed = subprocess.run(
         [
@@ -694,7 +697,7 @@ def test_apply_gate_cli_rolls_back_manifest_and_regenerates_card(
             str(result_path),
         ],
         cwd=repo_root,
-        env={**os.environ, "PYTHONPATH": str(repo_root)},
+        env={**os.environ, "PYTHONPATH": pythonpath},
         check=False,
         capture_output=True,
         text=True,
