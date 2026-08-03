@@ -1122,6 +1122,7 @@ class Pipeline:
 
         if hasattr(sections, "detect_sections"):
             return {
+                "document_type": sections.classify_document(text),
                 "section_hook": "detect_sections",
                 "sections": sections.detect_sections(text, language=language),
                 "section_detection": {
