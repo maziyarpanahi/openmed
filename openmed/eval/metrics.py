@@ -195,6 +195,37 @@ class F1Metrics:
 
 
 @dataclass(frozen=True)
+class CoreferenceClusteringScore:
+    """Documented B-cubed proxy score for coreference clustering.
+
+    Precision and recall are averaged per mention from the overlap between its
+    predicted and gold clusters; ``f1`` is their harmonic mean. This transparent
+    proxy is used instead of the full CoNLL MUC/B3/CEAF average for the small,
+    synthetic event-coreference gate.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    metric: str
+    item_count: int
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        """Return a JSON-compatible metric payload."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "metric": self.metric,
+            "item_count": self.item_count,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class PipelineFact:
     """One traceable clinical fact used by the end-to-end pipeline evaluator.
 
@@ -1675,6 +1706,42 @@ def compute_critical_finding_recall(
         covered_by_category=_count_map(category_keys, covered_by_category),
         total_by_category=_count_map(category_keys, total_by_category),
         missed_findings=tuple(missed),
+    )
+
+
+def compute_coreference_clustering_score(
+    predicted: Mapping[Any, str],
+    gold: Mapping[Any, str],
+    *,
+    metric: str = "bcubed",
+) -> CoreferenceClusteringScore:
+    """Score clusters with the documented mention-averaged B-cubed proxy.
+
+    ``predicted`` and ``gold`` must label the same mention keys. For every
+    mention, B-cubed precision is the fraction of its predicted cluster that is
+    in its gold cluster, and recall is the fraction of its gold cluster recovered
+    by the prediction. The returned F1 is the harmonic mean of the averages.
+
+    Args:
+        predicted: Mention key to predicted cluster id.
+        gold: The same mention keys mapped to gold cluster ids.
+        metric: Metric selector. Only ``"bcubed"`` is supported.
+
+    Returns:
+        Precision, recall, F1, metric name, and scored mention count.
+    """
+
+    if metric != "bcubed":
+        raise ValueError("only the documented 'bcubed' coreference proxy is supported")
+    from openmed.clinical.coref import bcubed_precision_recall_f1
+
+    score = bcubed_precision_recall_f1(predicted, gold)
+    return CoreferenceClusteringScore(
+        precision=score.precision,
+        recall=score.recall,
+        f1=score.f1,
+        metric=metric,
+        item_count=len(gold),
     )
 
 
@@ -4257,6 +4324,7 @@ __all__ = [
     "PipelineFact",
     "RateMetric",
     "F1Metrics",
+    "CoreferenceClusteringScore",
     "UncertaintyAccuracyMetrics",
     "LeakageMetrics",
     "MixedScriptLeakageMetrics",
@@ -4286,6 +4354,7 @@ __all__ = [
     "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
+    "compute_coreference_clustering_score",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_fact_level_f1",
