@@ -90,6 +90,13 @@ from openmed.eval.suites.code_mixed_routing import (
     load_code_mixed_routing_fixtures,
     run_code_mixed_routing,
 )
+from openmed.eval.suites.composite_normalization import (
+    COMPOSITE_NORMALIZATION,
+    build_composite_normalization_gold,
+    composite_normalization_metadata,
+    evaluate_composite_normalization,
+    run_composite_normalization,
+)
 from openmed.eval.suites.cross_lingual_grounding import (
     CROSS_LINGUAL_GROUNDING,
     CROSS_LINGUAL_LANGUAGES,

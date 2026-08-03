@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added offline family-transfer adapter routing that prefers installed target
+  adapters, falls back to compatible donor adapters with scored provenance,
+  and returns explicit unsupported or unavailable routing failures (#1331).
+- Completed clinical temporal timeline composition with DCT/TIMEX anchors on
+  every ordered event, transitively reduced public TLINK graphs, metric-ready
+  edge keys, and retained/pruned privacy-safe decision provenance (#1253).
 - Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
   consistency scoring, a zero-violation blocking gate, and synthetic
   discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and

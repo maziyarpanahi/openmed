@@ -464,6 +464,7 @@ jobs:
 
           from openmed.core.baseline import update_baseline_entry
           from openmed.eval.release_gates import GateReport, RELEASABLE
+          from openmed.eval.rollout import PHASE_CANARY, RolloutStateMachine
 
           stage = Path(os.environ["RELEASE_STAGE"])
           gate = GateReport.from_json(Path("release-gate-report.json").read_text())
@@ -483,12 +484,32 @@ jobs:
           if row.get("reproducibility_hash") in {None, ""}:
               raise SystemExit("staged manifest row has no reproducibility_hash")
 
+          rollout = RolloutStateMachine.load("gates/rollout_state.json")
+          phase = rollout.phase_state(gate.family, gate.tier, gate.format)
+          if phase is None or phase.phase != PHASE_CANARY:
+              raise SystemExit(
+                  "refusing latest promotion without a committed CANARY phase"
+              )
+          if phase.target != gate.repo_id:
+              raise SystemExit(
+                  "canary pointer does not match the staged gate-report target"
+              )
+          next_rollout = rollout.copy()
+          next_rollout.advance(
+              gate.family,
+              gate.tier,
+              gate.format,
+              gate,
+          )
+
           candidate = json.loads((stage / "gate-candidate.json").read_text())
           shield = json.loads((stage / "shield-report.json").read_text())
           metrics = dict(candidate.get("metrics") or {})
           metrics["public_shield"] = shield.get("metrics") or {}
 
           shutil.copyfile(stage / "models.jsonl", "models.jsonl")
+          next_rollout.save("gates/rollout_state.json")
+          next_rollout.save_audit("rollout-audit.json")
           update_baseline_entry(
               "gates/baseline.json",
               family=gate.family,
@@ -540,8 +561,10 @@ jobs:
           path: |
             models.jsonl
             gates/baseline.json
+            gates/rollout_state.json
             release-gate-report.json
             release-readiness-report.json
+            rollout-audit.json
             docs/model-cards/
             docs/benchmarks/
             docs/leaderboard/
