@@ -49,6 +49,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "event_coref.jsonl",
         "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
+        "grounded_codeable_concepts.jsonl",
         "grounding_export.jsonl",
         "grounding_vocab_synthetic.jsonl",
         "india_clinical.jsonl",
