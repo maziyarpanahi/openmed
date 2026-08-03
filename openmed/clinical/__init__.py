@@ -35,6 +35,17 @@ from .assertion_graph import (
     ReconciledAssertion,
     reconcile_assertions,
 )
+from .boilerplate import (
+    BOILERPLATE_DETECTOR_VERSION,
+    COPY_FORWARD_DETECTOR_VERSION,
+    DEFAULT_BOILERPLATE_TEMPLATE_RESOURCE,
+    BoilerplateSpan,
+    BoilerplateTemplate,
+    CopyForwardSpan,
+    detect_boilerplate,
+    detect_copy_forward,
+    load_boilerplate_template_corpus,
+)
 from .cancer_staging import (
     TNM_STAGING_ADVISORY,
     TnmBasis,
@@ -465,6 +476,15 @@ __all__ = [
     "AxisProvenance",
     "ReconciledAssertion",
     "reconcile_assertions",
+    "BOILERPLATE_DETECTOR_VERSION",
+    "COPY_FORWARD_DETECTOR_VERSION",
+    "DEFAULT_BOILERPLATE_TEMPLATE_RESOURCE",
+    "BoilerplateSpan",
+    "BoilerplateTemplate",
+    "CopyForwardSpan",
+    "detect_boilerplate",
+    "detect_copy_forward",
+    "load_boilerplate_template_corpus",
     "INDIA_CLINICAL_NER_DISCLAIMER",
     "AbnormalFlag",
     "LabValueAttributeMention",

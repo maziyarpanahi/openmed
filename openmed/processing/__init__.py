@@ -71,9 +71,11 @@ from .pulsar_connector import PulsarClientPair, create_pulsar_clients
 from .sentences import SentenceSpan, segment_chinese_text, segment_text
 from .text import (
     INDIC_SCRIPTS,
+    BoilerplateSuppressionResult,
     IndicNormalization,
     IndicNormalizer,
     TextProcessor,
+    apply_boilerplate_suppression,
     normalize_indic_text,
     postprocess_text,
     preprocess_text,
@@ -144,6 +146,8 @@ from .zh_segmentation import (
 
 __all__ = [
     "TextProcessor",
+    "BoilerplateSuppressionResult",
+    "apply_boilerplate_suppression",
     "INDIC_SCRIPTS",
     "IndicNormalization",
     "IndicNormalizer",
