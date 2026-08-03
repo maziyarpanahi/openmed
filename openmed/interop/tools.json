@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "tools": [
     {
       "description": "Run OpenMed named-entity recognition on clinical text.",
@@ -3837,6 +3837,76 @@
         "type": "object"
       },
       "stability": "stable",
+      "version": "1.0.0"
+    }
+  ],
+  "workflows": [
+    {
+      "artifacts": [
+        {
+          "name": "deidentify",
+          "schema_id": "openmed.deidentified_handoff.v1",
+          "source_tool": "openmed_deidentify"
+        },
+        {
+          "name": "detect",
+          "schema_id": "openmed.clinical_artifact.detect.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "context",
+          "schema_id": "openmed.clinical_artifact.context.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "sections",
+          "schema_id": "openmed.clinical_artifact.sections.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "relations",
+          "schema_id": "openmed.clinical_artifact.relations.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "ground",
+          "schema_id": "openmed.ground.v1",
+          "source_tool": "openmed_ground"
+        },
+        {
+          "name": "export",
+          "schema_id": "openmed.export_fhir.v1",
+          "source_tool": "openmed_export_fhir"
+        },
+        {
+          "name": "risk",
+          "schema_id": "openmed.risk_score.v1",
+          "source_tool": "openmed_risk_score"
+        }
+      ],
+      "default_execution": "local",
+      "description": "Local-first de-identification, clinical extraction, grounding, FHIR export, and residual-risk workflow with PHI-safe intermediate artifacts.",
+      "fixture_uri": "openmed://clinical-workflow/golden-agent-run",
+      "name": "openmed_clinical_workflow",
+      "prompt_name": "openmed-clinical-workflow",
+      "resource_uri": "openmed://clinical-workflow",
+      "stage_order": [
+        "deidentify",
+        "detect",
+        "context",
+        "sections",
+        "relations",
+        "ground",
+        "export",
+        "risk"
+      ],
+      "tools": [
+        "openmed_deidentify",
+        "openmed_clinical_pipeline",
+        "openmed_ground",
+        "openmed_export_fhir",
+        "openmed_risk_score"
+      ],
       "version": "1.0.0"
     }
   ]

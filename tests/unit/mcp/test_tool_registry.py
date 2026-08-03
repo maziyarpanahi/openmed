@@ -126,7 +126,7 @@ def test_tool_registry_resource_is_generated_from_specs() -> None:
     mcp_server._register_resources(fake)
     payload = json.loads(fake.resources["openmed://tool-registry"]())
 
-    assert payload["schema_version"] == "1.0.0"
+    assert payload["schema_version"] == "1.1.0"
     assert [tool["name"] for tool in payload["tools"]] == [
         spec.name for spec in TOOL_REGISTRY.all_specs()
     ]

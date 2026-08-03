@@ -273,7 +273,7 @@ GERMAN_CONTEXT_LEXICON = ClinicalCueLexicon(
         "abgeklungen",
     ),
     hypothetical=("wenn", "falls", "im fall von", "sofern", "sollte"),
-    recent=("aktiv", "akut", "aktuell", "derzeit", "neu", "laufend"),
+    recent=("aktiv", "akut", "akute", "aktuell", "derzeit", "neu", "laufend"),
     uncertainty=(
         "möglich",
         "wahrscheinlich",
