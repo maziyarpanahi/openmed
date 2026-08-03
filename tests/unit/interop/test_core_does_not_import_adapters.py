@@ -71,6 +71,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "cda",
         "cdm_etl",
         "duckdb",
+        "fhir_server",
         "function_tools",
         "gliner_biomed",
         "haystack",
@@ -99,6 +100,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("duckdb").extra == "duckdb"
     assert adapter_spec("hl7v2").extra == ""
     assert adapter_spec("icd11_api").extra == ""
+    assert adapter_spec("fhir_server").extra == "fhir"
     assert adapter_spec("indic").extra == "indic"
     assert adapter_spec("function_tools").extra == ""
     assert adapter_spec("haystack").extra == "haystack"
