@@ -78,6 +78,36 @@ Each `CoreferenceChain` contains:
 The `span_to_chain` index maps `(doc_id, (start, end))` to `chain_id`, so review
 interfaces can recover a chain without storing a raw mention surface.
 
+## Attaching Event Frames to Representatives
+
+Medication-change and lab-trend extraction accept the document-local chains
+through `coreference_chains=`. TREATMENT and TEST head roles are emitted at the
+canonical representative offset while their selected local evidence remains in
+role provenance. The lower-level `attach_coreference_representatives()` helper
+applies the same behavior to PROBLEM-like roles in other event frames.
+
+```python
+from openmed.clinical import extract_medication_change_events
+
+frames = extract_medication_change_events(
+    text,
+    event_mentions,
+    coreference_chains=chains,
+)
+drug = frames[0].role_slots("drug")[0]
+
+drug.cluster_id
+# stable document-scoped chain id
+drug.provenance["coreference"]["source_spans"]
+# [{"start": ..., "end": ..., "text_hash": "hmac-sha256:..."}]
+```
+
+When repeated head slots in one frame belong to the same chain, they collapse
+to one representative slot. Attribute roles remain attached once to that
+representative. The added provenance stores only cluster ids, confidence,
+offsets, and HMAC hashes; it does not copy mention surfaces into provenance.
+Frame `value` fields retain their existing caller-visible behavior.
+
 ## Resolution Rules
 
 Mentions are processed in document order, and a reference can link only to an
