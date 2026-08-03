@@ -263,7 +263,15 @@ def test_resolve_coreference_meets_event_gold_gate_with_sanitized_output() -> No
         document_id=document["doc_id"],
         hash_secret="synthetic-fixture-secret",
     )
+    cluster_ids = result.cluster_ids_by_offset()
     payload = json.dumps(result.to_dict()).casefold()
+    expected_offsets = {
+        (document["doc_id"], (mention["start"], mention["end"]))
+        for mention in document["gold_mentions"]
+    }
+    assert set(cluster_ids) == expected_offsets
+    assert len(set(cluster_ids.values())) == 1
+    assert result.entity_ids_by_offset() == cluster_ids
     assert "aspirin" not in payload
     assert "the medication" not in payload
     assert all(
