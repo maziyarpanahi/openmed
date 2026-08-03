@@ -7,6 +7,8 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
+from .capabilities import raise_missing_backend
+
 logger = logging.getLogger(__name__)
 
 HF_AVAILABLE = find_spec("transformers") is not None
@@ -19,10 +21,7 @@ pipeline: Any = None
 def _require_transformers() -> None:
     """Raise actionable guidance when Transformers is unavailable."""
     if not HF_AVAILABLE:
-        raise ImportError(
-            "HuggingFace transformers is required. "
-            "Install with: pip install transformers"
-        )
+        raise_missing_backend("hf", feature="HuggingFace Transformers inference")
 
 
 def _ensure_hf_auto_config() -> None:
@@ -76,7 +75,6 @@ if TYPE_CHECKING:
     from .config import OpenMedConfig
 
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
-from .capabilities import require_backend
 from .config import get_config
 from .model_integrity import prepare_model_reference
 from .model_registry import (
@@ -108,8 +106,7 @@ def is_hf_available() -> bool:
 def ensure_hf_available() -> None:
     """Raise an actionable error when the ``hf`` extra is not installed."""
 
-    if not HF_AVAILABLE:
-        require_backend("hf", feature="HuggingFace Transformers inference")
+    _require_transformers()
 
 
 class ModelLoader:

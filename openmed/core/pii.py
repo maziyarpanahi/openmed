@@ -39,6 +39,8 @@ from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import InputError as InputError
 from ..processing.text import validate_pii_input
 from .budget import BudgetClock, RequestBudget, coerce_budget
+from .capabilities import MissingOptionalDependencyError
+from .capabilities import install_hint as _optional_dependency_install_instruction
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,

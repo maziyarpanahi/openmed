@@ -118,6 +118,16 @@ def test_coreml_package_imports_without_coremltools(block_imports):
         coreml_pkg.ensure_coreml_available()
 
 
+def test_coreml_conversion_raises_shared_error_when_extra_missing(
+    block_imports, tmp_path
+):
+    block_imports("coremltools")
+    from openmed.coreml.convert import convert
+
+    with pytest.raises(MissingOptionalDependencyError, match=r"openmed\[coreml\]"):
+        convert("synthetic/offline-model", tmp_path / "model.mlpackage")
+
+
 def test_mcp_package_imports_without_mcp(block_imports):
     block_imports("mcp")
     mcp_pkg = importlib.import_module("openmed.mcp")
@@ -125,6 +135,30 @@ def test_mcp_package_imports_without_mcp(block_imports):
     assert mcp_pkg.is_mcp_available() is False
     with pytest.raises(MissingOptionalDependencyError):
         mcp_pkg.ensure_mcp_available()
+
+
+def test_mlx_conversion_raises_shared_error_when_hf_missing(block_imports):
+    block_imports("transformers")
+    from openmed.mlx.convert import convert_weights
+
+    with pytest.raises(MissingOptionalDependencyError, match=r"openmed\[hf\]"):
+        convert_weights("synthetic/offline-model")
+
+
+def test_onnx_export_raises_shared_error_when_extra_missing(block_imports, tmp_path):
+    block_imports("torch", "transformers")
+    from openmed.onnx.convert import export_onnx
+
+    with pytest.raises(MissingOptionalDependencyError, match=r"openmed\[onnx\]"):
+        export_onnx("synthetic/offline-model", tmp_path / "model.onnx")
+
+
+def test_onnx_validation_raises_shared_error_when_onnx_missing(block_imports, tmp_path):
+    block_imports("onnx")
+    from openmed.onnx.convert import _check_onnx_model
+
+    with pytest.raises(MissingOptionalDependencyError, match=r"openmed\[onnx\]"):
+        _check_onnx_model(tmp_path / "model.onnx")
 
 
 def test_presidio_adapter_raises_shared_error_when_missing(block_imports):
@@ -167,6 +201,11 @@ def test_multimodal_reports_unavailable_without_extra(monkeypatch):
         multimodal.base,
         "_missing_multimodal_dependencies",
         lambda: ["pdfplumber", "python-docx"],
+    )
+    monkeypatch.setattr(
+        multimodal.base,
+        "_is_backend_available",
+        lambda _name: False,
     )
     assert multimodal.is_multimodal_available() is False
     with pytest.raises(MissingOptionalDependencyError, match=r"openmed\[multimodal\]"):

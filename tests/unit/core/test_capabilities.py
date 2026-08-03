@@ -103,7 +103,7 @@ def test_available_backends_reports_every_seam_importlessly(force_missing):
 def test_available_backends_never_imports_backend_modules(force_present):
     # Even when every spec is reported present, the probe must not import them.
     force_present(
-        "mlx.core",
+        "mlx",
         "coremltools",
         "onnx",
         "onnxruntime",
@@ -117,8 +117,15 @@ def test_available_backends_never_imports_backend_modules(force_present):
     # find_spec was stubbed, so no heavy module ended up imported by the probe.
 
 
+def test_registered_probes_use_top_level_modules_only():
+    # find_spec imports a parent package when asked to resolve a dotted child.
+    # Top-level targets keep every capability check genuinely importless.
+    for name in registered_backends():
+        assert all("." not in module for module in backend_spec(name).modules)
+
+
 def test_is_backend_available_false_when_missing(force_missing):
-    force_missing("mlx.core")
+    force_missing("mlx")
     assert is_backend_available("mlx") is False
 
 
@@ -222,9 +229,9 @@ def test_install_hint_without_extra():
 
 
 def test_status_as_dict_is_serializable(force_missing):
-    force_missing("mlx.core")
+    force_missing("mlx")
     data = backend_status("mlx").as_dict()
     assert data["name"] == "mlx"
     assert data["available"] is False
-    assert data["missing"] == ["mlx.core"]
+    assert data["missing"] == ["mlx"]
     assert "install_hint" in data

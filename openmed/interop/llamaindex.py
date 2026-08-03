@@ -419,10 +419,7 @@ def _load_optional_class(module_name: str, class_name: str, *, feature: str) -> 
     try:
         module = _import_module(module_name)
     except ImportError as exc:
-        raise ImportError(
-            f"LlamaIndex {feature} require the 'llamaindex' extra. "
-            "Install with `pip install openmed[llamaindex]`."
-        ) from exc
+        raise_missing_backend("llamaindex", feature=f"LlamaIndex {feature}", cause=exc)
 
     try:
         return getattr(module, class_name)

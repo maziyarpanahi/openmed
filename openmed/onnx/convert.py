@@ -1313,10 +1313,9 @@ def _check_onnx_model(path: Path) -> None:
     try:
         import onnx
     except ImportError as exc:
-        raise ImportError(
-            "onnx is required to validate exported artifacts. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend(
+            "onnx", feature="Validating exported ONNX artifacts", cause=exc
+        )
     onnx.checker.check_model(str(path))
 
 

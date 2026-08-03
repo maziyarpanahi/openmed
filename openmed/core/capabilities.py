@@ -107,7 +107,7 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
     "mlx": BackendSpec(
         name="mlx",
         extra="mlx",
-        modules=("mlx.core",),
+        modules=("mlx",),
         description="Apple MLX hardware-accelerated inference (Apple Silicon)",
         install="mlx",
     ),
@@ -170,7 +170,15 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
     "multimodal": BackendSpec(
         name="multimodal",
         extra="multimodal",
-        modules=("pdfplumber", "docx", "PIL"),
+        modules=(
+            "pdfplumber",
+            "docx",
+            "PIL",
+            "markdown_it",
+            "piexif",
+            "pikepdf",
+            "pydicom",
+        ),
         description="Multimodal document/image ingestion and redaction",
         install="pdfplumber",
     ),
@@ -198,7 +206,7 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
     "llamaindex": BackendSpec(
         name="llamaindex",
         extra="llamaindex",
-        modules=("llama_index.core",),
+        modules=("llama_index",),
         description="LlamaIndex FunctionTool adapter",
         install="llama-index-core",
     ),
@@ -372,7 +380,7 @@ def require_backend(name: str, *, feature: str | None = None) -> None:
         return
     spec = backend_spec(name)
     raise MissingOptionalDependencyError(
-        package=", ".join(status.missing) or spec.primary_package,
+        package=spec.primary_package,
         feature=feature or spec.description,
         extra=spec.extra,
     )
@@ -402,7 +410,7 @@ def raise_missing_backend(
     spec = backend_spec(name)
     status = backend_status(name)
     error = MissingOptionalDependencyError(
-        package=", ".join(status.missing) or spec.primary_package,
+        package=spec.primary_package,
         feature=feature or spec.description,
         extra=spec.extra,
     )
