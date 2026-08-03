@@ -24,11 +24,15 @@ name the version under rollout as a string satisfies this contract. Keeping the
 public surface the finite-state machine, not a registry schema, lets the
 eventual registry own the pointer format without reshaping this module.
 
-Rollback here is the *transition*, not the regression-scoring decision: the
-coordinator consumes an already-scored :class:`~openmed.eval.release_gates.GateReport`,
-invokes a caller-supplied local pointer flip, and only then records
-``ROLLED_BACK``. The policy that calculates whether a metric crossed its gate
-tolerance remains in the release-gate layer.
+Rollback splits into two layers that stay separate. The *transition* is the
+coordinator's: it consumes an already-scored
+:class:`~openmed.eval.release_gates.GateReport`, invokes a caller-supplied local
+pointer flip, and only then records ``ROLLED_BACK``. The *decision* -- whether a
+monitored metric crossed its gate tolerance at all -- is :func:`decide_rollback`,
+which scores the candidate against the committed last-green baseline and returns
+``HOLD`` / ``ADVANCE`` / ``ROLLBACK`` with a PHI-free audit record. It computes
+and never mutates: the thresholds themselves still belong to the release-gate
+layer, and the pointer flip still belongs to the coordinator.
 """
 
 from __future__ import annotations
@@ -42,10 +46,26 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from openmed.core.audit import manifest_hash, stable_hash
-from openmed.core.baseline import baseline_key, get_baseline, load_baseline_store
+from openmed.core.baseline import (
+    BASELINE_PATH,
+    baseline_key,
+    get_baseline,
+    load_baseline_store,
+)
 from openmed.eval import harness
-from openmed.eval.history import BenchmarkHistoryDiff, diff_against_baseline
-from openmed.eval.release_gates import QUARANTINED, RELEASABLE, GateReport
+from openmed.eval.history import (
+    HIGHER_IS_BETTER,
+    REGRESSION,
+    BenchmarkHistoryDiff,
+    diff_against_baseline,
+)
+from openmed.eval.release_gates import (
+    _G1_G2_LABELS,
+    G7_RECALL_DROP_LIMIT,
+    QUARANTINED,
+    RELEASABLE,
+    GateReport,
+)
 from openmed.eval.report import BenchmarkReport
 
 ROLLOUT_STATE_SCHEMA_VERSION = 1
@@ -1130,26 +1150,375 @@ class RolloutCoordinator:
             )
 
 
+# -- gate-regression decision ------------------------------------------------
+#
+# The policy layer that scores a candidate against the committed last-green
+# baseline and says whether the rollout should hold, advance, or roll back.
+# It is pure: it reads committed state and returns a verdict, and never flips a
+# pointer or mutates the machine. ``RolloutCoordinator`` is what acts on it.
+
+ROLLBACK_AUDIT_SCHEMA_VERSION = 1
+
+#: Rollback decisions. Named ``DECISION_*`` because bare ``HOLD`` is already
+#: taken in ``openmed.eval`` by the champion/challenger promotion verdicts,
+#: which are a different judgement on a different comparison.
+DECISION_HOLD = "HOLD"
+DECISION_ADVANCE = "ADVANCE"
+DECISION_ROLLBACK = "ROLLBACK"
+
+#: Every decision :func:`decide_rollback` can return.
+ROLLBACK_DECISIONS: tuple[str, ...] = (
+    DECISION_ADVANCE,
+    DECISION_HOLD,
+    DECISION_ROLLBACK,
+)
+
+#: Labels whose recall is monitored for rollback. Sourced from the release-gate
+#: definition so this and G7 never drift.
+MONITORED_RECALL_LABELS = _G1_G2_LABELS
+
+#: Metric names carried into the baseline diff.
+RECALL_METRIC_PREFIX = "per_label_recall"
+LEAKAGE_METRIC = "residual_leakage_rate"
+
+#: Leakage has no tolerance band: G7 treats *any* residual-leakage increase over
+#: baseline as a violation, so the rollback decision uses the same zero
+#: tolerance rather than inventing a second, looser rule.
+LEAKAGE_REGRESSION_TOLERANCE = 0.0
+
+
+class MissingLastGreenError(RolloutStateError):
+    """Raised when a rollback is decided but no last-green target is committed."""
+
+
+@dataclass(frozen=True)
+class MetricRegression:
+    """One monitored metric that regressed past its tolerance."""
+
+    metric: str
+    baseline: float
+    current: float
+    #: Regression magnitude in the *worsening* direction, always positive here.
+    drop: float
+    tolerance: float
+    direction: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "baseline": self.baseline,
+            "current": self.current,
+            "direction": self.direction,
+            "drop": self.drop,
+            "metric": self.metric,
+            "tolerance": self.tolerance,
+        }
+
+
+@dataclass(frozen=True)
+class RollbackAuditRecord:
+    """PHI-free evidence for one rollback decision.
+
+    Carries metric names, numeric deltas, store keys and hashes only. Label
+    names are gate categories such as ``SSN``; no span text, offset or document
+    content is recorded.
+    """
+
+    decision: str
+    key: str
+    repo_id: str
+    report_hash: str
+    baseline_key: str | None
+    target: str | None
+    regressions: tuple[MetricRegression, ...] = ()
+    compared_metrics: tuple[str, ...] = ()
+    schema_version: int = ROLLBACK_AUDIT_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "baseline_key": self.baseline_key,
+            "compared_metrics": list(self.compared_metrics),
+            "decision": self.decision,
+            "key": self.key,
+            "regressions": [row.to_dict() for row in self.regressions],
+            "repo_id": self.repo_id,
+            "report_hash": self.report_hash,
+            "schema_version": self.schema_version,
+            "target": self.target,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Return the record's canonical, sorted JSON document."""
+
+        return json.dumps(self.to_dict(), indent=indent, sort_keys=True) + "\n"
+
+
+@dataclass(frozen=True)
+class RollbackDecision:
+    """Verdict for one candidate, plus the evidence it was derived from."""
+
+    decision: str
+    target: str | None
+    reasons: tuple[str, ...]
+    audit_record: RollbackAuditRecord
+    diff: BenchmarkHistoryDiff
+
+    @property
+    def rolled_back(self) -> bool:
+        """Return whether the candidate must be repointed to last-green."""
+
+        return self.decision == DECISION_ROLLBACK
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "audit_record": self.audit_record.to_dict(),
+            "decision": self.decision,
+            "diff": self.diff.to_dict(),
+            "reasons": list(self.reasons),
+            "target": self.target,
+        }
+
+
+def decide_rollback(
+    current_report: GateReport,
+    baseline: Any = None,
+    rollout_state: "RolloutStateMachine | PhaseState | None" = None,
+    *,
+    baseline_path: str | Path = BASELINE_PATH,
+    recall_tolerance: float = G7_RECALL_DROP_LIMIT,
+) -> RollbackDecision:
+    """Decide whether a candidate holds, advances, or rolls back.
+
+    The decision is pure and offline: it is reconstructable from *current_report*
+    plus the committed baseline and rollout state, with no live API call and no
+    mutation of either store. It computes the verdict and its audit record; the
+    actual pointer flip belongs to :class:`RolloutCoordinator`.
+
+    ``ROLLBACK`` wins over everything -- a candidate that regresses a monitored
+    metric past tolerance never advances, even when its own gate is
+    ``RELEASABLE``. ``ADVANCE`` requires a ``RELEASABLE`` decision; anything
+    else holds.
+
+    *baseline* accepts anything :func:`~openmed.eval.history.diff_against_baseline`
+    resolves -- a baseline store, a single entry, a metrics payload, or a JSON
+    path. When omitted the committed store at *baseline_path* is read and keyed
+    by the report's own ``family::tier::format``.
+
+    *rollout_state* is a :class:`RolloutStateMachine` (keyed by the report's own
+    coordinates) or an already-resolved :class:`PhaseState`. It supplies the
+    rollback target: ``last_green`` is read from committed state and returned
+    verbatim, never parsed out of a repo name.
+
+    Only metrics present in *both* the report and the baseline are compared, so
+    a baseline entry that tracks a different metric surface yields an empty
+    comparison rather than a false clean bill. ``compared_metrics`` on the audit
+    record names exactly what was scored, so a no-op comparison is visible in
+    the evidence instead of reading as a pass.
+
+    Raises:
+        RolloutStateError: if the report's reproducibility hash does not
+            recompute, or its decision is not a known gate decision.
+        MissingLastGreenError: if a rollback is decided for a key with no
+            committed ``last_green`` target.
+        ~openmed.core.baseline.BaselineMiss: if the committed baseline has no
+            entry for the report's key. A regression cannot be scored without a
+            last-green baseline, so this refuses rather than advancing.
+    """
+
+    report_key = baseline_key(
+        current_report.family,
+        current_report.tier,
+        current_report.format,
+    )
+    if current_report.decision not in {RELEASABLE, QUARANTINED}:
+        raise RolloutStateError(f"unknown gate decision: {current_report.decision!r}")
+    # Recompute rather than trust the stored hash: a report whose evidence has
+    # been edited under a stale hash must not be able to authorise an advance.
+    report_hash = current_report.recompute_repro_hash()
+    if report_hash != current_report.repro_hash:
+        raise RolloutStateError("gate report reproducibility hash is invalid")
+
+    state = _resolve_phase_state(rollout_state, current_report, report_key)
+    diff = diff_against_baseline(
+        _monitored_metrics_payload(current_report),
+        baseline,
+        baseline_path=baseline_path,
+        rank_limit=None,
+    )
+    regressions = _monitored_regressions(diff, recall_tolerance=recall_tolerance)
+    compared = tuple(sorted(diff.metrics))
+
+    reasons: list[str] = []
+    target: str | None = None
+    if regressions:
+        decision = DECISION_ROLLBACK
+        target = _require_last_green(state, report_key)
+        for row in regressions:
+            reasons.append(
+                f"{row.metric} regressed by {row.drop:.6g} "
+                f"(baseline={row.baseline:.6g} current={row.current:.6g}) "
+                f"beyond tolerance {row.tolerance:.6g}"
+            )
+    elif current_report.decision == RELEASABLE:
+        decision = DECISION_ADVANCE
+        reasons.append(
+            f"no monitored regression across {len(compared)} metric(s) and the "
+            f"phase gate is {RELEASABLE}"
+        )
+    else:
+        decision = DECISION_HOLD
+        reasons.append(
+            f"no monitored regression, but the phase gate is "
+            f"{current_report.decision!r} rather than {RELEASABLE}"
+        )
+
+    audit_record = RollbackAuditRecord(
+        decision=decision,
+        key=report_key,
+        repo_id=current_report.repo_id,
+        report_hash=report_hash,
+        baseline_key=diff.baseline_key,
+        target=target,
+        regressions=tuple(regressions),
+        compared_metrics=compared,
+    )
+    return RollbackDecision(
+        decision=decision,
+        target=target,
+        reasons=tuple(reasons),
+        audit_record=audit_record,
+        diff=diff,
+    )
+
+
+def _monitored_metrics_payload(report: GateReport) -> dict[str, Any]:
+    """Return the report's monitored metrics in baseline-diff shape.
+
+    Only the monitored axes are carried, so the diff -- and every audit record
+    derived from it -- stays scoped to per-label recall and residual leakage.
+    """
+
+    return {
+        "family": report.family,
+        "tier": report.tier,
+        "format": report.format,
+        "metrics": {
+            RECALL_METRIC_PREFIX: {
+                label: float(value)
+                for label, value in sorted(report.per_label_recall.items())
+                if label in MONITORED_RECALL_LABELS
+            },
+            LEAKAGE_METRIC: float(report.residual_leakage_rate),
+        },
+    }
+
+
+def _monitored_regressions(
+    diff: BenchmarkHistoryDiff,
+    *,
+    recall_tolerance: float,
+) -> list[MetricRegression]:
+    """Return every monitored metric that regressed past its tolerance."""
+
+    rows: list[MetricRegression] = []
+    for metric in sorted(diff.metrics):
+        delta = diff.metrics[metric]
+        if delta.verdict != REGRESSION:
+            continue
+        if metric.startswith(f"{RECALL_METRIC_PREFIX}."):
+            tolerance = recall_tolerance
+        elif metric == LEAKAGE_METRIC:
+            tolerance = LEAKAGE_REGRESSION_TOLERANCE
+        else:
+            continue
+        drop = (
+            delta.baseline - delta.current
+            if delta.direction == HIGHER_IS_BETTER
+            else delta.current - delta.baseline
+        )
+        if drop > tolerance:
+            rows.append(
+                MetricRegression(
+                    metric=metric,
+                    baseline=delta.baseline,
+                    current=delta.current,
+                    drop=drop,
+                    tolerance=tolerance,
+                    direction=delta.direction,
+                )
+            )
+    return rows
+
+
+def _resolve_phase_state(
+    rollout_state: "RolloutStateMachine | PhaseState | None",
+    report: GateReport,
+    report_key: str,
+) -> PhaseState | None:
+    if rollout_state is None:
+        return None
+    if isinstance(rollout_state, PhaseState):
+        if rollout_state.key != report_key:
+            raise RolloutStateError(
+                f"gate report coordinates {report_key} do not match {rollout_state.key}"
+            )
+        return rollout_state
+    if isinstance(rollout_state, RolloutStateMachine):
+        return rollout_state.phase_state(report.family, report.tier, report.format)
+    raise TypeError(
+        "rollout_state must be a RolloutStateMachine, a PhaseState, or None"
+    )
+
+
+def _require_last_green(state: PhaseState | None, report_key: str) -> str:
+    if state is None:
+        raise MissingLastGreenError(
+            f"rollback requires a seeded rollout key: {report_key}"
+        )
+    if not state.last_green:
+        raise MissingLastGreenError(f"last-green target is missing for {report_key}")
+    return state.last_green
+
+
 __all__ = [
+    "DECISION_ADVANCE",
+    "DECISION_HOLD",
+    "DECISION_ROLLBACK",
     "DEFAULT_DWELL_WINDOWS",
+    "LEAKAGE_METRIC",
+    "LEAKAGE_REGRESSION_TOLERANCE",
     "LEGAL_TRANSITIONS",
+    "MONITORED_RECALL_LABELS",
     "PHASES",
     "PHASE_CANARY",
     "PHASE_ROLLED_BACK",
     "PHASE_SHADOW",
     "PHASE_STABLE",
+    "RECALL_METRIC_PREFIX",
+    "ROLLBACK_AUDIT_SCHEMA_VERSION",
+    "ROLLBACK_DECISIONS",
     "ROLLOUT_AUDIT_SCHEMA_VERSION",
     "ROLLOUT_STATE_PATH",
     "ROLLOUT_STATE_SCHEMA_VERSION",
     "GateNotReleasableError",
     "GateApplication",
     "IllegalTransitionError",
+    "MetricRegression",
+    "MissingLastGreenError",
     "PhaseState",
+    "RollbackAuditRecord",
+    "RollbackDecision",
     "RolloutAuditRecord",
     "RolloutCoordinator",
     "RolloutError",
     "RolloutStateError",
     "RolloutStateMachine",
     "ShadowSuiteComparison",
+    "decide_rollback",
     "run_shadow_comparison",
 ]

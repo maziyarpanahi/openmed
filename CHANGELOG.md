@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
   contract, with explicit errors for missing dependencies, unknown backends,
   and conflicting preconstructed segmenters (#1848).
+- Added `decide_rollback()` in `openmed/eval/rollout.py`, the pure decision
+  function mapping a gate diff to a rollback target. It diffs monitored
+  per-label recall and residual leakage against the committed last-green
+  baseline via `eval/history.diff_against_baseline`, applies the shared
+  `G7_RECALL_DROP_LIMIT` tolerance, and returns `HOLD` / `ADVANCE` /
+  `ROLLBACK`. A regression past tolerance rolls back to the committed
+  `last_green` pointer and never advances, even when the candidate's own gate
+  is `RELEASABLE`. The decision is side-effect-free and reproducible from the
+  report plus committed baseline and rollout state with no live API call, and
+  emits a PHI-free audit record carrying metric names, numeric deltas, store
+  keys and hashes only (#1803).
 
 ### Fixed
 
