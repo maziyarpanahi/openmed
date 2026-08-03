@@ -899,7 +899,12 @@ def _clinical_detect_stage(
     """Run local detection and convert results to canonical text-free spans."""
 
     if artifact.spans:
-        return {"spans": artifact.public_spans()}
+        spans = artifact.public_spans()
+        return {
+            "spans": spans,
+            "model_name": "provided-openmed-spans",
+            "entity_count": len(spans),
+        }
     if artifact.text is None:
         raise ValueError("the detect stage requires text or canonical spans")
 
