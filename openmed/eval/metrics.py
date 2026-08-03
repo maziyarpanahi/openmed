@@ -207,6 +207,37 @@ class F1Metrics:
 
 
 @dataclass(frozen=True)
+class CoreferenceClusteringScore:
+    """Documented B-cubed proxy score for coreference clustering.
+
+    Precision and recall are averaged per mention from the overlap between its
+    predicted and gold clusters; ``f1`` is their harmonic mean. This transparent
+    proxy is used instead of the full CoNLL MUC/B3/CEAF average for the small,
+    synthetic event-coreference gate.
+    """
+
+    precision: float
+    recall: float
+    f1: float
+    metric: str
+    item_count: int
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        """Return a JSON-compatible metric payload."""
+
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "metric": self.metric,
+            "item_count": self.item_count,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class TemporalAwarenessMetrics:
     """Closure-aware precision, recall, and F1 over reduced TLINK graphs.
 
@@ -593,7 +624,7 @@ class CriticalFindingRecallMetrics:
 
 @dataclass(frozen=True)
 class ConsistencyMetric:
-    """Consistency score with concrete violation counts."""
+    """Consistency score with PHI-free violation details."""
 
     score: float
     consistent: int
@@ -1754,6 +1785,42 @@ def compute_critical_finding_recall(
     )
 
 
+def compute_coreference_clustering_score(
+    predicted: Mapping[Any, str],
+    gold: Mapping[Any, str],
+    *,
+    metric: str = "bcubed",
+) -> CoreferenceClusteringScore:
+    """Score clusters with the documented mention-averaged B-cubed proxy.
+
+    ``predicted`` and ``gold`` must label the same mention keys. For every
+    mention, B-cubed precision is the fraction of its predicted cluster that is
+    in its gold cluster, and recall is the fraction of its gold cluster recovered
+    by the prediction. The returned F1 is the harmonic mean of the averages.
+
+    Args:
+        predicted: Mention key to predicted cluster id.
+        gold: The same mention keys mapped to gold cluster ids.
+        metric: Metric selector. Only ``"bcubed"`` is supported.
+
+    Returns:
+        Precision, recall, F1, metric name, and scored mention count.
+    """
+
+    if metric != "bcubed":
+        raise ValueError("only the documented 'bcubed' coreference proxy is supported")
+    from openmed.clinical.coref import bcubed_precision_recall_f1
+
+    score = bcubed_precision_recall_f1(predicted, gold)
+    return CoreferenceClusteringScore(
+        precision=score.precision,
+        recall=score.recall,
+        f1=score.f1,
+        metric=metric,
+        item_count=len(gold),
+    )
+
+
 def compute_exact_span_f1(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -2223,37 +2290,57 @@ def bootstrap_abstention_residual_risk(
 def compute_date_shift_consistency(
     original_dates: Sequence[str],
     shifted_dates: Sequence[str],
+    *,
+    patient_ids: Sequence[str] | None = None,
 ) -> ConsistencyMetric:
-    """Score whether date replacements use one consistent day offset."""
+    """Score non-zero, patient-consistent date replacement offsets.
+
+    A patient may have a different shift from another patient, but every date
+    belonging to the same patient must use the same non-zero day offset. This
+    also preserves within-patient intervals and rejects real dates that survive
+    unchanged. Violation details contain only input positions and reason codes.
+    """
     if len(original_dates) != len(shifted_dates):
         raise ValueError("original_dates and shifted_dates must have the same length")
-    parsed: list[tuple[str, str, int]] = []
+    if patient_ids is not None and len(patient_ids) != len(original_dates):
+        raise ValueError("patient_ids and original_dates must have the same length")
+
+    groups = (
+        tuple(str(patient_id) for patient_id in patient_ids)
+        if patient_ids is not None
+        else ("default",) * len(original_dates)
+    )
+    parsed_by_patient: defaultdict[str, list[tuple[int, int]]] = defaultdict(list)
     violations: dict[str, list[str]] = {}
-    for original, shifted in zip(original_dates, shifted_dates):
+    for index, (original, shifted, patient_id) in enumerate(
+        zip(original_dates, shifted_dates, groups, strict=True)
+    ):
         original_date = _parse_date(original)
         shifted_date = _parse_date(shifted)
         if original_date is None or shifted_date is None:
-            violations.setdefault(original, []).append(shifted)
+            violations[f"date_index:{index}"] = ["unparseable_date"]
             continue
-        parsed.append((original, shifted, (shifted_date - original_date).days))
+        delta = (shifted_date - original_date).days
+        if delta == 0:
+            violations[f"date_index:{index}"] = ["unchanged_date"]
+            continue
+        parsed_by_patient[patient_id].append((index, delta))
 
     if not original_dates:
         return ConsistencyMetric(score=1.0, consistent=0, total=0, violations={})
-    if not parsed:
-        return ConsistencyMetric(
-            score=0.0,
-            consistent=0,
-            total=len(original_dates),
-            violations=violations,
-        )
 
-    expected = parsed[0][2]
     consistent = 0
-    for original, shifted, delta in parsed:
-        if delta == expected:
-            consistent += 1
-        else:
-            violations.setdefault(original, []).append(shifted)
+    for rows in parsed_by_patient.values():
+        delta_counts = Counter(delta for _, delta in rows)
+        expected = min(
+            delta_counts,
+            key=lambda delta: (-delta_counts[delta], delta),
+        )
+        for index, delta in rows:
+            if delta == expected:
+                consistent += 1
+            else:
+                violations[f"date_index:{index}"] = ["inconsistent_shift"]
     return ConsistencyMetric(
         score=_safe_rate(consistent, len(original_dates), zero_denominator=1.0),
         consistent=consistent,
@@ -2265,22 +2352,62 @@ def compute_date_shift_consistency(
 def compute_surrogate_consistency(
     originals: Sequence[str],
     surrogates: Sequence[str],
+    *,
+    document_ids: Sequence[str] | None = None,
+    checksum_valid: Sequence[bool | None] | None = None,
 ) -> ConsistencyMetric:
-    """Score whether repeated source values map to stable surrogates."""
+    """Score document-local surrogate stability and optional ID validity.
+
+    Repeated source values must map to one non-empty surrogate within a
+    document. Callers that validate checksum-bearing identifiers can provide a
+    parallel ``checksum_valid`` sequence; any explicit ``False`` verdict makes
+    that entity group inconsistent. Violation details contain no source or
+    surrogate values.
+    """
     if len(originals) != len(surrogates):
         raise ValueError("originals and surrogates must have the same length")
-    groups: defaultdict[str, list[str]] = defaultdict(list)
-    for original, surrogate in zip(originals, surrogates):
-        groups[original].append(surrogate)
+    if document_ids is not None and len(document_ids) != len(originals):
+        raise ValueError("document_ids and originals must have the same length")
+    if checksum_valid is not None and len(checksum_valid) != len(originals):
+        raise ValueError("checksum_valid and originals must have the same length")
+
+    documents = (
+        tuple(str(document_id) for document_id in document_ids)
+        if document_ids is not None
+        else ("default",) * len(originals)
+    )
+    checksum_verdicts = (
+        tuple(checksum_valid)
+        if checksum_valid is not None
+        else (None,) * len(originals)
+    )
+    groups: defaultdict[tuple[str, str], list[tuple[int, str, bool | None]]] = (
+        defaultdict(list)
+    )
+    for index, (document_id, original, surrogate, checksum_verdict) in enumerate(
+        zip(documents, originals, surrogates, checksum_verdicts, strict=True)
+    ):
+        if checksum_verdict is not None and not isinstance(checksum_verdict, bool):
+            raise ValueError("checksum_valid values must be bool or None")
+        groups[(document_id, original)].append(
+            (index, str(surrogate), checksum_verdict)
+        )
 
     violations: dict[str, list[str]] = {}
     consistent = 0
-    for original, values in groups.items():
-        unique_values = sorted(set(values))
-        if len(unique_values) == 1:
+    for values in groups.values():
+        violation_codes: list[str] = []
+        surrogates_for_group = [surrogate for _, surrogate, _ in values]
+        if any(not surrogate for surrogate in surrogates_for_group):
+            violation_codes.append("missing_surrogate")
+        if len(set(surrogates_for_group)) != 1:
+            violation_codes.append("inconsistent_surrogate")
+        if any(checksum_verdict is False for _, _, checksum_verdict in values):
+            violation_codes.append("checksum_invalid")
+        if not violation_codes:
             consistent += 1
         else:
-            violations[original] = unique_values
+            violations[f"entity_group:{values[0][0]}"] = violation_codes
     return ConsistencyMetric(
         score=_safe_rate(consistent, len(groups), zero_denominator=1.0),
         consistent=consistent,
@@ -2676,6 +2803,13 @@ def compute_metrics_bundle(
     cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
     model_size_bytes: int | None = None,
+    original_dates: Sequence[str] = (),
+    shifted_dates: Sequence[str] = (),
+    date_patient_ids: Sequence[str] | None = None,
+    surrogate_originals: Sequence[str] = (),
+    surrogates: Sequence[str] = (),
+    surrogate_document_ids: Sequence[str] | None = None,
+    surrogate_checksum_valid: Sequence[bool | None] | None = None,
     abstention_thresholds: Any | None = None,
     abstention_confidence_threshold: float = 0.0,
     abstention_model_id: str | None = None,
@@ -2754,6 +2888,17 @@ def compute_metrics_bundle(
         "resources": compute_resource_metrics(
             peak_rss_bytes=peak_rss_bytes,
             model_size_bytes=model_size_bytes,
+        ).to_dict(),
+        "date_shift_consistency": compute_date_shift_consistency(
+            original_dates,
+            shifted_dates,
+            patient_ids=date_patient_ids,
+        ).to_dict(),
+        "surrogate_consistency": compute_surrogate_consistency(
+            surrogate_originals,
+            surrogates,
+            document_ids=surrogate_document_ids,
+            checksum_valid=surrogate_checksum_valid,
         ).to_dict(),
     }
     if extracted_facts is not None:
@@ -4683,6 +4828,7 @@ __all__ = [
     "PipelineFact",
     "RateMetric",
     "F1Metrics",
+    "CoreferenceClusteringScore",
     "TemporalAwarenessMetrics",
     "TemporalConsistencyGateResult",
     "UncertaintyAccuracyMetrics",
@@ -4714,6 +4860,7 @@ __all__ = [
     "compute_mixed_script_leakage",
     "compute_character_recall",
     "compute_critical_finding_recall",
+    "compute_coreference_clustering_score",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_fact_level_f1",

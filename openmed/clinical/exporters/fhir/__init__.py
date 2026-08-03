@@ -8,7 +8,11 @@ from .condition import (
     CONDITION_VER_STATUS_SYSTEM,
     to_condition,
 )
-from .grounded import FHIR_RESOURCE_TYPES, to_fhir
+from .grounded import (
+    COREFERENCE_EVIDENCE_EXTENSION_URL,
+    FHIR_RESOURCE_TYPES,
+    to_fhir,
+)
 from .operation_outcome import (
     OperationOutcomeIssue,
     from_validation_result,
@@ -26,6 +30,7 @@ from .references import deterministic_fullurl
 __all__ = [
     "CONDITION_CLINICAL_SYSTEM",
     "CONDITION_VER_STATUS_SYSTEM",
+    "COREFERENCE_EVIDENCE_EXTENSION_URL",
     "FHIR_RESOURCE_TYPES",
     "to_condition",
     "to_fhir",

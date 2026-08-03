@@ -52,11 +52,11 @@ Required fields:
   it must note that the synthetic set is an assistive safety probe, not
   clinical ground truth.
 
-The package loader validates offsets, canonical labels, synthetic markers,
-expected output, hard-negative candidate metadata, critical-finding disclaimers,
-and language coverage. The JSON and JSONL files are also compatible with
-`openmed.eval.harness.load_fixtures`; golden-specific expected output remains
-available through each fixture's metadata.
+The package loader validates unique fixture IDs, offsets, canonical labels,
+synthetic markers, expected output, hard-negative candidate metadata,
+critical-finding disclaimers, and language coverage. The JSON and JSONL files
+are also compatible with `openmed.eval.harness.load_fixtures`; golden-specific
+expected output remains available through each fixture's metadata.
 
 ## Temporal TLINK Fixtures
 
