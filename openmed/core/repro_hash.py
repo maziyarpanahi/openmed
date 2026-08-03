@@ -16,6 +16,7 @@ TRAINING_PROVENANCE_FILENAME = "training_provenance.json"
 TRAINING_PROVENANCE_SCHEMA_VERSION = "openmed.training_provenance.v1"
 
 SPAN_SET_HASH_SCHEMA_VERSION = "openmed.span_set.v1"
+_REPLACEMENT_DIGEST_DOMAIN = b"openmed-span-replacement-v1\x00"
 
 _SHA256_DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-f]{64}$")
 _MODEL_CARD_REPRO_HASH_RE = re.compile(
@@ -303,14 +304,7 @@ def canonicalize_span_records(spans: Iterable[Any]) -> list[dict[str, Any]]:
     """
 
     records = [_span_record(span) for span in spans]
-    records.sort(
-        key=lambda record: (
-            record["start"],
-            record["end"],
-            record["label"],
-            record["action"],
-        )
-    )
+    records.sort(key=_span_record_sort_key)
     return records
 
 
@@ -357,19 +351,33 @@ def compute_span_set_hash(
 def _span_record(span: Any) -> dict[str, Any]:
     start = _span_attr(span, "start")
     end = _span_attr(span, "end")
-    label = _span_attr(span, "label")
+    label = _first_span_attr(
+        span,
+        "canonical_label",
+        "label",
+        "entity_type",
+        "entity_group",
+        "entity",
+    )
     confidence = _span_attr(span, "confidence")
+    if confidence is None:
+        confidence = _span_attr(span, "score")
     action = _span_attr(span, "action")
     surrogate = _span_attr(span, "surrogate")
     redacted = _span_attr(span, "redacted_text")
+    existing_replacement_digest = _span_attr(span, "replacement_digest")
 
-    replacement_digest = None
+    replacement_digest = (
+        str(existing_replacement_digest)
+        if existing_replacement_digest is not None
+        else None
+    )
     replacement_source = surrogate if surrogate is not None else redacted
     if replacement_source is not None:
-        # Hash the applied replacement so that surrogate drift is caught without
-        # ever storing the raw replacement value (which may echo synthetic PHI).
+        # Domain-separate the applied replacement digest so surrogate drift is
+        # caught without storing the raw replacement value.
         replacement_digest = hashlib.sha256(
-            str(replacement_source).encode("utf-8")
+            _REPLACEMENT_DIGEST_DOMAIN + str(replacement_source).encode("utf-8")
         ).hexdigest()
 
     return {
@@ -386,6 +394,33 @@ def _span_attr(span: Any, name: str) -> Any:
     if isinstance(span, Mapping):
         return span.get(name)
     return getattr(span, name, None)
+
+
+def _first_span_attr(span: Any, *names: str) -> Any:
+    for name in names:
+        value = _span_attr(span, name)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _span_record_sort_key(record: Mapping[str, Any]) -> tuple[Any, ...]:
+    start = record["start"]
+    end = record["end"]
+    confidence = record["confidence"]
+    replacement_digest = record["replacement_digest"]
+    return (
+        start is None,
+        start if start is not None else 0,
+        end is None,
+        end if end is not None else 0,
+        record["label"],
+        record["action"],
+        confidence is None,
+        confidence if confidence is not None else 0.0,
+        replacement_digest is None,
+        replacement_digest or "",
+    )
 
 
 def _coerce_int(value: Any) -> int | None:

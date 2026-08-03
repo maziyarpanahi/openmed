@@ -141,6 +141,50 @@ def test_canonicalize_span_records_is_order_independent_and_phi_free() -> None:
         }
 
 
+def test_canonicalize_span_records_uses_a_total_order_for_duplicate_offsets() -> None:
+    spans = [
+        {
+            "start": 7,
+            "end": 16,
+            "label": "NAME",
+            "confidence": 0.8,
+            "surrogate": "Alpha",
+        },
+        {
+            "start": 7,
+            "end": 16,
+            "label": "NAME",
+            "confidence": 0.9,
+            "surrogate": "Bravo",
+        },
+    ]
+
+    forward = canonicalize_span_records(spans)
+    reverse = canonicalize_span_records(reversed(spans))
+
+    assert forward == reverse
+    assert compute_span_set_hash(spans) == compute_span_set_hash(reversed(spans))
+
+
+def test_canonicalize_span_records_is_idempotent_and_prefers_canonical_labels() -> None:
+    spans = [
+        {
+            "start": None,
+            "end": None,
+            "label": "NAME",
+            "canonical_label": "PERSON",
+            "score": 0.9,
+            "replacement_digest": "sha256:replacement-proof",
+        }
+    ]
+
+    first = canonicalize_span_records(spans)
+
+    assert first[0]["label"] == "PERSON"
+    assert first[0]["confidence"] == 0.9
+    assert canonicalize_span_records(first) == first
+
+
 def test_compute_span_set_hash_is_stable_and_order_independent() -> None:
     spans = [
         {"start": 30, "end": 43, "label": "EMAIL", "confidence": 0.8},

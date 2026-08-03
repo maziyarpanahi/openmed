@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -100,18 +101,17 @@ def test_golden_file_contains_no_raw_phi() -> None:
 
 def test_repro_hash_stable_across_100_iterations() -> None:
     """Same input + seed must yield the identical span-set hash 100 times."""
-    item = next(
-        candidate
-        for candidate in default_corpus()
-        if candidate.item_id == "replace_seeded_name"
-    )
+    corpus = {item.item_id: item for item in default_corpus()}
 
-    hashes = {run_api_once(item, "deidentify")["hash"] for _ in range(100)}
-    assert len(hashes) == 1, "seeded replacement hash drifted across iterations"
+    for item_id in ("replace_seeded_name", "shift_dates_seeded"):
+        hashes = {
+            run_api_once(corpus[item_id], "deidentify")["hash"] for _ in range(100)
+        }
+        assert len(hashes) == 1, f"seeded output hash drifted for {item_id}"
 
 
-def test_seeded_replacement_and_keyed_shift_are_deterministic() -> None:
-    """Stochastic methods are pinned by seed / patient-key + secret."""
+def test_seeded_replacement_and_date_shift_are_deterministic() -> None:
+    """One request seed pins replacement-vault and automatic date-shift output."""
     corpus = {item.item_id: item for item in default_corpus()}
 
     replace_item = corpus["replace_seeded_name"]
@@ -120,9 +120,31 @@ def test_seeded_replacement_and_keyed_shift_are_deterministic() -> None:
     }
     assert len(replace_hashes) == 1
 
-    shift_item = corpus["shift_dates_patient_keyed"]
+    shift_item = corpus["shift_dates_seeded"]
     shift_hashes = {run_api_once(shift_item, "deidentify")["hash"] for _ in range(8)}
     assert len(shift_hashes) == 1
+
+
+def test_detector_row_order_does_not_change_tied_span_output() -> None:
+    """Equivalent detector rows must survive merge tie-breaks identically."""
+    text = "Patient Taylor Example arrived."
+    start = text.index("Taylor Example")
+    item = CorpusItem(
+        item_id="tied_detector_rows",
+        text=text,
+        language="en",
+        spans=(
+            SyntheticSpan("Taylor Example", "PATIENT", start, start + 14, 0.9),
+            SyntheticSpan("Taylor Example", "NAME", start, start + 14, 0.9),
+        ),
+    )
+
+    forward = run_api_once(item, "deidentify")
+    reverse = run_api_once(
+        item=replace(item, spans=tuple(reversed(item.spans))), api_name="deidentify"
+    )
+
+    assert forward == reverse
 
 
 def test_cross_process_determinism_fresh_interpreter() -> None:

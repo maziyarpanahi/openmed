@@ -21,9 +21,9 @@ Design notes
   harness therefore proves determinism of the *pipeline*, not of the model
   weights (see ``Out of scope`` in the task spec).
 * **PHI-free diagnostics.** Every record the harness emits or hashes contains
-  only offsets, canonical labels, confidences, and salted hashes of applied
-  replacements. Raw entity text and raw surrogate values never enter a report,
-  a golden file, or a divergence diagnostic.
+  only offsets, canonical labels, confidences, and domain-separated hashes of
+  applied replacements. Raw entity text and raw surrogate values never enter a
+  report, a golden file, or a divergence diagnostic.
 * **Single request-scoped seed.** Stochastic steps (surrogate replacement, date
   shifting) are pinned from one seed / patient-key + secret per corpus item, so
   the whole run is reproducible from the corpus definition alone.
@@ -94,9 +94,11 @@ class CorpusItem:
         language: ISO 639-1 language code passed to the API.
         spans: Synthetic gold spans the deterministic detector emits.
         method: De-identification method for :func:`openmed.deidentify`.
-        seed: Optional seed pinning surrogate replacement.
+        seed: Optional request seed pinning replacement and date shifting.
         patient_key: Optional stable key pinning date-shift offsets.
         date_shift_secret: Optional HMAC secret for patient-keyed date shifting.
+        surrogate_vault_secret: Optional synthetic secret that exercises the
+            stable surrogate-vault path without persisting a vault.
     """
 
     item_id: str
@@ -107,6 +109,7 @@ class CorpusItem:
     seed: int | None = None
     patient_key: str | None = None
     date_shift_secret: str | None = None
+    surrogate_vault_secret: str | None = None
 
     def prediction_rows(self) -> list[dict[str, Any]]:
         """Return raw token-classification rows for the deterministic detector."""
@@ -261,8 +264,8 @@ def default_corpus() -> tuple[CorpusItem, ...]:
         )
     )
 
-    # 2. Seeded replacement -- surrogates must be stable across runs and process
-    #    boundaries for a fixed seed.
+    # 2. Seeded replacement through a fresh in-memory surrogate vault -- the
+    #    same request seed must be stable across runs and process boundaries.
     text_replace = "Contact Jordan Rivera at the Example Clinic front desk."
     items.append(
         CorpusItem(
@@ -272,14 +275,16 @@ def default_corpus() -> tuple[CorpusItem, ...]:
             spans=(SyntheticSpan("Jordan Rivera", "NAME", 8, 21),),
             method="replace",
             seed=20220822,
+            surrogate_vault_secret="synthetic-surrogate-vault-secret",
         )
     )
 
-    # 3. Patient-keyed date shifting -- HMAC offset must be reproducible.
+    # 3. Automatic date shifting -- the same request seed must deterministically
+    #    derive one non-zero offset that is reused for every date in the item.
     text_dates = "Admitted 01/15/1970 and discharged 01/22/1970 for observation."
     items.append(
         CorpusItem(
-            item_id="shift_dates_patient_keyed",
+            item_id="shift_dates_seeded",
             text=text_dates,
             language="en",
             spans=(
@@ -287,8 +292,7 @@ def default_corpus() -> tuple[CorpusItem, ...]:
                 SyntheticSpan("01/22/1970", "DATE", 35, 45),
             ),
             method="shift_dates",
-            patient_key="synthetic-patient-0001",
-            date_shift_secret="synthetic-date-shift-secret",
+            seed=20220822,
         )
     )
 
@@ -325,7 +329,11 @@ def build_corpus_signature(corpus: Sequence[CorpusItem]) -> str:
                     "start": span.start,
                     "end": span.end,
                     "label": span.label,
-                    "action": f"{item.item_id}:{item.method}",
+                    "action": (
+                        f"{item.item_id}:{item.method}:seed={item.seed!r}:"
+                        f"patient_key={item.patient_key is not None}:"
+                        f"vault={item.surrogate_vault_secret is not None}"
+                    ),
                 }
             )
     return compute_span_set_hash(
@@ -378,13 +386,17 @@ def run_api_once(item: CorpusItem, api_name: str) -> dict[str, Any]:
             kwargs["patient_key"] = item.patient_key
         if item.date_shift_secret is not None:
             kwargs["date_shift_secret"] = item.date_shift_secret
+        if item.surrogate_vault_secret is not None:
+            from openmed.core.surrogate_vault import SurrogateVault
+
+            kwargs["surrogate_vault"] = SurrogateVault(item.surrogate_vault_secret)
         result = openmed.deidentify(item.text, **kwargs)
         spans = list(result.pii_entities)
-        # The span records already fold in each applied replacement via a salted
-        # ``replacement_digest``. Additionally bind a salted digest of the full
-        # de-identified output so drift *outside* detected spans (for example a
-        # stray whitespace or ordering change in redaction) is also caught. The
-        # raw output text is never stored -- only its salted hash.
+        # The span records already fold in each applied replacement via a
+        # domain-separated ``replacement_digest``. Additionally bind a digest
+        # of the full de-identified output so drift *outside* detected spans
+        # (for example a stray whitespace or ordering change in redaction) is
+        # also caught. The raw output text is never stored -- only its digest.
         output_digest = _output_digest(result.deidentified_text)
         content_hash = compute_span_set_hash(
             [
