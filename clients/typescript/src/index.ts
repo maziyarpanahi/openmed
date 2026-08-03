@@ -208,6 +208,42 @@ export interface OMOPLoadResponse {
   constraint_violations?: OMOPConstraintViolations;
 }
 
+export interface ConceptAncestorRequest {
+  ancestor_concept_id: number;
+  descendant_concept_id: number;
+}
+
+export interface CohortResolveRequest {
+  phenotype: JsonObject;
+  records_jsonl: string;
+  concept_ancestors?: ConceptAncestorRequest[];
+}
+
+export interface CohortEvidencePointer {
+  criterion_id: string;
+  concept_set_id: string;
+  concept_id: number;
+  vocabulary: string;
+  domain_table: string;
+  event_id: number;
+  note_id: number;
+  note_nlp_id: number;
+  source_note_hash: string;
+  start: number;
+  end: number;
+}
+
+export interface CohortResolveResponse {
+  schema_version: string;
+  advisory: string;
+  patient_ids: number[];
+  evidence: Array<{
+    patient_id: number;
+    matches: CohortEvidencePointer[];
+  }>;
+  provenance: JsonObject;
+}
+
 export interface EntityPrediction {
   text: string;
   label: string;
@@ -508,6 +544,12 @@ export class OpenMedClient {
 
   async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
     return this.post("/omop/load", request);
+  }
+
+  async resolveCohort(
+    request: CohortResolveRequest,
+  ): Promise<CohortResolveResponse> {
+    return this.post("/cohort/resolve", request);
   }
 
   async startSmartBackendIngestion(
