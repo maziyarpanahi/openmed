@@ -248,6 +248,8 @@ classification:
     - compliance/za-popia-identifier-checklist.md
     - i18n/glossary.md
     - leaderboard/index.md
+    - model-cards/registry/pii-last-green.md
+    - model-cards/registry/pii-latest.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md

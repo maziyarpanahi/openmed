@@ -342,6 +342,7 @@ include = [
   "/openmed/risk/data/*.json",
   "/eval/redteam/corpus/adversarial_phi.jsonl",
   "/gates/baseline.json",
+  "/gates/registry_state.json",
   "/models.jsonl",
   "/models.jsonl.sigstore.json",
   "/LICENSE",
