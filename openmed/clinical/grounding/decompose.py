@@ -102,11 +102,11 @@ class CompositeDecompositionProvenance:
 
 @dataclass(frozen=True)
 class PostCoordinationRequest:
-    """Deferred input for a caller-owned post-coordination expression builder.
+    """Deferred input for the user-key-gated post-coordination stage.
 
-    This task does not construct terminology expressions. The request preserves
-    the parent and proposed child mentions for that later stage, along with any
-    children that could already be linked and a PHI-safe audit record.
+    The request preserves the parent and proposed child mentions for that
+    stage, along with any children that could already be linked and a PHI-safe
+    audit record.
     """
 
     parent: CompositeMention
