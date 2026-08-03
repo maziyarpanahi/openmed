@@ -12,31 +12,51 @@ from openmed.core.decoding import SpanEdge, SpanNode
 from openmed.core.labels import normalize_label
 from openmed.processing.advanced_ner import EntitySpan
 
-MedicationAttributeType = Literal["dose", "route", "frequency", "duration"]
+MedicationAttributeType = Literal[
+    "dose",
+    "route",
+    "frequency",
+    "duration",
+    "form",
+    "strength",
+    "indication",
+]
 MedicationRelationType = Literal[
     "drug_to_dose",
     "drug_to_route",
     "drug_to_frequency",
     "drug_to_duration",
+    "drug_to_form",
+    "drug_to_strength",
+    "drug_to_indication",
 ]
 
-RELATION_SCHEMA_VERSION = 1
+RELATION_SCHEMA_VERSION = 2
 DRUG_TO_DOSE: MedicationRelationType = "drug_to_dose"
 DRUG_TO_ROUTE: MedicationRelationType = "drug_to_route"
 DRUG_TO_FREQUENCY: MedicationRelationType = "drug_to_frequency"
 DRUG_TO_DURATION: MedicationRelationType = "drug_to_duration"
+DRUG_TO_FORM: MedicationRelationType = "drug_to_form"
+DRUG_TO_STRENGTH: MedicationRelationType = "drug_to_strength"
+DRUG_TO_INDICATION: MedicationRelationType = "drug_to_indication"
 
 RELATION_ORDER: tuple[MedicationRelationType, ...] = (
     DRUG_TO_DOSE,
     DRUG_TO_ROUTE,
     DRUG_TO_FREQUENCY,
     DRUG_TO_DURATION,
+    DRUG_TO_FORM,
+    DRUG_TO_STRENGTH,
+    DRUG_TO_INDICATION,
 )
 RELATION_ATTRIBUTE_TYPES: dict[MedicationRelationType, MedicationAttributeType] = {
     DRUG_TO_DOSE: "dose",
     DRUG_TO_ROUTE: "route",
     DRUG_TO_FREQUENCY: "frequency",
     DRUG_TO_DURATION: "duration",
+    DRUG_TO_FORM: "form",
+    DRUG_TO_STRENGTH: "strength",
+    DRUG_TO_INDICATION: "indication",
 }
 ATTRIBUTE_RELATION_TYPES: dict[MedicationAttributeType, MedicationRelationType] = {
     attribute_type: relation_type
@@ -421,6 +441,40 @@ class MedicationRelation:
 
 
 @dataclass(frozen=True)
+class Relation:
+    """Public medication relation tuple with a bounded confidence score."""
+
+    head: SpanReference
+    type: MedicationAttributeType
+    tail: SpanReference
+    score: float
+
+    def __post_init__(self) -> None:
+        """Validate the generic relation confidence contract."""
+
+        if self.type not in ATTRIBUTE_RELATION_TYPES:
+            raise ValueError(f"unsupported medication relation type: {self.type!r}")
+        if not 0.0 <= self.score <= 1.0:
+            raise ValueError("relation score must be between 0 and 1")
+
+    @property
+    def relation_type(self) -> MedicationRelationType:
+        """Return the medication-specific edge label."""
+
+        return ATTRIBUTE_RELATION_TYPES[self.type]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the roadmap relation shape as a deterministic mapping."""
+
+        return {
+            "head": self.head.to_dict(),
+            "type": self.type,
+            "tail": self.tail.to_dict(),
+            "score": self.score,
+        }
+
+
+@dataclass(frozen=True)
 class CoreferenceSourceReference:
     """Privacy-safe source offsets and hash for one coreferent mention."""
 
@@ -517,7 +571,10 @@ __all__ = [
     "DRUG_TO_DOSE",
     "DRUG_TO_DURATION",
     "DRUG_TO_FREQUENCY",
+    "DRUG_TO_FORM",
+    "DRUG_TO_INDICATION",
     "DRUG_TO_ROUTE",
+    "DRUG_TO_STRENGTH",
     "CoreferenceProvenance",
     "CoreferenceSourceReference",
     "MedicationAttributeType",
@@ -530,6 +587,7 @@ __all__ = [
     "RelationCandidateBatch",
     "RelationCandidateRule",
     "RelationCandidate",
+    "Relation",
     "SpanReference",
     "build_relation_candidates",
 ]

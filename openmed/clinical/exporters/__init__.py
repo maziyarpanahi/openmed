@@ -33,7 +33,13 @@ from .dhis2 import (
     OrgUnitHierarchy,
     export_dhis2,
 )
-from .fhir import COREFERENCE_EVIDENCE_EXTENSION_URL, to_fhir
+from .fhir import (
+    COREFERENCE_EVIDENCE_EXTENSION_URL,
+    POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL,
+    postcoordinated_codeable_concept,
+    stamp_postcoordination_provenance,
+    to_fhir,
+)
 from .flat_table import (
     FLAT_TABLE_COLUMNS,
     flatten_clinical_entities,
@@ -59,6 +65,7 @@ __all__ = [
     "USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL",
     "CONCEPT_NORMALIZATION_PROVENANCE_EXTENSION_URL",
     "COREFERENCE_EVIDENCE_EXTENSION_URL",
+    "POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL",
     "CORE_OMOP_TABLES",
     "DEFAULT_GENERALIZATION_LEVEL",
     "DEFAULT_SMALL_CELL_THRESHOLD",
@@ -86,7 +93,9 @@ __all__ = [
     "flatten_entities",
     "export_dhis2",
     "parse_operational_template",
+    "postcoordinated_codeable_concept",
     "stamp_coding_provenance",
+    "stamp_postcoordination_provenance",
     "stamp_user_supplied_terminology_provenance",
     "to_codeable_concept",
     "to_csv",

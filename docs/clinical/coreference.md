@@ -84,7 +84,9 @@ interfaces can recover a chain without storing a raw mention surface.
 
 Use the keyword-only `document_text` form to detect and cluster clinical event
 candidates. This mode is limited to PROBLEM-, TEST-, and TREATMENT-like spans;
-it does not add PII coreference or rewrite downstream event-frame heads.
+it does not add PII coreference. Its sanitized result does not mutate event
+frames; the span-native chains described below opt downstream extraction into
+representative rewriting.
 
 ```python
 from openmed.clinical import resolve_coreference
@@ -107,6 +109,10 @@ result = resolve_coreference(
     document_id="synthetic-note",
     hash_secret="application-owned-secret",
 )
+cluster_ids = result.cluster_ids_by_offset()
+cluster_ids[("synthetic-note", (11, 27))]
+# "synthetic-note:entity:..."
+
 result.to_dict()["clusters"][0]
 # {
 #   "cluster_id": "synthetic-note:entity:...",

@@ -27,6 +27,7 @@ from ...grounding.assertion_grounding import (
 from ...grounding.types import GroundedSpan
 from ..codeable_concept import to_codeable_concept
 from .bundle import to_bundle
+from .codeable_concept import POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL
 from .condition import to_condition
 
 __all__ = [
@@ -396,6 +397,8 @@ def _remove_internal_fields(node: Any) -> None:
                     and str(extension.get("url") or "").startswith(
                         "https://openmed.ai/fhir/StructureDefinition/"
                     )
+                    and extension.get("url")
+                    != POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL
                 )
             ]
             if retained:
