@@ -1,14 +1,15 @@
-"""Language-family transfer graph for clinical adapter selection.
+"""Offline language-family taxonomy and clinical adapter transfer graph.
 
-The objects in this module are intentionally static metadata. They let
-language-pack and registry code reason about family transfer without downloading
-weights, launching training, or contacting external services.
+This module contains metadata only. Importing or querying it never downloads
+model weights, starts training, or contacts an external service.
 """
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
+from types import MappingProxyType
 
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 
@@ -30,20 +31,63 @@ CLINICAL_ADAPTER_DISCLAIMER = (
 )
 
 
-def normalize_language_code(language: str) -> str:
-    """Return the normalized base language code used by transfer metadata."""
-
-    normalized = language.strip().replace("_", "-").casefold()
+def _require_text(value: object, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    normalized = value.strip()
     if not normalized:
-        raise ValueError("language must not be empty")
-    if normalized in SUPPORTED_LANGUAGES:
-        return normalized
+        raise ValueError(f"{field_name} must not be empty")
+    return normalized
+
+
+def normalize_language_code(language: str) -> str:
+    """Return a normalized base language code for transfer metadata.
+
+    Args:
+        language: ISO language code, optionally followed by a region or script.
+
+    Returns:
+        A case-folded base language code such as ``"te"``.
+
+    Raises:
+        TypeError: If ``language`` is not a string.
+        ValueError: If ``language`` is empty.
+    """
+
+    normalized = _require_text(language, "language").replace("_", "-").casefold()
     return normalized.split("-", 1)[0]
 
 
-@dataclass(frozen=True)
+def _normalize_codes(values: tuple[str, ...], field_name: str) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes)):
+        raise TypeError(f"{field_name} must be an iterable of language codes")
+    normalized = tuple(normalize_language_code(value) for value in values)
+    if not normalized:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{field_name} must not contain duplicates")
+    return normalized
+
+
+def _normalize_names(values: tuple[str, ...], field_name: str) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes)):
+        raise TypeError(f"{field_name} must be an iterable of strings")
+    normalized = tuple(_require_text(value, field_name) for value in values)
+    if not normalized:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{field_name} must not contain duplicates")
+    return normalized
+
+
+@dataclass(frozen=True, slots=True)
 class LanguageFamily:
-    """One family grouping used for adapter transfer decisions."""
+    """One operational language family used for adapter transfer decisions.
+
+    ``scripts`` lists every script represented by the family's language
+    records. The taxonomy uses broad operational groups (for example,
+    ``indic``) where cross-family transfer is intentionally planned.
+    """
 
     family_id: str
     display_name: str
@@ -53,64 +97,73 @@ class LanguageFamily:
     notes: str = ""
 
     def __post_init__(self) -> None:
-        """Normalize tuple fields and reject incomplete family definitions."""
+        """Normalize collection fields and reject incomplete records."""
 
-        family_id = self.family_id.strip().casefold()
-        languages = tuple(normalize_language_code(lang) for lang in self.languages)
-        scripts = tuple(script.strip() for script in self.scripts if script.strip())
+        family_id = _require_text(self.family_id, "family_id").casefold()
+        display_name = _require_text(self.display_name, "display_name")
+        languages = _normalize_codes(self.languages, "languages")
+        scripts = _normalize_names(self.scripts, "scripts")
+        if isinstance(self.high_resource_languages, (str, bytes)):
+            raise TypeError(
+                "high_resource_languages must be an iterable of language codes"
+            )
         high_resource = tuple(
-            normalize_language_code(lang) for lang in self.high_resource_languages
+            normalize_language_code(language)
+            for language in self.high_resource_languages
         )
-        if not family_id:
-            raise ValueError("family_id must not be empty")
-        if not self.display_name.strip():
-            raise ValueError(f"{family_id}: display_name must not be empty")
-        if not languages:
-            raise ValueError(f"{family_id}: languages must not be empty")
-        if not scripts:
-            raise ValueError(f"{family_id}: scripts must not be empty")
+        if len(set(high_resource)) != len(high_resource):
+            raise ValueError("high_resource_languages must not contain duplicates")
         missing = set(high_resource) - set(languages)
         if missing:
             raise ValueError(
                 f"{family_id}: high_resource_languages not in family: {sorted(missing)}"
             )
+        if not isinstance(self.notes, str):
+            raise TypeError("notes must be a string")
+
         object.__setattr__(self, "family_id", family_id)
+        object.__setattr__(self, "display_name", display_name)
         object.__setattr__(self, "languages", languages)
         object.__setattr__(self, "scripts", scripts)
         object.__setattr__(self, "high_resource_languages", high_resource)
+        object.__setattr__(self, "notes", self.notes.strip())
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AdapterMetadata:
-    """Provenance and packaging metadata for a future family adapter artifact."""
+    """Provenance and packaging metadata for a future family adapter."""
 
     adapter_id: str
     backbone_model_id: str = DEFAULT_BACKBONE_MODEL_ID
     license: str = "apache-2.0"
-    provenance: str = "synthetic family-transfer planning metadata"
+    provenance: str = "OpenMed built-in family-transfer planning metadata"
     disclaimer: str = CLINICAL_ADAPTER_DISCLAIMER
     offline_runnable: bool = True
 
     def __post_init__(self) -> None:
-        """Normalize adapter identifiers and license strings."""
+        """Normalize metadata strings without resolving any remote artifact."""
 
-        adapter_id = self.adapter_id.strip()
-        license_name = self.license.strip().casefold()
-        if not adapter_id:
-            raise ValueError("adapter_id must not be empty")
-        if not self.backbone_model_id.strip():
-            raise ValueError(f"{adapter_id}: backbone_model_id must not be empty")
-        if not self.provenance.strip():
-            raise ValueError(f"{adapter_id}: provenance must not be empty")
-        if not self.disclaimer.strip():
-            raise ValueError(f"{adapter_id}: disclaimer must not be empty")
+        adapter_id = _require_text(self.adapter_id, "adapter_id")
+        backbone_model_id = _require_text(
+            self.backbone_model_id,
+            "backbone_model_id",
+        )
+        license_name = _require_text(self.license, "license").casefold()
+        provenance = _require_text(self.provenance, "provenance")
+        disclaimer = _require_text(self.disclaimer, "disclaimer")
+        if not isinstance(self.offline_runnable, bool):
+            raise TypeError("offline_runnable must be a boolean")
+
         object.__setattr__(self, "adapter_id", adapter_id)
+        object.__setattr__(self, "backbone_model_id", backbone_model_id)
         object.__setattr__(self, "license", license_name)
+        object.__setattr__(self, "provenance", provenance)
+        object.__setattr__(self, "disclaimer", disclaimer)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TransferEdge:
-    """Directed donor-to-target relationship for adapter transfer."""
+    """Directed donor-to-target relationship for future adapter transfer."""
 
     target_language: str
     donor_language: str
@@ -121,31 +174,44 @@ class TransferEdge:
     expected_f1_floor: float | None = None
 
     def __post_init__(self) -> None:
-        """Normalize edge keys and enforce basic edge invariants."""
+        """Normalize an edge and enforce its local invariants."""
 
         target = normalize_language_code(self.target_language)
         donor = normalize_language_code(self.donor_language)
-        family_id = self.family_id.strip().casefold()
-        mode = self.mode.strip()
+        family_id = _require_text(self.family_id, "family_id").casefold()
+        mode = _require_text(self.mode, "mode")
         if target == donor:
             raise ValueError(f"{target}: donor_language must differ from target")
-        if not family_id:
-            raise ValueError(f"{target}: family_id must not be empty")
+        if not isinstance(self.adapter, AdapterMetadata):
+            raise TypeError("adapter must be AdapterMetadata")
+        if isinstance(self.priority, bool) or not isinstance(self.priority, int):
+            raise TypeError("priority must be an integer")
         if self.priority < 1:
             raise ValueError(f"{target}: priority must be >= 1")
-        if not mode:
-            raise ValueError(f"{target}: mode must not be empty")
-        if self.expected_f1_floor is not None and not 0 <= self.expected_f1_floor <= 1:
-            raise ValueError(f"{target}: expected_f1_floor must be between 0 and 1")
+        if self.expected_f1_floor is not None:
+            floor = self.expected_f1_floor
+            if isinstance(floor, bool) or not isinstance(floor, (int, float)):
+                raise TypeError("expected_f1_floor must be a number or None")
+            if not math.isfinite(floor) or not 0.0 <= floor <= 1.0:
+                raise ValueError(
+                    f"{target}: expected_f1_floor must be a finite probability"
+                )
+
         object.__setattr__(self, "target_language", target)
         object.__setattr__(self, "donor_language", donor)
         object.__setattr__(self, "family_id", family_id)
         object.__setattr__(self, "mode", mode)
+        if self.expected_f1_floor is not None:
+            object.__setattr__(
+                self,
+                "expected_f1_floor",
+                float(self.expected_f1_floor),
+            )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FamilyTransferResolution:
-    """Resolved transfer metadata for one target language."""
+    """Resolved taxonomy and ordered donor metadata for one target language."""
 
     language: str
     family: LanguageFamily
@@ -165,7 +231,7 @@ class FamilyTransferResolution:
         return edge.donor_language if edge is not None else None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FamilyTransferConfig:
     """Validated language-family taxonomy plus directed transfer graph."""
 
@@ -173,48 +239,59 @@ class FamilyTransferConfig:
     transfer_graph: Mapping[str, tuple[TransferEdge, ...]]
 
     def __post_init__(self) -> None:
-        """Normalize mappings and run validation at construction time."""
+        """Copy and validate input mappings at construction time."""
 
-        families = {family.family_id: family for family in self.families.values()}
-        graph = {
-            normalize_language_code(target): tuple(
-                sorted(edges, key=lambda edge: edge.priority)
-            )
-            for target, edges in self.transfer_graph.items()
-        }
-        object.__setattr__(self, "families", families)
-        object.__setattr__(self, "transfer_graph", graph)
+        families: dict[str, LanguageFamily] = {}
+        for family in self.families.values():
+            if not isinstance(family, LanguageFamily):
+                raise TypeError("families values must be LanguageFamily records")
+            if family.family_id in families:
+                raise ValueError(f"duplicate family_id {family.family_id!r}")
+            families[family.family_id] = family
+
+        graph: dict[str, tuple[TransferEdge, ...]] = {}
+        for raw_target, raw_edges in self.transfer_graph.items():
+            target = normalize_language_code(raw_target)
+            if target in graph:
+                raise ValueError(f"duplicate transfer target {target!r}")
+            edges = tuple(raw_edges)
+            if any(not isinstance(edge, TransferEdge) for edge in edges):
+                raise TypeError("transfer_graph values must contain TransferEdge")
+            graph[target] = tuple(sorted(edges, key=lambda edge: edge.priority))
+
+        object.__setattr__(self, "families", MappingProxyType(families))
+        object.__setattr__(self, "transfer_graph", MappingProxyType(graph))
         self.validate()
 
     @property
     def languages(self) -> tuple[str, ...]:
-        """Return all languages covered by the taxonomy."""
+        """Return all language codes covered by the taxonomy."""
 
         return tuple(sorted(self._language_to_family()))
 
     def family_for_language(self, language: str) -> LanguageFamily | None:
-        """Return the family for ``language`` when the taxonomy covers it."""
+        """Return the family record for ``language``, when covered."""
 
         return self._language_to_family().get(normalize_language_code(language))
 
     def donor_edges_for(self, language: str) -> tuple[TransferEdge, ...]:
-        """Return ordered donor edges for ``language``."""
+        """Return deterministic donor edges for ``language`` by priority."""
 
         return self.transfer_graph.get(normalize_language_code(language), ())
 
     def donor_languages_for(self, language: str) -> tuple[str, ...]:
-        """Return ordered donor languages for ``language``."""
+        """Return deterministic donor language codes for ``language``."""
 
         return tuple(edge.donor_language for edge in self.donor_edges_for(language))
 
     def primary_donor_for(self, language: str) -> str | None:
-        """Return the primary donor language for ``language`` if configured."""
+        """Return the primary donor code for ``language``, if configured."""
 
         edges = self.donor_edges_for(language)
         return edges[0].donor_language if edges else None
 
     def resolve(self, language: str) -> FamilyTransferResolution | None:
-        """Return transfer metadata for ``language`` if it is in the taxonomy."""
+        """Resolve taxonomy and donor metadata for a supported language."""
 
         normalized = normalize_language_code(language)
         family = self.family_for_language(normalized)
@@ -227,32 +304,37 @@ class FamilyTransferConfig:
         )
 
     def validate(self) -> None:
-        """Validate family coverage, transfer edges, and adapter metadata."""
+        """Validate coverage, donor references, licenses, and graph acyclicity."""
 
         language_to_family = self._language_to_family()
-        missing_supported = SUPPORTED_LANGUAGES - set(language_to_family)
+        missing_supported = set(SUPPORTED_LANGUAGES) - set(language_to_family)
         if missing_supported:
             raise ValueError(
-                f"supported languages missing from transfer families: "
+                "supported languages missing from transfer families: "
                 f"{sorted(missing_supported)}"
             )
 
-        seen_priorities: dict[str, set[int]] = {}
+        adapter_ids: set[str] = set()
         adjacency: dict[str, tuple[str, ...]] = {}
         for target, edges in self.transfer_graph.items():
             if target not in language_to_family:
                 raise ValueError(f"{target}: transfer target has no language family")
-            seen_priorities[target] = set()
-            donors = []
+            priorities: set[int] = set()
+            donors: list[str] = []
             for edge in edges:
                 if edge.target_language != target:
                     raise ValueError(
                         f"{target}: edge target mismatch {edge.target_language!r}"
                     )
                 self._validate_edge(edge, language_to_family)
-                if edge.priority in seen_priorities[target]:
+                if edge.priority in priorities:
                     raise ValueError(f"{target}: duplicate donor priority")
-                seen_priorities[target].add(edge.priority)
+                if edge.adapter.adapter_id in adapter_ids:
+                    raise ValueError(
+                        f"duplicate adapter_id {edge.adapter.adapter_id!r}"
+                    )
+                priorities.add(edge.priority)
+                adapter_ids.add(edge.adapter.adapter_id)
                 donors.append(edge.donor_language)
             adjacency[target] = tuple(donors)
         self._reject_cycles(adjacency)
@@ -270,8 +352,8 @@ class FamilyTransferConfig:
                 family_by_language[language] = family
         return family_by_language
 
+    @staticmethod
     def _validate_edge(
-        self,
         edge: TransferEdge,
         language_to_family: Mapping[str, LanguageFamily],
     ) -> None:
@@ -293,11 +375,10 @@ class FamilyTransferConfig:
                 f"is in family {donor_family.family_id!r}, not "
                 f"{target_family.family_id!r}"
             )
-        license_name = edge.adapter.license.casefold()
-        if license_name not in PERMISSIVE_ADAPTER_LICENSES:
+        if edge.adapter.license not in PERMISSIVE_ADAPTER_LICENSES:
             raise ValueError(
-                f"{edge.adapter.adapter_id}: adapter license {license_name!r} "
-                "is not permissive"
+                f"{edge.adapter.adapter_id}: adapter license "
+                f"{edge.adapter.license!r} is not permissive"
             )
         if not edge.adapter.offline_runnable:
             raise ValueError(
@@ -325,179 +406,180 @@ class FamilyTransferConfig:
             visit(language, ())
 
 
-def _metadata(adapter_id: str, provenance: str) -> AdapterMetadata:
-    return AdapterMetadata(adapter_id=adapter_id, provenance=provenance)
-
-
-DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = {
-    "germanic": LanguageFamily(
-        family_id="germanic",
-        display_name="Germanic",
-        languages=("en", "de", "nl"),
-        scripts=("Latin",),
-        high_resource_languages=("en", "de"),
-        notes="Clinical PII models share Latin-script formatting and name patterns.",
-    ),
-    "romance": LanguageFamily(
-        family_id="romance",
-        display_name="Romance",
-        languages=("es", "fr", "it", "pt"),
-        scripts=("Latin",),
-        high_resource_languages=("es", "fr"),
-        notes="Sibling donors share Latin-script demographics and date conventions.",
-    ),
-    "indic": LanguageFamily(
-        family_id="indic",
-        display_name="Indic",
-        languages=("hi", "te"),
-        scripts=("Devanagari", "Telugu"),
-        high_resource_languages=("hi",),
-        notes="Hindi is the donor for Telugu adapter initialization and fallback.",
-    ),
-    "semitic": LanguageFamily(
-        family_id="semitic",
-        display_name="Semitic",
-        languages=("ar", "he"),
-        scripts=("Arabic", "Hebrew"),
-        high_resource_languages=("ar",),
-        notes="Right-to-left clinical text requires explicit adapter metadata.",
-    ),
-    "japonic": LanguageFamily(
-        family_id="japonic",
-        display_name="Japonic",
-        languages=("ja",),
-        scripts=("Han", "Hiragana", "Katakana"),
-        high_resource_languages=("ja",),
-    ),
-    "turkic": LanguageFamily(
-        family_id="turkic",
-        display_name="Turkic",
-        languages=("tr",),
-        scripts=("Latin",),
-        high_resource_languages=("tr",),
-    ),
-    "austronesian": LanguageFamily(
-        family_id="austronesian",
-        display_name="Austronesian",
-        languages=("id",),
-        scripts=("Latin",),
-        high_resource_languages=(),
-    ),
-    "tai-kadai": LanguageFamily(
-        family_id="tai-kadai",
-        display_name="Tai-Kadai",
-        languages=("th",),
-        scripts=("Thai",),
-        high_resource_languages=(),
-    ),
-}
-
-DEFAULT_TRANSFER_GRAPH: Mapping[str, tuple[TransferEdge, ...]] = {
-    "nl": (
-        TransferEdge(
-            target_language="nl",
-            donor_language="de",
+DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = MappingProxyType(
+    {
+        "germanic": LanguageFamily(
             family_id="germanic",
-            adapter=_metadata(
-                "family-transfer/germanic-de-to-nl",
-                "planned German-to-Dutch clinical PII adapter metadata",
-            ),
-            priority=1,
-            expected_f1_floor=0.80,
+            display_name="Germanic",
+            languages=("da", "de", "en", "nl", "no", "sv"),
+            scripts=("Latin",),
+            high_resource_languages=("de", "en"),
         ),
-        TransferEdge(
-            target_language="nl",
-            donor_language="en",
-            family_id="germanic",
-            adapter=_metadata(
-                "family-transfer/germanic-en-to-nl",
-                "planned English-to-Dutch clinical PII adapter metadata",
-            ),
-            priority=2,
-        ),
-    ),
-    "it": (
-        TransferEdge(
-            target_language="it",
-            donor_language="es",
+        "romance": LanguageFamily(
             family_id="romance",
-            adapter=_metadata(
-                "family-transfer/romance-es-to-it",
-                "planned Spanish-to-Italian clinical PII adapter metadata",
-            ),
-            priority=1,
-            expected_f1_floor=0.80,
+            display_name="Romance",
+            languages=("es", "fr", "it", "pt", "ro"),
+            scripts=("Latin",),
+            high_resource_languages=("es", "fr"),
         ),
-        TransferEdge(
-            target_language="it",
-            donor_language="fr",
-            family_id="romance",
-            adapter=_metadata(
-                "family-transfer/romance-fr-to-it",
-                "planned French-to-Italian clinical PII adapter metadata",
-            ),
-            priority=2,
-        ),
-    ),
-    "pt": (
-        TransferEdge(
-            target_language="pt",
-            donor_language="es",
-            family_id="romance",
-            adapter=_metadata(
-                "family-transfer/romance-es-to-pt",
-                "planned Spanish-to-Portuguese clinical PII adapter metadata",
-            ),
-            priority=1,
-            expected_f1_floor=0.80,
-        ),
-        TransferEdge(
-            target_language="pt",
-            donor_language="fr",
-            family_id="romance",
-            adapter=_metadata(
-                "family-transfer/romance-fr-to-pt",
-                "planned French-to-Portuguese clinical PII adapter metadata",
-            ),
-            priority=2,
-        ),
-        TransferEdge(
-            target_language="pt",
-            donor_language="it",
-            family_id="romance",
-            adapter=_metadata(
-                "family-transfer/romance-it-to-pt",
-                "planned Italian-to-Portuguese clinical PII adapter metadata",
-            ),
-            priority=3,
-        ),
-    ),
-    "te": (
-        TransferEdge(
-            target_language="te",
-            donor_language="hi",
+        "indic": LanguageFamily(
             family_id="indic",
-            adapter=_metadata(
-                "family-transfer/indic-hi-to-te",
-                "planned Hindi-to-Telugu clinical PII adapter metadata",
+            display_name="Indic transfer group",
+            languages=("as", "bn", "hi", "mr", "or", "ta", "te"),
+            scripts=("Bengali", "Devanagari", "Odia", "Tamil", "Telugu"),
+            high_resource_languages=("bn", "hi"),
+            notes=(
+                "Operational South Asian transfer group spanning Indo-Aryan and "
+                "Dravidian languages."
             ),
-            priority=1,
-            expected_f1_floor=0.80,
         ),
-    ),
-    "he": (
-        TransferEdge(
-            target_language="he",
-            donor_language="ar",
+        "semitic": LanguageFamily(
             family_id="semitic",
-            adapter=_metadata(
-                "family-transfer/semitic-ar-to-he",
-                "planned Arabic-to-Hebrew clinical PII adapter metadata",
-            ),
-            priority=1,
+            display_name="Semitic",
+            languages=("am", "ar", "he"),
+            scripts=("Arabic", "Ethiopic", "Hebrew"),
+            high_resource_languages=("ar",),
         ),
-    ),
-}
+        "slavic": LanguageFamily(
+            family_id="slavic",
+            display_name="Slavic",
+            languages=("cs", "ru", "uk"),
+            scripts=("Cyrillic", "Latin"),
+            high_resource_languages=("ru",),
+        ),
+        "bantu": LanguageFamily(
+            family_id="bantu",
+            display_name="Bantu",
+            languages=("sw", "xh", "zu"),
+            scripts=("Latin",),
+            high_resource_languages=("sw",),
+        ),
+        "hellenic": LanguageFamily(
+            family_id="hellenic",
+            display_name="Hellenic",
+            languages=("el",),
+            scripts=("Greek",),
+        ),
+        "austronesian": LanguageFamily(
+            family_id="austronesian",
+            display_name="Austronesian",
+            languages=("id",),
+            scripts=("Latin",),
+        ),
+        "japonic": LanguageFamily(
+            family_id="japonic",
+            display_name="Japonic",
+            languages=("ja",),
+            scripts=("Han", "Hiragana/Katakana"),
+            high_resource_languages=("ja",),
+        ),
+        "koreanic": LanguageFamily(
+            family_id="koreanic",
+            display_name="Koreanic",
+            languages=("ko",),
+            scripts=("Hangul",),
+            high_resource_languages=("ko",),
+        ),
+        "sinitic": LanguageFamily(
+            family_id="sinitic",
+            display_name="Sinitic",
+            languages=("zh",),
+            scripts=("Han",),
+            high_resource_languages=("zh",),
+        ),
+        "tai-kadai": LanguageFamily(
+            family_id="tai-kadai",
+            display_name="Tai-Kadai",
+            languages=("th",),
+            scripts=("Thai",),
+        ),
+        "turkic": LanguageFamily(
+            family_id="turkic",
+            display_name="Turkic",
+            languages=("tr",),
+            scripts=("Latin",),
+            high_resource_languages=("tr",),
+        ),
+    }
+)
+
+
+def _edge(
+    target: str,
+    donor: str,
+    family_id: str,
+    priority: int,
+    *,
+    expected_f1_floor: float | None = None,
+) -> TransferEdge:
+    adapter_id = f"family-transfer/{family_id}-{donor}-to-{target}"
+    provenance = (
+        f"OpenMed built-in planning metadata for {donor}-to-{target} clinical "
+        "PII transfer; no model weights are bundled."
+    )
+    return TransferEdge(
+        target_language=target,
+        donor_language=donor,
+        family_id=family_id,
+        adapter=AdapterMetadata(
+            adapter_id=adapter_id,
+            provenance=provenance,
+        ),
+        priority=priority,
+        expected_f1_floor=expected_f1_floor,
+    )
+
+
+DEFAULT_TRANSFER_GRAPH: Mapping[str, tuple[TransferEdge, ...]] = MappingProxyType(
+    {
+        "am": (_edge("am", "ar", "semitic", 1),),
+        "as": (_edge("as", "bn", "indic", 1),),
+        "cs": (
+            _edge("cs", "uk", "slavic", 1),
+            _edge("cs", "ru", "slavic", 2),
+        ),
+        "da": (
+            _edge("da", "no", "germanic", 1),
+            _edge("da", "sv", "germanic", 2),
+        ),
+        "he": (_edge("he", "ar", "semitic", 1),),
+        "it": (
+            _edge("it", "es", "romance", 1, expected_f1_floor=0.80),
+            _edge("it", "fr", "romance", 2),
+        ),
+        "mr": (_edge("mr", "hi", "indic", 1),),
+        "nl": (
+            _edge("nl", "de", "germanic", 1, expected_f1_floor=0.80),
+            _edge("nl", "en", "germanic", 2),
+        ),
+        "no": (_edge("no", "sv", "germanic", 1),),
+        "or": (
+            _edge("or", "hi", "indic", 1),
+            _edge("or", "bn", "indic", 2),
+        ),
+        "pt": (
+            _edge("pt", "es", "romance", 1, expected_f1_floor=0.80),
+            _edge("pt", "fr", "romance", 2),
+            _edge("pt", "it", "romance", 3),
+        ),
+        "ro": (
+            _edge("ro", "it", "romance", 1),
+            _edge("ro", "es", "romance", 2),
+            _edge("ro", "fr", "romance", 3),
+        ),
+        "ta": (
+            _edge("ta", "te", "indic", 1),
+            _edge("ta", "hi", "indic", 2),
+        ),
+        "te": (_edge("te", "hi", "indic", 1, expected_f1_floor=0.80),),
+        "uk": (_edge("uk", "ru", "slavic", 1),),
+        "xh": (
+            _edge("xh", "zu", "bantu", 1),
+            _edge("xh", "sw", "bantu", 2),
+        ),
+        "zu": (_edge("zu", "sw", "bantu", 1),),
+    }
+)
 
 DEFAULT_FAMILY_TRANSFER_CONFIG = FamilyTransferConfig(
     families=DEFAULT_LANGUAGE_FAMILIES,
@@ -506,6 +588,23 @@ DEFAULT_FAMILY_TRANSFER_CONFIG = FamilyTransferConfig(
 
 
 def get_family_transfer_config() -> FamilyTransferConfig:
-    """Return the committed default family-transfer config."""
+    """Return the committed, immutable, offline family-transfer config."""
 
     return DEFAULT_FAMILY_TRANSFER_CONFIG
+
+
+__all__ = [
+    "CLINICAL_ADAPTER_DISCLAIMER",
+    "DEFAULT_BACKBONE_MODEL_ID",
+    "DEFAULT_FAMILY_TRANSFER_CONFIG",
+    "DEFAULT_LANGUAGE_FAMILIES",
+    "DEFAULT_TRANSFER_GRAPH",
+    "PERMISSIVE_ADAPTER_LICENSES",
+    "AdapterMetadata",
+    "FamilyTransferConfig",
+    "FamilyTransferResolution",
+    "LanguageFamily",
+    "TransferEdge",
+    "get_family_transfer_config",
+    "normalize_language_code",
+]

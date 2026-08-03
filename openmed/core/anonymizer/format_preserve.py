@@ -148,6 +148,46 @@ def preserve_id_pattern(original: str, *, rng: Optional[random.Random] = None) -
     return "".join(out)
 
 
+_MASKED_AADHAAR_RE = re.compile(
+    r"^(?:X{4}|\*{4})[ -]?(?:X{4}|\*{4})[ -]?(?P<last_four>[0-9]{4})$",
+    re.IGNORECASE,
+)
+_AADHAAR_RE = re.compile(r"^(?:[2-9][0-9]{11}|[2-9][0-9]{3} [0-9]{4} [0-9]{4})$")
+
+
+def mask_aadhaar(original: str) -> str:
+    """Render an Aadhaar value in UIDAI's masked ``XXXX XXXX NNNN`` form.
+
+    The first eight digits are never returned. Already-masked values are
+    normalized to the same canonical form, which keeps repeated masking
+    idempotent.
+
+    Args:
+        original: A 12-digit Aadhaar surface, optionally in 4-4-4 display
+            form, or an already-masked Aadhaar value.
+
+    Returns:
+        The canonical masked Aadhaar surface containing only the last four
+        digits.
+
+    Raises:
+        ValueError: If ``original`` is not a supported Aadhaar surface.
+    """
+
+    candidate = original.strip()
+    masked_match = _MASKED_AADHAAR_RE.fullmatch(candidate)
+    if masked_match is not None:
+        return f"XXXX XXXX {masked_match.group('last_four')}"
+    if _AADHAAR_RE.fullmatch(candidate) is None:
+        raise ValueError("Aadhaar must use 12 digits or 4-4-4 spacing")
+    from ..pii_i18n import validate_aadhaar
+
+    if not validate_aadhaar(candidate):
+        raise ValueError("Aadhaar must have a valid Verhoeff checksum")
+    digits = candidate.replace(" ", "")
+    return f"XXXX XXXX {digits[-4:]}"
+
+
 def _different_digit(original: str, *, rng: random.Random) -> str:
     candidate = str(rng.randint(0, 8))
     if candidate >= original:
@@ -173,4 +213,5 @@ __all__ = [
     "preserve_date_format",
     "preserve_email_pattern",
     "preserve_id_pattern",
+    "mask_aadhaar",
 ]

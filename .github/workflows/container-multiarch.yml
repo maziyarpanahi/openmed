@@ -103,10 +103,66 @@ jobs:
           print(f"OpenMed {openmed.__version__} synthetic de-identification passed")
           PY
 
+  arm-latency:
+    name: ARM64 SMS latency budget
+    runs-on: ubuntu-24.04-arm
+    env:
+      ARM_LATENCY_MODEL: OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android
+      ARM_LATENCY_REVISION: 79f7db205869b1be4be23ac4f42aa95bdedc5aee
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Verify native ARM64 runner
+        shell: bash
+        run: test "$(uname -m)" = "aarch64"
+
+      - name: Install benchmark dependencies
+        run: python -m pip install -e ".[dev,onnx-runtime]"
+
+      - name: Verify intentionally slowed fixture fails the gate
+        run: >-
+          python -m pytest
+          tests/unit/eval/test_arm_latency.py::test_intentionally_slowed_fixture_trips_gate
+          -q
+
+      - name: Prefetch pinned INT8 model
+        shell: bash
+        run: |
+          hf download "$ARM_LATENCY_MODEL" \
+            model_int8.onnx config.json id2label.json tokenizer.json tokenizer_config.json \
+            --revision "$ARM_LATENCY_REVISION" \
+            --local-dir "$RUNNER_TEMP/openmed-pii-int8"
+
+      - name: Enforce offline SMS latency budget
+        env:
+          OPENMED_OFFLINE: "1"
+        shell: bash
+        run: |
+          openmed benchmark latency \
+            --model "$RUNNER_TEMP/openmed-pii-int8" \
+            --revision "$ARM_LATENCY_REVISION" \
+            --output arm-latency-report.json
+
+      - name: Upload ARM latency report
+        uses: actions/upload-artifact@v7
+        with:
+          name: arm-latency-report
+          path: arm-latency-report.json
+          if-no-files-found: error
+          retention-days: 90
+
   publish:
     name: Publish manifest list
     runs-on: ubuntu-latest
-    needs: smoke
+    needs:
+      - smoke
+      - arm-latency
     if: github.event_name != 'pull_request'
 
     steps:

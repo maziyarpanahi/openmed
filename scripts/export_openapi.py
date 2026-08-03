@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
 import openmed
 from openmed.service.app import create_app
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "docs" / "api" / "openapi.json"
 
 

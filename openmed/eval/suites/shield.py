@@ -7,12 +7,15 @@ No corpus rows are stored in this repository.
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any, Callable, Iterable, Mapping, Sequence
 from urllib.parse import quote
 from urllib.request import urlopen
 
+from openmed.core.audit import stable_hash
 from openmed.core.labels import (
     AGE,
     CANONICAL_LABELS,
@@ -24,8 +27,14 @@ from openmed.core.labels import (
     PHONE,
     URL,
 )
-from openmed.eval.harness import BenchmarkFixture
+from openmed.eval.cache import eval_code_hash, hash_fixture_set
+from openmed.eval.harness import (
+    BenchmarkFixture,
+    ModelRunner,
+    run_benchmark,
+)
 from openmed.eval.metrics import EvalSpan
+from openmed.eval.report import BenchmarkReport
 
 SHIELD = "shield"
 CORPUS_ROLE = "comparison"
@@ -55,6 +64,9 @@ SHIELD_LABEL_TO_CANONICAL: dict[str, str] = {
 }
 
 RowsLoader = Callable[[str, str, str], list[Mapping[str, Any]]]
+CheckpointManifest = Mapping[str, Any] | str | Path
+_SAFE_MANIFEST_REF = re.compile(r"[A-Za-z0-9._~:/?#@!$&()*+,;=%-]{1,2048}")
+_SAFE_SOURCE_REVISION = re.compile(r"[A-Za-z0-9._~:/@+-]{1,256}")
 
 
 @dataclass(frozen=True)
@@ -190,6 +202,119 @@ def fixtures_from_rows(
     return fixtures
 
 
+def run_clinical_phi_shield_benchmark(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    checkpoint_manifest: CheckpointManifest,
+    checkpoint_manifest_ref: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Benchmark the named clinical-PHI flagship as SHIELD comparison evidence.
+
+    The checkpoint manifest may be one JSON object, a list of model-manifest
+    rows, or a JSONL model manifest. ``checkpoint_manifest_ref`` is the stable
+    repository or publication link recorded in the report. Corpus text and raw
+    fixture identifiers are never copied into the resulting metadata.
+
+    Args:
+        fixtures: Public-sample SHIELD fixtures loaded by reference. Tests may
+            supply synthetic SHIELD-shaped rows through :func:`fixtures_from_rows`.
+        checkpoint_manifest: Checkpoint metadata or a path containing it.
+        checkpoint_manifest_ref: Stable link to the committed or published
+            checkpoint manifest.
+        device: Device label recorded in the benchmark report.
+        runner: Optional model runner; defaults to the standard eval runner.
+        generated_at: Optional caller-supplied report timestamp.
+
+    Returns:
+        A ``BenchmarkReport`` with explicit aggregate and per-label SHIELD
+        comparison metrics plus reproducibility metadata.
+
+    Raises:
+        ValueError: If the checkpoint or fixtures do not identify the named
+            flagship and public SHIELD comparison source.
+    """
+
+    from openmed.eval.datasets.clinical_phi import (
+        CLINICAL_PHI_MANIFEST_ID,
+        CLINICAL_PHI_MANIFEST_REF,
+        CLINICAL_PRIVACY_MODEL_ID,
+        clinical_phi_manifest_hash,
+        load_clinical_phi_manifest,
+    )
+
+    if not fixtures:
+        raise ValueError("clinical PHI SHIELD benchmark requires fixtures")
+    _validate_public_sample_fixtures(fixtures)
+    manifest_ref = _validate_manifest_ref(checkpoint_manifest_ref)
+    checkpoint = _checkpoint_manifest_row(
+        checkpoint_manifest,
+        model_id=CLINICAL_PRIVACY_MODEL_ID,
+    )
+    checkpoint_metadata = _checkpoint_metadata(
+        checkpoint,
+        manifest_ref=manifest_ref,
+        model_id=CLINICAL_PRIVACY_MODEL_ID,
+    )
+
+    dataset_manifest = load_clinical_phi_manifest()
+    public_source = dataset_manifest.source("shield_public_sample")
+    metadata = shield_suite_metadata()
+    metadata.update(
+        {
+            "benchmark_domain": "clinical_phi",
+            "checkpoint_manifest": checkpoint_metadata,
+            "comparison_evidence_only": True,
+            "dataset_manifest": {
+                "manifest_hash": clinical_phi_manifest_hash(dataset_manifest),
+                "manifest_id": CLINICAL_PHI_MANIFEST_ID,
+                "manifest_ref": CLINICAL_PHI_MANIFEST_REF,
+            },
+            "fixture_ids": [
+                _sha256_value(stable_hash({"fixture_id": fixture.fixture_id}))
+                for fixture in fixtures
+            ],
+            "public_corpus_reference": {
+                "dataset": public_source.dataset,
+                "license_id": public_source.license_id,
+                "loader_ref": public_source.loader_ref,
+                "redistribution": public_source.redistribution,
+                "source_id": public_source.source_id,
+                "source_url": public_source.source_url,
+                "split": public_source.split,
+            },
+            "reproducibility": {
+                "eval_code_hash": _sha256_value(
+                    eval_code_hash(
+                        (
+                            "openmed.eval.harness",
+                            "openmed.eval.metrics",
+                            "openmed.eval.suites.shield",
+                        )
+                    )
+                ),
+                "fixture_set_hash": _sha256_value(hash_fixture_set(fixtures)),
+                "runner_ref": ("openmed.eval.suites:run_clinical_phi_shield_benchmark"),
+            },
+        }
+    )
+
+    report = run_benchmark(
+        fixtures,
+        suite=SHIELD,
+        model_name=CLINICAL_PRIVACY_MODEL_ID,
+        device=device,
+        runner=runner,
+        generated_at=generated_at,
+        metadata=metadata,
+    )
+    metrics = dict(report.metrics)
+    metrics["shield_comparison"] = _shield_comparison_metrics(metrics)
+    return replace(report, metrics=metrics)
+
+
 def _span_from_row(row: Mapping[str, Any], *, text: str) -> EvalSpan:
     raw_label = str(row.get("span_label", ""))
     canonical_label = map_shield_label(raw_label)
@@ -211,6 +336,157 @@ def _span_from_row(row: Mapping[str, Any], *, text: str) -> EvalSpan:
             "span_id": str(row.get("span_id") or ""),
         },
     )
+
+
+def _checkpoint_manifest_row(
+    checkpoint_manifest: CheckpointManifest,
+    *,
+    model_id: str,
+) -> Mapping[str, Any]:
+    if isinstance(checkpoint_manifest, Mapping):
+        payload: Any = checkpoint_manifest
+    else:
+        path = Path(checkpoint_manifest)
+        try:
+            contents = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"failed to read checkpoint manifest: {path}") from exc
+        try:
+            payload = json.loads(contents)
+        except json.JSONDecodeError:
+            try:
+                payload = [
+                    json.loads(line) for line in contents.splitlines() if line.strip()
+                ]
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"checkpoint manifest is not valid JSON or JSONL: {path}"
+                ) from exc
+
+    if isinstance(payload, Mapping):
+        nested = payload.get("models") or payload.get("checkpoints")
+        rows: Sequence[Any] = (
+            nested
+            if isinstance(nested, Sequence) and not isinstance(nested, (str, bytes))
+            else (payload,)
+        )
+    elif isinstance(payload, Sequence) and not isinstance(payload, (str, bytes)):
+        rows = payload
+    else:
+        raise ValueError("checkpoint manifest must contain model metadata")
+
+    matches = [
+        row
+        for row in rows
+        if isinstance(row, Mapping)
+        and str(row.get("model_id") or row.get("repo_id") or "") == model_id
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            "checkpoint manifest must contain exactly one "
+            f"{model_id!r} row; found {len(matches)}"
+        )
+    return matches[0]
+
+
+def _checkpoint_metadata(
+    checkpoint: Mapping[str, Any],
+    *,
+    manifest_ref: str,
+    model_id: str,
+) -> dict[str, str]:
+    metadata = {
+        "manifest_content_hash": _sha256_value(stable_hash(checkpoint)),
+        "manifest_ref": manifest_ref,
+        "model_id": model_id,
+    }
+    reproducibility_hash = checkpoint.get("reproducibility_hash")
+    if reproducibility_hash is not None:
+        value = str(reproducibility_hash)
+        if not _is_sha256(value):
+            raise ValueError(
+                "checkpoint reproducibility_hash must be sha256:<64 lowercase hex>"
+            )
+        metadata["reproducibility_hash"] = value
+
+    provenance = checkpoint.get("provenance")
+    source_revision = checkpoint.get("source_revision")
+    if source_revision is None and isinstance(provenance, Mapping):
+        source_revision = provenance.get("source_revision")
+    if source_revision is not None:
+        revision = str(source_revision)
+        if _SAFE_SOURCE_REVISION.fullmatch(revision) is None:
+            raise ValueError("checkpoint source_revision must be a safe revision id")
+        metadata["source_revision"] = revision
+    return metadata
+
+
+def _shield_comparison_metrics(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    recall = metrics.get("recall_slices")
+    leakage = metrics.get("leakage")
+    exact = metrics.get("exact_span_f1")
+    if not all(isinstance(value, Mapping) for value in (recall, leakage, exact)):
+        raise ValueError(
+            "SHIELD benchmark lacks required recall, leakage, or F1 metrics"
+        )
+
+    labels = sorted(set(SHIELD_LABEL_TO_CANONICAL.values()))
+    recall_by_label = recall.get("by_label")
+    leakage_by_label = leakage.get("by_label")
+    if not isinstance(recall_by_label, Mapping) or not isinstance(
+        leakage_by_label, Mapping
+    ):
+        raise ValueError("SHIELD benchmark lacks per-label recall or leakage")
+
+    return {
+        "aggregate": {
+            "exact_span_f1": float(exact["f1"]),
+            "exact_span_precision": float(exact["precision"]),
+            "exact_span_recall": float(exact["recall"]),
+            "leakage": float(leakage["overall"]),
+            "recall": float(recall["overall"]),
+        },
+        "by_label": {
+            label: {
+                "leakage": float(leakage_by_label[label]),
+                "recall": float(recall_by_label[label]),
+            }
+            for label in labels
+        },
+        "evidence_role": "comparison",
+        "high_recall_release_gate": False,
+    }
+
+
+def _validate_public_sample_fixtures(fixtures: Sequence[BenchmarkFixture]) -> None:
+    for fixture in fixtures:
+        repository = str(fixture.metadata.get("repository") or "")
+        variant = str(fixture.metadata.get("variant") or "")
+        if repository != PUBLIC_SAMPLE_REPOSITORY or variant != "public_sample":
+            raise ValueError(
+                "clinical PHI SHIELD benchmark requires public-sample fixtures"
+            )
+
+
+def _validate_manifest_ref(value: str) -> str:
+    reference = str(value).strip()
+    if _SAFE_MANIFEST_REF.fullmatch(reference) is None:
+        raise ValueError("checkpoint_manifest_ref must be a safe repository link")
+    return reference
+
+
+def _is_sha256(value: str) -> bool:
+    prefix = "sha256:"
+    digest = value.removeprefix(prefix)
+    return (
+        value.startswith(prefix)
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+    )
+
+
+def _sha256_value(value: str) -> str:
+    return value if value.startswith("sha256:") else f"sha256:{value}"
 
 
 def _load_dataset_rows(
@@ -308,4 +584,5 @@ __all__ = [
     "shield_suite_metadata",
     "load_shield_fixtures",
     "fixtures_from_rows",
+    "run_clinical_phi_shield_benchmark",
 ]
