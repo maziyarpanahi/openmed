@@ -1,13 +1,15 @@
-"""Typed medication relation candidate schema."""
+"""Relation candidate schemas and script-agnostic candidate construction."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Literal
 
-from openmed.core.decoding.spans import stable_span_key
+from openmed.core.decoding import SpanEdge, SpanNode
+from openmed.core.labels import normalize_label
 from openmed.processing.advanced_ner import EntitySpan
 
 MedicationAttributeType = Literal["dose", "route", "frequency", "duration"]
@@ -40,13 +42,6 @@ ATTRIBUTE_RELATION_TYPES: dict[MedicationAttributeType, MedicationRelationType] 
     attribute_type: relation_type
     for relation_type, attribute_type in RELATION_ATTRIBUTE_TYPES.items()
 }
-SpanLabelPredicate = Callable[[str], bool]
-
-
-def normalize_relation_label(label: str) -> str:
-    """Return a stable normalized label for relation candidate filtering."""
-
-    return re.sub(r"[^a-z0-9]+", "_", label.casefold()).strip("_")
 
 
 @dataclass(frozen=True)
@@ -105,142 +100,240 @@ class SpanReference:
 
 
 @dataclass(frozen=True)
-class SpanPairCandidate:
-    """Ordered span pair shared by deterministic relation extractors."""
+class RelationCandidateRule:
+    """Language-specific rule used to construct typed relation candidates.
 
-    left: SpanReference
-    right: SpanReference
-    char_distance: int
-    intervening_span_count: int
-
-    def stable_key(self) -> tuple[int, int, int, int]:
-        """Return a deterministic sort key for the span pair."""
-
-        return (
-            self.left.start,
-            self.right.start,
-            self.left.end,
-            self.right.end,
-        )
-
-
-def generate_span_pair_candidates(
-    text: str,
-    spans: Iterable[EntitySpan | Mapping[str, Any]],
-    *,
-    include_labels: Iterable[str] | None = None,
-    label_predicate: SpanLabelPredicate | None = None,
-    max_char_distance: int | None = None,
-    section_by_span: Mapping[tuple[int, int], str] | None = None,
-) -> tuple[SpanPairCandidate, ...]:
-    """Generate ordered non-overlapping span pairs for relation extractors.
-
-    Args:
-        text: Original document text.
-        spans: Entity spans as ``EntitySpan`` objects or mappings.
-        include_labels: Optional case-insensitive label allow-list.
-        label_predicate: Optional predicate evaluated against raw span labels.
-        max_char_distance: Optional maximum character gap between spans.
-        section_by_span: Optional section labels keyed by ``(start, end)``.
-
-    Returns:
-        Deterministically ordered span-pair candidates with distance features.
+    Candidate construction operates only on source character offsets and cue
+    substrings. It intentionally does not tokenize on whitespace, which keeps
+    the same path valid for Chinese and Indic scripts.
     """
 
-    refs = _coerce_relation_spans(
-        text,
-        spans,
-        include_labels=include_labels,
-        label_predicate=label_predicate,
-        section_by_span=section_by_span,
-    )
-    pairs: list[SpanPairCandidate] = []
-    for left_index, left in enumerate(refs):
-        for right in refs[left_index + 1 :]:
-            if left.end > right.start:
-                continue
-            char_distance = max(0, right.start - left.end)
-            if max_char_distance is not None and char_distance > max_char_distance:
-                continue
-            pairs.append(
-                SpanPairCandidate(
-                    left=left,
-                    right=right,
-                    char_distance=char_distance,
-                    intervening_span_count=_intervening_pair_span_count(
-                        left,
-                        right,
-                        refs,
-                    ),
-                )
+    relation_type: str
+    source_relation: str
+    head_labels: frozenset[str]
+    tail_labels: frozenset[str]
+    cues: tuple[str, ...]
+    max_character_distance: int = 96
+
+    def __post_init__(self) -> None:
+        if not self.relation_type:
+            raise ValueError("relation_type must be non-empty")
+        if not self.source_relation:
+            raise ValueError("source_relation must be non-empty")
+        if not self.head_labels or not self.tail_labels:
+            raise ValueError("relation rules require head and tail labels")
+        if not self.cues:
+            raise ValueError("relation rules require at least one cue")
+        if self.max_character_distance < 0:
+            raise ValueError("max_character_distance must be non-negative")
+
+
+@dataclass(frozen=True)
+class RelationCandidateBatch:
+    """Span-graph inputs produced from already-extracted NER spans."""
+
+    nodes: tuple[SpanNode, ...]
+    candidates: tuple[SpanEdge, ...]
+    spans_by_node_id: Mapping[str, SpanReference]
+
+
+@dataclass(frozen=True)
+class _MatchedCue:
+    cue: str
+    start: int
+    end: int
+
+
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?。！？；;\n]")
+
+
+def build_relation_candidates(
+    text: str,
+    spans: Iterable[Any],
+    rules: Iterable[RelationCandidateRule],
+    *,
+    language: str,
+) -> RelationCandidateBatch:
+    """Build graph candidates from existing spans without word tokenization.
+
+    Args:
+        text: Original clinical text.
+        spans: Existing NER spans with character offsets into ``text``.
+        rules: Language-keyed relation rules.
+        language: Language code recorded as safe graph provenance.
+
+    Returns:
+        Nodes, candidate edges, and the stable node-to-span lookup used by the
+        shared :func:`openmed.core.decoding.decode_span_graph` decoder.
+    """
+
+    references = _coerce_relation_spans(text, spans)
+    nodes: list[SpanNode] = []
+    spans_by_node_id: dict[str, SpanReference] = {}
+    for index, reference in enumerate(references):
+        node_id = f"span-{index}"
+        spans_by_node_id[node_id] = reference
+        nodes.append(
+            SpanNode(
+                node_id=node_id,
+                start=reference.start,
+                end=reference.end,
+                label=normalize_label(reference.label),
+                score=reference.score,
+                metadata={"language": language},
             )
-    return tuple(sorted(pairs, key=lambda pair: pair.stable_key()))
+        )
+
+    candidates: list[SpanEdge] = []
+    ordered_rules = sorted(
+        rules,
+        key=lambda rule: (rule.relation_type, rule.source_relation),
+    )
+    for head_node in nodes:
+        for tail_node in nodes:
+            if head_node.node_id == tail_node.node_id:
+                continue
+            head = spans_by_node_id[head_node.node_id]
+            tail = spans_by_node_id[tail_node.node_id]
+            distance = _character_distance(head, tail)
+            between = _text_between(text, head, tail)
+            if _SENTENCE_BOUNDARY_RE.search(between):
+                continue
+            window_start = min(head.start, tail.start)
+            window = text[window_start : max(head.end, tail.end)]
+            for rule in ordered_rules:
+                if head_node.label not in rule.head_labels:
+                    continue
+                if tail_node.label not in rule.tail_labels:
+                    continue
+                if distance > rule.max_character_distance:
+                    continue
+                matched_cue = _matched_cue(window, rule.cues)
+                if matched_cue is None:
+                    continue
+                candidates.append(
+                    SpanEdge(
+                        head=head_node.node_id,
+                        tail=tail_node.node_id,
+                        label=rule.relation_type,
+                        score=_candidate_score(head, tail, distance),
+                        metadata={
+                            "character_distance": distance,
+                            "cue_end": window_start + matched_cue.end,
+                            "cue_start": window_start + matched_cue.start,
+                            "language": language,
+                            "matched_cue": matched_cue.cue,
+                            "source_relation": rule.source_relation,
+                        },
+                    )
+                )
+
+    return RelationCandidateBatch(
+        nodes=tuple(nodes),
+        candidates=tuple(
+            sorted(
+                candidates,
+                key=lambda edge: (edge.label, edge.head, edge.tail, -edge.score),
+            )
+        ),
+        spans_by_node_id=MappingProxyType(spans_by_node_id),
+    )
 
 
 def _coerce_relation_spans(
     text: str,
-    spans: Iterable[EntitySpan | Mapping[str, Any]],
-    *,
-    include_labels: Iterable[str] | None,
-    label_predicate: SpanLabelPredicate | None,
-    section_by_span: Mapping[tuple[int, int], str] | None,
+    spans: Iterable[Any],
 ) -> tuple[SpanReference, ...]:
-    section_by_span = section_by_span or {}
-    normalized_labels = (
-        {normalize_relation_label(label) for label in include_labels}
-        if include_labels is not None
-        else None
-    )
-    refs: list[SpanReference] = []
+    references: list[SpanReference] = []
     for item in spans:
-        span = item if isinstance(item, EntitySpan) else EntitySpan.from_mapping(item)
-        if span.start < 0 or span.end < span.start or span.end > len(text):
+        if isinstance(item, SpanReference):
+            start = item.start
+            end = item.end
+            label = item.label
+            score = item.score
+            section = item.section
+        elif isinstance(item, EntitySpan):
+            start = item.start
+            end = item.end
+            label = item.label
+            score = item.score
+            section = None
+        else:
+            data = item if isinstance(item, Mapping) else vars(item)
+            metadata = data.get("metadata") or {}
+            if not isinstance(metadata, Mapping):
+                metadata = {}
+            start = int(data.get("start", data.get("start_char", -1)))
+            end = int(data.get("end", data.get("end_char", -1)))
+            label = str(data.get("label", data.get("entity", "")))
+            score = float(data.get("score", metadata.get("confidence", 1.0)))
+            raw_section = data.get("section", metadata.get("section"))
+            section = None if raw_section is None else str(raw_section)
+        if not label or start < 0 or end <= start or end > len(text):
             continue
-        if normalized_labels is not None and (
-            normalize_relation_label(span.label) not in normalized_labels
-        ):
-            continue
-        if label_predicate is not None and not label_predicate(span.label):
-            continue
-        refs.append(
-            SpanReference.from_entity(
-                span,
-                document_text=text,
-                section=_relation_span_section(
-                    item,
-                    span=span,
-                    section_by_span=section_by_span,
-                ),
+        references.append(
+            SpanReference(
+                text=text[start:end],
+                label=str(label),
+                start=start,
+                end=end,
+                score=float(score),
+                section=section,
             )
         )
-    return tuple(sorted(refs, key=stable_span_key))
+
+    unique = {
+        (reference.start, reference.end, normalize_label(reference.label)): reference
+        for reference in references
+    }
+    return tuple(
+        sorted(
+            unique.values(),
+            key=lambda reference: (
+                reference.start,
+                reference.end,
+                normalize_label(reference.label),
+            ),
+        )
+    )
 
 
-def _relation_span_section(
-    item: EntitySpan | Mapping[str, Any],
-    *,
-    span: EntitySpan,
-    section_by_span: Mapping[tuple[int, int], str],
-) -> str | None:
-    if isinstance(item, Mapping):
-        section = item.get("section")
-        if section is not None:
-            return str(section)
-    return section_by_span.get((span.start, span.end))
-
-
-def _intervening_pair_span_count(
+def _text_between(
+    text: str,
     left: SpanReference,
     right: SpanReference,
-    spans: tuple[SpanReference, ...],
-) -> int:
-    return sum(
-        1
-        for span in spans
-        if span.offset_key() not in {left.offset_key(), right.offset_key()}
-        and left.end <= span.start
-        and span.end <= right.start
-    )
+) -> str:
+    if left.end <= right.start:
+        return text[left.end : right.start]
+    if right.end <= left.start:
+        return text[right.end : left.start]
+    return ""
+
+
+def _character_distance(left: SpanReference, right: SpanReference) -> int:
+    if left.end <= right.start:
+        return right.start - left.end
+    if right.end <= left.start:
+        return left.start - right.end
+    return 0
+
+
+def _matched_cue(window: str, cues: tuple[str, ...]) -> _MatchedCue | None:
+    for cue in sorted(cues, key=lambda value: (-len(value), value)):
+        match = re.search(re.escape(cue), window, flags=re.IGNORECASE)
+        if match is not None:
+            return _MatchedCue(cue=cue, start=match.start(), end=match.end())
+    return None
+
+
+def _candidate_score(
+    head: SpanReference,
+    tail: SpanReference,
+    distance: int,
+) -> float:
+    entity_confidence = max(0.0, min((head.score + tail.score) / 2.0, 1.0))
+    proximity = 1.0 / (1.0 + float(distance))
+    return round(0.65 + 0.2 * entity_confidence + 0.15 * proximity, 6)
 
 
 @dataclass(frozen=True)
@@ -301,6 +394,7 @@ class MedicationRelation:
     confidence: float
     features: dict[str, float]
     normalized: dict[str, Any] | None = None
+    coreference: CoreferenceProvenance | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic dictionary representation."""
@@ -321,7 +415,73 @@ class MedicationRelation:
         }
         if self.normalized is not None:
             payload["normalized"] = dict(self.normalized)
+        if self.coreference is not None:
+            payload["coreference"] = self.coreference.to_dict()
         return payload
+
+
+@dataclass(frozen=True)
+class CoreferenceSourceReference:
+    """Privacy-safe source offsets and hash for one coreferent mention."""
+
+    start: int
+    end: int
+    text_hash: str
+
+    def __post_init__(self) -> None:
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("coreference source offsets must satisfy 0 <= start < end")
+        if re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", self.text_hash) is None:
+            raise ValueError("coreference source text_hash must be an HMAC-SHA256 hash")
+
+    def to_dict(self) -> dict[str, int | str]:
+        """Return a JSON-compatible reference without raw source text."""
+
+        return {
+            "start": self.start,
+            "end": self.end,
+            "text_hash": self.text_hash,
+        }
+
+
+@dataclass(frozen=True)
+class CoreferenceProvenance:
+    """Document-local cluster identity and safe supporting mention evidence."""
+
+    cluster_id: str
+    representative: CoreferenceSourceReference
+    supporting_mentions: tuple[CoreferenceSourceReference, ...]
+
+    def __post_init__(self) -> None:
+        if not self.cluster_id:
+            raise ValueError("coreference cluster_id must be non-empty")
+        supporting_mentions = tuple(
+            sorted(
+                self.supporting_mentions,
+                key=lambda mention: (
+                    mention.start,
+                    mention.end,
+                    mention.text_hash,
+                ),
+            )
+        )
+        offsets = [(mention.start, mention.end) for mention in supporting_mentions]
+        if len(set(offsets)) != len(offsets):
+            raise ValueError("coreference supporting mention offsets must be unique")
+        if self.representative not in supporting_mentions:
+            raise ValueError("coreference representative must be a supporting mention")
+        object.__setattr__(self, "supporting_mentions", supporting_mentions)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return deterministic cluster provenance without mention surfaces."""
+
+        return {
+            "cluster_id": self.cluster_id,
+            "representative": self.representative.to_dict(),
+            "supporting_mentions": [
+                mention.to_dict() for mention in self.supporting_mentions
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -331,6 +491,7 @@ class MedicationRelationGroup:
     medication: SpanReference
     relations: tuple[MedicationRelation, ...]
     advisory: str
+    coreference: CoreferenceProvenance | None = None
 
     @property
     def attributes(self) -> dict[MedicationAttributeType, MedicationRelation]:
@@ -341,11 +502,14 @@ class MedicationRelationGroup:
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic dictionary representation."""
 
-        return {
+        payload: dict[str, Any] = {
             "medication": self.medication.to_dict(),
             "relations": [relation.to_dict() for relation in self.relations],
             "advisory": self.advisory,
         }
+        if self.coreference is not None:
+            payload["coreference"] = self.coreference.to_dict()
+        return payload
 
 
 __all__ = [
@@ -354,6 +518,8 @@ __all__ = [
     "DRUG_TO_DURATION",
     "DRUG_TO_FREQUENCY",
     "DRUG_TO_ROUTE",
+    "CoreferenceProvenance",
+    "CoreferenceSourceReference",
     "MedicationAttributeType",
     "MedicationRelation",
     "MedicationRelationGroup",
@@ -361,10 +527,9 @@ __all__ = [
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
+    "RelationCandidateBatch",
+    "RelationCandidateRule",
     "RelationCandidate",
-    "SpanLabelPredicate",
-    "SpanPairCandidate",
     "SpanReference",
-    "generate_span_pair_candidates",
-    "normalize_relation_label",
+    "build_relation_candidates",
 ]

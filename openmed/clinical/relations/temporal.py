@@ -1,20 +1,36 @@
-"""Deterministic temporal TLINK candidate extraction."""
+"""Deterministic, privacy-safe temporal TLINK candidate extraction.
+
+The extractor consumes existing EVENT and TIMEX spans and delegates span
+pairing and cue scoring to :func:`build_relation_candidates`. Returned
+candidates contain only typed labels, offsets, confidence values, and content
+hashes. Raw note or cue text is never retained in the public structures.
+"""
 
 from __future__ import annotations
 
-import hashlib
+import math
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from types import MappingProxyType
+from typing import Any, Literal, cast
 
+from openmed.core.audit import hash_text
+from openmed.core.decoding import (
+    SpanEdge,
+    SpanGraph,
+    SpanGraphConstraints,
+    SpanNode,
+    decode_span_graph,
+)
+from openmed.core.labels import normalize_label
 from openmed.processing.advanced_ner import EntitySpan
 
 from .candidate import (
-    SpanPairCandidate,
+    RelationCandidateBatch,
+    RelationCandidateRule,
     SpanReference,
-    generate_span_pair_candidates,
-    normalize_relation_label,
+    build_relation_candidates,
 )
 
 TemporalRelationType = Literal[
@@ -36,60 +52,63 @@ TEMPORAL_RELATION_TYPES: tuple[TemporalRelationType, ...] = (
     "ENDS_ON",
 )
 TEMPORAL_RELATION_SCHEMA_VERSION = 1
+TEMPORAL_GRAPH_SCHEMA_VERSION = 1
 
-_EVENT_LABELS = {
-    "condition",
-    "diagnosis",
-    "event",
-    "finding",
-    "medication_event",
-    "problem",
-    "procedure",
-    "symptom",
-}
-_TIMEX_LABELS = {
-    "date",
-    "duration",
-    "set",
-    "time",
-    "timex",
-    "timex3",
-    "temporal_expression",
-}
+_REDUCED_TEMPORAL_RELATION_TYPES = frozenset(
+    {"BEFORE", "OVERLAP", "CONTAINS", "BEGINS_ON", "ENDS_ON"}
+)
+_PARTIAL_ORDER_RELATION_TYPES = frozenset({"BEFORE", "CONTAINS"})
 
-_BEGINS_ON_RE = re.compile(
-    r"\b(?:began|begins|begin|started|starts|onset|onset\s+on|developed)\b"
-    r"(?:\s+\w+){0,2}?\s*(?:on|at|by)?\b",
-    re.IGNORECASE,
+_EVENT_LABEL_ALIASES = frozenset(
+    {
+        "CONDITION",
+        "DIAGNOSIS",
+        "EVENT",
+        "FINDING",
+        "MEDICATION_EVENT",
+        "PROBLEM",
+        "PROCEDURE",
+        "SYMPTOM",
+    }
 )
-_ENDS_ON_RE = re.compile(
-    r"\b(?:ended|ends|resolved|resolves|stopped|stops|completed|discontinued)\b"
-    r"(?:\s+\w+){0,2}?\s*(?:on|at|by)?\b",
-    re.IGNORECASE,
+_TIMEX_LABEL_ALIASES = frozenset(
+    {
+        "DATE",
+        "DURATION",
+        "SET",
+        "TEMPORAL_EXPRESSION",
+        "TIME",
+        "TIMEX",
+        "TIMEX3",
+    }
 )
-_BEFORE_RE = re.compile(r"\b(?:before|prior\s+to|preceding)\b", re.IGNORECASE)
-_AFTER_RE = re.compile(
-    r"\b(?:after|following|subsequent\s+to)\b",
-    re.IGNORECASE,
+_EVENT_LABELS = frozenset(normalize_label(label) for label in _EVENT_LABEL_ALIASES)
+_TIMEX_LABELS = frozenset(normalize_label(label) for label in _TIMEX_LABEL_ALIASES)
+_TEMPORAL_LABELS = _EVENT_LABELS | _TIMEX_LABELS
+
+_BEFORE_DIRECT = "before_direct"
+_AFTER_DIRECT = "after_direct"
+_OVERLAP_DIRECT = "overlap_direct"
+_CONTAINS_DIRECT = "contains_direct"
+_CONTAINS_REVERSE = "contains_reverse"
+_BEGINS_ON_DIRECT = "begins_on_direct"
+_ENDS_ON_DIRECT = "ends_on_direct"
+
+_DIRECT_RULES = frozenset(
+    {
+        _BEFORE_DIRECT,
+        _AFTER_DIRECT,
+        _OVERLAP_DIRECT,
+        _CONTAINS_DIRECT,
+        _BEGINS_ON_DIRECT,
+        _ENDS_ON_DIRECT,
+    }
 )
-_FOLLOWED_BY_RE = re.compile(r"\bfollowed\s+by\b", re.IGNORECASE)
-_PRECEDED_BY_RE = re.compile(r"\bpreceded\s+by\b", re.IGNORECASE)
-_OVERLAP_RE = re.compile(
-    r"\b(?:overlapped\s+with|overlaps?\s+with|concurrent\s+with|"
-    r"simultaneous\s+with|while|when|at\s+the\s+same\s+time\s+as)\b",
-    re.IGNORECASE,
-)
-_CONTAINS_RE = re.compile(
-    r"\b(?:contained|contains|included|includes)\b",
-    re.IGNORECASE,
-)
-_DURING_BETWEEN_RE = re.compile(r"\b(?:during|within)\b", re.IGNORECASE)
-_DURING_PREFIX_RE = re.compile(r"\b(?:during|within)\s+$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
 class TemporalSpanReference:
-    """PHI-safe reference to an event or TIMEX span."""
+    """Privacy-safe reference to one EVENT or TIMEX source span."""
 
     span_id: str
     label: str
@@ -99,8 +118,20 @@ class TemporalSpanReference:
     score: float
     text_hash: str
 
+    def __post_init__(self) -> None:
+        if not self.span_id or not self.label:
+            raise ValueError("temporal span id and label must be non-empty")
+        if self.role not in {"EVENT", "TIMEX"}:
+            raise ValueError("temporal span role must be EVENT or TIMEX")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("temporal span offsets must satisfy 0 <= start < end")
+        if not math.isfinite(float(self.score)):
+            raise ValueError("temporal span score must be finite")
+        if not self.text_hash.startswith("sha256:"):
+            raise ValueError("temporal span text_hash must be a SHA-256 hash")
+
     def to_dict(self) -> dict[str, Any]:
-        """Return a JSON-ready span reference without raw source text."""
+        """Return a JSON-compatible reference without raw source text."""
 
         return {
             "id": self.span_id,
@@ -115,15 +146,23 @@ class TemporalSpanReference:
 
 @dataclass(frozen=True)
 class TemporalCueReference:
-    """PHI-safe reference to the cue that supported a temporal relation."""
+    """Privacy-safe offsets and hash for the supporting temporal cue."""
 
-    category: str
+    category: TemporalRelationType
     start: int
     end: int
     text_hash: str
 
+    def __post_init__(self) -> None:
+        if self.category not in TEMPORAL_RELATION_TYPES:
+            raise ValueError("unsupported temporal cue category")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("temporal cue offsets must satisfy 0 <= start < end")
+        if not self.text_hash.startswith("sha256:"):
+            raise ValueError("temporal cue text_hash must be a SHA-256 hash")
+
     def to_dict(self) -> dict[str, Any]:
-        """Return a JSON-ready cue reference without raw source text."""
+        """Return a JSON-compatible cue reference without raw cue text."""
 
         return {
             "category": self.category,
@@ -135,7 +174,7 @@ class TemporalCueReference:
 
 @dataclass(frozen=True)
 class TemporalRelationCandidate:
-    """Typed directed TLINK candidate with privacy-preserving provenance."""
+    """Typed directed TLINK candidate with safe extraction provenance."""
 
     relation_type: TemporalRelationType
     source: TemporalSpanReference
@@ -145,8 +184,26 @@ class TemporalRelationCandidate:
     features: Mapping[str, float] = field(default_factory=dict)
     provenance: Mapping[str, Any] = field(default_factory=dict)
 
-    def stable_key(self) -> tuple[int, int, int, int, int]:
-        """Return a deterministic candidate ordering key."""
+    def __post_init__(self) -> None:
+        if self.relation_type not in TEMPORAL_RELATION_TYPES:
+            raise ValueError("unsupported temporal relation type")
+        if not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError("temporal relation confidence must be between 0 and 1")
+        object.__setattr__(
+            self,
+            "features",
+            MappingProxyType(
+                {key: float(value) for key, value in sorted(self.features.items())}
+            ),
+        )
+        object.__setattr__(
+            self,
+            "provenance",
+            MappingProxyType(dict(self.provenance)),
+        )
+
+    def stable_key(self) -> tuple[int, int, int, int, int, int, int]:
+        """Return the deterministic ordering key for this candidate."""
 
         return (
             self.source.start,
@@ -154,10 +211,12 @@ class TemporalRelationCandidate:
             TEMPORAL_RELATION_TYPES.index(self.relation_type),
             self.source.end,
             self.target.end,
+            self.cue.start,
+            self.cue.end,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a JSON-ready candidate without raw clinical text."""
+        """Return a JSON-compatible candidate without raw clinical text."""
 
         return {
             "relation_type": self.relation_type,
@@ -165,18 +224,9 @@ class TemporalRelationCandidate:
             "target": self.target.to_dict(),
             "confidence": self.confidence,
             "cue": self.cue.to_dict(),
-            "features": {key: self.features[key] for key in sorted(self.features)},
+            "features": dict(self.features),
             "provenance": dict(self.provenance),
         }
-
-
-@dataclass(frozen=True)
-class _ClassifiedPair:
-    relation_type: TemporalRelationType
-    source: SpanReference
-    target: SpanReference
-    cue_start: int
-    cue_end: int
 
 
 def extract_tlink_candidates(
@@ -184,158 +234,285 @@ def extract_tlink_candidates(
     spans: Iterable[EntitySpan | Mapping[str, Any]],
     *,
     max_char_distance: int | None = 240,
-    section_by_span: Mapping[tuple[int, int], str] | None = None,
 ) -> tuple[TemporalRelationCandidate, ...]:
-    """Extract typed directed temporal relation candidates.
+    """Extract typed directed EVENT-EVENT and EVENT-TIMEX candidates.
 
-    The extractor is deterministic and local-only. It emits EVENT-EVENT and
-    EVENT-TIMEX TLINK candidates with source/target offsets, hashes,
-    confidence, and cue provenance, but never returns raw note text.
+    Args:
+        text: Source document used only during in-memory extraction.
+        spans: Existing clinical spans with character offsets into ``text``.
+        max_char_distance: Maximum gap allowed between a candidate pair. Pass
+            ``None`` to allow any within-sentence distance.
+
+    Returns:
+        Stable TLINK candidates with offsets, labels, confidence, cue offsets,
+        and hashes. No returned object contains raw note or cue text.
     """
 
-    pairs = generate_span_pair_candidates(
+    if max_char_distance is not None and max_char_distance < 0:
+        raise ValueError("max_char_distance must be non-negative or None")
+    distance_limit = len(text) if max_char_distance is None else max_char_distance
+    batch = build_relation_candidates(
         text,
         spans,
-        label_predicate=_is_temporal_span_label,
-        max_char_distance=max_char_distance,
-        section_by_span=section_by_span,
+        _temporal_relation_rules(distance_limit),
+        language="en",
     )
+
     candidates: list[TemporalRelationCandidate] = []
-    seen: set[tuple[int, int, int, int, TemporalRelationType]] = set()
-    for pair in pairs:
-        classified = _classify_pair(text, pair)
-        if classified is None:
+    seen: set[tuple[Any, ...]] = set()
+    for edge in batch.candidates:
+        candidate = _safe_temporal_candidate(text, batch, edge)
+        if candidate is None:
             continue
         key = (
-            classified.source.start,
-            classified.source.end,
-            classified.target.start,
-            classified.target.end,
-            classified.relation_type,
+            candidate.relation_type,
+            candidate.source.start,
+            candidate.source.end,
+            candidate.target.start,
+            candidate.target.end,
+            candidate.cue.start,
+            candidate.cue.end,
         )
         if key in seen:
             continue
         seen.add(key)
-        candidates.append(_to_candidate(text, pair, classified))
+        candidates.append(candidate)
+
     return tuple(sorted(candidates, key=lambda candidate: candidate.stable_key()))
 
 
-def _classify_pair(
-    text: str,
-    pair: SpanPairCandidate,
-) -> _ClassifiedPair | None:
-    left_role = _span_role(pair.left)
-    right_role = _span_role(pair.right)
-    if left_role is None or right_role is None:
-        return None
-    if left_role == "TIMEX" and right_role == "TIMEX":
-        return None
+def decode_tlink_candidates(
+    candidates: Iterable[TemporalRelationCandidate],
+    *,
+    min_confidence: float = 0.0,
+) -> SpanGraph:
+    """Decode typed TLINK candidates into a consistent reduced graph.
 
-    between_start = pair.left.end
-    between_end = pair.right.start
-    between = text[between_start:between_end]
+    ``AFTER(source, target)`` is canonicalized to
+    ``BEFORE(target, source)`` so contradictory BEFORE/AFTER claims share one
+    partial-order constraint. ``BEFORE`` and ``CONTAINS`` edges are decoded as
+    an acyclic graph and transitively reduced. The original relation type,
+    direction, cue offsets, hashes, and extraction provenance remain attached
+    to each :class:`~openmed.core.decoding.SpanEdge` decision trace.
 
-    if left_role == "EVENT" and right_role == "TIMEX":
-        begins = _search_between(_BEGINS_ON_RE, between, base_offset=between_start)
-        if begins is not None:
-            return _classified("BEGINS_ON", pair.left, pair.right, begins)
-        ends = _search_between(_ENDS_ON_RE, between, base_offset=between_start)
-        if ends is not None:
-            return _classified("ENDS_ON", pair.left, pair.right, ends)
+    Args:
+        candidates: Privacy-safe typed TLINK candidates to decode.
+        min_confidence: Inclusive confidence floor between zero and one.
 
-    contains = _search_between(_CONTAINS_RE, between, base_offset=between_start)
-    if contains is not None:
-        return _classified("CONTAINS", pair.left, pair.right, contains)
+    Returns:
+        A deterministic span graph containing only reduced retained edges plus
+        kept and pruned provenance for every supplied candidate.
 
-    followed_by = _search_between(_FOLLOWED_BY_RE, between, base_offset=between_start)
-    if followed_by is not None:
-        return _classified("BEFORE", pair.left, pair.right, followed_by)
+    Raises:
+        ValueError: If ``min_confidence`` is invalid or one span id is reused
+            with conflicting span metadata.
+    """
 
-    preceded_by = _search_between(_PRECEDED_BY_RE, between, base_offset=between_start)
-    if preceded_by is not None:
-        return _classified("AFTER", pair.left, pair.right, preceded_by)
+    if not math.isfinite(float(min_confidence)) or not 0.0 <= min_confidence <= 1.0:
+        raise ValueError("min_confidence must be finite and between 0 and 1")
 
-    before = _search_between(_BEFORE_RE, between, base_offset=between_start)
-    if before is not None:
-        return _classified("BEFORE", pair.left, pair.right, before)
+    candidate_tuple = tuple(candidates)
+    spans_by_id: dict[str, TemporalSpanReference] = {}
+    for candidate in candidate_tuple:
+        for span in (candidate.source, candidate.target):
+            existing = spans_by_id.get(span.span_id)
+            if existing is not None and existing != span:
+                raise ValueError(
+                    f"temporal span id {span.span_id!r} has conflicting metadata"
+                )
+            spans_by_id[span.span_id] = span
 
-    after = _search_between(_AFTER_RE, between, base_offset=between_start)
-    if after is not None:
-        return _classified("AFTER", pair.left, pair.right, after)
-
-    overlap = _search_between(_OVERLAP_RE, between, base_offset=between_start)
-    if overlap is not None:
-        return _classified("OVERLAP", pair.left, pair.right, overlap)
-
-    during = _search_between(_DURING_BETWEEN_RE, between, base_offset=between_start)
-    if during is not None:
-        return _classified("CONTAINS", pair.right, pair.left, during)
-
-    prefix_start = max(0, pair.left.start - 24)
-    prefix = text[prefix_start : pair.left.start]
-    prefix_match = _DURING_PREFIX_RE.search(prefix)
-    if prefix_match is not None:
-        cue = (prefix_start + prefix_match.start(), prefix_start + prefix_match.end())
-        return _classified("CONTAINS", pair.left, pair.right, cue)
-
-    return None
-
-
-def _classified(
-    relation_type: TemporalRelationType,
-    source: SpanReference,
-    target: SpanReference,
-    cue_offsets: tuple[int, int],
-) -> _ClassifiedPair:
-    return _ClassifiedPair(
-        relation_type=relation_type,
-        source=source,
-        target=target,
-        cue_start=cue_offsets[0],
-        cue_end=cue_offsets[1],
+    nodes = tuple(_temporal_graph_node(span) for span in spans_by_id.values())
+    edges = tuple(_temporal_graph_edge(candidate) for candidate in candidate_tuple)
+    return decode_span_graph(
+        nodes,
+        edges,
+        constraints=SpanGraphConstraints(
+            allowed_edge_labels=_REDUCED_TEMPORAL_RELATION_TYPES,
+            acyclic_edge_labels=_PARTIAL_ORDER_RELATION_TYPES,
+            transitive_reduction_edge_labels=_PARTIAL_ORDER_RELATION_TYPES,
+        ),
+        min_edge_score=min_confidence,
     )
 
 
-def _search_between(
-    pattern: re.Pattern[str],
-    value: str,
-    *,
-    base_offset: int,
-) -> tuple[int, int] | None:
-    match = pattern.search(value)
-    if match is None:
-        return None
-    return base_offset + match.start(), base_offset + match.end()
+def _temporal_graph_node(span: TemporalSpanReference) -> SpanNode:
+    return SpanNode(
+        node_id=span.span_id,
+        start=span.start,
+        end=span.end,
+        label=span.role,
+        score=span.score,
+        text_hash=span.text_hash,
+        metadata={
+            "schema_version": TEMPORAL_GRAPH_SCHEMA_VERSION,
+            "source_label": span.label,
+        },
+    )
 
 
-def _to_candidate(
+def _temporal_graph_edge(candidate: TemporalRelationCandidate) -> SpanEdge:
+    source = candidate.source
+    target = candidate.target
+    relation_type = candidate.relation_type
+    canonical_relation_type = relation_type
+    if relation_type == "AFTER":
+        source, target = target, source
+        canonical_relation_type = "BEFORE"
+    elif relation_type == "OVERLAP" and _temporal_span_key(target) < _temporal_span_key(
+        source
+    ):
+        source, target = target, source
+
+    return SpanEdge(
+        head=source.span_id,
+        tail=target.span_id,
+        label=canonical_relation_type,
+        score=candidate.confidence,
+        metadata={
+            "schema_version": TEMPORAL_GRAPH_SCHEMA_VERSION,
+            "candidate_relation_type": relation_type,
+            "candidate_source_id": candidate.source.span_id,
+            "candidate_target_id": candidate.target.span_id,
+            "cue": candidate.cue.to_dict(),
+            "features": dict(candidate.features),
+            "provenance": dict(candidate.provenance),
+        },
+    )
+
+
+def _temporal_span_key(span: TemporalSpanReference) -> tuple[int, int, str, str]:
+    return (span.start, span.end, span.role, span.span_id)
+
+
+def _temporal_relation_rules(
+    max_char_distance: int,
+) -> tuple[RelationCandidateRule, ...]:
+    common = {"max_character_distance": max_char_distance}
+    return (
+        RelationCandidateRule(
+            relation_type="BEFORE",
+            source_relation=_BEFORE_DIRECT,
+            head_labels=_EVENT_LABELS,
+            tail_labels=_TEMPORAL_LABELS,
+            cues=("followed by", "prior to", "before", "precedes", "preceding"),
+            **common,
+        ),
+        RelationCandidateRule(
+            relation_type="AFTER",
+            source_relation=_AFTER_DIRECT,
+            head_labels=_EVENT_LABELS,
+            tail_labels=_TEMPORAL_LABELS,
+            cues=("preceded by", "subsequent to", "after", "following"),
+            **common,
+        ),
+        RelationCandidateRule(
+            relation_type="OVERLAP",
+            source_relation=_OVERLAP_DIRECT,
+            head_labels=_EVENT_LABELS,
+            tail_labels=_TEMPORAL_LABELS,
+            cues=(
+                "at the same time as",
+                "simultaneous with",
+                "overlapped with",
+                "concurrent with",
+                "overlaps with",
+                "overlap with",
+            ),
+            **common,
+        ),
+        RelationCandidateRule(
+            relation_type="CONTAINS",
+            source_relation=_CONTAINS_DIRECT,
+            head_labels=_TEMPORAL_LABELS,
+            tail_labels=_TEMPORAL_LABELS,
+            cues=("contained", "contains", "included", "includes"),
+            **common,
+        ),
+        RelationCandidateRule(
+            relation_type="CONTAINS",
+            source_relation=_CONTAINS_REVERSE,
+            head_labels=_TEMPORAL_LABELS,
+            tail_labels=_TEMPORAL_LABELS,
+            cues=("throughout", "during", "within"),
+            **common,
+        ),
+        RelationCandidateRule(
+            relation_type="BEGINS_ON",
+            source_relation=_BEGINS_ON_DIRECT,
+            head_labels=_EVENT_LABELS,
+            tail_labels=_TIMEX_LABELS,
+            cues=("commenced on", "started on", "began on", "begins on"),
+            **common,
+        ),
+        RelationCandidateRule(
+            relation_type="ENDS_ON",
+            source_relation=_ENDS_ON_DIRECT,
+            head_labels=_EVENT_LABELS,
+            tail_labels=_TIMEX_LABELS,
+            cues=(
+                "discontinued on",
+                "completed on",
+                "resolved on",
+                "stopped on",
+                "ended on",
+                "ends on",
+            ),
+            **common,
+        ),
+    )
+
+
+def _safe_temporal_candidate(
     text: str,
-    pair: SpanPairCandidate,
-    classified: _ClassifiedPair,
-) -> TemporalRelationCandidate:
-    features = {
-        "cue_match": 1.0,
-        "event_timex_pair": (
-            1.0
-            if {_span_role(classified.source), _span_role(classified.target)}
-            == {"EVENT", "TIMEX"}
-            else 0.0
-        ),
-        "intervening_span_count": float(pair.intervening_span_count),
-        "pair_char_distance": float(pair.char_distance),
-    }
+    batch: RelationCandidateBatch,
+    edge: SpanEdge,
+) -> TemporalRelationCandidate | None:
+    source = batch.spans_by_node_id[edge.head]
+    target = batch.spans_by_node_id[edge.tail]
+    source_role = _span_role(source)
+    target_role = _span_role(target)
+    if source_role is None or target_role is None:
+        return None
+    relation_type = cast(TemporalRelationType, edge.label)
+    if not _valid_role_pair(relation_type, source_role, target_role):
+        return None
+
+    cue_start = _metadata_offset(edge.metadata, "cue_start")
+    cue_end = _metadata_offset(edge.metadata, "cue_end")
+    source_relation = str(edge.metadata.get("source_relation", ""))
+    if cue_start is None or cue_end is None:
+        return None
+    if not _has_supported_orientation(
+        source,
+        target,
+        cue_start=cue_start,
+        cue_end=cue_end,
+        source_relation=source_relation,
+    ):
+        return None
+
+    source_ref = _safe_span(text, source, source_role)
+    target_ref = _safe_span(text, target, target_role)
     return TemporalRelationCandidate(
-        relation_type=classified.relation_type,
-        source=_safe_span(text, classified.source),
-        target=_safe_span(text, classified.target),
-        confidence=_confidence(pair),
+        relation_type=relation_type,
+        source=source_ref,
+        target=target_ref,
+        confidence=round(max(0.0, min(float(edge.score), 1.0)), 6),
         cue=TemporalCueReference(
-            category=classified.relation_type,
-            start=classified.cue_start,
-            end=classified.cue_end,
-            text_hash=_hash_text(text[classified.cue_start : classified.cue_end]),
+            category=relation_type,
+            start=cue_start,
+            end=cue_end,
+            text_hash=hash_text(text[cue_start:cue_end]),
         ),
-        features=features,
+        features={
+            "cue_match": 1.0,
+            "event_timex_pair": float({source_role, target_role} == {"EVENT", "TIMEX"}),
+            "intervening_span_count": float(
+                _intervening_span_count(batch, source, target)
+            ),
+            "pair_char_distance": float(edge.metadata["character_distance"]),
+        },
         provenance={
             "schema_version": TEMPORAL_RELATION_SCHEMA_VERSION,
             "extractor": "deterministic_temporal_tlink",
@@ -343,50 +520,96 @@ def _to_candidate(
     )
 
 
-def _safe_span(text: str, span: SpanReference) -> TemporalSpanReference:
-    role = _span_role(span)
-    if role is None:
-        msg = f"unsupported temporal span label: {span.label!r}"
-        raise ValueError(msg)
+def _has_supported_orientation(
+    source: SpanReference,
+    target: SpanReference,
+    *,
+    cue_start: int,
+    cue_end: int,
+    source_relation: str,
+) -> bool:
+    left, right = sorted(
+        (source, target),
+        key=lambda span: (span.start, span.end, normalize_label(span.label)),
+    )
+    if left.end > right.start:
+        return False
+    if not left.end <= cue_start < cue_end <= right.start:
+        return False
+    if source_relation in _DIRECT_RULES:
+        return source is left and target is right
+    if source_relation == _CONTAINS_REVERSE:
+        return source is right and target is left
+    return False
+
+
+def _safe_span(
+    text: str,
+    span: SpanReference,
+    role: TemporalSpanRole,
+) -> TemporalSpanReference:
+    label = _temporal_label(span.label)
     return TemporalSpanReference(
-        span_id=f"{role.lower()}:{span.start}:{span.end}",
-        label=span.label,
+        span_id=f"{role.casefold()}:{label.casefold()}:{span.start}:{span.end}",
+        label=label,
         role=role,
         start=span.start,
         end=span.end,
-        score=span.score,
-        text_hash=_hash_text(text[span.start : span.end]),
+        score=round(max(0.0, min(float(span.score), 1.0)), 6),
+        text_hash=hash_text(text[span.start : span.end]),
     )
 
 
-def _confidence(pair: SpanPairCandidate) -> float:
-    penalty = min(pair.char_distance, 160) / 1000.0
-    penalty += min(pair.intervening_span_count, 4) * 0.03
-    return round(max(0.5, 0.94 - penalty), 6)
-
-
-def _is_temporal_span_label(label: str) -> bool:
-    return _span_role_from_label(label) is not None
-
-
 def _span_role(span: SpanReference) -> TemporalSpanRole | None:
-    return _span_role_from_label(span.label)
-
-
-def _span_role_from_label(label: str) -> TemporalSpanRole | None:
-    normalized = normalize_relation_label(label)
-    if normalized in _TIMEX_LABELS or "timex" in normalized:
+    label = _temporal_label(span.label)
+    if label in _TIMEX_LABEL_ALIASES:
         return "TIMEX"
-    if normalized in _EVENT_LABELS or normalized.endswith("_event"):
+    if label in _EVENT_LABEL_ALIASES:
         return "EVENT"
     return None
 
 
-def _hash_text(value: str) -> str:
-    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+def _valid_role_pair(
+    relation_type: TemporalRelationType,
+    source_role: TemporalSpanRole,
+    target_role: TemporalSpanRole,
+) -> bool:
+    if relation_type in {"BEGINS_ON", "ENDS_ON"}:
+        return source_role == "EVENT" and target_role == "TIMEX"
+    if relation_type in {"BEFORE", "AFTER", "OVERLAP"}:
+        return source_role == "EVENT"
+    return "EVENT" in {source_role, target_role}
+
+
+def _temporal_label(label: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", label.upper()).strip("_")
+
+
+def _metadata_offset(metadata: Mapping[str, Any], key: str) -> int | None:
+    value = metadata.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _intervening_span_count(
+    batch: RelationCandidateBatch,
+    source: SpanReference,
+    target: SpanReference,
+) -> int:
+    left, right = sorted((source, target), key=lambda span: (span.start, span.end))
+    return sum(
+        1
+        for span in batch.spans_by_node_id.values()
+        if span is not source
+        and span is not target
+        and left.end <= span.start
+        and span.end <= right.start
+    )
 
 
 __all__ = [
+    "TEMPORAL_GRAPH_SCHEMA_VERSION",
     "TEMPORAL_RELATION_SCHEMA_VERSION",
     "TEMPORAL_RELATION_TYPES",
     "TemporalCueReference",
@@ -394,5 +617,6 @@ __all__ = [
     "TemporalRelationType",
     "TemporalSpanReference",
     "TemporalSpanRole",
+    "decode_tlink_candidates",
     "extract_tlink_candidates",
 ]

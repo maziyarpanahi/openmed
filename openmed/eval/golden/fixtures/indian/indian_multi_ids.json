@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "suite": "indian_multi_id",
+  "synthetic": true,
+  "notice": "Synthetic-only Indian identifier fixtures; no government registry data, DUA data, or real PHI.",
+  "fixtures": [
+    {
+      "id": "indian-pan-hi",
+      "language": "hi",
+      "text": "पैन नंबर: OMDBR7117R; invalid PAN: OMDBR7117A.",
+      "valid": [
+        {
+          "identifier_type": "pan",
+          "entity_type": "pan",
+          "canonical_label": "ID_NUM",
+          "start": 10,
+          "end": 20,
+          "text": "OMDBR7117R"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "pan",
+          "reason": "wrong_synthetic_check_letter",
+          "text": "OMDBR7117A"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "पैन नंबर: [ID_NUM]; invalid PAN: OMDBR7117A."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-epic-latin",
+      "language": "hi",
+      "text": "Voter ID: VNL5203138; invalid voter ID: VNL0000000.",
+      "valid": [
+        {
+          "identifier_type": "voter_id_epic",
+          "entity_type": "voter_id_epic",
+          "canonical_label": "ID_NUM",
+          "start": 10,
+          "end": 20,
+          "text": "VNL5203138"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "voter_id_epic",
+          "reason": "zero_serial",
+          "text": "VNL0000000"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "Voter ID: [ID_NUM]; invalid voter ID: VNL0000000."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-driving-licence-hi",
+      "language": "hi",
+      "text": "ड्राइविंग लाइसेंस: LF1220108382646; invalid DL: LF0020108382646.",
+      "valid": [
+        {
+          "identifier_type": "indian_driving_licence",
+          "entity_type": "indian_driving_licence",
+          "canonical_label": "ID_NUM",
+          "start": 19,
+          "end": 34,
+          "text": "LF1220108382646"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "indian_driving_licence",
+          "reason": "zero_rto_code",
+          "text": "LF0020108382646"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "ड्राइविंग लाइसेंस: [ID_NUM]; invalid DL: LF0020108382646."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-passport-te",
+      "language": "te",
+      "text": "పాస్‌పోర్ట్ నంబర్: K4789111; invalid passport: K0789111.",
+      "valid": [
+        {
+          "identifier_type": "indian_passport",
+          "entity_type": "indian_passport",
+          "canonical_label": "ID_NUM",
+          "start": 19,
+          "end": 27,
+          "text": "K4789111"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "indian_passport",
+          "reason": "leading_zero_serial",
+          "text": "K0789111"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "పాస్‌పోర్ట్ నంబర్: [ID_NUM]; invalid passport: K0789111."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-ifsc-code-mixed",
+      "language": "hi",
+      "text": "IFSC कोड: FVQO0ZQ3X83; invalid IFSC: FVQO1ZQ3X83.",
+      "valid": [
+        {
+          "identifier_type": "ifsc",
+          "entity_type": "ifsc",
+          "canonical_label": "ID_NUM",
+          "start": 10,
+          "end": 21,
+          "text": "FVQO0ZQ3X83"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "ifsc",
+          "reason": "reserved_character_not_zero",
+          "text": "FVQO1ZQ3X83"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "IFSC कोड: [ID_NUM]; invalid IFSC: FVQO1ZQ3X83."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-gstin-code-mixed",
+      "language": "hi",
+      "text": "GSTIN नंबर: 06OMDBX7342DTZM; invalid GSTIN: 06OMDBX7342DTZ0.",
+      "valid": [
+        {
+          "identifier_type": "gstin",
+          "entity_type": "gstin",
+          "canonical_label": "ID_NUM",
+          "start": 12,
+          "end": 27,
+          "text": "06OMDBX7342DTZM"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "gstin",
+          "reason": "wrong_mod36_checksum",
+          "text": "06OMDBX7342DTZ0"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "GSTIN नंबर: [ID_NUM]; invalid GSTIN: 06OMDBX7342DTZ0."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-vehicle-registration-hi",
+      "language": "hi",
+      "text": "गाड़ी नंबर: ZE65ZRR5256; invalid RTO registration: ZE00ZRR5256.",
+      "valid": [
+        {
+          "identifier_type": "vehicle_registration",
+          "entity_type": "indian_vehicle_registration",
+          "canonical_label": "VEHICLE_REGISTRATION",
+          "start": 12,
+          "end": 23,
+          "text": "ZE65ZRR5256"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "vehicle_registration",
+          "reason": "zero_rto_code",
+          "text": "ZE00ZRR5256"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "गाड़ी नंबर: [VEHICLE_REGISTRATION]; invalid RTO registration: ZE00ZRR5256."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    },
+    {
+      "id": "indian-abha-te",
+      "language": "te",
+      "text": "ఆభా నంబర్: 28665452177536; invalid ABHA: 00000000000000.",
+      "valid": [
+        {
+          "identifier_type": "abha",
+          "entity_type": "abha",
+          "canonical_label": "ID_NUM",
+          "start": 11,
+          "end": 25,
+          "text": "28665452177536"
+        }
+      ],
+      "hard_negatives": [
+        {
+          "identifier_type": "abha",
+          "reason": "all_zero_number",
+          "text": "00000000000000"
+        }
+      ],
+      "expected_output": {
+        "method": "mask",
+        "text": "ఆభా నంబర్: [ID_NUM]; invalid ABHA: 00000000000000."
+      },
+      "metadata": {
+        "synthetic": true,
+        "contains_real_phi": false,
+        "bundles_registry_data": false
+      }
+    }
+  ]
+}

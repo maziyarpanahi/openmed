@@ -1,0 +1,75 @@
+name: Low-resource profile
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/low-resource.yml"
+      - "docs/benchmarks/low-resource-baseline.json"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "scripts/benchmarks/low_resource_deid.py"
+      - "uv.lock"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/low-resource.yml"
+      - "docs/benchmarks/low-resource-baseline.json"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "scripts/benchmarks/low_resource_deid.py"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.11-slim
+      options: --memory 4g --memory-swap 4g --cpus 2
+    env:
+      CUDA_VISIBLE_DEVICES: ""
+      OPENMED_PROFILE: low_resource
+      LOW_RESOURCE_PII_REVISION: 82f57fcab68125b05f1aa9fdd41319732358311b
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install CPU-only runtime
+        run: uv sync --frozen --extra dev --extra onnx-runtime --python 3.11
+
+      - name: Cache the official INT8 artifact
+        run: |
+          .venv/bin/hf download \
+            OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-onnx-android \
+            model_int8.onnx config.json id2label.json \
+            tokenizer.json tokenizer_config.json \
+            --revision "$LOW_RESOURCE_PII_REVISION" \
+            --cache-dir ~/.cache/openmed
+
+      - name: Run 4 GiB memory regression gate
+        run: |
+          .venv/bin/python scripts/benchmarks/low_resource_deid.py \
+            --notes 100 \
+            --baseline docs/benchmarks/low-resource-baseline.json \
+            --max-regression-percent 10 \
+            --max-peak-rss-mib 2560 \
+            --require-cgroup-limit-gib 4 \
+            --require-no-gpu \
+            --output low-resource-benchmark.json
+
+      - name: Upload aggregate benchmark metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: low-resource-benchmark
+          path: low-resource-benchmark.json

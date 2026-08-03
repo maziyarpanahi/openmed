@@ -67,6 +67,44 @@ def test_stub_section_detector_stamps_emitted_spans_by_containing_section():
     ]
 
 
+def test_default_section_detector_exposes_canonical_sections_to_pipeline():
+    text = (
+        "Preamble Alice.\n"
+        "Past Medical History: John had childhood asthma.\n"
+        "Plan: Jane will call."
+    )
+
+    result = Pipeline(
+        model_detector=_model_detector("Alice", "John", "Jane"),
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+
+    assert _sections_by_surface(result, text) == {
+        "Alice": None,
+        "John": "past_medical_history",
+        "Jane": "plan",
+    }
+    section_stage = result.stage("doc_type_section").metadata
+    assert section_stage["section_hook"] == "detect_sections"
+    assert [section["label"] for section in section_stage["sections"]] == [
+        "unsectioned",
+        "past_medical_history",
+        "plan",
+    ]
+
+
+def test_default_stage_exposes_document_type_classification():
+    text = "RADIOLOGY REPORT\nFINDINGS: Clear.\nIMPRESSION: No acute finding."
+
+    result = Pipeline(
+        model_detector=_model_detector(),
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+
+    document_type = result.stage("doc_type_section").metadata["document_type"]
+    assert document_type == {"type": "radiology_report", "confidence": 0.98}
+
+
 def test_unavailable_section_hook_leaves_pipeline_output_unchanged():
     text = "Patient John Doe visited."
 

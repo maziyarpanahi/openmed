@@ -1,5 +1,6 @@
 """Tests for residual re-identification risk reports."""
 
+from openmed.processing.outputs import EntityPrediction, PredictionResult
 from openmed.risk import risk_report
 
 
@@ -47,6 +48,42 @@ def test_risk_report_exports_documented_shape_and_uses_span_offsets():
     assert age_qi["value"] == "94-year-old"
     assert age_qi["start"] == text.index("94-year-old")
     assert age_qi["section"] == "assessment"
+
+
+def test_risk_report_accepts_prediction_results_with_span_offsets():
+    text = "Assessment: 94-year-old seen at North Clinic."
+    start = text.index("94-year-old")
+    result = PredictionResult(
+        text=text,
+        entities=[
+            EntityPrediction(
+                text="94-year-old",
+                label="AGE",
+                confidence=1.0,
+                start=start,
+                end=start + len("94-year-old"),
+                metadata={"section": "assessment"},
+            )
+        ],
+        model_name="synthetic-offset-model",
+        timestamp="2026-01-01T00:00:00",
+    )
+
+    report = risk_report(result)
+
+    assert report["k_min"] == 1
+    age_qi = next(qi for qi in report["quasi_identifiers"] if qi["category"] == "age")
+    assert age_qi == {
+        "record_index": 0,
+        "record_id": None,
+        "category": "age",
+        "value": "94-year-old",
+        "normalized_value": "94",
+        "source": "span",
+        "start": start,
+        "end": start + len("94-year-old"),
+        "section": "assessment",
+    }
 
 
 def test_table_equivalence_classes_flag_singleton_and_compute_k_min():
@@ -110,6 +147,9 @@ def test_aux_linkage_attack_scores_nonzero_and_anonymized_records_score_zero():
     report = risk_report(deidentified, aux=aux)
 
     assert report["reid_rate"] > 0
+
+    original_report = risk_report(deidentified, original=aux)
+    assert original_report["reid_rate"] > 0
 
     anonymized_report = risk_report(
         [
