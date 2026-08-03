@@ -34,8 +34,22 @@ payload = result.to_dict()
 - `include_confidence` & `confidence_threshold`: control the final payload; defaults keep all scores.
 - `group_entities`: merge adjacent spans of the same label after formatting.
 - `formatter_kwargs`: forwarded to `openmed.processing.format_predictions`.
+- `assert_context`: opt in to deterministic clinical assertion labels. Each
+  entity receives `negation`, `uncertainty`, `experiencer`, and `temporality`
+  under `entity.metadata["clinical_context"]`.
 - Sentence options (`sentence_detection`, `sentence_language`, `sentence_clean`, `sentence_segmenter`, `sentence_backend`) wrap the sentence engine so each
   prediction carries the sentence span; disable them if latency matters more than helper metadata.
+
+The context stage is disabled by default. Enable it for clinical entities that
+will flow into grounding, FHIR export, or problem-list review:
+
+```python
+result = analyze_text(
+    "No evidence of pneumonia.",
+    assert_context=True,
+)
+print(result.entities[0].metadata["clinical_context"])
+```
 
 ## Optional YASBD sentence backend
 
