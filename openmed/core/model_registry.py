@@ -13,6 +13,11 @@ from types import MappingProxyType
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
+from .registry_service import (
+    load_registry_state,
+    pointer_targets,
+    semantic_version,
+)
 
 
 @dataclass
@@ -47,6 +52,7 @@ class ModelInfo:
     reproducibility_hash: Optional[str] = None
     released: Optional[str] = None
     provenance: Dict[str, Any] = field(default_factory=dict)
+    semantic_version: str = "0.0.0"
 
     @property
     def size_mb(self) -> Optional[int]:
@@ -704,6 +710,7 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         provenance=dict(row.get("provenance") or {})
         if isinstance(row.get("provenance"), dict)
         else {},
+        semantic_version=semantic_version(str(row["repo_id"])),
     )
 
 
@@ -961,7 +968,24 @@ def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     return aliases
 
 
-def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
+def _add_pointer_aliases(
+    registry: Dict[str, ModelInfo],
+    registry_state: Mapping[str, Any],
+) -> None:
+    by_repo_id = {model.model_id: model for model in registry.values()}
+    for family, pointers in pointer_targets(registry_state).items():
+        for pointer_name, repo_id in pointers.items():
+            if repo_id is None:
+                continue
+            model = by_repo_id.get(repo_id)
+            if model is not None:
+                registry[_slug(f"{family}_{pointer_name}")] = model
+
+
+def _build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
     registry: Dict[str, ModelInfo] = {}
     for row in rows:
         repo_id = row.get("repo_id")
@@ -974,11 +998,23 @@ def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
 
         for alias in _compatibility_aliases(row):
             registry.setdefault(alias, info)
+    if registry_state is not None:
+        _add_pointer_aliases(registry, registry_state)
     return registry
 
 
+def build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
+    """Build model metadata and named-pointer aliases from committed inputs."""
+
+    return _build_registry(rows, registry_state)
+
+
 _MANIFEST_ROWS = load_manifest_rows()
-OPENMED_MODELS = _build_registry(_MANIFEST_ROWS)
+_REGISTRY_STATE = load_registry_state(missing_ok=True)
+OPENMED_MODELS = build_registry(_MANIFEST_ROWS, _REGISTRY_STATE)
 
 
 def _models_by_language_from_manifest(languages: Iterable[str]) -> Dict[str, ModelInfo]:
