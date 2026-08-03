@@ -114,6 +114,8 @@ result.anchors[0].dct_position
 ```
 
 When `timex_spans` is omitted, local deterministic detection supplies TIMEX
-offsets. Passing an empty iterable disables detection. The anchoring result
-does not retain raw EVENT or TIMEX text: source evidence is represented by
-inclusive/exclusive offsets and SHA-256 hashes only.
+offsets. Passing an empty iterable disables detection. Supplied
+`NormalizedTimex` records retain their resolved values rather than being
+normalized again. The anchoring result does not retain raw EVENT or TIMEX
+text: source evidence is represented by inclusive/exclusive offsets and
+SHA-256 hashes only.

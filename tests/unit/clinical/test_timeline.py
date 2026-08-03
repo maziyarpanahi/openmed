@@ -13,6 +13,7 @@ from openmed.clinical import (
     anchor_events,
     detect_timexes,
     evaluate_timeline_gold,
+    normalize_temporal,
     resolve_temporality,
     resolve_timeline,
 )
@@ -137,6 +138,18 @@ def test_event_anchoring_autodetects_nearby_timex_without_crossing_sentences() -
     ]
     assert result.anchors[0].anchor_value == "2026-06-01"
     assert result.anchors[1].anchor_value == "2026-06-15"
+
+
+def test_event_anchoring_reuses_supplied_normalized_timex_value() -> None:
+    text = "Fever started 3 days ago."
+    timex = normalize_temporal(text, [(14, 24)], "2026-06-15")[0]
+
+    result = anchor_events(text, [(6, 13)], "2026-06-20", [timex])
+
+    assert result.anchors[0].anchor_value == "2026-06-12"
+    assert result.anchors[0].dct_position == "before"
+    assert result.anchors[0].timex is not None
+    assert result.anchors[0].timex.normalized_value == timex.value
 
 
 def test_event_anchoring_output_contains_offsets_and_hashes_not_note_text() -> None:

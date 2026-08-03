@@ -1435,14 +1435,31 @@ def _event_anchor_timexes(
         offsets: list[Mapping[str, object] | Sequence[int]] = [
             (timex.start, timex.end) for timex in detect_timexes(text)
         ]
+        records = normalize_temporal(text, offsets, document_creation_time)
     else:
-        offsets = []
-        for timex in timex_spans:
+        supplied_timexes = tuple(timex_spans)
+        offsets = [
+            timex
+            for timex in supplied_timexes
+            if not isinstance(timex, NormalizedTimex)
+        ]
+        normalized_offsets = iter(
+            normalize_temporal(text, offsets, document_creation_time)
+        )
+        records = []
+        for timex in supplied_timexes:
             if isinstance(timex, NormalizedTimex):
-                offsets.append((timex.start, timex.end))
+                start, end = _coerce_source_span(
+                    (timex.start, timex.end),
+                    text_length=len(text),
+                )
+                if timex.text != text[start:end]:
+                    raise ValueError(
+                        "NormalizedTimex text must match text at its source offsets"
+                    )
+                records.append(timex)
             else:
-                offsets.append(timex)
-    records = normalize_temporal(text, offsets, document_creation_time)
+                records.append(next(normalized_offsets))
     return tuple(
         record
         for record in records
