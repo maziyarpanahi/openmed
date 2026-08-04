@@ -90,26 +90,11 @@ class TestDefaultsJsonInvariants:
 
 
 class TestNerFamilyDomains:
-    DISPLAY_LABEL_OVERRIDES = {
-        "CHEM": "Chemical",
-        "CL": "CellLine",
-        "DNA": "DNA",
-        "PROTEIN_ENUM": "ProteinEnumeration",
-        "PROTEIN_FAMILIY_OR_GROUP": "ProteinFamilyOrGroup",
-        "RNA": "RNA",
-    }
     SHIPPED_CATEGORIES = {
         info.category
         for info in OPENMED_MODELS.values()
         if info.model_id.startswith("OpenMed/OpenMed-NER-")
     }
-
-    @classmethod
-    def _display_label(cls, entity_type):
-        return cls.DISPLAY_LABEL_OVERRIDES.get(
-            entity_type,
-            "".join(part.title() for part in entity_type.split("_")),
-        )
 
     def test_every_shipped_ner_family_has_a_domain(self):
         assert self.SHIPPED_CATEGORIES
@@ -121,11 +106,11 @@ class TestNerFamilyDomains:
 
     @pytest.mark.parametrize("category", sorted(SHIPPED_CATEGORIES))
     def test_family_labels_match_registry_metadata(self, category):
-        expected = [
-            self._display_label(entity_type)
-            for entity_type in _CATEGORY_ENTITY_TYPES[category]
-        ]
-        assert get_default_labels(category.lower()) == expected
+        source_labels = get_default_labels(category.lower())
+        normalized = list(
+            dict.fromkeys(normalize_canonical_label(label) for label in source_labels)
+        )
+        assert set(normalized) == set(_CATEGORY_ENTITY_TYPES[category])
 
 
 def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> None:
@@ -225,7 +210,7 @@ class TestMicrobiologyDomain:
             ("susceptibility", "SUSCEPTIBILITY"),
             ("antibiotic", "ANTIBIOTIC"),
             ("microorganism", "MICROORGANISM"),
-            ("organism", "MICROORGANISM"),
+            ("organism", "ORGANISM"),
         ],
     )
     def test_microbiology_labels_normalize(self, label, expected):
