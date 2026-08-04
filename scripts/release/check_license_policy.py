@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import json
 import re
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -18,6 +20,22 @@ else:  # pragma: no cover - exercised by Python 3.10 CI
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PYPROJECT = ROOT / "pyproject.toml"
+ICU_RULES_PATH = Path("openmed/processing/resources/segmenter/indic_rules.json")
+ICU_LICENSE_PATH = Path("openmed/processing/resources/segmenter/ICU.txt")
+ICU_SOURCE_REPOSITORY = "https://github.com/unicode-org/icu"
+ICU_SOURCE_REVISION = "0c5873f89bf64f6bbc0a24b84f07d79b25785a42"
+ICU_SOURCE_PATH = "icu4c/source/data/brkitr/rules/char.txt"
+ICU_SOURCE_COPYRIGHT = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation "
+    "and others. All Rights Reserved."
+)
+ICU_SOURCE_RETRIEVED = "2026-07-28"
+ICU_LICENSE_MARKERS = (
+    "Copyright (C) 2002-2016, International Business Machines Corporation and others.",
+    "ICU License - ICU 1.8.1 and later",
+    "Copyright (c) 1995-2016 International Business Machines Corporation and others",
+    "Permission is hereby granted, free of charge",
+)
 
 EXCLUDED_OPTIONAL_GROUPS = frozenset({"dev"})
 
@@ -72,16 +90,24 @@ REVIEWED_LICENSES = {
     "gliner": "Apache-2.0",
     "grpcio": "Apache-2.0",
     "griffe": "ISC",
+    "hanlp": "Apache-2.0",
+    "haystack-ai": "Apache-2.0",
+    "hnswlib": "Apache-2.0",
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
+    "indic-nlp-library": "MIT",
+    "jieba": "MIT",
     "langchain-core": "MIT",
+    "langgraph": "MIT",
     "llama-index-core": "MIT",
     "markdown-it-py": "MIT",
     "mcp": "MIT",
     "mkdocs": "BSD-2-Clause",
     "mkdocs-git-revision-date-localized-plugin": "MIT",
+    "mkdocs-llmstxt": "ISC",
     "mkdocs-material": "MIT",
     "mkdocs-minify-plugin": "MIT",
+    "mkdocs-static-i18n": "MIT",
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
@@ -89,7 +115,9 @@ REVIEWED_LICENSES = {
     "numpy": "BSD-3-Clause",
     "onnx": "Apache-2.0",
     "onnxruntime": "MIT",
+    "pkuseg": "MIT",
     "onnxscript": "MIT",
+    "opencc": "Apache-2.0",
     "opentelemetry-api": "Apache-2.0",
     "opentelemetry-exporter-otlp-proto-http": "Apache-2.0",
     "opentelemetry-sdk": "Apache-2.0",
@@ -102,11 +130,14 @@ REVIEWED_LICENSES = {
     "pillow": "HPND",
     "pikepdf": "MPL-2.0",
     "polars": "MIT",
+    "prefect": "Apache-2.0",
     "presidio-analyzer": "MIT",
     "pyarrow": "Apache-2.0",
+    "pycld2": "Apache-2.0",
     "protobuf": "BSD-3-Clause",
     "pydicom": "MIT",
     "pydeid": "MIT",
+    "pypinyin": "MIT",
     "pyyaml": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
@@ -114,10 +145,13 @@ REVIEWED_LICENSES = {
     "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
+    "quickumls": "MIT",
     "rapidfuzz": "MIT",
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
+    "scrubadub": "Apache-2.0",
+    "scispacy": "Apache-2.0",
     "spacy": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
@@ -125,10 +159,12 @@ REVIEWED_LICENSES = {
     "transformers": "Apache-2.0",
     "typer": "MIT",
     "uvicorn": "BSD-3-Clause",
+    "yasbd-lib": "MPL-2.0",
 }
 
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
 RESTRICTED_VOCAB_DATA_MARKERS = (
+    "cpt",
     "mrconso",
     "mrrel",
     "mrsty",
@@ -350,6 +386,83 @@ def audit_restricted_vocab_data(project_root: Path = ROOT) -> list[Path]:
     return findings
 
 
+def audit_restricted_vocab_wheel(wheel_path: Path) -> list[str]:
+    """Return restricted vocabulary data entries found in a built wheel.
+
+    Args:
+        wheel_path: Built wheel archive to inspect.
+
+    Returns:
+        Sorted archive entry paths that violate the restricted-data policy.
+    """
+
+    if not wheel_path.is_file():
+        raise FileNotFoundError(f"wheel does not exist: {wheel_path}")
+    findings: list[str] = []
+    with zipfile.ZipFile(wheel_path) as archive:
+        for name in archive.namelist():
+            normalized = name.lower().replace("\\", "/")
+            if Path(normalized).suffix not in RESTRICTED_VOCAB_DATA_SUFFIXES:
+                continue
+            if any(marker in normalized for marker in RESTRICTED_VOCAB_DATA_MARKERS):
+                findings.append(name)
+    return sorted(findings)
+
+
+def audit_bundled_license_notices(project_root: Path = ROOT) -> list[str]:
+    """Return failures for bundled resources whose required notices are incomplete."""
+
+    findings: list[str] = []
+    rules_path = project_root / ICU_RULES_PATH
+    license_path = project_root / ICU_LICENSE_PATH
+    root_notice_path = project_root / "NOTICE"
+
+    if not rules_path.is_file():
+        return [f"missing bundled ICU rules: {ICU_RULES_PATH}"]
+    if not license_path.is_file():
+        findings.append(f"missing bundled ICU license: {ICU_LICENSE_PATH}")
+    if not root_notice_path.is_file():
+        findings.append("missing root NOTICE")
+
+    try:
+        rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        findings.append(f"invalid bundled ICU rules metadata: {exc}")
+        rules = {}
+
+    source = rules.get("source")
+    if (
+        rules.get("license") != "ICU"
+        or rules.get("license_file") != ICU_LICENSE_PATH.name
+        or not isinstance(source, dict)
+        or source.get("repository") != ICU_SOURCE_REPOSITORY
+        or source.get("revision") != ICU_SOURCE_REVISION
+        or source.get("path") != ICU_SOURCE_PATH
+        or source.get("copyright") != ICU_SOURCE_COPYRIGHT
+        or source.get("retrieved") != ICU_SOURCE_RETRIEVED
+        or not source.get("modifications")
+    ):
+        findings.append("bundled Indic rules lack immutable ICU provenance")
+
+    if license_path.is_file():
+        license_text = license_path.read_text(encoding="utf-8")
+        if any(marker not in license_text for marker in ICU_LICENSE_MARKERS):
+            findings.append("bundled ICU license notice is incomplete")
+
+    if root_notice_path.is_file():
+        root_notice = root_notice_path.read_text(encoding="utf-8")
+        required_notice_markers = (
+            "ICU (International Components for Unicode) grapheme-break rules",
+            ICU_SOURCE_REVISION,
+            "Source-file copyright: Copyright (C) 2002-2016",
+            str(ICU_LICENSE_PATH).replace("\\", "/"),
+        )
+        if any(marker not in root_notice for marker in required_notice_markers):
+            findings.append("root NOTICE does not attribute the bundled ICU rules")
+
+    return findings
+
+
 def print_results(results: Sequence[LicenseAuditResult]) -> None:
     """Print a compact human-readable audit summary."""
 
@@ -388,6 +501,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=ROOT,
         help="Project root to scan for restricted bundled vocabulary data.",
     )
+    parser.add_argument(
+        "--wheel",
+        action="append",
+        type=Path,
+        default=[],
+        help="Built wheel to scan for UMLS, SNOMED CT, or CPT data entries.",
+    )
     return parser.parse_args(argv)
 
 
@@ -402,7 +522,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Restricted vocabulary data policy failed:", file=sys.stderr)
         for path in restricted_data:
             print(f"- {path}", file=sys.stderr)
-    return 1 if any(not result.allowed for result in results) or restricted_data else 0
+    restricted_wheel_data: list[tuple[Path, str]] = []
+    for wheel in args.wheel:
+        restricted_wheel_data.extend(
+            (wheel, entry) for entry in audit_restricted_vocab_wheel(wheel)
+        )
+    if restricted_wheel_data:
+        print("Restricted vocabulary wheel policy failed:", file=sys.stderr)
+        for wheel, entry in restricted_wheel_data:
+            print(f"- {wheel}: {entry}", file=sys.stderr)
+    bundled_notice_failures = audit_bundled_license_notices(args.project_root)
+    if bundled_notice_failures:
+        print("Bundled license notice policy failed:", file=sys.stderr)
+        for finding in bundled_notice_failures:
+            print(f"- {finding}", file=sys.stderr)
+    return (
+        1
+        if any(not result.allowed for result in results)
+        or restricted_data
+        or restricted_wheel_data
+        or bundled_notice_failures
+        else 0
+    )
 
 
 if __name__ == "__main__":

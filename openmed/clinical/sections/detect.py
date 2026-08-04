@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 from openmed.clinical.lexicons import (
@@ -11,11 +12,51 @@ from openmed.clinical.lexicons import (
     get_section_lexicon,
     normalize_section_header,
 )
+from openmed.processing.lists import ListItemSpan, parse_lists
 
 UNSECTIONED_SECTION = "unsectioned"
+LIST_BEARING_SECTION_LABELS = frozenset({"allergies", "medications", "problem_list"})
+LIST_SECTION_LOINC_CODES = MappingProxyType(
+    {
+        "allergies": "48765-2",
+        "medications": "10160-0",
+        "problem_list": "11450-4",
+    }
+)
+LIST_BEARING_SECTION_LOINC_CODES = frozenset(LIST_SECTION_LOINC_CODES.values())
 _HEADER_DELIMITERS = (":", "：", "﹕", "꞉")
 _UNDERLINE_CHARS = frozenset("-_=~")
 _BULLET_PREFIXES = ("-", "*", "•")
+
+
+class SectionSpan(dict[str, Any]):
+    """A JSON-ready canonical half-open clinical section range.
+
+    ``SectionSpan`` remains a dictionary so existing pipeline and service
+    consumers can serialize it directly, while its required fields are also
+    available as attributes for a small typed span contract.
+    """
+
+    def __init__(self, label: str, start: int, end: int, **metadata: Any) -> None:
+        super().__init__(label=label, start=int(start), end=int(end), **metadata)
+
+    @property
+    def label(self) -> str:
+        """Return the canonical section label."""
+
+        return str(self["label"])
+
+    @property
+    def start(self) -> int:
+        """Return the inclusive section start offset."""
+
+        return int(self["start"])
+
+    @property
+    def end(self) -> int:
+        """Return the exclusive section end offset."""
+
+        return int(self["end"])
 
 
 @dataclass(frozen=True)
@@ -43,7 +84,7 @@ def detect_sections(
     *,
     language: str | None = None,
     include_unsectioned: bool = True,
-) -> tuple[dict[str, Any], ...]:
+) -> tuple[SectionSpan, ...]:
     """Segment *text* into canonical clinical section spans.
 
     Headers are matched at line starts using language-pack section lexicons.
@@ -63,7 +104,7 @@ def detect_sections(
         for hit in _line_header_hits(line, _next_line(lines, index), language)
     )
     if not hits:
-        return (
+        unsectioned_result = (
             (
                 _section_dict(
                     label=UNSECTIONED_SECTION,
@@ -75,8 +116,14 @@ def detect_sections(
             if include_unsectioned and text
             else ()
         )
+        _validate_section_spans(
+            text,
+            unsectioned_result,
+            require_coverage=include_unsectioned,
+        )
+        return unsectioned_result
 
-    sections: list[dict[str, Any]] = []
+    sections: list[SectionSpan] = []
     cursor = 0
     for index, hit in enumerate(hits):
         if include_unsectioned and cursor < hit.start:
@@ -113,7 +160,232 @@ def detect_sections(
                 language=language,
             )
         )
-    return tuple(section for section in sections if section["start"] < section["end"])
+    result = tuple(section for section in sections if section["start"] < section["end"])
+    _validate_section_spans(
+        text,
+        result,
+        require_coverage=include_unsectioned,
+    )
+    return result
+
+
+def validate_section_spans(
+    text: str,
+    spans: Iterable[Mapping[str, Any]],
+) -> None:
+    """Assert that section spans form a complete partition of ``text``.
+
+    Spans use half-open character offsets. Each span must have a non-empty
+    canonical label, remain within the document, and begin exactly where the
+    previous span ends. An empty document is valid only with no spans.
+
+    Raises:
+        ValueError: If a span is malformed, out of bounds, empty, overlapping,
+            or leaves any document characters uncovered.
+    """
+
+    _validate_section_spans(text, spans, require_coverage=True)
+
+
+def list_section_label(section: str | Mapping[str, Any]) -> str | None:
+    """Return the canonical list-bearing label for a label or coded section.
+
+    Mapping inputs may identify a section with a canonical/user-facing
+    ``label`` or a LOINC value under ``loinc_code``, ``loinc``, ``code``,
+    ``coding``, or ``codes``. Coding mappings are accepted only when their
+    optional system identifies LOINC.
+    """
+
+    if isinstance(section, str):
+        return _canonical_list_label(section)
+
+    label = section.get("label")
+    if isinstance(label, str):
+        canonical = _canonical_list_label(label)
+        if canonical is not None:
+            return canonical
+
+    label_by_code = {code: label for label, code in LIST_SECTION_LOINC_CODES.items()}
+    for key in ("loinc_code", "loinc", "code", "coding", "codes"):
+        for code in _loinc_codes(section.get(key)):
+            canonical = label_by_code.get(code)
+            if canonical is not None:
+                return canonical
+    return None
+
+
+def is_list_bearing_section(section: str | Mapping[str, Any]) -> bool:
+    """Return whether a section is a problem, medication, or allergy list."""
+
+    return list_section_label(section) is not None
+
+
+def parse_section_lists(
+    text: str,
+    sections: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    language: str | None = None,
+) -> tuple[ListItemSpan, ...]:
+    """Parse lists only inside detected or supplied list-bearing sections.
+
+    Detected header text is excluded using ``content_start``. Returned item
+    offsets remain absolute to the full source document, and parent indices
+    remain valid across multiple list-bearing sections.
+
+    Args:
+        text: Full clinical document source.
+        sections: Optional section spans. When omitted, :func:`detect_sections`
+            supplies canonical section labels and offsets.
+        language: Optional language forwarded to section detection.
+
+    Returns:
+        Offset-aligned list items ordered across the source document.
+    """
+
+    active_sections = (
+        detect_sections(text, language=language)
+        if sections is None
+        else tuple(sections)
+    )
+    result: list[ListItemSpan] = []
+    for index, section in enumerate(active_sections):
+        if not isinstance(section, Mapping):
+            raise ValueError(f"section span {index} must be a mapping")
+        if not is_list_bearing_section(section):
+            continue
+        start = _optional_section_offset(section, "content_start", section.get("start"))
+        end = _optional_section_offset(section, "end", None)
+        if start is None or end is None or start < 0 or end > len(text) or start > end:
+            raise ValueError(f"section span {index} has invalid list bounds")
+        while start < end and text[start] in {" ", "\t"}:
+            start += 1
+
+        relative_items = parse_lists(text[start:end])
+        item_index_offset = len(result)
+        for item in relative_items:
+            result.append(
+                ListItemSpan(
+                    text=item.text,
+                    start=item.start + start,
+                    end=item.end + start,
+                    nesting_level=item.nesting_level,
+                    style=item.style,
+                    marker=item.marker,
+                    marker_start=(
+                        item.marker_start + start
+                        if item.marker_start is not None
+                        else None
+                    ),
+                    marker_end=(
+                        item.marker_end + start if item.marker_end is not None else None
+                    ),
+                    content_start=(
+                        item.content_start + start
+                        if item.content_start is not None
+                        else None
+                    ),
+                    parent_index=(
+                        item.parent_index + item_index_offset
+                        if item.parent_index is not None
+                        else None
+                    ),
+                )
+            )
+    return tuple(result)
+
+
+def _validate_section_spans(
+    text: str,
+    spans: Iterable[Mapping[str, Any]],
+    *,
+    require_coverage: bool,
+) -> None:
+    previous_end: int | None = None
+    for index, span in enumerate(spans):
+        if not isinstance(span, Mapping):
+            raise ValueError(f"section span {index} must be a mapping")
+        label = span.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"section span {index} requires a non-empty label")
+        start = _section_offset(span, "start", index)
+        end = _section_offset(span, "end", index)
+        if start < 0 or end > len(text):
+            raise ValueError(f"section span {index} is outside document bounds")
+        if end <= start:
+            raise ValueError(f"section span {index} must have positive length")
+
+        if previous_end is None:
+            if require_coverage and start != 0:
+                raise ValueError(f"section spans leave a gap from 0 to {start}")
+        elif start < previous_end:
+            raise ValueError(
+                f"section spans overlap at offsets {start} to {previous_end}"
+            )
+        elif start > previous_end:
+            raise ValueError(
+                f"section spans leave a gap from {previous_end} to {start}"
+            )
+        previous_end = end
+
+    if require_coverage:
+        covered_end = previous_end if previous_end is not None else 0
+        if covered_end != len(text):
+            raise ValueError(
+                f"section spans leave a gap from {covered_end} to {len(text)}"
+            )
+
+
+def _section_offset(span: Mapping[str, Any], key: str, index: int) -> int:
+    value = span.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"section span {index} requires an integer {key}")
+    return value
+
+
+def _optional_section_offset(
+    span: Mapping[str, Any],
+    key: str,
+    fallback: Any,
+) -> int | None:
+    value = span.get(key, fallback)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    return value
+
+
+def _canonical_list_label(label: str) -> str | None:
+    normalized = normalize_section_header(label)
+    aliases = {
+        "allergies": "allergies",
+        "allergy list": "allergies",
+        "drug allergies": "allergies",
+        "current medications": "medications",
+        "medication list": "medications",
+        "medications": "medications",
+        "meds": "medications",
+        "problem list": "problem_list",
+        "problems": "problem_list",
+    }
+    return aliases.get(normalized)
+
+
+def _loinc_codes(value: Any) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value.strip()
+        return
+    if isinstance(value, Mapping):
+        system = value.get("system")
+        code = value.get("code")
+        if isinstance(code, str) and (
+            system is None or (isinstance(system, str) and "loinc" in system.lower())
+        ):
+            yield code.strip()
+        return
+    if isinstance(value, Iterable):
+        for entry in value:
+            yield from _loinc_codes(entry)
 
 
 def _iter_lines(text: str) -> Iterable[_Line]:
@@ -282,12 +554,15 @@ def _section_dict(
     header_start: int | None = None,
     header_end: int | None = None,
     content_start: int | None = None,
-) -> dict[str, Any]:
-    section: dict[str, Any] = {
-        "label": label,
-        "start": int(start),
-        "end": int(end),
-    }
+) -> SectionSpan:
+    section = SectionSpan(
+        label=label,
+        start=int(start),
+        end=int(end),
+    )
+    loinc_code = LIST_SECTION_LOINC_CODES.get(label)
+    if loinc_code is not None:
+        section["loinc_code"] = loinc_code
     if header is not None:
         section.update(
             {
@@ -308,4 +583,15 @@ def _section_dict(
     return section
 
 
-__all__ = ["UNSECTIONED_SECTION", "detect_sections"]
+__all__ = [
+    "LIST_BEARING_SECTION_LABELS",
+    "LIST_BEARING_SECTION_LOINC_CODES",
+    "LIST_SECTION_LOINC_CODES",
+    "SectionSpan",
+    "UNSECTIONED_SECTION",
+    "detect_sections",
+    "is_list_bearing_section",
+    "list_section_label",
+    "parse_section_lists",
+    "validate_section_spans",
+]

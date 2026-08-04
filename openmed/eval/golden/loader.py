@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
-from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    INDIC_NER_LANGUAGES,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
 from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import (
@@ -27,6 +31,7 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     "multilingual",
     "checksum_ids",
     "financial_ids",
+    "india_health_ids",
     "date_arithmetic",
     "policy_profile_actions",
     HARD_NEGATIVE_CATEGORY,
@@ -37,14 +42,36 @@ _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
 _TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
-_NON_DEID_FIXTURE_NAMES = frozenset(
+_SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
+        "code_mixed_hinglish.jsonl",
         "context_multilingual.jsonl",
+        "event_coref.jsonl",
+        "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
+        "grounded_codeable_concepts.jsonl",
+        "grounding_export.jsonl",
+        "grounding_vocab_synthetic.jsonl",
+        "india_clinical.jsonl",
+        "indic_name_variants.json",
+        "joint_entity_relation.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
+        "relations_indic.jsonl",
+        "relations_zh.jsonl",
         "surrogate_multilingual.jsonl",
         "consensus_corpus.jsonl",
+        # Domain eval fixtures that are not PII de-identification gold spans and
+        # must not be loaded as such by load_golden_fixtures().
+        "radiology_finding.jsonl",
+        "radiology_report.jsonl",
+        "radiology_entity_relations.jsonl",
+        "hgvs_parse.jsonl",
+        "measurement_trend.jsonl",
+        "norm_multilingual.jsonl",
+        "temporal_tlinks.jsonl",
+        "tnm_stage.jsonl",
+        "oncotree_map.jsonl",
     }
 )
 
@@ -93,7 +120,9 @@ class GoldenFixture:
             raise ValueError("golden fixture expected_output.text is required")
 
         language = str(data.get("language") or data.get("lang") or "en")
-        fixture_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        fixture_languages = (
+            SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        )
         if language not in fixture_languages:
             raise ValueError(f"unsupported golden fixture language: {language!r}")
 
@@ -163,11 +192,15 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
     if fixture_path.is_file():
         return (fixture_path,)
     paths = [
-        *fixture_path.glob("*.json"),
+        *(
+            path
+            for path in fixture_path.glob("*.json")
+            if path.name not in _SPECIALIZED_FIXTURE_NAMES
+        ),
         *(
             path
             for path in fixture_path.glob("**/*.jsonl")
-            if path.name not in _NON_DEID_FIXTURE_NAMES
+            if path.name not in _SPECIALIZED_FIXTURE_NAMES
         ),
     ]
     if path is None:
@@ -178,6 +211,7 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
 def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:
     """Load and validate all golden fixtures under *path*."""
     fixtures: list[GoldenFixture] = []
+    fixture_paths: dict[str, Path] = {}
     for fixture_path in list_fixture_paths(path):
         if fixture_path.suffix.lower() == ".jsonl":
             rows = [
@@ -185,20 +219,28 @@ def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:
                 for line in fixture_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
-            fixtures.extend(GoldenFixture.from_mapping(row) for row in rows)
-            continue
+        else:
+            raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, Mapping):
+                raise ValueError(f"{fixture_path} must contain a mapping")
+            if raw.get("version") != _FIXTURE_VERSION:
+                raise ValueError(f"{fixture_path} has unsupported fixture version")
+            if raw.get("synthetic") is not True:
+                raise ValueError(f"{fixture_path} must be marked synthetic")
+            rows = raw.get("fixtures")
+            if not isinstance(rows, list):
+                raise ValueError(f"{fixture_path} must contain a fixtures list")
 
-        raw = json.loads(fixture_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, Mapping):
-            raise ValueError(f"{fixture_path} must contain a mapping")
-        if raw.get("version") != _FIXTURE_VERSION:
-            raise ValueError(f"{fixture_path} has unsupported fixture version")
-        if raw.get("synthetic") is not True:
-            raise ValueError(f"{fixture_path} must be marked synthetic")
-        rows = raw.get("fixtures")
-        if not isinstance(rows, list):
-            raise ValueError(f"{fixture_path} must contain a fixtures list")
-        fixtures.extend(GoldenFixture.from_mapping(row) for row in rows)
+        for row in rows:
+            fixture = GoldenFixture.from_mapping(row)
+            first_path = fixture_paths.get(fixture.fixture_id)
+            if first_path is not None:
+                raise ValueError(
+                    f"duplicate golden fixture id {fixture.fixture_id!r}: "
+                    f"{first_path} and {fixture_path}"
+                )
+            fixture_paths[fixture.fixture_id] = fixture_path
+            fixtures.append(fixture)
     return fixtures
 
 

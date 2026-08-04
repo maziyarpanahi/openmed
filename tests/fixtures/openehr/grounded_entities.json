@@ -1,0 +1,66 @@
+{
+  "doc_id": "synthetic-note-001",
+  "source_text": "Assessment: type 2 diabetes. Plan: metformin. Labs: glucose 145 mg/dL. Vitals: heart rate 88 /min.",
+  "entities": [
+    {
+      "label": "condition",
+      "text": "type 2 diabetes",
+      "start": 12,
+      "end": 27,
+      "candidates": [
+        {
+          "system": "SNOMED",
+          "code": "44054006",
+          "display": "Diabetes mellitus type 2",
+          "score": 0.98
+        }
+      ]
+    },
+    {
+      "label": "medication",
+      "text": "metformin",
+      "start": 35,
+      "end": 44,
+      "candidates": [
+        {
+          "system": "RXNORM",
+          "code": "6809",
+          "display": "metformin",
+          "score": 0.99
+        }
+      ]
+    },
+    {
+      "label": "lab_result",
+      "text": "glucose",
+      "start": 52,
+      "end": 59,
+      "value": 145,
+      "unit": "mg/dL",
+      "candidates": [
+        {
+          "system": "LOINC",
+          "code": "2345-7",
+          "display": "Glucose [Mass/volume] in Serum or Plasma",
+          "score": 0.97
+        }
+      ]
+    },
+    {
+      "label": "vital_sign",
+      "text": "heart rate",
+      "start": 80,
+      "end": 90,
+      "value": 88,
+      "unit": "/min",
+      "candidates": [
+        {
+          "system": "LOINC",
+          "code": "8867-4",
+          "display": "Heart rate",
+          "score": 0.96
+        }
+      ]
+    }
+  ]
+}

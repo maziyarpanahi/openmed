@@ -70,6 +70,36 @@ class TestSelectPrivacyFilterBackend:
         with patch("openmed.core.backends.MLXBackend.is_available", return_value=False):
             assert select_privacy_filter_backend("openai/privacy-filter") == "torch"
 
+    def test_local_torch_artifact_uses_torch_when_mlx_is_available(self, tmp_path):
+        from openmed.core.backends import select_privacy_filter_backend
+
+        (tmp_path / "config.json").write_text(
+            '{"model_type":"openai_privacy_filter"}',
+            encoding="utf-8",
+        )
+
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=True):
+            assert select_privacy_filter_backend(str(tmp_path)) == "torch"
+
+    @pytest.mark.parametrize("metadata_file", ["config.json", "openmed-mlx.json"])
+    def test_local_mlx_artifact_uses_mlx_from_metadata(
+        self,
+        tmp_path,
+        metadata_file,
+    ):
+        from openmed.core.backends import select_privacy_filter_backend
+
+        payload = (
+            '{"_mlx_model_type":"openai-privacy-filter",'
+            '"_mlx_weights_format":"safetensors"}'
+            if metadata_file == "config.json"
+            else '{"format":"openmed-mlx"}'
+        )
+        (tmp_path / metadata_file).write_text(payload, encoding="utf-8")
+
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=True):
+            assert select_privacy_filter_backend(str(tmp_path)) == "mlx"
+
     def test_nemotron_mlx_artifact_on_mac_with_mlx(self):
         from openmed.core.backends import select_privacy_filter_backend
 

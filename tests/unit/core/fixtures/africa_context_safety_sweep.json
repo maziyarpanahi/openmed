@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "id": "east-africa",
+      "text": "Follow-up was arranged at Kijabe Mission Hospital. M-Pesa transaction QJH4X7P2LK was recorded. Ethnicity: Kikuyu.",
+      "planted": [
+        {
+          "surface": "Kijabe Mission Hospital",
+          "label": "ORGANIZATION"
+        },
+        {
+          "surface": "QJH4X7P2LK",
+          "label": "ACCOUNT_NUMBER"
+        },
+        {
+          "surface": "Kikuyu",
+          "label": "ETHNICITY"
+        }
+      ]
+    },
+    {
+      "id": "west-africa",
+      "text": "The referral came from St Anne District Hospital. MTN MoMo reference 4839201746 was supplied. Tribal affiliation: Yoruba.",
+      "planted": [
+        {
+          "surface": "St Anne District Hospital",
+          "label": "ORGANIZATION"
+        },
+        {
+          "surface": "4839201746",
+          "label": "ACCOUNT_NUMBER"
+        },
+        {
+          "surface": "Yoruba",
+          "label": "ETHNICITY"
+        }
+      ]
+    },
+    {
+      "id": "southern-africa",
+      "text": "The patient attended Ndlovu Community Clinic. EcoCash receipt EC2486KQ93 was noted. The patient identifies as Zulu.",
+      "planted": [
+        {
+          "surface": "Ndlovu Community Clinic",
+          "label": "ORGANIZATION"
+        },
+        {
+          "surface": "EC2486KQ93",
+          "label": "ACCOUNT_NUMBER"
+        },
+        {
+          "surface": "Zulu",
+          "label": "ETHNICITY"
+        }
+      ]
+    },
+    {
+      "id": "north-africa",
+      "text": "The note originated at Atlas Health Centre. Vodafone Cash wallet 01048269375 was listed. Ethnic group: Amazigh.",
+      "planted": [
+        {
+          "surface": "Atlas Health Centre",
+          "label": "ORGANIZATION"
+        },
+        {
+          "surface": "01048269375",
+          "label": "ACCOUNT_NUMBER"
+        },
+        {
+          "surface": "Amazigh",
+          "label": "ETHNICITY"
+        }
+      ]
+    }
+  ]
+}
