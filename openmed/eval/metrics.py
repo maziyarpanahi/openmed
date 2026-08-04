@@ -207,6 +207,50 @@ class F1Metrics:
 
 
 @dataclass(frozen=True)
+class DocumentLevelRelationMetrics:
+    """Document relation F1 with intra- and cross-sentence recall slices."""
+
+    overall: F1Metrics
+    intra_sentence_recall: float
+    cross_sentence_recall: float
+    intra_sentence_gold: int
+    cross_sentence_gold: int
+    match: str
+
+    @property
+    def precision(self) -> float:
+        """Return overall document-level relation precision."""
+
+        return self.overall.precision
+
+    @property
+    def recall(self) -> float:
+        """Return overall document-level relation recall."""
+
+        return self.overall.recall
+
+    @property
+    def f1(self) -> float:
+        """Return overall document-level relation F1."""
+
+        return self.overall.f1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible relation metric report."""
+
+        return {
+            **self.overall.to_dict(),
+            "intra_sentence_recall": self.intra_sentence_recall,
+            "cross_sentence_recall": self.cross_sentence_recall,
+            "counts": {
+                "intra_sentence_gold": self.intra_sentence_gold,
+                "cross_sentence_gold": self.cross_sentence_gold,
+            },
+            "match": self.match,
+        }
+
+
+@dataclass(frozen=True)
 class CoreferenceClusteringScore:
     """Documented B-cubed proxy score for coreference clustering.
 
@@ -1857,6 +1901,79 @@ def compute_exact_span_f1(
                 true_positives += 1
                 break
     return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def compute_document_level_relation_metrics(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+    *,
+    match: str = "strict",
+) -> DocumentLevelRelationMetrics:
+    """Score document relations and separate recall by sentence distance.
+
+    Relations are classified as cross-sentence when their metadata carries a
+    truthy ``cross_sentence`` value or a positive ``sentence_distance``. A
+    sentence-scoped relation is otherwise treated as intra-sentence.
+    """
+
+    from openmed.eval.relation_metrics import (
+        compute_relation_f1,
+        normalize_eval_relations,
+    )
+
+    gold = normalize_eval_relations(gold_relations)
+    predicted = normalize_eval_relations(predicted_relations)
+    overall = compute_relation_f1(gold, predicted, match=match)
+    intra_sentence = [
+        relation for relation in gold if not _relation_crosses_sentences(relation)
+    ]
+    cross_sentence = [
+        relation for relation in gold if _relation_crosses_sentences(relation)
+    ]
+    intra_score = compute_relation_f1(intra_sentence, predicted, match=match)
+    cross_score = compute_relation_f1(cross_sentence, predicted, match=match)
+    return DocumentLevelRelationMetrics(
+        overall=overall,
+        intra_sentence_recall=intra_score.recall,
+        cross_sentence_recall=cross_score.recall,
+        intra_sentence_gold=len(intra_sentence),
+        cross_sentence_gold=len(cross_sentence),
+        match=str(match).strip().lower(),
+    )
+
+
+def compute_document_relation_metrics(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+    *,
+    match: str = "strict",
+) -> DocumentLevelRelationMetrics:
+    """Compatibility alias for document-level relation metrics."""
+
+    return compute_document_level_relation_metrics(
+        gold_relations,
+        predicted_relations,
+        match=match,
+    )
+
+
+def _relation_crosses_sentences(relation: Any) -> bool:
+    metadata = getattr(relation, "metadata", {})
+    if "cross_sentence" in metadata:
+        return _truthy(metadata["cross_sentence"])
+    distance = metadata.get("sentence_distance")
+    if distance is not None:
+        try:
+            return int(distance) > 0
+        except (TypeError, ValueError):
+            return False
+    head_metadata = getattr(relation.head, "metadata", {})
+    tail_metadata = getattr(relation.tail, "metadata", {})
+    head_sentence = head_metadata.get("sentence_index")
+    tail_sentence = tail_metadata.get("sentence_index")
+    if head_sentence is None or tail_sentence is None:
+        return False
+    return head_sentence != tail_sentence
 
 
 def normalize_pipeline_fact(value: PipelineFact | Mapping[str, Any]) -> PipelineFact:
@@ -4824,6 +4941,7 @@ __all__ = [
     "AbstentionMetrics",
     "CriticalFindingMiss",
     "CriticalFindingRecallMetrics",
+    "DocumentLevelRelationMetrics",
     "EvalSpan",
     "PipelineFact",
     "RateMetric",
@@ -4882,6 +5000,8 @@ __all__ = [
     "compute_clinical_utility_loss",
     "compute_abstention_metrics",
     "compute_date_shift_consistency",
+    "compute_document_level_relation_metrics",
+    "compute_document_relation_metrics",
     "compute_surrogate_consistency",
     "normalize_temporal_edges",
     "compute_temporal_awareness_f1",
