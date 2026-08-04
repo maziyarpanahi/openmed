@@ -1,0 +1,4 @@
+{
+  "_comment": "Records intentional, announced breaking changes to the openmed public API. Each key is a 'module.name' location (matching the differ's report) and each value is a short justification citing the deprecation cycle. See docs/compliance/api-deprecation-policy.md. Entries here are how you tell check_public_api.py that a removal or incompatible signature change is sanctioned rather than accidental. Remove an entry once the corresponding member no longer exists in the baseline.",
+  "announced_breaks": {}
+}

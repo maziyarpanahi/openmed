@@ -1,0 +1,38 @@
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "https://facility.test/openmrs/ws/fhir2/R4/Patient/patient-1",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-1",
+        "identifier": [
+          {
+            "system": "https://facility.test/openmrs/id/kenya-national-id",
+            "value": "12345678"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "text": "Amina Wanjiku",
+            "family": "Wanjiku",
+            "given": [
+              "Amina"
+            ]
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+254 712 345 678",
+            "use": "mobile"
+          }
+        ],
+        "gender": "female"
+      }
+    }
+  ],
+  "link": []
+}
