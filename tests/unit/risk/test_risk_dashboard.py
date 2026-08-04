@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from html.parser import HTMLParser
 
+import pytest
+
 from openmed.risk import (
+    AnonymityPolicy,
+    anonymize_release,
+    assess_release,
     enforce_kanon,
     kanon_report,
+    longitudinal_risk_report,
+    render_release_assessment_dashboard,
     render_risk_dashboard,
     risk_report,
+    write_release_assessment_dashboard,
     write_risk_dashboard,
 )
 
@@ -66,6 +75,60 @@ def _sample_risk() -> dict:
     )
 
 
+def _release_rows() -> list[dict[str, object]]:
+    return [
+        {
+            "patient_id": "patient-id-canary-a",
+            "age": 30,
+            "zip": "raw-qi-value-canary",
+            "condition": "sensitive-value-canary-a",
+        },
+        {
+            "patient_id": "patient-id-canary-b",
+            "age": 30,
+            "zip": "raw-qi-value-canary",
+            "condition": "sensitive-value-canary-b",
+        },
+    ]
+
+
+def _release_policy() -> AnonymityPolicy:
+    return AnonymityPolicy(
+        quasi_identifiers=("age", "zip"),
+        sensitive_attributes=("condition",),
+        privacy_unit="patient_id",
+        target_k=2,
+    )
+
+
+def _sample_longitudinal_risk() -> dict[str, object]:
+    report = longitudinal_risk_report(
+        [
+            {
+                "patient_id": "synthetic-subject-001",
+                "record_id": f"synthetic-note-{index}",
+                "text": "Synthetic follow-up note.",
+                "audit_spans": [
+                    {
+                        "canonical_label": "SYNTHETIC_SURROGATE",
+                        "surrogate": "synthetic-surrogate-a",
+                        "start": 0,
+                        "end": 9,
+                    }
+                ],
+            }
+            for index in (1, 2)
+        ],
+        hmac_key="synthetic-dashboard-key",
+    )
+    report["raw_note"] = "raw-top-level-canary"
+    report["patient_risks"][0]["raw_patient_key"] = "raw-patient-canary"
+    report["patient_risks"][0]["evidence"][0]["source"] = "raw-source-canary"
+    report["patient_risks"][0]["evidence"][0]["category"] = "raw-category-canary"
+    report["patient_risks"][0]["evidence"][0]["section"] = "raw-section-canary"
+    return report
+
+
 def test_render_risk_dashboard_returns_self_contained_html_document():
     html = render_risk_dashboard(_sample_risk(), title="Risk Review")
 
@@ -75,6 +138,7 @@ def test_render_risk_dashboard_returns_self_contained_html_document():
     assert "Headline Metrics" in html
     assert "Singleton Records" in html
     assert "Top Quasi-identifiers" in html
+    assert "Local-sensitive diagnostic" in html
     assert not re.search(r"\b(?:src|href)=[\"']https?://", html)
     _assert_balanced_html(html)
 
@@ -173,3 +237,311 @@ def test_render_risk_dashboard_is_deterministic_for_fixed_input():
     second = render_risk_dashboard(risk)
 
     assert first == second
+
+
+def test_legacy_dashboard_remains_explicitly_local_sensitive_and_detailed():
+    html = render_risk_dashboard(
+        {
+            "leakage_rate": 1.0,
+            "reid_rate": 1.0,
+            "k_min": 1,
+            "singleton_records": [
+                {
+                    "record_id": "local-record-canary",
+                    "record_index": 0,
+                    "effective_k": 1,
+                    "quasi_identifier_key": [
+                        {"category": "city", "values": ["local-qi-canary"]}
+                    ],
+                }
+            ],
+            "quasi_identifiers": [
+                {
+                    "record_id": "local-record-canary",
+                    "category": "city",
+                    "value": "local-qi-canary",
+                }
+            ],
+        }
+    )
+
+    assert "Local-sensitive diagnostic" in html
+    assert "local-record-canary" in html
+    assert "local-qi-canary" in html
+
+
+def test_release_assessment_dashboard_renders_only_allowlisted_aggregates():
+    assessment = assess_release(_release_rows(), _release_policy())
+    payload = assessment.to_dict()
+    payload["records"] = [{"zip": "injected-record-canary"}]
+    payload["source_path"] = "/private/injected-path-canary.csv"
+    payload["warnings"] = ["warning-text-canary"]
+    payload["record_id"] = "injected-record-id-canary"
+    payload["k_anonymity"]["equivalence_classes"] = [
+        {
+            "key": ["injected-class-key-canary"],
+            "members": [999],
+        }
+    ]
+
+    html = render_release_assessment_dashboard(payload, title="Release Evidence")
+
+    assert "Release Evidence" in html
+    assert "Aggregate evidence only" in html
+    assert "Qualified expert review is required" in html
+    assert "meets declared policy" in html
+    assert "Achieved k" in html
+    assert "Class Size Distribution" in html
+    for canary in (
+        "patient-id-canary-a",
+        "raw-qi-value-canary",
+        "sensitive-value-canary-a",
+        "injected-record-canary",
+        "/private/injected-path-canary.csv",
+        "warning-text-canary",
+        "injected-record-id-canary",
+        "injected-class-key-canary",
+    ):
+        assert canary not in html
+    assert not re.search(r"\b(?:src|href)=[\"']https?://", html)
+    _assert_balanced_html(html)
+
+
+def test_release_dashboard_adds_privacy_safe_longitudinal_linkage_panel():
+    longitudinal = _sample_longitudinal_risk()
+    high_risk = longitudinal["patient_risks"][0]
+
+    html = render_release_assessment_dashboard(
+        assess_release(_release_rows(), _release_policy()),
+        longitudinal=longitudinal,
+    )
+
+    assert "Longitudinal Linkage Risk" in html
+    assert "Highest-Risk Cohort" in html
+    assert "Maximum linkage bound" in html
+    assert "100.0%" in html
+    assert high_risk["patient_pseudonym"] in html
+    assert high_risk["evidence"][0]["note_hash"] in html
+    assert high_risk["evidence"][0]["value_hash"] in html
+    assert ">0</td>" in html
+    assert ">9</td>" in html
+    for canary in (
+        "synthetic-subject-001",
+        "synthetic-note-1",
+        "synthetic-surrogate-a",
+        "raw-top-level-canary",
+        "raw-patient-canary",
+        "raw-source-canary",
+        "raw-category-canary",
+        "raw-section-canary",
+    ):
+        assert canary not in html
+    _assert_balanced_html(html)
+
+
+def test_legacy_dashboard_output_is_unchanged_when_longitudinal_is_omitted():
+    risk = _sample_risk()
+
+    default_html = render_risk_dashboard(risk)
+    explicit_html = render_risk_dashboard(risk, longitudinal=None)
+    longitudinal_html = render_risk_dashboard(
+        risk,
+        longitudinal=_sample_longitudinal_risk(),
+    )
+
+    assert explicit_html == default_html
+    assert "Longitudinal Linkage Risk" not in default_html
+    assert "Longitudinal Linkage Risk" in longitudinal_html
+
+
+def test_longitudinal_panel_fails_closed_without_echoing_malformed_values():
+    longitudinal = _sample_longitudinal_risk()
+    longitudinal["patient_count"] = "raw-numeric-field-canary"
+    longitudinal["patient_risks"][0]["patient_pseudonym"] = "raw-hash-canary"
+
+    html = render_release_assessment_dashboard(
+        assess_release(_release_rows(), _release_policy()),
+        longitudinal=longitudinal,
+    )
+
+    assert "Longitudinal linkage evidence is unavailable or malformed" in html
+    assert "raw-numeric-field-canary" not in html
+    assert "raw-hash-canary" not in html
+    assert "Highest-Risk Cohort" not in html
+
+
+def test_anonymization_dashboard_never_traverses_sensitive_records():
+    result = anonymize_release(_release_rows(), _release_policy())
+    assert any(
+        "raw-qi-value-canary" in str(value) or "sensitive-value-canary" in str(value)
+        for record in result.records
+        for value in record.values()
+    )
+
+    html = render_release_assessment_dashboard(result)
+
+    assert "Before Anonymization" in html
+    assert "After Anonymization" in html
+    assert "Transformation and Utility" in html
+    assert "Selected Generalization" in html
+    for canary in (
+        "patient-id-canary-a",
+        "patient-id-canary-b",
+        "raw-qi-value-canary",
+        "sensitive-value-canary-a",
+        "sensitive-value-canary-b",
+    ):
+        assert canary not in html
+    _assert_balanced_html(html)
+
+
+def test_release_assessment_dashboard_rejects_detailed_risk_mappings():
+    with pytest.raises(TypeError, match="safe release assessment"):
+        render_release_assessment_dashboard(_sample_risk())
+
+
+def test_release_dashboard_preserves_valid_literal_schema_labels_with_escaping():
+    rows = [
+        {
+            "患者 ID": "patient-a",
+            "Patient Age": 40,
+            "Région, cohort | `v1`": "north",
+            "Diagnostic <group>": "alpha",
+        },
+        {
+            "患者 ID": "patient-b",
+            "Patient Age": 40,
+            "Région, cohort | `v1`": "north",
+            "Diagnostic <group>": "beta",
+        },
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("Patient Age", "Région, cohort | `v1`"),
+        sensitive_attributes=("Diagnostic <group>",),
+        privacy_unit="患者 ID",
+        target_k=2,
+    )
+
+    assessment = assess_release(rows, policy).to_dict()
+    payload = {
+        "artifact": "deidentification_anonymization_summary",
+        "before": assessment,
+        "after": assessment,
+        "generalization": {
+            "information_loss": 0.0,
+            "levels": [
+                {"attribute": attribute, "level": 0, "loss": 0.0}
+                for attribute in policy.quasi_identifiers
+            ],
+        },
+        "utility": {
+            "row_suppression_rate": 0.0,
+            "privacy_unit_suppression_rate": 0.0,
+            "quasi_identifier_cell_change_rate": 0.0,
+            "released_rows": 2,
+        },
+    }
+
+    html = render_release_assessment_dashboard(payload)
+
+    assert "Patient Age" in html
+    assert "Région, cohort | `v1`" in html
+    assert "Diagnostic &lt;group&gt;" in html
+    assert "Diagnostic <group>" not in html
+    assert "<script" not in html
+    _assert_balanced_html(html)
+
+
+def test_release_dashboard_drops_unsafe_control_and_bidi_labels():
+    payload = assess_release(_release_rows(), _release_policy()).to_dict()
+    payload["quasi_identifiers"].append("Alice Canary\u202e")
+    payload["attribute_disclosure"].append(
+        {
+            "attribute": "Sensitive\u0000Canary Name",
+            "l_diversity": {"achieved": 1, "violating_classes": 0},
+            "t_closeness": {"achieved": 0, "violating_classes": 0},
+        }
+    )
+
+    html = render_release_assessment_dashboard(payload)
+
+    assert "Alice Canary" not in html
+    assert "Canary Name" not in html
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("row_count",),
+        ("privacy_unit_count",),
+        ("policy", "target_k"),
+        ("policy", "target_l"),
+        ("policy", "target_t"),
+        ("k_anonymity", "achieved_k"),
+        ("sample_identity_risk", "max"),
+        ("warning_count",),
+        ("attribute_disclosure", 0, "l_diversity", "achieved"),
+        ("attribute_disclosure", 0, "l_diversity", "violating_classes"),
+        ("attribute_disclosure", 0, "t_closeness", "achieved"),
+        ("attribute_disclosure", 0, "t_closeness", "violating_classes"),
+    ],
+)
+def test_release_dashboard_never_echoes_strings_from_numeric_fields(
+    path: tuple[str | int, ...],
+) -> None:
+    payload = deepcopy(assess_release(_release_rows(), _release_policy()).to_dict())
+    target = payload
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = "numeric-field-canary"
+
+    html = render_release_assessment_dashboard(payload)
+
+    assert "numeric-field-canary" not in html
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("generalization", "information_loss"),
+        ("utility", "row_suppression_rate"),
+        ("utility", "privacy_unit_suppression_rate"),
+        ("utility", "quasi_identifier_cell_change_rate"),
+        ("utility", "released_rows"),
+        ("generalization", "levels", 0, "level"),
+        ("generalization", "levels", 0, "loss"),
+    ],
+)
+def test_anonymization_dashboard_never_echoes_strings_from_numeric_fields(
+    path: tuple[str | int, ...],
+) -> None:
+    payload = deepcopy(
+        anonymize_release(_release_rows(), _release_policy()).to_safe_dict()
+    )
+    target = payload
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = "numeric-field-canary"
+
+    html = render_release_assessment_dashboard(payload)
+
+    assert "numeric-field-canary" not in html
+
+
+def test_write_release_assessment_dashboard_writes_safe_balanced_html(tmp_path):
+    result = anonymize_release(_release_rows(), _release_policy())
+    path = tmp_path / "release-assessment.html"
+
+    returned = write_release_assessment_dashboard(
+        result,
+        path,
+        longitudinal=_sample_longitudinal_risk(),
+    )
+
+    assert returned == path
+    html = path.read_text(encoding="utf-8")
+    assert "Aggregate evidence only" in html
+    assert "Longitudinal Linkage Risk" in html
+    assert "raw-qi-value-canary" not in html
+    assert "raw-patient-canary" not in html
+    _assert_balanced_html(html)

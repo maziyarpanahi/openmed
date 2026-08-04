@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "uuid": "33333333-3333-4333-8333-333333333333",
+      "display": "Coded viral load observation",
+      "concept": {
+        "uuid": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "display": "HIV viral load",
+        "datatype": "Numeric"
+      },
+      "person": {
+        "uuid": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      },
+      "encounter": {
+        "uuid": "22222222-2222-4222-8222-222222222222"
+      },
+      "obsDatetime": "2026-07-01T09:31:00.000+0300",
+      "value": 42,
+      "comment": "Result reviewed with Amina Wanjiku."
+    }
+  ],
+  "links": []
+}

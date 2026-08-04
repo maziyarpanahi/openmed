@@ -1,4 +1,4 @@
-{"kind":"meta","suite":"context_multilingual","version":1,"synthetic":true,"languages":["en","es","fr","de","zh","hi"],"axes":["negation","temporality","certainty"]}
+{"kind":"meta","suite":"context_multilingual","version":1,"synthetic":true,"languages":["en","es","fr","de","zh","hi","ja"],"axes":["negation","temporality","certainty"]}
 {"case_id":"en-affirmed","language":"en","synthetic":true,"trap":"affirmed","text":"Pneumonia is present today.","target":{"text":"Pneumonia"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"certain"}}
 {"case_id":"en-negated","language":"en","synthetic":true,"trap":"negated","text":"No evidence of pneumonia today.","target":{"text":"pneumonia"},"expected":{"negation":"negated","temporality":"recent","certainty":"certain"}}
 {"case_id":"en-historical","language":"en","synthetic":true,"trap":"historical","text":"History of pneumonia is documented.","target":{"text":"pneumonia"},"expected":{"negation":"affirmed","temporality":"historical","certainty":"certain"}}
@@ -35,3 +35,11 @@
 {"case_id":"hi-hypothetical","language":"hi","synthetic":true,"trap":"hypothetical","text":"यदि निमोनिया लौटे तो क्लिनिक से संपर्क करें।","target":{"text":"निमोनिया"},"expected":{"negation":"affirmed","temporality":"hypothetical","certainty":"uncertain"}}
 {"case_id":"hi-pseudo","language":"hi","synthetic":true,"trap":"pseudo_negation","text":"निमोनिया से इंकार नहीं किया जा सकता।","target":{"text":"निमोनिया"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"uncertain"}}
 {"case_id":"hi-double","language":"hi","synthetic":true,"trap":"double_negation","text":"नहीं बिना निमोनिया।","target":{"text":"निमोनिया"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"certain"}}
+{"case_id":"ja-affirmed","language":"ja","synthetic":true,"trap":"affirmed","text":"本日、肺炎を確認した。","target":{"text":"肺炎"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"certain"}}
+{"case_id":"ja-negated","language":"ja","synthetic":true,"trap":"negated","text":"肺炎は認められない。","target":{"text":"肺炎"},"expected":{"negation":"negated","temporality":"recent","certainty":"certain"}}
+{"case_id":"ja-historical","language":"ja","synthetic":true,"trap":"historical","text":"既往歴に肺炎がある。","target":{"text":"肺炎"},"expected":{"negation":"affirmed","temporality":"historical","certainty":"certain"}}
+{"case_id":"ja-hypothetical","language":"ja","synthetic":true,"trap":"hypothetical","text":"仮に肺炎が再発したら、外来へ連絡する。","target":{"text":"肺炎"},"expected":{"negation":"affirmed","temporality":"hypothetical","certainty":"uncertain"}}
+{"case_id":"ja-pseudo","language":"ja","synthetic":true,"trap":"pseudo_negation","text":"肺炎の可能性は否定できない。","target":{"text":"肺炎"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"uncertain"}}
+{"case_id":"ja-uncertain-suffix","language":"ja","synthetic":true,"trap":"uncertain_suffix","text":"肺炎かもしれない。","target":{"text":"肺炎"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"uncertain"}}
+{"case_id":"ja-double","language":"ja","synthetic":true,"trap":"double_negation","text":"肺炎がないわけではない。","target":{"text":"肺炎"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"certain"}}
+{"case_id":"ja-scope","language":"ja","synthetic":true,"trap":"scope_termination","text":"既往歴に肺炎あり、しかし発熱を確認した。","target":{"text":"発熱"},"expected":{"negation":"affirmed","temporality":"recent","certainty":"certain"}}
