@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "version": "africa-context-terms-v1",
+  "term_sets": {
+    "facility_cues": {
+      "pan_african": [
+        "clinic",
+        "district hospital",
+        "dispensary",
+        "health center",
+        "health centre",
+        "mission hospital",
+        "referral hospital"
+      ]
+    },
+    "facility_name_stopwords": [
+      "Africa",
+      "African",
+      "Egypt",
+      "Ethiopia",
+      "Ghana",
+      "Kenya",
+      "Morocco",
+      "Nigeria",
+      "Rwanda",
+      "South Africa",
+      "Tanzania",
+      "Uganda"
+    ],
+    "mobile_money_operators": {
+      "east_africa": [
+        "Airtel Money",
+        "M-Pesa",
+        "T-Kash"
+      ],
+      "north_africa": [
+        "Orange Money",
+        "Vodafone Cash"
+      ],
+      "southern_africa": [
+        "EcoCash",
+        "MTN MoMo"
+      ],
+      "west_africa": [
+        "Airtel Money",
+        "MTN MoMo",
+        "Orange Money"
+      ]
+    },
+    "mobile_money_reference_cues": [
+      "account",
+      "code",
+      "id",
+      "number",
+      "receipt",
+      "ref",
+      "reference",
+      "transaction",
+      "wallet"
+    ],
+    "ethnic_affiliations": {
+      "east_africa": [
+        "Kamba",
+        "Kikuyu",
+        "Luhya",
+        "Luo",
+        "Maasai"
+      ],
+      "north_africa": [
+        "Amazigh",
+        "Arab",
+        "Berber",
+        "Nubian"
+      ],
+      "southern_africa": [
+        "Shona",
+        "Sotho",
+        "Tswana",
+        "Xhosa",
+        "Zulu"
+      ],
+      "west_africa": [
+        "Akan",
+        "Ewe",
+        "Fulani",
+        "Hausa",
+        "Igbo",
+        "Yoruba"
+      ]
+    },
+    "ethnic_affiliation_context": [
+      "affiliation",
+      "clan",
+      "community",
+      "ethnic group",
+      "ethnic origin",
+      "ethnicity",
+      "identifies as",
+      "race",
+      "tribal",
+      "tribe"
+    ]
+  },
+  "patterns": [
+    {
+      "id": "named_healthcare_facility",
+      "template": "\\b(?!(?i:{facility_name_stopwords})\\s+(?i:{facility_cues})\\b)(?:[A-ZÀ-ÖØ-Þ][\\w'’.-]*\\s+){1,5}(?i:{facility_cues})\\b",
+      "entity_type": "ORGANIZATION",
+      "priority": 9,
+      "flags": 0,
+      "base_score": 0.9,
+      "context_boost": 0.0,
+      "safety_sweep_requires_context": false
+    },
+    {
+      "id": "mobile_money_reference",
+      "template": "\\b(?i:(?:{mobile_money_operators})\\s+(?:(?:{mobile_money_reference_cues})\\s*[:#-]?\\s*)?)(?=[A-Z0-9 -]{8,24}\\b)(?=[A-Z0-9 -]*\\d)[A-Z0-9][A-Z0-9 -]{6,22}[A-Z0-9]\\b",
+      "entity_type": "ACCOUNT_NUMBER",
+      "priority": 10,
+      "flags": 0,
+      "base_score": 0.55,
+      "context_boost": 0.0,
+      "safety_sweep_requires_context": false
+    },
+    {
+      "id": "ethnic_affiliation",
+      "template": "\\b(?:{ethnic_affiliations})\\b",
+      "entity_type": "ETHNICITY",
+      "priority": 8,
+      "flags": 2,
+      "base_score": 0.55,
+      "context_boost": 0.4,
+      "context_term_set": "ethnic_affiliation_context",
+      "requires_context": true,
+      "safety_sweep_requires_context": true
+    }
+  ],
+  "african_profile_defaults": {
+    "africa_malabo_baseline": {
+      "policy_label_actions": {
+        "SENSITIVE_ATTRIBUTE": "mask"
+      },
+      "actions": {
+        "ACCOUNT_NUMBER": "mask",
+        "ETHNICITY": "mask",
+        "ORGANIZATION": "mask"
+      }
+    },
+    "eg_pdpl": {
+      "policy_label_actions": {
+        "SENSITIVE_ATTRIBUTE": "mask"
+      },
+      "actions": {
+        "ACCOUNT_NUMBER": "mask",
+        "ETHNICITY": "mask",
+        "ORGANIZATION": "mask"
+      }
+    },
+    "ke_dpa": {
+      "policy_label_actions": {
+        "SENSITIVE_ATTRIBUTE": "mask"
+      },
+      "actions": {
+        "ACCOUNT_NUMBER": "mask",
+        "ETHNICITY": "mask",
+        "ORGANIZATION": "mask"
+      }
+    },
+    "ma_law_09_08": {
+      "policy_label_actions": {
+        "SENSITIVE_ATTRIBUTE": "mask"
+      },
+      "actions": {
+        "ACCOUNT_NUMBER": "mask",
+        "ETHNICITY": "mask",
+        "ORGANIZATION": "mask"
+      }
+    },
+    "ng_ndpa": {
+      "policy_label_actions": {
+        "SENSITIVE_ATTRIBUTE": "mask"
+      },
+      "actions": {
+        "ACCOUNT_NUMBER": "mask",
+        "ETHNICITY": "mask",
+        "ORGANIZATION": "mask"
+      }
+    },
+    "za_popia": {
+      "policy_label_actions": {
+        "SENSITIVE_ATTRIBUTE": "mask"
+      },
+      "actions": {
+        "ACCOUNT_NUMBER": "mask",
+        "ETHNICITY": "mask",
+        "ORGANIZATION": "replace"
+      }
+    }
+  }
+}

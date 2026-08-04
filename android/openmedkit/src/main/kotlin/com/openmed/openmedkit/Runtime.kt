@@ -5,10 +5,13 @@ import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
 import com.openmed.openmedkit.onnx.OnnxTokenClassifier as RuntimeOnnxTokenClassifier
 import com.openmed.openmedkit.onnx.TokenOffset
 import com.openmed.openmedkit.onnx.TokenPrediction
+import com.openmed.openmedkit.segmentation.IcuTextSegmenter
 import java.io.Closeable
 
 /**
  * Raw token/span prediction emitted by an Android token classifier.
+ *
+ * [start] and [end] use half-open Unicode scalar offsets.
  */
 data class TokenClassificationPrediction(
     val label: String,
@@ -65,7 +68,21 @@ class BackendOnnxTokenClassifier(
     override fun tokenOffsets(text: String): List<IntRange> =
         encode(text).toTokenOffsets()
             .filterNot { it.startOffset == 0 && it.endOffset == 0 }
-            .map { it.startOffset until it.endOffset }
+            .mapNotNull { offset ->
+                val scalarLength = UnicodeOffsetContract.scalarLength(text)
+                if (
+                    offset.startOffset !in 0..scalarLength ||
+                    offset.endOffset !in offset.startOffset..scalarLength
+                ) {
+                    return@mapNotNull null
+                }
+                val utf16 = UnicodeOffsetContract.utf16Span(
+                    text,
+                    offset.startOffset,
+                    offset.endOffset,
+                )
+                utf16.start until utf16.end
+            }
 
     override fun close() {
         var failure: Throwable? = null
@@ -115,10 +132,19 @@ internal fun aggregateTokenPredictions(
 
     fun flush() {
         val entity = current ?: return
-        if (entity.start >= 0 && entity.end <= text.length && entity.end > entity.start) {
+        val scalarLength = UnicodeOffsetContract.scalarLength(text)
+        if (
+            entity.start >= 0 &&
+            entity.end <= scalarLength &&
+            entity.end > entity.start
+        ) {
             entities += TokenClassificationPrediction(
                 label = entity.label,
-                text = text.substring(entity.start, entity.end),
+                text = UnicodeOffsetContract.substring(
+                    text,
+                    entity.start,
+                    entity.end,
+                ),
                 confidence = entity.scores.average().toFloat(),
                 start = entity.start,
                 end = entity.end,
@@ -178,23 +204,25 @@ private fun splitTokenLabel(rawLabel: String): Pair<String, String> {
 /**
  * Decodes classifier output into EntityPrediction records.
  */
-class TokenClassificationDecoder {
+class TokenClassificationDecoder(
+    private val segmenter: IcuTextSegmenter = IcuTextSegmenter(),
+) {
     fun decode(
         predictions: List<TokenClassificationPrediction>,
         sourceText: String,
     ): List<EntityPrediction> {
-        val textLength = sourceText.length
         return predictions.mapNotNull { prediction ->
-            if (prediction.start < 0 || prediction.end <= prediction.start || prediction.end > textLength) {
+            if (prediction.end <= prediction.start) {
                 return@mapNotNull null
             }
             EntityPrediction(
                 label = prediction.label,
-                text = sourceText.substring(prediction.start, prediction.end),
+                text = prediction.text,
                 confidence = prediction.confidence,
                 start = prediction.start,
                 end = prediction.end,
-            )
+            ).snappedToGraphemeBoundaries(sourceText, segmenter)
+                .takeIf { it.end > it.start }
         }
     }
 }
@@ -206,15 +234,14 @@ object SpanRepair {
     fun repair(
         entities: List<EntityPrediction>,
         sourceText: String,
+        segmenter: IcuTextSegmenter = IcuTextSegmenter(),
     ): List<EntityPrediction> {
-        val textLength = sourceText.length
         return entities.mapNotNull { entity ->
-            val start = entity.start.coerceIn(0, textLength)
-            val end = entity.end.coerceIn(start, textLength)
-            if (end <= start) {
+            val snapped = entity.snappedToGraphemeBoundaries(sourceText, segmenter)
+            if (snapped.end <= snapped.start) {
                 return@mapNotNull null
             }
-            entity.copy(text = sourceText.substring(start, end), start = start, end = end)
+            snapped
         }
     }
 }
@@ -235,6 +262,21 @@ class PiiEntityMerger {
 }
 
 internal fun defaultTokenOffsets(text: String): List<IntRange> {
+    if (IcuTextSegmenter.requiresFallback(text)) {
+        val segmenter = IcuTextSegmenter()
+        val segmented = segmenter.fallbackWordSegments(text)
+        if (segmented.isNotEmpty()) {
+            return segmented.map { segment ->
+                val utf16 = UnicodeOffsetContract.utf16Span(
+                    text,
+                    segment.start,
+                    segment.end,
+                )
+                utf16.start until utf16.end
+            }
+        }
+    }
+
     val offsets = mutableListOf<IntRange>()
     var tokenStart: Int? = null
     for (index in text.indices) {

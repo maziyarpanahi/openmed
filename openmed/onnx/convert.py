@@ -58,6 +58,11 @@ from openmed.onnx.transformersjs import (
     TRANSFORMERSJS_FORMAT,
     export_transformersjs_bundle,
 )
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
+    validate_segmenter_resources,
+)
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
@@ -362,6 +367,7 @@ def convert(
     publish_token_env: str = "HF_WRITE_TOKEN",
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
+    segmenter_id: str | None = None,
 ) -> OnnxConversionResult:
     """Export ONNX artifacts and optionally publish the resulting directory."""
 
@@ -410,6 +416,11 @@ def convert(
         max_seq_length=max_seq_length,
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
+    )
+    segmenter = (
+        package_segmenter_resources(output_dir, segmenter_id)
+        if segmenter_id is not None
+        else None
     )
     if should_optimize_onnx and unoptimized_path is not None:
         optimization_manifest = optimize_onnx_graph(
@@ -546,6 +557,7 @@ def convert(
             tokenizer_source=output_dir,
             config_source=output_dir / "config.json",
             update_manifest=False,
+            segmenter_id=segmenter_id,
         )
         artifacts.append(
             ExportArtifact(
@@ -596,6 +608,7 @@ def convert(
         shape_buckets=shape_bucket_config,
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
+        segmenter=segmenter,
     )
     if recall_report is not None:
         apply_int8_recall_certification(
@@ -707,6 +720,7 @@ def write_export_manifest(
     shape_buckets: ShapeBucketConfig | Mapping[str, Any] | None = None,
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
 
@@ -748,11 +762,33 @@ def write_export_manifest(
             "files": list(tokenizer_files or find_tokenizer_files(output_dir)),
         },
     }
+    if segmenter is not None:
+        manifest["segmenter"] = dict(segmenter)
 
     manifest_path = output_dir / MANIFEST_FILENAME
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
+    validate_onnx_bundle(output_dir)
     return manifest_path
+
+
+def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
+    """Validate optional manifest-declared resources in an ONNX bundle."""
+
+    root = Path(output_dir)
+    manifest_path = root / MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        raise ValueError(f"ONNX bundle is missing {MANIFEST_FILENAME}: {root}")
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict):
+        raise ValueError("ONNX manifest must be a JSON object")
+    segmenter = manifest.get("segmenter")
+    if segmenter is not None:
+        if not isinstance(segmenter, Mapping):
+            raise ValueError("ONNX segmenter descriptor must be an object")
+        validate_segmenter_resources(root, segmenter)
+    return manifest
 
 
 def optimize_onnx_graph(
@@ -1637,6 +1673,12 @@ def main() -> None:
         help="Synthetic note used for export and runtime verification",
     )
     parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    parser.add_argument(
         "--eval-suite",
         default=None,
         help="Benchmark fixture JSON/JSONL used to certify android INT8 recall",
@@ -1712,6 +1754,7 @@ def main() -> None:
         validation_lengths=_parse_int_tuple(args.validation_lengths),
         cache_dir=args.cache_dir,
         sample_text=args.sample_text,
+        segmenter_id=args.segmenter,
         eval_suite_path=args.eval_suite,
         recall_delta_report_path=args.recall_delta_report,
         publish_to_hub=args.publish_to_hub,
