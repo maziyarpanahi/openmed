@@ -4,11 +4,140 @@ import pytest
 
 from openmed.eval.quant_delta import (
     evaluate_coreml_span_parity,
+    evaluate_export_variant_gate,
     evaluate_onnx_logit_parity,
     evaluate_quant_recall_delta,
     evaluate_speculative_redaction_parity,
     token_frequency_kl,
 )
+
+_EXPORT_TIER_BUDGETS = {
+    "tiny": {"ram_mb": 350.0, "p50_ms": 60.0, "p95_ms": 150.0},
+    "base": {"ram_mb": 900.0, "p50_ms": 150.0, "p95_ms": 400.0},
+}
+_EXPORT_PARENT_RECALL = {
+    "PERSON": 0.995,
+    "DATE": 0.995,
+    "ID_NUM": 0.995,
+}
+
+
+def _export_variant(
+    fmt: str,
+    tier: str,
+    *,
+    recall: dict[str, float] | None = None,
+    p50_ms: float = 40.0,
+    p95_ms: float = 120.0,
+    ram_mb: float = 300.0,
+    **overrides: object,
+) -> dict[str, object]:
+    variant: dict[str, object] = {
+        "format": fmt,
+        "tier": tier,
+        "p50_ms": p50_ms,
+        "p95_ms": p95_ms,
+        "ram_mb": ram_mb,
+    }
+    if recall is not None:
+        variant["recall"] = recall
+    variant.update(overrides)
+    return variant
+
+
+def _passing_export_variants() -> list[dict[str, object]]:
+    return [
+        _export_variant("onnx", "base", p50_ms=90.0, p95_ms=280.0, ram_mb=700.0),
+        _export_variant(
+            "onnx-int8",
+            "tiny",
+            recall={"PERSON": 0.992, "DATE": 0.993, "ID_NUM": 0.994},
+        ),
+        _export_variant("webgpu", "base", p50_ms=90.0, p95_ms=280.0, ram_mb=700.0),
+    ]
+
+
+def test_export_variant_gate_releases_passing_onnx_and_webgpu() -> None:
+    result = evaluate_export_variant_gate(
+        variants=_passing_export_variants(),
+        tier_budgets=_EXPORT_TIER_BUDGETS,
+        parent_recall=_EXPORT_PARENT_RECALL,
+        required_variants=["onnx", "onnx-int8", "webgpu"],
+    )
+
+    assert result.passed is True
+    assert result.blocked_formats == ()
+    assert result.missing_required == ()
+    assert set(result.evaluated_formats) == {"onnx", "onnx-int8", "webgpu"}
+
+
+def test_export_variant_gate_blocks_degraded_onnx_int8_only() -> None:
+    variants = _passing_export_variants()
+    variants[1]["recall"] = {"PERSON": 0.985, "DATE": 0.993, "ID_NUM": 0.994}
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_EXPORT_TIER_BUDGETS,
+        parent_recall=_EXPORT_PARENT_RECALL,
+        required_variants=["onnx", "onnx-int8", "webgpu"],
+    )
+
+    assert result.passed is False
+    assert result.blocked_formats == ("onnx-int8",)
+    passing = {r.format for r in result.variant_results if r.passed}
+    assert passing == {"onnx", "webgpu"}
+
+
+def test_export_variant_gate_blocks_webgpu_tier_budget_breach() -> None:
+    variants = _passing_export_variants()
+    variants[2]["p95_ms"] = 500.0
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_EXPORT_TIER_BUDGETS,
+        parent_recall=_EXPORT_PARENT_RECALL,
+    )
+
+    assert result.passed is False
+    assert result.blocked_formats == ("webgpu",)
+    webgpu = next(r for r in result.variant_results if r.format == "webgpu")
+    assert webgpu.tier_fit_passed is False
+    assert "p95_ms" in webgpu.tier_violations
+
+
+def test_export_variant_gate_fails_closed_on_missing_tier_evidence() -> None:
+    variants = [
+        {
+            "format": "onnx-int8",
+            "tier": "tiny",
+            "recall": {"PERSON": 0.992},
+        }
+    ]
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_EXPORT_TIER_BUDGETS,
+        parent_recall=_EXPORT_PARENT_RECALL,
+    )
+
+    assert result.passed is False
+    assert result.blocked_formats == ("onnx-int8",)
+
+
+def test_export_variant_gate_fails_closed_on_missing_required_variant() -> None:
+    variants = [
+        _export_variant("onnx", "base", p50_ms=90.0, p95_ms=280.0, ram_mb=700.0)
+    ]
+
+    result = evaluate_export_variant_gate(
+        variants=variants,
+        tier_budgets=_EXPORT_TIER_BUDGETS,
+        parent_recall=_EXPORT_PARENT_RECALL,
+        required_variants=["onnx", "webgpu"],
+    )
+
+    assert result.passed is False
+    assert result.missing_required == ("webgpu",)
 
 
 def test_int8_delta_below_half_point_passes() -> None:

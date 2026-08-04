@@ -21,6 +21,7 @@ from .frames import (
     EventType,
     RoleSlot,
     RoleSpec,
+    attach_coreference_representatives,
     score_event_frame_corpus,
 )
 
@@ -41,6 +42,7 @@ __all__ = [
     "MedicationChangeAction",
     "RoleSlot",
     "RoleSpec",
+    "attach_coreference_representatives",
     "extract_lab_trend_events",
     "extract_medication_change_events",
     "score_event_frame_corpus",
