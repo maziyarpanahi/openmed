@@ -65,6 +65,17 @@ from .documents_docx import (
 )
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
+from .documents_pdf_tables import (
+    CaptionRegion,
+    PdfRegions,
+    TableCell,
+    TableRegion,
+    extract_pdf_captions,
+    extract_pdf_regions,
+    extract_pdf_tables,
+    project_region_spans,
+    project_structured_spans,
+)
 from .epub import extract_epub
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 from .image import (
@@ -169,6 +180,15 @@ __all__ = [
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
+    "TableCell",
+    "TableRegion",
+    "CaptionRegion",
+    "PdfRegions",
+    "extract_pdf_tables",
+    "extract_pdf_captions",
+    "extract_pdf_regions",
+    "project_structured_spans",
+    "project_region_spans",
     "DocxRedaction",
     "DocxRunRange",
     "extract_docx",
