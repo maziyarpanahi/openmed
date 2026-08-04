@@ -17,13 +17,20 @@ SCHEMA_VERSION = "openmed.gate_evidence_bundle.v1"
 MANIFEST_FILENAME = "manifest.json"
 SUMMARY_FILENAME = "summary.txt"
 
+#: Artifact id for the gold-corpus quality report attached to the bundle.
+GOLD_QUALITY_REPORT_ARTIFACT = "gold_quality_report"
+
 G1_G8 = ("G1a", "G1b", "G2", "G3", "G4", "G5", "G6", "G7", "G8")
+G10 = ("G10",)
+G15 = ("G15",)
 _GATE_ORDER = (
     "policy_profile",
     "thresholds_matrix",
     "manifest_coherence",
     "calibration_present",
     *G1_G8,
+    *G10,
+    *G15,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,13 +42,20 @@ _DEFAULT_GATES_BY_ARTIFACT: dict[str, tuple[str, ...]] = {
     "candidate_report": G1_G8,
     "model_manifest": ("manifest_coherence",),
     "model_card": ("manifest_coherence",),
+    "model_datasheet": ("manifest_coherence", *G1_G8),
     "readme": ("manifest_coherence",),
     "thresholds_matrix": ("thresholds_matrix", "G1a", "G2"),
     "policy_profile": ("policy_profile", "calibration_present"),
     "calibration_thresholds": ("calibration_present", "G1a", "G1b", "G2"),
     "calibration_report": ("calibration_present",),
     "eval_set": ("G1a", "G1b", "G2", "G7"),
+    "faithfulness_report": G10,
+    "pipeline_attribution_report": G15,
+    "pipeline_eval_report": G15,
     "leakage_fixtures": ("G3", "G7"),
+    "rollout_audit": ("G7",),
+    "rollout_state": ("G7",),
+    "shadow_comparison": ("G1a", "G2", "G7"),
     "quant_recall_delta": ("G4",),
     "performance_report": ("G5", "G6"),
     "resource_report": ("G5",),
@@ -65,6 +79,8 @@ _PATH_ALIASES: dict[str, str] = {
     "eval_set_path": "eval_set",
     "fixture_path": "span_fixtures",
     "fixtures_path": "span_fixtures",
+    "faithfulness_path": "faithfulness_report",
+    "faithfulness_report_path": "faithfulness_report",
     "g8_fixture_path": "span_fixtures",
     "g8_span_fixture_path": "span_fixtures",
     "last_green_baseline_path": "baseline_store",
@@ -72,15 +88,23 @@ _PATH_ALIASES: dict[str, str] = {
     "leakage_fixtures_path": "leakage_fixtures",
     "manifest_path": "model_manifest",
     "model_card_path": "model_card",
+    "model_datasheet_path": "model_datasheet",
     "models_manifest_path": "model_manifest",
     "performance_report_path": "performance_report",
+    "pipeline_attribution_path": "pipeline_attribution_report",
+    "pipeline_attribution_report_path": "pipeline_attribution_report",
+    "pipeline_eval_report_path": "pipeline_eval_report",
     "policy_path": "policy_profile",
     "policy_profile_path": "policy_profile",
     "quant_delta_path": "quant_recall_delta",
     "quant_recall_delta_path": "quant_recall_delta",
     "quantization_report_path": "quant_recall_delta",
+    "datasheet_path": "model_datasheet",
     "readme_path": "readme",
     "resource_report_path": "resource_report",
+    "rollout_audit_path": "rollout_audit",
+    "rollout_state_path": "rollout_state",
+    "shadow_comparison_path": "shadow_comparison",
     "span_fixture_path": "span_fixtures",
     "span_fixtures_path": "span_fixtures",
     "threshold_matrix_path": "thresholds_matrix",
@@ -125,6 +149,8 @@ def bundle_gate_evidence(
     evidence_root: str | Path | None = None,
     extra_artifacts: Mapping[str, str | Path] | Sequence[Mapping[str, Any]] = (),
     manifest_name: str = MANIFEST_FILENAME,
+    extraction_fairness: Mapping[str, Any] | Any | None = None,
+    pipeline_attribution: Mapping[str, Any] | Any | None = None,
 ) -> EvidenceBundleResult:
     """Collect evidence referenced by *gate_report* into *output_dir*.
 
@@ -144,7 +170,12 @@ def bundle_gate_evidence(
     _add_inferred_required_specs(payload, specs)
 
     artifacts = _materialise_artifacts(specs, destination, root)
-    manifest = _build_manifest(payload, artifacts)
+    manifest = _build_manifest(
+        payload,
+        artifacts,
+        extraction_fairness=_extraction_fairness_section(extraction_fairness),
+        pipeline_attribution=_pipeline_attribution_section(pipeline_attribution),
+    )
     summary = _render_summary(manifest)
 
     manifest_path = destination / manifest_name
@@ -529,11 +560,56 @@ def _copy_artifact(
     return relative
 
 
+def _extraction_fairness_section(
+    extraction_fairness: Mapping[str, Any] | Any | None,
+) -> dict[str, Any] | None:
+    """Return the optional, PHI-free extraction-fairness evidence section."""
+    if extraction_fairness is None:
+        return None
+    source = extraction_fairness
+    if hasattr(source, "model_card_evidence") and callable(source.model_card_evidence):
+        source = source.model_card_evidence()
+    elif hasattr(source, "to_dict") and callable(source.to_dict):
+        source = source.to_dict()
+    if not isinstance(source, Mapping):
+        raise TypeError(
+            "extraction_fairness must be a mapping or expose "
+            "model_card_evidence()/to_dict()"
+        )
+    return json.loads(json.dumps(source, sort_keys=True))
+
+
+def _pipeline_attribution_section(
+    pipeline_attribution: Mapping[str, Any] | Any | None,
+) -> dict[str, Any] | None:
+    """Return an optional raw-text-free G15 attribution report section."""
+
+    if pipeline_attribution is None:
+        return None
+    source = pipeline_attribution
+    if hasattr(source, "to_dict") and callable(source.to_dict):
+        source = source.to_dict()
+    if not isinstance(source, Mapping):
+        raise TypeError("pipeline_attribution must be a mapping or expose to_dict()")
+    return json.loads(json.dumps(source, sort_keys=True))
+
+
 def _build_manifest(
     payload: Mapping[str, Any],
     artifacts: Sequence[Mapping[str, Any]],
+    *,
+    extraction_fairness: Mapping[str, Any] | None = None,
+    pipeline_attribution: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     gate_summary = _gate_summary(payload, artifacts)
+    if pipeline_attribution is not None:
+        g15 = gate_summary.setdefault(
+            "G15",
+            {"status": "not_referenced", "artifacts": [], "missing_artifacts": []},
+        )
+        if not g15["missing_artifacts"]:
+            g15["status"] = "covered"
+            g15["artifacts"] = sorted({*g15["artifacts"], "pipeline_attribution"})
     stability_summary = _stability_summary(payload)
     missing_required = [
         entry
@@ -546,7 +622,7 @@ def _build_manifest(
     missing_gates = [
         gate for gate, state in gate_summary.items() if state["status"] == "missing"
     ]
-    return {
+    manifest: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "gate_report": {
             "repo_id": payload.get("repo_id"),
@@ -554,6 +630,7 @@ def _build_manifest(
             "tier": payload.get("tier"),
             "format": payload.get("format"),
             "decision": payload.get("decision"),
+            "gate_results": [dict(check) for check in _gate_checks(payload)],
             "repro_hash": payload.get("repro_hash"),
             "stability_summary": stability_summary,
         },
@@ -576,6 +653,11 @@ def _build_manifest(
         "gates": gate_summary,
         "artifacts": [dict(entry) for entry in artifacts],
     }
+    if extraction_fairness is not None:
+        manifest["extraction_fairness"] = extraction_fairness
+    if pipeline_attribution is not None:
+        manifest["pipeline_attribution"] = pipeline_attribution
+    return manifest
 
 
 def _gate_summary(

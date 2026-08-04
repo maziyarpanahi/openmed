@@ -51,17 +51,52 @@ from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
 import logging
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from importlib import import_module
 from threading import RLock
 from typing import Any, Callable
 
-from .labels import CANONICAL_LABELS, normalize_label
-from .schemas.span import OpenMedSpan
+from .labels import (
+    CANONICAL_LABELS,
+    ID_SUBTYPE_ABHA,
+    ID_SUBTYPE_GSTIN,
+    ID_SUBTYPE_IFSC,
+    ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    ID_SUBTYPE_INDIAN_PASSPORT,
+    ID_SUBTYPE_PAN,
+    ID_SUBTYPE_VOTER_ID_EPIC,
+    id_subtype_for,
+    normalize_label,
+)
+from .schemas.span import OpenMedSpan, hmac_text_hash
 
 DETECTOR_ENTRY_POINT_GROUP = "openmed.detectors"
 DETECTOR_STAGES = frozenset({"deterministic", "fast_pii", "clinical_phi"})
 LANGUAGE_WILDCARDS = frozenset({"*", "all", "any"})
+INDIAN_MULTI_ID_DETECTOR = "indian_multi_id"
+INDIAN_MULTI_ID_ENTITY_TYPES = frozenset(
+    {
+        "abha",
+        "gstin",
+        "ifsc",
+        "indian_driving_licence",
+        "indian_passport",
+        "indian_vehicle_registration",
+        "pan",
+        "voter_id_epic",
+    }
+)
+INDIAN_MULTI_ID_SUBTYPES = {
+    "abha": ID_SUBTYPE_ABHA,
+    "gstin": ID_SUBTYPE_GSTIN,
+    "ifsc": ID_SUBTYPE_IFSC,
+    "indian_driving_licence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indian_passport": ID_SUBTYPE_INDIAN_PASSPORT,
+    "pan": ID_SUBTYPE_PAN,
+    "voter_id_epic": ID_SUBTYPE_VOTER_ID_EPIC,
+}
 
 DetectCallable = Callable[..., Sequence[OpenMedSpan]]
 
@@ -182,8 +217,110 @@ def register_detector(spec: DetectorSpec) -> DetectorSpec:
         raise TypeError("register_detector expects a DetectorSpec")
 
     with _DISCOVERY_LOCK:
-        DETECTOR_REGISTRY.setdefault(spec.stage, {})[spec.name] = spec
+        DETECTOR_REGISTRY.setdefault(spec.stage, {})[detector_provenance(spec)] = spec
     return spec
+
+
+def detect_indian_identifiers(
+    text: str,
+    *,
+    lang: str = "en",
+    context: Any = None,
+) -> tuple[OpenMedSpan, ...]:
+    """Detect validator-backed Indian identifiers without registry lookups.
+
+    Returned records contain offsets, HMAC hashes, structural validator names,
+    and subtype metadata only. Raw identifier surfaces are never stored in
+    evidence or metadata.
+    """
+
+    del lang, context
+    from .pii_entity_merger import find_context_words
+    from .pii_i18n import INDIAN_MULTI_ID_PII_PATTERNS
+
+    candidates: list[tuple[int, int, int, OpenMedSpan]] = []
+    for pattern in sorted(
+        INDIAN_MULTI_ID_PII_PATTERNS,
+        key=lambda item: item.priority,
+        reverse=True,
+    ):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            surface = match.group(0)
+            if pattern.validator is not None and not pattern.validator(surface):
+                continue
+            has_context = find_context_words(
+                text,
+                match.start(),
+                match.end(),
+                pattern.context_words,
+            )
+            if pattern.safety_sweep_requires_context and not has_context:
+                continue
+
+            score = pattern.base_score
+            if has_context:
+                score = min(1.0, score + pattern.context_boost)
+            canonical = normalize_label(pattern.entity_type)
+            subtype = INDIAN_MULTI_ID_SUBTYPES.get(
+                pattern.entity_type,
+                id_subtype_for(pattern.entity_type),
+            )
+            validator_name = (
+                pattern.validator.__name__ if pattern.validator is not None else "none"
+            )
+            metadata: dict[str, Any] = {
+                "context_match": has_context,
+                "identifier_type": subtype or canonical.casefold(),
+                "validator": validator_name,
+            }
+            candidates.append(
+                (
+                    match.start(),
+                    match.end(),
+                    pattern.priority,
+                    OpenMedSpan(
+                        doc_id="builtin-indian-id-detector",
+                        start=match.start(),
+                        end=match.end(),
+                        text_hash=hmac_text_hash(
+                            surface,
+                            "builtin-indian-id-detector",
+                        ),
+                        entity_type=pattern.entity_type,
+                        canonical_label=canonical,
+                        score=score,
+                        detector="builtin",
+                        evidence={
+                            "structure_valid": True,
+                            "validator": validator_name,
+                        },
+                        metadata=metadata,
+                    ),
+                )
+            )
+
+    accepted: list[OpenMedSpan] = []
+    for start, end, _priority, span in sorted(
+        candidates,
+        key=lambda item: (item[0], -item[2], -(item[1] - item[0])),
+    ):
+        if any(start < existing.end and end > existing.start for existing in accepted):
+            continue
+        accepted.append(span)
+    return tuple(sorted(accepted, key=lambda span: (span.start, span.end)))
+
+
+def _register_builtin_detectors() -> None:
+    register_detector(
+        DetectorSpec(
+            name=INDIAN_MULTI_ID_DETECTOR,
+            stage="deterministic",
+            languages=("en", "hi", "te"),
+            detect=detect_indian_identifiers,
+            provenance_prefix="builtin",
+            covered_labels=("ID_NUM", "VEHICLE_REGISTRATION"),
+        )
+    )
 
 
 def iter_detectors(stage: str, lang: str | None = None) -> tuple[DetectorSpec, ...]:
@@ -255,7 +392,7 @@ def iter_detector_capabilities(
 
 
 def discover_detectors() -> None:
-    """Discover ``openmed.detectors`` entry points once."""
+    """Discover legacy detectors and validated SDK recognizers once."""
 
     global _DISCOVERY_COMPLETE
 
@@ -271,7 +408,7 @@ def discover_detectors() -> None:
             "Failed to enumerate OpenMed detector plugins: %s",
             exc.__class__.__name__,
         )
-        return
+        entry_points = ()
 
     for entry_point in entry_points:
         entry_name = str(getattr(entry_point, "name", "<unknown>"))
@@ -286,11 +423,111 @@ def discover_detectors() -> None:
                 exc.__class__.__name__,
             )
 
+    discover_recognizer_plugins()
+
+
+def discover_recognizer_plugins(
+    *,
+    allow_network_egress: bool = False,
+    allow_non_permissive_licenses: bool = False,
+    opt_in_plugins: Sequence[str] = (),
+) -> tuple[DetectorSpec, ...]:
+    """Discover validated SDK recognizers and register detector adapters.
+
+    The SDK registry owns compatibility and policy validation. This runtime
+    bridge forwards explicit opt-ins and only adapts registrations the SDK has
+    accepted. Importing this module does not import or discover SDK plugins.
+
+    Args:
+        allow_network_egress: Allow SDK plugins declaring network access.
+        allow_non_permissive_licenses: Allow restricted plugin licenses.
+        opt_in_plugins: Plugin or qualified component ids explicitly enabled.
+
+    Returns:
+        Detector specs registered for accepted recognizer components.
+    """
+
+    try:
+        registrations = _iter_sdk_plugins(
+            "recognizer",
+            allow_network_egress=allow_network_egress,
+            allow_non_permissive_licenses=allow_non_permissive_licenses,
+            opt_in_plugins=opt_in_plugins,
+        )
+    except Exception as exc:  # pragma: no cover - defensive SDK boundary
+        logger.warning(
+            "Failed to discover OpenMed SDK recognizers: %s",
+            exc.__class__.__name__,
+        )
+        return ()
+    return register_plugin_recognizers(registrations)
+
+
+def register_plugin_recognizers(
+    registrations: Iterable[Any],
+) -> tuple[DetectorSpec, ...]:
+    """Adapt accepted SDK recognizer registrations to detector specs.
+
+    Args:
+        registrations: Validated ``PluginRegistration`` objects from the SDK.
+
+    Returns:
+        Detector specs registered with the privacy pipeline.
+    """
+
+    registered: list[DetectorSpec] = []
+    for registration in registrations:
+        try:
+            metadata = registration.metadata
+            if metadata.kind != "recognizer":
+                continue
+            runtime_metadata = metadata.metadata
+            stage = str(runtime_metadata.get("stage") or "fast_pii")
+            spec = DetectorSpec(
+                name=metadata.component_id,
+                stage=stage,
+                languages=metadata.languages,
+                detect=registration.component.recognize,
+                provenance_prefix=f"plugin:{metadata.plugin_id}",
+                covered_labels=metadata.labels,
+            )
+            register_detector(spec)
+        except Exception as exc:
+            qualified_id = _safe_registration_id(registration)
+            logger.warning(
+                "Failed to wire OpenMed SDK recognizer %s: %s",
+                qualified_id,
+                exc.__class__.__name__,
+            )
+            continue
+        registered.append(spec)
+    return tuple(registered)
+
 
 def detector_provenance(spec: DetectorSpec) -> str:
     """Return the detector provenance string recorded on plugin spans."""
 
     return f"{spec.provenance_prefix}:{spec.name}"
+
+
+def _iter_sdk_plugins(kind: str, **policy: Any) -> tuple[Any, ...]:
+    """Return SDK registrations without importing the SDK during bare imports."""
+
+    try:
+        registry = import_module("openmed.plugins.registry")
+    except ModuleNotFoundError as exc:
+        if exc.name in {"openmed.plugins.protocols", "openmed.plugins.registry"}:
+            return ()
+        raise
+    return tuple(registry.iter_plugins(kind, **policy))
+
+
+def _safe_registration_id(registration: Any) -> str:
+    try:
+        value = registration.metadata.qualified_id
+    except Exception:
+        return "<unknown>"
+    return value if isinstance(value, str) and value else "<unknown>"
 
 
 def _entry_points_for_group(group: str) -> Sequence[Any]:
@@ -382,19 +619,29 @@ def _reset_detector_registry_for_tests() -> None:
         DETECTOR_REGISTRY.clear()
         DETECTOR_REGISTRY.update({stage: {} for stage in DETECTOR_STAGES})
         _DISCOVERY_COMPLETE = False
+    _register_builtin_detectors()
+
+
+_register_builtin_detectors()
 
 
 __all__ = [
     "DETECTOR_ENTRY_POINT_GROUP",
     "DETECTOR_REGISTRY",
     "DETECTOR_STAGES",
+    "INDIAN_MULTI_ID_DETECTOR",
+    "INDIAN_MULTI_ID_ENTITY_TYPES",
+    "INDIAN_MULTI_ID_SUBTYPES",
     "DetectorCapability",
     "DetectorSpec",
     "DetectCallable",
     "default_detector_capabilities",
+    "detect_indian_identifiers",
     "detector_provenance",
     "discover_detectors",
+    "discover_recognizer_plugins",
     "iter_detector_capabilities",
     "iter_detectors",
     "register_detector",
+    "register_plugin_recognizers",
 ]

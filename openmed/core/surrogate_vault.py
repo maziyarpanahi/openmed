@@ -2,9 +2,10 @@
 
 The vault stores mappings from ``(canonical_label, lang, text_hash)`` to the
 selected surrogate value. ``text_hash`` is an HMAC-SHA256 digest of the source
-surface; raw source identifiers are never stored. Persisted vault payloads
-encrypt surrogate values under a versioned epoch key so the file at rest does
-not reveal replacement identifiers.
+surface, an in-memory Pinyin key for Chinese names, or an in-memory canonical
+transliteration for opted-in Indian name surfaces; none is persisted as
+plaintext. Persisted vault payloads encrypt surrogate values under a versioned
+epoch key so the file at rest does not reveal replacement identifiers.
 """
 
 from __future__ import annotations
@@ -15,23 +16,58 @@ import hmac
 import json
 import os
 import tempfile
+import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from math import isfinite
+from numbers import Real
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable
+from typing import AbstractSet, Any, Callable
 
-from .labels import normalize_label
+from .indic_name_match import (
+    DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
+    INDIC_NAME_KEY_VERSION,
+    IndicNameNormalizer,
+    detect_name_script,
+    is_indic_name_candidate,
+)
+from .labels import PERSON, normalize_label
 from .schemas.span import hmac_text_hash
+from .script_detect import (
+    canonical_indian_name,
+    indian_name_script,
+    render_indian_name,
+)
 
 LEGACY_SCHEMA_VERSION = 1
 SCHEMA_VERSION = 2
 HMAC_SCHEME = "hmac-sha256"
 ENCRYPTION_SCHEME = "hmac-sha256-stream-xor+hmac-sha256"
+SUBJECT_SURROGATE_LABEL = "SUBJECT"
+SUBJECT_SURROGATE_LANG = "und"
 
 _EPOCH_PREFIX = "epoch"
 _KEY_ID_BYTES = 8
 _NONCE_BYTES = 16
+_INDIAN_NAME_KEY_LANG = "india"
+_INDIAN_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
+_CHINESE_NAME_KEY_LANG = "zh-pinyin"
+_CHINESE_NAME_LABELS = frozenset({"PERSON", "FIRST_NAME", "LAST_NAME"})
+_SUBJECT_SOURCE_PREFIX = "openmed.subject.v1\x00"
+_SUBJECT_SURROGATE_PREFIX = "openmed.subject.surrogate.v1\x00"
+_SCRIPT_NAME_PREFIXES = {
+    "bengali": "BENGALI",
+    "devanagari": "DEVANAGARI",
+    "gurmukhi": "GURMUKHI",
+    "gujarati": "GUJARATI",
+    "kannada": "KANNADA",
+    "latin": "LATIN",
+    "malayalam": "MALAYALAM",
+    "odia": "ORIYA",
+    "tamil": "TAMIL",
+    "telugu": "TELUGU",
+}
 
 
 @dataclass(frozen=True, order=True)
@@ -128,6 +164,18 @@ class SurrogateSource:
             raise ValueError("label must be non-empty")
         if not self.lang:
             object.__setattr__(self, "lang", "en")
+
+
+class SubjectResolutionError(ValueError):
+    """Raised when caller-confirmed subject identifiers cannot be reconciled."""
+
+
+@dataclass(frozen=True)
+class _SourceIdentity:
+    canonical_label: str
+    key_lang: str
+    key_text: str = field(repr=False)
+    render_script: str | None = None
 
 
 @dataclass(frozen=True)
@@ -253,6 +301,67 @@ class _EpochManager:
         }
 
 
+def _validated_name_matching_metadata(
+    metadata: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if not metadata:
+        return {}
+    allowed = {
+        "backend",
+        "enabled",
+        "normalizer_version",
+        "similarity_threshold",
+    }
+    unknown = set(metadata) - allowed
+    if unknown:
+        raise ValueError(
+            "surrogate vault name_matching may not contain fields: "
+            + ", ".join(sorted(map(str, unknown)))
+        )
+    if set(metadata) != allowed:
+        raise ValueError("surrogate vault name_matching metadata is incomplete")
+    backend = metadata["backend"]
+    enabled = metadata["enabled"]
+    version = metadata["normalizer_version"]
+    threshold = metadata["similarity_threshold"]
+    if backend not in {"stdlib", "user-supplied"}:
+        raise ValueError("surrogate vault name_matching backend is unsupported")
+    if not isinstance(enabled, bool):
+        raise ValueError("surrogate vault name_matching enabled must be boolean")
+    if version != INDIC_NAME_KEY_VERSION:
+        raise ValueError("surrogate vault name_matching version is unsupported")
+    if isinstance(threshold, bool) or not isinstance(threshold, Real):
+        raise ValueError(
+            "surrogate vault name_matching similarity_threshold must be numeric"
+        )
+    numeric_threshold = float(threshold)
+    if not isfinite(numeric_threshold) or not 0.5 <= numeric_threshold <= 1.0:
+        raise ValueError(
+            "surrogate vault name_matching similarity_threshold is out of range"
+        )
+    return {
+        "backend": backend,
+        "enabled": enabled,
+        "normalizer_version": version,
+        "similarity_threshold": numeric_threshold,
+    }
+
+
+def _name_matching_tag(metadata: Mapping[str, Any], epoch: _EpochKey) -> str:
+    material = json.dumps(
+        dict(metadata),
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    digest = hmac.new(
+        epoch.encryption_key,
+        b"openmed-surrogate-vault:name-matching:1:" + material,
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{HMAC_SCHEME}:{digest}"
+
+
 class InMemorySurrogateStore:
     """In-memory store for surrogate vault entries."""
 
@@ -261,10 +370,15 @@ class InMemorySurrogateStore:
         entries: Iterable[SurrogateEntry] = (),
         *,
         epoch_manager: _EpochManager | None = None,
+        name_matching_metadata: Mapping[str, Any] | None = None,
     ) -> None:
         self._entries: dict[SurrogateKey, SurrogateEntry] = {}
+        self._surrogate_keys: dict[tuple[str, str, str], set[SurrogateKey]] = {}
         self._lock = RLock()
         self._epoch_manager = epoch_manager
+        self._name_matching_metadata = _validated_name_matching_metadata(
+            name_matching_metadata
+        )
         for entry in entries:
             self.set(entry.key, entry.surrogate, key_id=entry.key_id)
 
@@ -286,6 +400,19 @@ class InMemorySurrogateStore:
                 )
                 for key, entry in self._entries.items()
             }
+
+    @property
+    def name_matching_metadata(self) -> dict[str, Any]:
+        """Return non-sensitive persisted name-matching configuration."""
+
+        with self._lock:
+            return dict(self._name_matching_metadata)
+
+    def set_name_matching_metadata(self, metadata: Mapping[str, Any]) -> None:
+        """Replace non-sensitive name-matching configuration metadata."""
+
+        with self._lock:
+            self._name_matching_metadata = _validated_name_matching_metadata(metadata)
 
     def get(self, key: SurrogateKey) -> str | None:
         """Return the surrogate for ``key``, if present."""
@@ -317,6 +444,10 @@ class InMemorySurrogateStore:
                 surrogate,
                 str(effective_key_id or ""),
             )
+            self._surrogate_keys.setdefault(
+                (key.canonical_label, key.lang, surrogate),
+                set(),
+            ).add(key)
 
     def replace_entries(self, entries: Iterable[SurrogateEntry]) -> None:
         """Replace all entries atomically inside the in-memory store."""
@@ -329,6 +460,12 @@ class InMemorySurrogateStore:
             next_entries[entry.key] = entry
         with self._lock:
             self._entries = next_entries
+            self._surrogate_keys = {}
+            for key, entry in next_entries.items():
+                self._surrogate_keys.setdefault(
+                    (key.canonical_label, key.lang, entry.surrogate),
+                    set(),
+                ).add(key)
 
     def entries(self) -> tuple[SurrogateEntry, ...]:
         """Return entries sorted by their privacy-safe key."""
@@ -336,14 +473,14 @@ class InMemorySurrogateStore:
         with self._lock:
             return tuple(self._entries[key] for key in sorted(self._entries))
 
-    def used_surrogates(self, *, canonical_label: str, lang: str) -> set[str]:
+    def used_surrogates(self, *, canonical_label: str, lang: str) -> AbstractSet[str]:
         """Return surrogates already used for the label/language bucket."""
 
         with self._lock:
             return {
-                entry.surrogate
-                for key, entry in self._entries.items()
-                if key.canonical_label == canonical_label and key.lang == lang
+                surrogate
+                for label, key_lang, surrogate in self._surrogate_keys
+                if label == canonical_label and key_lang == lang
             }
 
     def to_payload(self) -> dict[str, Any]:
@@ -363,6 +500,12 @@ class InMemorySurrogateStore:
             **self._epoch_manager.payload(),
             "entries": [],
         }
+        if self._name_matching_metadata:
+            payload["name_matching"] = dict(self._name_matching_metadata)
+            payload["name_matching_tag"] = _name_matching_tag(
+                self._name_matching_metadata,
+                current_key,
+            )
         entries_payload: list[dict[str, str]] = []
         for entry in self.entries():
             key_id = entry.key_id or current_key.key_id
@@ -422,7 +565,26 @@ class InMemorySurrogateStore:
         entries = [
             _decrypt_entry_payload(entry, current_key) for entry in entries_payload
         ]
-        return cls(entries, epoch_manager=manager)
+        metadata = payload.get("name_matching") or {}
+        if not isinstance(metadata, Mapping):
+            raise ValueError("surrogate vault name_matching must be an object")
+        validated_metadata = _validated_name_matching_metadata(metadata)
+        persisted_tag = payload.get("name_matching_tag")
+        if validated_metadata:
+            if not isinstance(persisted_tag, str):
+                raise ValueError("surrogate vault name_matching_tag is required")
+            expected_tag = _name_matching_tag(validated_metadata, current_key)
+            if not hmac.compare_digest(persisted_tag, expected_tag):
+                raise ValueError("surrogate vault name_matching metadata is invalid")
+        elif persisted_tag is not None:
+            raise ValueError(
+                "surrogate vault name_matching_tag requires name_matching metadata"
+            )
+        return cls(
+            entries,
+            epoch_manager=manager,
+            name_matching_metadata=validated_metadata,
+        )
 
     @classmethod
     def _from_legacy_payload(
@@ -451,7 +613,17 @@ class InMemorySurrogateStore:
                 )
                 for entry in entries
             ]
-        return cls(entries, epoch_manager=manager)
+        metadata = payload.get("name_matching") or {}
+        if not isinstance(metadata, Mapping):
+            raise ValueError("surrogate vault name_matching must be an object")
+        if metadata or payload.get("name_matching_tag") is not None:
+            raise ValueError(
+                "legacy surrogate vaults may not contain name_matching metadata"
+            )
+        return cls(
+            entries,
+            epoch_manager=manager,
+        )
 
 
 class JsonFileSurrogateStore(InMemorySurrogateStore):
@@ -464,11 +636,16 @@ class JsonFileSurrogateStore(InMemorySurrogateStore):
         *,
         autosave: bool = True,
         epoch_manager: _EpochManager | None = None,
+        name_matching_metadata: Mapping[str, Any] | None = None,
     ) -> None:
         self.path = Path(path)
         self.autosave = bool(autosave)
         self._hydrating = True
-        super().__init__(entries, epoch_manager=epoch_manager)
+        super().__init__(
+            entries,
+            epoch_manager=epoch_manager,
+            name_matching_metadata=name_matching_metadata,
+        )
         self._hydrating = False
 
     @classmethod
@@ -502,6 +679,7 @@ class JsonFileSurrogateStore(InMemorySurrogateStore):
             loaded.entries(),
             autosave=autosave,
             epoch_manager=loaded.epoch_manager,
+            name_matching_metadata=loaded.name_matching_metadata,
         )
 
     def set(
@@ -553,13 +731,45 @@ class JsonFileSurrogateStore(InMemorySurrogateStore):
 
 
 SurrogateFactory = Callable[[int], str]
+SurrogateRenderer = Callable[[str], str]
 ConsistencySnapshot = Mapping[str, str]
 
 
 def _contains_source_surface(candidate: str, source_text: str) -> bool:
-    if candidate == source_text:
+    folded_candidate = unicodedata.normalize("NFKC", candidate).casefold()
+    folded_source = unicodedata.normalize("NFKC", source_text).casefold()
+    if folded_candidate == folded_source:
         return True
-    return len(source_text) >= 4 and source_text in candidate
+    return len(folded_source) >= 4 and folded_source in folded_candidate
+
+
+def _matches_required_script(candidate: str, required_script: str | None) -> bool:
+    if required_script is None:
+        return True
+    if required_script.casefold() != "latin":
+        raise ValueError("required_script currently supports only 'Latin'")
+    letters = [char for char in candidate if char.isalpha()]
+    return bool(letters) and all(
+        "LATIN" in unicodedata.name(char, "") for char in letters
+    )
+
+
+def _matches_render_script(candidate: str, render_script: str | None) -> bool:
+    if render_script is None:
+        return True
+    prefix = _SCRIPT_NAME_PREFIXES.get(render_script.casefold())
+    if prefix is None:
+        return False
+    letters = [char for char in candidate if char.isalpha()]
+    return bool(letters) and all(
+        unicodedata.name(char, "").startswith(f"{prefix} ") for char in letters
+    )
+
+
+def _contains_indian_name(candidate: str, canonical_source: str) -> bool:
+    if candidate == canonical_source:
+        return True
+    return len(canonical_source) >= 4 and canonical_source in candidate
 
 
 class SurrogateVault:
@@ -577,6 +787,10 @@ class SurrogateVault:
         hmac_secret: str | bytes,
         *,
         store: InMemorySurrogateStore | None = None,
+        config: Any = None,
+        transliteration_aware_name_matching: bool | None = None,
+        indic_name_similarity_threshold: float | None = None,
+        transliterator: Any = None,
     ) -> None:
         _secret_bytes(hmac_secret)
         self.hmac_secret = hmac_secret
@@ -591,11 +805,75 @@ class SurrogateVault:
             raise ValueError("surrogate vault store is missing epoch metadata")
         self._epoch_manager = self.store.epoch_manager
 
+        persisted = self.store.name_matching_metadata
+        if transliteration_aware_name_matching is None and config is not None:
+            transliteration_aware_name_matching = getattr(
+                config,
+                "transliteration_aware_name_matching",
+                False,
+            )
+        if indic_name_similarity_threshold is None and config is not None:
+            indic_name_similarity_threshold = float(
+                getattr(
+                    config,
+                    "indic_name_similarity_threshold",
+                    DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
+                )
+            )
+        if transliteration_aware_name_matching is None:
+            transliteration_aware_name_matching = persisted.get("enabled", False)
+        if indic_name_similarity_threshold is None:
+            indic_name_similarity_threshold = float(
+                persisted.get(
+                    "similarity_threshold",
+                    DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
+                )
+            )
+
+        if not isinstance(transliteration_aware_name_matching, bool):
+            raise TypeError("transliteration_aware_name_matching must be a boolean")
+
+        persisted_backend = str(persisted.get("backend", ""))
+        if (
+            persisted_backend == "user-supplied"
+            and transliterator is None
+            and self.entries()
+        ):
+            raise ValueError(
+                "this vault requires the user-supplied Indic transliterator "
+                "used when it was created"
+            )
+        if not persisted and self.entries() and transliteration_aware_name_matching:
+            raise ValueError(
+                "transliteration-aware matching cannot be enabled on a legacy "
+                "vault that already contains entries"
+            )
+        self._set_name_matching(
+            enabled=transliteration_aware_name_matching,
+            similarity_threshold=indic_name_similarity_threshold,
+            transliterator=transliterator,
+            allow_existing=persisted == {},
+        )
+
     @classmethod
-    def in_memory(cls, hmac_secret: str | bytes) -> "SurrogateVault":
+    def in_memory(
+        cls,
+        hmac_secret: str | bytes,
+        *,
+        config: Any = None,
+        transliteration_aware_name_matching: bool | None = None,
+        indic_name_similarity_threshold: float | None = None,
+        transliterator: Any = None,
+    ) -> "SurrogateVault":
         """Create a vault backed by memory only."""
 
-        return cls(hmac_secret)
+        return cls(
+            hmac_secret,
+            config=config,
+            transliteration_aware_name_matching=(transliteration_aware_name_matching),
+            indic_name_similarity_threshold=indic_name_similarity_threshold,
+            transliterator=transliterator,
+        )
 
     @classmethod
     def from_file(
@@ -605,6 +883,10 @@ class SurrogateVault:
         hmac_secret: str | bytes,
         create: bool = True,
         autosave: bool = True,
+        config: Any = None,
+        transliteration_aware_name_matching: bool | None = None,
+        indic_name_similarity_threshold: float | None = None,
+        transliterator: Any = None,
     ) -> "SurrogateVault":
         """Create a vault backed by a deterministic encrypted JSON file."""
 
@@ -616,6 +898,10 @@ class SurrogateVault:
                 autosave=autosave,
                 hmac_secret=hmac_secret,
             ),
+            config=config,
+            transliteration_aware_name_matching=(transliteration_aware_name_matching),
+            indic_name_similarity_threshold=indic_name_similarity_threshold,
+            transliterator=transliterator,
         )
 
     def __repr__(self) -> str:
@@ -643,6 +929,41 @@ class SurrogateVault:
 
         return tuple(sorted(self._epoch_manager.revoked_key_ids))
 
+    @property
+    def transliteration_aware_name_matching(self) -> bool:
+        """Return whether Indic PERSON surfaces use canonical match keys."""
+
+        return self._transliteration_aware_name_matching
+
+    @property
+    def indic_name_similarity_threshold(self) -> float:
+        """Return the configured collision-safety threshold."""
+
+        return self._indic_name_normalizer.similarity_threshold
+
+    @property
+    def indic_name_normalizer(self) -> IndicNameNormalizer:
+        """Return the in-memory normalizer used for PERSON vault keys."""
+
+        return self._indic_name_normalizer
+
+    def configure_name_matching(
+        self,
+        *,
+        enabled: bool,
+        similarity_threshold: float = DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
+        transliterator: Any = None,
+    ) -> None:
+        """Configure transliteration matching before the first entry is stored."""
+
+        self._set_name_matching(
+            enabled=enabled,
+            similarity_threshold=similarity_threshold,
+            transliterator=transliterator,
+            allow_existing=False,
+        )
+        self._save_if_file_backed()
+
     def text_hash(self, source_text: str | bytes) -> str:
         """Return the current-epoch vault HMAC for ``source_text``."""
 
@@ -662,6 +983,102 @@ class SurrogateVault:
             self._epoch_manager.current_key,
         )
 
+    def subject_key_for(self, source_identifier: str) -> SurrogateKey:
+        """Build the HMAC-only key for one structured subject identifier.
+
+        The identifier is domain-separated from ordinary entity surfaces and
+        is used only in memory while deriving the key. The returned value never
+        contains the source identifier.
+        """
+
+        return self.key_for(
+            _subject_source_text(source_identifier),
+            label=SUBJECT_SURROGATE_LABEL,
+            lang=SUBJECT_SURROGATE_LANG,
+        )
+
+    def resolve_subject(
+        self,
+        source_identifier: str,
+        *,
+        aliases: Iterable[SurrogateSource | Mapping[str, Any] | tuple[Any, ...]] = (),
+    ) -> str:
+        """Resolve caller-confirmed cross-modal identifiers to one surrogate.
+
+        ``source_identifier`` is the structured subject key. ``aliases`` are
+        identifiers already matched to that subject by the caller, such as a
+        detected note name or MRN. This method deliberately performs no entity
+        matching: it only binds confirmed aliases under their ordinary vault
+        keys so later text replacement and structured de-identification reuse
+        the same value.
+
+        Only HMAC-derived keys are stored. If aliases were previously bound to
+        different subjects, resolution fails without exposing any source value
+        in the exception.
+        """
+
+        anchor = SurrogateSource(
+            source_text=_subject_source_text(source_identifier),
+            label=SUBJECT_SURROGATE_LABEL,
+            lang=SUBJECT_SURROGATE_LANG,
+        )
+        linked_sources = (anchor, *_sources(aliases))
+        sources_by_key = {
+            self.key_for(
+                source.source_text,
+                label=source.label,
+                lang=source.lang,
+            ): source
+            for source in linked_sources
+        }
+
+        existing_by_key: dict[SurrogateKey, str] = {}
+        for key, source in sources_by_key.items():
+            existing = self.get(
+                source.source_text,
+                label=source.label,
+                lang=source.lang,
+            )
+            if existing is not None:
+                existing_by_key[key] = existing
+        existing_surrogates = set(existing_by_key.values())
+        if len(existing_surrogates) > 1:
+            raise SubjectResolutionError(
+                "subject identifiers are already bound to different surrogates"
+            )
+
+        anchor_key = self.subject_key_for(source_identifier)
+        anchor_existing = existing_by_key.get(anchor_key)
+        if existing_surrogates:
+            surrogate = next(iter(existing_surrogates))
+            anchor_bucket = self.store.used_surrogates(
+                canonical_label=anchor_key.canonical_label,
+                lang=anchor_key.lang,
+            )
+            if anchor_existing is None and surrogate in anchor_bucket:
+                raise SubjectResolutionError(
+                    "subject surrogate is already owned by a different subject"
+                )
+        else:
+
+            def create(attempt: int) -> str:
+                material = (
+                    f"{_SUBJECT_SURROGATE_PREFIX}{source_identifier}\x00{attempt}"
+                )
+                token = self.text_hash(material).rsplit(":", 1)[-1][:24]
+                return f"PATIENT_{token.upper()}"
+
+            surrogate = self.get_or_create(
+                anchor.source_text,
+                label=anchor.label,
+                lang=anchor.lang,
+                create_surrogate=create,
+            )
+
+        for key in sources_by_key:
+            self.store.set(key, surrogate, key_id=self.current_key_id)
+        return surrogate
+
     def get(
         self,
         source_text: str,
@@ -671,7 +1088,21 @@ class SurrogateVault:
     ) -> str | None:
         """Return an existing surrogate for a source identifier."""
 
-        return self.store.get(self.key_for(source_text, label=label, lang=lang))
+        source = _source(source_text=source_text, label=label, lang=lang)
+        key = self._key_for_epoch(source, self._epoch_manager.current_key)
+        existing = self.store.get(key)
+        if existing is not None:
+            return self._render_for_source(existing, source)
+        for legacy_key in self._legacy_keys_for_epoch(
+            source,
+            self._epoch_manager.current_key,
+        ):
+            if legacy_key == key:
+                continue
+            existing = self.store.get(legacy_key)
+            if existing is not None:
+                return self._render_for_source(existing, source)
+        return None
 
     def get_or_create(
         self,
@@ -680,13 +1111,68 @@ class SurrogateVault:
         label: str,
         lang: str = "en",
         create_surrogate: SurrogateFactory,
+        required_script: str | None = None,
+        render_surrogate: SurrogateRenderer | None = None,
     ) -> str:
-        """Return a stable surrogate, creating and storing it if needed."""
+        """Return a stable surrogate, optionally rendered or script-constrained."""
 
-        key = self.key_for(source_text, label=label, lang=lang)
+        source = _source(source_text=source_text, label=label, lang=lang)
+        identity = self._source_identity(source)
+        key = self._key_for_epoch(source, self._epoch_manager.current_key)
         existing = self.store.get(key)
         if existing is not None:
-            return existing
+            rendered = self._render_for_source(
+                existing,
+                source,
+                renderer=render_surrogate,
+            )
+            assert rendered is not None
+            if not _matches_required_script(rendered, required_script):
+                raise ValueError("existing surrogate does not satisfy required_script")
+            return rendered
+        for legacy_key in self._legacy_keys_for_epoch(
+            source,
+            self._epoch_manager.current_key,
+        ):
+            if legacy_key == key:
+                continue
+            existing = self.store.get(legacy_key)
+            if existing is not None:
+                stored_existing = (
+                    canonical_indian_name(existing)
+                    if identity.key_lang == _INDIAN_NAME_KEY_LANG
+                    else existing
+                )
+                rendered = self._render_for_source(
+                    stored_existing,
+                    source,
+                    renderer=render_surrogate,
+                )
+                assert rendered is not None
+                if not _matches_required_script(rendered, required_script):
+                    raise ValueError(
+                        "existing legacy surrogate does not satisfy required_script"
+                    )
+                try:
+                    self.store.set(key, stored_existing, key_id=self.current_key_id)
+                except ValueError:
+                    normalized_existing = self.store.get(key)
+                    if normalized_existing is None:
+                        raise
+                    normalized_rendered = self._render_for_source(
+                        normalized_existing,
+                        source,
+                        renderer=render_surrogate,
+                    )
+                    assert normalized_rendered is not None
+                    if not _matches_required_script(
+                        normalized_rendered, required_script
+                    ):
+                        raise ValueError(
+                            "existing surrogate does not satisfy required_script"
+                        )
+                    return normalized_rendered
+                return rendered
 
         used = self.store.used_surrogates(
             canonical_label=key.canonical_label,
@@ -697,7 +1183,42 @@ class SurrogateVault:
             candidate = create_surrogate(attempt)
             if not candidate:
                 continue
-            if _contains_source_surface(candidate, source_text) or candidate in used:
+            rendered_candidate: str
+            if identity.key_lang == _INDIAN_NAME_KEY_LANG:
+                candidate = canonical_indian_name(candidate)
+                if not candidate:
+                    continue
+                leaks_source = _contains_indian_name(candidate, identity.key_text)
+                render_script = identity.render_script
+                assert render_script is not None
+                rendered_candidate = render_indian_name(
+                    candidate,
+                    render_script,
+                )
+            elif identity.key_lang == "indic":
+                leaks_source = self._indic_candidate_leaks_source(
+                    candidate,
+                    source_text,
+                )
+                rendered_value = self._render_for_source(
+                    candidate,
+                    source,
+                    renderer=render_surrogate,
+                )
+                assert rendered_value is not None
+                rendered_candidate = rendered_value
+                leaks_source = leaks_source or _contains_source_surface(
+                    rendered_candidate,
+                    source_text,
+                )
+            else:
+                leaks_source = _contains_source_surface(candidate, source_text)
+                rendered_candidate = candidate
+            if (
+                leaks_source
+                or candidate in used
+                or not _matches_required_script(rendered_candidate, required_script)
+            ):
                 continue
             surrogate = candidate
             break
@@ -705,12 +1226,33 @@ class SurrogateVault:
         if not surrogate:
             suffix = key.text_hash.rsplit(":", 1)[-1][:8]
             base = create_surrogate(0) or key.canonical_label
-            if _contains_source_surface(base, source_text) or base in used:
-                base = key.canonical_label
+            if identity.key_lang == _INDIAN_NAME_KEY_LANG:
+                base = canonical_indian_name(base) or key.canonical_label.casefold()
+                leaks_source = _contains_indian_name(base, identity.key_text)
+            elif identity.key_lang == "indic":
+                leaks_source = self._indic_candidate_leaks_source(base, source_text)
+            else:
+                leaks_source = _contains_source_surface(base, source_text)
+            if leaks_source or base in used:
+                base = key.canonical_label.casefold()
             surrogate = f"{base}_{suffix}"
+            rendered_surrogate = self._render_for_source(
+                surrogate,
+                source,
+                renderer=render_surrogate,
+            )
+            assert rendered_surrogate is not None
+            if not _matches_required_script(rendered_surrogate, required_script):
+                raise ValueError("unable to create a surrogate in required_script")
 
         self.store.set(key, surrogate, key_id=self.current_key_id)
-        return surrogate
+        rendered = self._render_for_source(
+            surrogate,
+            source,
+            renderer=render_surrogate,
+        )
+        assert rendered is not None
+        return rendered
 
     def entries(self) -> tuple[SurrogateEntry, ...]:
         """Return the current sorted vault entries."""
@@ -877,6 +1419,38 @@ class SurrogateVault:
         save()
 
     def _key_for_epoch(self, source: SurrogateSource, epoch: _EpochKey) -> SurrogateKey:
+        identity = self._source_identity(source)
+        return SurrogateKey(
+            canonical_label=identity.canonical_label,
+            lang=identity.key_lang,
+            text_hash=hmac_text_hash(identity.key_text, epoch.linkage_key),
+        )
+
+    def _normalized_legacy_key_for_epoch(
+        self, source: SurrogateSource, epoch: _EpochKey
+    ) -> SurrogateKey:
+        effective_lang = str(source.lang or "en")
+        canonical_label = normalize_label(str(source.label), effective_lang)
+        source_text = _linkage_source_text(source.source_text, canonical_label)
+        return SurrogateKey(
+            canonical_label=canonical_label,
+            lang=effective_lang,
+            text_hash=hmac_text_hash(source_text, epoch.linkage_key),
+        )
+
+    def _exact_indian_key_for_epoch(
+        self, source: SurrogateSource, epoch: _EpochKey
+    ) -> SurrogateKey:
+        identity = _source_identity(source)
+        return SurrogateKey(
+            canonical_label=identity.canonical_label,
+            lang=identity.key_lang,
+            text_hash=hmac_text_hash(identity.key_text, epoch.linkage_key),
+        )
+
+    def _legacy_key_for_epoch(
+        self, source: SurrogateSource, epoch: _EpochKey
+    ) -> SurrogateKey:
         effective_lang = str(source.lang or "en")
         canonical_label = normalize_label(str(source.label), effective_lang)
         return SurrogateKey(
@@ -885,14 +1459,144 @@ class SurrogateVault:
             text_hash=hmac_text_hash(source.source_text, epoch.linkage_key),
         )
 
-    def _source_proof(self, source: SurrogateSource) -> str:
+    def _legacy_keys_for_epoch(
+        self, source: SurrogateSource, epoch: _EpochKey
+    ) -> tuple[SurrogateKey, ...]:
+        candidates = (
+            self._normalized_legacy_key_for_epoch(source, epoch),
+            self._exact_indian_key_for_epoch(source, epoch),
+            self._legacy_key_for_epoch(source, epoch),
+        )
+        return tuple(dict.fromkeys(candidates))
+
+    def _source_identity(self, source: SurrogateSource) -> _SourceIdentity:
         effective_lang = str(source.lang or "en")
+        if (
+            source.label == SUBJECT_SURROGATE_LABEL
+            and effective_lang == SUBJECT_SURROGATE_LANG
+        ):
+            return _SourceIdentity(
+                canonical_label=SUBJECT_SURROGATE_LABEL,
+                key_lang=SUBJECT_SURROGATE_LANG,
+                key_text=source.source_text,
+            )
         canonical_label = normalize_label(str(source.label), effective_lang)
+        if canonical_label in _CHINESE_NAME_LABELS and effective_lang.replace(
+            "-", "_"
+        ).casefold().startswith("zh"):
+            from ..processing.zh_pinyin import pinyin_fuzzy_key
+
+            return _SourceIdentity(
+                canonical_label=canonical_label,
+                key_lang=_CHINESE_NAME_KEY_LANG,
+                key_text=pinyin_fuzzy_key(source.source_text),
+            )
+        if (
+            self.transliteration_aware_name_matching
+            and canonical_label == PERSON
+            and is_indic_name_candidate(source.source_text, lang=effective_lang)
+        ):
+            script = detect_name_script(source.source_text)
+            if script in _SCRIPT_NAME_PREFIXES:
+                return _SourceIdentity(
+                    canonical_label=canonical_label,
+                    key_lang="indic",
+                    key_text=self.indic_name_normalizer.canonical_key(
+                        source.source_text
+                    ),
+                    render_script=script,
+                )
+        return _source_identity(source)
+
+    def _render_for_source(
+        self,
+        stored_surrogate: str | None,
+        source: SurrogateSource,
+        *,
+        renderer: SurrogateRenderer | None = None,
+    ) -> str | None:
+        if stored_surrogate is None:
+            return None
+        identity = self._source_identity(source)
+        if identity.key_lang == "indic":
+            if renderer is not None:
+                rendered = renderer(stored_surrogate)
+                if (
+                    rendered
+                    and _matches_render_script(rendered, identity.render_script)
+                    and not _contains_source_surface(rendered, source.source_text)
+                ):
+                    return rendered
+            rendered = self.indic_name_normalizer.render_surrogate(
+                stored_surrogate,
+                source_surface=source.source_text,
+            )
+            if (
+                rendered
+                and _matches_render_script(rendered, identity.render_script)
+                and not _contains_source_surface(rendered, source.source_text)
+            ):
+                return rendered
+            placeholder = self.indic_name_normalizer.render_surrogate(
+                "Person",
+                source_surface=source.source_text,
+            )
+            if not _matches_render_script(placeholder, identity.render_script):
+                raise ValueError("unable to render Indic surrogate in source script")
+            return placeholder
+        script = identity.render_script
+        if script is None:
+            return stored_surrogate
+        assert script is not None
+        return render_indian_name(stored_surrogate, script)
+
+    def _indic_candidate_leaks_source(
+        self,
+        candidate: str,
+        source_text: str,
+    ) -> bool:
+        try:
+            return self.indic_name_normalizer.matches(candidate, source_text)
+        except ValueError:
+            return _contains_source_surface(candidate, source_text)
+
+    def _set_name_matching(
+        self,
+        *,
+        enabled: bool,
+        similarity_threshold: float,
+        transliterator: Any,
+        allow_existing: bool,
+    ) -> None:
+        if not isinstance(enabled, bool):
+            raise TypeError("enabled must be a boolean")
+        normalizer = IndicNameNormalizer(
+            similarity_threshold=similarity_threshold,
+            transliterator=transliterator,
+        )
+        metadata = {
+            "backend": "user-supplied" if transliterator is not None else "stdlib",
+            "enabled": enabled,
+            "normalizer_version": INDIC_NAME_KEY_VERSION,
+            "similarity_threshold": normalizer.similarity_threshold,
+        }
+        current = self.store.name_matching_metadata
+        changed = bool(current and current != metadata)
+        if self.entries() and changed and not allow_existing:
+            raise ValueError(
+                "name matching configuration cannot change after vault entries exist"
+            )
+        self._transliteration_aware_name_matching = enabled
+        self._indic_name_normalizer = normalizer
+        self.store.set_name_matching_metadata(metadata)
+
+    def _source_proof(self, source: SurrogateSource) -> str:
+        identity = self._source_identity(source)
         material = json.dumps(
             {
-                "canonical_label": canonical_label,
-                "lang": effective_lang,
-                "source_text": source.source_text,
+                "canonical_label": identity.canonical_label,
+                "lang": identity.key_lang,
+                "source_text": identity.key_text,
             },
             ensure_ascii=True,
             separators=(",", ":"),
@@ -921,18 +1625,26 @@ class SurrogateVault:
         from_key: _EpochKey,
         to_key: _EpochKey,
     ) -> tuple[SurrogateEntry, ...]:
-        source_by_key = {
-            self._key_for_epoch(source, from_key): source for source in sources
-        }
+        source_by_key: dict[SurrogateKey, SurrogateSource] = {}
+        for source in sources:
+            source_by_key[self._key_for_epoch(source, from_key)] = source
+            for legacy_key in self._legacy_keys_for_epoch(source, from_key):
+                source_by_key.setdefault(legacy_key, source)
         remapped: dict[SurrogateKey, SurrogateEntry] = {}
         missing: list[str] = []
         for entry in entries:
-            source = source_by_key.get(entry.key)
-            if source is None:
+            matched_source = source_by_key.get(entry.key)
+            if matched_source is None:
                 missing.append(entry.key.text_hash)
                 continue
-            next_key = self._key_for_epoch(source, to_key)
-            next_entry = SurrogateEntry(next_key, entry.surrogate, to_key.key_id)
+            next_key = self._key_for_epoch(matched_source, to_key)
+            identity = self._source_identity(matched_source)
+            next_surrogate = (
+                canonical_indian_name(entry.surrogate)
+                if identity.key_lang == _INDIAN_NAME_KEY_LANG
+                else entry.surrogate
+            )
+            next_entry = SurrogateEntry(next_key, next_surrogate, to_key.key_id)
             current = remapped.get(next_key)
             if current is not None and current.surrogate != next_entry.surrogate:
                 raise ValueError("rotation would collapse two surrogates into one key")
@@ -1087,6 +1799,51 @@ def _source(*, source_text: str, label: str, lang: str = "en") -> SurrogateSourc
     )
 
 
+def _subject_source_text(source_identifier: str) -> str:
+    if not isinstance(source_identifier, str):
+        raise TypeError("source_identifier must be a string")
+    if not source_identifier:
+        raise ValueError("source_identifier must be non-empty")
+    return f"{_SUBJECT_SOURCE_PREFIX}{source_identifier}"
+
+
+def _linkage_source_text(source_text: str, canonical_label: str) -> str:
+    """Return cross-script linkage material without persisting source text."""
+
+    if canonical_label != "PERSON":
+        return source_text
+
+    # Import lazily so the lightweight vault module does not initialize the
+    # broader processing package during module import.
+    from ..processing.transliteration import INDIC_SCRIPTS, transliteration_key
+    from .script_detect import detect_script
+
+    script = detect_script(source_text)
+    if script not in {*INDIC_SCRIPTS, "Latin"}:
+        return source_text
+    return transliteration_key(source_text)
+
+
+def _source_identity(source: SurrogateSource) -> _SourceIdentity:
+    effective_lang = str(source.lang or "en")
+    canonical_label = normalize_label(str(source.label), effective_lang)
+    script = indian_name_script(source.source_text, effective_lang)
+    if canonical_label in _INDIAN_NAME_LABELS and script is not None:
+        canonical_name = canonical_indian_name(source.source_text)
+        if canonical_name:
+            return _SourceIdentity(
+                canonical_label=canonical_label,
+                key_lang=_INDIAN_NAME_KEY_LANG,
+                key_text=canonical_name,
+                render_script=script,
+            )
+    return _SourceIdentity(
+        canonical_label=canonical_label,
+        key_lang=effective_lang,
+        key_text=source.source_text,
+    )
+
+
 def _sources(
     sources: Iterable[SurrogateSource | Mapping[str, Any] | tuple[Any, ...]],
 ) -> tuple[SurrogateSource, ...]:
@@ -1126,12 +1883,15 @@ __all__ = [
     "HMAC_SCHEME",
     "LEGACY_SCHEMA_VERSION",
     "SCHEMA_VERSION",
+    "SUBJECT_SURROGATE_LABEL",
+    "SUBJECT_SURROGATE_LANG",
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "SurrogateEntry",
     "SurrogateKey",
     "SurrogateSource",
     "SurrogateVault",
+    "SubjectResolutionError",
     "VaultConsistencyReport",
     "VaultRotationResult",
 ]

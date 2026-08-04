@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .africa_context import rendered_pattern_entries
+
 
 @dataclass
 class PIIPattern:
@@ -31,7 +33,11 @@ class PIIPattern:
     Inspired by Microsoft Presidio's PatternRecognizer approach:
     - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
     - context_words: Keywords that boost confidence when found nearby
+    - requires_context: Reject pattern-only matches without nearby context
     - validator: Optional checksum/validation function to confirm matches
+    - reject_on_validation_failure: Drop regex matches whose validator fails,
+      rather than retaining them with a reduced confidence score
+    - context_required: Require nearby context for semantic-only recognition
     - safety_sweep_requires_context: Require nearby context before the
       deterministic safety sweep accepts this pattern
 
@@ -54,10 +60,13 @@ class PIIPattern:
     context_words: List[str] = field(
         default_factory=list
     )  # Keywords that boost confidence
+    requires_context: bool = False
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
+    context_required: bool = False
     safety_sweep_requires_context: bool = False
+    reject_on_validation_failure: bool = False
 
 
 # ============================================================================
@@ -512,13 +521,35 @@ PII_PATTERNS = [
 ]
 
 
+PII_PATTERNS.extend(
+    PIIPattern(
+        entry["pattern"],
+        entry["entity_type"],
+        priority=entry["priority"],
+        flags=entry["flags"],
+        base_score=entry["base_score"],
+        context_boost=entry["context_boost"],
+        context_words=list(entry["context_words"]),
+        requires_context=entry["requires_context"],
+        safety_sweep_requires_context=entry["safety_sweep_requires_context"],
+    )
+    for entry in rendered_pattern_entries()
+)
+
+
 # ============================================================================
 # Context Detection (inspired by Presidio's LemmaContextAwareEnhancer)
 # ============================================================================
 
 
 def find_context_words(
-    text: str, start: int, end: int, context_words: List[str], context_window: int = 100
+    text: str,
+    start: int,
+    end: int,
+    context_words: List[str],
+    context_window: int = 100,
+    *,
+    require_boundaries: bool = False,
 ) -> bool:
     """Check if context words appear near the matched entity.
 
@@ -531,6 +562,9 @@ def find_context_words(
         end: Entity end position
         context_words: List of keywords to search for
         context_window: Number of characters to search before/after (default: 100)
+        require_boundaries: Require context phrases to begin and end outside
+            word characters, preventing short keywords from matching inside
+            unrelated words.
 
     Returns:
         True if any context word found within window
@@ -554,7 +588,7 @@ def find_context_words(
         word_lower = word.lower()
 
         # Direct match
-        if word_lower in context_text:
+        if not require_boundaries and word_lower in context_text:
             return True
 
         # Check word boundaries (avoid partial matches like "ssn" in "assign")
@@ -612,22 +646,42 @@ def find_semantic_units(
 
             matched_text = text[match.start() : match.end()]
 
+            has_context = bool(
+                pii_pattern.context_words
+                and find_context_words(
+                    text,
+                    match.start(),
+                    match.end(),
+                    pii_pattern.context_words,
+                )
+            )
+            if pii_pattern.requires_context:
+                has_required_context = find_context_words(
+                    text,
+                    match.start(),
+                    match.end(),
+                    pii_pattern.context_words,
+                    require_boundaries=True,
+                )
+                if not has_required_context:
+                    continue
+
             # Calculate score with context awareness
             score = pii_pattern.base_score
 
             # Check for context words (like Presidio)
-            if pii_pattern.context_words:
-                has_context = find_context_words(
-                    text, match.start(), match.end(), pii_pattern.context_words
-                )
-                if has_context:
-                    score = min(1.0, score + pii_pattern.context_boost)
+            if has_context:
+                score = min(1.0, score + pii_pattern.context_boost)
+            if pii_pattern.context_required and not has_context:
+                continue
 
             # Validate if validator exists
             validated = True
             if pii_pattern.validator:
                 is_valid = pii_pattern.validator(matched_text)
                 if not is_valid:
+                    if pii_pattern.reject_on_validation_failure:
+                        continue
                     # Failed validation - significantly reduce score
                     score = score * 0.3  # Reduce to 30% confidence
                     validated = False
@@ -646,6 +700,17 @@ def find_semantic_units(
     # Sort by start position
     units.sort(key=lambda x: x[0])
     return units
+
+
+def _entity_sort_key(entity: Dict[str, Any]) -> Tuple[int, int, str, float, str]:
+    """Return a total ordering for model entities independent of input order."""
+    return (
+        int(entity["start"]),
+        int(entity["end"]),
+        str(entity.get("entity_type", "")),
+        -float(entity.get("score", 0.0)),
+        str(entity.get("word", "")),
+    )
 
 
 def calculate_dominant_label(
@@ -695,7 +760,10 @@ def calculate_dominant_label(
             label: sum(label_confidences[label]) / len(label_confidences[label])
             for label in candidates
         }
-        dominant_label = max(avg_confidences, key=avg_confidences.get)
+        dominant_label = min(
+            candidates,
+            key=lambda label: (-avg_confidences[label], str(label)),
+        )
     else:  # tie_breaker == 'first'
         # Use first occurrence
         for entity in entities:
@@ -717,6 +785,7 @@ def merge_entities_with_semantic_units(
     prefer_model_labels: bool = False,
     allow_semantic_only_matches: bool = True,
     allow_label_expansion: bool = True,
+    india_clinical: bool = False,
 ) -> List[Dict[str, Any]]:
     """Merge entity predictions using semantic unit patterns.
 
@@ -731,6 +800,9 @@ def merge_entities_with_semantic_units(
         prefer_model_labels: If True, prefer model's label over pattern's label
         allow_semantic_only_matches: If False, regex-only matches are not added
         allow_label_expansion: If False, keep the model label taxonomy unchanged
+        india_clinical: Normalize Indian-English clinical abbreviations before
+            merging and bridge eligible PERSON/LOCATION spans across Latin and
+            Indic script boundaries.
 
     Returns:
         List of merged entity dicts
@@ -746,16 +818,33 @@ def merge_entities_with_semantic_units(
         {'entity_type': 'date_of_birth', 'score': 0.8, 'start': 5, 'end': 15,
          'word': '01/15/1970', 'merged_from': 2}
     """
+    if india_clinical:
+        from ..clinical.normalization import normalize_indian_clinical_entities
+
+        entities = normalize_indian_clinical_entities(entities)
+
+    # Model adapters are allowed to produce equivalent rows through dict/set
+    # aggregation. Establish a total order before any index-based tie-break or
+    # overlap bookkeeping so hash-seed-dependent input order cannot affect the
+    # selected label or final span list.
+    entities = sorted(entities, key=_entity_sort_key)
+
     if not use_semantic_patterns:
         # Just return entities as-is if not using patterns
-        return sorted(entities, key=lambda x: x["start"])
+        ordered = list(entities)
+        return (
+            merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
+        )
 
     # Find semantic units
     semantic_units = find_semantic_units(text, patterns)
 
     if not semantic_units:
         # No semantic units found, return original entities
-        return sorted(entities, key=lambda x: x["start"])
+        ordered = list(entities)
+        return (
+            merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
+        )
 
     merged = []
     used_entities = set()
@@ -816,6 +905,16 @@ def merge_entities_with_semantic_units(
                         else unit_type
                     )
 
+            source_labels = sorted(
+                {
+                    str(unit_type),
+                    *(str(entity["entity_type"]) for entity in overlapping_entities),
+                }
+            )
+            mixed_label_union = (
+                len({normalize_label(label) for label in source_labels}) > 1
+            )
+
             # Combine model confidence with pattern confidence.
             # When pattern validation failed, heavily discount the pattern
             # contribution to avoid high-confidence invalid entities.
@@ -826,15 +925,32 @@ def merge_entities_with_semantic_units(
                 # Unvalidated: 90% model, 10% pattern
                 final_confidence = (0.9 * model_avg_confidence) + (0.1 * unit_score)
 
+            # Semantic patterns may expand a fragmented model span, but they
+            # must never shrink away any text the model already classified as
+            # PII. Use the union of the regex unit and every overlapping model
+            # entity so a narrower semantic submatch (for example a postcode
+            # inside an MRN) cannot create a raw-identifier leak.
+            merged_start = min(
+                unit_start,
+                *(int(entity["start"]) for entity in overlapping_entities),
+            )
+            merged_end = max(
+                unit_end,
+                *(int(entity["end"]) for entity in overlapping_entities),
+            )
+
             # Create merged entity
             merged.append(
                 {
                     "entity_type": final_label,
                     "score": final_confidence,
-                    "start": unit_start,
-                    "end": unit_end,
-                    "word": text[unit_start:unit_end],
+                    "start": merged_start,
+                    "end": merged_end,
+                    "word": text[merged_start:merged_end],
                     "merged_from": len(overlapping),
+                    "source_labels": source_labels,
+                    "mixed_label_union": mixed_label_union,
+                    "detector_sources": ["ml", "locale_rule"],
                 }
             )
 
@@ -850,6 +966,9 @@ def merge_entities_with_semantic_units(
                     "end": unit_end,
                     "word": text[unit_start:unit_end],
                     "merged_from": 0,
+                    "source_labels": [str(unit_type)],
+                    "mixed_label_union": False,
+                    "detector_sources": ["locale_rule"],
                 }
             )
 
@@ -858,9 +977,229 @@ def merge_entities_with_semantic_units(
         if i not in used_entities:
             merged.append(entity)
 
-    # Sort by start position
-    merged.sort(key=lambda x: x["start"])
-    return merged
+    coalesced = _coalesce_overlapping_merged_entities(merged, text)
+    if india_clinical:
+        return merge_india_code_mixed_spans(coalesced, text)
+    return coalesced
+
+
+def _coalesce_overlapping_merged_entities(
+    entities: List[Dict[str, Any]],
+    text: str,
+) -> List[Dict[str, Any]]:
+    """Union transitive overlaps without losing any detected source text.
+
+    Separate, non-overlapping semantic units can both overlap the same wider
+    model span. After semantic expansion that produces overlapping output
+    entities; simply choosing one would discard model-detected text. Collapse
+    each transitive overlap cluster to its full union before downstream
+    arbitration so every contributing detection remains covered.
+    """
+    if not entities:
+        return []
+
+    ordered = sorted(entities, key=_entity_sort_key)
+    clusters: List[List[Dict[str, Any]]] = []
+    current = [ordered[0]]
+    current_end = int(ordered[0]["end"])
+    for entity in ordered[1:]:
+        start = int(entity["start"])
+        end = int(entity["end"])
+        if start < current_end:
+            current.append(entity)
+            current_end = max(current_end, end)
+            continue
+        clusters.append(current)
+        current = [entity]
+        current_end = end
+    clusters.append(current)
+
+    result: List[Dict[str, Any]] = []
+    for cluster in clusters:
+        if len(cluster) == 1:
+            result.append(cluster[0])
+            continue
+
+        start = min(int(entity["start"]) for entity in cluster)
+        end = max(int(entity["end"]) for entity in cluster)
+        winner = max(
+            cluster,
+            key=lambda entity: (
+                int(entity["end"]) - int(entity["start"]),
+                float(entity.get("score", 0.0)),
+                str(entity.get("entity_type", "")),
+            ),
+        )
+        source_labels = sorted(
+            {
+                str(label)
+                for entity in cluster
+                for label in entity.get(
+                    "source_labels",
+                    [entity.get("entity_type", "")],
+                )
+                if label
+            }
+        )
+        detector_sources = sorted(
+            {
+                str(source)
+                for entity in cluster
+                for source in entity.get("detector_sources", ["ml"])
+                if source
+            }
+        )
+        result.append(
+            {
+                "entity_type": winner["entity_type"],
+                "score": max(float(entity.get("score", 0.0)) for entity in cluster),
+                "start": start,
+                "end": end,
+                "word": text[start:end],
+                "merged_from": sum(
+                    max(int(entity.get("merged_from", 1)), 1) for entity in cluster
+                ),
+                "source_labels": source_labels,
+                "mixed_label_union": len(
+                    {normalize_label(label) for label in source_labels}
+                )
+                > 1,
+                "detector_sources": detector_sources,
+            }
+        )
+
+    return result
+
+
+_INDIA_TRANSLITERATION_GAP_RE = re.compile(r"(?:\s*|\s*[-/|]\s*|\s*[\[(]\s*)")
+_INDIA_PERSON_LABELS = frozenset(
+    {"name", "person", "patient", "per", "patient_name", "full_name"}
+)
+_INDIA_LOCATION_LABELS = frozenset({"location", "loc", "place", "city"})
+
+
+def merge_india_code_mixed_spans(
+    entities: List[Dict[str, Any]],
+    text: str,
+) -> List[Dict[str, Any]]:
+    """Bridge PERSON/LOCATION fragments split only by an Indic script change.
+
+    The rule is intentionally narrow and must be opted into by the India
+    clinical route. It unions adjacent same-family spans only when one surface
+    is Latin and the other is Devanagari or Telugu. This captures mixed-script
+    names such as ``राहुल Sharma`` and parenthesized transliterations without
+    widening ordinary English entities.
+    """
+
+    if not entities:
+        return []
+
+    from ..clinical.normalization import normalize_indian_clinical_entities
+
+    ordered = sorted(
+        (dict(entity) for entity in entities),
+        key=_entity_sort_key,
+    )
+    merged: list[Dict[str, Any]] = []
+    current = ordered[0]
+    for candidate in ordered[1:]:
+        if not _should_bridge_india_spans(current, candidate, text):
+            merged.append(current)
+            current = candidate
+            continue
+        current = _bridge_india_spans(current, candidate, text)
+    merged.append(current)
+    return normalize_indian_clinical_entities(merged)
+
+
+def _should_bridge_india_spans(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    text: str,
+) -> bool:
+    left_family = _india_entity_family(str(left.get("entity_type", "")))
+    right_family = _india_entity_family(str(right.get("entity_type", "")))
+    if left_family is None or left_family != right_family:
+        return False
+
+    left_end = int(left["end"])
+    right_start = int(right["start"])
+    if right_start < left_end or right_start - left_end > 12:
+        return False
+    gap = text[left_end:right_start]
+    if _INDIA_TRANSLITERATION_GAP_RE.fullmatch(gap) is None:
+        return False
+
+    from .script_detect import detect_script
+
+    scripts = {
+        detect_script(text[int(left["start"]) : left_end]),
+        detect_script(text[right_start : int(right["end"])]),
+    }
+    return "Latin" in scripts and bool(scripts & {"Devanagari", "Telugu"})
+
+
+def _india_entity_family(label: str) -> str | None:
+    normalized = label.casefold().replace("b-", "").replace("i-", "")
+    if normalized in _INDIA_PERSON_LABELS:
+        return "person"
+    if normalized in _INDIA_LOCATION_LABELS:
+        return "location"
+    return None
+
+
+def _bridge_india_spans(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    text: str,
+) -> Dict[str, Any]:
+    start = int(left["start"])
+    end = int(right["end"])
+    gap = text[int(left["end"]) : int(right["start"])]
+    if "(" in gap and text[end : end + 1] == ")":
+        end += 1
+    elif "[" in gap and text[end : end + 1] == "]":
+        end += 1
+
+    source_labels = sorted(
+        {
+            str(label)
+            for entity in (left, right)
+            for label in entity.get(
+                "source_labels",
+                [entity.get("entity_type", "")],
+            )
+            if label
+        }
+    )
+    detector_sources = sorted(
+        {
+            str(source)
+            for entity in (left, right)
+            for source in entity.get("detector_sources", ["ml"])
+            if source
+        }
+    )
+    return {
+        "entity_type": max(
+            (left, right),
+            key=lambda entity: float(entity.get("score", 0.0)),
+        )["entity_type"],
+        "score": max(float(left.get("score", 0.0)), float(right.get("score", 0.0))),
+        "start": start,
+        "end": end,
+        "word": text[start:end],
+        "merged_from": max(int(left.get("merged_from", 1)), 1)
+        + max(int(right.get("merged_from", 1)), 1),
+        "source_labels": source_labels,
+        "mixed_label_union": len({normalize_label(label) for label in source_labels})
+        > 1,
+        "detector_sources": detector_sources,
+        "india_clinical_merge": {
+            "script_boundary_bridge": True,
+            "transliteration_pair": True,
+        },
+    }
 
 
 def normalize_label(label: str) -> str:

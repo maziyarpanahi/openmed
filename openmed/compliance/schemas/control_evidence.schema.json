@@ -1,0 +1,226 @@
+{
+  "$id": "https://openmed.life/schemas/compliance/control_evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "openmed.iso_control_evidence.v1",
+      "type": "string"
+    },
+    "pack_id": {
+      "const": "openmed-iso-27701-27001-control-evidence",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "frameworks": {
+      "items": {
+        "enum": [
+          "ISO/IEC 27001:2022",
+          "ISO/IEC 27701:2025"
+        ]
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "scope": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "disclaimer": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "covered": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "partial": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "out-of-scope": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "covered",
+        "partial",
+        "out-of-scope"
+      ],
+      "type": "object"
+    },
+    "controls": {
+      "items": {
+        "$ref": "#/$defs/control"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "pack_id",
+    "title",
+    "frameworks",
+    "scope",
+    "disclaimer",
+    "summary",
+    "controls"
+  ],
+  "title": "OpenMedIsoControlEvidencePack",
+  "type": "object",
+  "$defs": {
+    "control": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "covered",
+                  "partial"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "capabilities": {
+                "minItems": 1
+              },
+              "evidence": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "out-of-scope"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "capabilities": {
+                "maxItems": 0
+              },
+              "evidence": {
+                "maxItems": 0
+              },
+              "rationale": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "framework": {
+          "enum": [
+            "ISO/IEC 27001:2022",
+            "ISO/IEC 27701:2025"
+          ]
+        },
+        "control_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "covered",
+            "partial",
+            "out-of-scope"
+          ]
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "enum": [
+              "audit-chain",
+              "key-lifecycle",
+              "no-phi-logging",
+              "offline-mode",
+              "release-gates"
+            ]
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/evidencePointer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "framework",
+        "control_id",
+        "title",
+        "status",
+        "rationale",
+        "capabilities",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "evidencePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "config-flag",
+            "documentation",
+            "guard-test",
+            "implementation",
+            "report-artifact"
+          ]
+        },
+        "reference": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reference",
+        "description"
+      ],
+      "type": "object"
+    }
+  }
+}
