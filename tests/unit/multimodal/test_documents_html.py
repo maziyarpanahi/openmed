@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 
 import pytest
 
-from openmed.multimodal.documents_html import extract_html
+from openmed.multimodal import base
+from openmed.multimodal.documents_html import extract_html, write_redacted_html
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_phi.html"
 
@@ -126,3 +128,174 @@ def test_path_raw_and_file_like_inputs_match_and_preserve_newline_offsets(
         start, end = _source_range(path_document, index)
         if path_document.location_at(index).metadata["source_map_mode"] == "linear":
             assert source[start:end] == character
+
+
+def test_writer_redacts_exact_fixture_and_preserves_surrounding_source(
+    tmp_path: Path,
+) -> None:
+    raw = FIXTURE.read_text(encoding="utf-8")
+    output = tmp_path / "redacted.html"
+
+    result = write_redacted_html(FIXTURE, output, [(8, 18, "[PERSON]")])
+
+    redacted = output.read_text(encoding="utf-8")
+    assert result == output
+    assert "<p>Patient [PERSON]</p>" in redacted
+    start = raw.index("Jane", raw.index("<body>"))
+    end = raw.index(" Roe", start) + len(" Roe")
+    assert redacted == raw[:start] + "[PERSON]" + raw[end:]
+
+
+def test_writer_preserves_mixed_newlines_and_escapes_replacement(
+    tmp_path: Path,
+) -> None:
+    raw = "<!doctype html>\r\n<!--keep-->\n<p>Jane\rRoe</p>"
+    source = tmp_path / "source.html"
+    noop = tmp_path / "noop.html"
+    redacted = tmp_path / "redacted.html"
+    source.write_bytes(raw.encode())
+
+    write_redacted_html(source, noop, [])
+    document = extract_html(source)
+    start = document.text.index("Jane")
+    write_redacted_html(source, redacted, [(start, start + 4, "A&B")])
+
+    assert noop.read_bytes() == source.read_bytes()
+    expected = raw[: raw.index("Jane")] + "A&amp;B" + raw[raw.index("Jane") + 4 :]
+    assert redacted.read_bytes() == expected.encode()
+
+
+def test_writer_projects_linear_suffix_atomic_entity_and_cross_tag_ranges(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "entities.html"
+    suffix_output = tmp_path / "suffix.html"
+    entity_output = tmp_path / "entity.html"
+    cross_output = tmp_path / "cross.html"
+    source.write_text("<p>&amp;copycat</p>", encoding="utf-8")
+
+    document = extract_html(source)
+    suffix = document.text.index("copycat")
+    write_redacted_html(source, suffix_output, [(suffix, suffix + 7, "word")])
+    write_redacted_html(source, entity_output, [(0, 1, "and")])
+    assert suffix_output.read_text(encoding="utf-8") == "<p>&amp;word</p>"
+    assert entity_output.read_text(encoding="utf-8") == "<p>andcopycat</p>"
+
+    cross_source = tmp_path / "cross-source.html"
+    cross_source.write_text("<p>Jane <em>Roe</em></p>", encoding="utf-8")
+    write_redacted_html(cross_source, cross_output, [(0, 8, "[PERSON]")])
+    assert cross_output.read_text(encoding="utf-8") == "<p>[PERSON]<em></em></p>"
+
+
+@pytest.mark.parametrize(
+    "replacements",
+    [
+        [(-1, 1, "x")],
+        [(0, 0, "x")],
+        [(0, 99, "x")],
+        [(0, 2, "x"), (1, 3, "y")],
+    ],
+)
+def test_writer_rejects_invalid_ranges_before_output(
+    tmp_path: Path, replacements: list[tuple[int, int, str]]
+) -> None:
+    source = tmp_path / "source.html"
+    output = tmp_path / "output.html"
+    source.write_text("<p>Jane</p>", encoding="utf-8")
+    with pytest.raises(ValueError):
+        write_redacted_html(source, output, replacements)
+    assert not output.exists()
+
+
+def test_writer_deduplicates_exact_requests_and_rejects_atomic_collisions(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.html"
+    duplicate_output = tmp_path / "duplicate.html"
+    collision_output = tmp_path / "collision.html"
+    source.write_text("<p>&NotEqualTilde;</p>", encoding="utf-8")
+
+    write_redacted_html(source, duplicate_output, [(0, 2, "x"), (0, 2, "x")])
+    assert duplicate_output.read_text(encoding="utf-8") == "<p>x</p>"
+    with pytest.raises(ValueError):
+        write_redacted_html(
+            source,
+            collision_output,
+            [(0, 1, "x"), (1, 2, "x")],
+        )
+    assert not collision_output.exists()
+
+
+def test_writer_rejects_no_replaceable_text_and_source_aliases(tmp_path: Path) -> None:
+    source = tmp_path / "source.html"
+    source.write_text("<p>Jane</p><p>Roe</p>", encoding="utf-8")
+    document = extract_html(source)
+    separator = document.text.index("\n")
+    with pytest.raises(ValueError):
+        write_redacted_html(
+            source,
+            tmp_path / "break.html",
+            [(separator, separator + 1, "x")],
+        )
+
+    for alias in (source, source.resolve()):
+        with pytest.raises(ValueError):
+            write_redacted_html(source, alias, [(0, 4, "x")])
+    symlink = tmp_path / "alias.html"
+    symlink.symlink_to(source)
+    with pytest.raises(ValueError):
+        write_redacted_html(source, symlink, [(0, 4, "x")])
+    hardlink = tmp_path / "hardlink.html"
+    os.link(source, hardlink)
+    with pytest.raises(ValueError):
+        write_redacted_html(source, hardlink, [(0, 4, "x")])
+    assert source.read_text(encoding="utf-8") == "<p>Jane</p><p>Roe</p>"
+
+
+def test_explicit_module_import_registers_stdlib_handlers_and_safe_dispatch(
+    tmp_path: Path,
+) -> None:
+    assert base._HANDLERS[".html"][-1].requires_multimodal is False
+    assert base._HANDLERS[".htm"][-1].requires_multimodal is False
+    output = tmp_path / "redacted.html"
+    observed: dict[str, object] = {}
+
+    def detector(text: str, *, lang: str | None = None):
+        observed.update(text=text, lang=lang)
+        return {"entities": [{"start": 8, "end": 18, "label": "PERSON"}]}
+
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        policy={"output_path": output},
+        models={"detector": detector},
+        lang="en",
+    )
+
+    assert observed == {"text": "Patient Jane & Roe", "lang": "en"}
+    assert "<p>Patient [PERSON]</p>" in output.read_text(encoding="utf-8")
+    assert document.metadata == {
+        "format": "html",
+        "source_path": str(FIXTURE),
+        "detected_span_count": 1,
+        "redacted_html_path": str(output),
+    }
+    assert all(
+        value not in _flatten(document.metadata)
+        for value in (
+            FIXTURE.read_text(encoding="utf-8"),
+            "Hidden Jane",
+            "display:none",
+        )
+    )
+
+
+def test_handler_without_entities_does_not_create_output(tmp_path: Path) -> None:
+    output = tmp_path / "unused.html"
+    document = base._HANDLERS[".htm"][-1].handler(
+        FIXTURE,
+        policy={"output_path": output},
+        models=lambda text, **kwargs: [],
+    )
+    assert document.text == "Patient Jane & Roe"
+    assert document.metadata["detected_span_count"] == 0
+    assert not output.exists()

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import html as html_lib
 import os
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html.entities import html5
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-from .base import ExtractedDocument, SourceSpan
+from .base import ExtractedDocument, SourceSpan, register_handler
 
 _BREAK_TAGS = frozenset({"br"})
 _BLOCK_TAGS = frozenset(
@@ -74,6 +75,41 @@ def extract_html(source: str | os.PathLike[str] | Any) -> ExtractedDocument:
         retained only while parsing and is never exposed in public metadata.
     """
     return _parse_source(source).document
+
+
+def write_redacted_html(
+    source_path: str | os.PathLike[str],
+    output_path: str | os.PathLike[str],
+    replacements: Iterable[tuple[int, int, str]],
+) -> Path:
+    """Write normalized-text replacements into a distinct HTML source copy.
+
+    Args:
+        source_path: UTF-8 HTML source path.
+        output_path: Distinct destination path for redacted HTML.
+        replacements: ``(start, end, text)`` ranges in extracted visible text.
+
+    Returns:
+        The destination :class:`~pathlib.Path`.
+
+    Raises:
+        ValueError: If paths alias, ranges are invalid, or projected edits
+            collide.
+    """
+    source = Path(source_path)
+    output = Path(output_path)
+    _validate_distinct_paths(source, output)
+    parsed = _parse_source(source)
+    logical = _validate_logical_replacements(parsed.document, replacements)
+    projected = [
+        (_project_replacement(parsed.document, start, end), replacement)
+        for start, end, replacement in logical
+    ]
+    _validate_projected_replacements(projected)
+    redacted = _render_replacements(parsed.source, projected)
+    with output.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(redacted)
+    return output
 
 
 def _parse_source(source: str | os.PathLike[str] | Any) -> _ParsedHtml:
@@ -342,4 +378,253 @@ def _longest_legacy_entity_prefix(name: str) -> str | None:
     return None
 
 
-__all__ = ["extract_html"]
+def _validate_distinct_paths(source: Path, output: Path) -> None:
+    if source.resolve() == output.resolve():
+        raise ValueError("source and output paths must be distinct")
+    if source.exists() and output.exists() and os.path.samefile(source, output):
+        raise ValueError("source and output paths must be distinct")
+
+
+def _validate_logical_replacements(
+    document: ExtractedDocument,
+    replacements: Iterable[tuple[int, int, str]],
+) -> tuple[tuple[int, int, str], ...]:
+    unique: list[tuple[int, int, str]] = []
+    seen: set[tuple[int, int, str]] = set()
+    for raw_start, raw_end, raw_replacement in replacements:
+        item = (int(raw_start), int(raw_end), str(raw_replacement))
+        if item in seen:
+            continue
+        seen.add(item)
+        start, end, _ = item
+        if start < 0 or end <= start or end > len(document.text):
+            raise ValueError("replacement range is outside normalized HTML text")
+        unique.append(item)
+    ordered = sorted(unique, key=lambda item: (item[0], item[1], item[2]))
+    for previous, current in zip(ordered, ordered[1:]):
+        if current[0] < previous[1]:
+            raise ValueError("normalized replacement ranges overlap")
+    return tuple(ordered)
+
+
+def _project_replacement(
+    document: ExtractedDocument, start: int, end: int
+) -> tuple[tuple[int, int], ...]:
+    ranges: list[tuple[int, int]] = []
+    for span in document.spans:
+        overlap_start = max(start, span.start)
+        overlap_end = min(end, span.end)
+        if overlap_start >= overlap_end or not span.metadata.get("replaceable", False):
+            continue
+        source_start = int(span.metadata["source_start"])
+        source_end = int(span.metadata["source_end"])
+        if span.metadata.get("source_map_mode") == "linear":
+            source_start += overlap_start - span.start
+            source_end = source_start + (overlap_end - overlap_start)
+        candidate = (source_start, source_end)
+        if candidate not in ranges:
+            ranges.append(candidate)
+    if not ranges:
+        raise ValueError("replacement range contains no replaceable HTML text")
+    return tuple(sorted(ranges))
+
+
+def _validate_projected_replacements(
+    projected: Sequence[tuple[tuple[tuple[int, int], ...], str]],
+) -> None:
+    owned: list[tuple[int, int, int]] = []
+    for request_index, (ranges, _) in enumerate(projected):
+        for start, end in ranges:
+            for other_start, other_end, other_request in owned:
+                if (
+                    request_index != other_request
+                    and start < other_end
+                    and other_start < end
+                ):
+                    raise ValueError("projected HTML replacement ranges overlap")
+            owned.append((start, end, request_index))
+
+
+def _render_replacements(
+    source: str,
+    projected: Sequence[tuple[tuple[tuple[int, int], ...], str]],
+) -> str:
+    edits: list[tuple[int, int, str]] = []
+    for ranges, replacement in projected:
+        escaped = html_lib.escape(replacement)
+        for index, (start, end) in enumerate(ranges):
+            edits.append((start, end, escaped if index == 0 else ""))
+    redacted = source
+    for start, end, replacement in sorted(
+        edits, key=lambda item: item[0], reverse=True
+    ):
+        redacted = redacted[:start] + replacement + redacted[end:]
+    return redacted
+
+
+def _detect_entities(document: ExtractedDocument, models: Any, lang: str | None) -> Any:
+    detector = _resolve_detector(models)
+    if detector is None:
+        return ()
+    try:
+        return detector(document.text, lang=lang)
+    except TypeError:
+        return detector(document.text)
+
+
+def _resolve_detector(models: Any) -> Any:
+    if models is None:
+        return None
+    if callable(models):
+        return models
+    if isinstance(models, Mapping):
+        for key in ("detector", "extract_pii", "analyze_text", "predict_entities"):
+            candidate = models.get(key)
+            if callable(candidate):
+                return candidate
+        return None
+    for name in (
+        "detect",
+        "extract_pii",
+        "analyze_text",
+        "predict_entities",
+        "predict",
+    ):
+        candidate = getattr(models, name, None)
+        if callable(candidate):
+            return candidate
+    return None
+
+
+def _iter_entity_inputs(spans: Any) -> tuple[Any, ...]:
+    if spans is None:
+        return ()
+    for name in ("entities", "pii_entities"):
+        entities = getattr(spans, name, None)
+        if entities is not None:
+            return tuple(entities)
+    if isinstance(spans, Mapping):
+        for key in ("entities", "pii_entities", "spans"):
+            entities = spans.get(key)
+            if entities is not None:
+                return tuple(entities)
+        if "start" in spans and "end" in spans:
+            return (spans,)
+    if _looks_like_sequence_entity(spans):
+        return (spans,)
+    if isinstance(spans, Iterable) and not isinstance(spans, (str, bytes, bytearray)):
+        return tuple(spans)
+    return ()
+
+
+def _coerce_entity(
+    span: Any, *, default_replacement: str | None
+) -> tuple[int, int, str] | None:
+    if _looks_like_sequence_entity(span):
+        label = str(span[2]) if len(span) >= 3 and span[2] is not None else None
+        return int(span[0]), int(span[1]), default_replacement or _mask_for_label(label)
+    if isinstance(span, Mapping):
+        start = span.get("start")
+        end = span.get("end")
+        label = span.get("label", span.get("entity_type", span.get("entity_group")))
+        replacement = span.get("replacement", span.get("redacted_text"))
+    else:
+        start = getattr(span, "start", None)
+        end = getattr(span, "end", None)
+        label = getattr(
+            span,
+            "label",
+            getattr(span, "entity_type", getattr(span, "entity_group", None)),
+        )
+        replacement = getattr(span, "replacement", getattr(span, "redacted_text", None))
+    if start is None or end is None:
+        return None
+    return (
+        int(start),
+        int(end),
+        str(replacement)
+        if replacement is not None
+        else default_replacement or _mask_for_label(label),
+    )
+
+
+def _looks_like_sequence_entity(value: Any) -> bool:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        if len(value) >= 2:
+            try:
+                int(value[0])
+                int(value[1])
+            except (TypeError, ValueError):
+                return False
+            return True
+    return False
+
+
+def _mask_for_label(label: Any) -> str:
+    safe = "".join(
+        character if character.isalnum() else "_"
+        for character in str(label or "PHI").upper()
+    ).strip("_")
+    return f"[{safe or 'PHI'}]"
+
+
+def _policy_value(policy: Any, *names: str) -> Any:
+    if policy is None:
+        return None
+    if isinstance(policy, Mapping):
+        for name in names:
+            if name in policy:
+                return policy[name]
+        return None
+    for name in names:
+        value = getattr(policy, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _html_handler(
+    path: str | Path,
+    *,
+    policy: Any = None,
+    models: Any = None,
+    lang: str | None = None,
+) -> ExtractedDocument:
+    parsed = _parse_source(path)
+    entity_inputs = _iter_entity_inputs(_detect_entities(parsed.document, models, lang))
+    default_replacement = _policy_value(policy, "replacement")
+    replacements = tuple(
+        replacement
+        for entity in entity_inputs
+        if (
+            replacement := _coerce_entity(
+                entity, default_replacement=default_replacement
+            )
+        )
+        is not None
+    )
+    output_path = _policy_value(
+        policy, "output_path", "redacted_path", "destination_path"
+    )
+    if replacements and output_path is not None:
+        write_redacted_html(path, output_path, replacements)
+    metadata = {
+        "format": "html",
+        "detected_span_count": len(replacements),
+    }
+    source_path = parsed.document.metadata.get("source_path")
+    if source_path is not None:
+        metadata["source_path"] = source_path
+    if replacements and output_path is not None:
+        metadata["redacted_html_path"] = str(output_path)
+    return ExtractedDocument(
+        text=parsed.document.text,
+        spans=parsed.document.spans,
+        metadata=metadata,
+    )
+
+
+register_handler((".html", ".htm"), _html_handler, requires_multimodal=False)
+
+
+__all__ = ["extract_html", "write_redacted_html"]
