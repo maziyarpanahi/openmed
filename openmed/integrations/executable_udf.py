@@ -265,7 +265,7 @@ def _redact_batch(
     except Exception:
         raise ExecutableUDFError("failed to redact an input batch") from None
 
-    items = list(getattr(result, "items", []))
+    items = _batch_items(result)
     if len(items) != len(batch_texts):
         raise ExecutableUDFError("batch result count did not match input row count")
 
@@ -278,12 +278,37 @@ def _redact_batch(
 
 
 def _redacted_text(item: Any) -> str:
-    if not getattr(item, "success", False):
+    if isinstance(item, Mapping):
+        success = item.get("success", False)
+        result = item.get("result")
+    else:
+        success = getattr(item, "success", False)
+        result = getattr(item, "result", None)
+
+    if not success:
         raise ExecutableUDFError("one or more input rows could not be redacted")
-    redacted = getattr(getattr(item, "result", None), "deidentified_text", None)
+
+    if isinstance(result, Mapping):
+        redacted = result.get("deidentified_text")
+    else:
+        redacted = getattr(result, "deidentified_text", None)
     if not isinstance(redacted, str):
         raise ExecutableUDFError("batch redaction returned an invalid result")
     return redacted
+
+
+def _batch_items(result: Any) -> list[Any]:
+    if isinstance(result, Mapping):
+        items = result.get("items")
+    else:
+        items = getattr(result, "items", None)
+
+    if items is None:
+        return []
+    try:
+        return list(items)
+    except TypeError:
+        raise ExecutableUDFError("batch result contained invalid items") from None
 
 
 def _parse_tsv_row(raw_line: str, *, line_number: int) -> str:
@@ -306,7 +331,7 @@ def _decode_tsv_value(value: str) -> str:
             continue
 
         escaped = value[index + 1]
-        decoded.append(_TSV_DECODE_ESCAPES.get(escaped, escaped))
+        decoded.append(_TSV_DECODE_ESCAPES.get(escaped, f"\\{escaped}"))
         index += 2
     return "".join(decoded)
 

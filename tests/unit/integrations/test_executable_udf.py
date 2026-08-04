@@ -104,6 +104,67 @@ def test_tsv_escaping_round_trips_control_characters(monkeypatch) -> None:
     assert stdout.getvalue() == "[NAME]\\tcalled\\nagain\\\\soon\n"
 
 
+def test_tsv_escaping_preserves_unknown_backslash_sequences(monkeypatch) -> None:
+    received: list[str] = []
+
+    def fake_process_batch(texts: list[str], **kwargs: Any) -> SimpleNamespace:
+        received.extend(texts)
+        return _batch_result(list(texts))
+
+    monkeypatch.setattr(executable_udf, "process_batch", fake_process_batch)
+    stdout = io.StringIO()
+
+    executable_udf.redact_tsv_stream(
+        io.StringIO(r"literal\q\N" + "\n"),
+        stdout,
+        loader=object(),
+    )
+
+    assert received == [r"literal\q\N"]
+    assert stdout.getvalue() == r"literal\\q\\N" + "\n"
+
+
+def test_blank_rows_preserve_cardinality_without_batch_calls(monkeypatch) -> None:
+    def fail_if_called(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("blank rows must not invoke batch redaction")
+
+    monkeypatch.setattr(executable_udf, "process_batch", fail_if_called)
+    stdout = io.StringIO()
+
+    emitted = executable_udf.redact_tsv_stream(
+        io.StringIO("\n\n"),
+        stdout,
+        loader=object(),
+    )
+
+    assert emitted == 2
+    assert stdout.getvalue() == "\n\n"
+
+
+def test_mapping_batch_results_are_redacted(monkeypatch) -> None:
+    def fake_process_batch(texts: list[str], **kwargs: Any) -> dict[str, Any]:
+        return {
+            "items": [
+                {
+                    "success": True,
+                    "result": {"deidentified_text": _fake_redact(text)},
+                }
+                for text in texts
+            ]
+        }
+
+    monkeypatch.setattr(executable_udf, "process_batch", fake_process_batch)
+    stdout = io.StringIO()
+
+    executable_udf.redact_tsv_stream(
+        io.StringIO("Patient Jane Roe called\n"),
+        stdout,
+        loader=object(),
+    )
+
+    assert stdout.getvalue() == "Patient [NAME] called\n"
+
+
 def test_cli_failure_does_not_echo_or_log_raw_phi(monkeypatch, caplog) -> None:
     def fake_process_batch(texts: list[str], **kwargs: Any) -> SimpleNamespace:
         raise RuntimeError(f"model failed on {texts[0]}")
