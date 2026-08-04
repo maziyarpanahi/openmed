@@ -339,13 +339,37 @@ class ClinicalContextResult:
 
     ``negation="negated"`` is the downstream signal for
     ``verificationStatus=refuted`` when a grounding/FHIR layer materializes the
-    clinical span as a Condition. This object deliberately stays at the context
-    axis layer and does not construct that grounded record.
+    clinical span as a Condition. ``experiencer="family"`` is the downstream
+    signal to exclude the finding from patient-level resources. This object
+    deliberately stays at the context axis layer and does not construct that
+    grounded record.
     """
 
     temporality: str
     certainty: Certainty
     negation: Negation
+    experiencer: str | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a compact dictionary, omitting an unset experiencer."""
+
+        values = {
+            "temporality": self.temporality,
+            "certainty": self.certainty,
+            "negation": self.negation,
+            "experiencer": self.experiencer,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
+    def to_assertion(self) -> ClinicalAssertion:
+        """Return the assertion record consumed by grounding exporters."""
+
+        return ClinicalAssertion(
+            temporality=self.temporality,
+            certainty=self.certainty,
+            negation=self.negation,
+            experiencer=self.experiencer,
+        )
 
 
 @dataclass(frozen=True)
