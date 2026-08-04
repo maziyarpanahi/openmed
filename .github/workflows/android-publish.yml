@@ -1,5 +1,7 @@
-# Tags matching v* build and publish the OpenMedKit Android AAR to Maven Central.
-# Required repository secrets:
+# Tags matching v* validate the OpenMedKit Android AAR used by JitPack. When all
+# optional Central Portal credentials are configured, the same run also builds
+# and uploads a signed Maven Central bundle. Manual uploads require every secret.
+# Optional repository secrets for Maven Central:
 # - ANDROID_SIGNING_KEY: ASCII-armored GPG private key for Maven artifact signing.
 # - ANDROID_SIGNING_KEY_PASSWORD: passphrase for ANDROID_SIGNING_KEY.
 # - SONATYPE_USERNAME: Central Portal user-token username.
@@ -22,7 +24,6 @@ on:
 
 permissions:
   contents: read
-  checks: read
 
 jobs:
   guard:
@@ -30,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}
+      publish_android: ${{ steps.android_changes.outputs.publish_android }}
+      central_portal_configured: ${{ steps.central_credentials.outputs.configured }}
 
     steps:
       - uses: actions/checkout@v7
@@ -64,38 +67,66 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Require successful Android checks
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Detect Android artifact changes
+        id: android_changes
+        shell: bash
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs" \
-            --paginate \
-            --jq '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv' \
-            > check-runs.tsv
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "publish_android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          required_checks=(
-            "Build & Test Android OpenMedKit"
-            "Android AAR size and cold-start gate"
-          )
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "publish_android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          for check_name in "${required_checks[@]}"; do
-            line=$(awk -F '\t' -v name="$check_name" '$1 == name { found=$0 } END { print found }' check-runs.tsv)
-            if [ -z "$line" ]; then
-              echo "::error title=Missing required check::$check_name has not run on ${GITHUB_SHA}."
-              exit 1
-            fi
+          if git diff --quiet "$PREVIOUS_TAG" "$GITHUB_SHA" -- \
+            android/ models.jsonl scripts/android/build_android_catalog.py \
+            ':(exclude,glob)android/**/*.md'; then
+            echo "publish_android=false" >> "$GITHUB_OUTPUT"
+            echo "No Android artifact changes since $PREVIOUS_TAG; skipping publication."
+          else
+            echo "publish_android=true" >> "$GITHUB_OUTPUT"
+          fi
 
-            status=$(printf '%s\n' "$line" | cut -f2)
-            conclusion=$(printf '%s\n' "$line" | cut -f3)
-            if [ "$status" != "completed" ] || [ "$conclusion" != "success" ]; then
-              echo "::error title=Required check did not pass::$check_name is $status/$conclusion."
-              exit 1
+      - name: Detect optional Central Portal credentials
+        id: central_credentials
+        shell: bash
+        env:
+          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          configured=true
+          for name in \
+            ANDROID_SIGNING_KEY \
+            ANDROID_SIGNING_KEY_PASSWORD \
+            SONATYPE_USERNAME \
+            SONATYPE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              configured=false
             fi
           done
 
+          echo "configured=$configured" >> "$GITHUB_OUTPUT"
+          if [ "$configured" = "true" ]; then
+            exit 0
+          fi
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::error title=Missing Central Portal credentials::Configure all Android signing and Sonatype credentials before a manual upload."
+            exit 1
+          fi
+
+          echo "::notice title=Central Portal skipped::Optional publishing credentials are not configured; the immutable tag remains available through JitPack."
+
   build:
-    name: Build signed Central Portal bundle
+    name: Build Android release
     needs: guard
+    if: needs.guard.outputs.publish_android == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -122,6 +153,7 @@ jobs:
           ./gradlew :openmedkit:assembleDebug :openmedkit:testDebugUnitTest --stacktrace
 
       - name: Build signed Maven Central bundle
+        if: needs.guard.outputs.central_portal_configured == 'true'
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_openmedAndroidVersion: ${{ needs.guard.outputs.version }}
@@ -131,6 +163,7 @@ jobs:
           ./gradlew :openmedkit:bundleCentralPortalPublication --stacktrace
 
       - name: Upload Central Portal bundle artifact
+        if: needs.guard.outputs.central_portal_configured == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: openmedkit-central-portal-bundle
@@ -141,6 +174,7 @@ jobs:
   publish:
     name: Upload to Central Portal
     needs: [guard, build]
+    if: needs.guard.outputs.publish_android == 'true' && needs.guard.outputs.central_portal_configured == 'true'
     runs-on: ubuntu-latest
     environment:
       name: maven-central

@@ -7,13 +7,45 @@ import importlib
 import inspect
 import logging
 import unicodedata
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Mapping, Optional, Sequence
+from time import perf_counter
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    cast,
+)
 
-from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
+from openmed.compliance.data_use import DataUseAction, DataUsePolicy, DataUseTag
+
+from .budget import RequestBudget, coerce_budget
+from .custom_recognizer import (
+    CUSTOM_DENY_DETECTOR,
+    build_transliterated_name_recognizer,
+    coerce_custom_recognizer,
+)
 from .labels import hipaa_class_for, normalize_label, policy_label_for
+from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
+
+# Keep this runtime alias aligned with ``pii.DeidentificationMethod``. Importing
+# ``pii`` here would eagerly load the heavier public de-identification module,
+# which otherwise imports ``Pipeline`` only when ``deidentify`` is called.
+DeidentificationMethod = Literal[
+    "mask",
+    "aadhaar_mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
 
 STAGE_NAMES: tuple[str, ...] = (
     "normalize",
@@ -115,6 +147,7 @@ class LanguageRoute:
     script: str
     model_name: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    decision: DocumentLanguageDecision | None = None
 
 
 @dataclass(frozen=True)
@@ -132,7 +165,10 @@ class PipelineContext:
     normalized_text: str
     offset_map: OffsetMap
     route: LanguageRoute
+    token_language_tags: tuple[Any, ...] = ()
     section_metadata: Mapping[str, Any] = field(default_factory=dict)
+    locale: str | None = None
+    data_use_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -146,12 +182,33 @@ class PipelineResult:
     redacted_text: str
     audit_record: Mapping[str, Any]
     deidentification_result: Any = None
+    stage_durations_ms: Mapping[str, float] = field(default_factory=dict)
+    cascade_duration_ms: float | None = None
+    data_use_tags: tuple[str, ...] = ()
+    data_use_decision: Mapping[str, Any] = field(default_factory=dict)
 
     def stage(self, name: str) -> PipelineStageResult:
         for result in self.stage_results:
             if result.name == name:
                 return result
         raise KeyError(name)
+
+    def stage_duration_ms(self, name: str) -> float:
+        """Return the measured wall-clock duration of ``name`` in milliseconds.
+
+        Durations are latency-only measurements: they never carry document text
+        and are safe for transient metrics or logs. They cover only work
+        explicitly attributed to that stage, not cross-stage orchestration or
+        audit serialization. They are deliberately kept off the reproducible
+        audit record because wall-clock time is non-deterministic.
+
+        In cascade mode, the router spans detection stages 4--6 and its total
+        duration is therefore reported separately as ``cascade_duration_ms``;
+        it is not charged to any one stage.
+        """
+        if name not in self.stage_durations_ms:
+            raise KeyError(name)
+        return self.stage_durations_ms[name]
 
     def explain(self) -> Any:
         """Return a reviewer-facing trace report for this pipeline result."""
@@ -166,7 +223,34 @@ ModelDetector = Callable[..., Any]
 
 
 class Pipeline:
-    """Orchestrate the ten-stage privacy detection pipeline."""
+    """Orchestrate the ten-stage privacy detection pipeline.
+
+    Complexity for long inputs
+    --------------------------
+    Let ``n`` be the note length in characters and ``m`` the number of
+    candidate spans (typically ``m << n`` for clinical notes).
+
+    * Stage 1 (normalize) builds three character-indexed offset maps, so it is
+      ``O(n)`` in time and memory. Encoding repair (optional ``ftfy``) runs per
+      segment only when a real repairer is active; when it is unavailable the
+      per-segment call is skipped so stage 1 stays ``O(n)`` without a
+      per-character Python-call overhead.
+    * Stages 4 and 9 (deterministic detectors / safety sweep) scan the text
+      once per regex pattern, i.e. ``O(P * n)`` for a fixed pattern set ``P``
+      -- linear in ``n``.
+    * Stage 7 (arbitration) sorts and sweeps candidates in ``O(m log m)``.
+
+    The pipeline is therefore expected to scale roughly linearly with note
+    length. ``run`` measures explicitly attributed per-stage wall-clock work
+    (see :meth:`PipelineResult.stage_duration_ms`). Cross-stage setup, span
+    remapping, and audit serialization are excluded. When a cascade router is
+    configured, its shared detector/router work spans stages 4--6 and is
+    reported separately as :attr:`PipelineResult.cascade_duration_ms`; those
+    stage keys measure only their cascade-output projection and registered-hook
+    work. The latency-scaling regression tests in
+    ``tests/unit/core/test_pipeline_latency.py`` guard against a regression that
+    reintroduces super-linear behaviour.
+    """
 
     stage_names = STAGE_NAMES
 
@@ -180,16 +264,19 @@ class Pipeline:
         lang: str = "en",
         normalize_accents: Optional[bool] = None,
         use_safety_sweep: bool = True,
+        preserve_whitespace: bool = False,
         loader: Any = None,
         privacy_filter_pipeline: Any = None,
         model_detector: ModelDetector | None = None,
         clinical_model_detector: ModelDetector | None = None,
         cascade_router: Any = None,
+        language_router: LanguageRouter | None = None,
         arbitration: SpanHook | None = None,
         arbitration_mode: str | None = None,
         strict_no_leak: bool = False,
         policy_profile: str | None = None,
         policy: Any = None,
+        data_use_policy: DataUsePolicy | None = None,
         threshold_matrix: Mapping[str, Any] | None = None,
         calibration_thresholds_path: str | None = None,
         calibration_thresholds: Mapping[str, Any] | Any | None = None,
@@ -199,6 +286,11 @@ class Pipeline:
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
         custom_recognizer: Any = None,
+        indian_multi_id: bool | None = None,
+        code_mixed: bool = False,
+        token_language_tags: Sequence[Any] | None = None,
+        lid_model: Any = None,
+        transliterated_name_config: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
         from . import pii
@@ -214,6 +306,14 @@ class Pipeline:
             )
 
         self.policy = resolved_policy
+        if config is None:
+            from .config import get_config
+
+            config = get_config()
+        configured_pii_model = getattr(config, "pii_model", None)
+        if configured_pii_model and model_name in {None, pii._DEFAULT_EN_MODEL}:
+            model_name = configured_pii_model
+        self.data_use_policy = data_use_policy
         self.model_name = model_name or pii._DEFAULT_EN_MODEL
         self.confidence_threshold = confidence_threshold
         self.config = config
@@ -221,11 +321,15 @@ class Pipeline:
         self.lang = lang
         self.normalize_accents = normalize_accents
         self.use_safety_sweep = use_safety_sweep
+        self.preserve_whitespace = bool(preserve_whitespace)
         self.loader = loader
         self.privacy_filter_pipeline = privacy_filter_pipeline
         self.model_detector = model_detector
         self.clinical_model_detector = clinical_model_detector
         self.cascade_router = cascade_router
+        self.language_router = language_router
+        if self.language_router is None and lang == "auto":
+            self.language_router = LanguageRouter()
         self.arbitration = arbitration
         self.arbitration_mode = arbitration_mode
         self.strict_no_leak = strict_no_leak
@@ -241,6 +345,21 @@ class Pipeline:
         self.policy_actions = policy_actions
         self.section_detector = section_detector
         self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
+        self.indian_multi_id = indian_multi_id
+        self.code_mixed = bool(code_mixed)
+        if not self.code_mixed and token_language_tags is not None:
+            raise ValueError("token_language_tags requires code_mixed=True")
+        if not self.code_mixed and lid_model is not None:
+            raise ValueError("lid_model requires code_mixed=True")
+        self.token_language_tags = (
+            tuple(token_language_tags) if token_language_tags is not None else None
+        )
+        self.lid_model = lid_model
+        self.transliterated_name_recognizer = (
+            build_transliterated_name_recognizer(transliterated_name_config)
+            if self.code_mixed
+            else None
+        )
         self.hmac_secret = hmac_secret
         from .clinical_protect import protection_options_from_config
 
@@ -265,32 +384,86 @@ class Pipeline:
         doc_id: str | None = None,
         audit: bool = False,
         explain: bool = False,
+        data_use_tags: Sequence[DataUseTag | str] | DataUseTag | str = (),
+        data_use_action: DataUseAction | str = "process",
+        budget: Optional[RequestBudget] = None,
     ) -> PipelineResult:
+        resolved_budget = coerce_budget(budget)
+        budget_clock = resolved_budget.start() if resolved_budget is not None else None
+        if budget_clock is not None:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="pipeline.input_guard",
+            )
+            budget_clock.check("pipeline.start")
+
+        from openmed.compliance.data_use import (
+            DEFAULT_DATA_USE_POLICY,
+            DataUseAction,
+            DataUsePolicy,
+        )
+
+        resolved_data_use_policy = self.data_use_policy or DEFAULT_DATA_USE_POLICY
+        if not isinstance(resolved_data_use_policy, DataUsePolicy):
+            raise TypeError("data_use_policy must be a DataUsePolicy")
+        attempted_data_use_actions: list[DataUseAction | str] = [data_use_action]
+        if surrogate_vault is not None:
+            attempted_data_use_actions.append(DataUseAction.SURROGATE_VAULT)
+        data_use_evaluation = resolved_data_use_policy.enforce(
+            data_use_tags,
+            attempted_data_use_actions,
+        )
+        resolved_data_use_tags = tuple(tag.value for tag in data_use_evaluation.tags)
+        serialized_data_use_decision = data_use_evaluation.to_dict()
+
         from . import pii
 
         effective_method = pii._resolve_deidentification_method(
-            method,
+            cast("DeidentificationMethod", method),
             shift_dates,
             date_shift_days,
             patient_key=patient_key,
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
         )
-        original_text = text.strip()
-        normalized = self.stage1_normalize(original_text)
-        route = self.stage2_language_script(normalized.normalized_text)
+        stage_durations_ms: dict[str, float] = {
+            stage_name: 0.0 for stage_name in STAGE_NAMES
+        }
+        cascade_duration_ms: float | None = None
+        original_text = text if self.preserve_whitespace else text.strip()
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
+            normalized = self.stage1_normalize(original_text)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage1_normalize")
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
+            route = self.stage2_language_script(normalized.normalized_text)
+        token_language_tags = self._normalize_code_mixed_tags(normalized)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage2_language_script")
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
         )
-        section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[2]):
+            section_metadata = _remap_section_metadata_to_normalized(
+                self.stage3_doc_type_section(
+                    normalized.original_text,
+                    language=route.lang,
+                ),
+                normalized,
+            )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage3_doc_type_section")
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
             normalized_text=normalized.normalized_text,
             offset_map=normalized.offset_map,
             route=route,
+            token_language_tags=token_language_tags,
             section_metadata=section_metadata,
+            locale=locale,
+            data_use_tags=resolved_data_use_tags,
         )
 
         stage_results: list[PipelineStageResult] = [
@@ -307,6 +480,24 @@ class Pipeline:
                     "script": route.script,
                     "model_name": route.model_name,
                     **dict(route.metadata),
+                    **(
+                        {
+                            "code_mixed": {
+                                "enabled": True,
+                                "mode": "hinglish",
+                                "token_tags": [
+                                    {
+                                        "start": tag.start,
+                                        "end": tag.end,
+                                        "label": tag.label,
+                                    }
+                                    for tag in token_language_tags
+                                ],
+                            }
+                        }
+                        if self.code_mixed
+                        else {}
+                    ),
                 },
             ),
             PipelineStageResult(
@@ -318,6 +509,7 @@ class Pipeline:
 
         cascade_driven = self.cascade_router is not None
         if cascade_driven:
+            cascade_started = perf_counter()
             cascade_result = self.cascade_router.run(
                 normalized.normalized_text,
                 context=context,
@@ -325,81 +517,124 @@ class Pipeline:
                 language=route.lang,
                 policy_profile=self.policy_profile,
             )
-            deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
-            model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
-            clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
-            deterministic_spans = (
-                *deterministic_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[3],
-                ),
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
-            clinical_spans = (
-                *clinical_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[5],
-                ),
-            )
-            deterministic_spans = _stamp_span_sections(
-                deterministic_spans,
-                context.section_metadata,
-            )
-            model_spans = _stamp_span_sections(
-                model_spans,
-                context.section_metadata,
-            )
-            clinical_spans = _stamp_span_sections(
-                clinical_spans,
-                context.section_metadata,
-            )
+            cascade_duration_ms = (perf_counter() - cascade_started) * 1000.0
+            if budget_clock is not None:
+                budget_clock.check("pipeline.cascade_router")
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+                deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
+                deterministic_spans = (
+                    *deterministic_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[3],
+                    ),
+                )
+                deterministic_spans = _stamp_span_sections(
+                    deterministic_spans,
+                    context.section_metadata,
+                )
+                cascade_metadata = {
+                    "cascade_mode": cascade_result.mode,
+                    "routes": [
+                        {
+                            "route": stage.route,
+                            "name": stage.name,
+                            "reason": stage.reason,
+                            "span_count": len(stage.spans),
+                        }
+                        for stage in cascade_result.stage_results
+                    ],
+                    "timing_scope": (
+                        "R0 output projection and registered hooks only; shared "
+                        "cascade router time is reported separately"
+                    ),
+                }
+                stage_results.append(
+                    PipelineStageResult(
+                        4,
+                        STAGE_NAMES[3],
+                        spans=deterministic_spans,
+                        metadata=cascade_metadata,
+                    )
+                )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage4_deterministic_detectors")
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+                model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+                model_spans = _stamp_span_sections(
+                    model_spans,
+                    context.section_metadata,
+                )
+                stage_results.append(
+                    PipelineStageResult(
+                        5,
+                        STAGE_NAMES[4],
+                        spans=model_spans,
+                        metadata={
+                            "timing_scope": (
+                                "R1/R2 output projection and registered hooks only; "
+                                "shared cascade router time is reported separately"
+                            )
+                        },
+                    )
+                )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage5_fast_pii_model")
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+                clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+                clinical_spans = (
+                    *clinical_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[5],
+                    ),
+                )
+                clinical_spans = _stamp_span_sections(
+                    clinical_spans,
+                    context.section_metadata,
+                )
+                stage_results.append(
+                    PipelineStageResult(
+                        6,
+                        STAGE_NAMES[5],
+                        spans=clinical_spans,
+                        metadata={
+                            "timing_scope": (
+                                "R3/R4 output projection and registered hooks only; "
+                                "shared cascade router time is reported separately"
+                            )
+                        },
+                    )
+                )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage6_clinical_phi_model")
+
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
                 model_name="cascade",
             )
-            cascade_metadata = {
-                "cascade_mode": cascade_result.mode,
-                "routes": [
-                    {
-                        "route": stage.route,
-                        "name": stage.name,
-                        "reason": stage.reason,
-                        "span_count": len(stage.spans),
-                    }
-                    for stage in cascade_result.stage_results
-                ],
-            }
-            stage_results.append(
-                PipelineStageResult(
-                    4,
-                    STAGE_NAMES[3],
-                    spans=deterministic_spans,
-                    metadata=cascade_metadata,
-                )
-            )
-            stage_results.append(
-                PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
-            )
-            stage_results.append(
-                PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
-            )
         else:
-            deterministic_spans = self.stage4_deterministic_detectors(
-                normalized.normalized_text,
-                context,
-            )
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+                deterministic_spans = self.stage4_deterministic_detectors(
+                    normalized.normalized_text,
+                    context,
+                )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage4_deterministic_detectors")
             deterministic_spans = _stamp_span_sections(
                 deterministic_spans,
                 context.section_metadata,
@@ -408,34 +643,45 @@ class Pipeline:
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
-            pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
-            self._apply_calibration_thresholds(pii_result, route)
-            model_spans = self._entities_to_spans(
-                getattr(pii_result, "entities", ()),
-                normalized.normalized_text,
-                context,
-                default_detector=(
-                    f"model:{getattr(pii_result, 'model_name', route.model_name)}"
-                ),
-                stage=STAGE_NAMES[4],
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+                pii_result = self.stage5_fast_pii_model(
+                    normalized.normalized_text,
+                    route,
+                    locale=context.locale,
+                    token_language_tags=context.token_language_tags,
+                )
+                self._apply_calibration_thresholds(pii_result, route)
+                model_spans = self._entities_to_spans(
+                    getattr(pii_result, "entities", ()),
                     normalized.normalized_text,
                     context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
+                    default_detector=(
+                        f"model:{getattr(pii_result, 'model_name', route.model_name)}"
+                    ),
+                    stage=STAGE_NAMES[4],
+                )
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage5_fast_pii_model")
             model_spans = _stamp_span_sections(model_spans, context.section_metadata)
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
 
-            clinical_spans = self.stage6_clinical_phi_model(
-                normalized.normalized_text,
-                context,
-            )
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+                clinical_spans = self.stage6_clinical_phi_model(
+                    normalized.normalized_text,
+                    context,
+                )
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage6_clinical_phi_model")
             clinical_spans = _stamp_span_sections(
                 clinical_spans,
                 context.section_metadata,
@@ -445,10 +691,11 @@ class Pipeline:
             )
 
         arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
-        merged_spans = self.stage7_arbitration(
-            arbitration_candidates,
-            context,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[6]):
+            merged_spans = self.stage7_arbitration(
+                arbitration_candidates,
+                context,
+            )
         arbitration_trace_metadata = (
             _arbitration_trace_metadata(
                 arbitration_candidates,
@@ -493,6 +740,8 @@ class Pipeline:
                 options=self.clinical_protect_options,
                 lang=route.lang,
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage7_arbitration")
         stage_results.append(
             PipelineStageResult(
                 7,
@@ -502,11 +751,12 @@ class Pipeline:
             )
         )
 
-        policy_spans = self.stage8_policy_actions(
-            merged_spans,
-            context,
-            explain=explain,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[7]):
+            policy_spans = self.stage8_policy_actions(
+                merged_spans,
+                context,
+                explain=explain,
+            )
         policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
@@ -525,6 +775,8 @@ class Pipeline:
                 ]
                 pii_result.metadata = metadata
         else:
+            from .detector_plugins import INDIAN_MULTI_ID_ENTITY_TYPES
+
             pii._suppress_custom_allowed_entities(
                 normalized.normalized_text,
                 pii_result,
@@ -537,15 +789,25 @@ class Pipeline:
                     span
                     for span in policy_spans
                     if span.action != ACTION_KEEP
-                    and str(span.detector or "").startswith(("plugin:", "custom:"))
+                    and (
+                        str(span.detector or "").startswith(
+                            ("builtin:", "plugin:", "custom:")
+                        )
+                        or span.entity_type in INDIAN_MULTI_ID_ENTITY_TYPES
+                    )
                 ],
             )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage8_policy_actions")
 
-        sweep_spans, sweep_metadata = self.stage9_safety_sweep(
-            normalized.normalized_text,
-            pii_result,
-            context,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[8]):
+            sweep_spans, sweep_metadata = self.stage9_safety_sweep(
+                normalized.normalized_text,
+                pii_result,
+                context,
+            )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage9_safety_sweep")
         stage_results.append(
             PipelineStageResult(
                 9,
@@ -563,31 +825,60 @@ class Pipeline:
             normalized,
             self.hmac_secret,
         )
-        deidentified = self.stage10_emit(
-            normalized.original_text,
-            emission_pii_result,
-            effective_method=effective_method,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days,
-            patient_key=patient_key,
-            date_shift_max_days=date_shift_max_days,
-            date_shift_secret=date_shift_secret,
-            keep_mapping=effective_keep_mapping,
-            lang=route.lang,
-            consistent=consistent,
-            seed=seed,
-            locale=locale,
-            surrogate_vault=surrogate_vault,
-            model_name=route.model_name,
-            confidence_threshold=self.confidence_threshold,
-            normalize_accents=self.normalize_accents,
-            use_smart_merging=self.use_smart_merging,
-            use_safety_sweep=self.use_safety_sweep,
-            reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
-            policy_name=self.policy.name if self.policy is not None else None,
-            policy=self.policy.name if self.policy is not None else "hipaa_safe_harbor",
-            audit=audit,
-        )
+        if surrogate_vault is not None and bool(
+            getattr(
+                self.config,
+                "transliteration_aware_name_matching",
+                False,
+            )
+        ):
+            normalizer = getattr(surrogate_vault, "indic_name_normalizer", None)
+            surrogate_vault.configure_name_matching(
+                enabled=True,
+                similarity_threshold=float(
+                    getattr(
+                        self.config,
+                        "indic_name_similarity_threshold",
+                        0.80,
+                    )
+                ),
+                transliterator=getattr(normalizer, "transliterator", None),
+            )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage10_emit")
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
+            deidentified = self.stage10_emit(
+                normalized.original_text,
+                emission_pii_result,
+                effective_method=effective_method,
+                keep_year=keep_year,
+                date_shift_days=date_shift_days,
+                patient_key=patient_key,
+                date_shift_max_days=date_shift_max_days,
+                date_shift_secret=date_shift_secret,
+                keep_mapping=effective_keep_mapping,
+                lang=route.lang,
+                consistent=consistent,
+                seed=seed,
+                locale=locale,
+                surrogate_vault=surrogate_vault,
+                model_name=route.model_name,
+                confidence_threshold=self.confidence_threshold,
+                normalize_accents=self.normalize_accents,
+                use_smart_merging=self.use_smart_merging,
+                use_safety_sweep=self.use_safety_sweep,
+                reversible_ids=bool(
+                    self.policy is not None and self.policy.reversible_id
+                ),
+                policy_name=self.policy.name if self.policy is not None else None,
+                policy=(
+                    self.policy.name if self.policy is not None else "hipaa_safe_harbor"
+                ),
+                audit=audit,
+                config=self.config,
+            )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage10_emit_complete")
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
@@ -611,12 +902,22 @@ class Pipeline:
                 },
             )
         )
+        if resolved_data_use_tags:
+            deidentified.metadata = {
+                **(deidentified.metadata or {}),
+                "data_use": copy.deepcopy(serialized_data_use_decision),
+            }
         audit_record = self._audit_record(
             context,
             stage_results,
             emission_spans,
             redacted_text=deidentified.deidentified_text,
+            data_use_decision=(
+                serialized_data_use_decision if resolved_data_use_tags else None
+            ),
         )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.complete")
 
         return PipelineResult(
             original_text=normalized.original_text,
@@ -628,37 +929,98 @@ class Pipeline:
             redacted_text=deidentified.deidentified_text,
             audit_record=audit_record,
             deidentification_result=deidentified,
+            stage_durations_ms=dict(stage_durations_ms),
+            cascade_duration_ms=cascade_duration_ms,
+            data_use_tags=resolved_data_use_tags,
+            data_use_decision=serialized_data_use_decision,
         )
 
+    def _normalize_code_mixed_tags(
+        self,
+        document: NormalizedDocument,
+    ) -> tuple[Any, ...]:
+        if not self.code_mixed:
+            return ()
+
+        from .pii_i18n import CodeMixedTokenTag, normalize_code_mixed_token_tags
+
+        raw_tags = self.token_language_tags
+        if raw_tags is None:
+            from .lang_id_codemix import identify_token_languages
+
+            raw_tags = identify_token_languages(
+                document.original_text,
+                model=self.lid_model,
+            )
+        source_tags = normalize_code_mixed_token_tags(
+            document.original_text,
+            raw_tags,
+        )
+        normalized_tags = []
+        for tag in source_tags:
+            start, end = document.offset_map.original_span_to_normalized(
+                tag.start,
+                tag.end,
+            )
+            if start >= end:
+                raise ValueError("token language tag normalized to an empty span")
+            normalized_tags.append(CodeMixedTokenTag(start, end, tag.label))
+        return tuple(normalized_tags)
+
     def stage1_normalize(self, text: str) -> NormalizedDocument:
+        from ..processing.legacy_encoding import convert_legacy_encoding
+
+        legacy_conversion = convert_legacy_encoding(text)
+        legacy_text = legacy_conversion.text
+        if legacy_conversion.encoding == "unicode":
+            legacy_origins = tuple((index, index + 1) for index in range(len(text)))
+        else:
+            # Auto-detected ISCII reaches this API as a Latin-1 surrogate
+            # string, so original byte and source-character offsets coincide.
+            legacy_origins = legacy_conversion.offset_map.converted_to_original_spans
+
         repair_encoding, encoding_repair_metadata = _encoding_repairer()
+        # Encoding repair is an optional (ftfy) capability. When it is
+        # unavailable the repairer is the identity function, so calling it once
+        # per segment is pure overhead: on a long note stage 1 would make one
+        # no-op wrapper call per character. Detect the identity case once and
+        # skip the per-segment repair call, keeping stage 1 near-linear in note
+        # length without changing the normalized output.
+        repair_active = repair_encoding is not _identity_text
         normalized_parts: list[str] = []
         original_to_normalized: list[int | None] = [None] * len(text)
         normalized_to_original: list[int] = []
         normalized_to_original_span: list[tuple[int, int]] = []
         normalized_length = 0
 
-        for start, end, segment, is_whitespace in _iter_normalization_segments(text):
+        for start, end, segment, is_whitespace in _iter_normalization_segments(
+            legacy_text
+        ):
             normalized_start = normalized_length
             if is_whitespace:
                 normalized_segment = " "
-            else:
+            elif repair_active:
                 normalized_segment = unicodedata.normalize(
                     "NFC",
-                    _repair_encoding_segment(segment, repair_encoding=repair_encoding),
+                    repair_encoding(segment),
                 )
+            else:
+                normalized_segment = unicodedata.normalize("NFC", segment)
 
             if not normalized_segment:
                 continue
 
-            for index in range(start, end):
+            source_spans = legacy_origins[start:end]
+            source_start = min(span[0] for span in source_spans)
+            source_end = max(span[1] for span in source_spans)
+            for index in range(source_start, source_end):
                 original_to_normalized[index] = normalized_start
 
             normalized_parts.append(normalized_segment)
             normalized_length += len(normalized_segment)
             for _ in normalized_segment:
-                normalized_to_original.append(start)
-                normalized_to_original_span.append((start, end))
+                normalized_to_original.append(source_start)
+                normalized_to_original_span.append((source_start, source_end))
 
         normalized_text = "".join(normalized_parts)
         offset_map = OffsetMap(
@@ -666,7 +1028,7 @@ class Pipeline:
             normalized_to_original=tuple(normalized_to_original),
             normalized_to_original_span=tuple(normalized_to_original_span),
         )
-        return NormalizedDocument(
+        document = NormalizedDocument(
             original_text=text,
             normalized_text=normalized_text,
             offset_map=offset_map,
@@ -676,19 +1038,61 @@ class Pipeline:
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
                 "encoding_repair": encoding_repair_metadata,
+                "legacy_encoding": {
+                    "encoding": legacy_conversion.encoding,
+                    "changed": legacy_conversion.changed,
+                    "converted_bytes": (
+                        sum(ord(char) >= 0x80 for char in text)
+                        if legacy_conversion.encoding == "iscii"
+                        else 0
+                    ),
+                },
             },
         )
+        target_script = getattr(self.config, "chinese_target_script", None)
+        if target_script is None:
+            return document
+        return _normalize_chinese_document(document, target_script)
 
     def stage2_language_script(self, text: str) -> LanguageRoute:
         from . import pii
-        from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+        from .pii_i18n import (
+            DEFAULT_PII_MODELS,
+            INDIC_NER_LANGUAGES,
+            SUPPORTED_LANGUAGES,
+        )
+        from .script_detect import detect_script
 
-        script = _detect_script(text)
-        lang = _lang_from_script(script) if self.lang == "auto" else self.lang
-        if lang not in SUPPORTED_LANGUAGES:
+        if self.lang == "auto":
+            router = self.language_router or LanguageRouter()
+            decision = router.route(text)
+            lang = decision.language
+            script = decision.dominant_script
+            model_name = pii._resolve_effective_pii_model(self.model_name, lang)
+            return LanguageRoute(
+                lang=lang,
+                script=script,
+                model_name=model_name,
+                decision=decision,
+                metadata={
+                    "available_default_model": decision.dominant_pack.default_model,
+                    "dominant_pack": decision.dominant_pack.code,
+                    "routing_confidence": decision.confidence,
+                    "lid_backend": decision.lid_backend,
+                    "runs": [_language_run_metadata(run) for run in decision.runs],
+                    "run_overrides": [
+                        _language_run_metadata(run) for run in decision.overrides
+                    ],
+                },
+            )
+
+        script = detect_script(text)
+        lang = self.lang
+        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        if lang not in accepted_languages:
             raise ValueError(
                 f"Unsupported language '{lang}'. "
-                f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+                f"Supported: {sorted(accepted_languages)}"
             )
         model_name = pii._resolve_effective_pii_model(self.model_name, lang)
         return LanguageRoute(
@@ -698,9 +1102,14 @@ class Pipeline:
             metadata={"available_default_model": DEFAULT_PII_MODELS.get(lang)},
         )
 
-    def stage3_doc_type_section(self, text: str) -> Mapping[str, Any]:
+    def stage3_doc_type_section(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+    ) -> Mapping[str, Any]:
         if self.section_detector is not None:
-            return dict(self.section_detector(text))
+            return dict(_call_section_detector(self.section_detector, text, language))
 
         try:
             sections = importlib.import_module("openmed.clinical.sections")
@@ -713,13 +1122,15 @@ class Pipeline:
 
         if hasattr(sections, "detect_sections"):
             return {
+                "document_type": sections.classify_document(text),
                 "section_hook": "detect_sections",
-                "sections": sections.detect_sections(text),
+                "sections": sections.detect_sections(text, language=language),
                 "section_detection": {
                     "feature": "clinical section detection",
                     "available": True,
                     "skipped": False,
                     "dependency": "openmed.clinical.sections",
+                    "language": language,
                 },
             }
         return {
@@ -745,25 +1156,69 @@ class Pipeline:
             text,
             [],
             lang=context.route.lang,
-            patterns=_deterministic_patterns(context.route.lang),
+            patterns=self._deterministic_patterns(text, context),
+        )
+        custom_spans = self._custom_deny_spans(text, context)
+        registered_spans = self._registered_detector_spans(
+            text,
+            context,
+            pipeline_stage=STAGE_NAMES[3],
+        )
+        registered_spans = tuple(
+            span
+            for span in registered_spans
+            if not (
+                span.detector == "builtin:indian_multi_id"
+                and any(
+                    span.start < custom.end and span.end > custom.start
+                    for custom in custom_spans
+                )
+            )
+        )
+        rule_spans = self._entities_to_spans(
+            entities,
+            text,
+            context,
+            default_detector="rules:regex",
+            stage=STAGE_NAMES[3],
+        )
+        from .detector_plugins import INDIAN_MULTI_ID_ENTITY_TYPES
+
+        rule_spans = tuple(
+            span
+            for span in rule_spans
+            if not (
+                span.entity_type in INDIAN_MULTI_ID_ENTITY_TYPES
+                and any(
+                    span.start < custom.end and span.end > custom.start
+                    for custom in custom_spans
+                )
+            )
         )
         return (
-            self._entities_to_spans(
-                entities,
-                text,
-                context,
-                default_detector="rules:regex",
-                stage=STAGE_NAMES[3],
-            )
-            + self._custom_deny_spans(text, context)
-            + self._registered_detector_spans(
-                text,
-                context,
-                pipeline_stage=STAGE_NAMES[3],
-            )
+            rule_spans
+            + custom_spans
+            + self._transliterated_name_spans(text, context)
+            + registered_spans
         )
 
-    def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
+    def stage5_fast_pii_model(
+        self,
+        text: str,
+        route: LanguageRoute,
+        *,
+        locale: str | None = None,
+        token_language_tags: Sequence[Any] = (),
+    ) -> Any:
+        code_mixed_kwargs = (
+            {
+                "code_mixed": True,
+                "token_language_tags": token_language_tags,
+                "transliterated_name_config": self.transliterated_name_recognizer,
+            }
+            if self.code_mixed
+            else {}
+        )
         if self.model_detector is not None:
             return self.model_detector(
                 text,
@@ -772,21 +1227,50 @@ class Pipeline:
                 config=self.config,
                 use_smart_merging=self.use_smart_merging,
                 lang=route.lang,
+                locale=locale,
                 normalize_accents=self.normalize_accents,
                 loader=self.loader,
+                **code_mixed_kwargs,
             )
 
         from . import pii
 
+        if self.code_mixed:
+            return pii.extract_pii(
+                text,
+                self.model_name,
+                self.confidence_threshold,
+                self.config,
+                self.use_smart_merging,
+                lang=route.lang,
+                locale=locale,
+                normalize_accents=self.normalize_accents,
+                loader=self.loader,
+                abdm=self._indian_multi_id_enabled_for(
+                    lang=route.lang,
+                    locale=locale,
+                ),
+                code_mixed=True,
+                token_language_tags=token_language_tags,
+                transliterated_name_config=self.transliterated_name_recognizer,
+            )
         return pii.extract_pii(
             text,
-            self.model_name,
+            route.model_name,
             self.confidence_threshold,
             self.config,
             self.use_smart_merging,
             lang=route.lang,
+            locale=locale,
             normalize_accents=self.normalize_accents,
+            preserve_whitespace=self.preserve_whitespace,
             loader=self.loader,
+            abdm=self._indian_multi_id_enabled_for(
+                lang=route.lang,
+                locale=locale,
+            ),
+            batch_size=getattr(self.config, "batch_size", None),
+            num_workers=getattr(self.config, "num_workers", None),
         )
 
     def stage6_clinical_phi_model(
@@ -939,6 +1423,12 @@ class Pipeline:
                 text,
                 pii_result,
                 lang=context.route.lang,
+                locale=context.locale,
+                patterns=(
+                    self._deterministic_patterns(text, context)
+                    if self.code_mixed
+                    else None
+                ),
             )
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
@@ -952,6 +1442,13 @@ class Pipeline:
                 self.custom_recognizer,
             )
 
+        if self.policy is not None:
+            _stamp_policy_actions_on_entities(
+                pii_result,
+                self.policy,
+                language=context.route.lang,
+            )
+
         spans = self._entities_to_spans(
             getattr(pii_result, "entities", ()),
             text,
@@ -961,6 +1458,15 @@ class Pipeline:
             ),
             stage=STAGE_NAMES[8],
         )
+        if self.policy is not None:
+            spans = tuple(
+                _apply_policy_action(
+                    span,
+                    self.policy,
+                    language=context.route.lang,
+                )
+                for span in spans
+            )
         return spans, {
             "enabled": self.use_safety_sweep,
             "spans_added": spans_added,
@@ -996,7 +1502,7 @@ class Pipeline:
         text: str,
         pii_result: Any,
         *,
-        effective_method: str,
+        effective_method: DeidentificationMethod,
         keep_year: bool,
         date_shift_days: Optional[int],
         patient_key: Optional[str | bytes],
@@ -1017,6 +1523,7 @@ class Pipeline:
         policy_name: Optional[str] = None,
         policy: str = "hipaa_safe_harbor",
         audit: bool = False,
+        config: Any = None,
     ) -> Any:
         from . import pii
 
@@ -1044,6 +1551,7 @@ class Pipeline:
             policy_name=policy_name,
             policy=policy,
             audit=audit,
+            config=config,
         )
 
     def _entities_to_spans(
@@ -1095,11 +1603,20 @@ class Pipeline:
         *,
         pipeline_stage: str,
     ) -> tuple[OpenMedSpan, ...]:
-        from .detector_plugins import detector_provenance, iter_detectors
+        from .detector_plugins import (
+            INDIAN_MULTI_ID_DETECTOR,
+            detector_provenance,
+            iter_detectors,
+        )
 
         plugin_stage = _PIPELINE_TO_PLUGIN_STAGE[pipeline_stage]
         spans: list[OpenMedSpan] = []
         for spec in iter_detectors(plugin_stage, context.route.lang):
+            if (
+                spec.name == INDIAN_MULTI_ID_DETECTOR
+                and not self._indian_multi_id_enabled(context)
+            ):
+                continue
             try:
                 detected = _call_detector_plugin(spec, text, context)
             except Exception as exc:
@@ -1177,6 +1694,88 @@ class Pipeline:
             stage=STAGE_NAMES[3],
         )
 
+    def _deterministic_patterns(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> list[PIIPattern]:
+        if not self.code_mixed:
+            return _deterministic_patterns(
+                context.route.lang,
+                locale=context.locale,
+                include_indian_multi_id=self._indian_multi_id_enabled(context),
+            )
+        from .pii_i18n import get_patterns_for_code_mixed_tags
+
+        return get_patterns_for_code_mixed_tags(
+            text,
+            context.token_language_tags,
+            base_lang=context.route.lang,
+            locale=context.locale,
+            include_indian_multi_id=self._indian_multi_id_enabled(context),
+        )
+
+    def _indian_multi_id_enabled(self, context: PipelineContext) -> bool:
+        """Resolve explicit or India-route activation for the built-in pack."""
+
+        return self._indian_multi_id_enabled_for(
+            lang=context.route.lang,
+            locale=context.locale,
+        )
+
+    def _indian_multi_id_enabled_for(
+        self,
+        *,
+        lang: str,
+        locale: str | None,
+    ) -> bool:
+        """Resolve the multi-ID pack without retaining request text."""
+
+        if self.indian_multi_id is not None:
+            return self.indian_multi_id
+        from .custom_recognizer import abdm_mode_enabled
+
+        return abdm_mode_enabled(
+            None,
+            policy=self.policy,
+            lang=lang,
+            locale=locale,
+        )
+
+    def _transliterated_name_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> tuple[OpenMedSpan, ...]:
+        recognizer = self.transliterated_name_recognizer
+        if recognizer is None:
+            return ()
+        from .pii_i18n import code_mixed_route_active
+
+        if not code_mixed_route_active(text, context.token_language_tags):
+            return ()
+        spans = recognizer.detect_spans(
+            text,
+            doc_id=context.doc_id,
+            hmac_secret=self.hmac_secret,
+            lang=context.route.lang,
+        )
+        return tuple(
+            replace(
+                span,
+                detector="custom:hinglish-name",
+                metadata={
+                    **dict(span.metadata),
+                    "pipeline_stage": STAGE_NAMES[3],
+                    "code_mixed": {
+                        "mode": "hinglish",
+                        "source_script": "Latin",
+                    },
+                },
+            )
+            for span in spans
+        )
+
     def _suppress_custom_allowed_spans(
         self,
         text: str,
@@ -1197,7 +1796,12 @@ class Pipeline:
         final_spans: Sequence[OpenMedSpan],
         *,
         redacted_text: str,
+        data_use_decision: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any]:
+        # The audit record is reproducible: it carries only offsets, hashes,
+        # counts, and provenance -- never wall-clock timings, which are
+        # non-deterministic. Per-stage and shared cascade latency live only on
+        # ``PipelineResult.stage_durations_ms`` and ``cascade_duration_ms``.
         record = {
             "doc_id": context.doc_id,
             "language": context.route.lang,
@@ -1227,7 +1831,28 @@ class Pipeline:
                 "arbitration_mode": self.policy.arbitration_mode,
                 "threshold_profile": self.policy.threshold_profile,
             }
+        if data_use_decision is not None:
+            record["data_use"] = copy.deepcopy(dict(data_use_decision))
         return record
+
+
+@contextmanager
+def _stage_timer(
+    durations_ms: dict[str, float],
+    stage_name: str,
+) -> Iterator[None]:
+    """Record the wall-clock duration of a pipeline stage in milliseconds.
+
+    The recorded value is a latency measurement only; it carries no document
+    text and may be used for transient metrics or logs. It is deliberately not
+    persisted in the reproducible pipeline audit record.
+    """
+    start = perf_counter()
+    try:
+        yield
+    finally:
+        elapsed_ms = (perf_counter() - start) * 1000.0
+        durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
 
 
 def _iter_normalization_segments(text: str):
@@ -1251,6 +1876,65 @@ def _iter_normalization_segments(text: str):
 
 def _identity_text(text: str) -> str:
     return text
+
+
+def _normalize_chinese_document(
+    document: NormalizedDocument,
+    target_script: str,
+) -> NormalizedDocument:
+    """Compose optional OpenCC conversion into a stage-one source map."""
+
+    from ..processing.zh_normalize import normalize_chinese_variants
+
+    conversion = normalize_chinese_variants(
+        document.normalized_text,
+        target_script,
+    )
+    base_spans = document.offset_map.normalized_to_original_span
+    composed_spans: list[tuple[int, int]] = []
+    for source_start, source_end in conversion.char_origins:
+        if source_start < source_end:
+            spans = base_spans[source_start:source_end]
+            composed_spans.append(
+                (
+                    min(span[0] for span in spans),
+                    max(span[1] for span in spans),
+                )
+            )
+        else:
+            anchor = (
+                base_spans[source_start][0]
+                if source_start < len(base_spans)
+                else len(document.original_text)
+            )
+            composed_spans.append((anchor, anchor))
+
+    original_to_normalized: list[int | None] = [None] * len(document.original_text)
+    for normalized_index, (original_start, original_end) in enumerate(composed_spans):
+        for original_index in range(original_start, original_end):
+            if original_to_normalized[original_index] is None:
+                original_to_normalized[original_index] = normalized_index
+
+    offset_map = OffsetMap(
+        original_to_normalized=tuple(original_to_normalized),
+        normalized_to_original=tuple(span[0] for span in composed_spans),
+        normalized_to_original_span=tuple(composed_spans),
+    )
+    metadata = dict(document.metadata)
+    metadata["normalized_length"] = len(conversion.text)
+    metadata["chinese_variant_normalization"] = {
+        "changed": conversion.changed,
+        "config": conversion.config.value,
+        "enabled": True,
+        "opencc_available": conversion.opencc_available,
+        "target_script": target_script,
+    }
+    return NormalizedDocument(
+        original_text=document.original_text,
+        normalized_text=conversion.text,
+        offset_map=offset_map,
+        metadata=metadata,
+    )
 
 
 def _encoding_repairer() -> tuple[Callable[[str], str], Mapping[str, Any]]:
@@ -1295,30 +1979,99 @@ def _section_detection_unavailable_metadata(exc: ImportError) -> dict[str, Any]:
     }
 
 
-def _detect_script(text: str) -> str:
-    for char in text:
-        codepoint = ord(char)
-        if 0x0600 <= codepoint <= 0x06FF:
-            return "arabic"
-        if 0x3040 <= codepoint <= 0x30FF or 0x4E00 <= codepoint <= 0x9FFF:
-            return "japanese"
-        if 0x0900 <= codepoint <= 0x097F:
-            return "devanagari"
-        if 0x0C00 <= codepoint <= 0x0C7F:
-            return "telugu"
-    return "latin"
+def _call_section_detector(
+    detector: Callable[..., Mapping[str, Any]],
+    text: str,
+    language: str | None,
+) -> Mapping[str, Any]:
+    if language is None:
+        return detector(text)
+    try:
+        signature = inspect.signature(detector)
+    except (TypeError, ValueError):
+        return detector(text)
+    accepts_language = "language" in signature.parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+    if accepts_language:
+        return detector(text, language=language)
+    return detector(text)
 
 
-def _lang_from_script(script: str) -> str:
+def _remap_section_metadata_to_normalized(
+    section_metadata: Mapping[str, Any],
+    document: NormalizedDocument,
+) -> Mapping[str, Any]:
+    sections = section_metadata.get("sections")
+    if not sections:
+        return section_metadata
+    try:
+        section_iter = iter(sections)
+    except TypeError:
+        return section_metadata
+    remapped_sections = tuple(
+        _remap_section_to_normalized(section, document.offset_map)
+        for section in section_iter
+    )
+    return {**dict(section_metadata), "sections": remapped_sections}
+
+
+def _remap_section_to_normalized(section: Any, offset_map: OffsetMap) -> Any:
+    if isinstance(section, Mapping):
+        data = dict(section)
+    else:
+        label = _section_label(section)
+        section_start = getattr(section, "start", None)
+        section_end = getattr(section, "end", None)
+        if (
+            label is None
+            or not isinstance(section_start, int)
+            or not isinstance(section_end, int)
+        ):
+            return section
+        data = {"label": label, "start": section_start, "end": section_end}
+
+    start = data.get("start")
+    end = data.get("end")
+    if isinstance(start, int) and isinstance(end, int):
+        data["start"], data["end"] = offset_map.original_span_to_normalized(start, end)
+
+    header_start = data.get("header_start")
+    header_end = data.get("header_end")
+    if isinstance(header_start, int) and isinstance(header_end, int):
+        data["header_start"], data["header_end"] = (
+            offset_map.original_span_to_normalized(header_start, header_end)
+        )
+
+    content_start = data.get("content_start")
+    if isinstance(content_start, int):
+        data["content_start"] = offset_map.original_span_to_normalized(
+            content_start,
+            content_start,
+        )[0]
+    return data
+
+
+def _language_run_metadata(run: Any) -> dict[str, object]:
+    """Return PHI-free, offset-only metadata for one language run."""
+
     return {
-        "arabic": "ar",
-        "japanese": "ja",
-        "devanagari": "hi",
-        "telugu": "te",
-    }.get(script, "en")
+        "start": run.start,
+        "end": run.end,
+        "script": run.script,
+        "language": run.language,
+        "confidence": run.confidence,
+        "source": run.source,
+    }
 
 
-def _deterministic_patterns(lang: str) -> list[PIIPattern]:
+def _deterministic_patterns(
+    lang: str,
+    locale: str | None = None,
+    *,
+    include_indian_multi_id: bool = True,
+) -> list[PIIPattern]:
     from .anonymizer.providers import clinical_ids
 
     luhn_mrn = PIIPattern(
@@ -1331,11 +2084,40 @@ def _deterministic_patterns(lang: str) -> list[PIIPattern]:
         validator=clinical_ids.validate_luhn,
     )
     if lang == "en":
-        return [luhn_mrn, *PII_PATTERNS]
+        if locale is None:
+            return [luhn_mrn, *PII_PATTERNS]
+
+        from .pii_i18n import LOCALE_PII_PATTERNS
+
+        locale_key = locale.strip().replace("-", "_").casefold()
+        locale_patterns = LOCALE_PII_PATTERNS.get(locale_key, [])
+        if not include_indian_multi_id:
+            from .pii_i18n import INDIAN_MULTI_ID_PII_PATTERNS
+
+            indian_pattern_ids = {
+                id(pattern) for pattern in INDIAN_MULTI_ID_PII_PATTERNS
+            }
+            locale_patterns = [
+                pattern
+                for pattern in locale_patterns
+                if id(pattern) not in indian_pattern_ids
+            ]
+        return [
+            luhn_mrn,
+            *PII_PATTERNS,
+            *locale_patterns,
+        ]
 
     from .pii_i18n import get_patterns_for_language
 
-    return [luhn_mrn, *get_patterns_for_language(lang)]
+    return [
+        luhn_mrn,
+        *get_patterns_for_language(
+            lang,
+            locale=locale,
+            include_indian_multi_id=include_indian_multi_id,
+        ),
+    ]
 
 
 def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
@@ -1361,7 +2143,7 @@ def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
     if detector and str(detector).startswith(
-        ("rules:", "model:", "plugin:", "custom:")
+        ("rules:", "model:", "builtin:", "plugin:", "custom:")
     ):
         return str(detector)
 
@@ -1451,6 +2233,8 @@ def _section_ranges(
             and section_start < section_end
             and section_label is not None
         ):
+            continue
+        if section_label == "unsectioned":
             continue
         ranges.append((section_start, section_end, section_label))
     return tuple(sorted(ranges, key=lambda item: (item[0], item[1], item[2])))
@@ -1559,7 +2343,7 @@ def _arbitration_trace_metadata(
             matrix=threshold_matrix,
         )
         if _span_identity(candidate) in winner_identities:
-            decision = {
+            decision: dict[str, Any] = {
                 "span": span_ref,
                 "outcome": "winner",
                 "rule": "selected",
@@ -1795,20 +2579,37 @@ def _append_span_predictions(
     if not spans:
         return pii_result
 
+    existing_entities = list(getattr(pii_result, "entities", ()) or ())
+    existing_keys: set[tuple[int, int, str]] = set()
+    for entity in existing_entities:
+        bounds = _entity_bounds(entity, text)
+        if bounds is None:
+            continue
+        label = str(getattr(entity, "label", "") or "")
+        existing_keys.add((*bounds, normalize_label(label)))
+
+    new_spans = [
+        span
+        for span in spans
+        if (span.start, span.end, span.canonical_label) not in existing_keys
+    ]
+    if not new_spans:
+        return pii_result
+
     span_result = _prediction_result_from_spans(
         text,
-        spans,
+        new_spans,
         model_name=str(getattr(pii_result, "model_name", "plugins") or "plugins"),
     )
     combined = copy.copy(pii_result)
     combined.entities = [
-        *list(getattr(pii_result, "entities", ()) or ()),
+        *existing_entities,
         *span_result.entities,
     ]
     if hasattr(combined, "num_entities"):
         combined.num_entities = len(combined.entities)
     metadata = dict(getattr(pii_result, "metadata", None) or {})
-    metadata["plugin_detector_spans"] = len(spans)
+    metadata["plugin_detector_spans"] = len(new_spans)
     combined.metadata = metadata
     return combined
 
@@ -1932,6 +2733,26 @@ def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:
         "reversible_id": policy.reversible_id,
     }
     pii_result.metadata = metadata
+
+
+def _stamp_policy_actions_on_entities(
+    pii_result: Any,
+    policy: Any,
+    *,
+    language: str,
+) -> None:
+    """Attach policy actions to entities added after the policy stage."""
+
+    for entity in getattr(pii_result, "entities", ()):
+        canonical = normalize_label(str(getattr(entity, "label", "")), lang=language)
+        metadata = dict(getattr(entity, "metadata", None) or {})
+        metadata["policy_action"] = {
+            "policy": policy.name,
+            "schema_version": policy.schema_version,
+            "action": policy.action_for(canonical, lang=language),
+            "source": "policy_profile",
+        }
+        entity.metadata = metadata
 
 
 def _call_detector_plugin(spec: Any, text: str, context: PipelineContext) -> Any:

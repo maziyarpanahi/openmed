@@ -8,10 +8,13 @@ import pytest
 
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.robustness import (
+    MixedScriptEvasionGateError,
     adversarial_robustness_report,
     case_flip_perturbation,
     character_typo_perturbation,
+    generate_confusable_attack_corpus,
     identity_perturbation,
+    mixed_script_evasion_report,
     ocr_noise_perturbation,
     perturb_fixture,
     replay_adversarial_attack,
@@ -162,6 +165,54 @@ def test_adversarial_search_finds_misses_and_unicode_defense_recovers():
         assert first.text != fixture.text
 
 
+def test_confusable_attack_corpus_and_gate_cover_all_required_evasions():
+    fixture = _confusable_fixture()
+
+    attacks = generate_confusable_attack_corpus([fixture], seed=31)
+    report = mixed_script_evasion_report(
+        "exact-confusable",
+        [fixture],
+        seed=31,
+        runner=_exact_confusable_runner,
+        suite_name="synthetic-confusables",
+    )
+
+    assert {case.attack_class for case in attacks} == {
+        "full_width",
+        "homoglyph_cjk",
+        "homoglyph_cyrillic",
+        "homoglyph_greek",
+        "zero_width",
+    }
+    assert report.attack_count == len(attacks) == 5
+    assert report.detection_rate >= 0.99
+    assert report.pre_defense_leakage.leakage.overall > 0.5
+    assert report.post_defense_leakage.leakage.overall <= 0.01
+    assert report.post_defense_leakage.leakage.leaked_chars == 0
+    assert report.post_defense_leakage.to_dict()["unit"] == "grapheme_cluster"
+    assert report.passed
+    assert not report.violations
+    assert "JOHN DOE" not in json.dumps(report.to_dict(), sort_keys=True)
+
+    for case in attacks:
+        span = case.fixture.gold_spans[case.span_index]
+        assert span.text == case.fixture.text[span.start : span.end]
+
+
+def test_mixed_script_gate_raises_for_fixture_that_breaches_leakage_ceiling():
+    with pytest.raises(
+        MixedScriptEvasionGateError,
+        match="mixed_script_leakage_ceiling",
+    ):
+        mixed_script_evasion_report(
+            "leaky-confusable",
+            [_confusable_fixture()],
+            runner=_exact_confusable_runner,
+            defended_runner=lambda fixture, model_name, device: [],
+            raise_on_violation=True,
+        )
+
+
 def _fixture() -> BenchmarkFixture:
     return BenchmarkFixture.from_mapping(
         {
@@ -174,6 +225,33 @@ def _fixture() -> BenchmarkFixture:
             ],
         }
     )
+
+
+def _confusable_fixture() -> BenchmarkFixture:
+    return BenchmarkFixture.from_mapping(
+        {
+            "id": "confusable-name",
+            "text": "Patient JOHN DOE arrived.",
+            "language": "en",
+            "gold_spans": [
+                {"start": 8, "end": 16, "label": "PERSON"},
+            ],
+        }
+    )
+
+
+def _exact_confusable_runner(fixture, model_name, device):
+    assert device == "cpu"
+    start = fixture.text.find("JOHN DOE")
+    if start < 0:
+        return []
+    return [
+        {
+            "start": start,
+            "end": start + len("JOHN DOE"),
+            "label": "PERSON",
+        }
+    ]
 
 
 def _exact_gold_runner(fixture, model_name, device):
