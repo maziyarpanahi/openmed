@@ -150,6 +150,7 @@ nav:
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
+      - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
