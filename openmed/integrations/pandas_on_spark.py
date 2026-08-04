@@ -26,6 +26,7 @@ DEFAULT_PANDAS_ON_SPARK_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _CACHE_LOCK = RLock()
 _PROCESS_BATCH: Deidentifier | None = None
 _WORKER_LOADER: Any | None = None
+_WORKER_LOADER_CONFIG: Any | None = None
 _WORKER_LOADER_INITIALIZED = False
 
 
@@ -188,8 +189,8 @@ def _run_worker_batch(
     if policy is not None:
         kwargs["policy"] = policy
 
-    if process_batch_fn is None and "loader" not in kwargs and "config" not in kwargs:
-        loader = _get_worker_loader()
+    if process_batch_fn is None and kwargs.get("loader") is None:
+        loader = _get_worker_loader(kwargs.get("config"))
         if loader is not None:
             kwargs["loader"] = loader
 
@@ -226,19 +227,20 @@ def _get_process_batch() -> Deidentifier:
         return _PROCESS_BATCH
 
 
-def _get_worker_loader() -> Any | None:
-    global _WORKER_LOADER, _WORKER_LOADER_INITIALIZED
+def _get_worker_loader(config: Any | None = None) -> Any | None:
+    global _WORKER_LOADER, _WORKER_LOADER_CONFIG, _WORKER_LOADER_INITIALIZED
 
     with _CACHE_LOCK:
-        if _WORKER_LOADER_INITIALIZED:
+        if _WORKER_LOADER_INITIALIZED and _WORKER_LOADER_CONFIG is config:
             return _WORKER_LOADER
 
         try:
             from openmed.core import ModelLoader
 
-            _WORKER_LOADER = ModelLoader()
+            _WORKER_LOADER = ModelLoader() if config is None else ModelLoader(config)
         except ImportError:
             _WORKER_LOADER = None
+        _WORKER_LOADER_CONFIG = config
         _WORKER_LOADER_INITIALIZED = True
         return _WORKER_LOADER
 
@@ -304,11 +306,13 @@ def _deidentified_text(item: Any) -> str:
 def clear_worker_pipeline_cache() -> None:
     """Clear driver-local worker cache state used by deterministic tests."""
 
-    global _PROCESS_BATCH, _WORKER_LOADER, _WORKER_LOADER_INITIALIZED
+    global _PROCESS_BATCH, _WORKER_LOADER
+    global _WORKER_LOADER_CONFIG, _WORKER_LOADER_INITIALIZED
 
     with _CACHE_LOCK:
         _PROCESS_BATCH = None
         _WORKER_LOADER = None
+        _WORKER_LOADER_CONFIG = None
         _WORKER_LOADER_INITIALIZED = False
 
 

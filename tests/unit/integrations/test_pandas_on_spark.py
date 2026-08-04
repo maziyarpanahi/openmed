@@ -191,6 +191,46 @@ def test_worker_loader_is_initialized_once(monkeypatch: pytest.MonkeyPatch) -> N
     pandas_on_spark.clear_worker_pipeline_cache()
 
 
+def test_worker_batch_reuses_loader_with_forwarded_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("pyspark.pandas")
+    import openmed.core
+    from openmed.integrations import pandas_on_spark
+
+    config = object()
+    sentinel = object()
+    loaded_configs: list[Any] = []
+    batch_kwargs: list[dict[str, Any]] = []
+
+    def fake_loader(loader_config: Any) -> object:
+        loaded_configs.append(loader_config)
+        return sentinel
+
+    def fake_process_batch(texts: list[str], **kwargs: Any) -> list[str]:
+        batch_kwargs.append(kwargs)
+        return list(texts)
+
+    pandas_on_spark.clear_worker_pipeline_cache()
+    monkeypatch.setattr(openmed.core, "ModelLoader", fake_loader)
+    monkeypatch.setattr(
+        pandas_on_spark, "_get_process_batch", lambda: fake_process_batch
+    )
+
+    for _ in range(2):
+        assert pandas_on_spark._run_worker_batch(
+            ["synthetic text"],
+            method="mask",
+            policy="hipaa_safe_harbor",
+            process_batch_fn=None,
+            process_kwargs={"config": config},
+        ) == ["synthetic text"]
+
+    assert loaded_configs == [config]
+    assert all(kwargs["loader"] is sentinel for kwargs in batch_kwargs)
+    pandas_on_spark.clear_worker_pipeline_cache()
+
+
 def test_dataframe_accessor_rejects_missing_and_non_text_columns(spark: Any) -> None:
     ps = pytest.importorskip("pyspark.pandas")
     import openmed.integrations.pandas_on_spark  # noqa: F401

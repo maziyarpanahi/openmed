@@ -123,9 +123,7 @@ def _spark_session(tmp_path: Path) -> Any:
 
 
 @pytest.fixture()
-def spark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
-    monkeypatch.setenv("PYSPARK_PYTHON", sys.executable)
-    monkeypatch.setenv("PYSPARK_DRIVER_PYTHON", sys.executable)
+def spark(tmp_path: Path) -> Any:
     session = _spark_session(tmp_path)
     try:
         yield session
