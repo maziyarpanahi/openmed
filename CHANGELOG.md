@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added versioned HMAC-SHA256 request signing over method, path, timestamp,
+  nonce, and body digest, with client-side header helpers, bounded fail-closed
+  replay protection, and verifier-compatible signatures on async job webhooks
+  (#849).
 - Added offline family-transfer adapter routing that prefers installed target
   adapters, falls back to compatible donor adapters with scored provenance,
   and returns explicit unsupported or unavailable routing failures (#1331).
