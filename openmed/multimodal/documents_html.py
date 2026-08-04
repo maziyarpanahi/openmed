@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from html.entities import html5
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .base import ExtractedDocument, SourceSpan, register_handler
 
@@ -57,6 +57,7 @@ _BLOCK_TAGS = frozenset(
     }
 )
 _HARD_SUPPRESSION_TAGS = frozenset({"script", "style"})
+_DetectorCallShape = Literal["keyword_lang", "positional_lang", "text_only"]
 
 
 @dataclass(frozen=True)
@@ -110,10 +111,7 @@ def _write_parsed_html(
     replacements: Iterable[tuple[int, int, str]],
 ) -> Path:
     logical = _validate_logical_replacements(parsed.document, replacements)
-    projected = [
-        (_project_replacement(parsed.document, start, end), replacement)
-        for start, end, replacement in logical
-    ]
+    projected = _project_replacements(parsed.document, logical)
     _validate_projected_replacements(projected)
     redacted = _render_replacements(parsed.source, projected)
     with output.open("w", encoding="utf-8", newline="") as handle:
@@ -417,42 +415,59 @@ def _validate_logical_replacements(
     return tuple(ordered)
 
 
-def _project_replacement(
-    document: ExtractedDocument, start: int, end: int
-) -> tuple[tuple[int, int], ...]:
-    ranges: list[tuple[int, int]] = []
-    for span in document.spans:
-        overlap_start = max(start, span.start)
-        overlap_end = min(end, span.end)
-        if overlap_start >= overlap_end or not span.metadata.get("replaceable", False):
-            continue
-        source_start = int(span.metadata["source_start"])
-        source_end = int(span.metadata["source_end"])
-        if span.metadata.get("source_map_mode") == "linear":
-            source_start += overlap_start - span.start
-            source_end = source_start + (overlap_end - overlap_start)
-        candidate = (source_start, source_end)
-        if candidate not in ranges:
-            ranges.append(candidate)
-    if not ranges:
-        raise ValueError("replacement range contains no replaceable HTML text")
-    return tuple(sorted(ranges))
+def _project_replacements(
+    document: ExtractedDocument,
+    replacements: Sequence[tuple[int, int, str]],
+) -> tuple[tuple[tuple[tuple[int, int], ...], str], ...]:
+    projected: list[tuple[tuple[tuple[int, int], ...], str]] = []
+    spans = iter(document.spans)
+    span = next(spans, None)
+    for start, end, replacement in replacements:
+        while span is not None and span.end <= start:
+            span = next(spans, None)
+
+        ranges: list[tuple[int, int]] = []
+        seen_ranges: set[tuple[int, int]] = set()
+        while span is not None and span.start < end:
+            overlap_start = max(start, span.start)
+            overlap_end = min(end, span.end)
+            if overlap_start < overlap_end and span.metadata.get("replaceable", False):
+                source_start = int(span.metadata["source_start"])
+                source_end = int(span.metadata["source_end"])
+                if span.metadata.get("source_map_mode") == "linear":
+                    source_start += overlap_start - span.start
+                    source_end = source_start + (overlap_end - overlap_start)
+                candidate = (source_start, source_end)
+                if candidate not in seen_ranges:
+                    seen_ranges.add(candidate)
+                    ranges.append(candidate)
+            if span.end > end:
+                break
+            span = next(spans, None)
+
+        if not ranges:
+            raise ValueError("replacement range contains no replaceable HTML text")
+        projected.append((tuple(sorted(ranges)), replacement))
+    return tuple(projected)
 
 
 def _validate_projected_replacements(
     projected: Sequence[tuple[tuple[tuple[int, int], ...], str]],
 ) -> None:
-    owned: list[tuple[int, int, int]] = []
-    for request_index, (ranges, _) in enumerate(projected):
-        for start, end in ranges:
-            for other_start, other_end, other_request in owned:
-                if (
-                    request_index != other_request
-                    and start < other_end
-                    and other_start < end
-                ):
-                    raise ValueError("projected HTML replacement ranges overlap")
-            owned.append((start, end, request_index))
+    owned = [
+        (start, end, request_index)
+        for request_index, (ranges, _) in enumerate(projected)
+        for start, end in ranges
+    ]
+    owned.sort()
+    furthest_end = -1
+    furthest_owner = -1
+    for start, end, request_index in owned:
+        if start < furthest_end and request_index != furthest_owner:
+            raise ValueError("projected HTML replacement ranges overlap")
+        if end > furthest_end:
+            furthest_end = end
+            furthest_owner = request_index
 
 
 def _render_replacements(
@@ -464,33 +479,56 @@ def _render_replacements(
         escaped = html_lib.escape(replacement)
         for index, (start, end) in enumerate(ranges):
             edits.append((start, end, escaped if index == 0 else ""))
-    redacted = source
-    for start, end, replacement in sorted(
-        edits, key=lambda item: item[0], reverse=True
-    ):
-        redacted = redacted[:start] + replacement + redacted[end:]
-    return redacted
+    fragments: list[str] = []
+    cursor = 0
+    for start, end, replacement in sorted(edits):
+        fragments.extend((source[cursor:start], replacement))
+        cursor = end
+    fragments.append(source[cursor:])
+    return "".join(fragments)
 
 
 def _detect_entities(document: ExtractedDocument, models: Any, lang: str | None) -> Any:
     detector = _resolve_detector(models)
     if detector is None:
         return ()
-    if _accepts_lang_keyword(detector, document.text, lang):
+    call_shape = _select_detector_call_shape(detector, document.text, lang)
+    if call_shape == "keyword_lang":
         return detector(document.text, lang=lang)
+    if call_shape == "positional_lang":
+        return detector(document.text, lang)
     return detector(document.text)
 
 
-def _accepts_lang_keyword(detector: Any, text: str, lang: str | None) -> bool:
+def _select_detector_call_shape(
+    detector: Any, text: str, lang: str | None
+) -> _DetectorCallShape:
+    """Select one compatible call without executing the detector.
+
+    Signature-unavailable callables use the legacy text-only protocol. Opaque
+    lang-aware callables need an inspectable adapter that declares ``lang``.
+    """
     try:
         signature = inspect.signature(detector)
     except (TypeError, ValueError):
-        return True
-    try:
-        signature.bind(text, lang=lang)
-    except TypeError:
-        return False
-    return True
+        return "text_only"
+    call_shapes: tuple[
+        tuple[_DetectorCallShape, tuple[Any, ...], dict[str, Any]], ...
+    ] = (
+        ("keyword_lang", (text,), {"lang": lang}),
+        ("positional_lang", (text, lang), {}),
+        ("text_only", (text,), {}),
+    )
+    last_error: TypeError | None = None
+    for call_shape, args, kwargs in call_shapes:
+        try:
+            signature.bind(*args, **kwargs)
+        except TypeError as error:
+            last_error = error
+        else:
+            return call_shape
+    assert last_error is not None
+    raise last_error
 
 
 def _resolve_detector(models: Any) -> Any:

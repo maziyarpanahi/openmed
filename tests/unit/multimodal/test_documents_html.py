@@ -4,12 +4,14 @@ import io
 import os
 import subprocess
 import sys
+from functools import partial, wraps
 from pathlib import Path
 
 import pytest
 
 import openmed.multimodal as multimodal
-from openmed.multimodal import base
+from openmed.multimodal import base, documents_html
+from openmed.multimodal.base import ExtractedDocument
 from openmed.multimodal.documents_html import extract_html, write_redacted_html
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_phi.html"
@@ -257,6 +259,62 @@ def test_writer_deduplicates_exact_requests_and_rejects_atomic_collisions(
     assert not collision_output.exists()
 
 
+def test_writer_handles_many_disjoint_atomic_entity_replacements(
+    tmp_path: Path,
+) -> None:
+    count = 256
+    source = tmp_path / "many-entities.html"
+    output = tmp_path / "many-entities-redacted.html"
+    source.write_text("".join("<span>&amp;</span>" for _ in range(count)))
+
+    write_redacted_html(
+        source,
+        output,
+        [(index, index + 1, f"R&{index}") for index in range(count)],
+    )
+
+    assert output.read_text() == "".join(
+        f"<span>R&amp;{index}</span>" for index in range(count)
+    )
+
+
+def test_many_span_projection_advances_through_source_spans_once() -> None:
+    count = 400
+    document = extract_html("".join("<span>&amp;</span>" for _ in range(count)))
+
+    class CountingSpans:
+        def __init__(self, values):
+            self.values = values
+            self.visits = 0
+
+        def __iter__(self):
+            for value in self.values:
+                self.visits += 1
+                yield value
+
+    spans = CountingSpans(document.spans)
+    counted_document = ExtractedDocument(
+        text=document.text,
+        spans=spans,
+        metadata=document.metadata,
+    )
+    logical = tuple((index, index + 1, "x") for index in range(count))
+    projector = getattr(documents_html, "_project_replacements", None)
+    if projector is None:
+        projected = tuple(
+            (
+                documents_html._project_replacement(counted_document, start, end),
+                replacement,
+            )
+            for start, end, replacement in logical
+        )
+    else:
+        projected = projector(counted_document, logical)
+
+    assert len(projected) == count
+    assert spans.visits == len(document.spans) == count
+
+
 def test_writer_rejects_no_replaceable_text_and_source_aliases(tmp_path: Path) -> None:
     source = tmp_path / "source.html"
     source.write_text("<p>Jane</p><p>Roe</p>", encoding="utf-8")
@@ -347,6 +405,107 @@ def test_handler_calls_legacy_text_only_detector_once() -> None:
 
     assert observed == ["Patient Jane & Roe"]
     assert document.metadata["detected_span_count"] == 0
+
+
+@pytest.mark.parametrize("defaulted", [False, True])
+def test_handler_passes_lang_to_positional_only_detector_once(defaulted: bool) -> None:
+    observed: list[tuple[str, str | None]] = []
+
+    if defaulted:
+
+        def detector(text: str, lang: str | None = None, /):
+            observed.append((text, lang))
+            return []
+
+    else:
+
+        def detector(text: str, lang: str | None, /):
+            observed.append((text, lang))
+            return []
+
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        models=detector,
+        lang="en",
+    )
+
+    assert observed == [("Patient Jane & Roe", "en")]
+    assert document.metadata["detected_span_count"] == 0
+
+
+@pytest.mark.parametrize("signature_error", [TypeError, ValueError])
+def test_handler_calls_opaque_text_only_detector_once(
+    signature_error: type[Exception],
+) -> None:
+    class OpaqueDetector:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        @property
+        def __signature__(self):
+            raise signature_error("signature unavailable")
+
+        def __call__(self, text: str):
+            self.calls.append(text)
+            return []
+
+    detector = OpaqueDetector()
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        models=detector,
+        lang="en",
+    )
+
+    assert detector.calls == ["Patient Jane & Roe"]
+    assert document.metadata["detected_span_count"] == 0
+
+
+def test_handler_callable_shapes_pass_lang_once() -> None:
+    observed: list[tuple[str, str, str | None]] = []
+
+    class CallableDetector:
+        def __call__(self, text: str, **kwargs):
+            observed.append(("callable", text, kwargs.get("lang")))
+            return []
+
+    class BoundDetector:
+        def detect(self, text: str, *, lang: str | None = None):
+            observed.append(("bound", text, lang))
+            return []
+
+    def partial_detector(
+        label: str, text: str, *, lang: str | None = None
+    ) -> list[object]:
+        observed.append((label, text, lang))
+        return []
+
+    def wrapped_target(text: str, *, lang: str | None = None) -> list[object]:
+        observed.append(("wrapped", text, lang))
+        return []
+
+    @wraps(wrapped_target)
+    def wrapped_detector(*args, **kwargs):
+        return wrapped_target(*args, **kwargs)
+
+    detectors = (
+        CallableDetector(),
+        BoundDetector().detect,
+        partial(partial_detector, "partial"),
+        wrapped_detector,
+    )
+    for detector in detectors:
+        base._HANDLERS[".html"][-1].handler(
+            FIXTURE,
+            models=detector,
+            lang="en",
+        )
+
+    assert observed == [
+        ("callable", "Patient Jane & Roe", "en"),
+        ("bound", "Patient Jane & Roe", "en"),
+        ("partial", "Patient Jane & Roe", "en"),
+        ("wrapped", "Patient Jane & Roe", "en"),
+    ]
 
 
 def test_handler_propagates_detector_internal_type_error_without_retry() -> None:
