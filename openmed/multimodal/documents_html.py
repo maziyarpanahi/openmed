@@ -100,6 +100,14 @@ def write_redacted_html(
     output = Path(output_path)
     _validate_distinct_paths(source, output)
     parsed = _parse_source(source)
+    return _write_parsed_html(parsed, output, replacements)
+
+
+def _write_parsed_html(
+    parsed: _ParsedHtml,
+    output: Path,
+    replacements: Iterable[tuple[int, int, str]],
+) -> Path:
     logical = _validate_logical_replacements(parsed.document, replacements)
     projected = [
         (_project_replacement(parsed.document, start, end), replacement)
@@ -607,7 +615,9 @@ def _html_handler(
         policy, "output_path", "redacted_path", "destination_path"
     )
     if replacements and output_path is not None:
-        write_redacted_html(path, output_path, replacements)
+        output = Path(output_path)
+        _validate_distinct_paths(Path(path), output)
+        _write_parsed_html(parsed, output, replacements)
     metadata = {
         "format": "html",
         "detected_span_count": len(replacements),
