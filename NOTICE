@@ -30,6 +30,22 @@ ported into OpenMed clinical-context modules. Ported rule-set files must carry
 an upstream attribution header naming the source project, source URL, license,
 retrieval or port date, and a short summary of local modifications.
 
+Name: ICU (International Components for Unicode) grapheme-break rules
+Source: https://github.com/unicode-org/icu/blob/0c5873f89bf64f6bbc0a24b84f07d79b25785a42/icu4c/source/data/brkitr/rules/char.txt
+License: ICU (ICU License - ICU 1.8.1 and later)
+Source-file copyright: Copyright (C) 2002-2016, International Business
+Machines Corporation and others. All Rights Reserved.
+License-notice copyright: Copyright (c) 1995-2016 International Business
+Machines Corporation and others. All rights reserved.
+Usage: OpenMed adapts ICU 57.1 grapheme-cluster behavior into the compact
+Devanagari range, virama, and joiner table shipped as
+openmed/processing/resources/segmenter/indic_rules.json. The table records the
+exact upstream revision, source path, retrieval date, and local modifications.
+The complete ICU copyright and permission notice is retained in
+openmed/processing/resources/segmenter/ICU.txt and is copied into every
+standalone Indic or combined segmenter bundle as a declared, digest-bound
+license resource.
+
 Name: SHIELD clinical PHI corpus
 Source: https://github.com/susom/shield_dataset
 Paper: https://arxiv.org/abs/2605.03301

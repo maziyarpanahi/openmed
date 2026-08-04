@@ -5,143 +5,310 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Union
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
 from .__about__ import __version__
-from .core import ModelLoader, OpenMedConfig, load_model
-from .core.anonymizer import (
-    LANG_TO_LOCALE,
-    Anonymizer,
-    AnonymizerConfig,
-    register_clinical_provider,
-    register_label_generator,
-)
-from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
-from .core.custom_recognizer import CustomRecognizer
-from .core.explain import ExplainReport, explain
-from .core.hf_hub import (
-    CachedModel,
-    clear_cached_model,
-    list_cached_models,
-    prefetch_model,
-    resolve_repo_id,
-)
-from .core.labels import CANONICAL_LABELS, normalize_label
-from .core.model_registry import (
-    get_all_models,
-    get_default_pii_model,
-    get_model_info,
-    get_model_suggestions,
-    get_models_by_category,
-    get_pii_models_by_language,
-    list_model_categories,
-)
-from .core.model_search import ModelQuery, ModelSearchResult, search_models
-from .core.offline import network_blocked_if_offline
-from .core.pii import (
-    DeidentificationResult,
-    PIIEntity,
-    deidentify,
-    extract_pii,
-    reidentify,
-)
-from .core.pii_entity_merger import (
-    PII_PATTERNS,
-    PIIPattern,
-    calculate_dominant_label,
-    find_semantic_units,
-    merge_entities_with_semantic_units,
-)
-from .core.pii_i18n import (
-    DEFAULT_PII_MODELS,
-    LANGUAGE_PII_PATTERNS,
-    SUPPORTED_LANGUAGES,
-    get_patterns_for_language,
-)
-from .core.redaction_preview import redaction_preview, render_redaction_preview
-from .core.result_cache import (
-    get_result_cache,
-    make_cache_key,
-)
-from .core.results import AnalyzeResult
-from .core.streaming import (
-    StreamingBufferError,
-    StreamingDeidentificationEvent,
-    StreamingDeidentifier,
-    deidentify_stream,
-)
-from .core.surrogate_vault import (
-    ENCRYPTION_SCHEME,
-    InMemorySurrogateStore,
-    JsonFileSurrogateStore,
-    SurrogateEntry,
-    SurrogateKey,
-    SurrogateSource,
-    SurrogateVault,
-    VaultConsistencyReport,
-    VaultRotationResult,
-)
-from .mlx.lm import (
-    OpenMedMLXLanguageModel,
-    OpenMedPagedKVCache,
-    PagedKVCacheConfig,
-    PagedKVCachePlan,
-    PagedKVCacheStats,
-    TokenRange,
-    generate_text,
-)
-from .onnx.inference import OnnxEntity, OnnxModel, load_onnx_model
-from .processing import (
-    BatchItem,
-    BatchItemResult,
-    BatchProcessor,
-    BatchProgress,
-    BatchResult,
-    DatasetRedactionResult,
-    DatasetRedactionSummary,
-    OutputFormatter,
-    TextProcessor,
-    TokenizationHelper,
-    format_predictions,
-    postprocess_text,
-    preprocess_text,
-    process_batch,
-    redact_dataset,
-)
-from .processing import sentences as sentence_utils
-from .processing.advanced_ner import (
-    AdvancedNERProcessor,
-    StreamingReplayResult,
-    StreamingTokenClassifier,
-    create_advanced_processor,
-    replay_token_classifier,
-    stream_token_classifier,
-)
-from .processing.outputs import PredictionResult
-from .utils import (
-    Profiler,
-    ProfileReport,
-    Timer,
-    disable_profiling,
-    enable_profiling,
-    get_logger,
-    get_profile_report,
-    profile,
-    setup_logging,
-    timed,
-    validate_input,
-    validate_model_name,
-)
-from .utils.validation import (
-    sanitize_filename,
-    validate_batch_size,
-    validate_confidence_threshold,
-    validate_output_format,
-)
+
+if TYPE_CHECKING:
+    from .core import ModelLoader, OpenMedConfig
+    from .core.pii import (
+        DeidentificationResult,
+        PIIEntity,
+        deidentify,
+        extract_pii,
+        reidentify,
+    )
+    from .core.results import AnalyzeResult
+    from .processing import BatchProcessor
+    from .processing.sentences import SentenceSpan
+
+_LAZY_IMPORTS = {
+    "ModelLoader": ".core",
+    "OpenMedConfig": ".core",
+    "load_model": ".core",
+    "LANG_TO_LOCALE": ".core.anonymizer",
+    "Anonymizer": ".core.anonymizer",
+    "AnonymizerConfig": ".core.anonymizer",
+    "IndiaSurrogateProvider": ".core.anonymizer",
+    "register_clinical_provider": ".core.anonymizer",
+    "register_label_generator": ".core.anonymizer",
+    "AttestationReport": ".core.attestation",
+    "AttestationTemplateError": ".core.attestation",
+    "generate_attestation": ".core.attestation",
+    "list_attestation_profiles": ".core.attestation",
+    "load_attestation_template": ".core.attestation",
+    "AuditReport": ".core.audit",
+    "AuditSignature": ".core.audit",
+    "AuditSpan": ".core.audit",
+    "DetectorInfo": ".core.audit",
+    "BudgetExceededError": ".core.budget",
+    "RequestBudget": ".core.budget",
+    "coerce_budget": ".core.budget",
+    "CustomRecognizer": ".core.custom_recognizer",
+    "ExplainReport": ".core.explain",
+    "explain": ".core.explain",
+    "CachedModel": ".core.hf_hub",
+    "clear_cached_model": ".core.hf_hub",
+    "list_cached_models": ".core.hf_hub",
+    "prefetch_model": ".core.hf_hub",
+    "resolve_repo_id": ".core.hf_hub",
+    "IndicNameNormalizer": ".core.indic_name_match",
+    "canonical_indic_name_key": ".core.indic_name_match",
+    "detect_name_script": ".core.indic_name_match",
+    "indic_names_match": ".core.indic_name_match",
+    "CANONICAL_LABELS": ".core.labels",
+    "normalize_label": ".core.labels",
+    "get_all_models": ".core.model_registry",
+    "get_default_pii_model": ".core.model_registry",
+    "get_model_info": ".core.model_registry",
+    "get_model_suggestions": ".core.model_registry",
+    "get_models_by_category": ".core.model_registry",
+    "get_pii_models_by_language": ".core.model_registry",
+    "list_model_categories": ".core.model_registry",
+    "ModelQuery": ".core.model_search",
+    "ModelSearchResult": ".core.model_search",
+    "search_models": ".core.model_search",
+    "network_blocked_if_offline": ".core.offline",
+    "DeidentificationResult": ".core.pii",
+    "PIIEntity": ".core.pii",
+    "deidentify": ".core.pii",
+    "extract_pii": ".core.pii",
+    "reidentify": ".core.pii",
+    "PII_PATTERNS": ".core.pii_entity_merger",
+    "PIIPattern": ".core.pii_entity_merger",
+    "calculate_dominant_label": ".core.pii_entity_merger",
+    "find_semantic_units": ".core.pii_entity_merger",
+    "merge_entities_with_semantic_units": ".core.pii_entity_merger",
+    "merge_india_code_mixed_spans": ".core.pii_entity_merger",
+    "DEFAULT_PII_MODELS": ".core.pii_i18n",
+    "LANGUAGE_PII_PATTERNS": ".core.pii_i18n",
+    "SUPPORTED_LANGUAGES": ".core.pii_i18n",
+    "get_india_clinical_model_route": ".core.pii_i18n",
+    "get_patterns_for_language": ".core.pii_i18n",
+    "india_clinical_route_active": ".core.pii_i18n",
+    "redaction_preview": ".core.redaction_preview",
+    "render_redaction_preview": ".core.redaction_preview",
+    "ReviewFeedback": ".core.review_workflow",
+    "ReviewItem": ".core.review_workflow",
+    "ReviewQueue": ".core.review_workflow",
+    "append_feedback": ".core.review_workflow",
+    "build_review_queue": ".core.review_workflow",
+    "critical_labels": ".core.review_workflow",
+    "record_review_decision": ".core.review_workflow",
+    "get_result_cache": ".core.result_cache",
+    "make_cache_key": ".core.result_cache",
+    "AnalyzeResult": ".core.results",
+    "StreamingBufferError": ".core.streaming",
+    "StreamingDeidentificationEvent": ".core.streaming",
+    "StreamingDeidentifier": ".core.streaming",
+    "deidentify_stream": ".core.streaming",
+    "ENCRYPTION_SCHEME": ".core.surrogate_vault",
+    "SUBJECT_SURROGATE_LABEL": ".core.surrogate_vault",
+    "SUBJECT_SURROGATE_LANG": ".core.surrogate_vault",
+    "InMemorySurrogateStore": ".core.surrogate_vault",
+    "JsonFileSurrogateStore": ".core.surrogate_vault",
+    "SurrogateEntry": ".core.surrogate_vault",
+    "SurrogateKey": ".core.surrogate_vault",
+    "SurrogateSource": ".core.surrogate_vault",
+    "SurrogateVault": ".core.surrogate_vault",
+    "SubjectResolutionError": ".core.surrogate_vault",
+    "VaultConsistencyReport": ".core.surrogate_vault",
+    "VaultRotationResult": ".core.surrogate_vault",
+    "OpenMedMLXLanguageModel": ".mlx.lm",
+    "OpenMedPagedKVCache": ".mlx.lm",
+    "PagedKVCacheConfig": ".mlx.lm",
+    "PagedKVCachePlan": ".mlx.lm",
+    "PagedKVCacheStats": ".mlx.lm",
+    "TokenRange": ".mlx.lm",
+    "generate_text": ".mlx.lm",
+    "OnnxEntity": ".onnx.inference",
+    "OnnxModel": ".onnx.inference",
+    "load_onnx_model": ".onnx.inference",
+    "BatchItem": ".processing",
+    "BatchItemResult": ".processing",
+    "BatchProcessor": ".processing",
+    "BatchProgress": ".processing",
+    "BatchResult": ".processing",
+    "DatasetRedactionResult": ".processing",
+    "DatasetRedactionSummary": ".processing",
+    "IndicNormalization": ".processing",
+    "IndicNormalizer": ".processing",
+    "OutputFormatter": ".processing",
+    "TextProcessor": ".processing",
+    "TokenizationHelper": ".processing",
+    "format_predictions": ".processing",
+    "postprocess_text": ".processing",
+    "preprocess_text": ".processing",
+    "process_batch": ".processing",
+    "redact_dataset": ".processing",
+    "sentence_utils": ".processing",
+    "AdvancedNERProcessor": ".processing.advanced_ner",
+    "StreamingReplayResult": ".processing.advanced_ner",
+    "StreamingTokenClassifier": ".processing.advanced_ner",
+    "create_advanced_processor": ".processing.advanced_ner",
+    "replay_token_classifier": ".processing.advanced_ner",
+    "stream_token_classifier": ".processing.advanced_ner",
+    "PredictionResult": ".processing.outputs",
+    "PeakRSSMeasurement": ".utils",
+    "Profiler": ".utils",
+    "ProfileReport": ".utils",
+    "Timer": ".utils",
+    "disable_profiling": ".utils",
+    "enable_profiling": ".utils",
+    "get_logger": ".utils",
+    "get_peak_rss_bytes": ".utils",
+    "get_profile_report": ".utils",
+    "measure_peak_rss": ".utils",
+    "profile": ".utils",
+    "setup_logging": ".utils",
+    "timed": ".utils",
+    "validate_input": ".utils",
+    "validate_model_name": ".utils",
+    "sanitize_filename": ".utils.validation",
+    "validate_batch_size": ".utils.validation",
+    "validate_confidence_threshold": ".utils.validation",
+    "validate_output_format": ".utils.validation",
+}
+_LAZY_ATTRIBUTE_NAMES = {"sentence_utils": "sentences"}
+_LAZY_IMPORT_PREREQUISITES = {
+    ".core.pii_i18n": (".core.anonymizer",),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve and cache a top-level public export on first access."""
+
+    module_name = _LAZY_IMPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    for prerequisite in _LAZY_IMPORT_PREREQUISITES.get(module_name, ()):
+        import_module(prerequisite, __name__)
+    attribute_name = _LAZY_ATTRIBUTE_NAMES.get(name, name)
+    value = getattr(import_module(module_name, __name__), attribute_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Return eager and lazy top-level attributes for interactive discovery."""
+
+    return sorted(set(globals()) | set(_LAZY_IMPORTS))
+
+
+def _resolve_export(name: str) -> Any:
+    """Return an overridden, cached, or newly loaded top-level export."""
+
+    try:
+        return globals()[name]
+    except KeyError:
+        return __getattr__(name)
+
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE)
+_HARD_LINE_BREAK_PATTERN = re.compile(r"\r\n|[\n\r\v\f\x85\u2028\u2029]")
 
 logger = logging.getLogger(__name__)
+
+
+def _trim_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """Trim whitespace from a source span while preserving exact offsets."""
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+def _split_prediction_at_boundaries(
+    prediction: Dict[str, Any],
+    text: str,
+    segments: List[Dict[str, Any]],
+    *,
+    sentence_detection: bool,
+) -> List[Dict[str, Any]]:
+    """Split a model span at hard line breaks and detected sentence boundaries."""
+    start = prediction.get("start")
+    end = prediction.get("end")
+    if not (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and 0 <= start < end <= len(text)
+    ):
+        return []
+
+    line_ranges: List[tuple[int, int]] = []
+    cursor = start
+    for match in _HARD_LINE_BREAK_PATTERN.finditer(text, start, end):
+        fragment_start, fragment_end = _trim_span(text, cursor, match.start())
+        if fragment_end > fragment_start:
+            line_ranges.append((fragment_start, fragment_end))
+        cursor = match.end()
+    fragment_start, fragment_end = _trim_span(text, cursor, end)
+    if fragment_end > fragment_start:
+        line_ranges.append((fragment_start, fragment_end))
+
+    fragments: List[Dict[str, Any]] = []
+    for line_start, line_end in line_ranges:
+        overlapping_segments = (
+            [
+                segment
+                for segment in segments
+                if segment["end"] > line_start and segment["start"] < line_end
+            ]
+            if sentence_detection
+            else []
+        )
+        ranges = (
+            [
+                (
+                    max(line_start, segment["start"]),
+                    min(line_end, segment["end"]),
+                    segment,
+                )
+                for segment in overlapping_segments
+            ]
+            if overlapping_segments
+            else [(line_start, line_end, None)]
+        )
+
+        for range_start, range_end, segment in ranges:
+            range_start, range_end = _trim_span(text, range_start, range_end)
+            if range_end <= range_start:
+                continue
+            if segment is not None and segment.get("suppress_predictions"):
+                continue
+
+            fragment = dict(prediction)
+            fragment["start"] = range_start
+            fragment["end"] = range_end
+            fragment["word"] = text[range_start:range_end]
+
+            if sentence_detection:
+                span_metadata = dict(fragment.get("metadata") or {})
+                if segment is None:
+                    span_metadata.update(
+                        {
+                            "sentence_index": -1,
+                            "sentence_text": "",
+                            "sentence_start": range_start,
+                            "sentence_end": range_end,
+                        }
+                    )
+                else:
+                    span_metadata.update(
+                        {
+                            "sentence_index": segment["index"],
+                            "sentence_text": segment["text"],
+                            "sentence_start": segment["start"],
+                            "sentence_end": segment["end"],
+                        }
+                    )
+                fragment["metadata"] = span_metadata
+
+            fragments.append(fragment)
+
+    return fragments
 
 
 def list_models(
@@ -159,7 +326,8 @@ def list_models(
         config: Optional custom configuration for model discovery.
     """
 
-    loader = ModelLoader(config)
+    model_loader = _resolve_export("ModelLoader")
+    loader = model_loader(config)
     return loader.list_available_models(
         include_registry=include_registry,
         include_remote=include_remote,
@@ -174,7 +342,8 @@ def get_model_max_length(
 ) -> Optional[int]:
     """Return the inferred maximum sequence length for ``model_name``."""
 
-    loader = loader or ModelLoader(config)
+    model_loader = _resolve_export("ModelLoader")
+    loader = loader or model_loader(config)
     return loader.get_max_sequence_length(model_name)
 
 
@@ -197,6 +366,8 @@ def analyze_text(
     sentence_language: str = "en",
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
+    sentence_backend: Literal["auto", "yasbd"] = "auto",
+    assert_context: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
@@ -222,10 +393,18 @@ def analyze_text(
             :func:`openmed.processing.format_predictions`.
         metadata: Optional metadata to attach to the result.
         use_fast_tokenizer: Prefer fast tokenizers when available.
-        sentence_detection: Enable pySBD-powered sentence detection (default: True).
+        sentence_detection: Enable sentence detection (default: True). The
+            engine is selected by ``sentence_backend``.
         sentence_language: Language hint for the sentence detector.
-        sentence_clean: Whether to enable pySBD's cleaning heuristics.
-        sentence_segmenter: Optional preconstructed pySBD segmenter to reuse.
+        sentence_clean: Whether to enable the sentence detector's cleaning heuristics.
+        sentence_segmenter: Optional preconstructed segmenter object to reuse.
+            It cannot be combined with ``sentence_backend="yasbd"``.
+        sentence_backend: Sentence segmentation engine to use.
+            It can be ``"auto"`` (default, unchanged routing) or ``"yasbd"``
+            (experimental opt-in; requires ``openmed[yasbd]``).
+        assert_context: Attach deterministic negation, uncertainty,
+            experiencer, and temporality labels to each entity under
+            ``metadata["clinical_context"]``. Disabled by default.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
@@ -265,6 +444,19 @@ def analyze_text(
         ('asthma', 'CONDITION')
     """
 
+    model_loader = _resolve_export("ModelLoader")
+    network_blocked_if_offline = _resolve_export("network_blocked_if_offline")
+    get_result_cache = _resolve_export("get_result_cache")
+    make_cache_key = _resolve_export("make_cache_key")
+    analyze_result = _resolve_export("AnalyzeResult")
+    format_predictions = _resolve_export("format_predictions")
+    sentence_utils = _resolve_export("sentence_utils")
+    prediction_result = _resolve_export("PredictionResult")
+    validate_input = _resolve_export("validate_input")
+    validate_model_name = _resolve_export("validate_model_name")
+    validate_confidence_threshold = _resolve_export("validate_confidence_threshold")
+    validate_output_format = _resolve_export("validate_output_format")
+
     validated_text = validate_input(text)
     selected_model = model_id if model_id is not None else model_name
     if model_id is not None and model_name != "disease_detection_superclinical":
@@ -280,7 +472,7 @@ def analyze_text(
         if final_result is not None:
             return final_result
 
-    loader = loader or ModelLoader(config)
+    loader = loader or model_loader(config)
     runtime_config = getattr(loader, "config", config)
 
     pipeline_args = dict(
@@ -329,7 +521,7 @@ def analyze_text(
             except Exception:
                 pass
 
-    raw_segments: List[sentence_utils.SentenceSpan] = []
+    raw_segments: List[SentenceSpan] = []
     if sentence_detection:
         try:
             raw_segments = sentence_utils.segment_text(
@@ -337,8 +529,11 @@ def analyze_text(
                 language=sentence_language,
                 clean=sentence_clean,
                 segmenter=sentence_segmenter,
+                backend=sentence_backend,
             )
         except ImportError:
+            if sentence_backend != "auto":
+                raise
             sentence_detection = False
     if not raw_segments:
         sentence_detection = False
@@ -492,6 +687,9 @@ def analyze_text(
 
     flattened_predictions: List[Dict[str, Any]] = []
     for chunk_idx, chunk in enumerate(chunk_descriptors):
+        chunk_segments = [
+            processed_segments[idx] for idx in chunk.get("segment_indices", [])
+        ]
         if chunk_idx < len(normalized_predictions):
             segment_predictions = normalized_predictions[chunk_idx]
         else:
@@ -510,63 +708,16 @@ def analyze_text(
             if isinstance(end, int):
                 adjusted["end"] = end + chunk["start"]
 
-            sentence_index: Optional[int] = None
-            for idx in chunk.get("segment_indices", []):
-                seg_meta = processed_segments[idx]
-                seg_start = seg_meta["start"]
-                seg_end = seg_meta["end"]
-                adj_start = adjusted.get("start")
-                adj_end = adjusted.get("end")
-                if isinstance(adj_start, int) and seg_start <= adj_start < seg_end:
-                    sentence_index = idx
-                    break
-                if (
-                    sentence_index is None
-                    and isinstance(adj_end, int)
-                    and seg_start < adj_end <= seg_end
-                ):
-                    sentence_index = idx
-                    break
-
-            if sentence_index is None and chunk.get("segment_indices"):
-                sentence_index = chunk["segment_indices"][0]
-
-            if sentence_index is not None:
-                seg_meta = processed_segments[sentence_index]
-                if seg_meta.get("suppress_predictions"):
-                    continue
-                span_metadata = dict(adjusted.get("metadata") or {})
-                span_metadata.setdefault("sentence_index", sentence_index)
-                span_metadata.setdefault("sentence_text", seg_meta["text"])
-                span_metadata.setdefault("sentence_start", seg_meta["start"])
-                span_metadata.setdefault("sentence_end", seg_meta["end"])
-                adjusted["metadata"] = span_metadata
-            elif sentence_detection:
-                span_metadata = dict(adjusted.get("metadata") or {})
-                span_metadata.setdefault("sentence_index", -1)
-                span_metadata.setdefault("sentence_text", "")
-                span_metadata.setdefault("sentence_start", chunk["start"])
-                span_metadata.setdefault("sentence_end", chunk["end"])
-                adjusted["metadata"] = span_metadata
-
-            adj_start = adjusted.get("start")
-            adj_end = adjusted.get("end")
-
-            if not (
-                isinstance(adj_start, int)
-                and isinstance(adj_end, int)
-                and adj_end > adj_start
+            for fragment in _split_prediction_at_boundaries(
+                adjusted,
+                validated_text,
+                chunk_segments,
+                sentence_detection=sentence_detection,
             ):
-                continue
-
-            span_slice = validated_text[adj_start:adj_end]
-            stripped = span_slice.strip()
-            if not stripped:
-                continue
-            if _PLACEHOLDER_SEGMENT_PATTERN.search(stripped):
-                continue
-
-            flattened_predictions.append(adjusted)
+                span_slice = validated_text[fragment["start"] : fragment["end"]]
+                if _PLACEHOLDER_SEGMENT_PATTERN.search(span_slice):
+                    continue
+                flattened_predictions.append(fragment)
 
     base_metadata = dict(metadata) if metadata else {}
     base_metadata.setdefault("sentence_detection", sentence_detection)
@@ -603,6 +754,16 @@ def analyze_text(
             logger.warning("Failed to remap predictions to medical tokens: %s", exc)
             base_metadata.setdefault("medical_tokenizer", False)
 
+    if assert_context and flattened_predictions:
+        from .clinical.context import assert_context as attach_context
+
+        flattened_predictions = attach_context(
+            validated_text,
+            flattened_predictions,
+            sentences=processed_segments,
+            language=sentence_language,
+        )
+
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,
         "group_entities": group_entities,
@@ -631,8 +792,8 @@ def analyze_text(
         **fmt_kwargs,
     )
     final_result: Union[AnalyzeResult, str, List[Dict[str, Any]]]
-    if fmt_output == "dict" and isinstance(result, PredictionResult):
-        final_result = AnalyzeResult.from_prediction_result(result)
+    if fmt_output == "dict" and isinstance(result, prediction_result):
+        final_result = analyze_result.from_prediction_result(result)
     else:
         final_result = result
     if cache_results:
@@ -649,6 +810,8 @@ __all__ = [
     "OnnxModel",
     "load_onnx_model",
     "TextProcessor",
+    "IndicNormalization",
+    "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
     "TokenizationHelper",
@@ -705,10 +868,13 @@ __all__ = [
     # Profiling utilities
     "Profiler",
     "ProfileReport",
+    "PeakRSSMeasurement",
     "Timer",
     "enable_profiling",
     "disable_profiling",
     "get_profile_report",
+    "get_peak_rss_bytes",
+    "measure_peak_rss",
     "profile",
     "timed",
     # PII detection and de-identification
@@ -717,6 +883,15 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    # Per-request resource and timeout budgets
+    "RequestBudget",
+    "BudgetExceededError",
+    "coerce_budget",
+    "AttestationReport",
+    "AttestationTemplateError",
+    "generate_attestation",
+    "list_attestation_profiles",
+    "load_attestation_template",
     "CustomRecognizer",
     "StreamingBufferError",
     "StreamingDeidentificationEvent",
@@ -726,8 +901,16 @@ __all__ = [
     "stream_token_classifier",
     "redaction_preview",
     "render_redaction_preview",
+    "ReviewFeedback",
+    "ReviewItem",
+    "ReviewQueue",
+    "append_feedback",
+    "build_review_queue",
+    "critical_labels",
+    "record_review_decision",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
+    "merge_india_code_mixed_spans",
     "find_semantic_units",
     "calculate_dominant_label",
     "PII_PATTERNS",
@@ -736,13 +919,16 @@ __all__ = [
     "SUPPORTED_LANGUAGES",
     "DEFAULT_PII_MODELS",
     "LANGUAGE_PII_PATTERNS",
+    "get_india_clinical_model_route",
     "get_patterns_for_language",
+    "india_clinical_route_active",
     # Canonical label taxonomy
     "CANONICAL_LABELS",
     "normalize_label",
     # Anonymization engine
     "Anonymizer",
     "AnonymizerConfig",
+    "IndiaSurrogateProvider",
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",
@@ -755,4 +941,8 @@ __all__ = [
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "ENCRYPTION_SCHEME",
+    "IndicNameNormalizer",
+    "canonical_indic_name_key",
+    "indic_names_match",
+    "detect_name_script",
 ]

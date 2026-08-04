@@ -74,11 +74,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Add the OpenMed `v1.9.1` release to the app module:
+Add the OpenMed `v2.0.0` release to the app module:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.9.1")
+    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
 }
 ```
 
