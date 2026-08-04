@@ -39,7 +39,7 @@ authors = [
 [project.optional-dependencies]
 dev = [
   "pre-commit>=4.0",
-  "cryptography>=42,<50",
+  "cryptography>=50,<51",
   "rich>=13.0",
   "typer>=0.12",
   "pytest>=7.0",
@@ -77,7 +77,7 @@ cli = [
 ]
 
 integrity = [
-  "cryptography>=42,<50",
+  "cryptography>=50,<51",
 ]
 
 mcp = [
@@ -325,6 +325,14 @@ constraint-dependencies = [
   "betterproto==2.0.0b6; python_version >= '3.11'",
 ]
 conflicts = [
+  [
+    { extra = "beam" },
+    { extra = "dev" },
+  ],
+  [
+    { extra = "beam" },
+    { extra = "integrity" },
+  ],
   [
     { extra = "awq" },
     { extra = "gliner" },
