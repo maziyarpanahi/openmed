@@ -92,8 +92,9 @@ Webhook requests include:
 The signature uses the shared
 [HMAC request-signing scheme](request-signing.md), covering `POST`, the exact
 callback path and query, timestamp, nonce, and SHA-256 digest of the canonical
-JSON body. Non-2xx responses and transport errors are retried with exponential
-backoff.
+JSON body. Each delivery attempt is signed independently with a fresh nonce, so
+retries remain compatible with receiver-side replay protection. Non-2xx
+responses and transport errors are retried with exponential backoff.
 
 ## Local Store Configuration
 

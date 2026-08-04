@@ -12,7 +12,6 @@ import httpx
 from .signing import (
     NONCE_HEADER,
     SIGNATURE_HEADER,
-    SIGNATURE_PREFIX,
     TIMESTAMP_HEADER,
     sign_request,
 )
@@ -88,24 +87,21 @@ def deliver_webhook(
     client: Optional[httpx.Client] = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> WebhookDeliveryResult:
-    """POST a signed webhook payload, retrying non-2xx responses and I/O errors."""
+    """POST a signed webhook payload, retrying non-2xx responses and I/O errors.
+
+    Each HTTP delivery attempt receives its own timestamp and nonce so a
+    receiver can apply replay protection without rejecting a legitimate retry.
+    """
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
     if backoff_seconds < 0:
         raise ValueError("backoff_seconds must be greater than or equal to 0")
 
     request_path = httpx.URL(url).raw_path.decode("ascii")
-    body, timestamp, nonce, signature = sign_webhook_payload(
-        payload,
-        secret=secret,
-        path=request_path,
-    )
-    headers = {
+    body = canonical_json_bytes(payload)
+    base_headers = {
         "Content-Type": "application/json",
         EVENT_HEADER: str(payload.get("event", "job.terminal")),
-        TIMESTAMP_HEADER: timestamp,
-        NONCE_HEADER: nonce,
-        SIGNATURE_HEADER: signature,
     }
 
     owns_client = client is None
@@ -116,6 +112,13 @@ def deliver_webhook(
     try:
         for attempt in range(1, max_attempts + 1):
             attempts = attempt
+            signed_headers = sign_request(
+                "POST",
+                request_path,
+                body,
+                secret=secret,
+            )
+            headers = {**base_headers, **signed_headers}
             try:
                 response = active_client.post(url, content=body, headers=headers)
                 last_status_code = response.status_code

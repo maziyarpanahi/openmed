@@ -6,7 +6,12 @@ import json
 
 import httpx
 
-from openmed.service.signing import NONCE_HEADER, sign_request
+from openmed.service.signing import (
+    NONCE_HEADER,
+    NonceCache,
+    sign_request,
+    verify_request_signature,
+)
 from openmed.service.webhooks import (
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
@@ -44,13 +49,25 @@ def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:
 def test_deliver_webhook_retries_with_backoff_until_success() -> None:
     attempts = 0
     delays: list[float] = []
+    seen_nonces: list[str] = []
     seen_request: httpx.Request | None = None
+    nonce_cache = NonceCache()
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal attempts
         nonlocal seen_request
         attempts += 1
         seen_request = request
+        seen_nonces.append(request.headers[NONCE_HEADER])
+        assert verify_request_signature(
+            request.method,
+            request.url.raw_path.decode("ascii"),
+            request.content,
+            request.headers,
+            secret="secret",
+            nonce_cache=nonce_cache,
+            now=int(request.headers[TIMESTAMP_HEADER]),
+        )
         if attempts == 1:
             return httpx.Response(503)
         return httpx.Response(204)
@@ -74,6 +91,7 @@ def test_deliver_webhook_retries_with_backoff_until_success() -> None:
     assert seen_request.headers[SIGNATURE_HEADER].startswith("sha256=")
     assert seen_request.headers[TIMESTAMP_HEADER]
     assert seen_request.headers[NONCE_HEADER]
+    assert len(seen_nonces) == len(set(seen_nonces))
 
 
 def test_deliver_webhook_reports_failure_after_attempts() -> None:

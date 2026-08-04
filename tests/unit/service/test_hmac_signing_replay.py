@@ -174,3 +174,19 @@ def test_client_signer_returns_only_the_three_signature_headers() -> None:
         SIGNATURE_HEADER: headers[SIGNATURE_HEADER],
     }
     assert headers[SIGNATURE_HEADER].startswith("sha256=")
+
+
+def test_explicit_empty_nonce_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        sign_request(
+            "POST",
+            "/jobs",
+            secret="shared-secret",
+            timestamp=1_800_000_000,
+            nonce="",
+        )
+
+
+def test_nonce_cache_rejects_non_finite_window() -> None:
+    with pytest.raises(ValueError):
+        NonceCache(window_seconds=float("nan"))

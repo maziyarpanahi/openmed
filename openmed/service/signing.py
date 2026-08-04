@@ -69,11 +69,8 @@ class NonceCache:
             or max_entries < 1
         ):
             raise ValueError("max_entries must be at least 1")
-        if isinstance(window_seconds, bool) or window_seconds <= 0:
-            raise ValueError("window_seconds must be greater than 0")
-
         self.max_entries = max_entries
-        self.window_seconds = float(window_seconds)
+        self.window_seconds = _normalize_window(window_seconds)
         self._entries: dict[str, float] = {}
         self._expirations: list[tuple[float, int, str]] = []
         self._sequence = 0
@@ -187,7 +184,9 @@ def sign_request(
     issued_at = _normalize_timestamp(
         int(time.time()) if timestamp is None else timestamp
     )
-    request_nonce = _normalize_nonce(nonce or secrets.token_urlsafe(24))
+    request_nonce = _normalize_nonce(
+        secrets.token_urlsafe(24) if nonce is None else nonce
+    )
     digest = _signature_digest(
         secret,
         canonical_signing_string(method, path, issued_at, request_nonce, body),
