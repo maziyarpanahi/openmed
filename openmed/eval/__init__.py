@@ -244,6 +244,14 @@ from openmed.eval.frontier import (
     frontier_point_from_reports,
     frontier_report,
 )
+from openmed.eval.generalization import (
+    GENERALIZATION_ARTIFACT_TYPE,
+    GENERALIZATION_METRICS,
+    GENERALIZATION_SCHEMA_VERSION,
+    GENERALIZATION_SUITE,
+    GeneralizationReport,
+    cross_corpus_report,
+)
 from openmed.eval.golden import (
     HARD_NEGATIVE_CATEGORY,
     HARD_NEGATIVE_PACK_VERSION,
@@ -705,6 +713,12 @@ from openmed.eval.utility import (
 
 __all__ = [
     "DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR",
+    "GENERALIZATION_ARTIFACT_TYPE",
+    "GENERALIZATION_METRICS",
+    "GENERALIZATION_SCHEMA_VERSION",
+    "GENERALIZATION_SUITE",
+    "GeneralizationReport",
+    "cross_corpus_report",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
     "TEMPORAL_AWARENESS_F1_FLOOR",
     "TEMPORAL_CONSISTENCY_VIOLATION_CEILING",
