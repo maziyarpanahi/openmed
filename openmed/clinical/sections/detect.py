@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
@@ -88,20 +88,59 @@ class _HeaderHit:
     language: str
 
 
+@dataclass(frozen=True)
+class _SectionCandidate:
+    span: SectionSpan
+    header_start: int
+    header_end: int
+    registration_order: int
+
+    @property
+    def header_length(self) -> int:
+        return self.header_end - self.header_start
+
+
+_SectionSegmenter = Callable[[str, str | None], tuple[SectionSpan, ...]]
+
+
 def detect_sections(
     text: str,
     *,
     language: str | None = None,
     include_unsectioned: bool = True,
 ) -> tuple[SectionSpan, ...]:
-    """Segment *text* into canonical clinical section spans.
+    """Run registered segmenters and assemble canonical section spans.
 
-    Headers are matched at line starts using language-pack section lexicons.
-    Colon/full-width-colon headers, standalone headers, and underlined headers
-    are supported without whitespace assumptions around CJK or RTL scripts.
-    Returned ``label`` values are canonical section keys, so downstream section
-    priors can consume them directly.
+    Candidate headers from the language-pack lexicon and focused section-family
+    segmenters are merged deterministically. Overlapping header matches prefer
+    the longest match, then the earliest section start, then registration order
+    for an exact tie. Returned spans are sorted and, by default, ``unsectioned``
+    spans fill any uncovered ranges so the result covers all of *text*.
     """
+
+    if not text:
+        validate_sections(text, ())
+        return ()
+
+    candidates = _section_candidates(text, language)
+    result = _assemble_sections(
+        text,
+        _resolve_overlapping_headers(candidates),
+        language=language,
+        include_unsectioned=include_unsectioned,
+    )
+    if include_unsectioned:
+        validate_sections(text, result)
+    else:
+        _validate_section_spans(text, result, require_coverage=False)
+    return result
+
+
+def _segment_lexicon_sections(
+    text: str,
+    language: str | None,
+) -> tuple[SectionSpan, ...]:
+    """Return sections detected from the multilingual header lexicon."""
 
     if not text:
         return ()
@@ -113,29 +152,21 @@ def detect_sections(
         for hit in _line_header_hits(line, _next_line(lines, index), language)
     )
     if not hits:
-        unsectioned_result = (
-            (
-                _section_dict(
-                    label=UNSECTIONED_SECTION,
-                    start=0,
-                    end=len(text),
-                    language=language,
-                ),
-            )
-            if include_unsectioned and text
-            else ()
+        result = (
+            _section_dict(
+                label=UNSECTIONED_SECTION,
+                start=0,
+                end=len(text),
+                language=language,
+            ),
         )
-        _validate_section_spans(
-            text,
-            unsectioned_result,
-            require_coverage=include_unsectioned,
-        )
-        return unsectioned_result
+        validate_sections(text, result)
+        return result
 
     sections: list[SectionSpan] = []
     cursor = 0
     for index, hit in enumerate(hits):
-        if include_unsectioned and cursor < hit.start:
+        if cursor < hit.start:
             sections.append(
                 _section_dict(
                     label=UNSECTIONED_SECTION,
@@ -160,7 +191,7 @@ def detect_sections(
             )
         cursor = section_end
 
-    if include_unsectioned and cursor < len(text):
+    if cursor < len(text):
         sections.append(
             _section_dict(
                 label=UNSECTIONED_SECTION,
@@ -170,15 +201,212 @@ def detect_sections(
             )
         )
     result = tuple(section for section in sections if section["start"] < section["end"])
-    _validate_section_spans(
-        text,
-        result,
-        require_coverage=include_unsectioned,
-    )
+    validate_sections(text, result)
     return result
 
 
-def validate_section_spans(
+def _segment_history_sections(
+    text: str,
+    language: str | None,
+) -> tuple[SectionSpan, ...]:
+    """Adapt the focused history-family segmenter to the registry contract."""
+
+    del language
+    from .history import segment_history_family
+
+    return segment_history_family(text)
+
+
+_REGISTERED_SECTION_SEGMENTERS: tuple[_SectionSegmenter, ...] = (
+    _segment_lexicon_sections,
+    _segment_history_sections,
+)
+
+
+def _section_candidates(
+    text: str,
+    language: str | None,
+) -> tuple[_SectionCandidate, ...]:
+    candidates: list[_SectionCandidate] = []
+    registration_order = 0
+    for segmenter in _REGISTERED_SECTION_SEGMENTERS:
+        for index, raw_span in enumerate(segmenter(text, language)):
+            if not isinstance(raw_span, Mapping):
+                raise ValueError(
+                    f"registered section segmenter span {index} must be a mapping"
+                )
+            label = raw_span.get("label")
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError(
+                    f"registered section segmenter span {index} requires a label"
+                )
+            start = _section_offset(raw_span, "start", index)
+            end = _section_offset(raw_span, "end", index)
+            if start < 0 or start > len(text) or end < 0 or end > len(text):
+                raise ValueError(
+                    f"registered section segmenter span {index} has invalid offsets"
+                )
+            if end <= start:
+                raise ValueError(
+                    f"registered section segmenter span {index} has invalid offsets"
+                )
+            if label == UNSECTIONED_SECTION:
+                continue
+
+            metadata = {
+                key: value
+                for key, value in raw_span.items()
+                if isinstance(key, str) and key not in {"label", "start", "end"}
+            }
+            span = SectionSpan(label=label, start=start, end=end, **metadata)
+            header_start, header_end = _candidate_header_bounds(text, span)
+            candidates.append(
+                _SectionCandidate(
+                    span=span,
+                    header_start=header_start,
+                    header_end=header_end,
+                    registration_order=registration_order,
+                )
+            )
+            registration_order += 1
+    return tuple(candidates)
+
+
+def _candidate_header_bounds(
+    text: str,
+    span: Mapping[str, Any],
+) -> tuple[int, int]:
+    start = int(span["start"])
+    end = int(span["end"])
+    raw_header_start = span.get("header_start")
+    raw_header_end = span.get("header_end")
+    if raw_header_start is not None or raw_header_end is not None:
+        if (
+            not isinstance(raw_header_start, int)
+            or isinstance(raw_header_start, bool)
+            or not isinstance(raw_header_end, int)
+            or isinstance(raw_header_end, bool)
+            or not start <= raw_header_start < raw_header_end <= end
+        ):
+            raise ValueError("section candidate has invalid header offsets")
+        return raw_header_start, raw_header_end
+
+    line_end = text.find("\n", start, end)
+    if line_end == -1:
+        line_end = end
+    content_end = line_end - int(line_end > start and text[line_end - 1] == "\r")
+    content, content_start = _strip_line_prefix(text[start:content_end], start)
+    delimiter_index = _first_delimiter_index(content)
+    header = (
+        content[:delimiter_index].strip() if delimiter_index > 0 else content.strip()
+    )
+    if not header:
+        return start, start + 1
+    header_start = content_start + content.find(header)
+    return header_start, header_start + len(header)
+
+
+def _resolve_overlapping_headers(
+    candidates: Iterable[_SectionCandidate],
+) -> tuple[_SectionCandidate, ...]:
+    selected: list[_SectionCandidate] = []
+    precedence = sorted(
+        candidates,
+        key=lambda candidate: (
+            -candidate.header_length,
+            candidate.span.start,
+            candidate.registration_order,
+        ),
+    )
+    for candidate in precedence:
+        if any(_candidate_headers_overlap(candidate, other) for other in selected):
+            continue
+        selected.append(candidate)
+    return tuple(
+        sorted(
+            selected,
+            key=lambda candidate: (
+                candidate.span.start,
+                candidate.registration_order,
+            ),
+        )
+    )
+
+
+def _candidate_headers_overlap(
+    left: _SectionCandidate,
+    right: _SectionCandidate,
+) -> bool:
+    return left.span.start == right.span.start or (
+        left.header_start < right.header_end and right.header_start < left.header_end
+    )
+
+
+def _assemble_sections(
+    text: str,
+    candidates: tuple[_SectionCandidate, ...],
+    *,
+    language: str | None,
+    include_unsectioned: bool,
+) -> tuple[SectionSpan, ...]:
+    if not candidates:
+        if not include_unsectioned:
+            return ()
+        return (
+            _section_dict(
+                label=UNSECTIONED_SECTION,
+                start=0,
+                end=len(text),
+                language=language,
+            ),
+        )
+
+    sections: list[SectionSpan] = []
+    cursor = 0
+    for index, candidate in enumerate(candidates):
+        start = candidate.span.start
+        if include_unsectioned and cursor < start:
+            sections.append(
+                _section_dict(
+                    label=UNSECTIONED_SECTION,
+                    start=cursor,
+                    end=start,
+                    language=language,
+                )
+            )
+        next_start = (
+            candidates[index + 1].span.start
+            if index + 1 < len(candidates)
+            else len(text)
+        )
+        end = min(candidate.span.end, next_start)
+        metadata = {
+            key: value
+            for key, value in candidate.span.items()
+            if key not in {"label", "start", "end"}
+        }
+        sections.append(
+            SectionSpan(
+                label=candidate.span.label,
+                start=start,
+                end=end,
+                **metadata,
+            )
+        )
+        cursor = end
+    if include_unsectioned and cursor < len(text):
+        sections.append(
+            _section_dict(
+                label=UNSECTIONED_SECTION,
+                start=cursor,
+                end=len(text),
+                language=language,
+            )
+        )
+    return tuple(sections)
+
+
+def validate_sections(
     text: str,
     spans: Iterable[Mapping[str, Any]],
 ) -> None:
@@ -194,6 +422,15 @@ def validate_section_spans(
     """
 
     _validate_section_spans(text, spans, require_coverage=True)
+
+
+def validate_section_spans(
+    text: str,
+    spans: Iterable[Mapping[str, Any]],
+) -> None:
+    """Backward-compatible alias for :func:`validate_sections`."""
+
+    validate_sections(text, spans)
 
 
 def list_section_label(section: str | Mapping[str, Any]) -> str | None:
@@ -345,7 +582,7 @@ def _validate_section_spans(
             raise ValueError(f"section span {index} requires a non-empty label")
         start = _section_offset(span, "start", index)
         end = _section_offset(span, "end", index)
-        if start < 0 or end > len(text):
+        if start < 0 or start > len(text) or end < 0 or end > len(text):
             raise ValueError(f"section span {index} is outside document bounds")
         if end <= start:
             raise ValueError(f"section span {index} must have positive length")
@@ -357,7 +594,7 @@ def _validate_section_spans(
             raise ValueError(
                 f"section spans overlap at offsets {start} to {previous_end}"
             )
-        elif start > previous_end:
+        elif require_coverage and start > previous_end:
             raise ValueError(
                 f"section spans leave a gap from {previous_end} to {start}"
             )

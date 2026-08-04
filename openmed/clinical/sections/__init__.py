@@ -14,6 +14,7 @@ from .detect import (
     parse_section_lists,
     section_label_from_loinc,
     validate_section_spans,
+    validate_sections,
 )
 from .doctype import (
     DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE,
@@ -41,5 +42,6 @@ __all__ = [
     "parse_section_lists",
     "segment_history_family",
     "section_label_from_loinc",
+    "validate_sections",
     "validate_section_spans",
 ]
