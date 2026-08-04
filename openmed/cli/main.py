@@ -951,6 +951,24 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
     )
     safe_harbor_parser.set_defaults(handler=_handle_compliance_safe_harbor)
 
+    part11_export_parser = compliance_sub.add_parser(
+        "part11-export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(part11_export_parser)
+
+    # Keep a discoverable noun/verb spelling alongside the flat command name.
+    part11_parser = compliance_sub.add_parser(
+        "part11",
+        help="21 CFR Part 11 audit-trail utilities.",
+    )
+    part11_sub = part11_parser.add_subparsers(dest="part11_command")
+    nested_export_parser = part11_sub.add_parser(
+        "export",
+        help="Export PHI-safe events as a 21 CFR Part 11 audit trail.",
+    )
+    _add_part11_export_arguments(nested_export_parser)
+
     expert_verify_parser = compliance_sub.add_parser(
         "expert-review-verify",
         help="Verify a PHI-safe de-identification expert-review evidence bundle.",
@@ -1002,6 +1020,32 @@ def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     attestation_verify_parser.set_defaults(handler=_handle_expert_attestation_verify)
+
+
+def _add_part11_export_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the input/output arguments shared by Part 11 export aliases."""
+
+    parser.add_argument(
+        "input",
+        type=Path,
+        help=(
+            "JSON file containing safe event objects, an events array, or an "
+            "existing Part 11 trail."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        required=True,
+        help="Path for the local Part 11 audit-trail JSON file.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing output file atomically.",
+    )
+    parser.set_defaults(handler=_handle_compliance_part11_export)
 
 
 def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
@@ -2708,6 +2752,83 @@ def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
             "attestation_hash": attestation.attestation_hash,
         },
         human=f"Safe Harbor attestation written to: {args.output}",
+    )
+
+
+def _handle_compliance_part11_export(args: argparse.Namespace) -> int:
+    """Export safe event mappings to a verified Part 11 audit trail."""
+
+    from ..compliance.part11 import (
+        PART11_FORMAT,
+        Part11AuditTrail,
+        build_part11_audit_trail,
+    )
+
+    try:
+        source = args.input.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to read the Part 11 input file.",
+            code="input_read_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        parsed = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            f"Invalid JSON in Part 11 input at line {exc.lineno} column {exc.colno}.",
+            code="invalid_json",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        if isinstance(parsed, MappingABC) and parsed.get("format") == PART11_FORMAT:
+            trail = Part11AuditTrail.from_dict(parsed)
+        else:
+            if isinstance(parsed, MappingABC):
+                events = parsed.get("events", parsed.get("records"))
+                if events is None:
+                    events = [parsed]
+            else:
+                events = parsed
+            if not isinstance(events, Sequence) or isinstance(events, (str, bytes)):
+                raise TypeError("Part 11 input must contain an event list")
+            trail = build_part11_audit_trail(events)
+        if not trail.verify():
+            raise ValueError("Part 11 audit trail integrity verification failed")
+        serialized = trail.to_json() + "\n"
+    except (TypeError, ValueError) as exc:
+        raise CliError(
+            f"Failed to build the Part 11 audit trail: {exc}",
+            code="part11_export_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    try:
+        _write_safe_text(args.output, serialized, overwrite=args.overwrite)
+    except (OSError, UnicodeError) as exc:
+        raise CliError(
+            "Failed to write the Part 11 audit-trail file.",
+            code="output_write_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = {
+        "output": str(args.output),
+        "record_count": len(trail.records),
+        "head_hash": trail.head_hash,
+        "trail_hash": trail.trail_hash,
+        "verified": True,
+    }
+    return emit(
+        args,
+        payload,
+        human=(
+            f"Part 11 audit trail written to: {args.output}\n"
+            f"Records: {len(trail.records)}\n"
+            "Verification: PASS"
+        ),
     )
 
 
