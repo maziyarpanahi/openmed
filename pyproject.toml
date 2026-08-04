@@ -321,6 +321,9 @@ openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"
 
 [tool.uv]
+constraint-dependencies = [
+  "betterproto==2.0.0b6; python_version >= '3.11'",
+]
 conflicts = [
   [
     { extra = "awq" },
