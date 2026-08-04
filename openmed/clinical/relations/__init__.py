@@ -66,6 +66,7 @@ from .medication_links import (
     MedicationRelationScorer,
     MedicationStatementRecord,
     extract_medication_relations,
+    extract_relations,
     link_medication_attributes,
     reconstruct_medication_statements,
 )
@@ -78,7 +79,6 @@ from .multilingual import (
     RELATION_TYPE_REGISTRY,
     MultilingualRelation,
     available_multilingual_relation_languages,
-    extract_relations,
     map_relation_type,
     multilingual_relation_rules,
     relation_type_mapping,
