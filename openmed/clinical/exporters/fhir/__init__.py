@@ -18,6 +18,7 @@ from .grounded import (
     FHIR_RESOURCE_TYPES,
     to_fhir,
 )
+from .observation import to_observation
 from .operation_outcome import (
     OperationOutcomeIssue,
     from_validation_result,
@@ -39,6 +40,7 @@ __all__ = [
     "FHIR_RESOURCE_TYPES",
     "POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL",
     "to_condition",
+    "to_observation",
     "to_fhir",
     "postcoordinated_codeable_concept",
     "stamp_postcoordination_provenance",
