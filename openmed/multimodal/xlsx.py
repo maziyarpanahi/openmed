@@ -25,10 +25,10 @@ from .tabular_csv import (
     ACTION_FREE_TEXT_REDACT,
     ACTION_KEEP,
     ColumnDecision,
-    _date_shift_for_row,
     _merge_policy_options,
     _redact_cell,
     classify_columns,
+    derive_date_shift_days,
 )
 
 _XLSX_HINT = 'Install with: pip install "openmed[multimodal]".'
@@ -291,7 +291,7 @@ def _header_name(value: Any, column: int) -> str:
 
 
 def _classification_value(cell: Any) -> str:
-    if cell.data_type == "f" or not isinstance(cell.value, str):
+    if cell.data_type in {"f", "e"} or not isinstance(cell.value, str):
         return ""
     return cell.value
 
@@ -317,7 +317,7 @@ def _redact_worksheet(
         row_shift_days: int | None = None
         for decision in decisions:
             cell = worksheet.cell(row=row_index, column=decision.index + 1)
-            if cell.data_type == "f" or not isinstance(cell.value, str):
+            if cell.data_type in {"f", "e"} or not isinstance(cell.value, str):
                 continue
 
             original = cell.value
@@ -325,9 +325,9 @@ def _redact_worksheet(
                 redacted, labels = _run_cell_deidentifier(original, deidentifier)
             else:
                 if decision.action == ACTION_DATE_SHIFT and row_shift_days is None:
-                    row_shift_days = _date_shift_for_row(
+                    row_shift_days = derive_date_shift_days(
                         row_values,
-                        row_index=row_index - header_row - 1,
+                        record_index=row_index - header_row - 1,
                         fixed_days=date_shift_days,
                         seed=date_shift_seed,
                     )

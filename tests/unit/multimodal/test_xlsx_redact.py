@@ -116,3 +116,63 @@ def test_redact_xlsx_rejects_in_place_redaction(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="must differ"):
         redact_xlsx(source, source, cell_deidentifier=_cell_deidentifier)
+
+
+def test_redact_xlsx_reuses_date_column_policy_and_skips_error_cells(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "synthetic.xlsx"
+    output = tmp_path / "synthetic.redacted.xlsx"
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["visit_date", "amount", "calculated", "error_value"])
+    sheet.append(["2026-04-01", 7, "=B2*2", "#N/A"])
+    sheet["D2"].data_type = "e"
+    workbook.save(source)
+    workbook.close()
+
+    result = redact_xlsx(source, output, date_shift_days=5)
+
+    redacted = openpyxl.load_workbook(output, data_only=False)
+    sheet = redacted.active
+    assert sheet["A2"].value == "2026-04-06"
+    assert sheet["B2"].value == 7
+    assert sheet["C2"].value == "=B2*2"
+    assert sheet["D2"].value == "#N/A"
+    assert sheet["D2"].data_type == "e"
+    redacted.close()
+
+    assert result.redaction_report == (
+        {"sheet_index": 0, "coordinate": "A2", "labels": ["DATE"]},
+    )
+
+
+def test_redact_xlsx_detects_free_text_phi_in_a_safe_column(tmp_path: Path) -> None:
+    source = tmp_path / "synthetic.xlsx"
+    output = tmp_path / "synthetic.redacted.xlsx"
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["status", "count"])
+    sheet.append(["Call John Doe at 555-0101", 3])
+    workbook.save(source)
+    workbook.close()
+
+    result = redact_xlsx(
+        source,
+        output,
+        cell_deidentifier=_cell_deidentifier,
+    )
+
+    redacted = openpyxl.load_workbook(output, data_only=False)
+    assert redacted.active["A2"].value == "Call [PERSON] at [PHONE]"
+    assert redacted.active["B2"].value == 3
+    redacted.close()
+    assert result.redaction_report == (
+        {
+            "sheet_index": 0,
+            "coordinate": "A2",
+            "labels": ["PERSON", "PHONE"],
+        },
+    )
