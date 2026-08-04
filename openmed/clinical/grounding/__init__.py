@@ -15,6 +15,15 @@ from .assertion_grounding import (
     ground_with_context,
 )
 from .candidate_generator import SparseCandidateGenerator, generate_candidates
+from .crosswalk import (
+    DEFAULT_CROSSWALK_RESOURCES,
+    CrosswalkEntry,
+    CrosswalkFormatError,
+    CrosswalkLicenseError,
+    CrosswalkResource,
+    load_crosswalk,
+    load_default_crosswalks,
+)
 from .decompose import (
     COMPOSITE_GROUNDING_DECISIONS,
     CompositeChildProvenance,
@@ -50,6 +59,11 @@ from .index import (
     query_index,
 )
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
+from .multilingual import (
+    MultilingualGrounder,
+    MultilingualGroundingResult,
+    ground_multilingual,
+)
 from .postcoordination import (
     LATERALITY_SITE_PATTERN,
     LATERALITY_SITE_SLOTS,
@@ -125,6 +139,11 @@ __all__ = [
     "CompositeGroundingResult",
     "ConceptMatch",
     "ConceptReference",
+    "CrosswalkEntry",
+    "CrosswalkFormatError",
+    "CrosswalkLicenseError",
+    "CrosswalkResource",
+    "DEFAULT_CROSSWALK_RESOURCES",
     "DenseCandidateGenerator",
     "DEFAULT_GROUNDING_SYSTEMS",
     "ECLConstraint",
@@ -153,6 +172,8 @@ __all__ = [
     "LATERALITY_SITE_SLOTS",
     "MLXSapBERTEncoder",
     "MentionDecomposer",
+    "MultilingualGrounder",
+    "MultilingualGroundingResult",
     "POLICY_DROP",
     "POLICY_STATUS",
     "POLICY_SUPPRESS",
@@ -194,6 +215,7 @@ __all__ = [
     "decompose_and_relink",
     "generate_candidates",
     "ground",
+    "ground_multilingual",
     "ground_with_context",
     "get_index",
     "get_linker",
@@ -201,6 +223,8 @@ __all__ = [
     "grounding_provenance",
     "is_postcoordinated_candidate",
     "load_encoder",
+    "load_crosswalk",
+    "load_default_crosswalks",
     "load_index",
     "normalize_language",
     "normalize_term",
