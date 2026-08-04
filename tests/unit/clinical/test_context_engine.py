@@ -62,6 +62,30 @@ def test_rule_scope_does_not_cross_sentence_boundary() -> None:
     assert hits == []
 
 
+def test_apply_context_rules_reuses_supported_offset_aliases() -> None:
+    text = "No fever but cough persists."
+    start = text.index("cough")
+    cough = {
+        "text": "cough",
+        "start_char": start,
+        "end_char": start + len("cough"),
+    }
+
+    [(_, hits)] = apply_context_rules(text, [cough])
+
+    assert hits == []
+
+
+def test_apply_context_rules_honors_occurrence_for_repeated_text() -> None:
+    text = "No fever but fever persists."
+    second_fever = {"text": "fever", "occurrence": 1}
+
+    [(returned_span, hits)] = apply_context_rules(text, [second_fever])
+
+    assert returned_span is second_fever
+    assert hits == []
+
+
 @pytest.mark.parametrize(
     ("text", "surface"),
     [

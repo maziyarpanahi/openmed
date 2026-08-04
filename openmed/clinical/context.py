@@ -1036,8 +1036,9 @@ def apply_context_rules(
 
     Args:
         text: Source document text.
-        spans: Concept spans exposing ``start``/``end`` offsets, span-like
-            two-integer sequences, or unique text-like values found in ``text``.
+        spans: Concept spans exposing supported offset aliases, span-like
+            two-integer sequences, or unique or occurrence-indexed text-like
+            values found in ``text``.
         sentences: Optional sentence spans or sentence strings. When omitted,
             the shared pySBD-backed sentence segmenter is used.
 
@@ -1334,28 +1335,29 @@ def _target_offsets(text: str, span: Any) -> tuple[int, int]:
     if not span_text:
         raise ValueError("span must expose start/end offsets or a text-like value")
 
-    start = text.find(span_text)
-    if start == -1:
+    offsets = _text_offsets_in_context(text, span_text, _occurrence_of(span))
+    if offsets is not None:
+        return offsets
+    if not _text_appears_in_context(text, span_text):
         raise ValueError("span text is not present in source text")
-    return start, start + len(span_text)
+    raise ValueError(
+        "span text must be unique or provide an occurrence index or offsets"
+    )
 
 
 def _try_offsets_from_obj(obj: Any) -> tuple[int, int] | None:
-    if isinstance(obj, Mapping):
-        start = _first_mapping_value(obj, ("start", "span_start", "sentence_start"))
-        end = _first_mapping_value(obj, ("end", "span_end", "sentence_end"))
-        if start is not None and end is not None:
-            return int(start), int(end)
-        return None
+    offsets = _offsets_of(obj)
+    if offsets is not None:
+        return offsets
+
+    start = _int_field(obj, ("span_start", "sentence_start"))
+    end = _int_field(obj, ("span_end", "sentence_end"))
+    if start is not None and end is not None:
+        return start, end
 
     if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
-        if len(obj) >= 2 and all(isinstance(value, int) for value in obj[:2]):
+        if len(obj) >= 2 and all(type(value) is int for value in obj[:2]):
             return int(obj[0]), int(obj[1])
-
-    start = _first_attr(obj, ("start", "span_start", "sentence_start"))
-    end = _first_attr(obj, ("end", "span_end", "sentence_end"))
-    if start is not None and end is not None:
-        return int(start), int(end)
     return None
 
 
@@ -1364,22 +1366,6 @@ def _offsets_from_obj(obj: Any) -> tuple[int, int]:
     if offsets is None:
         raise ValueError("sentence must expose start/end offsets or be text")
     return offsets
-
-
-def _first_mapping_value(obj: Mapping[Any, Any], keys: tuple[str, ...]) -> Any:
-    for key in keys:
-        value = obj.get(key)
-        if value is not None:
-            return value
-    return None
-
-
-def _first_attr(obj: Any, attrs: tuple[str, ...]) -> Any:
-    for attr in attrs:
-        value = getattr(obj, attr, None)
-        if value is not None:
-            return value
-    return None
 
 
 def _validate_offsets(
