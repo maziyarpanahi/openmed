@@ -23,19 +23,29 @@ Every row must include:
 | `benchmark` | Legacy benchmark object or enriched suite list. |
 | `arxiv` | Related arXiv id, or `null`. |
 | `license` | Model license identifier, or `null` when not declared. |
-| `reproducibility_hash` | Stable `sha256:<64 lower hex>` provenance hash. |
+| `reproducibility_hash` | Stable `sha256:<64 lower hex>` repository/provenance hash. It binds the catalog row to a repository revision and file list; artifact bytes use the separate cache integrity manifest documented in [Supply Chain Controls](security/supply-chain.md#model-artifact-integrity). |
 | `released` | Release date as `YYYY-MM-DD`, or `null`. |
 
 ## Enrichment fields
 
-Benchmark and device measurements are optional. Existing rows without these
-fields remain valid.
+Benchmark and device measurements are optional. PII-family rows additionally
+require audited tokenizer script coverage; other families may omit it.
 
 | Field | Shape | Description |
 |---|---|---|
+| `download_mb` | number | Recorded current-snapshot download size in decimal megabytes. |
+| `disk_mb` | number | Recorded on-disk snapshot footprint in decimal megabytes. |
+| `download_sizes` | object | Safetensors, MLX, Core ML, and ONNX download sizes in decimal megabytes; unpublished formats use `null`. |
 | `latency_ms` | object | Per-device latency map in milliseconds. Keys are device labels and values are non-negative numbers. |
 | `peak_ram_mb` | object | Per-device peak RAM map in megabytes. Keys are device labels and values are non-negative numbers. |
 | `recommended_tier` | string | One of `phone`, `laptop`, `workstation`, or `server`. |
+| `script_coverage` | object | Required on PII-family rows. Contains all 11 audited Han and Indic script targets with `unk_rate`, `byte_fallback_rate`, `tokens_per_grapheme`, and `verdict`. |
+| `script_eval` | object | Per-claimed-script dataset, recall, and leakage-floor results. Unreported release-gate values remain `null`. |
+
+For a language claimed by a model, a script verdict is `unsupported` when the
+audited UNK-token rate is strictly greater than 1%. Unclaimed scripts retain
+their metrics with an `unclaimed` verdict. Registry language lookups exclude
+models whose claimed script is explicitly unsupported.
 
 The legacy benchmark shape remains valid:
 
@@ -60,6 +70,11 @@ Enriched rows may replace it with a suite list:
 Only aggregate metrics belong in the manifest. Do not store raw PHI, prompts,
 documents, or examples in benchmark or device result files.
 
+When `download_sizes`, `script_eval`, and `script_coverage` are present, the
+model-card generator publishes explicit download-size, per-script evaluation,
+tokenizer-coverage, and license sections. This keeps release decisions tied to
+the validated manifest instead of hand-maintained card prose.
+
 ## Refresh and enrich
 
 Regenerate the base manifest from the Hugging Face org:
@@ -67,6 +82,22 @@ Regenerate the base manifest from the Hugging Face org:
 ```bash
 python scripts/manifest/generate_manifest.py --output models.jsonl
 ```
+
+The refresh preserves existing enrichment fields by `repo_id`. If a refresh
+adds a new PII-family model, manifest validation intentionally fails until the
+tokenizer audit populates its script coverage. Run the complete audit with the
+optional `hf` dependencies installed:
+
+```bash
+uv pip install -e ".[dev,hf]"
+.venv/bin/python scripts/audit_pii_tokenizer_coverage.py \
+  --update-manifest \
+  --resume
+```
+
+This writes the machine-readable JSON report and the human-readable Markdown
+table under `docs/`, then updates every PII manifest row only after all models
+and all 11 scripts have completed successfully.
 
 Merge benchmark and latency results into a new manifest:
 
@@ -85,6 +116,8 @@ by `repo_id`:
   "results": [
     {
       "repo_id": "OpenMed/OpenMed-PII-Fixture-Tiny-65M",
+      "download_mb": 131.794,
+      "disk_mb": 131.794,
       "latency_ms": {"iphone_15_pro": 18.4, "m2_air": 7.0},
       "peak_ram_mb": {"iphone_15_pro": 512, "m2_air": 384},
       "recommended_tier": "phone",

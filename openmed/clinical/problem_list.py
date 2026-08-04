@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
+
+from openmed.core.labels import CONDITION
+
+if TYPE_CHECKING:
+    from .normalization import GroundedIndiaTerm
 
 from .context import (
     AFFIRMED,
@@ -376,6 +381,28 @@ def deduplicate_problem_list(
     return reconciled
 
 
+def problem_mentions_from_grounded_terms(
+    grounded_terms: Iterable[GroundedIndiaTerm],
+) -> list[ProblemMention]:
+    """Convert grounded AYUSH conditions into coded problem-list mentions.
+
+    Medication matches are intentionally excluded because the problem list is
+    condition-only. The bridge copies code, system, and offsets while leaving
+    clinical assertion axes at their conservative existing defaults.
+    """
+
+    return [
+        ProblemMention(
+            text=term.text,
+            system=term.system_uri,
+            code=term.code,
+            offset=(term.start, term.end),
+        )
+        for term in grounded_terms
+        if term.canonical_label == CONDITION
+    ]
+
+
 __all__ = [
     "ACTIVE",
     "INACTIVE",
@@ -389,4 +416,5 @@ __all__ = [
     "UNCONFIRMED",
     "clinical_status_from_assertion",
     "deduplicate_problem_list",
+    "problem_mentions_from_grounded_terms",
 ]

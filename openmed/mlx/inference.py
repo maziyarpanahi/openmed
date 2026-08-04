@@ -21,6 +21,7 @@ from openmed.core.decoding import (
     decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
+    token_spans_to_char_spans,
     trim_span_whitespace,
     viterbi_decode,
 )
@@ -563,13 +564,13 @@ class PrivacyFilterMLXPipeline:
             index: int(label_id) for index, label_id in enumerate(pred_ids)
         }
         token_spans = labels_to_token_spans(labels_by_index, self.label_info)
+        token_offsets = list(zip(char_starts, char_ends))
+        char_spans = token_spans_to_char_spans(token_spans, token_offsets, text)
 
         entities: list[dict[str, Any]] = []
-        for span_label, token_start, token_end in token_spans:
-            if not (0 <= token_start < token_end <= len(char_starts)):
-                continue
-            start = char_starts[token_start]
-            end = char_ends[token_end - 1]
+        for token_span, char_span in zip(token_spans, char_spans):
+            _, token_start, token_end = token_span
+            span_label, start, end = char_span
             start, end = _trim_span_whitespace(start, end, text)
             if end <= start:
                 continue
@@ -1145,6 +1146,17 @@ def _download_preconverted_mlx_model(
     )
 
 
+def _is_legacy_mlx_artifact_config(config: dict[str, Any]) -> bool:
+    """Return whether *config* carries the pre-manifest converter markers."""
+    model_type = config.get("_mlx_model_type")
+    weights_format = config.get("_mlx_weights_format")
+    return (
+        isinstance(model_type, str)
+        and bool(model_type.strip())
+        and weights_format in {"safetensors", "npz"}
+    )
+
+
 def _resolve_mlx_model(
     model_name: str,
     config: Any = None,
@@ -1239,10 +1251,10 @@ def _resolve_mlx_model(
             ) from exc
 
         manifest, artifact_config = load_artifact_config(mlx_path)
-        if manifest is None:
+        if manifest is None and not _is_legacy_mlx_artifact_config(artifact_config):
             raise ValueError(
                 f"Pre-converted MLX repository {full_model_id} is missing "
-                f"{MANIFEST_FILENAME}"
+                f"{MANIFEST_FILENAME} and legacy MLX converter markers"
             )
         if not any(
             path.is_file()

@@ -14,11 +14,14 @@ id -> HL7 system URI); this module maps the grounding linker system tokens
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
-from openmed.clinical.grounding import Candidate
+from openmed.clinical.grounding.postcoordination import (
+    is_postcoordinated_candidate,
+)
+from openmed.clinical.grounding.types import GroundedSpan
 
+from .code_provenance import stamp_coding_provenance
 from .codeable_concept_simple import codeable_concept as _build_codeable_concept
 from .codeable_concept_simple import system_uri as _system_uri
 
@@ -27,52 +30,66 @@ from .codeable_concept_simple import system_uri as _system_uri
 SYSTEM_URI: dict[str, str] = {
     "RXNORM": _system_uri("rxnorm"),
     "ICD10CM": _system_uri("icd-10-cm"),
+    "ICD11": _system_uri("icd-11-mms"),
     "LOINC": _system_uri("loinc"),
     "SNOMED": _system_uri("snomed"),
     "HPO": _system_uri("hpo"),
+    "MESH": _system_uri("mesh"),
     "UMLS": "http://terminology.hl7.org/CodeSystem/umls",
 }
 
 __all__ = ["SYSTEM_URI", "GroundedSpan", "to_codeable_concept", "build_reverse_index"]
 
 
-@dataclass(frozen=True)
-class GroundedSpan:
-    """A source span with its grounding candidates.
-
-    ``text`` is the source surface (used as ``CodeableConcept.text``),
-    ``start``/``end`` are character offsets into the source document, and
-    ``candidates`` are the per-system linker results.
-    """
-
-    text: str
-    start: int
-    end: int
-    candidates: tuple[Candidate, ...] = ()
-
-
 def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
     """Build a FHIR R4 ``CodeableConcept`` for a grounded span.
 
     Each candidate becomes a ``Coding`` with the canonical HL7 system URI, code,
-    display, and an extension-free internal ``_score`` (the linker score, for
-    downstream filtering). Codings are ordered deterministically by the shared
-    system priority; ``.text`` is the source surface. A span with no candidates
-    yields a text-only concept.
+    display, and an internal ``_score`` (the linker score, for downstream
+    filtering). Candidates carrying a vocabulary version are stamped through
+    the shared code-provenance path. Codings are ordered deterministically by
+    the shared system priority; ``.text`` is the source surface. A span with no
+    candidates yields a text-only concept.
     """
-    if not grounded_span.candidates:
-        return {"text": grounded_span.text}
+    if grounded_span.abstained or not grounded_span.candidates:
+        result = {"text": grounded_span.text}
+        grounding = _grounding_provenance(grounded_span)
+        if grounding:
+            result["_grounding"] = grounding
+        return result
 
-    codings = [
-        {
+    codings = []
+    for candidate in grounded_span.candidates:
+        coding = {
             "system": _uri_for(candidate.system),
             "code": candidate.code,
             "display": candidate.display,
             "_score": float(candidate.score),
+            **_candidate_calibration_fields(grounded_span),
         }
-        for candidate in grounded_span.candidates
-    ]
-    return _build_codeable_concept(codings, text=grounded_span.text)
+        if candidate.vocab_version:
+            coding = stamp_coding_provenance(
+                coding,
+                {coding["system"]: candidate.vocab_version},
+                source_label="grounding candidate",
+            )
+        if is_postcoordinated_candidate(candidate):
+            from .fhir.codeable_concept import stamp_postcoordination_provenance
+
+            if not candidate.vocab_version:
+                raise ValueError(
+                    "post-coordinated SNOMED candidate requires an edition version"
+                )
+            coding = stamp_postcoordination_provenance(
+                coding,
+                edition_uri=candidate.vocab_version,
+            )
+        codings.append(coding)
+    result = _build_codeable_concept(codings, text=grounded_span.text)
+    grounding = _grounding_provenance(grounded_span)
+    if grounding:
+        result["_grounding"] = grounding
+    return result
 
 
 def build_reverse_index(
@@ -85,6 +102,8 @@ def build_reverse_index(
     """
     index: dict[tuple[str, str], list[tuple[int, int]]] = {}
     for span in grounded_spans:
+        if span.abstained:
+            continue
         for candidate in span.candidates:
             key = (_uri_for(candidate.system), candidate.code)
             index.setdefault(key, []).append((span.start, span.end))
@@ -98,3 +117,38 @@ def _uri_for(system: str) -> str:
         raise ValueError(
             f"Unknown grounding system {system!r}. Known: {sorted(SYSTEM_URI)}."
         ) from None
+
+
+def _candidate_calibration_fields(grounded_span: GroundedSpan) -> dict[str, Any]:
+    has_provenance = bool(_grounding_provenance(grounded_span))
+    if (
+        grounded_span.calibrated_score is None
+        and not grounded_span.abstained
+        and not has_provenance
+    ):
+        return {}
+    fields: dict[str, Any] = {"_abstained": bool(grounded_span.abstained)}
+    if grounded_span.calibrated_score is not None:
+        fields["_calibrated_score"] = float(grounded_span.calibrated_score)
+    return fields
+
+
+def _grounding_provenance(grounded_span: GroundedSpan) -> dict[str, Any]:
+    provenance = (
+        dict(grounded_span.provenance)
+        if isinstance(grounded_span.provenance, Mapping)
+        else {}
+    )
+    calibration = provenance.get("grounding_calibration")
+    result: dict[str, Any] = {}
+    if isinstance(calibration, Mapping):
+        result.update(dict(calibration))
+    if grounded_span.calibrated_score is not None:
+        result.setdefault("calibrated_score", float(grounded_span.calibrated_score))
+    if grounded_span.abstained:
+        result["abstained"] = True
+    elif result:
+        result.setdefault("abstained", False)
+    if result:
+        result.setdefault("candidate_count", len(grounded_span.candidates))
+    return result
