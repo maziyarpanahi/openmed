@@ -48,6 +48,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "beam": AdapterSpec(
+        name="beam",
+        module="openmed.interop.beam_transform",
+        extra="beam",
+        description="Apache Beam PTransform for worker-local de-identification",
+    ),
     "cda": AdapterSpec(
         name="cda",
         module="openmed.interop.cda",

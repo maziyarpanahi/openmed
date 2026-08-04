@@ -208,6 +208,10 @@ agents = [
   "llama-index-core>=0.10,<1",
 ]
 
+beam = [
+  "apache-beam>=2.73,<3",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
