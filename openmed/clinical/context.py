@@ -51,7 +51,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from openmed.clinical.lexicons import (
     ClinicalCueLexicon,
