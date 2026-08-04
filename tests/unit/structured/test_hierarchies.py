@@ -309,6 +309,42 @@ def test_date_shift_requires_patient_key_and_secret():
         generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, patient_key="k")
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"patient_key": "", "secret": SECRET},
+        {"patient_key": "patient-1", "secret": ""},
+        {"patient_key": "patient-1", "secret": SECRET, "max_days": 0},
+    ],
+)
+def test_invalid_date_shift_parameters_raise_typed_error(kwargs):
+    with pytest.raises(HierarchyError, match="parameters are invalid"):
+        generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, **kwargs)
+
+
+def test_date_shift_range_overflow_raises_typed_error():
+    patient_key = "boundary-patient"
+    max_days = 1
+    offset = stable_offset_for(patient_key, max_days=max_days, secret=SECRET)
+    boundary = date.min if offset < 0 else date.max
+
+    with pytest.raises(HierarchyError, match="exceeds the supported date range"):
+        generalize_value(
+            COLUMN_TYPE_DATE,
+            boundary,
+            0,
+            patient_key=patient_key,
+            secret=SECRET,
+            max_days=max_days,
+        )
+
+
+@pytest.mark.parametrize("value", ["2024-2-9", "2024-02-9", "20240209"])
+def test_date_requires_canonical_iso_string(value):
+    with pytest.raises(HierarchyError, match="ISO YYYY-MM-DD"):
+        generalize_value(COLUMN_TYPE_DATE, value, 1)
+
+
 # --------------------------------------------------------------------------- #
 # Acceptance: typed errors and validation                                     #
 # --------------------------------------------------------------------------- #

@@ -127,12 +127,18 @@ def _coerce_date(value: object) -> date:
     if isinstance(value, date):
         return value
     if isinstance(value, str):
+        text = value.strip()
         try:
-            return datetime.strptime(value.strip(), _ISO_DATE_FORMAT).date()
+            parsed = datetime.strptime(text, _ISO_DATE_FORMAT).date()
         except ValueError as exc:
             raise HierarchyError(
                 f"date must be an ISO YYYY-MM-DD string, got {value!r}"
             ) from exc
+        if parsed.isoformat() != text:
+            raise HierarchyError(
+                f"date must be an ISO YYYY-MM-DD string, got {value!r}"
+            )
+        return parsed
     raise HierarchyError(
         f"date must be a date or ISO string, got {type(value).__name__}"
     )
@@ -163,8 +169,15 @@ def _shift_date(
     parsed = _coerce_date(value)
     if patient_key is None or secret is None:
         raise HierarchyError("date shifting requires both patient_key and secret")
-    offset = stable_offset_for(patient_key, max_days=max_days, secret=secret)
-    return (parsed + timedelta(days=offset)).strftime(_ISO_DATE_FORMAT)
+    try:
+        offset = stable_offset_for(patient_key, max_days=max_days, secret=secret)
+    except (TypeError, ValueError) as exc:
+        raise HierarchyError("date shifting parameters are invalid") from exc
+    try:
+        shifted = parsed + timedelta(days=offset)
+    except OverflowError as exc:
+        raise HierarchyError("date shift exceeds the supported date range") from exc
+    return shifted.strftime(_ISO_DATE_FORMAT)
 
 
 def _truncate_month(value: object) -> str:
