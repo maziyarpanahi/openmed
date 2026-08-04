@@ -21,7 +21,9 @@ from openmed.eval.metrics import (
     EvalSpan,
     bootstrap_ci,
     compute_character_recall,
+    compute_critical_finding_recall,
     compute_leakage_rate,
+    compute_relaxed_span_f1,
     normalize_eval_spans,
 )
 from openmed.eval.suites import GOLDEN, load_suite_fixtures, validate_suite_name
@@ -31,6 +33,18 @@ TRANSFER_MATRIX_SCHEMA_VERSION = 1
 DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR = 0.005
 
 _GROUP_METADATA_KEYS = ("group", "demographic_group", "surrogate_group")
+
+EXTRACTION_FAIRNESS_SCHEMA_VERSION = 1
+#: Synthetic surrogate axes the extraction-fairness audit groups fixtures by.
+EXTRACTION_FAIRNESS_GROUP_AXES = ("site", "note_type", "demographic_group")
+#: Standing note stating the audit is assistive and uses synthetic surrogates.
+EXTRACTION_FAIRNESS_ASSISTIVE_NOTE = (
+    "This extraction-fairness audit is assistive only. Groups come from "
+    "synthetic surrogate metadata (site, note type, demographic surrogate) "
+    "attached to fixtures, not from patient attributes inferred from clinical "
+    "text. It flags where extraction quality diverges across groups; it does "
+    "not certify parity."
+)
 
 
 @dataclass(frozen=True)
@@ -968,10 +982,412 @@ def _plain(value: Any) -> Any:
     return value
 
 
+@dataclass(frozen=True)
+class ExtractionFairnessGroupMetrics:
+    """Extraction quality for one synthetic surrogate group.
+
+    All fields are PHI-free aggregate counts and rates; no span text is kept.
+    """
+
+    axis: str
+    group: str
+    entity_f1: float
+    recall: float
+    critical_finding_recall: float
+    true_positives: int
+    false_positives: int
+    false_negatives: int
+    covered_chars: int
+    total_chars: int
+    critical_covered: int
+    critical_total: int
+    span_count: int
+    fixture_count: int
+
+    def to_dict(self) -> dict[str, float | int | str]:
+        """Return a JSON-ready mapping."""
+        return {
+            "axis": self.axis,
+            "group": self.group,
+            "entity_f1": self.entity_f1,
+            "recall": self.recall,
+            "critical_finding_recall": self.critical_finding_recall,
+            "true_positives": self.true_positives,
+            "false_positives": self.false_positives,
+            "false_negatives": self.false_negatives,
+            "covered_chars": self.covered_chars,
+            "total_chars": self.total_chars,
+            "critical_covered": self.critical_covered,
+            "critical_total": self.critical_total,
+            "span_count": self.span_count,
+            "fixture_count": self.fixture_count,
+        }
+
+    def __getitem__(self, key: str) -> float | int | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class ExtractionFairnessReport:
+    """Per-group extraction quality and worst-vs-best disparity for one model.
+
+    The report is assistive only and groups fixtures by synthetic surrogate
+    metadata (see :data:`EXTRACTION_FAIRNESS_ASSISTIVE_NOTE`). It never infers
+    demographic attributes from clinical text.
+    """
+
+    suite: str
+    model_name: str
+    fixture_count: int
+    axes: tuple[str, ...]
+    per_group: dict[str, ExtractionFairnessGroupMetrics]
+    extraction_f1_gap: float
+    recall_gap: float
+    critical_finding_recall_gap: float
+    worst_group: str | None
+    best_group: str | None
+    worst_group_by_metric: dict[str, str | None]
+    by_axis: dict[str, dict[str, Any]]
+    assistive: bool = True
+    note: str = EXTRACTION_FAIRNESS_ASSISTIVE_NOTE
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic, PHI-free report payload."""
+        return {
+            "schema_version": EXTRACTION_FAIRNESS_SCHEMA_VERSION,
+            "artifact_type": "openmed.extraction_fairness_audit",
+            "suite": self.suite,
+            "model_name": self.model_name,
+            "fixture_count": self.fixture_count,
+            "axes": list(self.axes),
+            "per_group": {
+                group: metrics.to_dict()
+                for group, metrics in sorted(self.per_group.items())
+            },
+            "extraction_f1_gap": self.extraction_f1_gap,
+            "recall_gap": self.recall_gap,
+            "critical_finding_recall_gap": self.critical_finding_recall_gap,
+            "worst_group": self.worst_group,
+            "best_group": self.best_group,
+            "worst_group_by_metric": dict(sorted(self.worst_group_by_metric.items())),
+            "by_axis": {
+                axis: dict(self.by_axis[axis]) for axis in sorted(self.by_axis)
+            },
+            "assistive": self.assistive,
+            "note": self.note,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the report as deterministic JSON."""
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def gate_metric(self) -> dict[str, Any]:
+        """Return the compact payload the G14 extraction-fairness gate reads."""
+        return {
+            "extraction_f1_gap": self.extraction_f1_gap,
+            "recall_gap": self.recall_gap,
+            "critical_finding_recall_gap": self.critical_finding_recall_gap,
+            "worst_group": self.worst_group,
+            "best_group": self.best_group,
+            "worst_group_by_metric": dict(sorted(self.worst_group_by_metric.items())),
+            "per_group": {
+                group: {
+                    "entity_f1": metrics.entity_f1,
+                    "recall": metrics.recall,
+                    "critical_finding_recall": metrics.critical_finding_recall,
+                }
+                for group, metrics in sorted(self.per_group.items())
+            },
+            "assistive": self.assistive,
+            "note": self.note,
+        }
+
+    def model_card_evidence(self) -> dict[str, Any]:
+        """Return compact aggregate evidence suitable for scorecards/cards."""
+        return {
+            "artifact_type": "openmed.extraction_fairness_audit",
+            "schema_version": EXTRACTION_FAIRNESS_SCHEMA_VERSION,
+            "axes": list(self.axes),
+            "extraction_f1_gap": self.extraction_f1_gap,
+            "recall_gap": self.recall_gap,
+            "critical_finding_recall_gap": self.critical_finding_recall_gap,
+            "worst_group": self.worst_group,
+            "best_group": self.best_group,
+            "worst_group_by_metric": dict(sorted(self.worst_group_by_metric.items())),
+            "assistive": self.assistive,
+            "note": self.note,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass
+class _ExtractionGroupCounts:
+    axis: str = ""
+    true_positives: int = 0
+    predicted_count: int = 0
+    gold_count: int = 0
+    covered_chars: int = 0
+    total_chars: int = 0
+    critical_covered: int = 0
+    critical_total: int = 0
+    span_count: int = 0
+    fixture_count: int = 0
+
+
+#: Committed synthetic corpus (algorithmically generated, no real PHI) carrying
+#: ``site``/``note_type``/``demographic_group`` surrogate metadata and gold
+#: extraction spans so the extraction-fairness audit can run offline in CI.
+EXTRACTION_FAIRNESS_FIXTURES_PATH = Path(__file__).with_name("fixtures") / (
+    "extraction_fairness_synthetic.jsonl"
+)
+
+
+def load_extraction_fairness_fixtures(
+    path: str | Path | None = None,
+) -> list[BenchmarkFixture]:
+    """Load the committed synthetic surrogate-grouped extraction fixtures."""
+    source = Path(path) if path is not None else EXTRACTION_FAIRNESS_FIXTURES_PATH
+    fixtures: list[BenchmarkFixture] = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        fixtures.append(BenchmarkFixture.from_mapping(json.loads(stripped)))
+    return fixtures
+
+
+def extraction_fairness_report(
+    model: str | ModelRunner,
+    suite: str | Sequence[BenchmarkFixture | Mapping[str, Any]],
+    *,
+    runner: ModelRunner | None = None,
+    device: str = "cpu",
+    suite_kwargs: Mapping[str, Any] | None = None,
+    axes: Sequence[str] = EXTRACTION_FAIRNESS_GROUP_AXES,
+) -> ExtractionFairnessReport:
+    """Audit per-group extraction quality across synthetic surrogate groups.
+
+    Extraction recall/F1 that is systematically lower for one site, note type,
+    or demographic surrogate is a fairness and safety concern the leakage
+    fairness report cannot detect. This audit runs the model once per fixture
+    and accumulates entity F1, character recall, and critical-finding recall
+    into each synthetic surrogate group the fixture belongs to, then reports the
+    worst-group-vs-best-group gap per metric.
+
+    Grouping is read from PHI-free fixture metadata (``site``, ``note_type``,
+    ``demographic_group`` by default); attributes are never inferred from
+    clinical text. See :data:`EXTRACTION_FAIRNESS_ASSISTIVE_NOTE`.
+
+    Args:
+        model: Model identifier, or a runner callable with the harness
+            ``ModelRunner`` signature.
+        suite: Named suite such as ``"golden"``, or concrete benchmark
+            fixtures/mappings carrying surrogate-group metadata.
+        runner: Optional runner to use when ``model`` is a string identifier.
+        device: Device tag passed to the model runner and normalization.
+        suite_kwargs: Optional keyword arguments for named suite loaders.
+        axes: Synthetic surrogate metadata keys to group by.
+
+    Returns:
+        An extraction-fairness report with per-group entity F1/recall/critical
+        finding recall and the worst-group-vs-best-group gaps.
+    """
+    suite_name, fixtures = _load_fairness_fixtures(suite, suite_kwargs=suite_kwargs)
+    model_name, model_runner = _resolve_model_runner(model, runner)
+    resolved_axes = tuple(str(axis).strip() for axis in axes if str(axis).strip())
+    counts: defaultdict[str, _ExtractionGroupCounts] = defaultdict(
+        _ExtractionGroupCounts
+    )
+
+    for fixture in fixtures:
+        predicted_spans = _predict_fixture(
+            fixture,
+            model_name=model_name,
+            model_runner=model_runner,
+            device=device,
+        )
+        f1 = compute_relaxed_span_f1(
+            fixture.gold_spans,
+            predicted_spans,
+            default_language=fixture.language,
+            default_device=device,
+            source_text=fixture.text,
+        )
+        recall = compute_character_recall(
+            fixture.gold_spans,
+            predicted_spans,
+            default_language=fixture.language,
+            default_device=device,
+            source_text=fixture.text,
+        )
+        critical = compute_critical_finding_recall(
+            fixture.gold_spans,
+            predicted_spans,
+            default_language=fixture.language,
+            default_device=device,
+            source_text=fixture.text,
+        )
+        for group_key, axis in _extraction_groups_for_fixture(fixture, resolved_axes):
+            group_counts = counts[group_key]
+            group_counts.axis = axis
+            group_counts.true_positives += f1.true_positives
+            group_counts.predicted_count += f1.true_positives + f1.false_positives
+            group_counts.gold_count += f1.true_positives + f1.false_negatives
+            group_counts.covered_chars += int(recall.numerator)
+            group_counts.total_chars += int(recall.denominator)
+            group_counts.critical_covered += critical.covered
+            group_counts.critical_total += critical.total
+            group_counts.span_count += len(fixture.gold_spans)
+            group_counts.fixture_count += 1
+
+    per_group = {
+        group: _extraction_group_metrics(group, group_counts)
+        for group, group_counts in sorted(counts.items())
+    }
+
+    worst_group_by_metric = {
+        "entity_f1": _extreme_group(per_group, "entity_f1", worst=True),
+        "recall": _extreme_group(per_group, "recall", worst=True),
+        "critical_finding_recall": _extreme_group(
+            per_group, "critical_finding_recall", worst=True
+        ),
+    }
+    by_axis = _extraction_by_axis(per_group, resolved_axes)
+
+    return ExtractionFairnessReport(
+        suite=suite_name,
+        model_name=model_name,
+        fixture_count=len(fixtures),
+        axes=resolved_axes,
+        per_group=per_group,
+        extraction_f1_gap=_metric_gap(per_group, "entity_f1"),
+        recall_gap=_metric_gap(per_group, "recall"),
+        critical_finding_recall_gap=_metric_gap(per_group, "critical_finding_recall"),
+        worst_group=worst_group_by_metric["entity_f1"],
+        best_group=_extreme_group(per_group, "entity_f1", worst=False),
+        worst_group_by_metric=worst_group_by_metric,
+        by_axis=by_axis,
+    )
+
+
+def _extraction_groups_for_fixture(
+    fixture: BenchmarkFixture,
+    axes: Sequence[str],
+) -> list[tuple[str, str]]:
+    """Return ``(group_key, axis)`` pairs a fixture contributes to."""
+    metadata = fixture.metadata or {}
+    groups: list[tuple[str, str]] = []
+    for axis in axes:
+        value = metadata.get(axis)
+        if value is None or not str(value).strip():
+            continue
+        groups.append((f"{axis}={str(value).strip()}", axis))
+    return groups
+
+
+def _extraction_group_metrics(
+    group: str,
+    counts: _ExtractionGroupCounts,
+) -> ExtractionFairnessGroupMetrics:
+    true_positives = counts.true_positives
+    false_positives = counts.predicted_count - true_positives
+    false_negatives = counts.gold_count - true_positives
+    precision = _safe_rate(true_positives, counts.predicted_count, 1.0)
+    recall_from_counts = _safe_rate(true_positives, counts.gold_count, 1.0)
+    if precision + recall_from_counts == 0:
+        entity_f1 = 0.0
+    else:
+        entity_f1 = (
+            2 * precision * recall_from_counts / (precision + recall_from_counts)
+        )
+    return ExtractionFairnessGroupMetrics(
+        axis=counts.axis,
+        group=group,
+        entity_f1=entity_f1,
+        recall=_safe_rate(counts.covered_chars, counts.total_chars, 1.0),
+        critical_finding_recall=_safe_rate(
+            counts.critical_covered, counts.critical_total, 1.0
+        ),
+        true_positives=true_positives,
+        false_positives=false_positives,
+        false_negatives=false_negatives,
+        covered_chars=counts.covered_chars,
+        total_chars=counts.total_chars,
+        critical_covered=counts.critical_covered,
+        critical_total=counts.critical_total,
+        span_count=counts.span_count,
+        fixture_count=counts.fixture_count,
+    )
+
+
+def _metric_gap(
+    per_group: Mapping[str, ExtractionFairnessGroupMetrics],
+    metric: str,
+) -> float:
+    values = [getattr(metrics, metric) for metrics in per_group.values()]
+    if not values:
+        return 0.0
+    return max(values) - min(values)
+
+
+def _extreme_group(
+    per_group: Mapping[str, ExtractionFairnessGroupMetrics],
+    metric: str,
+    *,
+    worst: bool,
+) -> str | None:
+    if not per_group:
+        return None
+    ordered = sorted(
+        per_group.items(),
+        key=lambda item: (getattr(item[1], metric), item[0]),
+    )
+    return ordered[0][0] if worst else ordered[-1][0]
+
+
+def _extraction_by_axis(
+    per_group: Mapping[str, ExtractionFairnessGroupMetrics],
+    axes: Sequence[str],
+) -> dict[str, dict[str, Any]]:
+    by_axis: dict[str, dict[str, Any]] = {}
+    for axis in axes:
+        axis_groups = {
+            group: metrics
+            for group, metrics in per_group.items()
+            if metrics.axis == axis
+        }
+        if not axis_groups:
+            continue
+        by_axis[axis] = {
+            "group_count": len(axis_groups),
+            "extraction_f1_gap": _metric_gap(axis_groups, "entity_f1"),
+            "recall_gap": _metric_gap(axis_groups, "recall"),
+            "critical_finding_recall_gap": _metric_gap(
+                axis_groups, "critical_finding_recall"
+            ),
+            "worst_group": _extreme_group(axis_groups, "entity_f1", worst=True),
+            "best_group": _extreme_group(axis_groups, "entity_f1", worst=False),
+        }
+    return by_axis
+
+
 __all__ = [
     "DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR",
+    "EXTRACTION_FAIRNESS_ASSISTIVE_NOTE",
+    "EXTRACTION_FAIRNESS_FIXTURES_PATH",
+    "EXTRACTION_FAIRNESS_GROUP_AXES",
+    "EXTRACTION_FAIRNESS_SCHEMA_VERSION",
     "TRANSFER_MATRIX_SCHEMA_VERSION",
     "UNSPECIFIED_GROUP",
+    "ExtractionFairnessGroupMetrics",
+    "ExtractionFairnessReport",
     "FairnessGroupMetrics",
     "FairnessReport",
     "TransferDeficiency",
@@ -979,5 +1395,7 @@ __all__ = [
     "TransferMatrixCell",
     "TransferMatrixReport",
     "cross_lingual_transfer_report",
+    "extraction_fairness_report",
     "fairness_report",
+    "load_extraction_fairness_fixtures",
 ]

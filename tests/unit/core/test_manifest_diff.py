@@ -118,7 +118,10 @@ def test_models_diff_json_emits_machine_readable_diff(
 
     assert result == 0
     assert captured.err == ""
-    payload = json.loads(captured.out)
+    envelope = json.loads(captured.out)
+    assert envelope["ok"] is True
+    assert envelope["command"] == "models diff"
+    payload = envelope["data"]
     assert payload["added"] == ["OpenMed/added"]
     assert payload["removed"] == ["OpenMed/removed"]
     assert payload["changed"] == [

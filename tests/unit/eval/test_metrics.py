@@ -6,17 +6,29 @@ import json
 
 import pytest
 
+from openmed.eval.golden import non_latin_golden_fixtures
 from openmed.eval.harness import BenchmarkFixture, load_fixtures, run_benchmark
+from openmed.eval.leakage_heatmap import compute_extraction_reemission_heatmap
 from openmed.eval.metrics import (
     ABSTENTION_ROUTE_REDACT,
+    CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
     EvalSpan,
     apply_abstention_policy,
     compute_abstention_metrics,
     compute_character_recall,
+    compute_coreference_clustering_score,
+    compute_critical_finding_recall,
+    compute_date_shift_consistency,
     compute_exact_span_f1,
+    compute_extraction_reemission_leakage,
+    compute_latency_summary,
     compute_leakage_rate,
+    compute_metrics_bundle,
+    compute_over_redaction_loss,
     compute_recall_slices,
     compute_relaxed_span_f1,
+    compute_resource_metrics,
+    compute_surrogate_consistency,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -38,6 +50,16 @@ def test_eval_modules_import_cleanly():
         "drugprot",
         "policy_compliance",
         "biomedical-ner",
+        "multilingual-clinical-ner",
+        "masakhaner",
+        "cmeee",
+        "naamapadam",
+        "chinese-clinical-ner",
+        "multimodal_dicom",
+        "code_mixed_routing",
+        "india_health_id_leakage",
+        "indian_multi_id",
+        "indic-name-consistency",
     )
 
 
@@ -61,6 +83,111 @@ def test_leakage_rate_is_char_weighted_and_sliced():
     assert result.by_device["cpu"] == pytest.approx(11 / 15)
     assert result.leaked_chars_by_label["SSN"] == 11
     assert result.total_chars_by_label["PERSON"] == 4
+
+
+def test_extraction_reemission_leakage_counts_surfaces_and_offsets():
+    text = "Patient Alice has SSN 123-45-6789."
+    name_start = text.index("Alice")
+    ssn_start = text.index("123-45-6789")
+    gold = [
+        {"start": name_start, "end": name_start + 5, "label": "PERSON"},
+        {"start": ssn_start, "end": ssn_start + 11, "label": "SSN"},
+    ]
+    extraction = {
+        "facts": [
+            {"value": "Alice", "concept": {"label": "masked condition"}},
+            {
+                "value": "redacted",
+                "evidence": {"start": ssn_start, "end": ssn_start + 11},
+            },
+        ],
+        "fhir": {"resourceType": "Observation", "valueString": "123-45-6789"},
+    }
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        extraction,
+        source_text=text,
+    )
+    heatmap = compute_extraction_reemission_heatmap(
+        gold,
+        extraction,
+        source_text=text,
+    )
+
+    assert result.overall == pytest.approx(1.0)
+    assert result.leaked_chars_by_label["PERSON"] == 5
+    assert result.leaked_chars_by_label["SSN"] == 11
+    assert heatmap.cells["PERSON"]["en"].leaked_chars == 5
+    assert heatmap.cells["SSN"]["en"].leaked_chars == 11
+
+
+def test_clean_extraction_output_has_zero_reemission_leakage():
+    text = "Patient Alice has SSN 123-45-6789."
+    name_start = text.index("Alice")
+    ssn_start = text.index("123-45-6789")
+    gold = [
+        {"start": name_start, "end": name_start + 5, "label": "PERSON"},
+        {"start": ssn_start, "end": ssn_start + 11, "label": "SSN"},
+    ]
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        {"facts": [{"value": "stable", "evidence": {"start": 0, "end": 7}}]},
+        source_text=text,
+    )
+    metrics = compute_metrics_bundle(
+        gold,
+        gold,
+        extraction_outputs={"facts": [{"value": "stable"}]},
+        source_text=text,
+    )
+
+    assert result.overall == 0.0
+    assert result.leaked_chars == 0
+    assert metrics["leakage"]["overall"] == 0.0
+    assert metrics["extraction_reemission_leakage"]["overall"] == 0.0
+
+
+def test_extraction_offsets_are_not_scanned_as_numeric_phi_surfaces():
+    text = "12 was recorded before a stable clinical observation."
+    gold = [{"start": 0, "end": 2, "label": "ID_NUM"}]
+    extraction = {
+        "facts": [
+            {
+                "value": "stable",
+                "evidence": {"start": 12, "end": 20},
+                "offsets": [30, 35],
+            }
+        ]
+    }
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        extraction,
+        source_text=text,
+    )
+
+    assert result.overall == 0.0
+    assert result.leaked_chars == 0
+
+
+def test_extraction_reemission_detects_non_latin_golden_fixture():
+    fixture = non_latin_golden_fixtures()[0]
+    span = next(
+        span
+        for span in fixture.gold_spans
+        if any(ord(char) > 127 and char.isalpha() for char in span.text)
+    )
+
+    result = compute_extraction_reemission_leakage(
+        fixture.gold_spans,
+        {"grounding": {"concept_label": f"echoed {span.text}"}},
+        default_language=fixture.language,
+    )
+
+    assert result.leaked_chars_by_language[fixture.language] >= span.length
+    assert result.by_language[fixture.language] > 0.0
 
 
 def test_zero_gold_spans_do_not_report_leakage_and_have_full_recall():
@@ -87,6 +214,74 @@ def test_exact_and_relaxed_f1_differ_on_boundary_drift():
     assert relaxed.f1 == 1.0
     assert exact.false_negatives == 1
     assert relaxed.true_positives == 1
+
+
+def test_utility_latency_and_resource_metrics_cover_edge_values():
+    utility = compute_over_redaction_loss(
+        [{"start": 0, "end": 4, "label": "PERSON"}],
+        [
+            {"start": 0, "end": 4, "label": "PERSON"},
+            {"start": 5, "end": 8, "label": "OTHER"},
+        ],
+        text_length=12,
+    )
+    latency = compute_latency_summary([40, 10, 30, 20])
+    resources = compute_resource_metrics(
+        peak_rss_bytes=2 * 1024 * 1024,
+        model_size_bytes=3 * 1024 * 1024,
+    )
+
+    assert utility.rate == pytest.approx(3 / 8)
+    assert utility.numerator == 3
+    assert utility.denominator == 8
+    assert latency.p50_ms == 20.0
+    assert latency.p95_ms == 40.0
+    assert resources.peak_rss_mib == 2.0
+    assert resources.model_size_mib == 3.0
+
+
+def test_date_shift_consistency_is_patient_scoped_and_rejects_surviving_dates():
+    result = compute_date_shift_consistency(
+        ["2026-01-01", "2026-01-08", "2026-03-01", "2026-04-01"],
+        ["2026-01-31", "2026-02-07", "2026-05-30", "2026-04-01"],
+        patient_ids=["patient-a", "patient-a", "patient-b", "patient-c"],
+    )
+    serialized = json.dumps(result.to_dict(), sort_keys=True)
+
+    assert result.score == pytest.approx(3 / 4)
+    assert result.violations == {"date_index:3": ["unchanged_date"]}
+    assert "2026-04-01" not in serialized
+    assert "patient-" not in serialized
+
+
+def test_surrogate_consistency_is_document_scoped_checksum_aware_and_phi_free():
+    result = compute_surrogate_consistency(
+        ["Synthetic Alice", "Synthetic Alice", "Synthetic Alice", "Synthetic ID"],
+        ["Person One", "Person Two", "Person Three", "000-invalid"],
+        document_ids=["doc-a", "doc-a", "doc-b", "doc-b"],
+        checksum_valid=[None, None, None, False],
+    )
+    serialized = json.dumps(result.to_dict(), sort_keys=True)
+
+    assert result.score == pytest.approx(1 / 3)
+    assert result.violations == {
+        "entity_group:0": ["inconsistent_surrogate"],
+        "entity_group:3": ["checksum_invalid"],
+    }
+    assert "Synthetic Alice" not in serialized
+    assert "Person One" not in serialized
+    assert "000-invalid" not in serialized
+
+
+def test_coreference_clustering_metric_uses_documented_bcubed_proxy():
+    gold = {"m1": "a", "m2": "a", "m3": "b"}
+    predicted = {"m1": "x", "m2": "x", "m3": "y"}
+
+    score = compute_coreference_clustering_score(predicted, gold)
+
+    assert score.metric == "bcubed"
+    assert score.item_count == 3
+    assert score.f1 == 1.0
 
 
 def test_critical_abstentions_route_to_redaction_not_passthrough():
@@ -194,6 +389,62 @@ def test_recall_slices_cover_label_language_and_device_edges():
     assert "mlx-8bit" in recall.by_device
 
 
+def test_critical_finding_recall_reports_phi_free_missed_details():
+    text = (
+        "Critical safety probe: The synthetic patient has documented allergy to "
+        "penicillin with anaphylaxis, acute myocardial infarction, and potassium "
+        "6.9 mmol/L requiring urgent review."
+    )
+    gold = [
+        EvalSpan(
+            start=71,
+            end=81,
+            label="MEDICATION",
+            text="penicillin",
+            metadata={
+                "critical_finding": True,
+                "critical_finding_category": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+                "fixture_id": "fixture-critical",
+            },
+        ),
+        EvalSpan(
+            start=100,
+            end=127,
+            label="CONDITION",
+            text="acute myocardial infarction",
+            metadata={
+                "critical_finding": True,
+                "critical_finding_category": "critical_diagnosis",
+                "fixture_id": "fixture-critical",
+            },
+        ),
+    ]
+    predicted = [
+        EvalSpan(
+            start=100,
+            end=127,
+            label="CONDITION",
+            text="acute myocardial infarction",
+        )
+    ]
+
+    recall = compute_critical_finding_recall(gold, predicted, source_text=text)
+    payload = recall.to_dict()
+
+    assert recall.overall == pytest.approx(0.5)
+    assert recall.by_category[CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY] == 0.0
+    assert payload["missed_findings"] == [
+        {
+            "category": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+            "fixture_id": "fixture-critical",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert "penicillin" not in json.dumps(payload)
+
+
 def test_benchmark_report_serializes_deterministically_to_json_and_markdown():
     report = BenchmarkReport(
         suite="golden",
@@ -225,6 +476,24 @@ def test_harness_runs_with_injected_runner_without_loading_models():
             "text": "Patient John",
             "language": "en",
             "gold_spans": [{"start": 8, "end": 12, "label": "PERSON"}],
+            "metadata": {
+                "date_chain": {
+                    "original_dates": ["2026-01-01", "2026-01-08"],
+                    "shifted_dates": ["2026-01-31", "2026-02-07"],
+                },
+                "surrogate_pairs": [
+                    {
+                        "original": "Synthetic John",
+                        "surrogate": "Synthetic Person",
+                        "checksum_valid": True,
+                    },
+                    {
+                        "original": "Synthetic John",
+                        "surrogate": "Synthetic Person",
+                        "checksum_valid": True,
+                    },
+                ],
+            },
         }
     )
 
@@ -244,6 +513,8 @@ def test_harness_runs_with_injected_runner_without_loading_models():
     assert report.fixture_count == 1
     assert report.metrics["leakage"]["overall"] == 0.0
     assert report.metrics["exact_span_f1"]["f1"] == 1.0
+    assert report.metrics["date_shift_consistency"]["score"] == 1.0
+    assert report.metrics["surrogate_consistency"]["score"] == 1.0
 
 
 def test_harness_surfaces_abstention_metrics_with_thresholds():

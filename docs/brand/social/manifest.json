@@ -1,0 +1,676 @@
+{
+  "schema_version": 3,
+  "source": "docs/brand/social/_src/exports.json",
+  "profile_copy": "docs/brand/social/_src/profile-copy.json",
+  "source_hashes": {
+    "docs/brand/social/_src/exports.json": "385c4ed79de723b47e8af696bd83cd8e06abdd8a6f07edb60ffb150545a59353",
+    "docs/brand/social/_src/profile-copy.json": "04255d0564edcc50363d952bdc4c0cc4945ddaad24cccfddd52e57596c7409cf",
+    "docs/brand/system/claims.yml": "9f6f70d8525654eb545ff6b50e88acee45cb39e6ce8cbffa59e313022537b9f3",
+    "docs/brand/social/exports/README.md": "e28ac10689d4ae392509bad8a7102fba63d3895ab1c6d862ff2e13bb5d5178a0"
+  },
+  "approved_exports": {
+    "avatar-cat-2x.png": "5d0dc4afccfd96293a1afd854941d4a52b23c10b248e5a4e62081e04ec18e8d5",
+    "avatar-linkedin-2x.png": "7466b7a6ca4be686e6e5a939f2b9473d30cba207e764a6d1d5ee427e4cea288b",
+    "avatar-x-circle-2x.png": "c38a8d76009e1103a04d802392d3927fc26f16b6d9543e9ecc50a6223332563d",
+    "favicon-2x.png": "0db970f592da0f134c015674dd8f6a2aa2d280dcb767b74ff48ac3101554ce87",
+    "github-social-2x.png": "c0f6b3103ea1c39779105cd7332e2e3c6a6a99cf627082b8f7630335530a9f00",
+    "hf-org-2x.png": "1aac842e38a25ade76f72e24a014974908081f428b1de18737402f7a571be70b",
+    "linkedin-banner-2x.png": "495f5b2891673b0a5cc49e2ddb0f4227c312e694fd9ebb3ecb7b86a7893cb4a4",
+    "og-website-2x.png": "9a3372bdd3385432e5208b5251bdd1296f2c880fd04ed67afebac3116bdf7d58",
+    "readme-banner-2x.png": "22ecd9d5d51521f79d3face84b873ac637d28ce5562252f726b669a25e041621",
+    "x-header-2x.png": "a476f6e2a1bd5d6e140b139f36c50dea6e5c0499b3e953d8e142dbcdd576d226"
+  },
+  "resolved_profile_copy": {
+    "schema_version": 2,
+    "source_claims": "../../system/claims.yml",
+    "source_voice": "../../system/voice.md",
+    "required_claims": [
+      "runtime_locality",
+      "sdk_license",
+      "model_license_population",
+      "dataset_access"
+    ],
+    "claim_placeholders": {
+      "runtime_public_wording": "runtime_locality.public_wording",
+      "sdk_license": "sdk_license.public_wording",
+      "model_license_public_wording": "model_license_population.public_wording",
+      "dataset_access_public_wording": "dataset_access.public_wording"
+    },
+    "platforms": {
+      "website": {
+        "target": "OpenMed.life website",
+        "link": "https://openmed.life/",
+        "title": "OpenMed — local-first clinical AI",
+        "description": "Build clinical extraction and de-identification workflows on hardware you control. Model and dataset terms vary by source.",
+        "card_asset": "og-website",
+        "card_alt": "OpenMed social card with the Open Cross and the words “Your data. Your model. Your hardware.”; its footer lists openmed.life, 2,000+ models, 340M+ downloads, 10M+ installs, and Apache-2.0.",
+        "authorization": "Repository source update only; deployment and cache refresh require separate explicit approval."
+      },
+      "github_repository": {
+        "target": "maziyarpanahi/openmed",
+        "link": "https://github.com/maziyarpanahi/openmed",
+        "website": "https://openmed.life/",
+        "description": "Local-first clinical extraction and de-identification on hardware you control. Apache-2.0 SDK; model and dataset terms vary.",
+        "topics": [
+          "clinical-nlp",
+          "de-identification",
+          "local-first",
+          "medical-nlp",
+          "privacy"
+        ],
+        "social_preview_asset": "github-social",
+        "social_preview_alt": "OpenMed GitHub social preview with the cat mascot, Open Cross, technology labels, installation command, and the words “State-of-the-art clinical AI models, tools, and native apps.”; its bottom line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+        "avatar_policy": "Never change the personal owner avatar.",
+        "limits": {
+          "description_max_characters": 350
+        },
+        "authorization": "Repository metadata and social-preview edits require separate explicit approval."
+      },
+      "hugging_face_organization": {
+        "target": "OpenMed organization",
+        "link": "https://huggingface.co/OpenMed",
+        "bio": "Local-first clinical model workflows on hardware you control.",
+        "about": "OpenMed publishes model artifacts for clinical extraction and de-identification workflows. Model licenses vary; review each model repository. Dataset access and terms vary by source.",
+        "avatar_asset": "avatar-cat",
+        "avatar_alt": "OpenMed white cat mascot wearing a teal turban and medical-cross pendant.",
+        "limits": {
+          "bio_max_characters": 160
+        },
+        "authorization": "Organization profile edits require separate explicit approval."
+      },
+      "hugging_face_card_repository": {
+        "target": "OpenMed/README",
+        "link": "https://huggingface.co/spaces/OpenMed/README",
+        "about": "Organization presentation repository for the OpenMed card asset and profile copy.",
+        "card_asset": "hf-org",
+        "card_alt": "OpenMed Hugging Face card with the cat mascot, Open Cross, topic labels, and the words “The open clinical AI hub.”; its metric line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+        "space_policy": "Code/file push only. Never read or change Hugging Face Space visibility or settings.",
+        "authorization": "Repository file update requires separate explicit approval; Space settings are never authorized by this runbook."
+      },
+      "x": {
+        "target": "@OpenMed_AI",
+        "link": "https://x.com/OpenMed_AI",
+        "bio": "Local-first clinical AI on hardware you control. Apache-2.0 SDK. Model and dataset terms vary.",
+        "pinned_post": "OpenMed is a local-first SDK for clinical extraction and de-identification workflows. Core processing can run on hardware you control after required artifacts are present. Choose and validate models for your use case. Apache-2.0 SDK; model and dataset terms vary.",
+        "avatar_asset": "avatar-x-circle",
+        "avatar_alt": "OpenMed Open Cross centered in a circular light tile.",
+        "header_asset": "x-header",
+        "header_alt": "OpenMed X header reading “Built to run anywhere, inspected by anyone.” beside panels labeled 2,000+ open models, 340M+ model downloads, and 10M+ installs.",
+        "limits": {
+          "bio_max_characters": 160,
+          "post_max_characters": 280
+        },
+        "authorization": "Profile, header, avatar, link, and pinned-post edits require separate explicit approval."
+      },
+      "linkedin": {
+        "target": "OpenMed company page",
+        "link": "https://www.linkedin.com/company/openmed-ai/",
+        "tagline": "Local-first clinical AI on hardware you control.",
+        "about": "OpenMed is a software library and research toolkit for clinical extraction and de-identification workflows. Its core runtime can process locally after required artifacts are present; downloads and configured integrations may use a network. Apache-2.0 SDK. Model and dataset terms vary by source.",
+        "featured_post": "Build clinical extraction and de-identification workflows on hardware you control. Review each model and dataset for your use case and deployment boundary. Apache-2.0 SDK.",
+        "tile_asset": "avatar-linkedin",
+        "tile_alt": "OpenMed Open Cross in a dark rounded-square tile.",
+        "cover_asset": "linkedin-banner",
+        "cover_alt": "OpenMed LinkedIn banner reading “Built to run anywhere, inspected by anyone.” beside panels labeled 340M+ model downloads and 10M+ installs.",
+        "limits": {
+          "tagline_max_characters": 120,
+          "about_max_characters": 2000,
+          "post_max_characters": 3000
+        },
+        "authorization": "Company profile, cover, tile, link, and featured-content edits require separate explicit approval."
+      }
+    },
+    "alt_text": {
+      "og-website": "OpenMed social card with the Open Cross and the words “Your data. Your model. Your hardware.”; its footer lists openmed.life, 2,000+ models, 340M+ downloads, 10M+ installs, and Apache-2.0.",
+      "github-social": "OpenMed GitHub social preview with the cat mascot, Open Cross, technology labels, installation command, and the words “State-of-the-art clinical AI models, tools, and native apps.”; its bottom line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+      "x-header": "OpenMed X header reading “Built to run anywhere, inspected by anyone.” beside panels labeled 2,000+ open models, 340M+ model downloads, and 10M+ installs.",
+      "hf-org": "OpenMed Hugging Face card with the cat mascot, Open Cross, topic labels, and the words “The open clinical AI hub.”; its metric line lists 2,000+ models, 340M+ downloads, and 10M+ installs.",
+      "readme-banner": "OpenMed README banner with the cat mascot, lowercase wordmark, Open Cross, and the text “Open-source healthcare AI · 340M+ downloads · 10M+ installs.”",
+      "linkedin-banner": "OpenMed LinkedIn banner reading “Built to run anywhere, inspected by anyone.” beside panels labeled 340M+ model downloads and 10M+ installs.",
+      "avatar-cat": "OpenMed white cat mascot wearing a teal turban and medical-cross pendant.",
+      "avatar-x-circle": "OpenMed Open Cross centered in a circular light tile.",
+      "avatar-linkedin": "OpenMed Open Cross in a dark rounded-square tile.",
+      "favicon": "OpenMed Open Cross.",
+      "apple-touch": "OpenMed Open Cross on a light surface.",
+      "favicon-ico": "OpenMed Open Cross in browser favicon sizes."
+    }
+  },
+  "resolved_profile_copy_sha256": "0bc70304474f35526d3c44111deb6b50ab1699b7844ca3d00d5131c3b8c8758a",
+  "synchronizer": {
+    "implementation": "scripts/brand/render_social_assets.py",
+    "engine": "byte copy plus Pillow size derivatives",
+    "pillow_version": "12.3.0",
+    "master_policy": "byte-identical approved export",
+    "resampling": "LANCZOS",
+    "derivative_png_compress_level": 9,
+    "network": "blocked",
+    "master_color_profile": "source-preserved",
+    "derivative_color_profile": "sRGB",
+    "animation_state": "disabled",
+    "visual_reconstruction": "forbidden"
+  },
+  "assets": [
+    {
+      "id": "website-og",
+      "source": "docs/brand/social/exports/og-website-2x.png",
+      "master": "docs/brand/social/og-2x.png",
+      "native": "docs/brand/social/og.png",
+      "size": [
+        1200,
+        630
+      ],
+      "role": "Website Open Graph and X card",
+      "assignment": "Approved website social card",
+      "safe_zone": [
+        64,
+        54,
+        1136,
+        576
+      ],
+      "copy_to": [
+        "docs/website/og.png"
+      ],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "9a3372bdd3385432e5208b5251bdd1296f2c880fd04ed67afebac3116bdf7d58",
+      "approved_export_pixel_sha256": "b69048d00a5b8083b42086e52374c80dfb8e28605bf63d1ce111e10443ba503b",
+      "master_sha256": "9a3372bdd3385432e5208b5251bdd1296f2c880fd04ed67afebac3116bdf7d58",
+      "master_exact_copy": true,
+      "native_sha256": "e10d071f877206c736d538f66b1a8c563b2b34fa265d0c0f05ba4900db91ac23",
+      "native_pixel_sha256": "8228b42999a67e4c34a4a2a340d9202289bbcc581776c04c78ba9d3288dafa94",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/og-website-2x.png",
+        "source_size": [
+          2400,
+          1260
+        ],
+        "output_size": [
+          1200,
+          630
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "fb2ac315e85fb6aac50bccc4d5a85f4a12278c7b9b6cb74b75656e3a1a435fe8"
+    },
+    {
+      "id": "github-social",
+      "source": "docs/brand/social/exports/github-social-2x.png",
+      "master": "docs/brand/social/github-social-2x.png",
+      "native": "docs/brand/social/github-social.png",
+      "size": [
+        1280,
+        640
+      ],
+      "role": "GitHub repository social preview",
+      "assignment": "Approved GitHub repository card",
+      "safe_zone": [
+        64,
+        56,
+        1216,
+        584
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "c0f6b3103ea1c39779105cd7332e2e3c6a6a99cf627082b8f7630335530a9f00",
+      "approved_export_pixel_sha256": "58ffd0f036841f841e86e3806cb9ea28d5e4f919fd800e19bd402a7b6114efc7",
+      "master_sha256": "c0f6b3103ea1c39779105cd7332e2e3c6a6a99cf627082b8f7630335530a9f00",
+      "master_exact_copy": true,
+      "native_sha256": "8f9dedeaac9fac463c0f14f805efb7d78bd8af6c45d38363e4bb65b8bc9bd4ac",
+      "native_pixel_sha256": "1044cddacbd10a5b631d97aa26f4a4b19d656faf4db0e9a8991f1e9931fd20d1",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/github-social-2x.png",
+        "source_size": [
+          2560,
+          1280
+        ],
+        "output_size": [
+          1280,
+          640
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "b8cd068c40c8522c307f375c68cca78b959ec4e44677ac2264b8798221b5301e",
+      "safe_zone_preview": "docs/brand/social/previews/github-social-safe-zone.png",
+      "safe_zone_preview_sha256": "bcadbc8f1d20b245fb054ab259c82eb39b881e7822805103b858e3610968fcb2"
+    },
+    {
+      "id": "x-header",
+      "source": "docs/brand/social/exports/x-header-2x.png",
+      "master": "docs/brand/social/x-header-2x.png",
+      "native": "docs/brand/social/x-header.png",
+      "size": [
+        1500,
+        500
+      ],
+      "role": "X profile header",
+      "assignment": "Approved type-only, right-aligned header; avatar overlaps bottom-left",
+      "safe_zone": [
+        360,
+        52,
+        1440,
+        448
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "a476f6e2a1bd5d6e140b139f36c50dea6e5c0499b3e953d8e142dbcdd576d226",
+      "approved_export_pixel_sha256": "8544e1254a46663401c070862d433a660f7d4b7da13d0b4f9a61820237efb52f",
+      "master_sha256": "a476f6e2a1bd5d6e140b139f36c50dea6e5c0499b3e953d8e142dbcdd576d226",
+      "master_exact_copy": true,
+      "native_sha256": "c66e6c5929bd59fce543e454835913eab49df8a04f75a1fbd04a6cee22f63d0a",
+      "native_pixel_sha256": "dc7516525f511efd5ac8b04278bb11913e0815cd9911a145ed2127e6d6b4308d",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/x-header-2x.png",
+        "source_size": [
+          3000,
+          1000
+        ],
+        "output_size": [
+          1500,
+          500
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "b5bbbf096273ee065112b12a1660a700f8bfadaca8bd4c6e9cf88b5432bb022c",
+      "safe_zone_preview": "docs/brand/social/previews/x-header-safe-zone.png",
+      "safe_zone_preview_sha256": "f64edfeec64fbfa2ed6e3e678d6ef615d10ca6756b1c7e540546dc6eeeff25d9"
+    },
+    {
+      "id": "hugging-face-card",
+      "source": "docs/brand/social/exports/hf-org-2x.png",
+      "master": "docs/brand/social/hf-card-2x.png",
+      "native": "docs/brand/social/hf-card.png",
+      "size": [
+        1200,
+        630
+      ],
+      "role": "Hugging Face OpenMed organization card",
+      "assignment": "Approved Hugging Face organization card",
+      "safe_zone": [
+        64,
+        54,
+        1136,
+        576
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "1aac842e38a25ade76f72e24a014974908081f428b1de18737402f7a571be70b",
+      "approved_export_pixel_sha256": "d7fcc9bf2a4fa4da65e7272828e53e6bf802964dd03e902dee60fdd09690ce92",
+      "master_sha256": "1aac842e38a25ade76f72e24a014974908081f428b1de18737402f7a571be70b",
+      "master_exact_copy": true,
+      "native_sha256": "8632da48f249fa38c817e0312c106bfadaabfa7669457555878c864e3649c387",
+      "native_pixel_sha256": "54e12fd36c49b5691bbc12c411c4d7707741f46d037afaa7ef126d6a453b5ba8",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/hf-org-2x.png",
+        "source_size": [
+          2400,
+          1260
+        ],
+        "output_size": [
+          1200,
+          630
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "c8fd432b035a0a67ebf7bfa45e3f5370bdfa0f7e0006f9fafde9b74001e4ef99",
+      "safe_zone_preview": "docs/brand/social/previews/hugging-face-card-safe-zone.png",
+      "safe_zone_preview_sha256": "5289c8515641bd70f9968513f1810a1d6cd58bdec8f5abf59bfbca8dfe44bd43"
+    },
+    {
+      "id": "readme-banner",
+      "source": "docs/brand/social/exports/readme-banner-2x.png",
+      "master": "docs/brand/social/readme-banner-2x.png",
+      "native": "docs/brand/social/readme-banner.png",
+      "size": [
+        1280,
+        320
+      ],
+      "role": "Repository README banner",
+      "assignment": "Approved README banner",
+      "safe_zone": [
+        28,
+        28,
+        1240,
+        292
+      ],
+      "copy_to": [
+        "docs/brand/openmed-readme-banner.png"
+      ],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "22ecd9d5d51521f79d3face84b873ac637d28ce5562252f726b669a25e041621",
+      "approved_export_pixel_sha256": "e5682b1a37d2c1931c76c6133978d9176a2efc619ed853370a7ae69cfe56a8f9",
+      "master_sha256": "22ecd9d5d51521f79d3face84b873ac637d28ce5562252f726b669a25e041621",
+      "master_exact_copy": true,
+      "native_sha256": "3002104ff49d294a7361108af5951c8861b2d34623a7c0692443ec6c7800627f",
+      "native_pixel_sha256": "e84808af782983a626538799c414349b74f3e52e3375a2b849a13d1be06f120c",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/readme-banner-2x.png",
+        "source_size": [
+          2560,
+          640
+        ],
+        "output_size": [
+          1280,
+          320
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "a692855f1aa7c2c70fe6c1664efddc1720f1fa7828886e86017791af0a98c548"
+    },
+    {
+      "id": "linkedin-banner",
+      "source": "docs/brand/social/exports/linkedin-banner-2x.png",
+      "master": "docs/brand/social/linkedin-banner-2x.png",
+      "native": "docs/brand/social/linkedin-banner.png",
+      "size": [
+        1128,
+        191
+      ],
+      "role": "LinkedIn company cover",
+      "assignment": "Approved LinkedIn banner; left 300 pixels kept clear for logo tile",
+      "safe_zone": [
+        300,
+        20,
+        1100,
+        171
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "495f5b2891673b0a5cc49e2ddb0f4227c312e694fd9ebb3ecb7b86a7893cb4a4",
+      "approved_export_pixel_sha256": "4dfe154c0f7ba081295a1f6eae423089eb4f4e12dd85c544706349721d13cbb2",
+      "master_sha256": "495f5b2891673b0a5cc49e2ddb0f4227c312e694fd9ebb3ecb7b86a7893cb4a4",
+      "master_exact_copy": true,
+      "native_sha256": "13a8450ebf0c46bbccd6fc204badff83422a822135d39e8be390eb4074b54296",
+      "native_pixel_sha256": "032ff26a3b38b8c1655442ab007a3cf0f76f7569332da8023f8b2b5dac5c6e1a",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/linkedin-banner-2x.png",
+        "source_size": [
+          2256,
+          382
+        ],
+        "output_size": [
+          1128,
+          191
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "9e13d4317563ff890dfc723ef220d78f1b47c0b4f5b21fea5802ee3dc609e442",
+      "safe_zone_preview": "docs/brand/social/previews/linkedin-banner-safe-zone.png",
+      "safe_zone_preview_sha256": "eac0f78fe10703d708486e064feb10fcfbe9ffd50b556e3aa5e8243d5657c4a0"
+    },
+    {
+      "id": "hugging-face-avatar",
+      "source": "docs/brand/social/exports/avatar-cat-2x.png",
+      "master": "docs/brand/social/avatar-cat-2x.png",
+      "native": "docs/brand/social/avatar-square-512.png",
+      "size": [
+        512,
+        512
+      ],
+      "role": "Hugging Face OpenMed organization avatar",
+      "assignment": "Approved cat avatar",
+      "safe_zone": [
+        48,
+        48,
+        464,
+        464
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "5d0dc4afccfd96293a1afd854941d4a52b23c10b248e5a4e62081e04ec18e8d5",
+      "approved_export_pixel_sha256": "2289e971fb98e6ade3a534ab0eceb1ec6827872071e1a302d8b9522917c60d55",
+      "master_sha256": "5d0dc4afccfd96293a1afd854941d4a52b23c10b248e5a4e62081e04ec18e8d5",
+      "master_exact_copy": true,
+      "native_sha256": "ebec7042b55b39fa8b14cc9a151b3752db7cceadbe7fb3072e8a1329f7013493",
+      "native_pixel_sha256": "4e35f92e661957730fea6dfed5c9f4c091ba4fcc19ce1625ba562aa1b73c6884",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/avatar-cat-2x.png",
+        "source_size": [
+          1024,
+          1024
+        ],
+        "output_size": [
+          512,
+          512
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "71fd57e0d04ebcd873a21f64101bb3d9aa2bbacae7f669ef1c7ae33c8312d55d"
+    },
+    {
+      "id": "x-avatar",
+      "source": "docs/brand/social/exports/avatar-x-circle-2x.png",
+      "master": "docs/brand/social/avatar-x-circle-2x.png",
+      "native": "docs/brand/social/avatar-circle-400.png",
+      "size": [
+        400,
+        400
+      ],
+      "role": "X avatar",
+      "assignment": "Approved circular X avatar",
+      "safe_zone": [
+        42,
+        42,
+        358,
+        358
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "c38a8d76009e1103a04d802392d3927fc26f16b6d9543e9ecc50a6223332563d",
+      "approved_export_pixel_sha256": "226da4f283654f62a836e933a0213c4a6d8252851a24045b3133945dc49ae069",
+      "master_sha256": "c38a8d76009e1103a04d802392d3927fc26f16b6d9543e9ecc50a6223332563d",
+      "master_exact_copy": true,
+      "native_sha256": "700fb2e6363cdeccd686589c77ccc9942d95a6047583a571bdf95ebf4ac06d2e",
+      "native_pixel_sha256": "2c658b3038de571dd922083cd0393d0caad111e3958918596ab2b73d6fa1b09f",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/avatar-x-circle-2x.png",
+        "source_size": [
+          800,
+          800
+        ],
+        "output_size": [
+          400,
+          400
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "5ff504d913cea77415dd51fbbe7ffaf2b36114a763277a7b214beb792f34b046"
+    },
+    {
+      "id": "linkedin-company-tile",
+      "source": "docs/brand/social/exports/avatar-linkedin-2x.png",
+      "master": "docs/brand/social/avatar-linkedin-2x.png",
+      "native": "docs/brand/social/avatar-linkedin-300.png",
+      "size": [
+        300,
+        300
+      ],
+      "role": "LinkedIn company logo tile",
+      "assignment": "Approved LinkedIn logo tile",
+      "safe_zone": [
+        28,
+        28,
+        272,
+        272
+      ],
+      "copy_to": [],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "7466b7a6ca4be686e6e5a939f2b9473d30cba207e764a6d1d5ee427e4cea288b",
+      "approved_export_pixel_sha256": "ef54979355cd6ce84e9fbd8b94277852e44d88dd0e72755f0fdb5524f83635fd",
+      "master_sha256": "7466b7a6ca4be686e6e5a939f2b9473d30cba207e764a6d1d5ee427e4cea288b",
+      "master_exact_copy": true,
+      "native_sha256": "8d2bed45bb42a5e0b0dd8834a1c15eeabda0bb352cceebd35cde9f01c70205e6",
+      "native_pixel_sha256": "bd9c1c08c54264ebbe2a18be326795b84004cf5664ef59640c632661a648541b",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/avatar-linkedin-2x.png",
+        "source_size": [
+          600,
+          600
+        ],
+        "output_size": [
+          300,
+          300
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "ec742222f7f47297f34f41cbb3d840ea7363bf3d4071d8d6c1f8ea77f39a6265"
+    },
+    {
+      "id": "favicon",
+      "source": "docs/brand/social/exports/favicon-2x.png",
+      "master": "docs/brand/social/favicon-2x.png",
+      "native": "docs/brand/social/favicon-64.png",
+      "size": [
+        64,
+        64
+      ],
+      "role": "Raster favicon fallback",
+      "assignment": "Approved favicon",
+      "safe_zone": [
+        2,
+        2,
+        62,
+        62
+      ],
+      "copy_to": [
+        "docs/website/favicon-64.png"
+      ],
+      "dpr": {
+        "master": 2,
+        "native": 1
+      },
+      "mode": "RGBA",
+      "approved_export_sha256": "0db970f592da0f134c015674dd8f6a2aa2d280dcb767b74ff48ac3101554ce87",
+      "approved_export_pixel_sha256": "7643e64aca7f1e703f0b34025fc0881ddbd92f6b77d4cb6cbd4ea3aa22a3e57d",
+      "master_sha256": "0db970f592da0f134c015674dd8f6a2aa2d280dcb767b74ff48ac3101554ce87",
+      "master_exact_copy": true,
+      "native_sha256": "300d0b4a2d93fbc1a2a7040e9db40f2884880f34efce92ad9f201ebb7a51118c",
+      "native_pixel_sha256": "5040856def466451ac8ceafac34218ad8639d072051ebe685be6b6e7a799b841",
+      "native_derivative": {
+        "method": "Pillow Image.Resampling.LANCZOS",
+        "source": "docs/brand/social/exports/favicon-2x.png",
+        "source_size": [
+          128,
+          128
+        ],
+        "output_size": [
+          64,
+          64
+        ],
+        "visual_edits": "none"
+      },
+      "safe_zone_crop_pixel_sha256": "d30ff7ed5926368ce30e31eb86b4d14301b97a34dd188fa5749b086e24014b0e"
+    }
+  ],
+  "derived_assets": [
+    {
+      "id": "apple-touch",
+      "kind": "resize",
+      "source": "docs/brand/social/exports/favicon-2x.png",
+      "output": "docs/brand/social/apple-touch-180.png",
+      "size": [
+        180,
+        180
+      ],
+      "role": "Apple touch icon",
+      "assignment": "Size derivative of the approved favicon",
+      "copy_to": [
+        "docs/website/apple-touch-icon.png"
+      ],
+      "mode": "RGBA",
+      "sha256": "f1c2fb7fe536af92353d75100337dcd348fbef3d1cb5eab02da9419480a452f5",
+      "pixel_sha256": "90a84a163a22bc2e07045653187d8f1508502c306e3c5ec1aaca2764a64aa6b1",
+      "visual_edits": "none"
+    },
+    {
+      "id": "favicon-ico",
+      "kind": "favicon_ico",
+      "source": "docs/brand/social/favicon-64.png",
+      "output": "docs/brand/social/favicon.ico",
+      "sizes": [
+        [
+          16,
+          16
+        ],
+        [
+          32,
+          32
+        ],
+        [
+          48,
+          48
+        ],
+        [
+          64,
+          64
+        ]
+      ],
+      "role": "Auto-discovered browser favicon fallback",
+      "assignment": "Multi-size derivative of the approved favicon",
+      "copy_to": [
+        "docs/website/favicon.ico"
+      ],
+      "mode": "RGBA",
+      "sha256": "a8a8c7de62dfba2e38c6289e94c228b646b655632dbd3240c9089f7d09dd98aa",
+      "pixel_sha256": "5040856def466451ac8ceafac34218ad8639d072051ebe685be6b6e7a799b841",
+      "visual_edits": "none"
+    }
+  ],
+  "external_distribution": [
+    {
+      "source": "docs/brand/social/github-social.png",
+      "approved_export": "docs/brand/social/exports/github-social-2x.png",
+      "target": "maziyarpanahi/openmed social preview",
+      "authorization": "explicit external profile edit"
+    },
+    {
+      "source": "docs/brand/social/hf-card.png",
+      "approved_export": "docs/brand/social/exports/hf-org-2x.png",
+      "target": "OpenMed/README openmed-social-card.png",
+      "authorization": "explicit external repository update"
+    }
+  ]
+}

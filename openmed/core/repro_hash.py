@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
+from .audit import stable_hash
+
 TRAINING_PROVENANCE_FILENAME = "training_provenance.json"
 TRAINING_PROVENANCE_SCHEMA_VERSION = "openmed.training_provenance.v1"
 
@@ -33,6 +35,26 @@ _REQUIRED_TRAINING_PROVENANCE_FIELDS = (
 
 class ReproducibilityVerificationError(ValueError):
     """Raised when a training provenance record cannot be verified."""
+
+
+def compute_canonical_payload_hash(payload: Any) -> str:
+    """Return ``sha256:<digest>`` for an arbitrary canonical-JSON payload.
+
+    This is the generic counterpart to :func:`compute_reproducibility_hash`,
+    which is shaped for training artifacts (recipe / data manifest / base
+    model). Use it to hash a run record -- such as a release run-ledger row --
+    that has to bind to a hash produced elsewhere in the release path.
+
+    The canonicalization contract is the one
+    :class:`~openmed.eval.release_gates.GateReport` uses for its own
+    ``repro_hash``: sorted keys, compact separators, ``ensure_ascii=True``,
+    ``allow_nan=False``, UTF-8, and a ``sha256:`` prefix. It is shared by
+    delegating to :func:`openmed.core.audit.stable_hash` rather than restating
+    the rules here, so a record and the report it references can never drift
+    onto different canonical forms.
+    """
+
+    return stable_hash(payload)
 
 
 def compute_reproducibility_hash(
@@ -413,6 +435,7 @@ __all__ = [
     "TRAINING_PROVENANCE_SCHEMA_VERSION",
     "ReproducibilityVerificationError",
     "build_training_provenance",
+    "compute_canonical_payload_hash",
     "compute_environment_lock_digest",
     "compute_file_digest",
     "compute_reproducibility_hash",

@@ -1,20 +1,34 @@
 from __future__ import annotations
 
+import subprocess
+import sys
+import textwrap
+
 import pytest
 
 from openmed.plugins import registry
 from openmed.plugins.protocols import (
+    COMPONENT_ANONYMIZER_PROVIDER,
     COMPONENT_EXPORTER,
+    COMPONENT_INTEROP_ADAPTER,
+    COMPONENT_LANGUAGE_PACK,
     COMPONENT_RECOGNIZER,
+    PLUGIN_COMPONENT_KINDS,
     PLUGIN_SDK_VERSION,
     PluginComponentMetadata,
 )
 from openmed.plugins.registry import (
+    REASON_DUPLICATE_COMPONENT,
+    REASON_ENTRY_POINT_ENUMERATION_FAILED,
     REASON_INVALID_LABEL,
     REASON_INVALID_METADATA,
+    REASON_LOAD_ERROR,
+    REASON_MISSING_LABELS,
     REASON_NETWORK_EGRESS_OPT_IN_REQUIRED,
     REASON_NON_PERMISSIVE_LICENSE_OPT_IN_REQUIRED,
     REASON_PROTOCOL_VERSION_MISMATCH,
+    REASON_UNKNOWN_COMPONENT_KIND,
+    PluginRegistry,
     discover_plugins,
     is_permissive_license,
     iter_plugins,
@@ -31,6 +45,8 @@ def reset_plugin_registry():
 class FakeEntryPoint:
     def __init__(self, name, loaded):
         self.name = name
+        self.value = f"synthetic_plugins:{name}"
+        self.group = registry.PLUGIN_ENTRY_POINT_GROUP
         self._loaded = loaded
 
     def load(self):
@@ -41,7 +57,7 @@ class FakeEntryPoint:
 
 class ToyRecognizer:
     metadata = PluginComponentMetadata(
-        plugin_id="acme-openmed",
+        plugin_id="synthetic-openmed",
         component_id="toy-person",
         kind=COMPONENT_RECOGNIZER,
         labels=("PERSON",),
@@ -54,7 +70,7 @@ class ToyRecognizer:
 
 class ToyExporter:
     metadata = PluginComponentMetadata(
-        plugin_id="acme-openmed",
+        plugin_id="synthetic-openmed",
         component_id="toy-exporter",
         kind=COMPONENT_EXPORTER,
         labels=("PERSON",),
@@ -77,6 +93,16 @@ def _patch_entry_points(monkeypatch, *entry_points):
     return lambda: calls
 
 
+def test_sdk_declares_each_child_issue_component_kind():
+    assert PLUGIN_COMPONENT_KINDS == {
+        COMPONENT_RECOGNIZER,
+        COMPONENT_ANONYMIZER_PROVIDER,
+        COMPONENT_EXPORTER,
+        COMPONENT_INTEROP_ADAPTER,
+        COMPONENT_LANGUAGE_PACK,
+    }
+
+
 def test_valid_entry_point_is_discovered_once(monkeypatch):
     calls = _patch_entry_points(
         monkeypatch,
@@ -85,8 +111,8 @@ def test_valid_entry_point_is_discovered_once(monkeypatch):
 
     result = discover_plugins()
     assert [item.metadata.qualified_id for item in result.registrations] == [
-        "acme-openmed:toy-exporter",
-        "acme-openmed:toy-person",
+        "synthetic-openmed:toy-exporter",
+        "synthetic-openmed:toy-person",
     ]
     assert result.quarantined == ()
 
@@ -98,7 +124,7 @@ def test_valid_entry_point_is_discovered_once(monkeypatch):
 def test_protocol_version_mismatch_is_quarantined(monkeypatch):
     class FuturePlugin:
         metadata = PluginComponentMetadata(
-            plugin_id="acme-openmed",
+            plugin_id="synthetic-openmed",
             component_id="future",
             kind=COMPONENT_RECOGNIZER,
             sdk_version="2.0.0",
@@ -111,8 +137,43 @@ def test_protocol_version_mismatch_is_quarantined(monkeypatch):
 
     assert result.registrations == ()
     assert result.quarantined[0].reason == REASON_PROTOCOL_VERSION_MISMATCH
-    assert result.quarantined[0].plugin_id == "acme-openmed"
+    assert result.quarantined[0].plugin_id == "synthetic-openmed"
     assert "2.0.0" in result.quarantined[0].message
+
+
+def test_malformed_protocol_version_is_quarantined(monkeypatch):
+    class MalformedVersionPlugin:
+        metadata = PluginComponentMetadata(
+            plugin_id="synthetic-openmed",
+            component_id="bad-version",
+            kind=COMPONENT_EXPORTER,
+            sdk_version="1",
+        )
+
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("bad-version", MalformedVersionPlugin()),
+    )
+
+    result = discover_plugins()
+
+    assert result.quarantined[0].reason == REASON_PROTOCOL_VERSION_MISMATCH
+
+
+def test_unknown_component_kind_is_quarantined(monkeypatch):
+    class UnknownComponent:
+        metadata = PluginComponentMetadata(
+            plugin_id="synthetic-openmed",
+            component_id="unknown",
+            kind="model_downloader",
+        )
+
+    _patch_entry_points(monkeypatch, FakeEntryPoint("unknown", UnknownComponent()))
+
+    result = discover_plugins()
+
+    assert result.registrations == ()
+    assert result.quarantined[0].reason == REASON_UNKNOWN_COMPONENT_KIND
 
 
 def test_policy_restricted_plugins_require_explicit_opt_in(monkeypatch):
@@ -136,8 +197,8 @@ def test_policy_restricted_plugins_require_explicit_opt_in(monkeypatch):
 
     _patch_entry_points(
         monkeypatch,
-        FakeEntryPoint("network", NetworkPlugin()),
-        FakeEntryPoint("restricted", RestrictedLicensePlugin()),
+        FakeEntryPoint("1-network", NetworkPlugin()),
+        FakeEntryPoint("2-restricted", RestrictedLicensePlugin()),
     )
 
     result = discover_plugins()
@@ -155,7 +216,29 @@ def test_policy_restricted_plugins_require_explicit_opt_in(monkeypatch):
         "remote-plugin:network-person",
         "restricted-plugin:person",
     ]
+    assert opted_in.registrations[0].loaded_by_policy_opt_in is False
     assert opted_in.registrations[1].loaded_by_policy_opt_in is True
+
+
+def test_non_boolean_network_declaration_is_quarantined(monkeypatch):
+    class AmbiguousNetworkPlugin:
+        metadata = {
+            "plugin_id": "synthetic-openmed",
+            "component_id": "ambiguous-network",
+            "kind": COMPONENT_EXPORTER,
+            "network_egress": "false",
+        }
+
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("ambiguous-network", AmbiguousNetworkPlugin()),
+    )
+
+    result = discover_plugins()
+
+    assert result.registrations == ()
+    assert result.quarantined[0].reason == REASON_INVALID_METADATA
+    assert "network_egress" in result.quarantined[0].message
 
 
 def test_unsupported_recognizer_label_is_quarantined(monkeypatch):
@@ -178,6 +261,24 @@ def test_unsupported_recognizer_label_is_quarantined(monkeypatch):
     assert "ALIEN" in result.quarantined[0].message
 
 
+def test_recognizer_without_declared_labels_is_quarantined(monkeypatch):
+    class MissingLabelsPlugin:
+        metadata = PluginComponentMetadata(
+            plugin_id="missing-labels",
+            component_id="recognizer",
+            kind=COMPONENT_RECOGNIZER,
+        )
+
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("missing-labels", MissingLabelsPlugin()),
+    )
+
+    result = discover_plugins()
+
+    assert result.quarantined[0].reason == REASON_MISSING_LABELS
+
+
 def test_malformed_plugin_fixture_is_quarantined_with_specific_reason(monkeypatch):
     class MissingMetadata:
         pass
@@ -191,8 +292,113 @@ def test_malformed_plugin_fixture_is_quarantined_with_specific_reason(monkeypatc
     assert "metadata" in result.quarantined[0].message
 
 
+def test_malformed_component_does_not_hide_valid_sibling(monkeypatch):
+    class MissingMetadata:
+        pass
+
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("mixed", (MissingMetadata(), ToyExporter())),
+    )
+
+    result = discover_plugins()
+
+    assert [item.metadata.component_id for item in result.registrations] == [
+        "toy-exporter"
+    ]
+    assert result.quarantined[0].reason == REASON_INVALID_METADATA
+
+
+def test_entry_point_load_failure_does_not_escape_discovery(monkeypatch):
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("broken-load", RuntimeError("synthetic failure")),
+    )
+
+    result = discover_plugins()
+
+    assert result.registrations == ()
+    assert result.quarantined[0].reason == REASON_LOAD_ERROR
+    assert result.quarantined[0].message.endswith("RuntimeError")
+    assert "synthetic failure" not in result.quarantined[0].message
+
+
+def test_entry_point_enumeration_failure_is_structured(monkeypatch):
+    def fail_enumeration(*, group=None):
+        raise RuntimeError("synthetic internal detail")
+
+    monkeypatch.setattr(
+        registry.importlib_metadata,
+        "entry_points",
+        fail_enumeration,
+    )
+
+    result = discover_plugins()
+
+    assert result.registrations == ()
+    assert result.quarantined[0].reason == REASON_ENTRY_POINT_ENUMERATION_FAILED
+    assert result.quarantined[0].message.endswith("RuntimeError")
+    assert "synthetic internal detail" not in result.quarantined[0].message
+
+
+def test_duplicate_component_is_quarantined_deterministically(monkeypatch):
+    _patch_entry_points(
+        monkeypatch,
+        FakeEntryPoint("1-primary", ToyRecognizer()),
+        FakeEntryPoint("2-duplicate", ToyRecognizer()),
+    )
+
+    result = discover_plugins()
+
+    assert len(result.registrations) == 1
+    assert result.registrations[0].entry_point_name == "1-primary"
+    assert result.quarantined[0].reason == REASON_DUPLICATE_COMPONENT
+
+
 def test_license_policy_accepts_only_permissive_expressions():
     assert is_permissive_license("Apache-2.0")
     assert is_permissive_license("Apache-2.0 OR MIT")
+    assert is_permissive_license("CC-BY-4.0")
+    assert not is_permissive_license("Apache-2.0 OR GPL-3.0-only")
     assert not is_permissive_license("GPL-3.0-only")
+    assert not is_permissive_license("MIT!")
     assert not is_permissive_license("")
+
+
+def test_registry_snapshot_does_not_trigger_discovery(monkeypatch):
+    calls = _patch_entry_points(monkeypatch, FakeEntryPoint("toy", ToyRecognizer()))
+
+    result = PluginRegistry().snapshot()
+
+    assert result.registrations == ()
+    assert result.quarantined == ()
+    assert calls() == 0
+
+
+def test_bare_import_does_not_import_or_discover_plugins():
+    code = """
+    import importlib.metadata
+    import sys
+
+    def fail_discovery(*args, **kwargs):
+        raise AssertionError("plugin discovery was triggered")
+
+    importlib.metadata.entry_points = fail_discovery
+
+    import openmed
+
+    assert "openmed.plugins" not in sys.modules
+    assert not any(name.startswith("openmed.plugins.") for name in sys.modules)
+
+    import openmed.plugins
+    """
+
+    result = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        check=False,
+        cwd=".",
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr

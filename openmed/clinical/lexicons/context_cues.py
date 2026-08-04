@@ -273,7 +273,7 @@ GERMAN_CONTEXT_LEXICON = ClinicalCueLexicon(
         "abgeklungen",
     ),
     hypothetical=("wenn", "falls", "im fall von", "sofern", "sollte"),
-    recent=("aktiv", "akut", "aktuell", "derzeit", "neu", "laufend"),
+    recent=("aktiv", "akut", "akute", "aktuell", "derzeit", "neu", "laufend"),
     uncertainty=(
         "möglich",
         "wahrscheinlich",
@@ -392,6 +392,74 @@ HINDI_CONTEXT_LEXICON = ClinicalCueLexicon(
     token_boundaries=False,
 )
 
+# Japanese cue-and-scope behavior is informed by the general negation-focus
+# method in Matsuyoshi et al. (LREC 2014) and the modality analysis in
+# Higashiyama et al. (Natural Language Processing 22(2), 2015). The compact
+# surface forms below are independently authored; no source corpus or trigger
+# list is redistributed.
+JAPANESE_CONTEXT_LEXICON = ClinicalCueLexicon(
+    language="ja",
+    historical=("既往歴", "既往", "以前", "過去に", "かつて", "治癒済み"),
+    hypothetical=("仮に", "場合", "なら", "ときは", "際は"),
+    recent=("急性", "現在", "新規", "新たな", "活動性", "持続中"),
+    uncertainty=(
+        "可能性がある",
+        "可能性",
+        "疑い",
+        "疑われる",
+        "否定できない",
+        "除外できない",
+        "考えられる",
+        "かもしれない",
+        "仮に",
+        "場合",
+        "なら",
+        "ときは",
+        "際は",
+    ),
+    negation=(
+        "認められない",
+        "認めない",
+        "認めず",
+        "所見なし",
+        "なし",
+        "否定された",
+        "否定",
+        "ない",
+    ),
+    pseudo_negation=(
+        "可能性を否定できない",
+        "否定できない",
+        "除外できない",
+        "かもしれない",
+    ),
+    backward=(
+        "場合",
+        "なら",
+        "ときは",
+        "際は",
+        "可能性がある",
+        "可能性",
+        "疑い",
+        "疑われる",
+        "否定できない",
+        "除外できない",
+        "考えられる",
+        "かもしれない",
+        "認められない",
+        "認めない",
+        "認めず",
+        "所見なし",
+        "なし",
+        "否定された",
+        "否定",
+        "ない",
+    ),
+    scope_terminators=("しかし", "ただし", "一方", "または"),
+    conjunction_terminators=("しかし", "ただし", "一方"),
+    token_boundaries=False,
+)
+
 _LEXICONS: dict[str, ClinicalCueLexicon] = {}
 
 
@@ -470,6 +538,7 @@ for _lexicon in (
     GERMAN_CONTEXT_LEXICON,
     CHINESE_CONTEXT_LEXICON,
     HINDI_CONTEXT_LEXICON,
+    JAPANESE_CONTEXT_LEXICON,
 ):
     register_clinical_cue_lexicon(_lexicon)
 

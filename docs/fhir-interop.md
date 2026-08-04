@@ -143,3 +143,7 @@ bundle = to_bundle(
 The helper assigns stable `urn:uuid` `fullUrl` values and rewrites internal
 references that point to resources present in the bundle. It does not synthesize
 missing resources and does not validate external FHIR profiles.
+
+For an opt-in, offline check of profiles declared in `meta.profile`, including
+post-de-identification comparison, see
+[WHO SMART Guidelines Profile Checks](./fhir-smart-guidelines.md).

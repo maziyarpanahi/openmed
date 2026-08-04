@@ -1,4 +1,9 @@
-"""Lazy entry-point registry for OpenMed plugin components."""
+"""Lazy entry-point discovery for OpenMed plugin components.
+
+Discovery is always caller-triggered. Each entry point is isolated so a broken
+or policy-restricted plugin becomes a structured quarantine record instead of
+preventing other plugins, or OpenMed itself, from loading.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import importlib.metadata as importlib_metadata
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from inspect import getattr_static
 from threading import RLock
 from typing import Any
 
@@ -37,6 +43,7 @@ PERMISSIVE_LICENSES = frozenset(
         "Apache-2.0",
         "BSD-2-Clause",
         "BSD-3-Clause",
+        "CC-BY-4.0",
         "CC0-1.0",
         "ISC",
         "MIT",
@@ -46,6 +53,15 @@ PERMISSIVE_LICENSES = frozenset(
 )
 
 _LICENSE_TOKEN_RE = re.compile(r"[A-Za-z0-9.+-]+")
+_LICENSE_EXPRESSION_RE = re.compile(r"[A-Za-z0-9.+()\-\s]+")
+_SEMVER_RE = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+
+
+class _PluginDeclarationError(ValueError):
+    """Internal error for safe, registry-authored validation messages."""
 
 
 @dataclass(frozen=True)
@@ -53,8 +69,9 @@ class PluginDiscoveryPolicy:
     """Policy gates applied while discovering plugin entry points.
 
     Args:
-        allow_network_egress: Allow plugins that declare network egress.
-        allow_non_permissive_licenses: Allow plugins with restricted licenses.
+        allow_network_egress: Allow every plugin that declares network egress.
+        allow_non_permissive_licenses: Allow every plugin whose license is not
+            in the auto-load allowlist.
         opt_in_plugins: Plugin ids or qualified component ids explicitly
             allowed through both policy gates.
     """
@@ -64,11 +81,16 @@ class PluginDiscoveryPolicy:
     opt_in_plugins: Sequence[str] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "opt_in_plugins",
-            tuple(str(item).strip() for item in self.opt_in_plugins if str(item)),
+        if not isinstance(self.allow_network_egress, bool):
+            raise TypeError("allow_network_egress must be a boolean")
+        if not isinstance(self.allow_non_permissive_licenses, bool):
+            raise TypeError("allow_non_permissive_licenses must be a boolean")
+        if isinstance(self.opt_in_plugins, (str, bytes)):
+            raise TypeError("opt_in_plugins must be a sequence of plugin ids")
+        opt_ins = tuple(
+            str(item).strip() for item in self.opt_in_plugins if str(item).strip()
         )
+        object.__setattr__(self, "opt_in_plugins", opt_ins)
 
 
 @dataclass(frozen=True)
@@ -81,7 +103,7 @@ class PluginRegistration:
     loaded_by_policy_opt_in: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        """Return JSON-compatible registration metadata."""
+        """Return registration metadata without the executable component."""
 
         return {
             "entry_point_name": self.entry_point_name,
@@ -110,7 +132,7 @@ class PluginQuarantineRecord:
         return f"{self.plugin_id}:{self.component_id}"
 
     def to_dict(self) -> dict[str, Any]:
-        """Return JSON-compatible quarantine details."""
+        """Return detached, JSON-compatible quarantine details."""
 
         return {
             "entry_point_name": self.entry_point_name,
@@ -131,7 +153,14 @@ class PluginDiscoveryResult:
     quarantined: tuple[PluginQuarantineRecord, ...]
 
     def registrations_for_kind(self, kind: str) -> tuple[PluginRegistration, ...]:
-        """Return registrations whose metadata kind matches *kind*."""
+        """Return registrations whose metadata kind matches ``kind``.
+
+        Args:
+            kind: Component kind to select.
+
+        Returns:
+            Accepted registrations of the requested kind.
+        """
 
         normalized = str(kind or "").strip().lower()
         return tuple(
@@ -141,7 +170,7 @@ class PluginDiscoveryResult:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return JSON-compatible discovery results."""
+        """Return detached, JSON-compatible discovery results."""
 
         return {
             "registrations": [
@@ -159,6 +188,13 @@ class PluginRegistry:
         *,
         policy: PluginDiscoveryPolicy | None = None,
     ) -> None:
+        """Create an undiscovered registry governed by ``policy``.
+
+        Args:
+            policy: Optional explicit discovery policy. Safe local-first
+                defaults are used when it is omitted.
+        """
+
         self.policy = policy or PluginDiscoveryPolicy()
         self._lock = RLock()
         self._discovered = False
@@ -166,7 +202,15 @@ class PluginRegistry:
         self._quarantined: list[PluginQuarantineRecord] = []
 
     def discover(self, *, force: bool = False) -> PluginDiscoveryResult:
-        """Discover entry points once and return the registry snapshot."""
+        """Discover entry points once and return the registry snapshot.
+
+        Args:
+            force: Clear the previous snapshot and repeat discovery.
+
+        Returns:
+            Accepted components and structured quarantine records. Discovery
+            failures are represented in the result and are never raised.
+        """
 
         with self._lock:
             if self._discovered and not force:
@@ -175,27 +219,37 @@ class PluginRegistry:
             self._registrations.clear()
             self._quarantined.clear()
 
-        try:
-            entry_points = _entry_points_for_group(PLUGIN_ENTRY_POINT_GROUP)
-        except Exception as exc:  # pragma: no cover - importlib defensive guard
-            self._quarantine(
-                entry_point_name=PLUGIN_ENTRY_POINT_GROUP,
-                reason=REASON_ENTRY_POINT_ENUMERATION_FAILED,
-                message=f"failed to enumerate entry points: {exc.__class__.__name__}",
-            )
+            try:
+                entry_points = _entry_points_for_group(PLUGIN_ENTRY_POINT_GROUP)
+            except Exception as exc:  # pragma: no cover - defensive stdlib guard
+                self._quarantine(
+                    entry_point_name=PLUGIN_ENTRY_POINT_GROUP,
+                    reason=REASON_ENTRY_POINT_ENUMERATION_FAILED,
+                    message=(
+                        "failed to enumerate plugin entry points: "
+                        f"{exc.__class__.__name__}"
+                    ),
+                )
+                return self.snapshot()
+
+            for entry_point in sorted(entry_points, key=_entry_point_sort_key):
+                self._load_entry_point(entry_point)
+
             return self.snapshot()
-
-        for entry_point in entry_points:
-            self._load_entry_point(entry_point)
-
-        return self.snapshot()
 
     def registrations(
         self,
         *,
         kind: str | None = None,
     ) -> tuple[PluginRegistration, ...]:
-        """Return accepted registrations, optionally filtered by kind."""
+        """Return accepted registrations, optionally filtered by kind.
+
+        Args:
+            kind: Optional component kind to select.
+
+        Returns:
+            Accepted registrations from the cached discovery pass.
+        """
 
         result = self.discover()
         if kind is None:
@@ -203,12 +257,20 @@ class PluginRegistry:
         return result.registrations_for_kind(kind)
 
     def quarantined(self) -> tuple[PluginQuarantineRecord, ...]:
-        """Return structured records for skipped plugin components."""
+        """Return structured records for skipped plugin components.
+
+        Returns:
+            Quarantine records from the cached discovery pass.
+        """
 
         return self.discover().quarantined
 
     def snapshot(self) -> PluginDiscoveryResult:
-        """Return the current registry snapshot without triggering discovery."""
+        """Return the current snapshot without triggering discovery.
+
+        Returns:
+            Current accepted and quarantined records, which may both be empty.
+        """
 
         with self._lock:
             return PluginDiscoveryResult(
@@ -222,24 +284,31 @@ class PluginRegistry:
             )
 
     def _load_entry_point(self, entry_point: Any) -> None:
-        entry_name = str(getattr(entry_point, "name", "<unknown>"))
+        entry_name = _entry_point_text(entry_point, "name", "<unknown>")
         try:
             loaded = entry_point.load()
         except Exception as exc:
             self._quarantine(
                 entry_point_name=entry_name,
                 reason=REASON_LOAD_ERROR,
-                message=f"failed to load entry point: {exc.__class__.__name__}",
+                message=f"failed to load plugin entry point: {exc.__class__.__name__}",
             )
             return
 
         try:
             components = _coerce_components(loaded)
-        except Exception as exc:
+        except _PluginDeclarationError as exc:
             self._quarantine(
                 entry_point_name=entry_name,
                 reason=REASON_INVALID_METADATA,
                 message=str(exc),
+            )
+            return
+        except Exception as exc:
+            self._quarantine(
+                entry_point_name=entry_name,
+                reason=REASON_LOAD_ERROR,
+                message=f"plugin factory failed: {exc.__class__.__name__}",
             )
             return
 
@@ -249,11 +318,18 @@ class PluginRegistry:
     def _register_component(self, entry_name: str, component: Any) -> None:
         try:
             metadata = _metadata_for_component(component)
-        except Exception as exc:
+        except _PluginDeclarationError as exc:
             self._quarantine(
                 entry_point_name=entry_name,
                 reason=REASON_INVALID_METADATA,
                 message=str(exc),
+            )
+            return
+        except Exception as exc:
+            self._quarantine(
+                entry_point_name=entry_name,
+                reason=REASON_INVALID_METADATA,
+                message=(f"failed to read plugin metadata: {exc.__class__.__name__}"),
             )
             return
 
@@ -324,8 +400,19 @@ def discover_plugins(
     """Discover third-party plugin components.
 
     Default discovery is cached and excludes plugins that declare network
-    egress or non-permissive licenses. Passing any opt-in option uses a fresh
-    registry so callers must make that policy choice explicitly.
+    egress or a non-permissive license. Passing a broad policy flag or an
+    explicit plugin id uses a fresh registry, making the opt-in local to this
+    call rather than changing safe process defaults.
+
+    Args:
+        allow_network_egress: Allow all plugins declaring network access.
+        allow_non_permissive_licenses: Allow all plugins outside the permissive
+            license allowlist.
+        opt_in_plugins: Plugin or qualified component ids to opt in explicitly.
+        force: Repeat cached default discovery.
+
+    Returns:
+        Accepted registrations and structured quarantine records.
     """
 
     policy = PluginDiscoveryPolicy(
@@ -345,7 +432,18 @@ def iter_plugins(
     allow_non_permissive_licenses: bool = False,
     opt_in_plugins: Sequence[str] = (),
 ) -> tuple[PluginRegistration, ...]:
-    """Return accepted plugin registrations, optionally filtered by kind."""
+    """Return accepted plugin registrations, optionally filtered by kind.
+
+    Args:
+        kind: Optional component kind to select.
+        allow_network_egress: Allow all plugins declaring network access.
+        allow_non_permissive_licenses: Allow all plugins outside the permissive
+            license allowlist.
+        opt_in_plugins: Plugin or qualified component ids to opt in explicitly.
+
+    Returns:
+        Accepted plugin registrations matching ``kind`` when provided.
+    """
 
     result = discover_plugins(
         allow_network_egress=allow_network_egress,
@@ -358,20 +456,39 @@ def iter_plugins(
 
 
 def quarantined_plugins() -> tuple[PluginQuarantineRecord, ...]:
-    """Return quarantine records from default plugin discovery."""
+    """Return quarantine records from default plugin discovery.
+
+    Returns:
+        Structured records for components rejected by the safe default policy.
+    """
 
     return _DEFAULT_REGISTRY.quarantined()
 
 
 def is_permissive_license(license_expression: str) -> bool:
-    """Return whether *license_expression* is allowed for auto-load."""
+    """Return whether an SPDX-like expression is safe for auto-load.
 
-    tokens = tuple(_LICENSE_TOKEN_RE.findall(str(license_expression or "")))
+    The check is intentionally conservative: every license token in a compound
+    expression must be in the allowlist. Unknown, malformed, and restricted
+    declarations therefore require explicit opt-in.
+
+    Args:
+        license_expression: SPDX-like license expression declared by a plugin.
+
+    Returns:
+        Whether every declared license token is auto-loadable.
+    """
+
+    if not isinstance(license_expression, str):
+        return False
+    if _LICENSE_EXPRESSION_RE.fullmatch(license_expression) is None:
+        return False
+    tokens = tuple(_LICENSE_TOKEN_RE.findall(license_expression))
     if not tokens:
         return False
-    license_tokens = [
+    license_tokens = tuple(
         token for token in tokens if token.upper() not in {"AND", "OR", "WITH"}
-    ]
+    )
     return bool(license_tokens) and all(
         token in PERMISSIVE_LICENSES for token in license_tokens
     )
@@ -387,9 +504,27 @@ def _entry_points_for_group(group: str) -> Sequence[Any]:
         return tuple(entry_points.get(group, ()))
 
 
+def _entry_point_sort_key(entry_point: Any) -> tuple[str, str, str]:
+    return (
+        _entry_point_text(entry_point, "name"),
+        _entry_point_text(entry_point, "value"),
+        _entry_point_text(entry_point, "group"),
+    )
+
+
+def _entry_point_text(
+    entry_point: Any,
+    attribute: str,
+    default: str = "",
+) -> str:
+    try:
+        value = getattr(entry_point, attribute)
+    except Exception:
+        return default
+    return value if isinstance(value, str) else default
+
+
 def _coerce_components(value: Any) -> tuple[Any, ...]:
-    if value is None:
-        return ()
     if _looks_like_component(value):
         return (value,)
     if callable(value):
@@ -398,12 +533,22 @@ def _coerce_components(value: Any) -> tuple[Any, ...]:
         components: list[Any] = []
         for item in value:
             components.extend(_coerce_components(item))
-        return tuple(components)
-    raise TypeError("openmed.plugins entry points must return components with metadata")
+        if components:
+            return tuple(components)
+        raise _PluginDeclarationError(
+            "plugin entry point must provide at least one component with metadata"
+        )
+    return (value,)
 
 
 def _looks_like_component(value: Any) -> bool:
-    return hasattr(value, "metadata")
+    if value is None:
+        return False
+    try:
+        getattr_static(value, "metadata")
+    except AttributeError:
+        return False
+    return True
 
 
 def _metadata_for_component(component: Any) -> PluginComponentMetadata:
@@ -413,8 +558,38 @@ def _metadata_for_component(component: Any) -> PluginComponentMetadata:
     if isinstance(raw_metadata, PluginComponentMetadata):
         return raw_metadata
     if isinstance(raw_metadata, Mapping):
-        return PluginComponentMetadata.from_mapping(raw_metadata)
-    raise TypeError("plugin component must expose PluginComponentMetadata metadata")
+        try:
+            return PluginComponentMetadata.from_mapping(raw_metadata)
+        except (TypeError, ValueError) as exc:
+            raise _PluginDeclarationError(
+                "invalid plugin metadata declaration: "
+                f"{_safe_metadata_error_message(exc)}"
+            ) from exc
+    raise _PluginDeclarationError(
+        "plugin component must expose PluginComponentMetadata metadata"
+    )
+
+
+def _safe_metadata_error_message(exc: TypeError | ValueError) -> str:
+    message = str(exc)
+    allowed_messages = {
+        "component_id must be a string",
+        "description must be a string",
+        "kind must be a string",
+        "labels must be a sequence of strings",
+        "labels must contain only strings",
+        "languages must be a sequence of strings",
+        "languages must contain only strings",
+        "license must be a string",
+        "metadata must be a mapping",
+        "name must be a string",
+        "network_egress must be a boolean",
+        "plugin_id must be a string",
+        "sdk_version must be a string",
+    }
+    if message in allowed_messages:
+        return message
+    return f"metadata fields failed validation: {exc.__class__.__name__}"
 
 
 def _metadata_rejection(
@@ -425,6 +600,11 @@ def _metadata_rejection(
         return REASON_INVALID_METADATA, "plugin_id must be non-empty"
     if not metadata.component_id:
         return REASON_INVALID_METADATA, "component_id must be non-empty"
+    if ":" in metadata.plugin_id or ":" in metadata.component_id:
+        return (
+            REASON_INVALID_METADATA,
+            "plugin_id and component_id must not contain ':'",
+        )
     if metadata.kind not in PLUGIN_COMPONENT_KINDS:
         return (
             REASON_UNKNOWN_COMPONENT_KIND,
@@ -443,16 +623,15 @@ def _metadata_rejection(
     if label_error is not None:
         return label_error
 
-    if metadata.network_egress and not (
-        policy.allow_network_egress or _has_policy_opt_in(metadata, policy)
-    ):
+    opted_in = _has_policy_opt_in(metadata, policy)
+    if metadata.network_egress and not (policy.allow_network_egress or opted_in):
         return (
             REASON_NETWORK_EGRESS_OPT_IN_REQUIRED,
             "plugin declares network egress and requires explicit opt-in",
         )
 
     if not is_permissive_license(metadata.license) and not (
-        policy.allow_non_permissive_licenses or _has_policy_opt_in(metadata, policy)
+        policy.allow_non_permissive_licenses or opted_in
     ):
         return (
             REASON_NON_PERMISSIVE_LICENSE_OPT_IN_REQUIRED,
@@ -480,10 +659,10 @@ def _label_rejection(
 
 
 def _sdk_major(version: str) -> int:
-    major_text = str(version or "").split(".", 1)[0]
-    if not major_text.isdigit():
+    match = _SEMVER_RE.fullmatch(str(version or ""))
+    if match is None:
         return -1
-    return int(major_text)
+    return int(match.group(1))
 
 
 def _has_policy_opt_in(
@@ -519,6 +698,16 @@ def _reset_plugin_registry_for_tests() -> None:
 __all__ = [
     "PERMISSIVE_LICENSES",
     "PLUGIN_ENTRY_POINT_GROUP",
+    "REASON_DUPLICATE_COMPONENT",
+    "REASON_ENTRY_POINT_ENUMERATION_FAILED",
+    "REASON_INVALID_LABEL",
+    "REASON_INVALID_METADATA",
+    "REASON_LOAD_ERROR",
+    "REASON_MISSING_LABELS",
+    "REASON_NETWORK_EGRESS_OPT_IN_REQUIRED",
+    "REASON_NON_PERMISSIVE_LICENSE_OPT_IN_REQUIRED",
+    "REASON_PROTOCOL_VERSION_MISMATCH",
+    "REASON_UNKNOWN_COMPONENT_KIND",
     "PluginDiscoveryPolicy",
     "PluginDiscoveryResult",
     "PluginQuarantineRecord",

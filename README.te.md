@@ -1,32 +1,30 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — లోకల్-ఫస్ట్ హెల్త్‌కేర్ AI" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="పిల్లి మస్కట్, చిన్న అక్షరాల వర్డ్‌మార్క్, Open Cross, ఓపెన్ సోర్స్ హెల్త్‌కేర్ AI, 340M+ డౌన్‌లోడ్‌లు మరియు 10M+ ఇన్‌స్టాల్‌లు అనే వచనంతో OpenMed README బ్యానర్" width="1280" />
 
-<h3>మీ పరికరం నుండి ఎప్పటికీ బయటకు వెళ్లని లోకల్-ఫస్ట్ హెల్త్‌కేర్ AI</h3>
+<h3>మీ డేటా. మీ మోడల్. మీ హార్డ్‌వేర్.</h3>
 
-<p><b>క్లినికల్ టెక్స్ట్‌ను ఒకే కోడ్ లైన్‌తో నిర్మాణాత్మక అంతర్దృష్టిగా మార్చండి.</b><br/>
-ఎంటిటీ వెలికితీత, PII డీ-ఐడెంటిఫికేషన్, మరియు పూర్తిగా మీ స్వంత హార్డ్‌వేర్‌పై నడిచే 1,000+ ప్రత్యేక వైద్య
-మోడల్‌లు — Python లో ఒక లైన్ నుండి, Apple MLX ద్వారా శక్తివంతమైన iPhone లో నేటివ్ Swift యాప్ వరకు. క్లౌడ్ లేదు.
-వెండర్ లాక్-ఇన్ లేదు. రోగి డేటా మీ నెట్‌వర్క్ నుండి బయటకు వెళ్లదు.</p>
+<p><b>మీ నియంత్రణలోని హార్డ్‌వేర్‌పై క్లినికల్ టెక్స్ట్‌ను నిర్మాణాత్మక, డీ-ఐడెంటిఫై చేసిన అంతర్దృష్టిగా మార్చండి.</b><br/>
+అవసరమైన మోడల్ ఆర్టిఫాక్ట్‌లు అందుబాటులోకి వచ్చిన తర్వాత OpenMed ప్రధాన స్థానిక రన్‌టైమ్ వెలికితీత మరియు డీ-ఐడెంటిఫికేషన్‌ను నిర్వహిస్తుంది. మోడల్ డౌన్‌లోడ్‌లు, రిమోట్ ప్రొవైడర్ అడాప్టర్‌లు, టెలిమెట్రీ ప్రారంభించిన మార్గాలు మరియు వినియోగదారు కాన్ఫిగర్ చేసిన అనుసంధానాలు నెట్‌వర్క్‌ను ఉపయోగించవచ్చు; ప్రతి మోడల్ మరియు డేటాసెట్ నిబంధనలను పరిశీలించండి.</p>
 
 <p>
-  <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
-  <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
-  <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
-  <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
+  <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
+  <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
+  <a href="LICENSE">Apache-2.0 SDK source</a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift — OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon — MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
+  <a href="swift/OpenMedKit">OpenMedKit</a> ·
+  <a href="docs/mlx-backend.md">Apple Silicon / MLX</a> ·
+  <a href="docs/export-onnx-android.md">Android / ONNX Runtime Mobile</a> ·
+  <a href="docs/export-transformersjs.md">Browser / Transformers.js</a> ·
+  <a href="https://openmed.life/docs">Documentation</a>
 </p>
 
 <p>
-  <b>1,000+ మోడల్‌లు</b> &nbsp;·&nbsp; <b>12 భాషలు</b> &nbsp;·&nbsp; <b>247 PII చెక్‌పాయింట్‌లు</b> &nbsp;·&nbsp; <b>100% పరికరంలో</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>స్థానిక అమలుకు ప్రాధాన్యం</b> &nbsp;·&nbsp; <b>మోడల్ మద్దతు గల 33 PII భాషలు</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -55,7 +53,7 @@
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed ఒక క్లినికల్ డిశ్చార్జ్ పత్రం నుండి PII ని రియల్-టైమ్‌లో డీ-ఐడెంటిఫై చేస్తోంది" width="760" />
   <br/>
-  <sub><b>రియల్-టైమ్ PII డీ-ఐడెంటిఫికేషన్</b> — Nemotron Privacy Filter ఒక క్లినికల్ డిశ్చార్జ్ పత్రం నుండి పేర్లు, చిరునామాలు, ID లు మరియు బిల్లింగ్ డేటాను పూర్తిగా పరికరంలోనే మాస్క్ చేస్తోంది. <i>(చూపిన అన్ని విలువలు సింథటిక్.)</i></sub>
+  <sub><b>రియల్-టైమ్ PII డీ-ఐడెంటిఫికేషన్</b>: Nemotron Privacy Filter ఒక క్లినికల్ డిశ్చార్జ్ పత్రం నుండి పేర్లు, చిరునామాలు, ID లు మరియు బిల్లింగ్ డేటాను పూర్తిగా పరికరంలోనే మాస్క్ చేస్తోంది. <i>(చూపిన అన్ని విలువలు సింథటిక్.)</i></sub>
 </div>
 
 ---
@@ -76,48 +74,41 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-అత్యాధునిక క్లినికల్ NER మోడల్ స్థానికంగా నడుస్తోంది — API కీ లేదు, నెట్‌వర్క్ కాల్ లేదు.
+అవసరమైన ఆర్టిఫాక్ట్‌లు అందుబాటులోకి వచ్చిన తర్వాత క్లినికల్ NER మోడల్ స్థానిక రన్‌టైమ్‌ను ఉపయోగిస్తుంది.
 
 ---
 
 ## OpenMed ఎందుకు?
 
-|                                       |       **OpenMed**        |     క్లౌడ్ వైద్య API లు    |
-| ------------------------------------- | :----------------------: | :-----------------------: |
-| మీ పరికరం/సర్వర్‌లలో నడుస్తుంది          |            ✅            |            ❌             |
-| రోగి డేటా మీ నెట్‌వర్క్ నుండి బయటకు వెళ్తుంది |     **ఎప్పటికీ లేదు**     |    వెండర్‌కు పంపబడుతుంది    |
-| ఖర్చు                                 |   ఉచితం & ఓపెన్-సోర్స్    |    కాల్‌కు ఛార్జ్           |
-| ప్రత్యేక వైద్య మోడల్‌లు                  |          1,000+          |          పరిమితం          |
-| భాషలు                                 |           12+            |          మారుతుంది        |
-| ఆఫ్‌లైన్ / ఐసోలేటెడ్ (air-gapped)      |            ✅            |            ❌             |
-| Apple Silicon (MLX) త్వరణం             |            ✅            |          వర్తించదు        |
-| నేటివ్ iOS / macOS యాప్‌లు              |   ✅ OpenMedKit ద్వారా     |            ❌             |
-| వెండర్ లాక్-ఇన్                         |    లేదు — Apache-2.0      |            ఉంది           |
+| అమలు పరిశీలన | OpenMed SDK పరిధి |
+| --- | --- |
+| ప్రధాన రన్‌టైమ్ | అవసరమైన ఆర్టిఫాక్ట్‌లు అందుబాటులోకి వచ్చిన తర్వాత స్థానికంగా ప్రాసెస్ చేస్తుంది |
+| ఐచ్ఛిక నెట్‌వర్క్ మార్గాలు | డౌన్‌లోడ్‌లు, రిమోట్ అడాప్టర్‌లు, టెలిమెట్రీ మరియు అనుసంధానాలు నెట్‌వర్క్‌ను ఉపయోగించవచ్చు |
+| ధృవీకరణ | అమలు యజమాని మోడల్, డేటా నిబంధనలు, గోప్యత ప్రవర్తన మరియు క్లినికల్ అనుకూలతను ధృవీకరిస్తారు |
+| ఇంటర్‌ఫేస్‌లు | మద్దతు ఉన్న చోట Python, Swift, Android, బ్రౌజర్ మరియు సేవలు |
 
-- **ప్రత్యేక మోడల్‌లు** — జాగ్రత్తగా ఎంపిక చేసిన 1,000+ బయోమెడికల్ & క్లినికల్ మోడల్‌లు, వీటిలో చాలావి యాజమాన్య పరిష్కారాలను అధిగమిస్తాయి.
-- **HIPAA-అనుకూల డీ-ఐడెంటిఫికేషన్** — మొత్తం 18 Safe Harbor ఐడెంటిఫయర్‌లు, స్మార్ట్ ఎంటిటీ మెర్జింగ్, మరియు ఫార్మాట్‌ను నిలుపుకునే నకిలీ విలువలు.
-- **ప్రతిచోటా నడుస్తుంది** — CPU, CUDA, Apple Silicon (MLX), మరియు OpenMedKit ద్వారా iOS/macOS యాప్‌లలో నేటివ్‌గా.
-- **ఒక లైన్‌లో డిప్లాయ్‌మెంట్** — Python API, Docker REST సేవ, లేదా బ్యాచ్ పైప్‌లైన్‌లు.
-- **లాక్-ఇన్ లేదు** — Apache-2.0, మీ ఇన్‌ఫ్రాస్ట్రక్చర్, మీ డేటా.
+- **ఎంపిక చేసిన మోడల్ కేటలాగ్**: మీ వినియోగానికి ప్రతి మోడల్, లైసెన్స్ మరియు డేటాసెట్‌ను ధృవీకరించండి.
+- **Safe Harbor‌కు సరిపోలే కాన్ఫిగరేషన్**: 18 ఐడెంటిఫయర్ వర్గాలను లక్ష్యంగా చేసుకోగలదు; నిపుణుల అమలు సమీక్ష ఇంకా అవసరం, SDK వాడకం మాత్రమే HIPAA అనుసరణను నిరూపించదు.
+- **మద్దతు ఉన్న అమలు మార్గాలు**: CPU, CUDA, MLX, మొబైల్, సేవ మరియు బ్రౌజర్ అడాప్టర్‌లు పర్యావరణం, ఆర్టిఫాక్ట్‌ను బట్టి మారుతాయి.
+- **అమలు ఇంటర్‌ఫేస్‌లు**: Python, కంటైనర్‌లు, సేవలు మరియు బ్యాచ్ వర్క్‌ఫ్లోలకు కాన్ఫిగరేషన్, ధృవీకరణ అవసరం.
+- **SDK సోర్స్**: Apache-2.0 License క్రింద విడుదల చేయబడింది; మోడల్ మరియు డేటాసెట్ నిబంధనలు మారుతాయి.
 
 ---
 
-## పరికరంలో, Apple లో — Swift, MLX మరియు iOS
+## పరికరంలో, Apple లో: Swift, MLX మరియు iOS
 
-మీ డేటా ఇప్పటికే ఉన్న చోటే నడిచేలా OpenMed రూపొందించబడింది. Apple హార్డ్‌వేర్‌పై ఇది **MLX** తో వేగవంతమవుతుంది,
-మరియు **[OpenMedKit](swift/OpenMedKit)** ద్వారా నేరుగా iPhone, iPad మరియు Mac యాప్‌లలోకి చేరుతుంది — తద్వారా
-PII గుర్తింపు మరియు క్లినికల్ వెలికితీత పూర్తిగా ఆఫ్‌లైన్‌గా, పరికరంలోనే జరుగుతాయి.
+మద్దతు ఉన్న Apple హార్డ్‌వేర్‌పై, అవసరమైన ఆర్టిఫాక్ట్‌లు అందుబాటులోకి వచ్చిన తర్వాత OpenMed స్థానిక ప్రాసెసింగ్ కోసం **MLX** మరియు **[OpenMedKit](swift/OpenMedKit)**ను ఉపయోగించగలదు. మోడల్ సేకరణ మరియు వినియోగదారు కాన్ఫిగర్ చేసిన రిమోట్ అనుసంధానాలు వేర్వేరు నెట్‌వర్క్ పరిధులుగా ఉంటాయి.
 
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
 ]
 ```
 
-- **MLX రన్‌టైమ్** — PII టోకెన్ వర్గీకరణ, Privacy Filter కుటుంబం, మరియు ప్రయోగాత్మక GLiNER కుటుంబపు zero-shot పనుల కోసం (CoreML ఫాల్‌బ్యాక్ మార్గంతో).
-- **ఒక మోడల్ పేరు, అన్ని ప్లాట్‌ఫారమ్‌లు** — Apple కాని హార్డ్‌వేర్‌పై, MLX మోడల్ పేర్లు స్వయంచాలకంగా సంబంధిత PyTorch చెక్‌పాయింట్‌కు తిరిగి వెళ్తాయి.
-- **Apple Silicon పై Python** కూడా: `pip install "openmed[mlx]"`.
+- **MLX రన్‌టైమ్**: PII టోకెన్ వర్గీకరణ, Privacy Filter కుటుంబం, మరియు ప్రయోగాత్మక GLiNER కుటుంబపు zero-shot పనుల కోసం (CoreML ఫాల్‌బ్యాక్ మార్గంతో).
+- **ఒక మోడల్ పేరు, అన్ని ప్లాట్‌ఫారమ్‌లు**: Apple కాని హార్డ్‌వేర్‌పై, MLX మోడల్ పేర్లు స్వయంచాలకంగా సంబంధిత PyTorch చెక్‌పాయింట్‌కు తిరిగి వెళ్తాయి.
+- **Apple Silicon పై Python** కూడా: `pip install --upgrade "openmed[mlx]"`.
 
 గైడ్‌లు: [MLX బ్యాకెండ్](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML ఎక్స్‌పోర్ట్](docs/coreml-export.md)
 
@@ -127,7 +118,7 @@ dependencies: [
 
 ```mermaid
 flowchart LR
-    A["క్లినికల్ టెక్స్ట్"] --> B["OpenMed<br/>(100% పరికరంలో)"]
+    A["క్లినికల్ టెక్స్ట్"] --> B["OpenMed<br/>(స్థానిక అమలుకు ప్రాధాన్యం)"]
     B --> C["వైద్య ఎంటిటీలు"]
     B --> D["PII గుర్తించబడింది"]
     B --> E["డీ-ఐడెంటిఫైడ్ టెక్స్ట్"]
@@ -143,13 +134,13 @@ flowchart LR
 
 ```bash
 # Core + Hugging Face runtime (Linux, macOS, Windows; CPU or CUDA)
-pip install "openmed[hf]"
+pip install --upgrade "openmed[hf]"
 
 # Add the REST service
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 
 # Apple Silicon acceleration (MLX)
-pip install "openmed[mlx]"
+pip install --upgrade "openmed[mlx]"
 ```
 
 <table>
@@ -220,7 +211,7 @@ result = analyze_text(
 
 ## మోడల్‌లు
 
-ప్రత్యేక వైద్య NER మోడల్‌ల క్యూరేటెడ్ రిజిస్ట్రీ — [పూర్తి కేటలాగ్](https://openmed.life/docs/model-registry) ను బ్రౌజ్ చేయండి.
+ప్రత్యేక వైద్య NER మోడల్‌ల క్యూరేటెడ్ రిజిస్ట్రీ. [పూర్తి కేటలాగ్](https://openmed.life/docs/model-registry) ను బ్రౌజ్ చేయండి.
 
 | మోడల్ | ప్రత్యేకత | ఎంటిటీ రకాలు | పరిమాణం |
 |-------|-----------|--------------|---------|
@@ -250,17 +241,17 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 ```
 
 - **స్మార్ట్ ఎంటిటీ మెర్జింగ్** `01/15/1970` ను విభజించకుండా పూర్తిగా ఉంచుతుంది.
-- **Faker-ఆధారిత అస్పష్టీకరణ** — క్లినికల్ ID ల కోసం అనుకూల ప్రొవైడర్‌లతో (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
-- **HIPAA**: మొత్తం 18 Safe Harbor ఐడెంటిఫయర్‌లు, కాన్ఫిగర్ చేయగల కాన్ఫిడెన్స్ థ్రెష్‌హోల్డ్‌లతో.
+- **Faker-ఆధారిత అస్పష్టీకరణ**: క్లినికల్ ID ల కోసం అనుకూల ప్రొవైడర్‌లతో (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
+- **HIPAA పరిధి**: Safe Harbor‌కు సరిపోలే వర్గాలు, కాన్ఫిగర్ చేయగల థ్రెష్‌హోల్డ్‌లు అమలు సహాయకాలు; నిపుణుల అమలు సమీక్ష ఇంకా అవసరం, SDK వాడకం మాత్రమే అనుసరణను నిరూపించదు.
 
 [పూర్తి PII నోట్‌బుక్](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [స్మార్ట్ మెర్జింగ్](docs/pii-smart-merging.md) · [అనామకీకరణ](docs/anonymization.md)
 
 <details>
-<summary><b>Privacy Filter కుటుంబం</b> — OpenAI Privacy Filter ఆర్కిటెక్చర్‌పై మూడు మోడల్ కుటుంబాలు</summary>
+<summary><b>Privacy Filter కుటుంబం</b>: OpenAI Privacy Filter ఆర్కిటెక్చర్‌పై మూడు మోడల్ కుటుంబాలు</summary>
 
 <br/>
 
-మోడల్ కోడ్ ఒకటే (స్థానిక అటెన్షన్, sink టోకెన్‌లు, RoPE+YaRN, tiktoken `o200k_base` టోకనైజేషన్‌తో gpt-oss-శైలి స్పార్స్ MoE ట్రాన్స్‌ఫార్మర్); శిక్షణ డేటా మాత్రమే వేరు. అన్నీ **ఒకే** `extract_pii()` / `deidentify()` API ద్వారా వెళ్తాయి — `model_name=` ఆర్గ్యుమెంట్ మాత్రమే మారుతుంది.
+మోడల్ కోడ్ ఒకటే (స్థానిక అటెన్షన్, sink టోకెన్‌లు, RoPE+YaRN, tiktoken `o200k_base` టోకనైజేషన్‌తో gpt-oss-శైలి స్పార్స్ MoE ట్రాన్స్‌ఫార్మర్); శిక్షణ డేటా మాత్రమే వేరు. అన్నీ **ఒకే** `extract_pii()` / `deidentify()` API ద్వారా వెళ్తాయి. `model_name=` ఆర్గ్యుమెంట్ మాత్రమే మారుతుంది.
 
 | వేరియంట్ | PyTorch (CPU + CUDA) | MLX (Apple Silicon) | MLX 8-bit |
 | --- | --- | --- | --- |
@@ -278,15 +269,15 @@ extract_pii(text, model_name="OpenMed/privacy-filter-nemotron")    # same code, 
 extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silicon (MLX)
 ```
 
-Apple Silicon కాని హోస్ట్‌లపై, MLX మోడల్ పేర్లు స్వయంచాలకంగా సంబంధిత PyTorch చెక్‌పాయింట్‌తో భర్తీ చేయబడతాయి (ఒక్కసారి హెచ్చరికతో) — ఒక మోడల్ పేరు రాయండి, ఎక్కడైనా అమలు చేయండి. చూడండి [Privacy Filter ఆర్కిటెక్చర్ & బ్యాకెండ్ రూటింగ్](docs/anonymization.md#privacy-filter-family).
+Apple Silicon కాని హోస్ట్‌లపై, MLX మోడల్ పేర్లు స్వయంచాలకంగా సంబంధిత PyTorch చెక్‌పాయింట్‌తో భర్తీ చేయబడతాయి (ఒక్కసారి హెచ్చరికతో). ఒక మోడల్ పేరు రాయండి, ఎక్కడైనా అమలు చేయండి. చూడండి [Privacy Filter ఆర్కిటెక్చర్ & బ్యాకెండ్ రూటింగ్](docs/anonymization.md#privacy-filter-family).
 
 </details>
 
 ---
 
-## బహుభాషా PII (12 భాషలు)
+## బహుభాషా PII (34 మద్దతు ఉన్న మార్గాలు; 33 మోడల్ మద్దతుతో)
 
-`en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` మరియు `tr` భాషల్లో వెలికితీత మరియు డీ-ఐడెంటిఫికేషన్ — మొత్తం **247 PII చెక్‌పాయింట్‌లు**.
+`en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` మరియు `tr` భాషల్లో వెలికితీత మరియు డీ-ఐడెంటిఫికేషన్, మొత్తం **నమోదిత PII మోడల్ కేటలాగ్**.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -320,12 +311,12 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 రిక్వెస్ట్ ధ్రువీకరణ, భాగస్వామ్య పైప్‌లైన్ ప్రీలోడ్, మరియు ఏకీకృత ఎర్రర్ ఎన్వలప్‌లతో కూడిన Docker-అనుకూల FastAPI సేవ.
 
 ```bash
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:local .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:local
 ```
 
 ```bash
@@ -355,7 +346,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 <img src="docs/brand/openmed-mascot-icon.png" alt="OpenMed మస్కట్" width="104" align="left" />
 
 OpenMed యొక్క సంరక్షకుడు ఒక మెత్తని పర్షియన్ పిల్లి, చిన్న **అవిసెన్నా (ఇబ్న్ సీనా, Avicenna / Ibn Sina)** రూపంలో
-— ఆ గొప్ప పర్షియన్ వైద్యుని *కానన్ ఆఫ్ మెడిసిన్ (The Canon of Medicine)* సుమారు 600 సంవత్సరాలు ప్రపంచపు ప్రామాణిక
+: ఆ గొప్ప పర్షియన్ వైద్యుని *కానన్ ఆఫ్ మెడిసిన్ (The Canon of Medicine)* సుమారు 600 సంవత్సరాలు ప్రపంచపు ప్రామాణిక
 వైద్య పాఠ్యగ్రంథంగా నిలిచింది. అతను తెరిచిన వైద్య జ్ఞాన గ్రంథాన్ని కాపలా కాస్తాడు, రంగుల వరుస **పర్షియన్ ఫిరోజా
 (fīrūza)** నుండి ప్రేరణ పొందింది: మీ అత్యంత గోప్యమైన డేటా కోసం ఒక లోకల్-ఫస్ట్ సంరక్షకుడు.
 
@@ -365,20 +356,20 @@ OpenMed యొక్క సంరక్షకుడు ఒక మెత్తన
 
 ## సహకారం
 
-సహకారాలకు స్వాగతం — బగ్ నివేదికలు, ఫీచర్ అభ్యర్థనలు మరియు PR లు.
+సహకారాలకు స్వాగతం: బగ్ నివేదికలు, ఫీచర్ అభ్యర్థనలు మరియు PR లు.
 
 - [ఒక issue తెరవండి](https://github.com/maziyarpanahi/openmed/issues)
-- **అనువాదాలకు స్వాగతం** — పైన ఉన్న భాషా స్విచర్‌లో లింక్ చేయబడిన ఇతర భాషల README లను పూర్తి చేయడంలో సహాయపడండి.
+- **అనువాదాలకు స్వాగతం**: పైన ఉన్న భాషా స్విచర్‌లో లింక్ చేయబడిన ఇతర భాషల README లను పూర్తి చేయడంలో సహాయపడండి.
 
 ---
 
 ## కృతజ్ఞతలు
 
-OpenMed అద్భుతమైన ఓపెన్-సోర్స్ పనిపై ఆధారపడి ఉంది — ప్రత్యేక ధన్యవాదాలు **OpenAI** ([Privacy Filter](https://huggingface.co/openai/privacy-filter) ఆర్కిటెక్చర్), **NVIDIA** ([Nemotron PII డేటాసెట్](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)), **Hugging Face** (`transformers` మరియు మోడల్ ఎకోసిస్టమ్), **Apple** ([MLX](https://github.com/ml-explore/mlx)), మరియు **[Faker](https://faker.readthedocs.io/)** నిర్వాహకులకు.
+OpenMed అద్భుతమైన ఓపెన్-సోర్స్ పనిపై ఆధారపడి ఉంది. ప్రత్యేక ధన్యవాదాలు **OpenAI** ([Privacy Filter](https://huggingface.co/openai/privacy-filter) ఆర్కిటెక్చర్), **NVIDIA** ([Nemotron PII డేటాసెట్](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)), **Hugging Face** (`transformers` మరియు మోడల్ ఎకోసిస్టమ్), **Apple** ([MLX](https://github.com/ml-explore/mlx)), మరియు **[Faker](https://faker.readthedocs.io/)** నిర్వాహకులకు.
 
 ## లైసెన్స్
 
-[Apache-2.0 లైసెన్స్](LICENSE) క్రింద విడుదల చేయబడింది.
+OpenMed SDK సోర్స్ [Apache-2.0 License](LICENSE) క్రింద విడుదల చేయబడింది.
 
 ## ఉల్లేఖనం
 
@@ -402,9 +393,7 @@ OpenMed అద్భుతమైన ఓపెన్-సోర్స్ పని
 
 OpenMed మీకు ఉపయోగకరంగా ఉంటే, ఒక స్టార్ ఇతరులు దాన్ని కనుగొనడంలో సహాయపడుతుంది.
 
-<a href="https://star-history.com/#maziyarpanahi/openmed&Date">
-  <img src="https://api.star-history.com/svg?repos=maziyarpanahi/openmed&type=Date" alt="స్టార్ చరిత్ర చార్ట్" width="640" />
-</a>
+[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
