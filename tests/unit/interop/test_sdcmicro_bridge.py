@@ -62,6 +62,17 @@ def test_stubbed_rscript_maps_aggregate_measures_and_uses_private_csv(
     observed: dict[str, object] = {}
     monkeypatch.setattr(sdcmicro.shutil, "which", lambda candidate: f"/opt/{candidate}")
     expected_rscript = os.path.abspath("/opt/approved-Rscript")
+    real_os_open = os.open
+
+    def recording_open(path, flags, mode=0o777, *, dir_fd=None):
+        filename = Path(path).name
+        if filename in {"input.csv", "bridge.R", "config.json", "aggregate.json"}:
+            observed.setdefault("creation_modes", {})[filename] = mode
+        if dir_fd is None:
+            return real_os_open(path, flags, mode)
+        return real_os_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(sdcmicro.os, "open", recording_open)
 
     def fake_run(command, **kwargs):
         input_path = Path(command[3])
@@ -98,7 +109,14 @@ def test_stubbed_rscript_maps_aggregate_measures_and_uses_private_csv(
         "timeout": 60.0,
         "cwd": observed["kwargs"]["cwd"],
     }
-    assert observed["input_mode"] == 0o600
+    assert observed["creation_modes"] == {
+        "input.csv": 0o600,
+        "bridge.R": 0o600,
+        "config.json": 0o600,
+        "aggregate.json": 0o600,
+    }
+    if os.name == "posix":
+        assert observed["input_mode"] == 0o600
     assert observed["rows"][0] == {
         "age_band": "40-49",
         "region": "north",
