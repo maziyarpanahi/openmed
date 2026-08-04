@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import io
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+import openmed.multimodal as multimodal
 from openmed.multimodal import base
 from openmed.multimodal.documents_html import extract_html, write_redacted_html
 
@@ -299,3 +302,59 @@ def test_handler_without_entities_does_not_create_output(tmp_path: Path) -> None
     assert document.text == "Patient Jane & Roe"
     assert document.metadata["detected_span_count"] == 0
     assert not output.exists()
+
+
+def test_clean_package_import_activates_handlers_without_optional_extra() -> None:
+    command = (
+        "import openmed.multimodal as m; "
+        "from openmed.multimodal import base; "
+        "print(m.extract_html.__module__); "
+        "print(base._HANDLERS['.html'][-1].requires_multimodal); "
+        "print(base._HANDLERS['.htm'][-1].requires_multimodal)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", command],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "openmed.multimodal.documents_html",
+        "False",
+        "False",
+    ]
+
+
+def test_package_exports_are_unique_identical_and_documented() -> None:
+    assert multimodal.extract_html is extract_html
+    assert multimodal.write_redacted_html is write_redacted_html
+    assert multimodal.__all__.count("extract_html") == 1
+    assert multimodal.__all__.count("write_redacted_html") == 1
+    assert extract_html.__doc__ and "source" in extract_html.__doc__.lower()
+    assert (
+        write_redacted_html.__doc__
+        and "replacement" in write_redacted_html.__doc__.lower()
+    )
+
+
+@pytest.mark.parametrize("suffix", [".html", ".HTM"])
+def test_real_dispatcher_redacts_both_extensions(tmp_path: Path, suffix: str) -> None:
+    source = tmp_path / f"synthetic{suffix}"
+    output = tmp_path / f"redacted{suffix}"
+    source.write_bytes(FIXTURE.read_bytes())
+
+    def detector(text: str, *, lang: str | None = None):
+        assert text == "Patient Jane & Roe"
+        assert lang == "en"
+        return [(8, 18, "PERSON")]
+
+    document = multimodal.redact_document(
+        source,
+        models=detector,
+        lang="en",
+        policy={"output_path": output, "replacement": "[REDACTED]"},
+    )
+
+    assert document.metadata["detected_span_count"] == 1
+    assert "<p>Patient [REDACTED]</p>" in output.read_text(encoding="utf-8")
