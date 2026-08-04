@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping, Sequence
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -24,6 +26,7 @@ except ImportError as exc:  # pragma: no cover - exercised by packaging users
 Deidentifier = Callable[..., Any]
 RiskReporter = Callable[..., dict[str, Any]]
 ClinicalExtractor = Callable[..., Any]
+Generalizer = Callable[[Any, str], Any]
 
 
 @register_dataframe_accessor("openmed")
@@ -68,6 +71,84 @@ class OpenMedDataFrameAccessor:
             )
 
         return redacted
+
+    def classify_columns(
+        self,
+        *,
+        confidence_threshold: float = 0.70,
+    ) -> dict[str, Any]:
+        """Return an editable, unapplied semantic auto-policy for this frame.
+
+        Classification is advisory. Use :meth:`apply_auto_policy` with the
+        reviewed artifact to perform the explicitly selected transformations.
+        """
+
+        from openmed.structured.column_semantics import classify_records
+
+        return classify_records(
+            _records_for_release(self._obj),
+            columns=tuple(self._obj.columns),
+            confidence_threshold=confidence_threshold,
+            source_format="pandas",
+        )
+
+    def apply_auto_policy(
+        self,
+        auto_policy: Mapping[str, Any],
+        *,
+        reviewed: bool = False,
+        deidentifier: Deidentifier | None = None,
+        generalizer: Generalizer | None = None,
+        deidentify_kwargs: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """Apply a human-reviewed column policy to a DataFrame copy.
+
+        Args:
+            auto_policy: Editable artifact returned by ``classify_columns``.
+            reviewed: Explicit confirmation that a human reviewed the artifact.
+            deidentifier: Optional free-text de-identification callable.
+            generalizer: Optional ``(value, semantic_type)`` callable.
+            deidentify_kwargs: Options passed to free-text de-identification.
+
+        Returns:
+            A transformed copy. Suppressed direct-identifier columns are
+            removed, free text is de-identified, generalized columns are sent
+            through the generalizer, and keep columns are unchanged.
+
+        Raises:
+            ValueError: If review is not confirmed or any column still abstains.
+        """
+
+        if reviewed is not True:
+            raise ValueError("auto-policy application requires reviewed=True")
+        decisions = _validated_auto_policy(self._obj, auto_policy)
+        transformed = self._obj.copy(deep=True)
+        redact = deidentifier or _load_deidentifier()
+        generalize = generalizer or _default_generalizer
+        redact_kwargs = dict(deidentify_kwargs or {})
+        suppressed: list[str] = []
+
+        for column, decision in decisions.items():
+            action = decision["recommended_action"]
+            if action == "suppress":
+                suppressed.append(column)
+            elif action == "route-to-deidentify":
+                transformed[column] = transformed[column].map(
+                    lambda value: _redact_value(value, redact, redact_kwargs)
+                )
+            elif action == "generalize":
+                semantic_type = str(decision["semantic_type"])
+                transformed[column] = transformed[column].map(
+                    lambda value: _generalize_value(
+                        value,
+                        semantic_type=semantic_type,
+                        generalizer=generalize,
+                    )
+                )
+
+        if suppressed:
+            transformed = transformed.drop(columns=suppressed)
+        return transformed
 
     def risk_report(
         self,
@@ -203,6 +284,104 @@ def _load_risk_report() -> RiskReporter:
     return risk_report
 
 
+def _validated_auto_policy(
+    frame: Any,
+    auto_policy: Mapping[str, Any],
+) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(auto_policy, Mapping):
+        raise TypeError("auto_policy must be a mapping")
+    raw_decisions = auto_policy.get("columns")
+    if not isinstance(raw_decisions, Mapping):
+        raise ValueError("auto_policy must contain a columns mapping")
+    frame_columns = tuple(frame.columns)
+    if set(raw_decisions) != set(frame_columns):
+        missing = sorted(set(frame_columns) - set(raw_decisions))
+        extra = sorted(set(raw_decisions) - set(frame_columns))
+        raise ValueError(
+            f"auto_policy columns do not match DataFrame; missing={missing!r}, "
+            f"extra={extra!r}"
+        )
+
+    allowed_actions = {
+        "generalize",
+        "keep",
+        "route-to-deidentify",
+        "suppress",
+    }
+    decisions: dict[str, Mapping[str, Any]] = {}
+    unresolved: list[str] = []
+    for column in frame_columns:
+        decision = raw_decisions[column]
+        if not isinstance(decision, Mapping):
+            raise ValueError(f"auto_policy decision for {column!r} must be a mapping")
+        action = decision.get("recommended_action")
+        if decision.get("abstained") is True or action == "manual-review":
+            unresolved.append(column)
+        if action not in allowed_actions and action != "manual-review":
+            raise ValueError(
+                f"auto_policy decision for {column!r} has unknown action {action!r}"
+            )
+        decisions[column] = decision
+    if unresolved:
+        raise ValueError(
+            "auto_policy has unresolved manual-review columns: " + ", ".join(unresolved)
+        )
+    return decisions
+
+
+def _generalize_value(
+    value: Any,
+    *,
+    semantic_type: str,
+    generalizer: Generalizer,
+) -> Any:
+    if value is None or _is_missing(value):
+        return value
+    return generalizer(value, semantic_type)
+
+
+def _default_generalizer(value: Any, semantic_type: str) -> str:
+    from openmed.structured.hierarchies import (
+        COLUMN_TYPE_AGE,
+        COLUMN_TYPE_CLINICAL_CODE,
+        COLUMN_TYPE_DATE,
+        COLUMN_TYPE_ZIP,
+        generalize_value,
+    )
+
+    if semantic_type == "age":
+        return generalize_value(COLUMN_TYPE_AGE, value, 0)
+    if semantic_type == "postal_code":
+        normalized = re.sub(r"[^A-Za-z0-9]", "", str(value))
+        return generalize_value(COLUMN_TYPE_ZIP, normalized, 2)
+    if semantic_type in {"date", "date_of_birth"}:
+        normalized_date = _iso_date(value)
+        return generalize_value(COLUMN_TYPE_DATE, normalized_date, 2)
+    if semantic_type in {
+        "clinical_code",
+        "diagnosis_code",
+        "lab_code",
+        "medication_code",
+        "procedure_code",
+    }:
+        return generalize_value(COLUMN_TYPE_CLINICAL_CODE, str(value), 1)
+    return "*"
+
+
+def _iso_date(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    for source_format in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, source_format).date().isoformat()
+        except ValueError:
+            continue
+    raise ValueError(f"cannot generalize non-date value {value!r}")
+
+
 def ensure_registered() -> None:
     """Ensure the accessor is registered on the currently imported pandas."""
 
@@ -334,6 +513,7 @@ def _release_scalar(value: Any) -> Any:
 __all__ = [
     "ClinicalExtractor",
     "Deidentifier",
+    "Generalizer",
     "OpenMedDataFrameAccessor",
     "RiskReporter",
     "ensure_registered",

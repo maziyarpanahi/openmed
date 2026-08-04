@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -13,6 +14,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "jieba",
     "langchain",
     "langchain_core",
+    "langgraph",
     "pandas",
     "presidio",
     "philter_ucsf",
@@ -62,6 +64,23 @@ def test_import_openmed_does_not_import_optional_adapter_dependencies():
     assert not any(_is_optional_adapter_module(name) for name in sys.modules)
 
 
+def test_fresh_core_import_does_not_import_graph_or_search_frameworks():
+    code = """
+import sys
+import openmed
+import openmed.interop
+blocked = [
+    name for name in sys.modules
+    if name == 'langgraph'
+    or name.startswith('langgraph.')
+    or name == 'haystack'
+    or name.startswith('haystack.')
+]
+assert blocked == [], blocked
+"""
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
 def test_import_interop_registry_does_not_import_optional_adapter_dependencies():
     _clear_optional_adapter_modules()
     sys.modules.pop("openmed.interop.icd11_api", None)
@@ -74,6 +93,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "duckdb",
         "function_tools",
         "gliner_biomed",
+        "graph_orchestration",
         "haystack",
         "hl7v2",
         "icd11_api",
@@ -92,6 +112,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "ray",
         "scispacy_linker",
         "scrubadub",
+        "search_pipeline",
         "spacy",
         "spark",
         "zh",
@@ -103,6 +124,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("icd11_api").extra == ""
     assert adapter_spec("indic").extra == "indic"
     assert adapter_spec("function_tools").extra == ""
+    assert adapter_spec("graph_orchestration").extra == "langgraph"
     assert adapter_spec("haystack").extra == "haystack"
     assert adapter_spec("langchain").extra == "langchain"
     assert adapter_spec("llamaindex").extra == "llamaindex"
@@ -118,6 +140,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("ray").extra == "ray"
     assert adapter_spec("scispacy_linker").extra == "scispacy"
     assert adapter_spec("scrubadub").extra == "scrubadub"
+    assert adapter_spec("search_pipeline").extra == "haystack"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"
     assert adapter_spec("spark").extra == "spark"

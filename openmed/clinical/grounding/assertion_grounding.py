@@ -53,6 +53,7 @@ from ..context import (
     PATIENT_EXPERIENCER,
     RECENT,
     ClinicalAssertion,
+    ClinicalContextResult,
     resolve_span_context,
     scan_context_cues,
 )
@@ -177,7 +178,7 @@ class AssertionGroundingStatus:
 
 
 def assertion_grounding_status(
-    assertion: ClinicalAssertion,
+    assertion: ClinicalAssertion | ClinicalContextResult,
 ) -> AssertionGroundingStatus:
     """Derive the code-level grounding status from composed ConText axes.
 
@@ -188,7 +189,12 @@ def assertion_grounding_status(
     not the patient's or refuted can never be resolved to ``present``.
     """
 
-    status = _dominant_status(assertion)
+    normalized = (
+        assertion.to_assertion()
+        if isinstance(assertion, ClinicalContextResult)
+        else assertion
+    )
+    status = _dominant_status(normalized)
     verification, clinical, patient = _STATUS_MAP[status]
     return AssertionGroundingStatus(
         status=status,

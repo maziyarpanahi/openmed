@@ -84,6 +84,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="Generic function-calling and tool-use schema adapters",
     ),
+    "graph_orchestration": AdapterSpec(
+        name="graph_orchestration",
+        module="openmed.interop.graph_orchestration",
+        extra="langgraph",
+        description="State-graph de-identification and re-identification nodes",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
@@ -155,6 +161,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.scrubadub",
         extra="scrubadub",
         description="scrubadub Filth span adapter",
+    ),
+    "search_pipeline": AdapterSpec(
+        name="search_pipeline",
+        module="openmed.interop.search_pipeline",
+        extra="haystack",
+        description="Modular search-pipeline redaction components",
     ),
     "spark": AdapterSpec(
         name="spark",
