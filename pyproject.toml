@@ -195,6 +195,10 @@ langchain = [
   "langchain-core>=0.2,<2",
 ]
 
+langgraph = [
+  "langgraph>=0.2,<2",
+]
+
 haystack = [
   "haystack-ai>=2,<3",
 ]
@@ -205,6 +209,7 @@ llamaindex = [
 
 agents = [
   "langchain-core>=0.2,<2",
+  "langgraph>=0.2,<2",
   "llama-index-core>=0.10,<1",
 ]
 
@@ -324,15 +329,13 @@ openmed-mcp = "openmed.mcp.server:main"
 constraint-dependencies = [
   "betterproto==2.0.0b6; python_version >= '3.11'",
 ]
+override-dependencies = [
+  # Beam 2.75 caps these below their patched releases even though its
+  # DirectRunner remains compatible with the secure versions.
+  "cryptography>=50,<51",
+  "httplib2>=0.32",
+]
 conflicts = [
-  [
-    { extra = "beam" },
-    { extra = "dev" },
-  ],
-  [
-    { extra = "beam" },
-    { extra = "integrity" },
-  ],
   [
     { extra = "awq" },
     { extra = "gliner" },

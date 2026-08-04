@@ -90,6 +90,14 @@ def test_beam_extra_declares_apache_beam_dependency():
     assert any(requirement.startswith("apache-beam") for requirement in dependencies)
 
 
+def test_beam_resolution_uses_patched_security_dependencies():
+    with (ROOT / "pyproject.toml").open("rb") as handle:
+        overrides = _toml.load(handle)["tool"]["uv"]["override-dependencies"]
+
+    assert any(requirement.startswith("cryptography>=50") for requirement in overrides)
+    assert any(requirement.startswith("httplib2>=0.32") for requirement in overrides)
+
+
 def test_expand_raises_clear_error_without_apache_beam(monkeypatch):
     monkeypatch.setattr(beam_transform, "_beam", None)
 
