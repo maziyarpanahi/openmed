@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -60,6 +61,7 @@ def test_stubbed_rscript_maps_aggregate_measures_and_uses_private_csv(
     del accepted_license
     observed: dict[str, object] = {}
     monkeypatch.setattr(sdcmicro.shutil, "which", lambda candidate: f"/opt/{candidate}")
+    expected_rscript = os.path.abspath("/opt/approved-Rscript")
 
     def fake_run(command, **kwargs):
         input_path = Path(command[3])
@@ -88,7 +90,7 @@ def test_stubbed_rscript_maps_aggregate_measures_and_uses_private_csv(
         rscript="approved-Rscript",
     )
 
-    assert observed["command"][0:2] == ["/opt/approved-Rscript", "--vanilla"]
+    assert observed["command"][0:2] == [expected_rscript, "--vanilla"]
     assert observed["kwargs"] == {
         "check": False,
         "capture_output": True,
