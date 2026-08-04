@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added dependency-free OpenDocument Text (`.odt`) extraction with paragraph
+  and list reading order, deterministic table linearization, character-offset
+  source maps, multimodal registry discovery, and usage documentation (#857).
 - Added offline family-transfer adapter routing that prefers installed target
   adapters, falls back to compatible donor adapters with scored provenance,
   and returns explicit unsupported or unavailable routing failures (#1331).
