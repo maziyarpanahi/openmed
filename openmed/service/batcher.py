@@ -121,6 +121,7 @@ class _QueuedJob(Generic[T, R]):
     queued_at: float
     priority_handle: Optional[BatchPriorityHandle]
     wait_timeout: Optional[asyncio.TimerHandle]
+    admission_released: bool = False
 
 
 class DynamicBatcher(Generic[T, R]):
@@ -238,9 +239,6 @@ class DynamicBatcher(Generic[T, R]):
             future.cancel()
             await self._remove_pending_job(job.job_id)
             raise
-        finally:
-            async with self._lock:
-                self._admission.release()
 
     async def admission_error(self, priority: object) -> Optional[BackpressureError]:
         """Return a backpressure error if *priority* cannot admit more work."""
@@ -328,12 +326,12 @@ class DynamicBatcher(Generic[T, R]):
             self._record_queue_wait(job.priority, waited)
             self._admission.record_wait(waited)
             self._record_shed(job.priority)
+            error = self._admission.wait_expired(priority=job.priority)
+            self._release_admission_locked(job)
             if job.priority_handle is not None:
                 job.priority_handle._clear(job.job_id)
             if not job.future.done():
-                job.future.set_exception(
-                    self._admission.wait_expired(priority=job.priority)
-                )
+                job.future.set_exception(error)
 
     def _schedule_flush_locked(self, loop: asyncio.AbstractEventLoop) -> None:
         if self._timer is not None:
@@ -405,32 +403,33 @@ class DynamicBatcher(Generic[T, R]):
 
     async def _run_batch(self, batch: Sequence[_QueuedJob[T, R]]) -> None:
         active_jobs = [job for job in batch if not job.future.cancelled()]
-        if not active_jobs:
-            return
-
         try:
-            results = self._dispatch([job.item for job in active_jobs])
-            if inspect.isawaitable(results):
-                results = await results
-            results = list(results)
-            if len(results) != len(active_jobs):
-                raise ValueError(
-                    "Batch dispatch returned "
-                    f"{len(results)} results for {len(active_jobs)} jobs"
-                )
+            if active_jobs:
+                results = self._dispatch([job.item for job in active_jobs])
+                if inspect.isawaitable(results):
+                    results = await results
+                results = list(results)
+                if len(results) != len(active_jobs):
+                    raise ValueError(
+                        "Batch dispatch returned "
+                        f"{len(results)} results for {len(active_jobs)} jobs"
+                    )
+
+                for job, result in zip(active_jobs, results):
+                    if job.future.done():
+                        continue
+                    if isinstance(result, BaseException):
+                        job.future.set_exception(result)
+                    else:
+                        job.future.set_result(result)
         except Exception as exc:
             for job in active_jobs:
                 if not job.future.done():
                     job.future.set_exception(exc)
-            return
-
-        for job, result in zip(active_jobs, results):
-            if job.future.done():
-                continue
-            if isinstance(result, BaseException):
-                job.future.set_exception(result)
-            else:
-                job.future.set_result(result)
+        finally:
+            async with self._lock:
+                for job in batch:
+                    self._release_admission_locked(job)
 
     async def _remove_pending_job(self, job_id: int) -> None:
         async with self._lock:
@@ -448,11 +447,18 @@ class DynamicBatcher(Generic[T, R]):
                 self._timer.cancel()
                 self._timer = None
             self._record_queue_depth(job.priority)
+            self._release_admission_locked(job)
             if job.priority_handle is not None:
                 job.priority_handle._clear(job.job_id)
 
     def _pending_count_locked(self) -> int:
         return len(self._jobs)
+
+    def _release_admission_locked(self, job: _QueuedJob[T, R]) -> None:
+        if job.admission_released:
+            return
+        job.admission_released = True
+        self._admission.release()
 
     def _backpressure_error_locked(self, priority: str) -> BackpressureError:
         return BackpressureError(

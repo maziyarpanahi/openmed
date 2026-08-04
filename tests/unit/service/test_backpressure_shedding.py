@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -159,6 +160,51 @@ def test_request_waiting_beyond_maximum_is_shed_and_releases_admission() -> None
     assert expired.max_wait_ms == 10
     assert depth == 0
     assert shedding is False
+
+
+def test_cancelled_inflight_request_keeps_admission_until_dispatch_finishes() -> None:
+    async def scenario() -> tuple[int, int, int]:
+        dispatch_started = asyncio.Event()
+        release_dispatch = asyncio.Event()
+        dispatch_finished = asyncio.Event()
+
+        async def dispatch(items: list[str]) -> list[str]:
+            dispatch_started.set()
+            await release_dispatch.wait()
+            dispatch_finished.set()
+            return list(items)
+
+        batcher = DynamicBatcher(
+            dispatch,
+            max_batch_size=1,
+            max_wait_ms=1000,
+            high_watermark=1,
+            low_watermark=0,
+            max_queue_wait_ms=1000,
+            queue_name="analyze",
+        )
+        request = asyncio.create_task(batcher.submit("inflight"))
+        await asyncio.wait_for(dispatch_started.wait(), timeout=0.2)
+
+        request.cancel()
+        with suppress(asyncio.CancelledError):
+            await request
+
+        during_dispatch = await batcher.admission_snapshot()
+        with pytest.raises(BackpressureError):
+            await batcher.submit("shed")
+
+        release_dispatch.set()
+        await asyncio.wait_for(dispatch_finished.wait(), timeout=0.2)
+        await asyncio.sleep(0)
+        after_dispatch = await batcher.admission_snapshot()
+        return during_dispatch.depth, after_dispatch.depth, int(after_dispatch.shedding)
+
+    during_depth, after_depth, shedding = asyncio.run(scenario())
+
+    assert during_depth == 1
+    assert after_depth == 0
+    assert shedding == 0
 
 
 def test_admission_metrics_expose_depth_state_wait_and_shed_count() -> None:
