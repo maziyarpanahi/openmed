@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
   contract, with explicit errors for missing dependencies, unknown backends,
   and conflicting preconstructed segmenters (#1848).
+- Added a verified dependency-license record for the `[multimodal]` and `[ocr-paddle]`
+  extras (`openmed/multimodal/_licenses.py`) carrying the SPDX identifier, source URL, and verification date for each pinned distribution, plus the Tesseract system-binary license and the TCIA per-collection dataset caveat. A new test gate reuses the permissive-only license policy to fail when a pinned dependency is unrecorded, has drifted from `pyproject.toml`, is not permissive, or is imported in-process contrary to invariant I2. pydicom is confirmed MIT, replacing the previous "license unverified" caveat (#257).
 
 ### Fixed
 
