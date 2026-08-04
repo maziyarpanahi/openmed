@@ -12,6 +12,7 @@ from .doctype import (
     DocumentClassification,
     classify_document,
 )
+from .history import segment_history_family
 
 __all__ = [
     "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE",
@@ -21,5 +22,6 @@ __all__ = [
     "UNSECTIONED_SECTION",
     "classify_document",
     "detect_sections",
+    "segment_history_family",
     "validate_section_spans",
 ]
