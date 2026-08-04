@@ -272,6 +272,17 @@
 | IntraocularPressure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
+## Radiology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Finding | FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| ImagingModality | IMAGING_MODALITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Laterality | LATERALITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Measurement | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+| Impression | FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/radiology_finding.jsonl |
+
 ## Generic
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |

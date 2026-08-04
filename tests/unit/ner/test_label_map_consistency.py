@@ -13,8 +13,10 @@ from pathlib import Path
 import pytest
 
 from openmed.core.labels import (
+    BIOMEDICAL_LABEL_KIND,
     CANONICAL_LABELS,
     hipaa_class_for,
+    label_kind_for,
     policy_label_for,
     risk_level_for,
     system_hints_for,
@@ -311,6 +313,102 @@ class TestSpecialtyRouting:
                 info.category not in {"Dermatology", "Ophthalmology"}
                 for _key, info, _reason in suggestions
             )
+
+
+# ---------------------------------------------------------------------------
+# Radiology domain and routing (issue #1971)
+# ---------------------------------------------------------------------------
+
+
+class TestRadiologyDomain:
+    EXPECTED_LABELS = [
+        "Finding",
+        "ImagingModality",
+        "Anatomy",
+        "Laterality",
+        "Measurement",
+        "Impression",
+    ]
+    EXPECTED_CANONICAL_LABELS = [
+        "FINDING",
+        "IMAGING_MODALITY",
+        "ANATOMY",
+        "LATERALITY",
+        "MEASUREMENT",
+    ]
+
+    def test_radiology_in_available_domains(self):
+        assert "radiology" in available_domains()
+
+    def test_get_default_labels_returns_radiology_set(self):
+        assert get_default_labels("radiology") == self.EXPECTED_LABELS
+
+    def test_radiology_labels_match_registry_metadata(self):
+        normalized = list(
+            dict.fromkeys(
+                normalize_canonical_label(label) for label in self.EXPECTED_LABELS
+            )
+        )
+        assert normalized == self.EXPECTED_CANONICAL_LABELS
+        assert normalized == _CATEGORY_ENTITY_TYPES["Radiology"]
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            ("finding", "FINDING"),
+            ("imaging modality", "IMAGING_MODALITY"),
+            ("laterality", "LATERALITY"),
+            ("measurement", "MEASUREMENT"),
+            ("impression", "FINDING"),
+        ],
+    )
+    def test_radiology_labels_are_non_identifier_biomedical_concepts(
+        self, label, expected
+    ):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert label_kind_for(expected) == BIOMEDICAL_LABEL_KIND
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert hipaa_class_for(expected) is None
+
+
+class TestRadiologyRouting:
+    RADIOLOGY_TEXT = "CT of the chest shows a 4 mm nodule"
+
+    def test_match_categories_routes_radiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.RADIOLOGY_TEXT)
+        ]
+        assert categories == ["Radiology"]
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "CT chest",
+            "MRI brain",
+            "chest x-ray",
+            "renal ultrasound",
+            "portable radiograph",
+            "with contrast",
+            "impression is unchanged",
+            "pulmonary nodule",
+            "left lower lobe opacity",
+        ],
+    )
+    def test_each_radiology_keyword_routes(self, text):
+        categories = [category for category, _reason in _match_categories(text)]
+        assert "Radiology" in categories
+
+    def test_radiology_is_registry_metadata_not_a_live_category(self):
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Radiology" in _CATEGORY_ENTITY_TYPES
+        assert "Radiology" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.RADIOLOGY_TEXT)
+        assert suggestions
+        assert all(info.category != "Radiology" for _key, info, _reason in suggestions)
 
 
 # ---------------------------------------------------------------------------

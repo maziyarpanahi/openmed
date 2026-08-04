@@ -118,6 +118,12 @@ ORGANISM: Final = "ORGANISM"
 PATHOLOGY: Final = "PATHOLOGY"
 BIOMARKER: Final = "BIOMARKER"
 
+#: Radiology finding concepts (issue #1971)
+FINDING: Final = "FINDING"
+IMAGING_MODALITY: Final = "IMAGING_MODALITY"
+LATERALITY: Final = "LATERALITY"
+MEASUREMENT: Final = "MEASUREMENT"
+
 #: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO)
 CONDITION: Final = "CONDITION"
 MEDICATION: Final = "MEDICATION"
@@ -148,6 +154,10 @@ BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         ORGANISM,
         PATHOLOGY,
         BIOMARKER,
+        FINDING,
+        IMAGING_MODALITY,
+        LATERALITY,
+        MEASUREMENT,
     }
 )
 # ``CONDITION`` predates this taxonomy and retains its existing compatibility
@@ -394,6 +404,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         ORGANISM,
         PATHOLOGY,
         BIOMARKER,
+        FINDING,
+        IMAGING_MODALITY,
+        LATERALITY,
+        MEASUREMENT,
         CONDITION,
         MEDICATION,
         LAB_TEST,
@@ -841,6 +855,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     PATHOLOGY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
     BIOMARKER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    # Radiology finding concepts (issue #1971)
+    FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IMAGING_MODALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    LATERALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MEASUREMENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     # Clinical concepts
     CONDITION: _label_metadata(
         CLINICAL_CONCEPT,
@@ -1569,12 +1588,20 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "pathology": PATHOLOGY,
     "pathologicalformation": PATHOLOGY,
     "biomarker": BIOMARKER,
+    # Radiology finding concepts
+    "finding": FINDING,
+    "radiologyfinding": FINDING,
+    "imagingfinding": FINDING,
+    "impression": FINDING,
+    "imagingmodality": IMAGING_MODALITY,
+    "modality": IMAGING_MODALITY,
+    "laterality": LATERALITY,
+    "measurement": MEASUREMENT,
     # Clinical concepts
     "condition": CONDITION,
     "diagnosis": PROBLEM,
     "ayushmorbidity": CONDITION,
     "namastemorbidity": CONDITION,
-    "finding": CONDITION,
     "problem": PROBLEM,
     "disorder": CONDITION,
     "syndrome": CONDITION,
@@ -1586,7 +1613,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "labtest": LAB_TEST,
     "test": LAB_TEST,
     "lab": LAB_TEST,
-    "measurement": LAB_TEST,
     "analyte": LAB_TEST,
     "procedure": PROCEDURE,
     "surgery": PROCEDURE,
@@ -2157,6 +2183,10 @@ __all__ = [
     "ORGANISM",
     "PATHOLOGY",
     "BIOMARKER",
+    "FINDING",
+    "IMAGING_MODALITY",
+    "LATERALITY",
+    "MEASUREMENT",
     "CONDITION",
     "MEDICATION",
     "LAB_TEST",

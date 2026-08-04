@@ -54,6 +54,7 @@ from openmed.core.labels import (
     ETHNICITY,
     EYE_COLOR,
     FEEDING_ROUTE,
+    FINDING,
     FIRST_NAME,
     FORM,
     FREQUENCY,
@@ -76,6 +77,7 @@ from openmed.core.labels import (
     ID_SUBTYPE_NATIONAL_ID,
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
+    IMAGING_MODALITY,
     IMEI,
     INDICATION,
     INSULIN_REGIMEN,
@@ -89,11 +91,13 @@ from openmed.core.labels import (
     LABEL_TO_HIPAA,
     LABEL_TO_POPIA,
     LAST_NAME,
+    LATERALITY,
     LINE_DRAIN_TUBE,
     LITECOIN_ADDRESS,
     LOCATION,
     MAC_ADDRESS,
     MASKED_NUMBER,
+    MEASUREMENT,
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
@@ -470,7 +474,7 @@ class TestRegistryCoverage:
 
 
 class TestBiomedicalEntityLabels:
-    """Canonical labels shared by the shipped biomedical NER families."""
+    """Canonical labels shared by biomedical NER domains."""
 
     EXPECTED_LABELS = frozenset(
         {
@@ -492,6 +496,10 @@ class TestBiomedicalEntityLabels:
             ORGANISM,
             PATHOLOGY,
             BIOMARKER,
+            FINDING,
+            IMAGING_MODALITY,
+            LATERALITY,
+            MEASUREMENT,
         }
     )
 
@@ -516,6 +524,11 @@ class TestBiomedicalEntityLabels:
             ("organism_subdivision", ORGANISM),
             ("organism_substance", ORGANISM),
             ("pathological_formation", PATHOLOGY),
+            ("radiology finding", FINDING),
+            ("imaging modality", IMAGING_MODALITY),
+            ("laterality", LATERALITY),
+            ("measurement", MEASUREMENT),
+            ("impression", FINDING),
         ],
     )
     def test_family_native_aliases_normalize(self, alias, expected):
@@ -568,12 +581,12 @@ class TestClinicalConceptLabels:
         [
             ("disease", DISEASE),
             ("diagnosis", PROBLEM),
-            ("finding", CONDITION),
+            ("finding", FINDING),
             ("drug", DRUG),
             ("medication", MEDICATION),
             ("chemical", CHEMICAL),
             ("test", LAB_TEST),
-            ("measurement", LAB_TEST),
+            ("measurement", MEASUREMENT),
             ("analyte", LAB_TEST),
             ("surgery", PROCEDURE),
             ("procedure", PROCEDURE),
