@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "provenance": "Fabricated for address-assist and leakage regression coverage; not copied from patient data or an address corpus.",
+  "minimum_address_token_recall": 0.95,
+  "cases": [
+    {
+      "id": "zh-address-001",
+      "text": "现住址：澄海省新川市星河区云杉街道康悦路88号。",
+      "address": "澄海省新川市星河区云杉街道康悦路88号",
+      "model_prefix": "澄海省新川市",
+      "labelled_tokens": ["澄海省", "新川市", "星河区", "云杉街道", "康悦路", "88号"]
+    },
+    {
+      "id": "zh-address-002",
+      "text": "联系地址：云岭省安州市月湖县青竹街道和顺街17号；请核对。",
+      "address": "云岭省安州市月湖县青竹街道和顺街17号",
+      "model_prefix": "云岭省安州市",
+      "labelled_tokens": ["云岭省", "安州市", "月湖县", "青竹街道", "和顺街", "17号"]
+    },
+    {
+      "id": "zh-address-003",
+      "text": "居住地：江华省宁川市清泉区松柏镇望安大道306号。",
+      "address": "江华省宁川市清泉区松柏镇望安大道306号",
+      "model_prefix": "江华省宁川市",
+      "labelled_tokens": ["江华省", "宁川市", "清泉区", "松柏镇", "望安大道", "306号"]
+    },
+    {
+      "id": "zh-address-004",
+      "text": "现住址：青岚省和州市市光区大竹街道云景路29号。",
+      "address": "青岚省和州市市光区大竹街道云景路29号",
+      "model_prefix": "青岚省和州市",
+      "labelled_tokens": ["青岚省", "和州市", "市光区", "大竹街道", "云景路", "29号"]
+    }
+  ]
+}

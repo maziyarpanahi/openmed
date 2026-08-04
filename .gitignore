@@ -142,6 +142,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
+/site-*/
 
 # mypy
 .mypy_cache/
@@ -239,6 +240,8 @@ dev_config.json
 # Documentation build artifacts
 docs/website/_build/
 docs/api/_build/
+output/playwright/
+.playwright-cli/
 
 .pypirc
 
