@@ -209,6 +209,314 @@ def test_nested_raw_or_malformed_context_fields_are_dropped():
     assert "4111 1111 1111 1111" not in serialized
 
 
+def test_detailed_risk_shapes_are_reduced_to_aggregate_audit_evidence():
+    report = _report()
+    report.residual_risk = {
+        "source_path": "/private/raw/records-canary.csv",
+        "risk_report": {
+            "leakage_rate": 0.25,
+            "reid_rate": 0.5,
+            "k_min": 1,
+            "singleton_records": [
+                {
+                    "record_index": 7,
+                    "record_id": "record-id-canary",
+                    "effective_k": 1,
+                    "quasi_identifier_key": [
+                        {"category": "geography", "values": ["raw-qi-canary"]}
+                    ],
+                }
+            ],
+            "quasi_identifiers": [
+                {
+                    "record_index": 7,
+                    "record_id": "record-id-canary",
+                    "category": "geography",
+                    "value": "raw-qi-canary",
+                    "normalized_value": "normalized-qi-canary",
+                    "source": "field",
+                    "start": 1,
+                    "end": 2,
+                }
+            ],
+        },
+        "kanon": {
+            "record_count": 2,
+            "quasi_identifiers": ["city"],
+            "sensitive_attributes": ["condition"],
+            "k": 1,
+            "class_count": 2,
+            "class_size_distribution": [[1, 2]],
+            "equivalence_classes": [
+                {
+                    "key": ["class-key-canary"],
+                    "size": 1,
+                    "members": [7],
+                    "l_diversity": {"condition": {"distinct": 1, "entropy": 0.0}},
+                    "t_closeness": {"condition": 0.5},
+                }
+            ],
+            "l": {"condition": 1},
+            "l_diversity": {"condition": {"min_distinct": 1, "min_entropy": 0.0}},
+            "t_closeness": {"condition": 0.5},
+            "l_metric": "distinct",
+            "t_distance": "variational",
+        },
+        "enforcement": {
+            "schema_version": 1,
+            "record_count": 2,
+            "released_count": 1,
+            "suppressed_count": 1,
+            "target_k": 2,
+            "target_l": 1,
+            "target_t": 1.0,
+            "quasi_identifiers": ["city"],
+            "sensitive_attributes": ["condition"],
+            "records": [{"city": "released-record-canary"}],
+            "kanon": {
+                "record_count": 1,
+                "quasi_identifiers": ["city"],
+                "sensitive_attributes": ["condition"],
+                "k": 1,
+                "class_count": 1,
+                "class_size_distribution": [[1, 1]],
+                "equivalence_classes": [
+                    {
+                        "key": ["enforced-key-canary"],
+                        "size": 1,
+                        "members": [0],
+                        "l_diversity": {},
+                        "t_closeness": {},
+                    }
+                ],
+                "l": {"condition": 0},
+                "l_diversity": {},
+                "t_closeness": {},
+                "l_metric": "distinct",
+                "t_distance": "variational",
+            },
+            "suppressed_records": [
+                {
+                    "offset": 1,
+                    "record_hash": "suppressed-hash-canary",
+                    "reason": "privacy_class_violation",
+                }
+            ],
+            "generalization": {
+                "levels": {"city": {"level": 1, "name": "region", "loss": 0.5}},
+                "information_loss": 0.5,
+                "nodes_evaluated": 2,
+            },
+            "bounds": {
+                "max_reidentification_upper_bound": 1.0,
+                "target_reidentification_upper_bound": 0.5,
+                "numeric_self_check": {
+                    "passed": False,
+                    "identity_bound_violations": [{"record_index": 0, "bound": 1.0}],
+                    "l_diversity_satisfied": True,
+                    "t_closeness_satisfied": True,
+                },
+                "per_record": [
+                    {
+                        "record_index": 0,
+                        "record_hash": "per-record-hash-canary",
+                    }
+                ],
+            },
+        },
+    }
+
+    payload = report.to_dict()["residual_risk"]
+    serialized = json.dumps(payload, sort_keys=True)
+
+    for canary in (
+        "/private/raw/records-canary.csv",
+        "record-id-canary",
+        "raw-qi-canary",
+        "normalized-qi-canary",
+        "class-key-canary",
+        "released-record-canary",
+        "enforced-key-canary",
+        "suppressed-hash-canary",
+        "per-record-hash-canary",
+    ):
+        assert canary not in serialized
+    for forbidden_key in (
+        '"normalized_value"',
+        '"record_id"',
+        '"equivalence_classes"',
+        '"members"',
+        '"records"',
+        '"suppressed_records"',
+        '"per_record"',
+        '"source_path_hash"',
+        '"record_id_hash"',
+        '"record_hash"',
+    ):
+        assert forbidden_key not in serialized
+
+    assert payload["risk_report"]["artifact"] == "deidentification_risk_summary"
+    assert payload["risk_report"]["singleton_record_count"] == 1
+    assert payload["risk_report"]["quasi_identifier_categories"] == {"geography": 1}
+    assert payload["kanon"]["equivalence_class_detail_count"] == 1
+    assert payload["kanon"]["l"] == {"condition": 1}
+    assert (
+        payload["enforcement"]["bounds"]["numeric_self_check"][
+            "identity_bound_violation_count"
+        ]
+        == 1
+    )
+
+
+def test_anonymization_result_is_serialized_through_its_safe_summary():
+    from openmed.risk import AnonymityPolicy, anonymize_release
+
+    rows = [
+        {
+            "patient_id": "audit-patient-canary-a",
+            "age": 30,
+            "zip": "audit-raw-qi-canary",
+            "condition": "audit-sensitive-canary-a",
+            "site_code": "site-a",
+            "source_batch": "batch-a",
+        },
+        {
+            "patient_id": "audit-patient-canary-b",
+            "age": 30,
+            "zip": "audit-raw-qi-canary",
+            "condition": "audit-sensitive-canary-b",
+            "site_code": "site-a",
+            "source_batch": "batch-a",
+        },
+    ]
+    policy = AnonymityPolicy(
+        quasi_identifiers=("age", "zip"),
+        sensitive_attributes=("condition",),
+        non_sensitive_attributes=("site_code",),
+        excluded_attributes=("source_batch",),
+        privacy_unit="patient_id",
+        target_k=2,
+    )
+    result = anonymize_release(rows, policy)
+    report = _report()
+    report.residual_risk = {"release": result}
+
+    payload = report.to_dict()["residual_risk"]["release"]
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["artifact"] == "deidentification_anonymization_summary"
+    assert payload["after"]["meets_policy"] is True
+    assert payload["policy"]["non_sensitive_attributes"] == ["site_code"]
+    assert payload["policy"]["excluded_attributes"] == ["source_batch"]
+    assert payload["released_schema_digest"] == result.released_schema_digest
+    assert payload["generalization"]["search"]["complete"] is False
+    assert payload["generalization"]["search"]["optimum_proven"] is True
+    assert (
+        payload["generalization"]["search"]["suppression_subsets_evaluated"]
+        == result.generalization.suppression_subsets_evaluated
+    )
+    assert (
+        payload["generalization"]["search"]["max_suppression_subsets"]
+        == result.generalization.max_suppression_subsets
+    )
+    for stage in ("before", "after"):
+        safe_k = payload[stage]["k_anonymity"]
+        source_k = getattr(result, stage).to_dict()["k_anonymity"]
+        assert safe_k["k_violating_class_count"] == source_k["k_violating_class_count"]
+        assert safe_k["l_violating_class_count"] == source_k["l_violating_class_count"]
+        assert safe_k["t_violating_class_count"] == source_k["t_violating_class_count"]
+    assert '"records"' not in serialized
+    for canary in (
+        "audit-patient-canary-a",
+        "audit-patient-canary-b",
+        "audit-raw-qi-canary",
+        "audit-sensitive-canary-a",
+        "audit-sensitive-canary-b",
+    ):
+        assert canary not in serialized
+
+
+def test_detailed_risk_category_is_allow_listed_without_echoing_forged_values():
+    report = _report()
+    report.residual_risk = {
+        "risk_report": {
+            "record_count": 1,
+            "leakage_rate": 1.0,
+            "reid_rate": 1.0,
+            "k_min": 1,
+            "singleton_records": [{"record_index": 0}],
+            "quasi_identifiers": [
+                {
+                    "category": "forged-category-sensitive-canary",
+                    "value": "raw-value-sensitive-canary",
+                }
+            ],
+        }
+    }
+
+    payload = report.to_dict()["residual_risk"]["risk_report"]
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["quasi_identifier_categories"] == {"unknown": 1}
+    assert "forged-category-sensitive-canary" not in serialized
+    assert "raw-value-sensitive-canary" not in serialized
+
+
+def test_serialized_release_summary_drops_untrusted_metadata_strings():
+    from openmed.risk import AnonymityPolicy, anonymize_release
+
+    result = anonymize_release(
+        [{"patient_id": "a", "age": 30}, {"patient_id": "b", "age": 30}],
+        AnonymityPolicy(
+            quasi_identifiers=("age",),
+            privacy_unit="patient_id",
+            target_k=2,
+        ),
+    )
+    payload = result.to_safe_dict()
+    payload["before"]["quasi_identifiers"].append("Alice Canary")
+    payload["generalization"]["levels"][0]["name"] = "Hierarchy Canary Name"
+    report = _report()
+    report.residual_risk = {"release": payload}
+
+    serialized = json.dumps(report.to_dict()["residual_risk"], sort_keys=True)
+
+    assert "Alice Canary" not in serialized
+    assert "Hierarchy Canary Name" not in serialized
+
+
+def test_release_audit_sanitizer_rejects_forged_closed_vocabulary_strings():
+    from openmed.risk import AnonymityPolicy, anonymize_release
+
+    result = anonymize_release(
+        [{"patient_id": "a", "age": 30}, {"patient_id": "b", "age": 30}],
+        AnonymityPolicy(
+            quasi_identifiers=("age",),
+            privacy_unit="patient_id",
+            target_k=2,
+        ),
+    )
+    payload = result.to_safe_dict()
+    canary = "closed-vocabulary-canary"
+    payload["policy"]["l_metric"] = canary
+    payload["policy"]["t_distance"] = canary
+    payload["before"]["attribute_disclosure"] = [
+        {
+            "attribute": "age",
+            "l_diversity": {"metric": canary},
+            "t_closeness": {"distance": canary},
+        }
+    ]
+    payload["generalization"]["search"]["strategy"] = canary
+    payload["generalization"]["search"]["suppression_strategy"] = canary
+    report = _report()
+    report.residual_risk = {"release": payload}
+
+    serialized = json.dumps(report.to_dict()["residual_risk"], sort_keys=True)
+
+    assert canary not in serialized
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

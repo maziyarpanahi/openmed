@@ -8,6 +8,8 @@ let package = Package(
     platforms: [
         .iOS(.v17),
         .macOS(.v14),
+        .watchOS(.v10),
+        .visionOS(.v1),
     ],
     products: [
         .library(
@@ -25,10 +27,26 @@ let package = Package(
         .target(
             name: "OpenMedKit",
             dependencies: [
-                .product(name: "Transformers", package: "swift-transformers"),
-                .product(name: "MLX", package: "mlx-swift"),
-                .product(name: "MLXNN", package: "mlx-swift"),
-                .product(name: "ZIPFoundation", package: "ZIPFoundation"),
+                .product(
+                    name: "Transformers",
+                    package: "swift-transformers",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLX",
+                    package: "mlx-swift",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLXNN",
+                    package: "mlx-swift",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "ZIPFoundation",
+                    package: "ZIPFoundation",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
             ],
             resources: [
                 .process("Resources")

@@ -565,6 +565,48 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "OMOP",
+      "item": [
+        {
+          "name": "Load OMOP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records_jsonl\": \"{\\\"document_id\\\": \\\"synthetic-note-001\\\", \\\"entities\\\": [{\\\"code\\\": \\\"73211009\\\", \\\"concept_id\\\": 201820, \\\"domain_id\\\": \\\"Condition\\\", \\\"end\\\": 24, \\\"start\\\": 16, \\\"text\\\": \\\"diabetes\\\", \\\"vocabulary_id\\\": \\\"SNOMED\\\"}], \\\"note_date\\\": \\\"2026-01-02\\\", \\\"note_text\\\": \\\"Patient reports diabetes.\\\", \\\"person_id\\\": \\\"synthetic-patient-001\\\"}\\n\",\n  \"vocabulary_version\": \"SNOMED-2026\",\n  \"validate_constraints\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/omop/load",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "omop",
+                "load"
+              ]
+            },
+            "description": "Load newline-delimited synthetic grounded note records into an in-memory OMOP CDM build and return a PHI-free per-table row-count and rejection summary."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }
