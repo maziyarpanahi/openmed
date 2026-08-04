@@ -7,15 +7,20 @@ import pytest
 from openmed.clinical import canonical_section_label
 from openmed.clinical.lexicons import load_section_headers
 from openmed.clinical.sections import (
+    LIST_SECTION_LOINC_CODES,
     UNSECTIONED_SECTION,
     SectionSpan,
     detect_sections,
+    is_list_bearing_section,
+    list_section_label,
+    parse_section_lists,
     validate_section_spans,
 )
 
 CANONICAL_SECTION_LABELS = {
     "history_of_present_illness",
     "past_medical_history",
+    "problem_list",
     "medications",
     "allergies",
     "social_history",
@@ -88,6 +93,59 @@ def test_section_synonyms_normalize_to_canonical_labels() -> None:
         "assessment_and_plan",
     ]
     assert canonical_section_label("Impression") == "impression"
+
+
+def test_list_bearing_sections_include_loinc_metadata_and_absolute_items() -> None:
+    text = (
+        "HPI: Synthetic cough.\n"
+        "MEDICATIONS:\n"
+        "1. Metformin 500 mg twice daily\n"
+        "2. Lisinopril 10 mg daily\n"
+        "PROBLEM LIST:\n"
+        "- Hypertension\n"
+        "- Type 2 diabetes"
+    )
+
+    sections = detect_sections(text)
+    medication_section = next(
+        section for section in sections if section.label == "medications"
+    )
+    problem_section = next(
+        section for section in sections if section.label == "problem_list"
+    )
+    items = parse_section_lists(text, sections)
+    top_level = [item for item in items if item.nesting_level == 0]
+
+    assert medication_section["loinc_code"] == LIST_SECTION_LOINC_CODES["medications"]
+    assert problem_section["loinc_code"] == LIST_SECTION_LOINC_CODES["problem_list"]
+    assert len(top_level) == 4
+    assert [item.marker for item in top_level] == ["1.", "2.", "-", "-"]
+    assert all(text[item.start : item.end] == item.text for item in items)
+
+
+def test_list_bearing_section_can_be_identified_by_loinc_code() -> None:
+    text = "Penicillin: rash\nLatex: hives"
+    coded_section = SectionSpan(
+        label="external_section",
+        start=0,
+        end=len(text),
+        coding={"system": "http://loinc.org", "code": "48765-2"},
+    )
+
+    assert is_list_bearing_section(coded_section)
+    assert list_section_label(coded_section) == "allergies"
+    assert len(parse_section_lists(text, (coded_section,))) == 2
+
+
+def test_inline_list_header_preserves_first_item_offset() -> None:
+    text = "MEDICATIONS: Metformin 500 mg daily\nLisinopril 10 mg daily"
+
+    items = parse_section_lists(text)
+
+    assert len(items) == 2
+    assert items[0].content_text.startswith("Metformin")
+    assert items[0].start == text.index("Metformin")
+    assert text[items[0].start : items[0].end] == items[0].text
 
 
 def test_headerless_note_returns_one_unsectioned_preamble_span() -> None:

@@ -458,6 +458,62 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
     }
 )
 
+# Structured-table semantic types map onto the same canonical vocabulary used
+# by text de-identification. Keeping this mapping in the label taxonomy avoids
+# a second, subtly incompatible label system in the tabular workflow.
+COLUMN_SEMANTIC_LABELS: Final[Mapping[str, str]] = {
+    "person_name": PERSON,
+    "medical_record_number": ID_NUM,
+    "nhs_number": ID_NUM,
+    "social_security_number": SSN,
+    "record_identifier": ID_NUM,
+    "email_address": EMAIL,
+    "phone_number": PHONE,
+    "street_address": STREET_ADDRESS,
+    "date_of_birth": DATE_OF_BIRTH,
+    "date": DATE,
+    "age": AGE,
+    "postal_code": ZIPCODE,
+    "location": LOCATION,
+    "gender": GENDER,
+    "organization": ORGANIZATION,
+    "clinical_code": CONDITION,
+    "diagnosis_code": CONDITION,
+    "procedure_code": PROCEDURE,
+    "medication_code": MEDICATION,
+    "lab_code": LAB_TEST,
+    "clinical_condition": CONDITION,
+    "medication": MEDICATION,
+    "procedure": PROCEDURE,
+    "lab_test": LAB_TEST,
+    "lab_value": LAB_VALUE,
+    "unit": UNIT,
+    "reference_range": REFERENCE_RANGE,
+    "free_text": OTHER,
+    "boolean": OTHER,
+    "categorical": OTHER,
+    "numeric": OTHER,
+    "unknown": OTHER,
+}
+
+
+def canonical_label_for_column_semantic(semantic_type: str) -> str:
+    """Return the canonical label for a structured column semantic type.
+
+    Args:
+        semantic_type: Stable semantic type emitted by the structured column
+            classifier.
+
+    Raises:
+        KeyError: If ``semantic_type`` is not part of the public mapping.
+    """
+
+    try:
+        return COLUMN_SEMANTIC_LABELS[semantic_type]
+    except (KeyError, TypeError):
+        raise KeyError(f"unknown column semantic type: {semantic_type!r}") from None
+
+
 # Boundary morphology is limited to labels that unambiguously identify a
 # person's name. Prefixes and usernames remain excluded because suffix-like
 # text can be part of those identifiers.
@@ -1965,9 +2021,11 @@ _validate_label_metadata()
 __all__ = [
     "CANONICAL_LABELS",
     "BIOMEDICAL_LABELS",
+    "COLUMN_SEMANTIC_LABELS",
     "CLINICAL_CONCEPT_LABELS",
     "NAME_BOUNDARY_REFINEMENT_LABELS",
     "normalize_label",
+    "canonical_label_for_column_semantic",
     "supports_name_boundary_refinement",
     "CMEEE_LABEL_TO_CANONICAL",
     "id_subtype_for",
