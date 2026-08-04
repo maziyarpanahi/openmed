@@ -187,3 +187,42 @@ def test_function_failures_and_sql_bodies_never_log_raw_text(caplog):
             body,
             flags=re.IGNORECASE,
         )
+
+
+def test_mapping_results_and_initialization_failures_remain_phi_safe(caplog):
+    def mapping_process_batch(texts: list[str], **kwargs: Any) -> dict[str, Any]:
+        del kwargs, texts
+        return {
+            "items": [
+                {
+                    "success": True,
+                    "result": {"deidentified_text": "[REDACTED]"},
+                }
+            ]
+        }
+
+    assert (
+        postgres_plpython.deidentify_text(
+            "synthetic patient note",
+            {},
+            process_batch_fn=mapping_process_batch,
+            loader_factory=object,
+        )
+        == "[REDACTED]"
+    )
+
+    raw_text = "synthetic failure text"
+
+    def failing_loader() -> Any:
+        raise ValueError(raw_text)
+
+    with pytest.raises(RuntimeError, match="OpenMed de-identification failed") as exc:
+        postgres_plpython.deidentify_text(
+            raw_text,
+            {},
+            process_batch_fn=mapping_process_batch,
+            loader_factory=failing_loader,
+        )
+
+    assert raw_text not in str(exc.value)
+    assert raw_text not in caplog.text

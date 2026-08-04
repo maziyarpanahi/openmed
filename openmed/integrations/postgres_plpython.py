@@ -15,7 +15,7 @@ raw clinical text must never be written to PostgreSQL logs.
 
 from __future__ import annotations
 
-from collections.abc import Callable, MutableMapping, Sequence
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +26,7 @@ _SESSION_CACHE_KEY = "openmed.postgres_plpython.pipeline.v1"
 
 ProcessBatch = Callable[..., Any]
 LoaderFactory = Callable[[], Any]
+_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -113,14 +114,13 @@ def deidentify_batch(
     if not positions:
         return output
 
-    state = _get_session_state(
-        session_globals,
-        process_batch_fn=process_batch_fn,
-        loader_factory=loader_factory,
-    )
-    inputs = [values[position] for position in positions]
-
     try:
+        state = _get_session_state(
+            session_globals,
+            process_batch_fn=process_batch_fn,
+            loader_factory=loader_factory,
+        )
+        inputs = [values[position] for position in positions]
         batch_result = state.process_batch(
             inputs,
             model_name=DEFAULT_MODEL_NAME,
@@ -131,10 +131,10 @@ def deidentify_batch(
             batch_size=max(1, len(inputs)),
             continue_on_error=True,
         )
+        redacted = _deidentified_texts(batch_result, expected=len(inputs))
     except Exception:
         raise RuntimeError("OpenMed de-identification failed") from None
 
-    redacted = _deidentified_texts(batch_result, expected=len(inputs))
     for position, replacement in zip(positions, redacted):
         output[position] = replacement
     return output
@@ -163,33 +163,47 @@ def _get_session_state(
 
 
 def _deidentified_texts(batch_result: Any, *, expected: int) -> list[str]:
-    items = getattr(batch_result, "items", batch_result)
+    if isinstance(batch_result, Mapping):
+        items = batch_result.get("items", _MISSING)
+    else:
+        items = getattr(batch_result, "items", batch_result)
+
+    if items is _MISSING or isinstance(items, (str, bytes)):
+        raise RuntimeError("OpenMed de-identification returned invalid results")
+
     try:
-        item_count = len(items)
-    except TypeError:
+        items = list(items)
+    except (TypeError, ValueError):
         raise RuntimeError(
             "OpenMed de-identification returned invalid results"
         ) from None
 
-    if item_count != expected:
+    if len(items) != expected:
         raise RuntimeError("OpenMed de-identification returned invalid results")
 
     redacted: list[str] = []
     for item in items:
-        if hasattr(item, "success") and not item.success:
+        success = _get_field(item, "success", default=_MISSING)
+        if success is not _MISSING and not success:
             raise RuntimeError("OpenMed de-identification failed for a batch item")
 
-        result = getattr(item, "result", item)
+        result = _get_field(item, "result", default=item)
         if isinstance(result, str):
             redacted.append(result)
             continue
 
-        replacement = getattr(result, "deidentified_text", None)
+        replacement = _get_field(result, "deidentified_text", default=None)
         if not isinstance(replacement, str):
             raise RuntimeError("OpenMed de-identification returned invalid results")
         redacted.append(replacement)
 
     return redacted
+
+
+def _get_field(value: Any, name: str, *, default: Any) -> Any:
+    if isinstance(value, Mapping):
+        return value.get(name, default)
+    return getattr(value, name, default)
 
 
 def _default_process_batch() -> ProcessBatch:
