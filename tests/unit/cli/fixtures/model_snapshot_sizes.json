@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-07-18",
+  "unit": "bytes",
+  "models": [
+    {
+      "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-33M",
+      "revision": "3c914174cf099fda326b43084f679ad31425f88c",
+      "actual_snapshot_bytes": 67905891
+    },
+    {
+      "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-TinyMed-65M",
+      "revision": "1ab9359dada59aafc76bf63879c4984a5fa3490e",
+      "actual_snapshot_bytes": 131793715
+    },
+    {
+      "repo_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+      "revision": "a2360d3f42526fc660ac3b2b2301e1c2d94eba61",
+      "actual_snapshot_bytes": 576698600
+    }
+  ]
+}

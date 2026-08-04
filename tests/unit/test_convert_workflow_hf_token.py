@@ -19,8 +19,9 @@ def test_convert_workflow_uses_protected_hf_publish_environment():
     assert "HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}" in workflow
 
 
-def test_convert_workflow_fails_publish_job_when_hf_token_is_missing():
+def test_convert_workflow_fails_publish_job_before_setup_when_hf_token_is_missing():
     workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
+    publish_job = workflow.split("  publish-hf:", maxsplit=1)[1]
 
     assert "Require HF write token before publish" in workflow
     assert 'if [ -z "${HF_WRITE_TOKEN:-}" ]; then' in workflow
@@ -28,6 +29,14 @@ def test_convert_workflow_fails_publish_job_when_hf_token_is_missing():
     assert "exit 1" in workflow
     assert re.search(r"hf_[A-Za-z0-9]{20,}", workflow) is None
     assert 'echo "$HF_WRITE_TOKEN' not in workflow
+    guard_position = publish_job.index(
+        "    - name: Require HF write token before publish"
+    )
+    assert guard_position < publish_job.index("    - uses: actions/checkout")
+    assert guard_position < publish_job.index("    - name: Set up Python")
+    assert guard_position < publish_job.index(
+        "    - name: Install publish dependencies"
+    )
 
 
 def test_convert_workflow_publishes_downloaded_conversion_artifacts():

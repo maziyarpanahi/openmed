@@ -20,6 +20,70 @@ Commit the updated `uv.lock` with the dependency change. The CI failure message
 uses the same remediation: `Run 'uv lock' and commit the updated uv.lock.`
 Do not edit the lockfile by hand.
 
+## Model artifact integrity
+
+OpenMed verifies registry model artifacts before their first model or pipeline
+construction. The first online load pins the current repository revision to the
+catalog row's `reproducibility_hash`, downloads only runtime files from that
+revision, verifies content-addressed Hub metadata, and records an offline
+`.openmed-integrity.json` artifact set under the configured OpenMed cache. Each
+artifact entry has a streamed SHA-256 digest. Later loads verify that local set
+without contacting the network.
+
+The catalog `reproducibility_hash` is a repository/provenance digest; it is not
+reused as an artifact-byte digest. Keeping the two values separate avoids
+comparing unrelated hashes while still binding the verified artifact set to the
+catalog revision.
+
+Re-check one local model directory or all prepared caches with:
+
+```bash
+openmed models verify /path/to/local/model
+openmed models verify OpenMed/model-id
+openmed models verify --all
+```
+
+`models verify` never performs network access. It prints the expected and
+actual artifact-set hashes and exits `0` when every selected cache passes. A
+missing artifact, malformed integrity record, or digest mismatch prints `FAIL`
+and exits `1`.
+
+Default mode verifies hashes when an integrity manifest is present and emits a
+prominent warning when a registry model has not yet been prepared. Set
+`OPENMED_MODEL_VERIFY_STRICT=1` to make a missing registry hash or integrity
+manifest fail closed. Emergency opt-out is available with
+`OPENMED_SKIP_MODEL_VERIFY=1`; it logs a prominent warning and should only be
+used while investigating or recovering a trusted cache.
+
+### Failure runbook
+
+If verification fails:
+
+1. Do not construct a PHI-processing pipeline from that cache.
+2. Record the model id, artifact path, expected SHA-256, and actual SHA-256. Do
+   not attach model inputs, patient data, or other PHI.
+3. Remove the named cached artifact and redownload the pinned revision:
+
+   ```bash
+   hf download OpenMed/model-id --cache-dir ~/.cache/openmed --force-download
+   ```
+
+   Replace `~/.cache/openmed` when `cache_dir` is customized.
+4. Load the model once to rebuild its verified cache record, then run
+   `openmed models verify OpenMed/model-id` again.
+5. If the mismatch recurs or the signed catalog is rejected, follow the
+   [security disclosure policy](disclosure-policy.md). Do not bypass the check
+   in production.
+
+### Optional signed catalog
+
+If `models.jsonl.sigstore.json` exists beside `models.jsonl`, catalog loading
+verifies the detached Sigstore bundle fully offline before parsing any row. The
+manifest digest, signature, pinned signer identity, and pinned public-key hash
+must all match. Install the optional verifier dependency with
+`pip install "openmed[integrity]"`. A present but invalid bundle fails closed;
+an absent bundle leaves the unsigned catalog behavior unchanged.
+
 ## Software bill of materials
 
 CI and every tagged release also generate a CycloneDX SBOM (`sbom.cdx.json`)

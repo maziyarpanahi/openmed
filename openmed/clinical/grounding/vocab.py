@@ -202,6 +202,56 @@ class VocabularyIndex:
 
         return len(self._concepts)
 
+    @property
+    def content_hash(self) -> str:
+        """Return a stable SHA-256 hash of the indexed concept content.
+
+        The digest is computed over each concept's system, code, preferred term,
+        normalized English aliases, and language-tagged aliases in canonical
+        (sorted) order, so two indexes built from the same vocabulary content
+        hash identically regardless of row order. English-only snapshots retain
+        the original digest contract. Downstream consumers store this as a
+        candidate's ``vocab_version`` so a grounding result can be traced to its
+        complete multilingual snapshot.
+        """
+
+        cached = getattr(self, "_content_hash", None)
+        if cached is not None:
+            return cached
+        digest = hashlib.sha256()
+        rows = sorted(
+            (
+                concept.system,
+                concept.code,
+                concept.preferred_term,
+                "\x1f".join(
+                    sorted(normalize_alias(alias) for alias in concept.aliases)
+                ),
+            )
+            for concept in self._concepts
+        )
+        for row in rows:
+            digest.update("\x1e".join(row).encode("utf-8"))
+            digest.update(b"\x1d")
+        localized_rows = sorted(
+            (
+                concept.system,
+                concept.code,
+                normalize_language(language),
+                "\x1f".join(sorted(normalize_alias(alias) for alias in aliases)),
+            )
+            for concept in self._concepts
+            for language, aliases in concept.language_aliases.items()
+        )
+        if localized_rows:
+            digest.update(b"\x1cLANGUAGE_ALIASES\x1c")
+            for row in localized_rows:
+                digest.update("\x1e".join(row).encode("utf-8"))
+                digest.update(b"\x1d")
+        content_hash = f"sha256:{digest.hexdigest()}"
+        self._content_hash = content_hash
+        return content_hash
+
     def lookup(
         self, alias: object, *, language: object | None = None
     ) -> VocabConcept | None:
@@ -806,6 +856,7 @@ def _concept_from_mapping(
     code = _first_value(
         normalized_row,
         "code",
+        "concept_id",
         "concept_code",
         "id",
         "loinc_num",
@@ -815,6 +866,7 @@ def _concept_from_mapping(
     preferred = _first_value(
         normalized_row,
         "preferred_term",
+        "canonical_term",
         "preferred",
         "term",
         "name",
