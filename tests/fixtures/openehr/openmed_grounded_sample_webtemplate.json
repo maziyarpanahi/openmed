@@ -1,0 +1,197 @@
+{
+  "templateId": "openmed_grounded_clinical_data",
+  "semVer": "1.0.0",
+  "version": "1.0.0",
+  "defaultLanguage": "en",
+  "languages": ["en"],
+  "tree": {
+    "id": "openmed_grounded_clinical_data",
+    "name": "OpenMed grounded clinical data",
+    "rmType": "COMPOSITION",
+    "nodeId": "openEHR-EHR-COMPOSITION.report.v1",
+    "min": 1,
+    "max": 1,
+    "children": [
+      {
+        "id": "problems",
+        "name": "Problems",
+        "rmType": "SECTION",
+        "nodeId": "openEHR-EHR-SECTION.problem_list.v1",
+        "min": 0,
+        "max": 1,
+        "children": [
+          {
+            "id": "problem_diagnosis",
+            "name": "Problem diagnosis",
+            "rmType": "EVALUATION",
+            "nodeId": "openEHR-EHR-EVALUATION.problem_diagnosis.v1",
+            "min": 0,
+            "max": -1,
+            "children": [
+              {
+                "id": "problem_name",
+                "name": "Problem name",
+                "rmType": "DV_TEXT",
+                "nodeId": "at0002",
+                "inputs": [{"type": "TEXT"}]
+              },
+              {
+                "id": "problem_code",
+                "name": "Problem code",
+                "rmType": "DV_CODED_TEXT",
+                "nodeId": "at0.1",
+                "inputs": [
+                  {"suffix": "code", "type": "CODED_TEXT"},
+                  {"suffix": "value", "type": "CODED_TEXT"},
+                  {"suffix": "terminology", "type": "CODED_TEXT"}
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "medications",
+        "name": "Medications",
+        "rmType": "SECTION",
+        "nodeId": "openEHR-EHR-SECTION.medications.v1",
+        "min": 0,
+        "max": 1,
+        "children": [
+          {
+            "id": "medication_order",
+            "name": "Medication order",
+            "rmType": "INSTRUCTION",
+            "nodeId": "openEHR-EHR-INSTRUCTION.medication_order.v1",
+            "min": 0,
+            "max": -1,
+            "children": [
+              {
+                "id": "medication_name",
+                "name": "Medication name",
+                "rmType": "DV_TEXT",
+                "nodeId": "at0002",
+                "inputs": [{"type": "TEXT"}]
+              },
+              {
+                "id": "medication_code",
+                "name": "Medication code",
+                "rmType": "DV_CODED_TEXT",
+                "nodeId": "at0.1",
+                "inputs": [
+                  {"suffix": "code", "type": "CODED_TEXT"},
+                  {"suffix": "value", "type": "CODED_TEXT"},
+                  {"suffix": "terminology", "type": "CODED_TEXT"}
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "laboratory",
+        "name": "Laboratory",
+        "rmType": "SECTION",
+        "nodeId": "openEHR-EHR-SECTION.laboratory.v1",
+        "min": 0,
+        "max": 1,
+        "children": [
+          {
+            "id": "laboratory_test_result",
+            "name": "Laboratory test result",
+            "rmType": "OBSERVATION",
+            "nodeId": "openEHR-EHR-OBSERVATION.laboratory_test_result.v1",
+            "min": 0,
+            "max": -1,
+            "children": [
+              {
+                "id": "laboratory_analyte_result",
+                "name": "Laboratory analyte result",
+                "rmType": "CLUSTER",
+                "nodeId": "openEHR-EHR-CLUSTER.laboratory_test_analyte.v1",
+                "children": [
+                  {
+                    "id": "analyte_name",
+                    "name": "Analyte name",
+                    "rmType": "DV_TEXT",
+                    "nodeId": "at0001",
+                    "inputs": [{"type": "TEXT"}]
+                  },
+                  {
+                    "id": "analyte_code",
+                    "name": "Analyte code",
+                    "rmType": "DV_CODED_TEXT",
+                    "nodeId": "at0.1",
+                    "inputs": [
+                      {"suffix": "code", "type": "CODED_TEXT"},
+                      {"suffix": "value", "type": "CODED_TEXT"},
+                      {"suffix": "terminology", "type": "CODED_TEXT"}
+                    ]
+                  },
+                  {
+                    "id": "analyte_value",
+                    "name": "Analyte value",
+                    "rmType": "DV_QUANTITY",
+                    "nodeId": "at0002",
+                    "inputs": [
+                      {"suffix": "magnitude", "type": "DECIMAL"},
+                      {"suffix": "unit", "type": "CODED_TEXT"}
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "vitals",
+        "name": "Vitals",
+        "rmType": "SECTION",
+        "nodeId": "openEHR-EHR-SECTION.vital_signs.v1",
+        "min": 0,
+        "max": 1,
+        "children": [
+          {
+            "id": "vital_sign",
+            "name": "Vital sign",
+            "rmType": "OBSERVATION",
+            "nodeId": "openEHR-EHR-OBSERVATION.vital_signs.v1",
+            "min": 0,
+            "max": -1,
+            "children": [
+              {
+                "id": "vital_sign_name",
+                "name": "Vital sign name",
+                "rmType": "DV_TEXT",
+                "nodeId": "at0001",
+                "inputs": [{"type": "TEXT"}]
+              },
+              {
+                "id": "vital_sign_code",
+                "name": "Vital sign code",
+                "rmType": "DV_CODED_TEXT",
+                "nodeId": "at0.1",
+                "inputs": [
+                  {"suffix": "code", "type": "CODED_TEXT"},
+                  {"suffix": "value", "type": "CODED_TEXT"},
+                  {"suffix": "terminology", "type": "CODED_TEXT"}
+                ]
+              },
+              {
+                "id": "value",
+                "name": "Value",
+                "rmType": "DV_QUANTITY",
+                "nodeId": "at0002",
+                "inputs": [
+                  {"suffix": "magnitude", "type": "DECIMAL"},
+                  {"suffix": "unit", "type": "CODED_TEXT"}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
