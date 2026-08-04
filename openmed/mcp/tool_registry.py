@@ -707,6 +707,22 @@ def render_langchain_tool_definitions(
     return render_adapter_tool_definitions("langchain", specs=specs)
 
 
+def render_graph_orchestration_tool_definitions(
+    specs: Iterable[ToolSpec] | None = None,
+) -> tuple[JsonObject, ...]:
+    """Render state-graph adapter definitions from canonical tool specs."""
+
+    return render_adapter_tool_definitions("graph_orchestration", specs=specs)
+
+
+def render_search_pipeline_tool_definitions(
+    specs: Iterable[ToolSpec] | None = None,
+) -> tuple[JsonObject, ...]:
+    """Render modular-search adapter definitions from canonical tool specs."""
+
+    return render_adapter_tool_definitions("search_pipeline", specs=specs)
+
+
 def render_presidio_tool_definitions(
     specs: Iterable[ToolSpec] | None = None,
 ) -> tuple[JsonObject, ...]:
@@ -2064,9 +2080,11 @@ __all__ = [
     "input_schema",
     "invoke_tool",
     "render_adapter_tool_definitions",
+    "render_graph_orchestration_tool_definitions",
     "render_langchain_tool_definitions",
     "render_mcp_tool",
     "render_presidio_tool_definitions",
+    "render_search_pipeline_tool_definitions",
     "render_tool_registry_document",
     "register_plugin_tools",
     "validate_registered_tool_output",

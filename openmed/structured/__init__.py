@@ -4,6 +4,19 @@ Intended contents include column classification, k-anonymity, l-diversity,
 t-closeness, and differential privacy capabilities.
 """
 
+from .column_semantics import (
+    ACTION_GENERALIZE,
+    ACTION_KEEP,
+    ACTION_MANUAL_REVIEW,
+    ACTION_ROUTE_TO_DEIDENTIFY,
+    ACTION_SUPPRESS,
+    AUTO_POLICY_SCHEMA_VERSION,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    ROLE_MANUAL_REVIEW,
+    classify_columns,
+    classify_records,
+    write_auto_policy,
+)
 from .consistency import (
     CrossModalConsistencyReport,
     SubjectConsistencyManifest,
@@ -143,7 +156,10 @@ __all__ = [
     "ACTION_DEIDENTIFY",
     "ACTION_GENERALIZE",
     "ACTION_KEEP",
+    "ACTION_MANUAL_REVIEW",
+    "ACTION_ROUTE_TO_DEIDENTIFY",
     "ACTION_SUPPRESS",
+    "AUTO_POLICY_SCHEMA_VERSION",
     "COLUMN_TYPE_AGE",
     "COLUMN_TYPE_CLINICAL_CODE",
     "COLUMN_TYPE_DATE",
@@ -151,6 +167,7 @@ __all__ = [
     "DEFAULT_TARGET_K",
     "DEFAULT_TARGET_L",
     "DEFAULT_TARGET_T",
+    "DEFAULT_CONFIDENCE_THRESHOLD",
     "FLOWSHEET_ADVISORY",
     "FieldRule",
     "HIERARCHY_SCHEMA_VERSION",
@@ -193,6 +210,7 @@ __all__ = [
     "ROLE_DIRECT_ID",
     "ROLE_FREE_TEXT",
     "ROLE_INTERNAL_LINKAGE",
+    "ROLE_MANUAL_REVIEW",
     "ROLE_QUASI_ID",
     "ROLE_SAFE",
     "ROLE_SENSITIVE",
@@ -226,6 +244,8 @@ __all__ = [
     "build_enforcement_hierarchies",
     "canonical_analyte",
     "cell_at",
+    "classify_columns",
+    "classify_records",
     "canonical_discharge_slot",
     "deidentify_linked_tables",
     "deidentify_subject_column",
@@ -249,5 +269,6 @@ __all__ = [
     "to_enforce_kanon_hierarchy",
     "validate_schema_policy",
     "verify_cross_modal_consistency",
+    "write_auto_policy",
     "write_table",
 ]
