@@ -1,4 +1,11 @@
-"""ConText decision axes for clinical spans (roadmap 5.2).
+"""ConText rules and decision axes for clinical spans (roadmap 5.2).
+
+The shared :func:`apply_context_rules` primitive is a deterministic,
+zero-training trigger and scope scanner. Its English starter cues live in the
+packaged ``data/context_rules.yaml`` resource rather than in this module. It
+returns modifier evidence without collapsing that evidence into axis labels;
+learned heads belong in later layers only where deterministic rules
+under-perform.
 
 This module holds narrow, deterministic ConText layers that classify clinical
 spans from a target span plus optional modifier hits produced by the shared
@@ -39,7 +46,12 @@ import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
-from typing import Any, Literal
+from functools import lru_cache
+from importlib import resources
+from pathlib import Path
+from typing import Any, Literal, cast
+
+import yaml  # type: ignore[import-untyped]
 
 from openmed.clinical.lexicons import (
     ClinicalCueLexicon,
@@ -73,8 +85,30 @@ UNCERTAIN: Certainty = "uncertain"
 #: The certainty values, ordered from asserted to less certain.
 CERTAINTY_VALUES = (CERTAIN, UNCERTAIN)
 
-ContextCueCategory = Literal["historical", "hypothetical", "uncertainty", "negation"]
-ContextCueDirection = Literal["forward", "backward"]
+ContextRuleCategory = Literal[
+    "negation",
+    "uncertainty",
+    "experiencer",
+    "temporality",
+]
+ContextCueCategory = Literal[
+    "historical",
+    "hypothetical",
+    "uncertainty",
+    "negation",
+    "experiencer",
+    "temporality",
+]
+ContextCueDirection = Literal["forward", "backward", "bidirectional"]
+ContextRuleScope = Literal["sentence", "clause"]
+
+DEFAULT_CONTEXT_RULES_RESOURCE = "data/context_rules.yaml"
+_CONTEXT_RULES_PACKAGE = "openmed.clinical"
+_CONTEXT_RULE_CATEGORIES = frozenset(
+    {"negation", "uncertainty", "experiencer", "temporality"}
+)
+_CONTEXT_RULE_DIRECTIONS = frozenset({"forward", "backward", "bidirectional"})
+_CONTEXT_RULE_SCOPES = frozenset({"sentence", "clause"})
 ContextSource = Literal["local", "section", "default"]
 
 INDIA_CLINICAL_NER_DISCLAIMER = (
@@ -462,6 +496,24 @@ class RerankContext:
 
 
 @dataclass(frozen=True)
+class ContextRule:
+    """One lexical ConText trigger and its propagation policy.
+
+    Rules are loaded from :data:`DEFAULT_CONTEXT_RULES_RESOURCE`. ``scope``
+    determines whether configured clause terminators are enforced, while
+    ``max_scope_tokens`` provides a deterministic upper bound within the
+    target sentence.
+    """
+
+    cue: str
+    category: ContextRuleCategory
+    direction: ContextCueDirection
+    scope: ContextRuleScope
+    terminators: tuple[str, ...]
+    max_scope_tokens: int
+
+
+@dataclass(frozen=True)
 class ModifierHit:
     """Scoped ConText cue matched around a target clinical span.
 
@@ -483,6 +535,24 @@ class ModifierHit:
         """Return the matched cue text for resolver compatibility."""
 
         return self.cue
+
+    @property
+    def matched_cue(self) -> str:
+        """Return the exact source text matched by the rule."""
+
+        return self.cue
+
+    @property
+    def offset(self) -> tuple[int, int]:
+        """Return the half-open document offset of the matched cue."""
+
+        return self.start, self.end
+
+
+@dataclass(frozen=True)
+class _ContextRuleMatch:
+    rule: ContextRule
+    hit: ModifierHit
 
 
 @dataclass(frozen=True)
@@ -896,6 +966,249 @@ def _has_explicit_negation_cue(
     )
 
 
+def load_context_rules(path: str | Path | None = None) -> tuple[ContextRule, ...]:
+    """Load and validate ConText rules from YAML.
+
+    Args:
+        path: Optional replacement rule-set path. When omitted, the packaged
+            English starter rules are loaded.
+
+    Returns:
+        Validated immutable context rules covering all four modifier axes.
+
+    Raises:
+        ValueError: If the rule set is malformed or lacks required provenance.
+    """
+
+    if path is None:
+        return _load_default_context_rules()
+    payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return _validate_context_rules_payload(payload)
+
+
+@lru_cache(maxsize=1)
+def _load_default_context_rules() -> tuple[ContextRule, ...]:
+    resource = resources.files(_CONTEXT_RULES_PACKAGE).joinpath(
+        DEFAULT_CONTEXT_RULES_RESOURCE
+    )
+    payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    return _validate_context_rules_payload(payload)
+
+
+def _validate_context_rules_payload(payload: Any) -> tuple[ContextRule, ...]:
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != 1:
+        raise ValueError("context rule set requires schema_version 1")
+
+    provenance = payload.get("provenance")
+    if not isinstance(provenance, Mapping):
+        raise ValueError("context rule set requires provenance metadata")
+    if provenance.get("license") != "Apache-2.0":
+        raise ValueError("context rule set provenance requires Apache-2.0")
+    sources = provenance.get("sources")
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(not isinstance(source, str) or not source.strip() for source in sources)
+    ):
+        raise ValueError("context rule set provenance requires named sources")
+
+    raw_rules = payload.get("rules")
+    if not isinstance(raw_rules, list) or not raw_rules:
+        raise ValueError("context rule set requires a non-empty rules list")
+
+    rules: list[ContextRule] = []
+    identities: set[tuple[str, str, str]] = set()
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, Mapping):
+            raise ValueError(f"context rule {index} must be a mapping")
+
+        cue = raw_rule.get("cue")
+        category = raw_rule.get("category")
+        direction = raw_rule.get("direction")
+        scope = raw_rule.get("scope")
+        raw_terminators = raw_rule.get("terminators")
+        max_scope_tokens = raw_rule.get("max_scope_tokens")
+
+        if not isinstance(cue, str) or not cue.strip():
+            raise ValueError(f"context rule {index} requires a cue")
+        cue = " ".join(cue.split())
+        if category not in _CONTEXT_RULE_CATEGORIES:
+            raise ValueError(f"context rule {index} has an invalid category")
+        if direction not in _CONTEXT_RULE_DIRECTIONS:
+            raise ValueError(f"context rule {index} has an invalid direction")
+        if scope not in _CONTEXT_RULE_SCOPES:
+            raise ValueError(f"context rule {index} has an invalid scope")
+        if not isinstance(raw_terminators, list) or any(
+            not isinstance(value, str) or not value.strip() for value in raw_terminators
+        ):
+            raise ValueError(f"context rule {index} requires terminator strings")
+        if (
+            not isinstance(max_scope_tokens, int)
+            or isinstance(max_scope_tokens, bool)
+            or max_scope_tokens < 1
+        ):
+            raise ValueError(
+                f"context rule {index} requires a positive max_scope_tokens"
+            )
+
+        terminators = tuple(" ".join(value.split()) for value in raw_terminators)
+        if len(terminators) != len(set(terminators)):
+            raise ValueError(f"context rule {index} terminators must be unique")
+
+        identity = (cue.casefold(), str(category), str(direction))
+        if identity in identities:
+            raise ValueError(f"context rule {index} duplicates an earlier rule")
+        identities.add(identity)
+        rules.append(
+            ContextRule(
+                cue=cue,
+                category=cast(ContextRuleCategory, category),
+                direction=cast(ContextCueDirection, direction),
+                scope=cast(ContextRuleScope, scope),
+                terminators=terminators,
+                max_scope_tokens=max_scope_tokens,
+            )
+        )
+
+    categories = {rule.category for rule in rules}
+    missing = _CONTEXT_RULE_CATEGORIES.difference(categories)
+    if missing:
+        raise ValueError(
+            "context rule set is missing categories: " + ", ".join(sorted(missing))
+        )
+    return tuple(rules)
+
+
+def apply_context_rules(
+    text: str,
+    spans: Iterable[Any],
+    sentences: Iterable[Any] | None = None,
+) -> list[tuple[Any, list[ModifierHit]]]:
+    """Apply packaged ConText rules and return modifier evidence per span.
+
+    Scope is always bounded to the target sentence. Clause-scoped rules also
+    stop at their configured termination cues, and every rule has a maximum
+    token propagation distance. The function deliberately returns raw modifier
+    hits; per-axis decision layers decide how to interpret them.
+
+    Args:
+        text: Source document text.
+        spans: Concept spans exposing supported offset aliases, span-like
+            two-integer sequences, or unique or occurrence-indexed text-like
+            values found in ``text``.
+        sentences: Optional sentence spans or sentence strings. When omitted,
+            the shared pySBD-backed sentence segmenter is used.
+
+    Returns:
+        A list preserving input order. Each item contains the original span and
+        its list of in-scope :class:`ModifierHit` values.
+    """
+
+    sentence_windows = _sentence_windows(text, sentences)
+    rule_matches = tuple(_iter_context_rule_matches(text, load_context_rules()))
+    results: list[tuple[Any, list[ModifierHit]]] = []
+
+    for span in spans:
+        target_start, target_end = _target_offsets(text, span)
+        target_sentence = _window_index(sentence_windows, target_start, target_end)
+        if target_sentence is None:
+            results.append((span, []))
+            continue
+
+        hits = [
+            match.hit
+            for match in rule_matches
+            if _context_rule_reaches_span(
+                text=text,
+                sentence_windows=sentence_windows,
+                target_sentence=target_sentence,
+                target_start=target_start,
+                target_end=target_end,
+                match=match,
+            )
+        ]
+        hits.sort(key=lambda hit: (hit.start, hit.end, hit.category, hit.direction))
+        results.append((span, hits))
+
+    return results
+
+
+def _iter_context_rule_matches(
+    text: str,
+    rules: Sequence[ContextRule],
+) -> Iterable[_ContextRuleMatch]:
+    accepted_by_category: dict[str, list[tuple[int, int]]] = {}
+    for rule in sorted(rules, key=lambda item: len(item.cue), reverse=True):
+        accepted = accepted_by_category.setdefault(rule.category, [])
+        for match in _context_literal_pattern(rule.cue).finditer(text):
+            offsets = (match.start(), match.end())
+            if any(_offsets_overlap(offsets, existing) for existing in accepted):
+                continue
+            accepted.append(offsets)
+            yield _ContextRuleMatch(
+                rule=rule,
+                hit=ModifierHit(
+                    cue=match.group(0),
+                    category=rule.category,
+                    start=match.start(),
+                    end=match.end(),
+                    direction=rule.direction,
+                ),
+            )
+
+
+@lru_cache(maxsize=None)
+def _context_literal_pattern(literal: str) -> re.Pattern[str]:
+    normalized = " ".join(literal.split())
+    escaped = r"\s+".join(re.escape(part) for part in normalized.split())
+    prefix = r"(?<!\w)" if normalized[0].isalnum() else ""
+    suffix = r"(?!\w)" if normalized[-1].isalnum() else ""
+    return re.compile(f"{prefix}(?:{escaped}){suffix}", re.IGNORECASE)
+
+
+def _offsets_overlap(
+    left: tuple[int, int],
+    right: tuple[int, int],
+) -> bool:
+    return left[0] < right[1] and right[0] < left[1]
+
+
+def _context_rule_reaches_span(
+    *,
+    text: str,
+    sentence_windows: tuple[_SentenceWindow, ...],
+    target_sentence: int,
+    target_start: int,
+    target_end: int,
+    match: _ContextRuleMatch,
+) -> bool:
+    hit = match.hit
+    if _window_index(sentence_windows, hit.start, hit.end) != target_sentence:
+        return False
+
+    if hit.end <= target_start and match.rule.direction in (
+        "forward",
+        "bidirectional",
+    ):
+        between = text[hit.end : target_start]
+    elif target_end <= hit.start and match.rule.direction in (
+        "backward",
+        "bidirectional",
+    ):
+        between = text[target_end : hit.start]
+    else:
+        return False
+
+    if len(re.findall(r"(?<!\w)\w+(?!\w)", between)) > match.rule.max_scope_tokens:
+        return False
+    if match.rule.scope == "clause" and any(
+        _context_literal_pattern(terminator).search(between)
+        for terminator in match.rule.terminators
+    ):
+        return False
+    return True
+
+
 def scan_context_cues(
     text: str,
     spans: Iterable[Any],
@@ -904,10 +1217,10 @@ def scan_context_cues(
 ) -> dict[Any, tuple[ModifierHit, ...]]:
     """Return scoped ConText cue hits for each target span.
 
-    This is the lightweight cue producer consumed by the deterministic
-    ConText axis resolvers in this module. It scans the already-committed
-    temporal, uncertainty, and negation cue lexicons; the full medspaCy-style
-    rule-engine port remains tracked separately.
+    This compatibility scanner is consumed by the deterministic multilingual
+    axis resolvers in this module. New callers that need the committed English
+    rule definitions and list-based shared primitive should use
+    :func:`apply_context_rules`.
 
     Args:
         text: Source document text.
@@ -1079,28 +1392,29 @@ def _target_offsets(text: str, span: Any) -> tuple[int, int]:
     if not span_text:
         raise ValueError("span must expose start/end offsets or a text-like value")
 
-    start = text.find(span_text)
-    if start == -1:
+    offsets = _text_offsets_in_context(text, span_text, _occurrence_of(span))
+    if offsets is not None:
+        return offsets
+    if not _text_appears_in_context(text, span_text):
         raise ValueError("span text is not present in source text")
-    return start, start + len(span_text)
+    raise ValueError(
+        "span text must be unique or provide an occurrence index or offsets"
+    )
 
 
 def _try_offsets_from_obj(obj: Any) -> tuple[int, int] | None:
-    if isinstance(obj, Mapping):
-        start = _first_mapping_value(obj, ("start", "span_start", "sentence_start"))
-        end = _first_mapping_value(obj, ("end", "span_end", "sentence_end"))
-        if start is not None and end is not None:
-            return int(start), int(end)
-        return None
+    offsets = _offsets_of(obj)
+    if offsets is not None:
+        return offsets
+
+    start = _int_field(obj, ("span_start", "sentence_start"))
+    end = _int_field(obj, ("span_end", "sentence_end"))
+    if start is not None and end is not None:
+        return start, end
 
     if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
-        if len(obj) >= 2 and all(isinstance(value, int) for value in obj[:2]):
+        if len(obj) >= 2 and all(type(value) is int for value in obj[:2]):
             return int(obj[0]), int(obj[1])
-
-    start = _first_attr(obj, ("start", "span_start", "sentence_start"))
-    end = _first_attr(obj, ("end", "span_end", "sentence_end"))
-    if start is not None and end is not None:
-        return int(start), int(end)
     return None
 
 
@@ -1109,22 +1423,6 @@ def _offsets_from_obj(obj: Any) -> tuple[int, int]:
     if offsets is None:
         raise ValueError("sentence must expose start/end offsets or be text")
     return offsets
-
-
-def _first_mapping_value(obj: Mapping[Any, Any], keys: tuple[str, ...]) -> Any:
-    for key in keys:
-        value = obj.get(key)
-        if value is not None:
-            return value
-    return None
-
-
-def _first_attr(obj: Any, attrs: tuple[str, ...]) -> Any:
-    for attr in attrs:
-        value = getattr(obj, attr, None)
-        if value is not None:
-            return value
-    return None
 
 
 def _validate_offsets(
@@ -1737,10 +2035,16 @@ __all__ = [
     "RerankContext",
     "ContextCueCategory",
     "ContextCueDirection",
+    "ContextRule",
+    "ContextRuleCategory",
+    "ContextRuleScope",
+    "DEFAULT_CONTEXT_RULES_RESOURCE",
     "ContextSource",
     "INDIA_CLINICAL_NER_DISCLAIMER",
     "ModifierHit",
+    "apply_context_rules",
     "clinical_context_lexicon_stats",
+    "load_context_rules",
     "scan_context_cues",
     "RECENT",
     "HISTORICAL",

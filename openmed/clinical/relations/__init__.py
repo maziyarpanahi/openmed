@@ -68,6 +68,7 @@ from .joint_head import (
     JointSpanPairScore,
     decode_joint_span_pairs,
 )
+from .lab_results import LAB_RESULT_ADVISORY, LabResult, extract_lab_results
 from .medication_links import (
     MEDICATION_LINK_ADVISORY,
     MedicationRelationScorer,
@@ -140,6 +141,8 @@ __all__ = [
     "JointSpanCandidate",
     "JointSpanPairHead",
     "JointSpanPairScore",
+    "LAB_RESULT_ADVISORY",
+    "LabResult",
     "MEDICATION_LINK_ADVISORY",
     "MedicationAttributeType",
     "MedicationRelation",
@@ -177,6 +180,7 @@ __all__ = [
     "decode_joint_span_pairs",
     "decode_tlink_candidates",
     "extract_tlink_candidates",
+    "extract_lab_results",
     "extract_medication_relations",
     "extract_document_relations",
     "extract_problem_relations",
