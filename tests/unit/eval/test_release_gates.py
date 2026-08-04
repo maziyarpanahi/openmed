@@ -583,6 +583,37 @@ def test_g9_relation_gate_passes_at_configured_lower_ci_floor(
     )
 
 
+def test_dua_relation_g9_is_promotion_blocking_but_not_daily_blocking(
+    tmp_path: Path,
+) -> None:
+    report = _report(
+        tmp_path,
+        metadata_updates={
+            "cadence": "human-run",
+            "daily_blocking": False,
+            "dua_relation_promotion_required": True,
+            "gate_tier": "promotion",
+            "promotion_blocking": True,
+            "task": "relation",
+        },
+        metric_updates=_relation_metric(
+            strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR - 0.001,
+            relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+        ),
+    )
+
+    check = release_gates.evaluate_dua_relation_promotion_gate(report)
+
+    assert check.gate == "G9"
+    assert check.passed is False
+    assert check.details["gate_tier"] == "promotion"
+    assert check.details["cadence"] == "human-run"
+    assert check.details["promotion_blocking"] is True
+    assert check.details["daily_blocking"] is False
+    assert check.details["strict_lower_ci_required"] is True
+    assert "strict_relation_f1" in check.details["violations"]
+
+
 def test_relation_golden_gate_passes_at_pinned_tolerance_and_is_signed(
     tmp_path: Path,
 ) -> None:

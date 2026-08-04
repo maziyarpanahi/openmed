@@ -92,6 +92,8 @@ G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+G9_DUA_PROMOTION_CADENCE = "human-run"
+G9_DUA_PROMOTION_TIER = "promotion"
 RELATION_GOLDEN_REGRESSION_GATE = "relation_golden_regression"
 RELATION_GOLDEN_TRAP_KINDS = ("assertion", "temporal")
 G13_STRICT_ENTITY_F1_FLOOR = 0.900
@@ -3330,6 +3332,41 @@ def _g9_relation_extraction_check(
     )
 
 
+def evaluate_dua_relation_promotion_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+) -> GateCheck:
+    """Evaluate promotion-only G9 evidence for credentialed DUA corpora.
+
+    The strict and relaxed confidence-bound checks remain promotion blocking,
+    while the serialized cadence contract explicitly excludes this expensive,
+    human-triggered corpus run from daily blocking evaluation.
+    """
+
+    payload = _report_payload(report)
+    metrics = _mapping(payload.get("metrics"))
+    metadata = {
+        **_mapping(payload.get("metadata")),
+        "relation_extraction_required": True,
+        "task": "relation",
+    }
+    base = _g9_relation_extraction_check(metrics, metadata)
+    details = {
+        **dict(base.details),
+        "cadence": G9_DUA_PROMOTION_CADENCE,
+        "daily_blocking": False,
+        "gate_tier": G9_DUA_PROMOTION_TIER,
+        "promotion_blocking": True,
+        "strict_lower_ci_required": True,
+    }
+    return GateCheck(
+        gate=base.gate,
+        passed=base.passed,
+        reason=base.reason,
+        details=details,
+        blocking_format=base.blocking_format,
+    )
+
+
 def _relation_extraction_evidence(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -6216,6 +6253,8 @@ __all__ = [
     "G15_E2E_FACT_F1_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
+    "G9_DUA_PROMOTION_CADENCE",
+    "G9_DUA_PROMOTION_TIER",
     "RELATION_GOLDEN_REGRESSION_GATE",
     "RELATION_GOLDEN_TRAP_KINDS",
     "FLAKINESS_GATE",
@@ -6244,6 +6283,7 @@ __all__ = [
     "evaluate_reid_risk_gate",
     "evaluate_reidentification_risk_gate",
     "evaluate_relation_golden_regression_gate",
+    "evaluate_dua_relation_promotion_gate",
     "evaluate_grounding_accuracy_gate",
     "evaluate_surrogate_quality_gate",
     "format_preview",

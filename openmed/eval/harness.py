@@ -67,6 +67,7 @@ _DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
 _DEFAULT_RELATION_SCORECARD_SIGNING_KEY = "openmed-relation-scorecard-local-key"
 RELATION_SCORECARD_ARTIFACT = "openmed.eval.relation_scorecard"
 RELATION_SCORECARD_SCHEMA_VERSION = 1
+DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
 DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
     Path(__file__).resolve().parent
     / "golden"
@@ -304,6 +305,15 @@ class RelationGateFailure(RuntimeError):
         self.scorecard = scorecard
         reason = str(scorecard.gate_result.get("reason") or "relation gate failed")
         super().__init__(reason)
+
+
+class DUARelationPromotionGateFailure(RuntimeError):
+    """Raised when a human-run DUA relation promotion gate fails."""
+
+    def __init__(self, report: BenchmarkReport, gate: Any) -> None:
+        self.report = report
+        self.gate = gate
+        super().__init__(str(getattr(gate, "reason", "DUA relation G9 failed")))
 
 
 @dataclass
@@ -1767,6 +1777,70 @@ def run_relation_benchmark(
         ci_alpha=ci_alpha,
         ci_seed=ci_seed,
     )
+    return report
+
+
+def run_dua_relation_promotion_benchmark(
+    fixtures: Sequence[Any],
+    *,
+    model_name: str,
+    runner: RelationModelRunner,
+    suite: str,
+    device: str = "cpu",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
+) -> BenchmarkReport:
+    """Run the human-triggered, promotion-blocking G9 DUA relation gate.
+
+    This entry point is deliberately separate from daily evaluation. It emits
+    aggregate relation metrics only and marks the gate as non-blocking for the
+    daily cadence, while a failed G9 result blocks this promotion run.
+    """
+
+    fixture_corpora = {
+        str(getattr(fixture, "metadata", {}).get("dataset") or "")
+        for fixture in fixtures
+        if isinstance(getattr(fixture, "metadata", {}), Mapping)
+    }
+    if not fixture_corpora or not fixture_corpora <= DUA_RELATION_PROMOTION_CORPORA:
+        allowed = ", ".join(sorted(DUA_RELATION_PROMOTION_CORPORA))
+        raise ValueError(
+            "DUA relation promotion fixtures must identify one of: " + allowed
+        )
+    report_metadata = {
+        **dict(metadata or {}),
+        "cadence": "human-run",
+        "daily_blocking": False,
+        "dua_relation_corpora": sorted(fixture_corpora),
+        "dua_relation_promotion_required": True,
+        "gate_tier": "promotion",
+        "promotion_blocking": True,
+        "task": "relation",
+    }
+    report = run_relation_benchmark(
+        fixtures,
+        suite=suite,
+        model_name=model_name,
+        runner=runner,
+        device=device,
+        generated_at=generated_at,
+        metadata=report_metadata,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
+    )
+    from openmed.eval.release_gates import evaluate_dua_relation_promotion_gate
+
+    gate = evaluate_dua_relation_promotion_gate(report)
+    report = replace(
+        report,
+        metrics={**dict(report.metrics), "g9_dua_promotion": gate.to_dict()},
+    )
+    if not gate.passed:
+        raise DUARelationPromotionGateFailure(report, gate)
     return report
 
 
@@ -3968,6 +4042,8 @@ __all__ = [
     "PIPELINE_EVAL_SCHEMA_VERSION",
     "BoundaryLeakageFinding",
     "BoundaryLeakageResult",
+    "DUA_RELATION_PROMOTION_CORPORA",
+    "DUARelationPromotionGateFailure",
     "FederatedDetectorSpec",
     "FederatedEvalReport",
     "FixtureResult",
@@ -3992,6 +4068,7 @@ __all__ = [
     "run_pipeline_eval",
     "run_pipeline_eval_fixture",
     "run_benchmark",
+    "run_dua_relation_promotion_benchmark",
     "run_relation_benchmark",
     "run_relation_suite",
     "run_cross_lingual_transfer",

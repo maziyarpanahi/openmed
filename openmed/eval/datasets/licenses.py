@@ -72,6 +72,37 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
             "logs, commits, or redistributes RadGraph or source radiology rows."
         ),
     ),
+    "biored": DatasetLicense(
+        dataset="biored",
+        license_id="BioRED-data-use-terms",
+        source_url="https://github.com/ncbi/BioRED",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "OpenMed requires a user-supplied authorized local BioC copy. The "
+            "adapter never downloads, caches, logs, commits, or redistributes "
+            "BioRED corpus rows."
+        ),
+    ),
+    "n2c2-2018": DatasetLicense(
+        dataset="n2c2-2018",
+        license_id="i2b2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/projects/n2c2-nlp/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "2018 ADE and medication relation data requires approved n2c2/DBMI "
+            "access. OpenMed reads only a user-supplied local BRAT copy."
+        ),
+    ),
+    "n2c2-2022": DatasetLicense(
+        dataset="n2c2-2022",
+        license_id="n2c2-DBMI-SHAC-DUA",
+        source_url="https://n2c2.dbmi.hms.harvard.edu/2022-track-2",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "2022 SDOH relation data requires approved n2c2/DBMI and SHAC "
+            "access. OpenMed reads only a user-supplied local BRAT copy."
+        ),
+    ),
     "naamapadam": DatasetLicense(
         dataset="naamapadam",
         license_id="CC0-1.0",
