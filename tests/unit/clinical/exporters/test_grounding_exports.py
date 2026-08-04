@@ -21,6 +21,10 @@ from openmed.clinical.exporters import (
     to_fhir,
     to_omop,
 )
+from openmed.clinical.exporters.fhir import (
+    GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
+    MEDICAL_DEVICE_ASSIST_EXTENSION_URL,
+)
 from openmed.clinical.grounding import Candidate, GroundedSpan
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash
 
@@ -152,7 +156,8 @@ def test_to_fhir_emits_valid_core_r4_resource_shapes() -> None:
     }
     serialized = str(bundle)
     assert "'_score'" not in serialized
-    assert "openmed.ai/fhir/StructureDefinition" not in serialized
+    assert GROUNDED_CODE_PROVENANCE_EXTENSION_URL in serialized
+    assert MEDICAL_DEVICE_ASSIST_EXTENSION_URL in serialized
     assert resources[0]["code"]["coding"][0]["version"] == "synthetic-v1"
     assert to_fhir(_spans(), document_id="synthetic-doc") == to_fhir(
         _spans(), document_id="synthetic-doc"

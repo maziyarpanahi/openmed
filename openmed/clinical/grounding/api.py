@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from openmed.core.labels import normalize_label
 
-from ..context import ClinicalAssertion, RerankContext
+from ..context import ClinicalAssertion, ClinicalContextResult, RerankContext
 from .decompose import decompose_and_relink
 from .embeddings import AliasEncoder
 from .matcher import LexicalMatcher
@@ -273,6 +274,8 @@ def _coerce_span(
     default_language: str | None,
 ) -> GroundedSpan:
     if isinstance(raw_span, GroundedSpan):
+        if isinstance(raw_span.assertion, ClinicalContextResult):
+            return replace(raw_span, assertion=raw_span.assertion.to_assertion())
         return raw_span
     if isinstance(raw_span, str):
         return GroundedSpan(
@@ -292,9 +295,18 @@ def _coerce_span(
     if end is None:
         end = start + len(text)
     label = _first_value(raw_span, _LABEL_FIELDS)
-    assertion = _coerce_assertion(_first_value(raw_span, ("assertion", "context")))
     language = _first_value(raw_span, ("source_language", "language", "lang"))
     metadata = _first_value(raw_span, ("metadata", "meta")) or {}
+    assertion_value = _first_value(raw_span, ("assertion", "context"))
+    if assertion_value is None and isinstance(metadata, Mapping):
+        assertion_value = metadata.get("clinical_context")
+    if assertion_value is None and isinstance(raw_span, Mapping):
+        if any(
+            key in raw_span
+            for key in ("temporality", "certainty", "uncertainty", "negation")
+        ):
+            assertion_value = raw_span
+    assertion = _coerce_assertion(assertion_value)
     canonical_label = None
     if label is not None and str(label).strip():
         canonical_label = normalize_label(
@@ -317,9 +329,11 @@ def _coerce_assertion(value: Any) -> ClinicalAssertion | None:
         return None
     if isinstance(value, ClinicalAssertion):
         return value
+    if isinstance(value, ClinicalContextResult):
+        return value.to_assertion()
     if isinstance(value, Mapping):
         temporality = value.get("temporality")
-        certainty = value.get("certainty")
+        certainty = value.get("certainty", value.get("uncertainty"))
         if temporality is None or certainty is None:
             return None
         return ClinicalAssertion(
