@@ -59,6 +59,14 @@ from .kanon import (
     enforce_kanon,
     kanon_report,
 )
+from .membership_inference import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_BUDGET,
+    DEFAULT_RISKIEST_RECORD_COUNT,
+    MembershipInferenceReport,
+    MembershipInferenceResult,
+    membership_inference_self_test,
+    run_membership_inference_self_test,
+)
 from .population import PopulationRiskAssessment, assess_population_risk
 from .reid import (
     LongitudinalCorpus,
@@ -104,6 +112,7 @@ __all__ = [
     "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_CORRELATION_TOLERANCE",
     "DEFAULT_MARGINAL_TOLERANCE",
+    "DEFAULT_MEMBERSHIP_ADVANTAGE_BUDGET",
     "DEFAULT_POLICY_BUDGETS",
     "DEFAULT_QI_WEIGHTS",
     "DEFAULT_RDP_ORDERS",
@@ -133,10 +142,13 @@ __all__ = [
     "LongitudinalEvidence",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "MembershipInferenceReport",
+    "MembershipInferenceResult",
     "PopulationRiskAssessment",
     "SurrogateDrawKind",
     "SuppressionProposal",
     "TabularProfile",
+    "DEFAULT_RISKIEST_RECORD_COUNT",
     "analyze_k_anonymity",
     "apply_suppression",
     "assess_population_risk",
@@ -149,9 +161,11 @@ __all__ = [
     "fit_tabular_profile",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "membership_inference_self_test",
     "quasi_identifier_key",
     "quasi_identifier_key_bytes",
     "risk_report",
+    "run_membership_inference_self_test",
     "sample_synthetic_table",
     "tabular_fidelity_report",
     "MemoryCeilingError",
