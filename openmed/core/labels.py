@@ -150,6 +150,11 @@ BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         BIOMARKER,
     }
 )
+# ``CONDITION`` predates this taxonomy and retains its existing compatibility
+# cross-maps. Newly canonical biomedical labels intentionally carry none.
+_BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS: Final[FrozenSet[str]] = BIOMEDICAL_LABELS - {
+    CONDITION
+}
 
 #: Relation-extraction head and attribute concepts (issue #252)
 PROBLEM: Final = "PROBLEM"
@@ -595,11 +600,6 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             ID_NUM,
             EYE_COLOR,
             HEIGHT,
-            GENE_OR_GENE_PRODUCT,
-            GENE,
-            PROTEIN,
-            DNA,
-            RNA,
             GENE_SYMBOL,
             VARIANT_DESCRIPTOR,
             PROTEIN_CHANGE,
@@ -615,23 +615,6 @@ NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
             MICROORGANISM,
             ANTIBIOTIC,
             SUSCEPTIBILITY,
-            DISEASE,
-            DRUG,
-            CHEMICAL,
-            GENE_OR_GENE_PRODUCT,
-            GENE,
-            PROTEIN,
-            DNA,
-            RNA,
-            ANATOMY,
-            ORGAN,
-            TISSUE,
-            CELL,
-            CANCER,
-            SPECIES,
-            ORGANISM,
-            PATHOLOGY,
-            BIOMARKER,
             CONDITION,
             MEDICATION,
             LAB_TEST,
@@ -1005,25 +988,6 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     MICROORGANISM: HIPAA_UNIQUE_IDENTIFIER,
     ANTIBIOTIC: HIPAA_UNIQUE_IDENTIFIER,
     SUSCEPTIBILITY: HIPAA_UNIQUE_IDENTIFIER,
-    # Biomedical NER family concepts. These compatibility cross-map entries
-    # support Safe Harbor reporting; the labels remain non-PII by kind.
-    DISEASE: HIPAA_UNIQUE_IDENTIFIER,
-    DRUG: HIPAA_UNIQUE_IDENTIFIER,
-    CHEMICAL: HIPAA_UNIQUE_IDENTIFIER,
-    GENE_OR_GENE_PRODUCT: HIPAA_UNIQUE_IDENTIFIER,
-    GENE: HIPAA_UNIQUE_IDENTIFIER,
-    PROTEIN: HIPAA_UNIQUE_IDENTIFIER,
-    DNA: HIPAA_UNIQUE_IDENTIFIER,
-    RNA: HIPAA_UNIQUE_IDENTIFIER,
-    ANATOMY: HIPAA_UNIQUE_IDENTIFIER,
-    ORGAN: HIPAA_UNIQUE_IDENTIFIER,
-    TISSUE: HIPAA_UNIQUE_IDENTIFIER,
-    CELL: HIPAA_UNIQUE_IDENTIFIER,
-    CANCER: HIPAA_UNIQUE_IDENTIFIER,
-    SPECIES: HIPAA_UNIQUE_IDENTIFIER,
-    ORGANISM: HIPAA_UNIQUE_IDENTIFIER,
-    PATHOLOGY: HIPAA_UNIQUE_IDENTIFIER,
-    BIOMARKER: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical concepts
     CONDITION: HIPAA_UNIQUE_IDENTIFIER,
     MEDICATION: HIPAA_UNIQUE_IDENTIFIER,
@@ -1163,23 +1127,6 @@ LABEL_TO_POPIA: Final[Mapping[str, str]] = {
     MICROORGANISM: POPIA_HEALTH_INFORMATION,
     ANTIBIOTIC: POPIA_HEALTH_INFORMATION,
     SUSCEPTIBILITY: POPIA_HEALTH_INFORMATION,
-    DISEASE: POPIA_HEALTH_INFORMATION,
-    DRUG: POPIA_HEALTH_INFORMATION,
-    CHEMICAL: POPIA_HEALTH_INFORMATION,
-    GENE_OR_GENE_PRODUCT: POPIA_HEALTH_INFORMATION,
-    GENE: POPIA_HEALTH_INFORMATION,
-    PROTEIN: POPIA_HEALTH_INFORMATION,
-    DNA: POPIA_HEALTH_INFORMATION,
-    RNA: POPIA_HEALTH_INFORMATION,
-    ANATOMY: POPIA_HEALTH_INFORMATION,
-    ORGAN: POPIA_HEALTH_INFORMATION,
-    TISSUE: POPIA_HEALTH_INFORMATION,
-    CELL: POPIA_HEALTH_INFORMATION,
-    CANCER: POPIA_HEALTH_INFORMATION,
-    SPECIES: POPIA_HEALTH_INFORMATION,
-    ORGANISM: POPIA_HEALTH_INFORMATION,
-    PATHOLOGY: POPIA_HEALTH_INFORMATION,
-    BIOMARKER: POPIA_HEALTH_INFORMATION,
     CONDITION: POPIA_HEALTH_INFORMATION,
     MEDICATION: POPIA_HEALTH_INFORMATION,
     LAB_TEST: POPIA_HEALTH_INFORMATION,
@@ -1250,6 +1197,7 @@ def _validate_label_metadata() -> None:
     hipaa_labels = set(LABEL_TO_HIPAA)
     popia_labels = set(LABEL_TO_POPIA)
     ndpa_classes = set(NDPA_SENSITIVE_CLASS_LABELS)
+    cross_map_labels = CANONICAL_LABELS - _BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS
     if metadata_labels != CANONICAL_LABELS:
         missing = sorted(CANONICAL_LABELS - metadata_labels)
         extra = sorted(metadata_labels - CANONICAL_LABELS)
@@ -1257,18 +1205,18 @@ def _validate_label_metadata() -> None:
             "LABEL_METADATA must cover CANONICAL_LABELS exactly; "
             f"missing={missing}, extra={extra}"
         )
-    if hipaa_labels != CANONICAL_LABELS:
-        missing = sorted(CANONICAL_LABELS - hipaa_labels)
-        extra = sorted(hipaa_labels - CANONICAL_LABELS)
+    if hipaa_labels != cross_map_labels:
+        missing = sorted(cross_map_labels - hipaa_labels)
+        extra = sorted(hipaa_labels - cross_map_labels)
         raise RuntimeError(
-            "LABEL_TO_HIPAA must cover CANONICAL_LABELS exactly; "
+            "LABEL_TO_HIPAA must cover identifier cross-map labels exactly; "
             f"missing={missing}, extra={extra}"
         )
-    if popia_labels != CANONICAL_LABELS:
-        missing = sorted(CANONICAL_LABELS - popia_labels)
-        extra = sorted(popia_labels - CANONICAL_LABELS)
+    if popia_labels != cross_map_labels:
+        missing = sorted(cross_map_labels - popia_labels)
+        extra = sorted(popia_labels - cross_map_labels)
         raise RuntimeError(
-            "LABEL_TO_POPIA must cover CANONICAL_LABELS exactly; "
+            "LABEL_TO_POPIA must cover identifier cross-map labels exactly; "
             f"missing={missing}, extra={extra}"
         )
     if ndpa_classes != set(NDPA_SENSITIVE_DATA_CLASSES):
@@ -1285,6 +1233,11 @@ def _validate_label_metadata() -> None:
         if unknown_labels:
             raise RuntimeError(
                 f"{ndpa_class} has unknown canonical labels {unknown_labels}"
+            )
+        biomedical_labels = sorted(set(labels) - cross_map_labels)
+        if biomedical_labels:
+            raise RuntimeError(
+                f"{ndpa_class} has non-identifier biomedical labels {biomedical_labels}"
             )
     for label, metadata in LABEL_METADATA.items():
         policy_label = metadata["policy_label"]
@@ -1987,14 +1940,14 @@ def system_hints_for(label: str, lang: str = "en") -> tuple[str, ...]:
     return cast(tuple[str, ...], _metadata_for(label, lang=lang)["system_hints"])
 
 
-def hipaa_class_for(label: str, lang: str = "en") -> str:
-    """Return the outbound HIPAA Safe Harbor class for a normalized label."""
-    return LABEL_TO_HIPAA[normalize_label(label, lang=lang)]
+def hipaa_class_for(label: str, lang: str = "en") -> str | None:
+    """Return the HIPAA class, or ``None`` for non-identifier biomedical labels."""
+    return LABEL_TO_HIPAA.get(normalize_label(label, lang=lang))
 
 
-def popia_class_for(label: str, lang: str = "en") -> str:
-    """Return the POPIA identifier class for a normalized label."""
-    return LABEL_TO_POPIA[normalize_label(label, lang=lang)]
+def popia_class_for(label: str, lang: str = "en") -> str | None:
+    """Return the POPIA class, or ``None`` for non-identifier biomedical labels."""
+    return LABEL_TO_POPIA.get(normalize_label(label, lang=lang))
 
 
 def ndpa_classes_for(label: str, lang: str = "en") -> FrozenSet[str]:

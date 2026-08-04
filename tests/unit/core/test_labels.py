@@ -86,6 +86,8 @@ from openmed.core.labels import (
     LAB_TEST,
     LAB_VALUE,
     LABEL_METADATA,
+    LABEL_TO_HIPAA,
+    LABEL_TO_POPIA,
     LAST_NAME,
     LINE_DRAIN_TUBE,
     LITECOIN_ADDRESS,
@@ -148,6 +150,7 @@ from openmed.core.labels import (
     hipaa_class_for,
     id_subtype_for,
     label_kind_for,
+    ndpa_classes_for,
     normalize_label,
     policy_label_for,
     risk_level_for,
@@ -526,6 +529,11 @@ class TestBiomedicalEntityLabels:
             assert {"hipaa_tags", "identifier_tags", "regulatory_tags"}.isdisjoint(
                 metadata
             )
+
+        newly_canonical = BIOMEDICAL_LABELS - {CONDITION}
+        assert newly_canonical.isdisjoint(LABEL_TO_HIPAA)
+        assert newly_canonical.isdisjoint(LABEL_TO_POPIA)
+        assert all(not ndpa_classes_for(label) for label in newly_canonical)
 
     def test_existing_pii_labels_and_aliases_are_unchanged(self):
         expected = {
