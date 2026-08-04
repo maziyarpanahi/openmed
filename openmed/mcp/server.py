@@ -7,7 +7,7 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from inspect import Signature
 from typing import Annotated, Any, Callable, Dict, Optional
 
@@ -34,9 +34,20 @@ from openmed.mcp.clinical_workflow import (
     load_golden_agent_run,
     render_clinical_workflow_prompt,
 )
+from openmed.mcp.consent_receipts import (
+    DEFAULT_CONSENT_POLICY_VERSION,
+    DEFAULT_CONSENT_RESOURCE,
+    DEFAULT_CONSENT_SCOPE,
+    ConsentReceiptError,
+    ConsentReceiptPolicy,
+    ConsentReceiptRequiredError,
+    ConsentReceiptVerificationError,
+    ConsentReceiptVerifier,
+)
 from openmed.mcp.tool_registry import (
     CLINICAL_WORKFLOW_SPEC,
     TOOL_REGISTRY,
+    ToolParameter,
     ToolSchemaValidationError,
     ToolSpec,
     render_mcp_tool,
@@ -142,7 +153,16 @@ def _error_envelope(error: BaseException) -> Dict[str, Any]:
     """Return a PHI-safe structured tool error without echoing input or output."""
 
     error_module = error.__class__.__module__
-    if isinstance(error, ToolSchemaValidationError):
+    if isinstance(error, ConsentReceiptRequiredError):
+        code = "consent_required"
+        message = "A valid consent receipt is required for this state-changing tool."
+    elif isinstance(error, ConsentReceiptVerificationError):
+        code = "consent_denied"
+        message = "The consent receipt does not authorize this state-changing tool."
+    elif isinstance(error, ConsentReceiptError):
+        code = "invalid_consent_receipt"
+        message = "The consent receipt is invalid."
+    elif isinstance(error, ToolSchemaValidationError):
         code = "invalid_result"
         message = "The tool returned an invalid structured result."
     elif isinstance(error, KeyError):
@@ -201,10 +221,28 @@ def _mcp_return_annotation(spec: ToolSpec) -> Any:
 def _render_structured_mcp_tool(
     spec: ToolSpec,
     handler: Callable[..., Dict[str, Any]],
+    *,
+    consent_policy: Optional[ConsentReceiptPolicy] = None,
+    authorization_spec: Optional[ToolSpec] = None,
 ) -> Callable[..., Any]:
     """Render one registry tool with structured success and error results."""
 
-    registry_tool = render_mcp_tool(spec, handler)
+    authorized_handler = handler
+    if consent_policy is not None and not spec.read_only_hint:
+        base_spec = authorization_spec or spec
+
+        def _consented_handler(**kwargs: Any) -> Dict[str, Any]:
+            receipt = kwargs.pop(_CONSENT_RECEIPT_PARAMETER.name, None)
+            consent_policy.authorize(
+                tool=base_spec.name,
+                arguments=kwargs,
+                receipt=receipt,
+            )
+            return handler(**kwargs)
+
+        authorized_handler = _consented_handler
+
+    registry_tool = render_mcp_tool(spec, authorized_handler)
     return_annotation = _mcp_return_annotation(spec)
 
     def _tool(*args: Any, **kwargs: Any) -> Any:
@@ -234,6 +272,84 @@ def _mcp_annotations(spec: ToolSpec) -> Any:
     except ImportError:
         return payload
     return ToolAnnotations(**payload)
+
+
+_CONSENT_RECEIPT_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "schema_version": {
+            "type": "string",
+            "const": "openmed.mcp.consent_receipt.v1",
+        },
+        "receipt_id": {"type": "string", "minLength": 1},
+        "client": {"type": "string", "minLength": 1},
+        "tool": {"type": "string", "minLength": 1},
+        "resource": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "decision": {"type": "string", "enum": ["allow", "deny"]},
+        "issued_at": {"type": "number"},
+        "expires_at": {"type": "number"},
+        "argument_digest": {
+            "type": "string",
+            "pattern": r"^sha256:[0-9a-f]{64}$",
+        },
+        "key_id": {"type": "string", "minLength": 1},
+        "signature": {
+            "type": "string",
+            "pattern": r"^hmac-sha256:[0-9a-f]{64}$",
+        },
+    },
+    "required": [
+        "schema_version",
+        "receipt_id",
+        "client",
+        "tool",
+        "resource",
+        "scope",
+        "decision",
+        "issued_at",
+        "expires_at",
+        "argument_digest",
+        "key_id",
+        "signature",
+    ],
+}
+_CONSENT_RECEIPT_ARGUMENT_SCHEMA = {
+    "anyOf": [
+        _CONSENT_RECEIPT_SCHEMA,
+        {"type": "string", "minLength": 1},
+        {"type": "null"},
+    ]
+}
+_CONSENT_RECEIPT_PARAMETER = ToolParameter(
+    name="consent_receipt",
+    schema=_CONSENT_RECEIPT_ARGUMENT_SCHEMA,
+    annotation=Optional[Mapping[str, Any] | str],
+    default=None,
+    description=(
+        "Optional signed, single-use receipt for a state-changing action. "
+        "The receipt contains no tool arguments."
+    ),
+)
+
+
+def _consented_tool_spec(spec: ToolSpec) -> ToolSpec:
+    """Add the optional receipt transport field to one server-local spec."""
+
+    if any(
+        parameter.name == _CONSENT_RECEIPT_PARAMETER.name
+        for parameter in spec.parameters
+    ):
+        return spec
+    input_contract = deepcopy(dict(spec.input_schema))
+    properties = dict(input_contract.get("properties") or {})
+    properties[_CONSENT_RECEIPT_PARAMETER.name] = deepcopy(
+        dict(_CONSENT_RECEIPT_ARGUMENT_SCHEMA)
+    )
+    input_contract["properties"] = properties
+    parameters = (*spec.parameters, _CONSENT_RECEIPT_PARAMETER)
+    return replace(spec, input_schema=input_contract, parameters=parameters)
 
 
 def _synchronize_registered_schemas(server: Any, spec: ToolSpec) -> None:
@@ -1448,17 +1564,30 @@ MCP_TOOL_NAMES: frozenset[str] = frozenset(build_mcp_tool_handlers(None))
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
+    consent_policy: Optional[ConsentReceiptPolicy] = None,
 ) -> None:
     handlers = build_mcp_tool_handlers(runtime_provider)
     for spec in TOOL_REGISTRY.latest_specs():
+        registered_spec = (
+            _consented_tool_spec(spec)
+            if consent_policy is not None and not spec.read_only_hint
+            else spec
+        )
         server.tool(
-            name=spec.name,
-            title=spec.title,
-            description=spec.description,
-            annotations=_mcp_annotations(spec),
+            name=registered_spec.name,
+            title=registered_spec.title,
+            description=registered_spec.description,
+            annotations=_mcp_annotations(registered_spec),
             structured_output=True,
-        )(_render_structured_mcp_tool(spec, handlers[spec.name]))
-        _synchronize_registered_schemas(server, spec)
+        )(
+            _render_structured_mcp_tool(
+                registered_spec,
+                handlers[spec.name],
+                consent_policy=consent_policy,
+                authorization_spec=spec,
+            )
+        )
+        _synchronize_registered_schemas(server, registered_spec)
 
 
 def _register_resources(
@@ -1573,8 +1702,30 @@ def create_mcp_server(
     host: Optional[str] = None,
     port: Optional[int] = None,
     streamable_http_path: str = "/mcp",
+    consent_policy: Optional[ConsentReceiptPolicy] = None,
+    consent_verifier: Optional[ConsentReceiptVerifier] = None,
+    consent_client: Optional[str] = None,
+    consent_resource: str | Mapping[str, str] | Callable[..., str] = (
+        DEFAULT_CONSENT_RESOURCE
+    ),
+    consent_scope: str | Mapping[str, str] | Callable[..., str] = DEFAULT_CONSENT_SCOPE,
+    consent_policy_version: str = DEFAULT_CONSENT_POLICY_VERSION,
+    consent_require_receipt: bool = True,
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
+    if consent_policy is not None and consent_verifier is not None:
+        raise ValueError("provide consent_policy or consent_verifier, not both")
+    if consent_verifier is not None:
+        if consent_client is None:
+            raise ValueError("consent_client is required with consent_verifier")
+        consent_policy = ConsentReceiptPolicy(
+            verifier=consent_verifier,
+            client=consent_client,
+            resource=consent_resource,
+            scope=consent_scope,
+            policy_version=consent_policy_version,
+            require_receipt=consent_require_receipt,
+        )
     FastMCP = _structured_fastmcp(_load_fastmcp())
     server = FastMCP(
         "OpenMed",
@@ -1586,7 +1737,7 @@ def create_mcp_server(
         stateless_http=True,
         json_response=True,
     )
-    _register_tools(server, runtime_provider)
+    _register_tools(server, runtime_provider, consent_policy)
     _register_resources(server, runtime_provider)
     _register_prompts(server)
     return server
