@@ -103,6 +103,7 @@ from .clinical_ids import (
     validate_gstin,
     validate_indian_phone,
     validate_indian_pin,
+    validate_mrn,
     validate_pan,
 )
 from .script_names import (
@@ -258,5 +259,6 @@ __all__ = [
     "validate_gstin",
     "validate_indian_phone",
     "validate_indian_pin",
+    "validate_mrn",
     "validate_pan",
 ]

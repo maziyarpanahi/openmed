@@ -1313,6 +1313,20 @@ class MedicalRecordNumberProvider(BaseProvider):
         return f"MRN-{self.numerify('#######')}"
 
 
+def validate_mrn(text: str) -> bool:
+    """Validate the explicit, provider-generated ``MRN-XXXX`` identifier shape.
+
+    Medical record numbers are institution-specific and do not have a shared
+    checksum. This deliberately conservative validator therefore requires an
+    MRN designator and an alphanumeric body instead of treating arbitrary
+    high-cardinality numbers as medical record identifiers.
+    """
+
+    return (
+        re.fullmatch(r"MRN[\s:._-]*[A-Z0-9][A-Z0-9._-]{2,31}", text, re.I) is not None
+    )
+
+
 # ---------------------------------------------------------------------------
 # US National Provider Identifier (10 digits, Luhn over "80840" prefix)
 # ---------------------------------------------------------------------------
@@ -3966,6 +3980,7 @@ __all__ = [
     "validate_indian_phone",
     "validate_indian_pin",
     "validate_luhn",
+    "validate_mrn",
     "validate_npi",
     "validate_ontario_health_card",
     "validate_pan",
