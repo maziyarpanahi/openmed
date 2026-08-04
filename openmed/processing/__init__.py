@@ -60,6 +60,13 @@ from .legacy_encoding import (
     iscii_to_unicode,
     unicode_to_iscii,
 )
+from .lists import (
+    ListItemSpan,
+    ListMarkerStyle,
+    list_boundary_f1,
+    parse_lists,
+    validate_list_items,
+)
 from .object_storage import (
     ObjectProgressCallback,
     ObjectStorageBatchResult,
@@ -68,7 +75,12 @@ from .object_storage import (
 )
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
-from .sentences import SentenceSpan, segment_chinese_text, segment_text
+from .sentences import (
+    SentenceSpan,
+    segment_chinese_text,
+    segment_clinical_text,
+    segment_text,
+)
 from .text import (
     INDIC_SCRIPTS,
     BoilerplateSuppressionResult,
@@ -246,8 +258,14 @@ __all__ = [
     "deidentify_stream",
     "replay",
     "sentences",
+    "ListItemSpan",
+    "ListMarkerStyle",
+    "list_boundary_f1",
+    "parse_lists",
+    "validate_list_items",
     "SentenceSpan",
     "segment_chinese_text",
+    "segment_clinical_text",
     "segment_text",
     "LOSSY_CASES",
     "TransliterationResult",
