@@ -21,6 +21,7 @@ from .doctype import (
     DocumentClassification,
     classify_document,
 )
+from .history import segment_history_family
 
 __all__ = [
     "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE",
@@ -38,6 +39,7 @@ __all__ = [
     "is_list_bearing_section",
     "list_section_label",
     "parse_section_lists",
+    "segment_history_family",
     "section_label_from_loinc",
     "validate_section_spans",
 ]
