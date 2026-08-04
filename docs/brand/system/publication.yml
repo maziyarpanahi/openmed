@@ -173,6 +173,7 @@ classification:
     - prefect-integration.md
     - spacy-component.md
     - hl7v2-deidentification.md
+    - interop/x12-837-redaction.md
     - compliance.md
     - compliance/api-deprecation-policy.md
     - compliance/africa-malabo-baseline.md

@@ -84,12 +84,16 @@ def test_redacts_patient_subscriber_and_provider_elements_only():
         "SYNTHFIRST",
         "SYNTHSUB123",
         "200 SAMPLE STREET",
+        "EXAMPLE CITY",
+        "90210",
         "19800101",
         "SYNTHSUB999",
         "SYNTHPATIENT",
         "SYNTHGIVEN",
         "SYNTHPAT456",
         "300 FIXTURE ROAD",
+        "DEMO TOWN",
+        "10001",
         "20100102",
         "SYNTHPAT999",
         "SYNTHDOCTOR",
@@ -123,6 +127,30 @@ def test_redacts_patient_subscriber_and_provider_elements_only():
     assert subscriber.get_value(8) == "MI"
     assert subscriber.get_value(9) == "REDACTED"
     assert result.deidentified_text.endswith("IEA*1*000000001~\n")
+
+
+def test_custom_isa_separators_and_segment_whitespace_round_trip():
+    source = (
+        SYNTHETIC_837.replace("SYNTHSUB999", "SYNTHSUB999:PART2^SYNTHALT999")
+        .replace("*", "|")
+        .replace("~", "?")
+        .replace("^", "!")
+    )
+
+    parsed = parse_x12_837(source)
+    result = redact_x12_837(source, replacement="MASKED")
+
+    assert parsed.delimiters.element == "|"
+    assert parsed.delimiters.repetition == "!"
+    assert parsed.delimiters.component == ":"
+    assert parsed.delimiters.segment == "?"
+    assert parsed.serialize() == source
+    assert "?\nGS|" in result.deidentified_text
+    assert "REF|SY|MASKED:MASKED!MASKED?" in result.deidentified_text
+    assert result.deidentified_text.endswith("IEA|1|000000001?\n")
+    assert parse_x12_837(result.deidentified_text).segment_names() == (
+        parsed.segment_names()
+    )
 
 
 def test_offset_map_round_trips_raw_audit_provenance():
