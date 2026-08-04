@@ -1,6 +1,15 @@
 """Core functionality for OpenMed package."""
 
 from .audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .audit_chain import (
+    AuditChain,
+    AuditChainEntry,
+    AuditChainSpan,
+    ChainVerificationResult,
+    append_to_chain_file,
+    verify_chain,
+)
+from .budget import BudgetExceededError, RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
     OpenMedConfig,
@@ -18,10 +27,51 @@ from .hf_hub import (
     prefetch_model,
     resolve_repo_id,
 )
+from .indic_name_match import (
+    DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD,
+    INDIC_LANGUAGE_CODES,
+    IndicNameNormalizer,
+    canonical_indic_name_key,
+    detect_name_script,
+    indic_names_match,
+)
+from .language_pack import (
+    LANGUAGE_PACK_REGISTRY,
+    LanguagePack,
+    LanguagePackRegistry,
+    get_language_pack,
+    register_language_pack,
+)
+from .language_pack_catalog import REGISTERED_SEGMENTERS, is_registered_segmenter
+from .language_pack_coherence import (
+    LanguagePackCoherenceError,
+    check_language_pack_coherence,
+    incoherent_packs,
+    pack_coherence_report,
+    require_language_pack_coherence,
+)
+from .language_router import (
+    DocumentLanguageDecision,
+    LanguageIdentifier,
+    LanguagePrediction,
+    LanguageRouter,
+    LanguageRun,
+    PyCLD2LanguageIdentifier,
+)
+from .model_integrity import ModelIntegrityError
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
 from .redaction_preview import redaction_preview, render_redaction_preview
+from .review_workflow import (
+    ReviewFeedback,
+    ReviewItem,
+    ReviewQueue,
+    append_feedback,
+    build_review_queue,
+    critical_labels,
+    record_review_decision,
+)
 from .rtl_render import (
     BIDI_CONTROL_CHARS,
     RTL_SCRIPTS,
@@ -33,20 +83,30 @@ from .rtl_render import (
     wrap_mask,
 )
 from .script_detect import (
+    CJK_SCRIPTS,
+    INDIC_SCRIPTS,
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
     UNKNOWN_SCRIPT,
     ZERO_WIDTH_CHARS,
+    ChineseScriptEstimate,
+    ChineseScriptVariant,
     DetectionNormalization,
+    ScriptDetectionWindow,
     candidate_languages_for_script,
+    detect_chinese_script,
     detect_script,
+    india_clinical_script_windows,
     normalize_for_pii_detection,
     segment_by_script,
 )
 from .surrogate_vault import (
     ENCRYPTION_SCHEME,
+    SUBJECT_SURROGATE_LABEL,
+    SUBJECT_SURROGATE_LANG,
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
+    SubjectResolutionError,
     SurrogateEntry,
     SurrogateKey,
     SurrogateSource,
@@ -57,6 +117,7 @@ from .surrogate_vault import (
 
 __all__ = [
     "ModelLoader",
+    "ModelIntegrityError",
     "load_model",
     "ModelQuery",
     "ModelSearchResult",
@@ -67,8 +128,21 @@ __all__ = [
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "AuditChain",
+    "AuditChainEntry",
+    "AuditChainSpan",
+    "ChainVerificationResult",
+    "append_to_chain_file",
+    "verify_chain",
     "redaction_preview",
     "render_redaction_preview",
+    "ReviewQueue",
+    "ReviewItem",
+    "ReviewFeedback",
+    "build_review_queue",
+    "record_review_decision",
+    "append_feedback",
+    "critical_labels",
     "BIDI_CONTROL_CHARS",
     "RTL_SCRIPTS",
     "RenderedRedaction",
@@ -86,25 +160,62 @@ __all__ = [
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "ENCRYPTION_SCHEME",
+    "SUBJECT_SURROGATE_LABEL",
+    "SUBJECT_SURROGATE_LANG",
+    "SubjectResolutionError",
+    "IndicNameNormalizer",
+    "canonical_indic_name_key",
+    "indic_names_match",
+    "detect_name_script",
+    "INDIC_LANGUAGE_CODES",
+    "DEFAULT_INDIC_NAME_SIMILARITY_THRESHOLD",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",
     "save_profile",
     "delete_profile",
     "load_config_with_profile",
+    "CJK_SCRIPTS",
+    "INDIC_SCRIPTS",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
     "ZERO_WIDTH_CHARS",
+    "ChineseScriptEstimate",
+    "ChineseScriptVariant",
     "DetectionNormalization",
+    "ScriptDetectionWindow",
     "candidate_languages_for_script",
+    "detect_chinese_script",
     "detect_script",
+    "india_clinical_script_windows",
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "RequestBudget",
+    "BudgetExceededError",
+    "coerce_budget",
     "prefetch_model",
     "list_cached_models",
     "clear_cached_model",
     "resolve_repo_id",
     "CachedModel",
+    "LanguagePack",
+    "LanguagePackRegistry",
+    "LANGUAGE_PACK_REGISTRY",
+    "get_language_pack",
+    "register_language_pack",
+    "REGISTERED_SEGMENTERS",
+    "is_registered_segmenter",
+    "LanguagePackCoherenceError",
+    "check_language_pack_coherence",
+    "incoherent_packs",
+    "pack_coherence_report",
+    "require_language_pack_coherence",
+    "LanguageIdentifier",
+    "LanguagePrediction",
+    "LanguageRun",
+    "DocumentLanguageDecision",
+    "LanguageRouter",
+    "PyCLD2LanguageIdentifier",
 ]

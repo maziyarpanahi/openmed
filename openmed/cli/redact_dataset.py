@@ -9,6 +9,8 @@ from typing import Any, Sequence, TextIO
 
 from openmed.processing.batch import redact_dataset
 
+from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit
+
 
 def parse_text_columns(
     text_columns: str | None,
@@ -32,16 +34,16 @@ def run_from_args(
 ) -> int:
     """Run dataset redaction from argparse arguments."""
     stdout = stdout or sys.stdout
-    stderr = stderr or sys.stderr
     columns = parse_text_columns(
         getattr(args, "text_columns", None),
         getattr(args, "text_column", None),
     )
     if not columns:
-        stderr.write(
-            "At least one --text-column or --text-columns value is required.\n"
+        raise CliError(
+            "At least one --text-column or --text-columns value is required.",
+            code="missing_columns",
+            exit_code=EXIT_USAGE,
         )
-        return 1
 
     try:
         result = redact_dataset(
@@ -60,12 +62,19 @@ def run_from_args(
             batch_size=getattr(args, "batch_size", 512),
         )
     except Exception as exc:
-        stderr.write(f"Dataset redaction failed: {exc}\n")
-        return 1
+        raise CliError(
+            f"Dataset redaction failed: {exc}",
+            code="redaction_failed",
+            exit_code=EXIT_ERROR,
+        )
 
-    stdout.write(json.dumps(result.summary.to_dict(), indent=2, sort_keys=True))
-    stdout.write("\n")
-    return 0
+    data = result.summary.to_dict()
+    return emit(
+        args,
+        data,
+        human=json.dumps(data, indent=2, sort_keys=True),
+        stream=stdout,
+    )
 
 
 def _split_columns(value: str) -> list[str]:

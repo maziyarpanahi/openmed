@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from . import gateway
+
 
 def validate_input(
     text: Any,
@@ -12,6 +14,12 @@ def validate_input(
     allow_empty: bool = False,
 ) -> str:
     """Validate and clean input text.
+
+    This is the library entry point into the shared input gateway. Character
+    and UTF-8 byte caps, encoding validation, whitespace normalization, and
+    empty/minimum-length checks are delegated to
+    :func:`openmed.utils.gateway.normalize_text`. The existing suspicious-input
+    heuristic remains as a library-specific compatibility check.
 
     Args:
         text: Input text to validate.
@@ -23,36 +31,27 @@ def validate_input(
         Validated and cleaned text.
 
     Raises:
-        ValueError: If validation fails.
+        InputValidationError: If validation fails. This subclasses
+            :class:`ValueError` for backward compatibility.
     """
-    if text is None:
-        if allow_empty:
-            return ""
-        raise ValueError("Input text cannot be None")
-
-    # Convert to string if not already
-    if not isinstance(text, str):
-        text = str(text)
-
-    # Basic cleaning
-    text = text.strip()
-
-    # Check empty string
-    if not text and not allow_empty:
-        raise ValueError("Input text cannot be empty")
-
-    # Check length constraints
-    if len(text) < min_length:
-        if allow_empty and len(text) == 0:
-            return text
-        raise ValueError(f"Input text too short. Minimum length: {min_length}")
-
-    if max_length and len(text) > max_length:
-        raise ValueError(f"Input text too long. Maximum length: {max_length}")
+    default_limits = gateway.get_default_limits()
+    limits = gateway.GatewayLimits(
+        max_chars=(default_limits.max_chars if max_length is None else max_length),
+        max_bytes=default_limits.max_bytes,
+    )
+    text = gateway.normalize_text(
+        text,
+        limits=limits,
+        min_length=min_length,
+        allow_empty=allow_empty,
+    )
 
     # Check for suspicious content
     if _contains_suspicious_content(text):
-        raise ValueError("Input text contains suspicious content")
+        raise gateway.InputValidationError(
+            "Input text contains suspicious content",
+            code="suspicious_content",
+        )
 
     return text
 

@@ -50,6 +50,7 @@ def test_local_only_model_listing_uses_manifest(mock_get_all_models, monkeypatch
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
 @patch("openmed.core.models.pipeline")
 def test_local_only_hf_pipeline_uses_cached_files(mock_pipeline, monkeypatch):
     _clear_offline_env(monkeypatch)
@@ -66,6 +67,7 @@ def test_local_only_hf_pipeline_uses_cached_files(mock_pipeline, monkeypatch):
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
 @patch("openmed.core.models.pipeline")
 def test_local_only_config_cannot_be_disabled_by_pipeline_kwarg(
     mock_pipeline, monkeypatch
@@ -112,6 +114,7 @@ def test_local_only_config_cannot_be_disabled_during_component_load(
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
 @patch("openmed.core.models.pipeline")
 def test_local_only_pipeline_fallback_preserves_cached_only_loading(
     mock_pipeline, monkeypatch
