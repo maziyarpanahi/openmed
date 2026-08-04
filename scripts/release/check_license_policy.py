@@ -146,6 +146,7 @@ REVIEWED_LICENSES = {
     "python-docx": "MIT",
     "quickumls": "MIT",
     "rapidfuzz": "MIT",
+    "ray": "Apache-2.0",
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
