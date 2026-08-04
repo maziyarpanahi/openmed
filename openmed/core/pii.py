@@ -39,6 +39,8 @@ from ..processing.outputs import EntityPrediction, PredictionResult
 from ..processing.text import InputError as InputError
 from ..processing.text import validate_pii_input
 from .budget import BudgetClock, RequestBudget, coerce_budget
+from .capabilities import MissingOptionalDependencyError
+from .capabilities import install_hint as _optional_dependency_install_instruction
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -90,37 +92,6 @@ DeidentificationMethod = Literal[
     "shift_dates",
     "format_preserve",
 ]
-
-
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
-
-    def __init__(
-        self,
-        *,
-        package: str,
-        feature: str,
-        extra: str | None = None,
-    ) -> None:
-        instruction = _optional_dependency_install_instruction(package, extra)
-        super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
-        )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
-
-
-def _optional_dependency_install_instruction(
-    package: str,
-    extra: str | None = None,
-) -> str:
-    if extra:
-        return (
-            f"Install it with `pip install openmed[{extra}]` "
-            f"or `pip install {package}`."
-        )
-    return f"Install it with `pip install {package}`."
 
 
 def _optional_dependency_status(
