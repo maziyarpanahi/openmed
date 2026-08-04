@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a weekday-themed model release orchestrator that chains conversion,
+  synthetic evaluation, signed release gates, model-card generation,
+  publication, fresh-environment smoke checks, last-green rollback, quarantine
+  reporting, and an append-only offline audit ledger (#1243).
+- Added offline family-transfer adapter routing that prefers installed target
+  adapters, falls back to compatible donor adapters with scored provenance,
+  and returns explicit unsupported or unavailable routing failures (#1331).
+- Completed clinical temporal timeline composition with DCT/TIMEX anchors on
+  every ordered event, transitively reduced public TLINK graphs, metric-ready
+  edge keys, and retained/pruned privacy-safe decision provenance (#1253).
+- Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
+  consistency scoring, a zero-violation blocking gate, and synthetic
+  discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and
+  contradiction-trap coverage (#1309).
 - Added deterministic OncoTree tumor-type mapping
   (`openmed.clinical.load_oncotree`, `map_tumor_type`) against a
   caller-supplied local release snapshot (path / `OPENMED_ONCOTREE_PATH` and

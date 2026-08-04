@@ -29,6 +29,12 @@ from openmed.core.pii_i18n import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.core.registry_service import (
+    REGISTRY_STATE_PATH,
+    RegistryStateError,
+    load_registry_state,
+    registry_state_errors,
+)
 from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
@@ -1217,6 +1223,7 @@ def _manifest_coherence_check(
     manifest_path = _manifest_path(metadata)
     manifest_rows: list[dict[str, Any]] = []
     manifest_row: Mapping[str, Any] | None = None
+    registry_state_path: Path | None = None
     if manifest_path is not None:
         try:
             manifest_rows = _load_manifest_rows(manifest_path)
@@ -1246,6 +1253,26 @@ def _manifest_coherence_check(
         mismatches.update(
             _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
         )
+        registry_state_path = _optional_path(metadata.get("registry_state_path"))
+        if registry_state_path is None and _is_default_path(
+            manifest_path, _DEFAULT_MANIFEST_PATH
+        ):
+            registry_state_path = REGISTRY_STATE_PATH
+        if registry_state_path is not None:
+            try:
+                registry_state = load_registry_state(registry_state_path)
+            except RegistryStateError as exc:
+                mismatches["registry_state"] = {
+                    "path": str(registry_state_path),
+                    "errors": [str(exc)],
+                }
+            else:
+                state_errors = registry_state_errors(manifest_rows, registry_state)
+                if state_errors:
+                    mismatches["registry_state"] = {
+                        "path": str(registry_state_path),
+                        "errors": state_errors,
+                    }
 
     card = _model_card_metadata(metadata)
     if card and manifest_row is not None:
@@ -1268,6 +1295,9 @@ def _manifest_coherence_check(
             "manifest_path": str(manifest_path) if manifest_path is not None else None,
             "manifest_rows": len(manifest_rows),
             "candidate_manifest_row": manifest_row is not None,
+            "registry_state_path": (
+                str(registry_state_path) if registry_state_path is not None else None
+            ),
         },
     )
 
