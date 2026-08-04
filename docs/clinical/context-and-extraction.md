@@ -236,16 +236,37 @@ mappings with `negation`, `uncertainty`, `experiencer`, and `temporality`, and
 also places those fields under `metadata["clinical_context"]` for compatibility
 with formatted NER results. Input spans are not mutated.
 
+Pass detected or upstream `SectionSpan` metadata through `sections=` to apply
+section-scoped priors. The span must fall inside the section's half-open
+`start`/`end` range. Canonical labels and supported LOINC section codes are
+accepted. With this opt-in path, each result also contains `context_sources`
+and `metadata["clinical_context_sources"]`, recording the winning source for
+each axis.
+
+Precedence is deterministic for every axis:
+
+1. `local` — an explicit in-clause modifier wins.
+2. `section` — a containing-section prior is used when no local modifier wins.
+3. `default` — the existing global default is used otherwise.
+
+Family History supplies `experiencer=family`; Past Medical History supplies
+`temporality=historical`. Section header text is not treated as a local cue, so
+provenance distinguishes a section prior from an explicit statement in the
+section body. Omitting `sections` preserves the prior output shape and values.
+
 ```python
 from openmed.clinical import assert_context
+from openmed.clinical.sections import detect_sections
 
-text = "No evidence of pneumonia."
-start = text.index("pneumonia")
+text = "Past Medical History:\nPneumonia."
+start = text.index("Pneumonia")
 [span] = assert_context(
     text,
-    [{"text": "pneumonia", "start": start, "end": start + 9}],
+    [{"text": "Pneumonia", "start": start, "end": start + 9}],
+    sections=detect_sections(text),
 )
-print(span["negation"])
+print(span["temporality"])
+print(span["context_sources"]["temporality"])
 ```
 
 `assert_context_axes()` returns a compact `ClinicalAssertion` for downstream
