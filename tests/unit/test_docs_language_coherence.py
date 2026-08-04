@@ -16,6 +16,7 @@ from pathlib import Path
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
+    INDIC_NER_LANGUAGES,
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
@@ -52,10 +53,11 @@ def _heading_codes(text: str) -> set[str]:
 
 def test_languages_doc_table_matches_supported_languages() -> None:
     rows = _table_rows(DOC.read_text(encoding="utf-8"))
+    documented_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
 
-    assert set(rows) == SUPPORTED_LANGUAGES
+    assert set(rows) == documented_languages
 
-    for lang in SUPPORTED_LANGUAGES:
+    for lang in documented_languages:
         name, model, locale = rows[lang]
         assert name == LANGUAGE_NAMES[lang], lang
         assert model == DEFAULT_PII_MODELS[lang], lang
@@ -64,11 +66,12 @@ def test_languages_doc_table_matches_supported_languages() -> None:
 
 def test_languages_doc_has_a_worked_example_per_language() -> None:
     text = DOC.read_text(encoding="utf-8")
+    documented_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
 
-    assert _heading_codes(text) == SUPPORTED_LANGUAGES
+    assert _heading_codes(text) == documented_languages
     # Each worked example shows a before/after de-identification.
-    assert text.count("Before:") >= len(SUPPORTED_LANGUAGES)
-    assert text.count("After:") >= len(SUPPORTED_LANGUAGES)
+    assert text.count("Before:") >= len(documented_languages)
+    assert text.count("After:") >= len(documented_languages)
 
 
 def test_languages_doc_is_in_nav_and_cross_linked() -> None:

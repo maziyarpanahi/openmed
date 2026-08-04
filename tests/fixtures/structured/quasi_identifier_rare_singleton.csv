@@ -1,0 +1,9 @@
+record_id,age,zip_code,admission_date,diagnosis,department
+peer-1,94,02139,2025-04-01,routine-follow-up,cardiology
+target,94,02139,2025-04-09,rare-alpha-syndrome,cardiology
+peer-2,94,30301,2025-04-09,routine-follow-up,cardiology
+peer-3,72,02139,2025-04-09,rare-alpha-syndrome,cardiology
+peer-4,72,30301,2025-04-01,routine-follow-up,cardiology
+peer-5,72,30301,2025-04-01,rare-alpha-syndrome,cardiology
+peer-6,65,02139,2025-04-01,routine-follow-up,cardiology
+peer-7,65,30301,2025-04-09,routine-follow-up,cardiology

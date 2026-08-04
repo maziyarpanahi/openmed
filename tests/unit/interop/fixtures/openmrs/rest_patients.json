@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "uuid": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "display": "Synthetic patient",
+      "identifiers": [
+        {
+          "uuid": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          "identifierType": {
+            "uuid": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+            "display": "KenyaEMR patient number"
+          }
+        }
+      ]
+    }
+  ],
+  "links": []
+}

@@ -1,0 +1,418 @@
+{
+  "fixture_version": "openmed.clinical_agent_run.v1",
+  "synthetic": true,
+  "workflow": {
+    "name": "openmed_clinical_workflow",
+    "version": "1.0.0",
+    "prompt_name": "openmed-clinical-workflow",
+    "resource_uri": "openmed://clinical-workflow",
+    "stage_order": [
+      "deidentify",
+      "detect",
+      "context",
+      "sections",
+      "relations",
+      "ground",
+      "export",
+      "risk"
+    ],
+    "default_execution": "local",
+    "allow_external_llm": false
+  },
+  "input": {
+    "note": "Synthetic subject Cedar Example, record SYN-1303-ALPHA, reports aster syndrome.",
+    "synthetic_direct_identifiers": [
+      "Cedar Example",
+      "SYN-1303-ALPHA"
+    ]
+  },
+  "artifacts": {
+    "deidentify": {
+      "schema_version": "openmed.deidentified_handoff.v1",
+      "deidentified_text": "Synthetic subject [NAME], record [RECORD_ID], reports aster syndrome.",
+      "source_text_hash": "sha256:214b19570d64de5ef11ef71ad025c6cf1c6cfdc2aeec60eb9e2009482121dfe5"
+    },
+    "detect": {
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": null,
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          }
+        }
+      ],
+      "model_name": "synthetic-offline-model",
+      "entity_count": 1
+    },
+    "context": {
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": null,
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true,
+            "clinical_context": {
+              "temporality": "recent",
+              "certainty": "certain",
+              "negation": "affirmed"
+            }
+          }
+        }
+      ],
+      "context_count": 1
+    },
+    "sections": {
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": "assessment",
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true,
+            "clinical_context": {
+              "temporality": "recent",
+              "certainty": "certain",
+              "negation": "affirmed"
+            }
+          }
+        }
+      ],
+      "sections": [
+        {
+          "label": "assessment",
+          "start": 0,
+          "end": 69,
+          "content_start": 0,
+          "language": "en",
+          "source": "synthetic_fixture"
+        }
+      ]
+    },
+    "relations": {
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": "assessment",
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true,
+            "clinical_context": {
+              "temporality": "recent",
+              "certainty": "certain",
+              "negation": "affirmed"
+            }
+          }
+        }
+      ],
+      "relations": []
+    },
+    "ground": {
+      "schema_version": "openmed.ground.v1",
+      "status": "completed",
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": "assessment",
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true,
+            "clinical_context": {
+              "temporality": "recent",
+              "certainty": "certain",
+              "negation": "affirmed"
+            },
+            "grounding": {
+              "span_index": 0,
+              "canonical_label": "CONDITION",
+              "start": 54,
+              "end": 68,
+              "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "system": "ICD10CM",
+              "code": "SYN-ASTER-1303",
+              "display": "Aster syndrome",
+              "score": 0.99,
+              "method": "composite",
+              "vocab_version": "synthetic-v1",
+              "encoder_index_key": "",
+              "abstained": false,
+              "alternatives": [],
+              "advisory": "Machine-suggested synthetic terminology grounding for human verification."
+            }
+          }
+        }
+      ],
+      "grounded_concepts": [
+        {
+          "span_index": 0,
+          "canonical_label": "CONDITION",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "system": "ICD10CM",
+          "code": "SYN-ASTER-1303",
+          "display": "Aster syndrome",
+          "score": 0.99,
+          "method": "composite",
+          "vocab_version": "synthetic-v1",
+          "encoder_index_key": "",
+          "abstained": false,
+          "alternatives": [],
+          "advisory": "Machine-suggested synthetic terminology grounding for human verification."
+        }
+      ],
+      "error": null
+    },
+    "export": {
+      "schema_version": "openmed.export_fhir.v1",
+      "status": "completed",
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": "assessment",
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true,
+            "clinical_context": {
+              "temporality": "recent",
+              "certainty": "certain",
+              "negation": "affirmed"
+            },
+            "grounding": {
+              "span_index": 0,
+              "canonical_label": "CONDITION",
+              "start": 54,
+              "end": 68,
+              "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "system": "ICD10CM",
+              "code": "SYN-ASTER-1303",
+              "display": "Aster syndrome",
+              "score": 0.99,
+              "method": "composite",
+              "vocab_version": "synthetic-v1",
+              "encoder_index_key": "",
+              "abstained": false,
+              "alternatives": [],
+              "advisory": "Machine-suggested synthetic terminology grounding for human verification."
+            }
+          }
+        }
+      ],
+      "bundle": {
+        "resourceType": "Bundle",
+        "type": "collection",
+        "entry": [
+          {
+            "fullUrl": "urn:uuid:0ffe874d-7898-53df-89ad-9e938d81a14a",
+            "resource": {
+              "resourceType": "Condition",
+              "id": "openmed-5a7751f64c1d50e057c9e0d6c11468eb",
+              "clinicalStatus": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                    "code": "active"
+                  }
+                ]
+              },
+              "verificationStatus": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                    "code": "confirmed"
+                  }
+                ]
+              },
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                    "version": "synthetic-v1",
+                    "code": "SYN-ASTER-1303",
+                    "display": "Aster syndrome"
+                  }
+                ],
+                "text": "Aster syndrome"
+              },
+              "subject": {
+                "reference": "Patient/openmed-subject"
+              }
+            }
+          }
+        ]
+      },
+      "resource_count": 1,
+      "error": null
+    },
+    "risk": {
+      "schema_version": "openmed.risk_score.v1",
+      "status": "completed",
+      "spans": [
+        {
+          "schema_version": 1,
+          "doc_id": "synthetic-agent-run-1303",
+          "start": 54,
+          "end": 68,
+          "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entity_type": "synthetic_condition",
+          "canonical_label": "CONDITION",
+          "policy_label": "CLINICAL_CONCEPT",
+          "regulatory_tags": [],
+          "score": 0.99,
+          "detector": "synthetic-offline-model",
+          "evidence": {
+            "pipeline_stage": "detect",
+            "synthetic": true
+          },
+          "action": "keep",
+          "replacement": null,
+          "reversible_id": null,
+          "section": "assessment",
+          "metadata": {
+            "pipeline_stage": "detect",
+            "synthetic": true,
+            "clinical_context": {
+              "temporality": "recent",
+              "certainty": "certain",
+              "negation": "affirmed"
+            },
+            "grounding": {
+              "span_index": 0,
+              "canonical_label": "CONDITION",
+              "start": 54,
+              "end": 68,
+              "text_hash": "hmac-sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "system": "ICD10CM",
+              "code": "SYN-ASTER-1303",
+              "display": "Aster syndrome",
+              "score": 0.99,
+              "method": "composite",
+              "vocab_version": "synthetic-v1",
+              "encoder_index_key": "",
+              "abstained": false,
+              "alternatives": [],
+              "advisory": "Machine-suggested synthetic terminology grounding for human verification."
+            }
+          }
+        }
+      ],
+      "risk_report": {
+        "schema_version": 1,
+        "artifact": "deidentification_risk_summary",
+        "detail_level": "aggregate_phi_safe",
+        "record_count": 1,
+        "leakage_rate": 0.0,
+        "reidentification_rate": 0.0,
+        "minimum_k": 1,
+        "singleton_record_count": 1,
+        "quasi_identifier_count": 0,
+        "quasi_identifier_categories": {}
+      },
+      "error": null
+    }
+  }
+}
