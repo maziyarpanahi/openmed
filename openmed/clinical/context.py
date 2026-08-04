@@ -60,6 +60,7 @@ from openmed.clinical.lexicons import (
     normalize_section_header,
     normalized_section_header_aliases,
 )
+from openmed.clinical.sections.detect import section_label_from_loinc
 
 Negation = Literal["affirmed", "negated"]
 
@@ -108,6 +109,7 @@ _CONTEXT_RULE_CATEGORIES = frozenset(
 )
 _CONTEXT_RULE_DIRECTIONS = frozenset({"forward", "backward", "bidirectional"})
 _CONTEXT_RULE_SCOPES = frozenset({"sentence", "clause"})
+ContextSource = Literal["local", "section", "default"]
 
 INDIA_CLINICAL_NER_DISCLAIMER = (
     "India clinical NER output assists review and does not make clinical or "
@@ -889,10 +891,14 @@ def _section_text_of(obj: Any) -> str:
 
 def _canonical_section_name(section: Any) -> str | None:
     section_text = _section_text_of(section)
-    if not section_text:
-        return None
-    normalized = _normalize_section_label(section_text)
-    return SECTION_LABEL_ALIASES.get(normalized)
+    if section_text:
+        normalized = _normalize_section_label(section_text)
+        canonical = SECTION_LABEL_ALIASES.get(normalized)
+        if canonical is not None:
+            return canonical
+    if isinstance(section, (str, Mapping)):
+        return section_label_from_loinc(section)
+    return None
 
 
 def canonical_section_name(section: Any) -> str | None:
@@ -921,6 +927,7 @@ def canonical_section_label(section: Any) -> str | None:
 
 def _has_explicit_temporality_cue(
     span: Any,
+    modifier_hits: Any = None,
     *,
     language: str | None = None,
 ) -> bool:
@@ -929,7 +936,33 @@ def _has_explicit_temporality_cue(
         compiled.hypothetical_re.search(part)
         or compiled.historical_re.search(part)
         or compiled.recent_re.search(part)
-        for part in _text_parts(span, None, language=language)
+        for part in _text_parts(span, modifier_hits, language=language)
+    )
+
+
+def _has_explicit_uncertainty_cue(
+    span: Any,
+    modifier_hits: Any = None,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
+    return any(
+        compiled.uncertainty_re.search(part)
+        for part in _text_parts(span, modifier_hits, language=language)
+    )
+
+
+def _has_explicit_negation_cue(
+    span: Any,
+    modifier_hits: Any = None,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
+    return any(
+        compiled.negation_re.search(_mask_pseudo_negation(part, language=language))
+        for part in _text_parts(span, modifier_hits, language=language)
     )
 
 
@@ -1611,7 +1644,13 @@ def assert_context_axes(
         certainty=resolve_uncertainty(span, modifier_hits, language=language),
         negation=resolve_negation(span, modifier_hits, language=language),
     )
-    return apply_section_context(span, section, assertion, language=language)
+    return apply_section_context(
+        span,
+        section,
+        assertion,
+        language=language,
+        modifier_hits=modifier_hits,
+    )
 
 
 def assert_context(
@@ -1620,6 +1659,7 @@ def assert_context(
     sentences: Iterable[Any] | None = None,
     language: str | None = None,
     section_experiencer: str | None = None,
+    sections: Iterable[Any] | Mapping[str, Any] | str | None = None,
 ) -> list[dict[str, Any]]:
     """Attach all four clinical context axes to extracted spans.
 
@@ -1627,7 +1667,11 @@ def assert_context(
     ``experiencer``, and ``temporality`` at the top level. The same compact
     mapping is placed under ``metadata["clinical_context"]`` so formatted NER
     results can preserve it without changing their public entity schema.
-    Input spans are never mutated.
+    Input spans are never mutated. When ``sections`` is supplied, each span is
+    matched to its containing section and a ``context_sources`` mapping records
+    the winning ``local|section|default`` source for every axis. The same source
+    mapping is copied to ``metadata["clinical_context_sources"]``. Omitting
+    ``sections`` preserves the historical output shape exactly.
 
     Args:
         text: Source document text indexed by the span offsets.
@@ -1637,6 +1681,10 @@ def assert_context(
         language: Optional cue-lexicon language code.
         section_experiencer: Optional patient/family/other section prior used
             only when no explicit experiencer cue governs a span.
+        sections: Optional iterable of offset-bearing section mappings such as
+            :class:`~openmed.clinical.sections.SectionSpan`. A single mapping
+            or label is also accepted. Labels and supported LOINC section codes
+            are canonicalized before priors are applied.
 
     Returns:
         Copied span mappings enriched with the four context axes, in input
@@ -1650,6 +1698,9 @@ def assert_context(
         span_list = [spans]
     else:
         span_list = list(spans)
+
+    section_list = _coerce_sections(sections)
+    record_context_sources = sections is not None
 
     scoped_hits = scan_context_cues(
         text,
@@ -1665,20 +1716,27 @@ def assert_context(
     enriched_spans: list[dict[str, Any]] = []
     for span in span_list:
         start, end = _target_offsets(text, span)
+        matched_section = _section_for_span(section_list, start=start, end=end)
+        section_signal = matched_section or _span_section(span)
+        section_text = _mask_section_header(text, matched_section)
+        modifier_hits = _modifier_hits_outside_section_header(
+            scoped_hits[span],
+            matched_section,
+        )
         scoped_span = {
-            "text": text[start:end],
-            "document_text": text,
+            "text": section_text[start:end],
+            "document_text": section_text,
             "start": start,
             "end": end,
         }
         assertion = assert_context_axes(
             scoped_span,
-            scoped_hits[span],
-            section=_span_section(span),
+            modifier_hits,
+            section=section_signal,
             language=language,
         )
         assignment = resolve_experiencer(
-            text,
+            section_text,
             {"start": start, "end": end},
             section_experiencer=section_experiencer or assertion.experiencer,
         )
@@ -1691,6 +1749,16 @@ def assert_context(
 
         enriched = _span_mapping_copy(span, text=text, start=start, end=end)
         enriched.update(context_fields)
+        context_sources = None
+        if record_context_sources:
+            context_sources = _context_axis_sources(
+                scoped_span,
+                modifier_hits,
+                section_signal,
+                assignment_source=assignment.source,
+                language=language,
+            )
+            enriched["context_sources"] = dict(context_sources)
         raw_metadata = enriched.get("metadata")
         if isinstance(raw_metadata, Mapping):
             metadata = dict(raw_metadata)
@@ -1699,10 +1767,158 @@ def assert_context(
         else:
             metadata = {"value": raw_metadata}
         metadata["clinical_context"] = dict(context_fields)
+        if context_sources is not None:
+            metadata["clinical_context_sources"] = dict(context_sources)
         enriched["metadata"] = metadata
         enriched_spans.append(enriched)
 
     return enriched_spans
+
+
+def _coerce_sections(
+    sections: Iterable[Any] | Mapping[str, Any] | str | None,
+) -> tuple[Any, ...] | None:
+    if sections is None:
+        return None
+    if isinstance(sections, (str, Mapping)):
+        return (sections,)
+    try:
+        return tuple(sections)
+    except TypeError as exc:
+        raise TypeError("sections must be a section mapping or iterable") from exc
+
+
+def _section_for_span(
+    sections: tuple[Any, ...] | None,
+    *,
+    start: int,
+    end: int,
+) -> Any:
+    if not sections:
+        return None
+
+    containing: list[tuple[int, int, Any]] = []
+    unscoped: list[Any] = []
+    for index, section in enumerate(sections):
+        offsets = _offsets_of(section)
+        if offsets is None:
+            if isinstance(section, str) or _canonical_section_name(section) is not None:
+                unscoped.append(section)
+            continue
+        section_start, section_end = offsets
+        if section_start <= start and end <= section_end:
+            containing.append((section_end - section_start, index, section))
+
+    if containing:
+        return min(containing, key=lambda candidate: candidate[:2])[2]
+    if len(unscoped) == 1:
+        return unscoped[0]
+    return None
+
+
+def _section_header_offsets(section: Any) -> tuple[int, int] | None:
+    if not isinstance(section, Mapping):
+        return None
+
+    header_start = _int_field(section, ("header_start",))
+    header_end = _int_field(section, ("header_end",))
+    if (
+        header_start is not None
+        and header_end is not None
+        and header_start < header_end
+    ):
+        return header_start, header_end
+
+    section_start = _int_field(section, _START_KEYS)
+    content_start = _int_field(section, ("content_start",))
+    if (
+        section_start is not None
+        and content_start is not None
+        and section_start < content_start
+    ):
+        return section_start, content_start
+    return None
+
+
+def _mask_section_header(text: str, section: Any) -> str:
+    header_offsets = _section_header_offsets(section)
+    if header_offsets is None:
+        return text
+    start, end = header_offsets
+    if start < 0 or end > len(text):
+        return text
+    return f"{text[:start]}{' ' * (end - start)}{text[end:]}"
+
+
+def _modifier_hits_outside_section_header(
+    modifier_hits: Any,
+    section: Any,
+) -> tuple[Any, ...]:
+    header_offsets = _section_header_offsets(section)
+    hits = tuple(_iter_modifier_hits(modifier_hits))
+    if header_offsets is None:
+        return hits
+    header_start, header_end = header_offsets
+    return tuple(
+        hit
+        for hit in hits
+        if (offsets := _offsets_of(hit)) is None
+        or offsets[1] <= header_start
+        or header_end <= offsets[0]
+    )
+
+
+def _context_axis_sources(
+    span: Any,
+    modifier_hits: Any,
+    section: Any,
+    *,
+    assignment_source: str,
+    language: str | None,
+) -> dict[str, ContextSource]:
+    canonical_section = _canonical_section_name(section)
+    section_prior = SECTION_CONTEXT_PRIORS.get(canonical_section or "", {})
+    temporality_source: ContextSource
+    if _has_explicit_temporality_cue(
+        span,
+        modifier_hits,
+        language=language,
+    ):
+        temporality_source = "local"
+    elif "temporality" in section_prior:
+        temporality_source = "section"
+    else:
+        temporality_source = "default"
+
+    if assignment_source == "cue":
+        experiencer_source: ContextSource = "local"
+    elif assignment_source == "section":
+        experiencer_source = "section"
+    else:
+        experiencer_source = "default"
+
+    return {
+        "negation": (
+            "local"
+            if _has_explicit_negation_cue(
+                span,
+                modifier_hits,
+                language=language,
+            )
+            else "default"
+        ),
+        "uncertainty": (
+            "local"
+            if _has_explicit_uncertainty_cue(
+                span,
+                modifier_hits,
+                language=language,
+            )
+            else "default"
+        ),
+        "experiencer": experiencer_source,
+        "temporality": temporality_source,
+    }
 
 
 def _span_mapping_copy(
@@ -1757,6 +1973,8 @@ def apply_section_context(
     section: Any = None,
     assertion: ClinicalAssertion | None = None,
     language: str | None = None,
+    *,
+    modifier_hits: Any = None,
 ) -> ClinicalAssertion:
     """Apply conservative section priors to a span assertion.
 
@@ -1788,7 +2006,11 @@ def apply_section_context(
     if (
         temporality_prior
         and resolved_assertion.temporality == RECENT
-        and not _has_explicit_temporality_cue(span, language=language)
+        and not _has_explicit_temporality_cue(
+            span,
+            modifier_hits,
+            language=language,
+        )
     ):
         changes["temporality"] = temporality_prior
 
@@ -1817,6 +2039,7 @@ __all__ = [
     "ContextRuleCategory",
     "ContextRuleScope",
     "DEFAULT_CONTEXT_RULES_RESOURCE",
+    "ContextSource",
     "INDIA_CLINICAL_NER_DISCLAIMER",
     "ModifierHit",
     "apply_context_rules",

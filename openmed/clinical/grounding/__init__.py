@@ -51,9 +51,12 @@ from .index import (
 )
 from .matcher import ConceptMatch, LexicalConcept, LexicalMatcher, normalize_term
 from .postcoordination import (
+    LATERALITY_SITE_PATTERN,
+    LATERALITY_SITE_SLOTS,
     POSTCOORDINATION_ATTRIBUTE_SLOTS,
     POSTCOORDINATION_PROVENANCE_KEY,
     ConceptReference,
+    LateralitySiteDecomposer,
     MentionDecomposer,
     PostCoordinationDecomposition,
     PostCoordinationStage,
@@ -62,6 +65,7 @@ from .postcoordination import (
     RulesPostCoordinationDecomposer,
     SnomedExpression,
     build_expression,
+    decompose_laterality_site_mention,
     decompose_mention,
     is_postcoordinated_candidate,
 )
@@ -144,6 +148,9 @@ __all__ = [
     "InvalidVocabularyLoaderError",
     "LexicalConcept",
     "LexicalMatcher",
+    "LateralitySiteDecomposer",
+    "LATERALITY_SITE_PATTERN",
+    "LATERALITY_SITE_SLOTS",
     "MLXSapBERTEncoder",
     "MentionDecomposer",
     "POLICY_DROP",
@@ -182,6 +189,7 @@ __all__ = [
     "build_index",
     "build_or_load_index",
     "build_expression",
+    "decompose_laterality_site_mention",
     "decompose_mention",
     "decompose_and_relink",
     "generate_candidates",

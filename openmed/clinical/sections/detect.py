@@ -23,6 +23,15 @@ LIST_SECTION_LOINC_CODES = MappingProxyType(
         "problem_list": "11450-4",
     }
 )
+CONTEXT_SECTION_LOINC_CODES = MappingProxyType(
+    {
+        "family_history": "10157-6",
+        "past_medical_history": "11348-0",
+    }
+)
+SECTION_LOINC_CODES = MappingProxyType(
+    {**LIST_SECTION_LOINC_CODES, **CONTEXT_SECTION_LOINC_CODES}
+)
 LIST_BEARING_SECTION_LOINC_CODES = frozenset(LIST_SECTION_LOINC_CODES.values())
 _HEADER_DELIMITERS = (":", "：", "﹕", "꞉")
 _UNDERLINE_CHARS = frozenset("-_=~")
@@ -208,6 +217,33 @@ def list_section_label(section: str | Mapping[str, Any]) -> str | None:
     label_by_code = {code: label for label, code in LIST_SECTION_LOINC_CODES.items()}
     for key in ("loinc_code", "loinc", "code", "coding", "codes"):
         for code in _loinc_codes(section.get(key)):
+            canonical = label_by_code.get(code)
+            if canonical is not None:
+                return canonical
+    return None
+
+
+def section_label_from_loinc(section: str | Mapping[str, Any]) -> str | None:
+    """Return a canonical section label from supported LOINC metadata.
+
+    Mapping inputs may carry a LOINC value under ``loinc_code``, ``loinc``,
+    ``code``, ``coding``, or ``codes``. Coding mappings are accepted only when
+    their optional system identifies LOINC. A bare string is treated as a
+    LOINC code, not as a section heading.
+    """
+
+    values: Iterable[Any]
+    if isinstance(section, str):
+        values = (section,)
+    else:
+        values = (
+            section.get(key)
+            for key in ("loinc_code", "loinc", "code", "coding", "codes")
+        )
+
+    label_by_code = {code: label for label, code in SECTION_LOINC_CODES.items()}
+    for value in values:
+        for code in _loinc_codes(value):
             canonical = label_by_code.get(code)
             if canonical is not None:
                 return canonical
@@ -560,7 +596,7 @@ def _section_dict(
         start=int(start),
         end=int(end),
     )
-    loinc_code = LIST_SECTION_LOINC_CODES.get(label)
+    loinc_code = SECTION_LOINC_CODES.get(label)
     if loinc_code is not None:
         section["loinc_code"] = loinc_code
     if header is not None:
@@ -584,14 +620,17 @@ def _section_dict(
 
 
 __all__ = [
+    "CONTEXT_SECTION_LOINC_CODES",
     "LIST_BEARING_SECTION_LABELS",
     "LIST_BEARING_SECTION_LOINC_CODES",
     "LIST_SECTION_LOINC_CODES",
+    "SECTION_LOINC_CODES",
     "SectionSpan",
     "UNSECTIONED_SECTION",
     "detect_sections",
     "is_list_bearing_section",
     "list_section_label",
     "parse_section_lists",
+    "section_label_from_loinc",
     "validate_section_spans",
 ]
