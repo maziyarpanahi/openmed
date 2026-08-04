@@ -18,6 +18,36 @@ _UNDERLINE_CHARS = frozenset("-_=~")
 _BULLET_PREFIXES = ("-", "*", "•")
 
 
+class SectionSpan(dict[str, Any]):
+    """A JSON-ready canonical half-open clinical section range.
+
+    ``SectionSpan`` remains a dictionary so existing pipeline and service
+    consumers can serialize it directly, while its required fields are also
+    available as attributes for a small typed span contract.
+    """
+
+    def __init__(self, label: str, start: int, end: int, **metadata: Any) -> None:
+        super().__init__(label=label, start=int(start), end=int(end), **metadata)
+
+    @property
+    def label(self) -> str:
+        """Return the canonical section label."""
+
+        return str(self["label"])
+
+    @property
+    def start(self) -> int:
+        """Return the inclusive section start offset."""
+
+        return int(self["start"])
+
+    @property
+    def end(self) -> int:
+        """Return the exclusive section end offset."""
+
+        return int(self["end"])
+
+
 @dataclass(frozen=True)
 class _Line:
     text: str
@@ -43,7 +73,7 @@ def detect_sections(
     *,
     language: str | None = None,
     include_unsectioned: bool = True,
-) -> tuple[dict[str, Any], ...]:
+) -> tuple[SectionSpan, ...]:
     """Segment *text* into canonical clinical section spans.
 
     Headers are matched at line starts using language-pack section lexicons.
@@ -63,7 +93,7 @@ def detect_sections(
         for hit in _line_header_hits(line, _next_line(lines, index), language)
     )
     if not hits:
-        return (
+        unsectioned_result = (
             (
                 _section_dict(
                     label=UNSECTIONED_SECTION,
@@ -75,8 +105,14 @@ def detect_sections(
             if include_unsectioned and text
             else ()
         )
+        _validate_section_spans(
+            text,
+            unsectioned_result,
+            require_coverage=include_unsectioned,
+        )
+        return unsectioned_result
 
-    sections: list[dict[str, Any]] = []
+    sections: list[SectionSpan] = []
     cursor = 0
     for index, hit in enumerate(hits):
         if include_unsectioned and cursor < hit.start:
@@ -113,7 +149,79 @@ def detect_sections(
                 language=language,
             )
         )
-    return tuple(section for section in sections if section["start"] < section["end"])
+    result = tuple(section for section in sections if section["start"] < section["end"])
+    _validate_section_spans(
+        text,
+        result,
+        require_coverage=include_unsectioned,
+    )
+    return result
+
+
+def validate_section_spans(
+    text: str,
+    spans: Iterable[Mapping[str, Any]],
+) -> None:
+    """Assert that section spans form a complete partition of ``text``.
+
+    Spans use half-open character offsets. Each span must have a non-empty
+    canonical label, remain within the document, and begin exactly where the
+    previous span ends. An empty document is valid only with no spans.
+
+    Raises:
+        ValueError: If a span is malformed, out of bounds, empty, overlapping,
+            or leaves any document characters uncovered.
+    """
+
+    _validate_section_spans(text, spans, require_coverage=True)
+
+
+def _validate_section_spans(
+    text: str,
+    spans: Iterable[Mapping[str, Any]],
+    *,
+    require_coverage: bool,
+) -> None:
+    previous_end: int | None = None
+    for index, span in enumerate(spans):
+        if not isinstance(span, Mapping):
+            raise ValueError(f"section span {index} must be a mapping")
+        label = span.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"section span {index} requires a non-empty label")
+        start = _section_offset(span, "start", index)
+        end = _section_offset(span, "end", index)
+        if start < 0 or end > len(text):
+            raise ValueError(f"section span {index} is outside document bounds")
+        if end <= start:
+            raise ValueError(f"section span {index} must have positive length")
+
+        if previous_end is None:
+            if require_coverage and start != 0:
+                raise ValueError(f"section spans leave a gap from 0 to {start}")
+        elif start < previous_end:
+            raise ValueError(
+                f"section spans overlap at offsets {start} to {previous_end}"
+            )
+        elif start > previous_end:
+            raise ValueError(
+                f"section spans leave a gap from {previous_end} to {start}"
+            )
+        previous_end = end
+
+    if require_coverage:
+        covered_end = previous_end if previous_end is not None else 0
+        if covered_end != len(text):
+            raise ValueError(
+                f"section spans leave a gap from {covered_end} to {len(text)}"
+            )
+
+
+def _section_offset(span: Mapping[str, Any], key: str, index: int) -> int:
+    value = span.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"section span {index} requires an integer {key}")
+    return value
 
 
 def _iter_lines(text: str) -> Iterable[_Line]:
@@ -282,12 +390,12 @@ def _section_dict(
     header_start: int | None = None,
     header_end: int | None = None,
     content_start: int | None = None,
-) -> dict[str, Any]:
-    section: dict[str, Any] = {
-        "label": label,
-        "start": int(start),
-        "end": int(end),
-    }
+) -> SectionSpan:
+    section = SectionSpan(
+        label=label,
+        start=int(start),
+        end=int(end),
+    )
     if header is not None:
         section.update(
             {
@@ -308,4 +416,9 @@ def _section_dict(
     return section
 
 
-__all__ = ["UNSECTIONED_SECTION", "detect_sections"]
+__all__ = [
+    "SectionSpan",
+    "UNSECTIONED_SECTION",
+    "detect_sections",
+    "validate_section_spans",
+]
