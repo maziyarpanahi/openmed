@@ -454,6 +454,15 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.BIOMARKER,
         label_taxonomy.ANATOMY,
     ],
+    # Forward metadata for future Radiology models; no such model is
+    # registered today (see issue #1971).
+    "Radiology": [
+        label_taxonomy.FINDING,
+        label_taxonomy.IMAGING_MODALITY,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.LATERALITY,
+        label_taxonomy.MEASUREMENT,
+    ],
     # Forward metadata for future Anesthesia models; no such model is
     # registered today (see issue #952).
     "Anesthesia": [
@@ -1252,6 +1261,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
         "Ophthalmology",
         "Contains ophthalmology terms",
+    ),
+    "\\bct\\b|\\bmri\\b|x[- ]?ray|ultrasound|radiograph|contrast|impression|nodule|opacity": (
+        "Radiology",
+        "Contains radiology/imaging terms",
     ),
     "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
         "Anesthesia",
