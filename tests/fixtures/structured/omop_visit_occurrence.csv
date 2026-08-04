@@ -1,0 +1,2 @@
+visit_occurrence_id,person_id,visit_concept_id,visit_start_date,visit_start_datetime,visit_end_date,visit_end_datetime,visit_type_concept_id,provider_id,care_site_id,visit_source_value,admitted_from_concept_id,admitted_from_source_value,discharged_to_concept_id,discharged_to_source_value
+2001,1001,9201,2024-03-20,2024-03-20T09:30:00,2024-03-21,2024-03-21T10:45:00,44818518,4001,5001,Visit for Synthetic Avery Example,0,Home address for Avery Example,0,Home address for Avery Example

@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "name": "omop_hipaa_safe_harbor",
+  "schema": "omop",
+  "base_policy": "hipaa_safe_harbor",
+  "default_action": "keep",
+  "identifier_fields": [
+    "*.*_id",
+    "*.*_source_value"
+  ],
+  "fields": {
+    "*.*_source_value": {
+      "action": "route-to-deidentify",
+      "field_type": "free-text"
+    },
+    "*.*_date": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "*.*_datetime": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "*.*_concept_id": "keep",
+    "*.person_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "*.visit_occurrence_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "person.person_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "person.year_of_birth": "keep",
+    "person.month_of_birth": {
+      "action": "suppress",
+      "field_type": "quasi-identifier"
+    },
+    "person.day_of_birth": {
+      "action": "suppress",
+      "field_type": "quasi-identifier"
+    },
+    "person.birth_datetime": {
+      "action": "date-shift",
+      "field_type": "date"
+    },
+    "person.location_id": {
+      "action": "suppress",
+      "field_type": "quasi-identifier"
+    },
+    "person.provider_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "person.care_site_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "visit_occurrence.visit_occurrence_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "visit_occurrence.person_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "visit_occurrence.provider_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "visit_occurrence.care_site_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "visit_occurrence.preceding_visit_occurrence_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "location.location_id": {
+      "action": "keep",
+      "field_type": "internal-linkage"
+    },
+    "location.address_1": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "location.address_2": {
+      "action": "suppress",
+      "field_type": "identifier"
+    },
+    "location.city": {
+      "action": "suppress",
+      "field_type": "quasi-identifier"
+    },
+    "location.state": {
+      "action": "keep",
+      "field_type": "quasi-identifier"
+    },
+    "location.zip": {
+      "action": "generalize",
+      "field_type": "quasi-identifier",
+      "generalization": "zip",
+      "level": 2
+    },
+    "location.county": {
+      "action": "suppress",
+      "field_type": "quasi-identifier"
+    },
+    "location.latitude": "suppress",
+    "location.longitude": "suppress"
+  }
+}
