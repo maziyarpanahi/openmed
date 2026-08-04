@@ -234,7 +234,7 @@ def build_synthetic_sr_dataset() -> Any:
         Sequence,
         concept=_code(Dataset, "103339001", "SCT", "Long Axis"),
         numeric_value="12.5",
-        unit=_code(Dataset, "mm", "UCUM", "mm"),
+        unit=_code(Dataset, "mm", "UCUM", "millimeter"),
         relationship="CONTAINS",
     )
     short_axis = _num_item(
@@ -242,7 +242,7 @@ def build_synthetic_sr_dataset() -> Any:
         Sequence,
         concept=_code(Dataset, "103340004", "SCT", "Short Axis"),
         numeric_value="8.0",
-        unit=_code(Dataset, "mm", "UCUM", "mm"),
+        unit=_code(Dataset, "mm", "UCUM", "millimeter"),
         relationship="CONTAINS",
     )
     measurement_group.ContentSequence = Sequence(

@@ -65,8 +65,8 @@ class SrContentItem(TypedDict):
         value: Rendered value for the node. For ``NUM`` this is the numeric
             measured value as a string; for ``CODE`` the coded concept meaning;
             for ``TEXT`` the literal text; empty for ``CONTAINER``.
-        unit_code: Coded measurement unit (UCUM code meaning) for ``NUM`` nodes,
-            otherwise ``None``.
+        unit_code: Coded measurement unit value (for example the UCUM code
+            ``mm``) for ``NUM`` nodes, otherwise ``None``.
         relationship: ``RelationshipType`` of the node to its parent (for
             example ``CONTAINS``, ``HAS PROPERTIES``), or ``None`` at the root.
         template_id: Mapped ``TemplateIdentifier`` (TID) when the node declares a
@@ -235,9 +235,7 @@ def _render_num(node: Any) -> tuple[str, str | None]:
     if measured is None:
         return "", None
     value = _string_value(getattr(measured, "NumericValue", None))
-    unit = _coded_concept_meaning(
-        getattr(measured, "MeasurementUnitsCodeSequence", None)
-    )
+    unit = _coded_value(getattr(measured, "MeasurementUnitsCodeSequence", None))
     return value, (unit or None)
 
 
@@ -250,6 +248,17 @@ def _coded_concept_meaning(sequence: Any) -> str:
     if item is None:
         return ""
     return _string_value(getattr(item, "CodeMeaning", None))
+
+
+def _coded_value(sequence: Any) -> str:
+    item = _first_sequence_item(sequence)
+    if item is None:
+        return ""
+    for attribute in ("CodeValue", "LongCodeValue", "URNCodeValue", "CodeMeaning"):
+        value = _string_value(getattr(item, attribute, None))
+        if value:
+            return value
+    return ""
 
 
 def _template_id(node: Any) -> str | None:
