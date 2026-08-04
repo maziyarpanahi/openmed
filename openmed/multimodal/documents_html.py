@@ -57,6 +57,8 @@ _BLOCK_TAGS = frozenset(
     }
 )
 _HARD_SUPPRESSION_TAGS = frozenset({"script", "style"})
+_LEGACY_ENTITY_NAMES = frozenset(name for name in html5 if not name.endswith(";"))
+_MAX_LEGACY_ENTITY_NAME_LENGTH = max(len(name) for name in _LEGACY_ENTITY_NAMES)
 _DetectorCallShape = Literal["keyword_lang", "positional_lang", "text_only"]
 
 
@@ -379,9 +381,9 @@ def _line_starts(text: str) -> tuple[int, ...]:
 
 
 def _longest_legacy_entity_prefix(name: str) -> str | None:
-    for end in range(len(name), 0, -1):
+    for end in range(min(len(name), _MAX_LEGACY_ENTITY_NAME_LENGTH), 0, -1):
         prefix = name[:end]
-        if prefix in html5:
+        if prefix in _LEGACY_ENTITY_NAMES:
             return prefix
     return None
 
@@ -512,23 +514,28 @@ def _select_detector_call_shape(
         signature = inspect.signature(detector)
     except (TypeError, ValueError):
         return "text_only"
-    call_shapes: tuple[
-        tuple[_DetectorCallShape, tuple[Any, ...], dict[str, Any]], ...
-    ] = (
-        ("keyword_lang", (text,), {"lang": lang}),
-        ("positional_lang", (text, lang), {}),
-        ("text_only", (text,), {}),
-    )
-    last_error: TypeError | None = None
-    for call_shape, args, kwargs in call_shapes:
-        try:
-            signature.bind(*args, **kwargs)
-        except TypeError as error:
-            last_error = error
-        else:
-            return call_shape
-    assert last_error is not None
-    raise last_error
+    parameters = signature.parameters
+    lang_parameter = parameters.get("lang")
+    if lang_parameter is not None and lang_parameter.kind in (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.VAR_POSITIONAL,
+    ):
+        signature.bind(text, lang)
+        return "positional_lang"
+    if lang_parameter is not None and lang_parameter.kind in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+    ):
+        signature.bind(text, lang=lang)
+        return "keyword_lang"
+    if any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    ):
+        signature.bind(text, lang=lang)
+        return "keyword_lang"
+    signature.bind(text)
+    return "text_only"
 
 
 def _resolve_detector(models: Any) -> Any:
@@ -579,9 +586,15 @@ def _iter_entity_inputs(spans: Any) -> tuple[Any, ...]:
 def _coerce_entity(
     span: Any, *, default_replacement: str | None
 ) -> tuple[int, int, str] | None:
-    if _looks_like_sequence_entity(span):
+    if isinstance(span, Sequence) and not isinstance(span, (str, bytes, bytearray)):
+        if len(span) < 2:
+            return None
         label = str(span[2]) if len(span) >= 3 and span[2] is not None else None
-        return int(span[0]), int(span[1]), default_replacement or _mask_for_label(label)
+        return (
+            _coerce_entity_offset(span[0]),
+            _coerce_entity_offset(span[1]),
+            default_replacement or _mask_for_label(label),
+        )
     if isinstance(span, Mapping):
         start = span.get("start")
         end = span.get("end")
@@ -599,23 +612,37 @@ def _coerce_entity(
     if start is None or end is None:
         return None
     return (
-        int(start),
-        int(end),
+        _coerce_entity_offset(start),
+        _coerce_entity_offset(end),
         str(replacement)
         if replacement is not None
         else default_replacement or _mask_for_label(label),
     )
 
 
+def _coerce_entity_offset(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        pass
+    raise ValueError("invalid detector entity offsets")
+
+
 def _looks_like_sequence_entity(value: Any) -> bool:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        if len(value) >= 2:
-            try:
-                int(value[0])
-                int(value[1])
-            except (TypeError, ValueError):
+        if len(value) < 2:
+            return False
+        first, second = value[0], value[1]
+        for candidate in (first, second):
+            if isinstance(candidate, Mapping):
                 return False
-            return True
+            if isinstance(candidate, Sequence) and not isinstance(
+                candidate, (str, bytes, bytearray)
+            ):
+                return False
+            if all(hasattr(candidate, name) for name in ("start", "end")):
+                return False
+        return True
     return False
 
 

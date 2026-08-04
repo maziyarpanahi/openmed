@@ -4,6 +4,7 @@ import io
 import os
 import subprocess
 import sys
+import traceback
 from functools import partial, wraps
 from pathlib import Path
 
@@ -130,6 +131,45 @@ def test_entities_use_callback_bounded_atomic_and_linear_ranges() -> None:
     assert _source_range(document, combining) == _source_range(document, combining + 1)
     start, end = _source_range(document, combining)
     assert source[start:end] == "&NotEqualTilde;"
+
+
+def test_long_semicolonless_entity_prefix_work_is_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy_names = documents_html._LEGACY_ENTITY_NAMES
+
+    class CountingLegacyNames:
+        def __init__(self) -> None:
+            self.checks = 0
+
+        def __contains__(self, name: object) -> bool:
+            self.checks += 1
+            return name in legacy_names
+
+    counting_names = CountingLegacyNames()
+    monkeypatch.setattr(
+        documents_html,
+        "_LEGACY_ENTITY_NAMES",
+        counting_names,
+    )
+    checks: list[int] = []
+    for suffix_length in (2_000, 20_000):
+        counting_names.checks = 0
+        suffix = "x" * suffix_length
+
+        document = extract_html(f"<p>&amp{suffix}</p>")
+
+        assert document.text == f"&{suffix}"
+        assert _source_range(document, 0) == (3, 7)
+        assert _source_range(document, len(document.text) - 1) == (
+            7 + suffix_length - 1,
+            7 + suffix_length,
+        )
+        checks.append(counting_names.checks)
+
+    assert checks[0] > 0
+    assert checks[0] == checks[1]
+    assert checks[0] <= documents_html._MAX_LEGACY_ENTITY_NAME_LENGTH
 
 
 def test_inline_and_block_whitespace_mapping() -> None:
@@ -407,6 +447,18 @@ def test_handler_calls_legacy_text_only_detector_once() -> None:
     assert document.metadata["detected_span_count"] == 0
 
 
+def test_handler_passes_lang_via_kwargs_without_reusing_second_positional() -> None:
+    observed: list[tuple[str, float, dict[str, object]]] = []
+
+    def detector(text: str, threshold: float = 0.5, **kwargs):
+        observed.append((text, threshold, kwargs))
+        return []
+
+    base._HANDLERS[".html"][-1].handler(FIXTURE, models=detector, lang="en")
+
+    assert observed == [("Patient Jane & Roe", 0.5, {"lang": "en"})]
+
+
 @pytest.mark.parametrize("defaulted", [False, True])
 def test_handler_passes_lang_to_positional_only_detector_once(defaulted: bool) -> None:
     observed: list[tuple[str, str | None]] = []
@@ -422,6 +474,57 @@ def test_handler_passes_lang_to_positional_only_detector_once(defaulted: bool) -
         def detector(text: str, lang: str | None, /):
             observed.append((text, lang))
             return []
+
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        models=detector,
+        lang="en",
+    )
+
+    assert observed == [("Patient Jane & Roe", "en")]
+    assert document.metadata["detected_span_count"] == 0
+
+
+def test_handler_prefers_declared_positional_only_lang_over_kwargs() -> None:
+    observed: list[tuple[str, str | None, dict[str, object]]] = []
+
+    def detector(text: str, lang: str | None = None, /, **kwargs):
+        observed.append((text, lang, kwargs))
+        return []
+
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        models=detector,
+        lang="en",
+    )
+
+    assert observed == [("Patient Jane & Roe", "en", {})]
+    assert document.metadata["detected_span_count"] == 0
+
+
+def test_handler_does_not_inject_lang_into_unrelated_positional_parameter() -> None:
+    observed: list[tuple[str, str | None]] = []
+
+    def detector(text: str, labels: str | None = None, /):
+        observed.append((text, labels))
+        return []
+
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        models=detector,
+        lang="en",
+    )
+
+    assert observed == [("Patient Jane & Roe", None)]
+    assert document.metadata["detected_span_count"] == 0
+
+
+def test_handler_passes_lang_to_keyword_capable_detector_once() -> None:
+    observed: list[tuple[str, str | None]] = []
+
+    def detector(text: str, lang: str | None = None):
+        observed.append((text, lang))
+        return []
 
     document = base._HANDLERS[".html"][-1].handler(
         FIXTURE,
@@ -523,6 +626,48 @@ def test_handler_propagates_detector_internal_type_error_without_retry() -> None
         )
 
     assert observed == [("Patient Jane & Roe", "en")]
+
+
+@pytest.mark.parametrize(
+    "entity",
+    [
+        {
+            "start": "SENTINEL_PHI_PATIENT_JANE_<p>raw</p>",
+            "end": 18,
+            "replacement": "SENTINEL_PHI_PATIENT_JANE_<p>raw</p>",
+        },
+        (
+            "SENTINEL_PHI_PATIENT_JANE_<p>raw</p>",
+            18,
+            "SENTINEL_PHI_PATIENT_JANE_<p>raw</p>",
+        ),
+    ],
+)
+def test_handler_rejects_malformed_offsets_without_exposing_detector_values(
+    tmp_path: Path, entity: object
+) -> None:
+    sentinel = "SENTINEL_PHI_PATIENT_JANE_<p>raw</p>"
+    output = tmp_path / "must-not-exist.html"
+
+    def detector(text: str, *, lang: str | None = None):
+        return [entity]
+
+    with pytest.raises(ValueError, match="invalid detector entity offsets") as caught:
+        base._HANDLERS[".html"][-1].handler(
+            FIXTURE,
+            policy={"output_path": output},
+            models=detector,
+            lang="en",
+        )
+
+    error = caught.value
+    exposed = "".join(traceback.format_exception(error))
+    assert sentinel not in str(error)
+    assert sentinel not in repr(error)
+    assert sentinel not in exposed
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert not output.exists()
 
 
 def test_clean_package_import_activates_handlers_without_optional_extra() -> None:
