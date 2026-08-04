@@ -56,7 +56,7 @@ nav:
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
-      - Detector Plugin SDK: plugin-sdk.md
+      - Extension Plugin SDK: plugin-sdk.md
       - Batch Processing: batch-processing.md
       - Legacy Indic Encoding: legacy-indic-encoding.md
       - Performance Profiling: profiling.md
