@@ -625,6 +625,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -632,6 +635,13 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "or",
+              "pa",
+              "ta",
               "te",
               "pt",
               "ar",
@@ -641,7 +651,18 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el"
             ],
             "title": "Lang",
             "type": "string"
