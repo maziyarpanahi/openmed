@@ -29,12 +29,14 @@ EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 PHONE_RE = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
 MRN_RE = re.compile(r"\bMRN-\d{8}\b")
 NAME_RE = re.compile(r"\b(?:Jane Doe|Jose Alvarez|Casey Example)\b")
+CROSS_BOUNDARY_RE = re.compile(r"\bBOUNDARY-LEFT\. BOUNDARY-RIGHT\b")
 
 _DETECTORS = (
     ("EMAIL", EMAIL_RE, 0.99),
     ("PHONE", PHONE_RE, 0.98),
     ("MRN", MRN_RE, 0.97),
     ("NAME", NAME_RE, 0.96),
+    ("MRN", CROSS_BOUNDARY_RE, 0.95),
 )
 
 
@@ -106,6 +108,25 @@ def test_windows_never_split_a_sentence_and_cover_all_spans():
         assert window.text == text[window.start : window.end]
 
 
+def test_single_overlong_sentence_is_not_split_at_a_segmentation_block():
+    boundary_email = "long.sentence@hospital.example"
+    text = f"{'stable observation ' * 80}{boundary_email} {'continued care ' * 80}."
+
+    windows = list(iter_document_windows(text, window_chars=128, overlap_chars=32))
+    result = deidentify_document_stream(
+        text,
+        window_chars=128,
+        overlap_chars=32,
+        pipeline=_pipeline(),
+    )
+
+    assert len(windows) == 1
+    assert windows[0].text == text
+    emails = [entity for entity in result.pii_entities if entity.entity_type == "EMAIL"]
+    assert len(emails) == 1
+    assert text[emails[0].start : emails[0].end] == boundary_email
+
+
 # --------------------------------------------------------------------------- #
 # Span identity vs. the single-pass pipeline
 # --------------------------------------------------------------------------- #
@@ -134,6 +155,8 @@ def test_stream_spans_are_identical_to_single_pass_on_same_input():
     assert [(span.start, span.end) for span in result.spans] == [
         (entity.start, entity.end) for entity in result.pii_entities
     ]
+    assert result.redacted_text == single.redacted_text
+    assert result.deidentified_text == result.redacted_text
 
 
 def test_stream_matches_single_pass_across_window_and_overlap_sizes():
@@ -174,6 +197,41 @@ def test_iterable_source_is_reassembled_before_segmentation():
     assert _entity_signature(from_fragments.pii_entities) == _entity_signature(
         from_string.pii_entities
     )
+    assert from_fragments.redacted_text == from_string.redacted_text
+    assert from_fragments.document_length == len(text)
+
+
+def test_iterable_source_is_consumed_incrementally_before_pipeline_work():
+    fragment = "The patient remained stable throughout the observation period. "
+    fragment_count = 80
+    consumed = 0
+    consumed_at_detection: list[int] = []
+
+    def source():
+        nonlocal consumed
+        for _ in range(fragment_count):
+            consumed += 1
+            yield fragment
+
+    def observing_detector(text: str, **kwargs) -> PredictionResult:
+        consumed_at_detection.append(consumed)
+        return _regex_detector(text, **kwargs)
+
+    result = deidentify_document_stream(
+        source(),
+        window_chars=192,
+        overlap_chars=64,
+        pipeline=Pipeline(
+            model_detector=observing_detector,
+            use_safety_sweep=True,
+        ),
+    )
+
+    assert consumed == fragment_count
+    assert consumed_at_detection
+    assert consumed_at_detection[0] < fragment_count
+    assert result.document_length == len(fragment) * fragment_count
+    assert result.redacted_text == (fragment * fragment_count).strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -217,6 +275,32 @@ def test_identifier_at_window_boundary_is_caught_whole_once():
     ]
     assert len(single_emails) == 1
     assert (single_emails[0].start, single_emails[0].end) == (email.start, email.end)
+
+
+def test_identifier_spanning_sentence_window_boundary_replaces_partial_spans():
+    boundary_identifier = "BOUNDARY-LEFT. BOUNDARY-RIGHT"
+    text = (
+        "Stable first sentence. "
+        f"{boundary_identifier} was verified. "
+        "Stable final sentence."
+    )
+    single = _pipeline().run(text, method="mask")
+    single_signature = _entity_signature(single.deidentification_result.pii_entities)
+
+    result = deidentify_document_stream(
+        [text[:31], text[31:47], text[47:]],
+        window_chars=24,
+        overlap_chars=32,
+        pipeline=_pipeline(),
+        method="mask",
+    )
+
+    boundary_entities = [
+        entity for entity in result.pii_entities if entity.text == boundary_identifier
+    ]
+    assert len(boundary_entities) == 1
+    assert _entity_signature(result.pii_entities) == single_signature
+    assert result.redacted_text == single.redacted_text
 
 
 def test_no_raw_identifier_survives_in_the_source_after_redaction_offsets():

@@ -9,6 +9,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
 from .__about__ import __version__
+
 if TYPE_CHECKING:
     from .core import ModelLoader, OpenMedConfig
     from .core.document_stream import (
@@ -210,6 +211,7 @@ def _resolve_export(name: str) -> Any:
         return globals()[name]
     except KeyError:
         return __getattr__(name)
+
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE)
 _HARD_LINE_BREAK_PATTERN = re.compile(r"\r\n|[\n\r\v\f\x85\u2028\u2029]")

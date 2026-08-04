@@ -25,7 +25,7 @@ document length.
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Optional
@@ -33,6 +33,7 @@ from typing import Any, Optional
 from ..processing.sentences import segment_text
 from .pii import DeidentificationMethod, PIIEntity
 from .pipeline import Pipeline
+from .schemas.span import OpenMedSpan
 
 __all__ = [
     "DocumentStreamResult",
@@ -60,6 +61,15 @@ class _DocumentWindow:
 
 
 @dataclass(frozen=True)
+class _DocumentSentence:
+    """One source-preserving sentence or other safe text segment."""
+
+    text: str
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
 class DocumentStreamResult:
     """Aggregate result of a memory-bounded streaming document pass.
 
@@ -67,6 +77,8 @@ class DocumentStreamResult:
         pii_entities: Detected PII entities with **global** document offsets,
             ordered by ``(start, end)``. Identical to the non-streaming
             :func:`openmed.core.pii.deidentify` result on the same input.
+        redacted_text: Source document with detected entities replaced according
+            to the configured de-identification method.
         window_count: Number of windows processed.
         max_window_chars: Largest window (in characters) handed to the pipeline;
             the practical peak-memory driver.
@@ -77,13 +89,149 @@ class DocumentStreamResult:
     window_count: int
     max_window_chars: int
     document_length: int
-    _spans: tuple[Any, ...] = field(default=(), repr=False)
+    _spans: tuple[OpenMedSpan, ...] = field(default=(), repr=False)
+    _source_text: str | None = field(default=None, repr=False)
+    _redacted_chunks: tuple[str, ...] = field(default=(), repr=False)
 
     @property
-    def spans(self) -> tuple[Any, ...]:
+    def spans(self) -> tuple[OpenMedSpan, ...]:
         """Return canonical :class:`OpenMedSpan` records with global offsets."""
 
         return self._spans
+
+    @property
+    def redacted_text(self) -> str:
+        """Return the redacted document without retaining another source copy."""
+
+        if self._source_text is not None:
+            leading = len(self._source_text) - len(self._source_text.lstrip())
+            stripped = self._source_text.strip()
+            return _render_redacted_region(
+                stripped,
+                region_start=leading,
+                entities=self.pii_entities,
+            )
+        return "".join(self._redacted_chunks).strip()
+
+    @property
+    def deidentified_text(self) -> str:
+        """Alias :attr:`redacted_text` for parity with de-identification results."""
+
+        return self.redacted_text
+
+
+def _iter_source_blocks(
+    source: str | Iterable[str],
+    *,
+    block_chars: int,
+) -> Iterator[str]:
+    """Coalesce arbitrary source fragments into bounded segmentation blocks."""
+
+    fragments: Iterable[str] = (source,) if isinstance(source, str) else source
+    pending = ""
+    for fragment in fragments:
+        if not isinstance(fragment, str):
+            raise TypeError("source fragments must be strings")
+        fragment_offset = 0
+        while fragment_offset < len(fragment):
+            take = min(block_chars - len(pending), len(fragment) - fragment_offset)
+            pending += fragment[fragment_offset : fragment_offset + take]
+            fragment_offset += take
+            if len(pending) == block_chars:
+                yield pending
+                pending = ""
+    if pending:
+        yield pending
+
+
+def _iter_sentence_segments(
+    source: str | Iterable[str],
+    *,
+    block_chars: int,
+    lang: str,
+) -> Iterator[_DocumentSentence]:
+    """Yield exact source segments while retaining only one unfinished sentence."""
+
+    pending = ""
+    pending_start = 0
+    for block in _iter_source_blocks(source, block_chars=block_chars):
+        pending += block
+        spans = segment_text(pending, language=lang)
+
+        if not spans:
+            if pending and not pending.strip():
+                yield _DocumentSentence(
+                    text=pending,
+                    start=pending_start,
+                    end=pending_start + len(pending),
+                )
+                pending_start += len(pending)
+                pending = ""
+            continue
+
+        # Retain the last sentence because it may be incomplete at the source
+        # block boundary. A sentence longer than ``block_chars`` therefore grows
+        # the carry until a real sentence boundary appears; it is never split at
+        # an arbitrary character or token offset.
+        if len(spans) < 2:
+            continue
+
+        cutoff = int(spans[-1].start)
+        if cutoff <= 0:
+            continue
+        cursor = 0
+        for index in range(len(spans) - 1):
+            segment_end = int(spans[index + 1].start)
+            segment_end = min(cutoff, max(cursor, segment_end))
+            if segment_end <= cursor:
+                continue
+            yield _DocumentSentence(
+                text=pending[cursor:segment_end],
+                start=pending_start + cursor,
+                end=pending_start + segment_end,
+            )
+            cursor = segment_end
+        if cursor < cutoff:
+            yield _DocumentSentence(
+                text=pending[cursor:cutoff],
+                start=pending_start + cursor,
+                end=pending_start + cutoff,
+            )
+        pending = pending[cutoff:]
+        pending_start += cutoff
+
+    if not pending:
+        return
+
+    spans = segment_text(pending, language=lang)
+    if not spans:
+        yield _DocumentSentence(
+            text=pending,
+            start=pending_start,
+            end=pending_start + len(pending),
+        )
+        return
+
+    cursor = 0
+    for index in range(len(spans)):
+        segment_end = (
+            int(spans[index + 1].start) if index + 1 < len(spans) else len(pending)
+        )
+        segment_end = max(cursor, min(len(pending), segment_end))
+        if segment_end <= cursor:
+            continue
+        yield _DocumentSentence(
+            text=pending[cursor:segment_end],
+            start=pending_start + cursor,
+            end=pending_start + segment_end,
+        )
+        cursor = segment_end
+    if cursor < len(pending):
+        yield _DocumentSentence(
+            text=pending[cursor:],
+            start=pending_start + cursor,
+            end=pending_start + len(pending),
+        )
 
 
 def _iter_sentence_bounds(
@@ -92,68 +240,24 @@ def _iter_sentence_bounds(
     block_chars: int,
     lang: str,
 ) -> Iterator[tuple[int, int]]:
-    """Yield global ``(start, end)`` sentence bounds by segmenting incrementally.
+    """Yield global sentence bounds using the incremental segment iterator."""
 
-    ``pysbd`` segments whatever text it is handed in one pass, so segmenting the
-    whole document at once would allocate an O(length) list of per-sentence
-    strings. Instead this walks the document in ``block_chars`` slices, segments
-    each slice, emits every sentence that is fully inside the slice, and carries
-    the trailing (possibly incomplete) sentence forward to the next slice. The
-    segmenter's working set is therefore bounded by ``block_chars`` plus one
-    carried sentence -- never the whole document.
-
-    Only integer offsets are yielded; no sentence text is retained.
-    """
-
-    length = len(text)
-    carry_start = 0  # global offset of the not-yet-emitted tail
-    while carry_start < length:
-        block_end = min(length, carry_start + block_chars)
-        is_final = block_end >= length
-        block = text[carry_start:block_end]
-        spans = segment_text(block, language=lang)
-        if not spans:
-            # Segmenter produced nothing (e.g. pure whitespace block); advance.
-            if is_final:
-                return
-            carry_start = block_end
-            continue
-
-        # On non-final blocks, hold back the last sentence: it may continue past
-        # the block boundary, so re-segment it together with the next block.
-        emit_upto = len(spans) if is_final else len(spans) - 1
-        last_emitted_end = carry_start
-        for span in spans[:emit_upto]:
-            global_start = carry_start + span.start
-            global_end = carry_start + span.end
-            last_emitted_end = global_end
-            yield (global_start, global_end)
-
-        if is_final:
-            return
-
-        # Carry from the start of the held-back sentence. If nothing was emitted
-        # (a single sentence spans the whole block), force progress by carrying
-        # from the block end to avoid an infinite loop; such a sentence is longer
-        # than ``block_chars`` and becomes its own window later.
-        held_start = carry_start + spans[emit_upto].start
-        if held_start <= carry_start:
-            # Whole block is one unfinished sentence; grow the window by emitting
-            # it as-is to guarantee forward progress.
-            yield (carry_start, block_end)
-            carry_start = block_end
-        else:
-            carry_start = max(last_emitted_end, held_start)
+    for sentence in _iter_sentence_segments(
+        text,
+        block_chars=block_chars,
+        lang=lang,
+    ):
+        yield (sentence.start, sentence.end)
 
 
 def iter_document_windows(
-    text: str,
+    source: str | Iterable[str],
     *,
     window_chars: int = 4096,
     overlap_chars: int = 0,
     lang: str = "en",
 ) -> Iterator[_DocumentWindow]:
-    """Yield sentence-aligned windows of ``text`` bounded by ``window_chars``.
+    """Yield sentence-aligned windows of ``source`` bounded by ``window_chars``.
 
     Whole sentences are grouped greedily so each window's own (non-overlap)
     region stays within ``window_chars`` where possible. A single sentence longer
@@ -167,61 +271,79 @@ def iter_document_windows(
     ``window_chars`` and the longest single sentence -- not of document length.
 
     Args:
-        text: Source document text.
+        source: Source document text or an iterable of source fragments.
         window_chars: Soft upper bound on the newly-owned characters per window.
         overlap_chars: Leading context characters carried from the prior window.
         lang: Language code for sentence segmentation.
 
     Yields:
-        ``_DocumentWindow`` records with global offsets into ``text``.
+        ``_DocumentWindow`` records with global source offsets.
     """
 
     if window_chars < 1:
         raise ValueError("window_chars must be positive")
     if overlap_chars < 0:
         raise ValueError("overlap_chars must be non-negative")
-    if not text:
-        return
-
     # Segment over blocks a couple of windows wide so most sentences resolve
     # inside a single block while the segmenter's working set stays bounded.
     block_chars = max(window_chars * 2, 1024)
 
-    group_start: int | None = None
-    group_end = 0
+    group: list[_DocumentSentence] = []
     group_chars = 0
-    emitted_any = False
+    overlap: tuple[_DocumentSentence, ...] = ()
 
-    def emit(own_start: int, own_end: int) -> _DocumentWindow:
-        window_start = max(0, own_start - overlap_chars) if overlap_chars else own_start
+    def emit(sentences: Sequence[_DocumentSentence]) -> _DocumentWindow:
+        own_start = sentences[0].start
+        own_end = sentences[-1].end
+        overlap_text = "".join(sentence.text for sentence in overlap)
+        own_text = "".join(sentence.text for sentence in sentences)
+        window_start = overlap[0].start if overlap else own_start
         return _DocumentWindow(
-            text=text[window_start:own_end],
+            text=f"{overlap_text}{own_text}",
             start=window_start,
             end=own_end,
             overlap_start=own_start,
         )
 
-    for sent_start, sent_end in _iter_sentence_bounds(
-        text, block_chars=block_chars, lang=lang
+    for sentence in _iter_sentence_segments(
+        source,
+        block_chars=block_chars,
+        lang=lang,
     ):
-        sentence_len = sent_end - sent_start
-        if group_start is not None and group_chars + sentence_len > window_chars:
-            yield emit(group_start, group_end)
-            emitted_any = True
-            group_start = None
+        sentence_len = sentence.end - sentence.start
+        if group and group_chars + sentence_len > window_chars:
+            yield emit(group)
+            overlap = _select_overlap_sentences(group, overlap_chars)
+            group = []
             group_chars = 0
-        if group_start is None:
-            group_start = sent_start
-        group_end = sent_end
+        group.append(sentence)
         group_chars += sentence_len
 
-    if group_start is not None:
-        yield emit(group_start, group_end)
-        emitted_any = True
+    if group:
+        yield emit(group)
 
-    if not emitted_any and text.strip():
-        # Segmenter yielded no bounds but there is content; emit it whole.
-        yield emit(0, len(text))
+
+def _select_overlap_sentences(
+    sentences: Sequence[_DocumentSentence],
+    overlap_chars: int,
+) -> tuple[_DocumentSentence, ...]:
+    """Return whole trailing sentences for safe cross-window context."""
+
+    if overlap_chars == 0 or not sentences:
+        return ()
+
+    selected: list[_DocumentSentence] = []
+    selected_chars = 0
+    for sentence in reversed(sentences):
+        sentence_chars = sentence.end - sentence.start
+        if selected and selected_chars + sentence_chars > overlap_chars:
+            break
+        selected.append(sentence)
+        selected_chars += sentence_chars
+        if selected_chars >= overlap_chars:
+            break
+    selected.reverse()
+    return tuple(selected)
 
 
 class DocumentStreamDeidentifier:
@@ -295,13 +417,13 @@ class DocumentStreamDeidentifier:
             ),
         )
 
-    def run(self, text: str) -> DocumentStreamResult:
-        """Process ``text`` and return global-offset entities and spans.
+    def run(self, source: str | Iterable[str]) -> DocumentStreamResult:
+        """Process ``source`` and return global-offset entities and spans.
 
         Args:
-            text: The full document text. Only one window at a time is handed to
-                the pipeline, so peak memory is bounded by ``window_chars`` and
-                the longest single sentence, not by ``len(text)``.
+            source: Full document text or iterable of source fragments. Only one
+                window at a time is handed to the pipeline, so processing memory
+                is bounded by ``window_chars`` and the longest single sentence.
 
         Returns:
             A :class:`DocumentStreamResult` whose ``pii_entities`` carry global
@@ -309,19 +431,70 @@ class DocumentStreamDeidentifier:
         """
 
         entities: dict[tuple[int, int, str], PIIEntity] = {}
-        spans: dict[tuple[int, int, str], Any] = {}
+        spans: dict[tuple[int, int, str], OpenMedSpan] = {}
         window_count = 0
         max_window_chars = 0
+        document_length = 0
+        redacted_chunks: list[str] | None = [] if not isinstance(source, str) else None
+        pending_region: tuple[str, int] | None = None
 
         for window in iter_document_windows(
-            text,
+            source,
             window_chars=self.window_chars,
             overlap_chars=self.overlap_chars,
             lang=self.lang,
         ):
             window_count += 1
             max_window_chars = max(max_window_chars, len(window.text))
+            document_length = window.end
             self._process_window(window, entities, spans)
+
+            if redacted_chunks is not None:
+                own_offset = window.overlap_start - window.start
+                own_text = window.text[own_offset:]
+                if pending_region is not None:
+                    region_text, region_start = pending_region
+                    crossing_ends = [
+                        int(entity.end)
+                        for entity in entities.values()
+                        if int(entity.start) < window.overlap_start < int(entity.end)
+                    ]
+                    if crossing_ends:
+                        combined = f"{region_text}{own_text}"
+                        finalized_end = max(crossing_ends)
+                        finalized_chars = finalized_end - region_start
+                        redacted_chunks.append(
+                            _render_redacted_region(
+                                combined[:finalized_chars],
+                                region_start=region_start,
+                                entities=entities.values(),
+                            )
+                        )
+                        pending_region = (
+                            combined[finalized_chars:],
+                            finalized_end,
+                        )
+                    else:
+                        redacted_chunks.append(
+                            _render_redacted_region(
+                                region_text,
+                                region_start=region_start,
+                                entities=entities.values(),
+                            )
+                        )
+                        pending_region = (own_text, window.overlap_start)
+                else:
+                    pending_region = (own_text, window.overlap_start)
+
+        if redacted_chunks is not None and pending_region is not None:
+            region_text, region_start = pending_region
+            redacted_chunks.append(
+                _render_redacted_region(
+                    region_text,
+                    region_start=region_start,
+                    entities=entities.values(),
+                )
+            )
 
         ordered_keys = sorted(entities, key=lambda key: (key[0], key[1], key[2]))
         ordered_entities = [entities[key] for key in ordered_keys]
@@ -331,15 +504,19 @@ class DocumentStreamDeidentifier:
             pii_entities=ordered_entities,
             window_count=window_count,
             max_window_chars=max_window_chars,
-            document_length=len(text),
+            document_length=(
+                len(source) if isinstance(source, str) else document_length
+            ),
             _spans=ordered_spans,
+            _source_text=source if isinstance(source, str) else None,
+            _redacted_chunks=tuple(redacted_chunks or ()),
         )
 
     def _process_window(
         self,
         window: _DocumentWindow,
         entities: dict[tuple[int, int, str], PIIEntity],
-        spans: dict[tuple[int, int, str], Any],
+        spans: dict[tuple[int, int, str], OpenMedSpan],
     ) -> None:
         window_text = window.text
         if not window_text.strip():
@@ -365,7 +542,7 @@ class DocumentStreamDeidentifier:
 
         window_entities = result.deidentification_result.pii_entities
         window_spans = list(result.spans)
-        span_by_local: dict[tuple[int, int], Any] = {
+        span_by_local: dict[tuple[int, int], OpenMedSpan] = {
             (int(span.start), int(span.end)): span for span in window_spans
         }
 
@@ -385,6 +562,19 @@ class DocumentStreamDeidentifier:
             if key in entities:
                 continue
 
+            # An overlap window may reveal that a provisional span emitted by
+            # the prior window was only part of an identifier. Prefer the span
+            # that crosses the safe boundary and remove overlapping fragments.
+            if global_start < window.overlap_start < global_end:
+                overlapping_keys = [
+                    existing_key
+                    for existing_key in entities
+                    if existing_key[0] < global_end and global_start < existing_key[1]
+                ]
+                for existing_key in overlapping_keys:
+                    entities.pop(existing_key, None)
+                    spans.pop(existing_key, None)
+
             entities[key] = _shift_entity_global(entity, base)
             local_span = span_by_local.get((local_start, local_end))
             if local_span is not None:
@@ -402,9 +592,9 @@ def deidentify_document_stream(
     """Stream-de-identify a very long document with a bounded memory footprint.
 
     Accepts either the full document as one string or an iterable of source
-    fragments (which are concatenated); either way the text is re-segmented on
-    sentence boundaries internally, so fragment boundaries never affect the
-    result.
+    fragments. Fragments are consumed incrementally and re-segmented on sentence
+    boundaries, so fragment boundaries never affect the result and no complete
+    raw-document copy is created for iterable input.
 
     Args:
         source: The document text, or an iterable of text fragments.
@@ -420,14 +610,47 @@ def deidentify_document_stream(
         the non-streaming :func:`openmed.core.pii.deidentify` on the same input.
     """
 
-    text = source if isinstance(source, str) else "".join(source)
     streamer = DocumentStreamDeidentifier(
         window_chars=window_chars,
         overlap_chars=overlap_chars,
         lang=lang,
         **kwargs,
     )
-    return streamer.run(text)
+    return streamer.run(source)
+
+
+def _render_redacted_region(
+    text: str,
+    *,
+    region_start: int,
+    entities: Iterable[PIIEntity],
+) -> str:
+    """Render global-offset entities into one contiguous source region."""
+
+    applicable = sorted(
+        (
+            entity
+            for entity in entities
+            if int(entity.start) >= region_start
+            and int(entity.end) <= region_start + len(text)
+        ),
+        key=lambda entity: (int(entity.start), int(entity.end)),
+    )
+    if not applicable:
+        return text
+
+    rendered: list[str] = []
+    cursor = 0
+    for entity in applicable:
+        local_start = int(entity.start) - region_start
+        local_end = int(entity.end) - region_start
+        if local_start < cursor:
+            continue
+        rendered.append(text[cursor:local_start])
+        rendered.append(entity.redacted_text or "")
+        cursor = local_end
+    rendered.append(text[cursor:])
+    return "".join(rendered)
 
 
 def _shift_entity_global(entity: PIIEntity, offset: int) -> PIIEntity:
@@ -437,7 +660,7 @@ def _shift_entity_global(entity: PIIEntity, offset: int) -> PIIEntity:
     return shifted
 
 
-def _shift_span_global(span: Any, offset: int) -> Any:
+def _shift_span_global(span: OpenMedSpan, offset: int) -> OpenMedSpan:
     return replace(
         span,
         start=int(span.start) + offset,
