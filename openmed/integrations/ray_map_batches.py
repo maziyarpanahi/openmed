@@ -65,6 +65,12 @@ class RayDeidentifyBatch:
     ) -> None:
         if not isinstance(column, str) or not column.strip():
             raise ValueError("column must be a non-empty string")
+        if (
+            isinstance(process_batch_size, bool)
+            or not isinstance(process_batch_size, int)
+            or process_batch_size < 1
+        ):
+            raise ValueError("process_batch_size must be a positive integer")
 
         kwargs = dict(process_batch_kwargs or {})
         reserved = {
@@ -98,23 +104,30 @@ class RayDeidentifyBatch:
     def __call__(self, batch: Any) -> Any:
         """Return the batch with the configured text column de-identified."""
 
+        return self.process_batch(batch)
+
+    def process_batch(self, batch: Any) -> Any:
+        """De-identify one Arrow or pandas batch and preserve its shape."""
+
         values = _target_values(batch, self.column)
         positions: list[int] = []
         texts: list[str] = []
         for position, value in enumerate(values):
-            if _is_missing(value) or value == "":
+            if _is_missing(value):
                 continue
             if not isinstance(value, str):
                 raise TypeError(
                     f"Ray batch column {self.column!r} must contain strings or nulls"
                 )
+            if value == "":
+                continue
             positions.append(position)
             texts.append(value)
 
         redacted_values = list(values)
         if texts:
             ids = [f"ray_batch_{position}" for position in positions]
-            result = self._pipeline.process_texts(texts, ids=ids)
+            result = _process_pipeline_batch(self._pipeline, texts, ids)
             redacted_texts = _deidentified_texts(result, expected=len(texts))
             for position, redacted in zip(positions, redacted_texts):
                 redacted_values[position] = redacted
@@ -353,6 +366,17 @@ def _deidentified_texts(result: Any, *, expected: int) -> list[str]:
             f"OpenMed returned {len(items)} result(s) for {expected} input(s)"
         )
     return [_deidentified_text(item) for item in items]
+
+
+def _process_pipeline_batch(
+    pipeline: BatchPipeline,
+    texts: Sequence[str],
+    ids: Sequence[str],
+) -> Any:
+    process_batch = getattr(pipeline, "process_batch", None)
+    if callable(process_batch):
+        return process_batch(texts, ids=ids)
+    return pipeline.process_texts(texts, ids=ids)
 
 
 def _deidentified_text(item: Any) -> str:

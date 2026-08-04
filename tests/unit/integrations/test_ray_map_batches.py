@@ -17,7 +17,7 @@ class _FakeBatchPipeline:
     def __init__(self, stats: Any | None = None) -> None:
         self._stats = stats
 
-    def process_texts(self, texts, ids=None):
+    def process_batch(self, texts, ids=None):
         if self._stats is not None:
             import ray
 
@@ -58,7 +58,7 @@ def test_callable_preserves_batch_shape_and_non_target_columns(batch_format):
         policy_profile="hipaa_safe_harbor",
         pipeline_factory=lambda **_: _FakeBatchPipeline(),
     )
-    output = actor(batch)
+    output = actor.process_batch(batch)
     output_frame = output if batch_format == "pandas" else output.to_pandas()
 
     assert len(output_frame) == len(frame)
@@ -158,7 +158,7 @@ def test_ray_dataset_uses_one_loaded_pipeline_per_actor():
             model_name="fixture-pii-model",
             batch_size=2,
             batch_format="pandas",
-            concurrency=1,
+            concurrency=2,
             pipeline_factory=FakePipelineFactory(stats),
         ).materialize()
         output = redacted.to_pandas()
@@ -169,7 +169,10 @@ def test_ray_dataset_uses_one_loaded_pipeline_per_actor():
         assert output["score"].tolist() == [row["score"] for row in records]
         assert "Jane Roe" not in "\n".join(output["note"])
         assert "John Doe" not in "\n".join(output["note"])
-        assert snapshot["loads"] == [("fixture-pii-model", "strict_no_leak")]
+        assert snapshot["loads"] == [
+            ("fixture-pii-model", "strict_no_leak"),
+            ("fixture-pii-model", "strict_no_leak"),
+        ]
         assert sum(snapshot["batch_sizes"]) == len(records)
         assert max(snapshot["batch_sizes"]) <= 2
     finally:
