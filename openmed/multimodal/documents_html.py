@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html as html_lib
+import inspect
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -158,17 +159,17 @@ class _HtmlTextParser(HTMLParser):
         self._parts: list[str] = []
         self._spans: list[SourceSpan] = []
         self._cursor = 0
-        self._in_head = False
+        self._head_depth = 0
         self._body_started = False
         self._hard_suppression = {tag: 0 for tag in _HARD_SUPPRESSION_TAGS}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         normalized = tag.lower()
         if normalized == "head" and not self._body_started:
-            self._in_head = True
+            self._head_depth += 1
         elif normalized == "body":
             self._body_started = True
-            self._in_head = False
+            self._head_depth = 0
         if normalized in _HARD_SUPPRESSION_TAGS:
             self._hard_suppression[normalized] += 1
             return
@@ -195,7 +196,8 @@ class _HtmlTextParser(HTMLParser):
                 self._hard_suppression[normalized] -= 1
             return
         if normalized == "head":
-            self._in_head = False
+            if self._head_depth:
+                self._head_depth -= 1
             return
         if self._suppressed:
             return
@@ -289,7 +291,7 @@ class _HtmlTextParser(HTMLParser):
 
     @property
     def _suppressed(self) -> bool:
-        return self._in_head or any(self._hard_suppression.values())
+        return bool(self._head_depth) or any(self._hard_suppression.values())
 
     def document(self) -> ExtractedDocument:
         while self._parts and self._parts[-1] == "\n":
@@ -474,10 +476,21 @@ def _detect_entities(document: ExtractedDocument, models: Any, lang: str | None)
     detector = _resolve_detector(models)
     if detector is None:
         return ()
-    try:
+    if _accepts_lang_keyword(detector, document.text, lang):
         return detector(document.text, lang=lang)
+    return detector(document.text)
+
+
+def _accepts_lang_keyword(detector: Any, text: str, lang: str | None) -> bool:
+    try:
+        signature = inspect.signature(detector)
+    except (TypeError, ValueError):
+        return True
+    try:
+        signature.bind(text, lang=lang)
     except TypeError:
-        return detector(document.text)
+        return False
+    return True
 
 
 def _resolve_detector(models: Any) -> Any:

@@ -75,6 +75,34 @@ def test_suppression_and_malformed_inputs(source: str, expected: str) -> None:
     )
 
 
+def test_nested_heads_remain_suppressed_until_body_resets_depth() -> None:
+    source = "<head><head>Hidden Jane</head>Still Hidden Roe<body>Visible Pat</body>"
+
+    document = extract_html(source)
+
+    assert document.text == "Visible Pat"
+    assert "Hidden Jane" not in document.text
+    assert "Still Hidden Roe" not in document.text
+
+
+def test_nested_head_handler_passes_only_body_text_to_detector() -> None:
+    source = "<head><head>Hidden Jane</head>Still Hidden Roe<body>Visible Pat</body>"
+    observed: list[tuple[str, str | None]] = []
+
+    def detector(text: str, *, lang: str | None = None):
+        observed.append((text, lang))
+        return []
+
+    document = base._HANDLERS[".html"][-1].handler(
+        source,
+        models=detector,
+        lang="en",
+    )
+
+    assert observed == [("Visible Pat", "en")]
+    assert document.text == "Visible Pat"
+
+
 def test_entities_use_callback_bounded_atomic_and_linear_ranges() -> None:
     source = (
         "<p>&amp;copycat &amp copy &copycat &ampersand &boguscat; "
@@ -302,6 +330,40 @@ def test_handler_without_entities_does_not_create_output(tmp_path: Path) -> None
     assert document.text == "Patient Jane & Roe"
     assert document.metadata["detected_span_count"] == 0
     assert not output.exists()
+
+
+def test_handler_calls_legacy_text_only_detector_once() -> None:
+    observed: list[str] = []
+
+    def detector(text: str):
+        observed.append(text)
+        return []
+
+    document = base._HANDLERS[".html"][-1].handler(
+        FIXTURE,
+        models=detector,
+        lang="en",
+    )
+
+    assert observed == ["Patient Jane & Roe"]
+    assert document.metadata["detected_span_count"] == 0
+
+
+def test_handler_propagates_detector_internal_type_error_without_retry() -> None:
+    observed: list[tuple[str, str | None]] = []
+
+    def detector(text: str, *, lang: str | None = None):
+        observed.append((text, lang))
+        raise TypeError("detector body failed")
+
+    with pytest.raises(TypeError, match="detector body failed"):
+        base._HANDLERS[".html"][-1].handler(
+            FIXTURE,
+            models=detector,
+            lang="en",
+        )
+
+    assert observed == [("Patient Jane & Roe", "en")]
 
 
 def test_clean_package_import_activates_handlers_without_optional_extra() -> None:
