@@ -133,6 +133,19 @@ from openmed.eval.dataset_card import (
     write_eval_model_card,
     write_eval_model_datasheet,
 )
+from openmed.eval.determinism import (
+    DETERMINISM_CORPUS_VERSION,
+    CorpusItem,
+    DeterministicDetector,
+    DeterministicLoader,
+    DivergenceError,
+    ItemDeterminismReport,
+    SyntheticSpan,
+    build_corpus_signature,
+    default_corpus,
+    run_api_once,
+    run_determinism_check,
+)
 from openmed.eval.drift_monitor import (
     DEFAULT_DRIFT_THRESHOLD,
     DEFAULT_REFERENCE_PATH,
@@ -714,6 +727,18 @@ from openmed.eval.utility import (
 )
 
 __all__ = [
+    # Determinism regression harness (OM-822).
+    "DETERMINISM_CORPUS_VERSION",
+    "CorpusItem",
+    "DeterministicDetector",
+    "DeterministicLoader",
+    "DivergenceError",
+    "ItemDeterminismReport",
+    "SyntheticSpan",
+    "build_corpus_signature",
+    "default_corpus",
+    "run_api_once",
+    "run_determinism_check",
     "DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
     "TEMPORAL_AWARENESS_F1_FLOOR",
