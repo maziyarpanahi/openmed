@@ -5,15 +5,18 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib import resources
+from types import MappingProxyType
 from typing import Any
 
+from openmed.clinical.coreference import CoreferenceChain
 from openmed.clinical.medication_sig import (
     MEDICATION_SIG_ADVISORY,
     normalize_medication_attribute,
 )
+from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.decoding.spans import stable_span_key
 from openmed.processing.advanced_ner import EntitySpan
 
@@ -22,10 +25,13 @@ from .candidate import (
     RELATION_ATTRIBUTE_TYPES,
     RELATION_ORDER,
     RELATION_SCHEMA_VERSION,
+    CoreferenceProvenance,
+    CoreferenceSourceReference,
     MedicationAttributeType,
     MedicationRelation,
     MedicationRelationGroup,
     MedicationRelationType,
+    Relation,
     RelationCandidate,
     SpanReference,
 )
@@ -39,6 +45,14 @@ MEDICATION_LINK_ADVISORY = (
 DEFAULT_WEIGHTS_RESOURCE = "data/medication_link_weights.json"
 _TOKEN_RE = re.compile(r"\b\w+(?:[-/]\w+)*\b")
 _CLAUSE_BOUNDARY_RE = re.compile(r"[;\n]|(?:\s+-\s+)")
+_DOSAGE_ATTRIBUTE_ORDER: tuple[MedicationAttributeType, ...] = (
+    "dose",
+    "route",
+    "frequency",
+    "duration",
+    "form",
+    "strength",
+)
 
 
 @dataclass(frozen=True)
@@ -113,14 +127,219 @@ class _Sentence:
     end: int
 
 
+@dataclass(frozen=True)
+class _CoreferenceBinding:
+    chain: CoreferenceChain
+    provenance: CoreferenceProvenance
+
+
+@dataclass(frozen=True)
+class MedicationStatementRecord:
+    """One non-FHIR medication regimen record with structured dosage spans."""
+
+    medication: SpanReference
+    dosage: Mapping[MedicationAttributeType, SpanReference]
+    indication: SpanReference | None
+    relations: tuple[Relation, ...]
+    advisory: str = MEDICATION_LINK_ADVISORY
+
+    def __post_init__(self) -> None:
+        """Freeze dosage order and validate the regimen head."""
+
+        unsupported = set(self.dosage) - set(_DOSAGE_ATTRIBUTE_ORDER)
+        if unsupported:
+            raise ValueError(
+                f"unsupported MedicationStatement dosage attributes: {unsupported}"
+            )
+        ordered_dosage = {
+            attribute_type: self.dosage[attribute_type]
+            for attribute_type in _DOSAGE_ATTRIBUTE_ORDER
+            if attribute_type in self.dosage
+        }
+        if any(
+            relation.head.offset_key() != self.medication.offset_key()
+            for relation in self.relations
+        ):
+            raise ValueError("MedicationStatement relations must share one drug head")
+        object.__setattr__(self, "dosage", MappingProxyType(ordered_dosage))
+
+    @property
+    def record_type(self) -> str:
+        """Return the interoperability-facing record shape name."""
+
+        return "MedicationStatement"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic non-FHIR medication statement mapping."""
+
+        payload: dict[str, Any] = {
+            "record_type": self.record_type,
+            "medication": self.medication.to_dict(),
+            "dosage": {
+                attribute_type: span.to_dict()
+                for attribute_type, span in self.dosage.items()
+            },
+            "relations": [relation.to_dict() for relation in self.relations],
+            "advisory": self.advisory,
+        }
+        if self.indication is not None:
+            payload["indication"] = self.indication.to_dict()
+        return payload
+
+
+def extract_medication_relations(
+    text: str,
+    spans: Iterable[EntitySpan | Mapping[str, Any]],
+    sections: Iterable[Mapping[str, Any]] | None = None,
+) -> tuple[Relation, ...]:
+    """Extract typed medication-to-attribute relations from existing spans.
+
+    The extractor supports dose, route, frequency, duration, form, strength,
+    and indication tails. It resolves section metadata with
+    :func:`openmed.clinical.sections.detect_sections` when callers do not pass
+    precomputed sections, and it never links across sentence, line, clause, or
+    known section boundaries.
+
+    Args:
+        text: Original clinical text.
+        spans: Existing medication and clinical-concept spans with source offsets.
+        sections: Optional precomputed contiguous section spans. When omitted,
+            sections are detected locally and deterministically.
+
+    Returns:
+        Deterministically ordered ``Relation(head, type, tail, score)`` records.
+        This assistive output is not a prescription decision and is not a
+        substitute for clinician review.
+    """
+
+    span_items = tuple(spans)
+    section_items = tuple(detect_sections(text) if sections is None else sections)
+    section_by_span = _section_labels_by_span(text, span_items, section_items)
+    groups = link_medication_attributes(
+        text,
+        span_items,
+        section_by_span=section_by_span,
+    )
+    return tuple(
+        Relation(
+            head=relation.head,
+            type=relation.attribute_type,
+            tail=relation.attribute,
+            score=relation.confidence,
+        )
+        for group in groups
+        for relation in group.relations
+    )
+
+
+def reconstruct_medication_statements(
+    relations: Iterable[Relation],
+) -> tuple[MedicationStatementRecord, ...]:
+    """Group medication relations into one non-FHIR record per regimen."""
+
+    grouped: dict[tuple[int, int], list[Relation]] = {}
+    medication_by_offset: dict[tuple[int, int], SpanReference] = {}
+    for relation in relations:
+        if not isinstance(relation, Relation):
+            raise TypeError("relations must contain Relation values")
+        offset = relation.head.offset_key()
+        grouped.setdefault(offset, []).append(relation)
+        medication_by_offset.setdefault(offset, relation.head)
+
+    statements: list[MedicationStatementRecord] = []
+    for offset in sorted(grouped):
+        best_by_type: dict[MedicationAttributeType, Relation] = {}
+        for relation in grouped[offset]:
+            current = best_by_type.get(relation.type)
+            if current is None or _resolved_relation_key(
+                relation
+            ) < _resolved_relation_key(current):
+                best_by_type[relation.type] = relation
+        ordered_relations = tuple(
+            best_by_type[RELATION_ATTRIBUTE_TYPES[relation_type]]
+            for relation_type in RELATION_ORDER
+            if RELATION_ATTRIBUTE_TYPES[relation_type] in best_by_type
+        )
+        dosage = {
+            attribute_type: best_by_type[attribute_type].tail
+            for attribute_type in _DOSAGE_ATTRIBUTE_ORDER
+            if attribute_type in best_by_type
+        }
+        indication_relation = best_by_type.get("indication")
+        statements.append(
+            MedicationStatementRecord(
+                medication=medication_by_offset[offset],
+                dosage=dosage,
+                indication=(
+                    indication_relation.tail
+                    if indication_relation is not None
+                    else None
+                ),
+                relations=ordered_relations,
+            )
+        )
+    return tuple(statements)
+
+
+def _resolved_relation_key(
+    relation: Relation,
+) -> tuple[float, int, int, int, str]:
+    return (
+        -relation.score,
+        RELATION_ORDER.index(relation.relation_type),
+        relation.tail.start,
+        relation.tail.end,
+        relation.tail.text.casefold(),
+    )
+
+
+def _section_labels_by_span(
+    text: str,
+    spans: Sequence[EntitySpan | Mapping[str, Any]],
+    sections: Sequence[Mapping[str, Any]],
+) -> dict[tuple[int, int], str]:
+    if not sections:
+        return {}
+    validate_section_spans(text, sections)
+    labels: dict[tuple[int, int], str] = {}
+    for span in spans:
+        offset = _source_span_offset(span)
+        if offset is None:
+            continue
+        start, end = offset
+        containing = next(
+            (
+                section
+                for section in sections
+                if int(section["start"]) <= start and end <= int(section["end"])
+            ),
+            None,
+        )
+        if containing is not None:
+            labels[offset] = str(containing["label"])
+    return labels
+
+
+def _source_span_offset(
+    span: EntitySpan | Mapping[str, Any],
+) -> tuple[int, int] | None:
+    if isinstance(span, EntitySpan):
+        return span.start, span.end
+    try:
+        return int(span["start"]), int(span["end"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def link_medication_attributes(
     text: str,
     spans: Iterable[EntitySpan | Mapping[str, Any]],
     *,
     section_by_span: Mapping[tuple[int, int], str] | None = None,
     scorer: MedicationRelationScorer | None = None,
+    coreference_chains: Sequence[CoreferenceChain] = (),
 ) -> tuple[MedicationRelationGroup, ...]:
-    """Link medication spans to dose, route, frequency, and duration spans.
+    """Link medication spans to seven supported regimen attribute types.
 
     The decoder is deterministic, on-device, and explainable. It is assistive,
     not a prescription decision, and not a substitute for clinician review;
@@ -133,10 +352,16 @@ def link_medication_attributes(
             ``label``, ``start``, ``end``, and optional ``score``/``section``.
         section_by_span: Optional section labels keyed by ``(start, end)``.
         scorer: Optional scorer instance. Defaults to bundled versioned weights.
+        coreference_chains: Optional document-local clinical coreference chains.
+            Relation candidates retain mention-local proximity scoring, while
+            emitted drug heads are rewritten to cluster representatives and
+            same-cluster relation groups are consolidated.
 
     Returns:
         Ordered medication relation groups. Every emitted relation includes
         head and attribute character offsets that refer back to ``text``.
+        Collapsed groups also retain every member offset and HMAC hash without
+        copying additional source text into provenance.
     """
 
     scorer = scorer or MedicationRelationScorer.from_default_config()
@@ -144,6 +369,10 @@ def link_medication_attributes(
     drugs = tuple(span for span in span_refs if _is_drug_span(span))
     if not drugs:
         return ()
+    coreference_by_offset = _coreference_bindings(
+        coreference_chains,
+        text_length=len(text),
+    )
 
     attributes = tuple(
         (span, attribute_type)
@@ -162,33 +391,155 @@ def link_medication_attributes(
         scorer=scorer,
     )
     selected = _decode_assignments(candidates, scorer=scorer)
-    selected_by_head: dict[tuple[int, int], list[RelationCandidate]] = {
-        drug.offset_key(): [] for drug in drugs
+    selected_by_group: dict[tuple[str, str], list[RelationCandidate]] = {
+        _medication_group_key(drug, coreference_by_offset): [] for drug in drugs
     }
     for candidate in selected:
-        selected_by_head.setdefault(candidate.head.offset_key(), []).append(candidate)
+        group_key = _medication_group_key(candidate.head, coreference_by_offset)
+        selected_by_group.setdefault(group_key, []).append(candidate)
+
+    drug_by_offset = {drug.offset_key(): drug for drug in drugs}
+    group_members: dict[tuple[str, str], list[SpanReference]] = {}
+    for drug in drugs:
+        group_key = _medication_group_key(drug, coreference_by_offset)
+        group_members.setdefault(group_key, []).append(drug)
 
     groups = []
-    for drug in drugs:
+    for group_key, member_drugs in group_members.items():
+        binding = coreference_by_offset.get(member_drugs[0].offset_key())
+        medication = _representative_medication(
+            member_drugs[0],
+            binding,
+            text=text,
+            drug_by_offset=drug_by_offset,
+        )
+        selected_candidates = _collapse_cluster_candidates(
+            selected_by_group.get(group_key, ())
+        )
         relations = tuple(
-            _candidate_to_relation(candidate)
-            for candidate in sorted(
-                selected_by_head.get(drug.offset_key(), ()),
-                key=lambda item: (
-                    RELATION_ORDER.index(item.relation_type),
-                    item.attribute.start,
-                    item.attribute.end,
-                ),
+            _candidate_to_relation(
+                candidate,
+                head=medication,
+                coreference=binding.provenance if binding else None,
             )
+            for candidate in selected_candidates
         )
         groups.append(
             MedicationRelationGroup(
-                medication=drug,
+                medication=medication,
                 relations=relations,
                 advisory=MEDICATION_LINK_ADVISORY,
+                coreference=binding.provenance if binding else None,
             )
         )
     return tuple(groups)
+
+
+def _coreference_bindings(
+    chains: Sequence[CoreferenceChain],
+    *,
+    text_length: int,
+) -> dict[tuple[int, int], _CoreferenceBinding]:
+    bindings: dict[tuple[int, int], _CoreferenceBinding] = {}
+    cluster_ids: set[str] = set()
+    document_id: str | None = None
+    for chain in chains:
+        if not isinstance(chain, CoreferenceChain):
+            raise TypeError("coreference_chains must contain CoreferenceChain values")
+        if chain.chain_id in cluster_ids:
+            raise ValueError("coreference cluster ids must be unique")
+        cluster_ids.add(chain.chain_id)
+        if chain.representative not in chain.members:
+            raise ValueError("coreference representative must be a chain member")
+        chain_document_ids = {member.doc_id for member in chain.members}
+        if len(chain_document_ids) != 1:
+            raise ValueError("coreference chains must be document-local")
+        chain_document_id = next(iter(chain_document_ids))
+        if document_id is not None and chain_document_id != document_id:
+            raise ValueError("coreference chains must belong to one document")
+        document_id = chain_document_id
+        sources = tuple(
+            CoreferenceSourceReference(
+                start=member.start,
+                end=member.end,
+                text_hash=member.text_hash,
+            )
+            for member in chain.members
+        )
+        representative = CoreferenceSourceReference(
+            start=chain.representative.start,
+            end=chain.representative.end,
+            text_hash=chain.representative.text_hash,
+        )
+        provenance = CoreferenceProvenance(
+            cluster_id=chain.chain_id,
+            representative=representative,
+            supporting_mentions=sources,
+        )
+        binding = _CoreferenceBinding(chain=chain, provenance=provenance)
+        for member in chain.members:
+            if member.end > text_length:
+                raise ValueError("coreference offsets are outside the source text")
+            offset = (member.start, member.end)
+            if offset in bindings:
+                raise ValueError(
+                    "one coreference source offset cannot belong to multiple clusters"
+                )
+            bindings[offset] = binding
+    return bindings
+
+
+def _medication_group_key(
+    medication: SpanReference,
+    bindings: Mapping[tuple[int, int], _CoreferenceBinding],
+) -> tuple[str, str]:
+    binding = bindings.get(medication.offset_key())
+    if binding is not None:
+        return "coreference", binding.chain.chain_id
+    return "offset", f"{medication.start}:{medication.end}"
+
+
+def _representative_medication(
+    source: SpanReference,
+    binding: _CoreferenceBinding | None,
+    *,
+    text: str,
+    drug_by_offset: Mapping[tuple[int, int], SpanReference],
+) -> SpanReference:
+    if binding is None:
+        return source
+    representative = binding.chain.representative
+    offset = (representative.start, representative.end)
+    existing = drug_by_offset.get(offset)
+    if existing is not None:
+        return existing
+    return SpanReference(
+        text=text[representative.start : representative.end],
+        label=source.label,
+        start=representative.start,
+        end=representative.end,
+        score=(
+            float(representative.score)
+            if representative.score is not None
+            else source.score
+        ),
+        section=representative.section or source.section,
+    )
+
+
+def _collapse_cluster_candidates(
+    candidates: Iterable[RelationCandidate],
+) -> tuple[RelationCandidate, ...]:
+    best_by_type: dict[MedicationRelationType, RelationCandidate] = {}
+    for candidate in candidates:
+        current = best_by_type.get(candidate.relation_type)
+        if current is None or candidate.stable_key() < current.stable_key():
+            best_by_type[candidate.relation_type] = candidate
+    return tuple(
+        best_by_type[relation_type]
+        for relation_type in RELATION_ORDER
+        if relation_type in best_by_type
+    )
 
 
 def _validate_config(config: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -268,6 +619,13 @@ def _candidate_edges(
         for attribute, attribute_type in attributes:
             if drug.offset_key() == attribute.offset_key():
                 continue
+            if not _candidate_is_in_scope(
+                drug,
+                attribute,
+                text=text,
+                sentences=sentences,
+            ):
+                continue
             relation_type = ATTRIBUTE_RELATION_TYPES[attribute_type]
             candidates.append(
                 scorer.score(
@@ -281,6 +639,24 @@ def _candidate_edges(
                 )
             )
     return tuple(sorted(candidates, key=lambda candidate: candidate.stable_key()))
+
+
+def _candidate_is_in_scope(
+    head: SpanReference,
+    attribute: SpanReference,
+    *,
+    text: str,
+    sentences: tuple[_Sentence, ...],
+) -> bool:
+    if not _same_sentence(head, attribute, sentences):
+        return False
+    if not _same_clause(head, attribute, text):
+        return False
+    return not (
+        head.section is not None
+        and attribute.section is not None
+        and _normalize_section(head.section) != _normalize_section(attribute.section)
+    )
 
 
 def _decode_assignments(
@@ -327,7 +703,12 @@ def _decode_assignments(
     )
 
 
-def _candidate_to_relation(candidate: RelationCandidate) -> MedicationRelation:
+def _candidate_to_relation(
+    candidate: RelationCandidate,
+    *,
+    head: SpanReference,
+    coreference: CoreferenceProvenance | None,
+) -> MedicationRelation:
     attribute_type = RELATION_ATTRIBUTE_TYPES[candidate.relation_type]
     normalized = normalize_medication_attribute(
         attribute_type, candidate.attribute.text
@@ -335,12 +716,13 @@ def _candidate_to_relation(candidate: RelationCandidate) -> MedicationRelation:
     return MedicationRelation(
         relation_type=candidate.relation_type,
         attribute_type=attribute_type,
-        head=candidate.head,
+        head=head,
         attribute=candidate.attribute,
         score=candidate.score,
         confidence=candidate.confidence,
         features=candidate.features,
         normalized=normalized,
+        coreference=coreference,
     )
 
 
@@ -506,7 +888,9 @@ def _is_drug_span(span: SpanReference) -> bool:
 
 def _attribute_type(span: SpanReference) -> MedicationAttributeType | None:
     label = _normalize_label(span.label)
-    if label in {"dose", "dosage", "strength"} or "dose" in label or "dosage" in label:
+    if label == "strength" or "strength" in label:
+        return "strength"
+    if label in {"dose", "dosage"} or "dose" in label or "dosage" in label:
         return "dose"
     if label == "route" or "route" in label:
         return "route"
@@ -514,6 +898,10 @@ def _attribute_type(span: SpanReference) -> MedicationAttributeType | None:
         return "frequency"
     if label == "duration" or "duration" in label:
         return "duration"
+    if label in {"form", "dose_form", "dosage_form"} or label.endswith("_form"):
+        return "form"
+    if label in {"indication", "reason", "reason_for_use"} or ("indication" in label):
+        return "indication"
     return None
 
 
@@ -528,6 +916,9 @@ def _normalize_section(section: str) -> str:
 __all__ = [
     "DEFAULT_WEIGHTS_RESOURCE",
     "MEDICATION_LINK_ADVISORY",
+    "MedicationStatementRecord",
     "MedicationRelationScorer",
+    "extract_medication_relations",
     "link_medication_attributes",
+    "reconstruct_medication_statements",
 ]

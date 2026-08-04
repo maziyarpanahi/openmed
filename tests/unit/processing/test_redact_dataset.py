@@ -218,7 +218,8 @@ def test_redact_dataset_requires_text_columns(tmp_path: Path, capsys) -> None:
     exit_code = main_module.main(["redact-dataset", str(input_path)])
 
     captured = capsys.readouterr()
-    assert exit_code == 1
+    # Missing required text columns is a usage error -> EXIT_USAGE (2).
+    assert exit_code == 2
     assert "At least one --text-column" in captured.err
 
 
