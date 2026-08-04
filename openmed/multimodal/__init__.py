@@ -135,6 +135,7 @@ from .verify_pdf import (
     RegionFidelity,
     verify_redacted_pdf,
 )
+from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
     "ExtractedDocument",
@@ -229,4 +230,7 @@ __all__ = [
     "RegionFidelity",
     "RedactionFidelityError",
     "verify_redacted_pdf",
+    "XlsxCellRedaction",
+    "XlsxRedactionResult",
+    "redact_xlsx",
 ]
