@@ -49,6 +49,7 @@ from .custom_recognizer import (
 from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
+    stable_offset_from_seed,
 )
 from .decoding import iter_grapheme_cluster_spans, remap_normalized_span
 from .offline import network_blocked_if_offline
@@ -2112,6 +2113,7 @@ def _build_deidentification_result(
             patient_key=patient_key,
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
+            seed=seed,
         )
 
     anonymizer = None
@@ -2579,9 +2581,10 @@ def deidentify(
         patient_key: Optional stable patient identifier used only to derive a
             deterministic HMAC date-shift offset. Raw keys are not logged,
             persisted, or returned.
-        date_shift_max_days: Maximum absolute offset for random or
+        date_shift_max_days: Maximum absolute offset for random, seeded, or
             patient-keyed date shifting. Defaults to 365 when ``patient_key``
-            is supplied and neither this nor ``date_shift_days`` is set.
+            or ``seed`` is supplied and neither this nor ``date_shift_days``
+            is set.
         date_shift_secret: Required HMAC key material for patient-keyed
             offsets. Reuse the same value across sessions to keep offsets
             stable.
@@ -2603,8 +2606,11 @@ def deidentify(
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
-        seed: Optional integer seed for cross-run reproducibility of
-            ``consistent=True`` replacements. Implies ``consistent=True``.
+        seed: Optional request-scoped integer seed for cross-run
+            reproducibility of replacements and automatic date shifting.
+            Implies ``consistent=True`` for replacement methods. Explicit
+            ``date_shift_days`` and patient-keyed offsets still take
+            precedence for ``method="shift_dates"``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
@@ -3255,6 +3261,7 @@ def _resolve_date_shift_days(
     patient_key: Optional[str | bytes],
     date_shift_max_days: Optional[int],
     date_shift_secret: Optional[str | bytes],
+    seed: Optional[int] = None,
 ) -> int:
     if patient_key is not None:
         return _stable_date_shift_days(
@@ -3266,6 +3273,14 @@ def _resolve_date_shift_days(
 
     if date_shift_days is not None:
         return date_shift_days
+
+    if seed is not None:
+        max_days = (
+            _validate_date_shift_max_days(date_shift_max_days)
+            if date_shift_max_days is not None
+            else DEFAULT_DATE_SHIFT_MAX_DAYS
+        )
+        return stable_offset_from_seed(seed, max_days=max_days)
 
     if date_shift_max_days is not None:
         max_days = _validate_date_shift_max_days(date_shift_max_days)
