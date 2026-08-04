@@ -56,6 +56,7 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "india_clinical.jsonl",
         "indic_name_variants.json",
         "joint_entity_relation.jsonl",
+        "relation_calibration.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",
