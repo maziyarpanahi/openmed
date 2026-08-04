@@ -5,6 +5,7 @@ from __future__ import annotations
 import html as html_lib
 import inspect
 import os
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html.entities import html5
@@ -56,7 +57,8 @@ _BLOCK_TAGS = frozenset(
         "ul",
     }
 )
-_HARD_SUPPRESSION_TAGS = frozenset({"script", "style"})
+_HARD_SUPPRESSION_TAGS = frozenset({"script", "style", "title"})
+_NESTED_TITLE_START_RE = re.compile(r"<title(?=[\s>])", re.IGNORECASE)
 _LEGACY_ENTITY_NAMES = frozenset(name for name in html5 if not name.endswith(";"))
 _MAX_LEGACY_ENTITY_NAME_LENGTH = max(len(name) for name in _LEGACY_ENTITY_NAMES)
 _DetectorCallShape = Literal["keyword_lang", "positional_lang", "text_only"]
@@ -207,6 +209,10 @@ class _HtmlTextParser(HTMLParser):
             self._append_break(start, end)
 
     def handle_data(self, data: str) -> None:
+        if self._hard_suppression["title"]:
+            self._hard_suppression["title"] += sum(
+                1 for _ in _NESTED_TITLE_START_RE.finditer(data)
+            )
         if self._suppressed or not data:
             return
         start = self._source_offset()

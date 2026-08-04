@@ -78,6 +78,62 @@ def test_suppression_and_malformed_inputs(source: str, expected: str) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("<title>Hidden Jane</title><p>Visible text</p>", "Visible text"),
+        (
+            "<html><title>Hidden Jane</title><body><p>Visible text</p></body></html>",
+            "Visible text",
+        ),
+        (
+            "<head><title>Hidden &amp; Jane</title></head>"
+            "<body><p>Visible &amp; text</p></body>",
+            "Visible & text",
+        ),
+        (
+            "<title>Hidden &amp; Jane<title>Still Hidden</title>"
+            "Still Hidden</title><p>Visible text</p>",
+            "Visible text",
+        ),
+        ("<title>Hidden Jane<body><p>Still hidden</p></body>", ""),
+    ],
+)
+def test_title_contents_are_always_suppressed(
+    source: str,
+    expected: str,
+) -> None:
+    document = extract_html(source)
+
+    assert document.text == expected
+
+
+def test_title_is_excluded_from_detector_and_preserved_during_body_redaction(
+    tmp_path: Path,
+) -> None:
+    raw = "<title>Hidden Jane &amp; Roe</title><p>Visible Pat</p>"
+    source = tmp_path / "title-fragment.html"
+    output = tmp_path / "redacted.html"
+    source.write_text(raw, encoding="utf-8")
+    observed: list[tuple[str, str | None]] = []
+
+    def detector(text: str, *, lang: str | None = None):
+        observed.append((text, lang))
+        return [(0, len(text), "PERSON")]
+
+    multimodal.redact_document(
+        source,
+        models=detector,
+        lang="en",
+        policy={"output_path": output, "replacement": "[PERSON]"},
+    )
+
+    assert observed == [("Visible Pat", "en")]
+    assert output.read_text(encoding="utf-8") == (
+        "<title>Hidden Jane &amp; Roe</title><p>[PERSON]</p>"
+    )
+
+
 def test_nested_heads_remain_suppressed_until_body_resets_depth() -> None:
     source = "<head><head>Hidden Jane</head>Still Hidden Roe<body>Visible Pat</body>"
 
