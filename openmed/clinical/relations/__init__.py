@@ -1,5 +1,7 @@
 """Clinical relation extraction public API."""
 
+from importlib import import_module
+
 from .assertion_filter import (
     ASSERTION_FILTER_ADVISORY,
     RELATION_ASSERTION_STATUSES,
@@ -178,4 +180,64 @@ __all__ = [
     "relation_type_mapping",
     "sample_negative_span_pairs",
     "split_sentence_offsets",
+    "DEFAULT_MAX_RELATION_ABSTENTION_RATE",
+    "DEFAULT_MIN_ISOTONIC_SAMPLES",
+    "DEFAULT_MIN_RETAINED_RELATION_ACCURACY",
+    "DEFAULT_RELATION_RELIABILITY_BINS",
+    "RELATION_CALIBRATION_ADVISORY",
+    "RELATION_CALIBRATION_SCHEMA_VERSION",
+    "RELATION_STATUS_ASSERTED",
+    "RELATION_STATUS_UNCERTAIN",
+    "CalibratedRelation",
+    "RelationAbstentionResult",
+    "RelationCalibrationConsistencyError",
+    "RelationCalibrationRecord",
+    "RelationCalibrator",
+    "RelationOperatingPoint",
+    "RelationTypeCalibrator",
+    "apply_relation_abstention",
+    "assert_relation_consistency_gate",
+    "calibrate_relation_scores",
+    "coerce_relation_calibration_records",
+    "evaluate_relation_consistency_gate",
+    "fit_relation_calibrator",
+    "relation_calibration_report",
+    "select_relation_operating_points",
 ]
+
+_CALIBRATION_EXPORTS = frozenset(
+    {
+        "DEFAULT_MAX_RELATION_ABSTENTION_RATE",
+        "DEFAULT_MIN_ISOTONIC_SAMPLES",
+        "DEFAULT_MIN_RETAINED_RELATION_ACCURACY",
+        "DEFAULT_RELATION_RELIABILITY_BINS",
+        "RELATION_CALIBRATION_ADVISORY",
+        "RELATION_CALIBRATION_SCHEMA_VERSION",
+        "RELATION_STATUS_ASSERTED",
+        "RELATION_STATUS_UNCERTAIN",
+        "CalibratedRelation",
+        "RelationAbstentionResult",
+        "RelationCalibrationConsistencyError",
+        "RelationCalibrationRecord",
+        "RelationCalibrator",
+        "RelationOperatingPoint",
+        "RelationTypeCalibrator",
+        "apply_relation_abstention",
+        "assert_relation_consistency_gate",
+        "calibrate_relation_scores",
+        "coerce_relation_calibration_records",
+        "evaluate_relation_consistency_gate",
+        "fit_relation_calibrator",
+        "relation_calibration_report",
+        "select_relation_operating_points",
+    }
+)
+
+
+def __getattr__(name: str) -> object:
+    """Load evaluator-dependent relation calibration exports on demand."""
+
+    if name in _CALIBRATION_EXPORTS:
+        calibration = import_module(".calibration", __name__)
+        return getattr(calibration, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
