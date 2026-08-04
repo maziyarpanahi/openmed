@@ -5962,7 +5962,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.13.1,<0.14" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "scispacy", "scrubadub", "service", "spacy", "spark", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "haystack", "hf", "indic", "integrity", "interop-gpl", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "scispacy", "scrubadub", "service", "spacy", "spark", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "opentelemetry-api"
