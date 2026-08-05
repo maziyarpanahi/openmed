@@ -49,6 +49,12 @@ from openmed.eval.datasets.multilingual_ner import (
     load_multilingual_ner_fixtures,
     multilingual_ner_suite_metadata,
 )
+from openmed.eval.datasets.n2c2_2018 import (
+    N2C2,
+    N2C2_PATH_ENV,
+    load_n2c2_2018_deid,
+    n2c2_suite_metadata,
+)
 from openmed.eval.datasets.naamapadam import (
     NAAMAPADAM_PATH_ENV,
     configured_naamapadam_path,
@@ -217,7 +223,6 @@ from openmed.eval.suites.temporal_tlinks import (
 
 GOLDEN = "golden"
 GROUNDING_CALIBRATION = "grounding_calibration"
-N2C2 = "n2c2"
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
@@ -268,6 +273,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
             path=kwargs.get("path"),
             year=kwargs.get("year", kwargs.get("corpus_year")),
         )
+    if suite == N2C2:
+        return load_n2c2_2018_deid(path=kwargs.get("path"))
     if suite == SHIELD:
         return load_shield_fixtures(**kwargs)
     if suite == DRUGPROT:
@@ -316,6 +323,10 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         metadata = i2b2_suite_metadata()
         metadata["path_config"] = kwargs.get("path_config", I2B2_PATH_ENV)
         metadata["year_config"] = kwargs.get("year_config", I2B2_YEAR_ENV)
+        return metadata
+    if suite == N2C2:
+        metadata = n2c2_suite_metadata()
+        metadata["path_config"] = kwargs.get("path_config", N2C2_PATH_ENV)
         return metadata
     if suite == SHIELD:
         return shield_suite_metadata(**kwargs)
@@ -494,6 +505,8 @@ __all__ = [
     "run_script_ner_benchmark",
     "load_i2b2_deid",
     "i2b2_suite_metadata",
+    "load_n2c2_2018_deid",
+    "n2c2_suite_metadata",
     "biomedical_ner_suite_metadata",
     "multilingual_ner_suite_metadata",
     "masakhaner_suite_metadata",
