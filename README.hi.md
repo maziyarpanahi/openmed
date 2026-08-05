@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>33 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>स्थानीय-प्रथम रनटाइम</b> &nbsp;·&nbsp; <b>34 मॉडल-समर्थित PII भाषाएँ</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -529,10 +529,10 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (34 समर्थित रूट; 33 मॉडल-समर्थित)
+## बहुभाषी PII (35 समर्थित रूट; 34 मॉडल-समर्थित)
 
-निष्कर्षण और डी-आइडेंटिफिकेशन **34 समर्थित PII भाषा codes** में उपलब्ध हैं:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
+निष्कर्षण और डी-आइडेंटिफिकेशन **35 समर्थित PII भाषा codes** में उपलब्ध हैं:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
 Russian routing अभी दस्तावेज़ित multilingual default-model placeholder का उपयोग
 करती है। Bengali, Chinese और Tamil के dedicated registry entries हैं।
 एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family चार अतिरिक्त routes

@@ -113,6 +113,7 @@ classification:
     - model-registry.md
     - model-manifest.md
     - indic-encoders.md
+    - indic-ner-checkpoints.md
     - model-tokenizer-script-coverage.md
     - output-formatting.md
     - clinical/context-and-extraction.md
@@ -121,6 +122,7 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/chinese-terminology-grounding.md
+    - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
@@ -247,6 +249,8 @@ classification:
     - compliance/za-popia-identifier-checklist.md
     - i18n/glossary.md
     - leaderboard/index.md
+    - model-cards/registry/pii-last-green.md
+    - model-cards/registry/pii-latest.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md
