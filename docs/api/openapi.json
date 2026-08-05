@@ -180,6 +180,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -187,7 +190,16 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -196,7 +208,19 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -349,6 +373,37 @@
         "title": "ModelUnloadRequest",
         "type": "object"
       },
+      "OmopLoadRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for /omop/load.",
+        "properties": {
+          "records_jsonl": {
+            "title": "Records Jsonl",
+            "type": "string"
+          },
+          "validate_constraints": {
+            "default": false,
+            "title": "Validate Constraints",
+            "type": "boolean"
+          },
+          "vocabulary_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vocabulary Version"
+          }
+        },
+        "required": [
+          "records_jsonl"
+        ],
+        "title": "OmopLoadRequest",
+        "type": "object"
+      },
       "PIIDeidentifyRequest": {
         "additionalProperties": false,
         "description": "Request schema for /pii/deidentify.",
@@ -401,6 +456,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -408,7 +466,16 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -417,7 +484,19 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -524,6 +603,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -531,7 +613,16 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -540,7 +631,19 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -620,6 +723,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -627,7 +733,16 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -636,7 +751,19 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -736,6 +863,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -743,7 +873,16 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -752,7 +891,19 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -860,6 +1011,9 @@
           "lang": {
             "default": "en",
             "enum": [
+              "am",
+              "as",
+              "bn",
               "en",
               "fr",
               "de",
@@ -867,7 +1021,16 @@
               "es",
               "nl",
               "hi",
+              "gu",
+              "kn",
+              "ml",
+              "mr",
+              "ne",
+              "or",
+              "pa",
+              "ta",
               "te",
+              "ur",
               "pt",
               "ar",
               "he",
@@ -876,7 +1039,19 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "ru",
+              "sv",
+              "da",
+              "no",
+              "sw",
+              "zu",
+              "xh",
+              "zh",
+              "uk",
+              "cs",
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -1022,7 +1197,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "1.9.1"
+    "version": "2.0.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1371,6 +1546,46 @@
           }
         },
         "summary": "Unload Models"
+      }
+    },
+    "/omop/load": {
+      "post": {
+        "operationId": "omop_load_omop_load_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OmopLoadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Omop Load Omop Load Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Omop Load"
       }
     },
     "/pii/deidentify": {

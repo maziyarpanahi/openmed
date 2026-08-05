@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any
+from collections.abc import Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from openmed.risk import (
+        AnonymityPolicy,
+        AnonymizationResult,
+        ReleaseAssessment,
+    )
 
 try:
     import polars as pl
@@ -92,6 +99,36 @@ def risk_report(
         original=_records_for_risk(original, selected_columns),
         aux=_records_for_risk(aux, selected_columns),
     )
+
+
+def assess_release(
+    frame: Any,
+    policy: AnonymityPolicy,
+) -> ReleaseAssessment:
+    """Return the aggregate-safe release assessment for a Polars DataFrame."""
+
+    _ensure_polars_frame(frame)
+    from openmed.risk import assess_release as openmed_assess_release
+
+    return openmed_assess_release(frame, policy)
+
+
+def anonymize_release(
+    frame: Any,
+    policy: AnonymityPolicy,
+    *,
+    hierarchies: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+) -> AnonymizationResult:
+    """Generalize and suppress a Polars release under an explicit policy.
+
+    Transformed rows remain only in ``AnonymizationResult.records``; callers
+    should use ``to_safe_dict`` or ``to_safe_json`` for aggregate evidence.
+    """
+
+    _ensure_polars_frame(frame)
+    from openmed.risk import anonymize_release as openmed_anonymize_release
+
+    return openmed_anonymize_release(frame, policy, hierarchies=hierarchies)
 
 
 def extract_frame(
@@ -203,6 +240,25 @@ def _register_namespace() -> None:
                 reporter=reporter,
             )
 
+        def assess_release(self, policy: AnonymityPolicy) -> ReleaseAssessment:
+            """Return a PHI-safe aggregate assessment for this DataFrame."""
+
+            return assess_release(self._frame, policy)
+
+        def anonymize_release(
+            self,
+            policy: AnonymityPolicy,
+            *,
+            hierarchies: (Mapping[str, Sequence[Mapping[str, Any]]] | None) = None,
+        ) -> AnonymizationResult:
+            """Generalize and suppress this DataFrame under ``policy``."""
+
+            return anonymize_release(
+                self._frame,
+                policy,
+                hierarchies=hierarchies,
+            )
+
         def extract(
             self,
             column: str,
@@ -292,6 +348,7 @@ def _validate_columns(frame: Any, columns: Sequence[str] | str) -> tuple[str, ..
 
 
 def _normalize_columns(columns: Sequence[str] | str) -> tuple[str, ...]:
+    normalized: tuple[str, ...]
     if isinstance(columns, str):
         normalized = (columns,)
     else:
@@ -352,6 +409,8 @@ __all__ = [
     "ClinicalExtractor",
     "Deidentifier",
     "RiskReporter",
+    "anonymize_release",
+    "assess_release",
     "deidentify_frame",
     "ensure_registered",
     "extract_frame",

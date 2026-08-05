@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from importlib import metadata
 from pathlib import Path
 
 import pytest
@@ -81,11 +82,28 @@ def test_argparse_cli_without_command_prints_help(
     assert "Command-line utilities for OpenMed" in capsys.readouterr().out
 
 
-def test_tui_command_is_not_registered() -> None:
-    result = _run_module("openmed.cli.main", "tui")
+def test_tui_entry_is_a_clear_not_implemented_stub() -> None:
+    args = main_module.build_parser().parse_args(
+        [
+            "tui",
+            "--model",
+            "synthetic-model",
+            "--confidence-threshold",
+            "0.6",
+        ]
+    )
 
-    assert result.returncode == 2
-    assert "invalid choice: 'tui'" in result.stderr
+    with pytest.raises(NotImplementedError, match="backend was removed"):
+        args.handler(args)
+
+
+def test_tui_entry_reports_the_stub_at_the_console_boundary(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main_module.main(["tui"])
+
+    assert result == 1
+    assert "TUI is not implemented" in capsys.readouterr().err
 
 
 def test_typer_surface_is_importable() -> None:
@@ -114,3 +132,14 @@ def test_console_script_is_declared() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert pyproject["project"]["scripts"]["openmed"] == "openmed.cli:main"
+
+
+def test_console_script_resolves_to_tracked_cli_package() -> None:
+    entry_point = next(
+        item
+        for item in metadata.entry_points(group="console_scripts")
+        if item.name == "openmed"
+    )
+
+    assert entry_point.value == "openmed.cli:main"
+    assert entry_point.load() is cli_entry
