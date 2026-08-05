@@ -29,6 +29,7 @@ _CLINICAL_DOMAINS_DISCLAIMER = (
 )
 _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "anesthesia": "tests/fixtures/clinical/anesthesia.jsonl",
+    "allergy_intolerance": "tests/fixtures/clinical/allergy_intolerance.jsonl",
     "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
     "gastroenterology": "tests/fixtures/clinical/gastroenterology.jsonl",
     "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
@@ -41,6 +42,15 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
+    "allergy_intolerance": (
+        "The display labels are shaped for the planned OM-138 FHIR "
+        "AllergyIntolerance exporter: Allergen maps to code, "
+        "ReactionManifestation to reaction.manifestation, ReactionSeverity to "
+        "reaction.severity, Criticality to criticality, AllergyType to type, "
+        "and OnsetContext to onset. This is descriptive extraction metadata "
+        "only; it is not a contraindication check, drug-allergy cross-check, "
+        "recommendation, or clinical decision logic."
+    ),
     "immunization": (
         "The display labels are shaped for the planned OM-138 FHIR Immunization "
         "exporter: VaccineName maps to vaccineCode, DoseNumber to "
