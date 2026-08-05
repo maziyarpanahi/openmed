@@ -193,6 +193,7 @@ class ModelLoader:
             model_name,
             full_model_name,
             local_only=bool(requested_local_loading.get("local_files_only")),
+            revision=kwargs.get("revision"),
         )
 
         try:
@@ -391,6 +392,7 @@ class ModelLoader:
             model_name,
             full_model_name,
             local_only=bool(requested_local_loading.get("local_files_only")),
+            revision=kwargs.get("revision"),
         )
 
         model_kwargs: Dict[str, Any] = {}
@@ -410,10 +412,12 @@ class ModelLoader:
             )
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
-            # Transformers forwards loader options through ``model_kwargs``;
-            # top-level extras are sent to the instantiated pipeline instead.
+            # Cached-only loading is enforced by resolving a local snapshot plus
+            # the socket guard below. Do not forward ``local_files_only`` here:
+            # Transformers 5 supplies the same keyword internally and otherwise
+            # passes it twice to AutoConfig.from_pretrained().
             pipeline_load_kwargs.pop("local_files_only", None)
-            model_kwargs.update(local_loading_kwargs)
+            model_kwargs.pop("local_files_only", None)
             cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
             if cache_dir is None and local_loading_kwargs.get("local_files_only"):
                 cache_dir = getattr(self.config, "cache_dir", None)
@@ -436,7 +440,7 @@ class ModelLoader:
             pipeline_kwargs.update(pipeline_load_kwargs)
             self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
-            effective_local_only = bool(model_kwargs.get("local_files_only"))
+            effective_local_only = bool(local_loading_kwargs.get("local_files_only"))
             with network_blocked_if_offline(
                 self.config,
                 local_only=effective_local_only,
@@ -451,9 +455,9 @@ class ModelLoader:
             logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
             fallback_load_kwargs = {
-                key: model_kwargs[key]
+                key: local_loading_kwargs[key]
                 for key in ("local_files_only",)
-                if key in model_kwargs
+                if key in local_loading_kwargs
             }
             with network_blocked_if_offline(
                 self.config,
@@ -702,18 +706,56 @@ class ModelLoader:
         resolved_model_name: str,
         *,
         local_only: bool,
+        revision: Optional[str] = None,
     ) -> str:
         """Resolve and verify cached artifacts before model construction."""
         registry_info = get_model_info(requested_model_name) or get_model_info(
             resolved_model_name
         )
-        return prepare_model_reference(
+        prepared_reference = prepare_model_reference(
             resolved_model_name,
             registry_info=registry_info,
             cache_dir=str(self.config.cache_dir),
             local_only=local_only,
             token=getattr(self.config, "hf_token", None),
         )
+        if not local_only or self._as_existing_local_path(prepared_reference):
+            return prepared_reference
+
+        cached_snapshot = self._find_cached_hf_snapshot(
+            prepared_reference,
+            revision=revision,
+        )
+        return cached_snapshot or prepared_reference
+
+    def _find_cached_hf_snapshot(
+        self,
+        model_name: str,
+        *,
+        revision: Optional[str] = None,
+    ) -> Optional[str]:
+        """Find a Hub snapshot without network access in known cache roots."""
+        from .hf_hub import _import_snapshot_download
+
+        snapshot_download, local_entry_not_found = _import_snapshot_download()
+        configured_cache = getattr(self.config, "cache_dir", None)
+        cache_candidates = (
+            str(configured_cache) if configured_cache is not None else None,
+            None,
+        )
+        for cache_dir in cache_candidates:
+            download_kwargs: Dict[str, Any] = {
+                "repo_id": model_name,
+                "revision": revision,
+                "local_files_only": True,
+            }
+            if cache_dir is not None:
+                download_kwargs["cache_dir"] = cache_dir
+            try:
+                return str(snapshot_download(**download_kwargs))
+            except local_entry_not_found:
+                continue
+        return None
 
     def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
         """Return a filesystem path when ``model_name`` points to local files."""
@@ -740,6 +782,10 @@ class ModelLoader:
             return {"local_files_only": True}
         if kwargs and "local_files_only" in kwargs:
             return {"local_files_only": kwargs["local_files_only"]}
+        if kwargs and isinstance(kwargs.get("model_kwargs"), Mapping):
+            model_kwargs = kwargs["model_kwargs"]
+            if "local_files_only" in model_kwargs:
+                return {"local_files_only": model_kwargs["local_files_only"]}
         if self._as_existing_local_path(model_name) is not None:
             return {"local_files_only": True}
         return {}

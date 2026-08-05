@@ -179,7 +179,7 @@ class TestModelLoader:
         kwargs = mock_pipeline.call_args.kwargs
         assert kwargs["model"] == str(model_dir)
         assert "local_files_only" not in kwargs
-        assert kwargs["model_kwargs"]["local_files_only"] is True
+        assert "local_files_only" not in kwargs["model_kwargs"]
         assert kwargs["model_kwargs"]["cache_dir"] == loader.config.cache_dir
 
     @patch("openmed.core.models.HF_AVAILABLE", True)
