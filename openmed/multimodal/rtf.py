@@ -263,10 +263,15 @@ class _RtfExtractor:
         while index < self._length:
             character = self._source[index]
             if character == "{":
+                # A surrogate pair must be formed by adjacent Unicode escapes in
+                # the same group. Never carry half of a character across an RTF
+                # destination or formatting boundary.
+                self._drop_pending_surrogate()
                 self._stack.append(self._state)
                 self._state = replace(self._state)
                 index += 1
             elif character == "}":
+                self._drop_pending_surrogate()
                 if self._stack:
                     self._state = self._stack.pop()
                 index += 1
@@ -392,7 +397,8 @@ class _RtfExtractor:
 
         self._drop_pending_surrogate()
         if value in _HIGH_SURROGATE_RANGE:
-            self._pending_surrogate = (value, index)
+            if not self._state.ignore:
+                self._pending_surrogate = (value, index)
         elif 0 <= value <= 0x10FFFF and value not in _LOW_SURROGATE_RANGE:
             if not self._state.ignore:
                 self._append_mapped(chr(value), index, end)

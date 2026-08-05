@@ -32,8 +32,10 @@ the source read as a single-byte stream and a byte offset into the file on disk.
 That lets redaction locate a span in the original document without re-parsing
 it.
 
-The metadata is PHI-safe: it records the source path, the resolved codepage, the
-RTF version, and character ranges, but never raw RTF content.
+The metadata never embeds raw RTF content. It records the source path, resolved
+codepage, RTF version, and character ranges. Because filenames and paths can
+themselves be sensitive, treat `source_path` as input provenance and do not log
+it verbatim.
 
 ## Behavior
 

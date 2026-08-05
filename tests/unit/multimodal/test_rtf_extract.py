@@ -133,6 +133,15 @@ def test_rtf_binary_payloads_do_not_leak_into_text(tmp_path: Path):
     assert doc.text == "Report end"
 
 
+def test_rtf_skipped_destination_cannot_complete_body_surrogate(tmp_path: Path):
+    source = "{\\rtf1\\ansi{\\*\\metadata \\u55357?}\\u56832?Visible}"
+    path = _write_rtf(tmp_path / "skipped_surrogate.rtf", source)
+
+    doc = extract_rtf(path)
+
+    assert doc.text == "Visible"
+
+
 def test_rtf_escaped_line_break_starts_a_new_paragraph(tmp_path: Path):
     source = "{\\rtf1\\ansi Vitals stable\\\r\nDischarge planned}"
     path = _write_rtf(tmp_path / "escaped_break.rtf", source)
