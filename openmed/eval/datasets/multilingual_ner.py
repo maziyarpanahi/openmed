@@ -21,12 +21,15 @@ from typing import Any, Iterable, Mapping, Sequence
 from openmed.core.labels import (
     BODY_SITE,
     CANONICAL_LABELS,
+    CMEEE_LABEL_TO_CANONICAL,
     CONDITION,
     LAB_TEST,
+    LOCATION,
     MEDICATION,
     MICROORGANISM,
     ORGANIZATION,
     OTHER,
+    PERSON,
     PROCEDURE,
     normalize_label,
 )
@@ -39,6 +42,7 @@ PHARMACONER = "pharmaconer"
 CANTEMIST = "cantemist"
 DEFT = "deft"
 CMEEE = "cmeee"
+NAAMAPADAM = "naamapadam"
 DEFAULT_SPLIT = "test"
 
 MULTILINGUAL_NER_BENCHMARKS: tuple[str, ...] = (
@@ -138,6 +142,7 @@ class MultilingualNerRecord:
 
     def to_benchmark_fixture(self) -> BenchmarkFixture:
         source = source_for(self.benchmark)
+        suite = str(self.metadata.get("suite") or MULTILINGUAL_NER)
         unmapped = tuple(
             sorted({span.source_label for span in self.spans if not span.mapped})
         )
@@ -159,7 +164,7 @@ class MultilingualNerRecord:
                 "display_name": source.display_name,
                 "language": self.language,
                 "split": self.split,
-                "suite": MULTILINGUAL_NER,
+                "suite": suite,
                 "task": "clinical_ner",
                 "text_hash": _text_hash(self.text),
                 "unmapped_labels": unmapped,
@@ -250,26 +255,23 @@ MULTILINGUAL_NER_SOURCES: Mapping[str, MultilingualNerSource] = {
         language="zh",
         source_url="https://tianchi.aliyun.com/dataset/95414",
         label_mapping={
-            "bod": BODY_SITE,
-            "body": BODY_SITE,
-            "body_site": BODY_SITE,
-            "dep": ORGANIZATION,
-            "department": ORGANIZATION,
-            "dis": CONDITION,
-            "disease": CONDITION,
-            "dru": MEDICATION,
-            "drug": MEDICATION,
-            "equ": OTHER,
-            "equipment": OTHER,
-            "ite": LAB_TEST,
-            "item": LAB_TEST,
-            "lab_test": LAB_TEST,
-            "mic": MICROORGANISM,
-            "microorganism": MICROORGANISM,
-            "pro": PROCEDURE,
-            "procedure": PROCEDURE,
-            "sym": CONDITION,
-            "symptom": CONDITION,
+            **CMEEE_LABEL_TO_CANONICAL,
+        },
+    ),
+    NAAMAPADAM: MultilingualNerSource(
+        benchmark=NAAMAPADAM,
+        display_name="Naamapadam / IndicGLUE NER",
+        language="hi",
+        source_url="https://huggingface.co/datasets/ai4bharat/naamapadam",
+        access_note="loaded by reference from an explicit local corpus path",
+        label_mapping={
+            "loc": LOCATION,
+            "location": LOCATION,
+            "org": ORGANIZATION,
+            "organization": ORGANIZATION,
+            "organisation": ORGANIZATION,
+            "per": PERSON,
+            "person": PERSON,
         },
     ),
 }
@@ -282,7 +284,7 @@ def source_for(benchmark: str) -> MultilingualNerSource:
     try:
         return MULTILINGUAL_NER_SOURCES[key]
     except KeyError as exc:
-        allowed = ", ".join(MULTILINGUAL_NER_BENCHMARKS)
+        allowed = ", ".join(sorted(MULTILINGUAL_NER_SOURCES))
         raise ValueError(
             f"unknown multilingual NER benchmark {benchmark!r}: {allowed}"
         ) from exc
@@ -902,6 +904,7 @@ __all__ = [
     "MULTILINGUAL_NER",
     "MULTILINGUAL_NER_BENCHMARKS",
     "MULTILINGUAL_NER_SOURCES",
+    "NAAMAPADAM",
     "PHARMACONER",
     "LabelMappingResult",
     "MultilingualNerCorpusRequired",

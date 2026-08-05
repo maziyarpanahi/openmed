@@ -1,0 +1,3 @@
+gradio==6.20.0
+openmed[hf,zh]==2.0.0
+torch==2.13.0
