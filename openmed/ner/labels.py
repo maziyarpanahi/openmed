@@ -189,6 +189,29 @@ def generate_clinical_domains_markdown() -> str:
                 f"{_markdown_cell(fixture_path)} |"
             )
         sections.append("")
+    sections.extend(
+        [
+            "## Offline Coverage Evaluation",
+            "",
+            (
+                "The fixture-backed clinical domains are checked by the "
+                "aggregate-only `clinical_domain_coverage` suite. Run "
+                "`openmed benchmark domain-coverage --json --output "
+                "domain-coverage.json` from the repository root to verify "
+                "that every shipped display label has a non-empty synthetic "
+                "span and that fixture labels resolve to the canonical label "
+                "catalog."
+            ),
+            "",
+            (
+                "The gate fails on a missing fixture, an orphan label, an "
+                "invalid offset, or a label with no span. Reports contain "
+                "domain names, labels, offsets, and counts only; fixture text "
+                "is never emitted."
+            ),
+            "",
+        ]
+    )
     return "\n".join(sections)
 
 
