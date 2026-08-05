@@ -19,6 +19,7 @@ from openmed.core.decoding import (
     decode_span_graph,
 )
 
+from ..coreference import CoreferenceChain
 from .frames import (
     ASSISTIVE_EVENT_DISCLAIMER,
     EVENT_FRAME_SCHEMAS,
@@ -26,6 +27,7 @@ from .frames import (
     EventFrame,
     EventType,
     RoleSlot,
+    attach_coreference_representatives,
 )
 
 CLINICAL_EVENT_LEXICON_VERSION = "clinical-events-v1"
@@ -242,6 +244,7 @@ def extract_medication_change_events(
     *,
     max_distance: int = 160,
     include_detected_time_anchors: bool = True,
+    coreference_chains: Sequence[CoreferenceChain] = (),
 ) -> list[EventFrame]:
     """Extract medication-change event frames from already-detected spans.
 
@@ -255,6 +258,9 @@ def extract_medication_change_events(
         include_detected_time_anchors: Whether to add deterministic time-anchor
             mentions for plain expressions such as ``today`` or ``over 48
             hours``.
+        coreference_chains: Optional document-local clinical coreference chains
+            used to canonicalize TREATMENT heads while retaining source-span
+            provenance.
 
     Returns:
         Filled event frames with provenance offsets and an assistive disclaimer.
@@ -279,7 +285,11 @@ def extract_medication_change_events(
         )
         is not None
     ]
-    return _surface_medication_conflicts(frames)
+    canonical_frames = [
+        attach_coreference_representatives(frame, coreference_chains, source_text)
+        for frame in frames
+    ]
+    return _surface_medication_conflicts(canonical_frames)
 
 
 def extract_lab_trend_events(
@@ -289,6 +299,7 @@ def extract_lab_trend_events(
     lab_value_graph: SpanGraph | None = None,
     max_distance: int = 180,
     include_detected_time_anchors: bool = True,
+    coreference_chains: Sequence[CoreferenceChain] = (),
 ) -> list[EventFrame]:
     """Extract lab-trend event frames from already-detected spans.
 
@@ -302,6 +313,9 @@ def extract_lab_trend_events(
         max_distance: Maximum character gap for linking a trigger to a role.
         include_detected_time_anchors: Whether to add deterministic time-window
             mentions for plain temporal expressions.
+        coreference_chains: Optional document-local clinical coreference chains
+            used to canonicalize TEST heads while retaining source-span
+            provenance.
 
     Returns:
         Filled event frames with provenance offsets and an assistive disclaimer.
@@ -316,7 +330,7 @@ def extract_lab_trend_events(
         raw_mentions,
         include_detected_time_anchors=include_detected_time_anchors,
     )
-    return [
+    frames = [
         frame
         for trigger in _find_triggers(source_text, _LAB_TREND_TRIGGER_CUES)
         if (
@@ -328,6 +342,10 @@ def extract_lab_trend_events(
             )
         )
         is not None
+    ]
+    return [
+        attach_coreference_representatives(frame, coreference_chains, source_text)
+        for frame in frames
     ]
 
 
