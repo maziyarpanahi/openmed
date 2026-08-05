@@ -5,14 +5,144 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
+from types import MappingProxyType
 from typing import TypedDict
+
+from .detect import detect_sections
 
 DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE = "data/doctype_signatures.json"
 UNKNOWN_DOCUMENT_TYPE = "unknown"
+GENERIC_DOCUMENT_TYPE = UNKNOWN_DOCUMENT_TYPE
+DOCUMENT_TYPES = (
+    "progress_note",
+    "discharge_summary",
+    "radiology_report",
+    "pathology_report",
+    "consult_note",
+    "operative_note",
+)
+DOCUMENT_TYPE_CONFIDENCE_THRESHOLD = 0.5
+DOCUMENT_TYPE_MAX_HEADER_TOKENS = 32
+
+# LOINC's document ontology uses kind-of-document and setting axes. These
+# compact lexical hints are reference-only: no LOINC table, codes, or release
+# content is bundled here. Callers that need a code table must supply it
+# through the existing vocabulary boundary.
+LOINC_DOCUMENT_ONTOLOGY_AXES = ("kind-of-document", "setting")
+LOINC_DOCUMENT_TYPE_HINTS = MappingProxyType(
+    {
+        "progress_note": ("progress", "daily", "follow-up", "outpatient"),
+        "discharge_summary": ("discharge", "hospital course", "inpatient"),
+        "radiology_report": ("radiology", "imaging", "x-ray", "ct", "mri"),
+        "pathology_report": ("pathology", "histology", "specimen", "biopsy"),
+        "consult_note": ("consultation", "specialist", "referral"),
+        "operative_note": ("operative", "surgical", "operating room"),
+    }
+)
+
+_DOCUMENT_TYPE_HEADER_PHRASES = MappingProxyType(
+    {
+        "progress_note": ("progress note", "daily progress note"),
+        "discharge_summary": (
+            "discharge summary",
+            "hospital discharge summary",
+        ),
+        "radiology_report": (
+            "radiology report",
+            "imaging report",
+            "x-ray report",
+            "ct report",
+            "mri report",
+        ),
+        "pathology_report": (
+            "pathology report",
+            "surgical pathology",
+            "histopathology report",
+        ),
+        "consult_note": (
+            "consultation note",
+            "consult note",
+            "specialist consultation",
+        ),
+        "operative_note": (
+            "operative note",
+            "operation note",
+            "surgical operative note",
+        ),
+    }
+)
+_DOCUMENT_TYPE_KEYWORD_CUES = MappingProxyType(
+    {
+        "progress_note": (
+            "subjective",
+            "objective",
+            "interval history",
+            "assessment",
+            "plan",
+        ),
+        "discharge_summary": (
+            "hospital course",
+            "discharge diagnoses",
+            "disposition",
+            "follow-up instructions",
+        ),
+        "radiology_report": (
+            "technique",
+            "comparison",
+            "findings",
+            "impression",
+            "radiograph",
+        ),
+        "pathology_report": (
+            "specimen",
+            "gross description",
+            "microscopic description",
+            "final diagnosis",
+            "histologic",
+        ),
+        "consult_note": (
+            "reason for consultation",
+            "consulting service",
+            "referring provider",
+            "recommendations",
+            "clinical opinion",
+        ),
+        "operative_note": (
+            "preoperative diagnosis",
+            "postoperative diagnosis",
+            "procedure performed",
+            "estimated blood loss",
+            "anesthesia",
+        ),
+    }
+)
+_SECTION_CUES_BY_DOCUMENT_TYPE = MappingProxyType(
+    {
+        "progress_note": (
+            "history_of_present_illness",
+            "assessment_and_plan",
+            "medications",
+        ),
+        "discharge_summary": (
+            "history_of_present_illness",
+            "assessment_and_plan",
+            "impression",
+        ),
+        "radiology_report": ("findings", "impression"),
+        "pathology_report": ("findings", "impression"),
+        "consult_note": (
+            "history_of_present_illness",
+            "assessment",
+            "plan",
+        ),
+        "operative_note": ("findings", "assessment_and_plan"),
+    }
+)
 _TOKEN_RE = re.compile(r"\w+(?:['\N{RIGHT SINGLE QUOTATION MARK}-]\w+)*", re.UNICODE)
 
 
@@ -21,6 +151,17 @@ class DocumentClassification(TypedDict):
 
     type: str
     confidence: float
+
+
+class DocumentTypeFeatures(TypedDict):
+    """Stable, JSON-friendly signals used by the document-type baseline."""
+
+    max_tokens: int
+    token_count: int
+    header_hits: dict[str, int]
+    section_histogram: dict[str, int]
+    keyword_cues: dict[str, int]
+    loinc_hints: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -44,12 +185,13 @@ class _SignatureTable:
 
 
 def classify_document(text: str) -> DocumentClassification:
-    """Classify a clinical note from deterministic first-window signatures.
+    """Classify a clinical note from deterministic features and signatures.
 
     The bundled signatures cover discharge summaries, progress notes,
     radiology reports, pathology reports, operative notes, and consult notes.
-    Classification is local and deterministic. When no signature wins clearly,
-    the function returns ``unknown`` rather than guessing.
+    Classification is local and deterministic. A score below
+    :data:`DOCUMENT_TYPE_CONFIDENCE_THRESHOLD`, or an ambiguous top score,
+    returns ``unknown`` rather than guessing.
 
     Args:
         text: Clinical note text. Only the first configured token window is
@@ -64,19 +206,26 @@ def classify_document(text: str) -> DocumentClassification:
         raise TypeError("text must be a string")
 
     table = _load_signature_table()
+    features = extract_doctype_features(text, max_tokens=table.max_tokens)
     window = _normalized_token_window(text, max_tokens=table.max_tokens)
-    if not window:
+    if not features["token_count"]:
         return _unknown_classification(table)
 
     matches: list[tuple[float, str]] = []
     for document_type in table.document_types:
-        matched_confidences = [
+        signature_confidences = [
             rule.confidence
             for rule in document_type.rules
             if all(_contains_phrase(window, phrase) for phrase in rule.phrases)
         ]
-        if matched_confidences:
-            matches.append((max(matched_confidences), document_type.document_type))
+        signature_confidence = max(signature_confidences, default=0.0)
+        feature_confidence = _feature_confidence(
+            document_type.document_type,
+            features,
+        )
+        confidence = max(signature_confidence, feature_confidence)
+        if confidence >= DOCUMENT_TYPE_CONFIDENCE_THRESHOLD:
+            matches.append((confidence, document_type.document_type))
 
     if not matches:
         return _unknown_classification(table)
@@ -94,10 +243,122 @@ def classify_document(text: str) -> DocumentClassification:
     }
 
 
+def extract_doctype_features(
+    text: str,
+    *,
+    max_tokens: int | None = None,
+) -> DocumentTypeFeatures:
+    """Extract deterministic document-type signals from a clinical note.
+
+    The first ``max_tokens`` normalized tokens provide the bounded header and
+    keyword window. Section counts are computed from :func:`detect_sections`
+    over the complete note, and the LOINC-related values are lexical hints for
+    the ``kind-of-document``/``setting`` axes rather than a terminology table.
+    No text is returned in the feature vector, which keeps the result suitable
+    for local audit and training-label plumbing.
+
+    Args:
+        text: Clinical note text.
+        max_tokens: Optional first-token window override. The classifier's
+            configured window is used by default.
+
+    Returns:
+        A stable mapping with fixed document-type signal keys and a sorted
+        section-label histogram.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    configured_max_tokens = _load_signature_table().max_tokens
+    window_size = (
+        configured_max_tokens
+        if max_tokens is None
+        else _validate_max_tokens(max_tokens)
+    )
+    tokens = _normalized_tokens(text)[:window_size]
+    window = " ".join(tokens)
+    header_window = " ".join(tokens[:DOCUMENT_TYPE_MAX_HEADER_TOKENS])
+    section_histogram = Counter(
+        str(section["label"]) for section in detect_sections(text)
+    )
+
+    return {
+        "max_tokens": window_size,
+        "token_count": len(tokens),
+        "header_hits": {
+            document_type: _count_phrases(
+                header_window,
+                _DOCUMENT_TYPE_HEADER_PHRASES[document_type],
+            )
+            for document_type in DOCUMENT_TYPES
+        },
+        "section_histogram": dict(sorted(section_histogram.items())),
+        "keyword_cues": {
+            document_type: _count_phrases(
+                window,
+                _DOCUMENT_TYPE_KEYWORD_CUES[document_type],
+            )
+            for document_type in DOCUMENT_TYPES
+        },
+        "loinc_hints": {
+            document_type: _count_phrases(
+                window,
+                LOINC_DOCUMENT_TYPE_HINTS[document_type],
+            )
+            for document_type in DOCUMENT_TYPES
+        },
+    }
+
+
 def _normalized_token_window(text: str, *, max_tokens: int) -> str:
+    return " ".join(_normalized_tokens(text)[:max_tokens])
+
+
+def _normalized_tokens(text: str) -> tuple[str, ...]:
     normalized = unicodedata.normalize("NFKC", text).casefold()
-    tokens = _TOKEN_RE.findall(normalized)
-    return " ".join(tokens[:max_tokens])
+    return tuple(_TOKEN_RE.findall(normalized))
+
+
+def _count_phrases(window: str, phrases: Sequence[str]) -> int:
+    return sum(_contains_phrase(window, phrase) for phrase in phrases)
+
+
+def _feature_confidence(
+    document_type: str,
+    features: DocumentTypeFeatures,
+) -> float:
+    header_strength = min(features["header_hits"].get(document_type, 0), 1)
+    keyword_strength = min(
+        features["keyword_cues"].get(document_type, 0) / 3.0,
+        1.0,
+    )
+    loinc_strength = min(
+        features["loinc_hints"].get(document_type, 0) / 2.0,
+        1.0,
+    )
+    section_count = sum(
+        features["section_histogram"].get(section, 0)
+        for section in _SECTION_CUES_BY_DOCUMENT_TYPE.get(document_type, ())
+    )
+    section_strength = min(section_count / 2.0, 1.0)
+
+    if header_strength:
+        return round(
+            min(
+                0.99,
+                0.68
+                + (0.12 * keyword_strength)
+                + (0.1 * loinc_strength)
+                + (0.1 * section_strength),
+            ),
+            6,
+        )
+
+    return round(
+        (0.4 * keyword_strength) + (0.3 * loinc_strength) + (0.3 * section_strength),
+        6,
+    )
 
 
 def _contains_phrase(window: str, phrase: str) -> bool:
@@ -162,6 +423,13 @@ def _validate_signature_table(payload: object) -> _SignatureTable:
         seen_types.add(document_type.document_type)
         document_types.append(document_type)
 
+    missing_types = set(DOCUMENT_TYPES).difference(seen_types)
+    if missing_types:
+        raise ValueError(
+            "document type signatures are missing labels: "
+            + ", ".join(sorted(missing_types))
+        )
+
     return _SignatureTable(
         max_tokens=max_tokens,
         ambiguity_margin=ambiguity_margin,
@@ -225,9 +493,27 @@ def _probability(
     return value
 
 
+def _validate_max_tokens(max_tokens: int) -> int:
+    if (
+        not isinstance(max_tokens, int)
+        or isinstance(max_tokens, bool)
+        or max_tokens < 1
+    ):
+        raise ValueError("document type max_tokens must be a positive integer")
+    return max_tokens
+
+
 __all__ = [
     "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE",
+    "DOCUMENT_TYPE_CONFIDENCE_THRESHOLD",
+    "DOCUMENT_TYPE_MAX_HEADER_TOKENS",
+    "DOCUMENT_TYPES",
     "UNKNOWN_DOCUMENT_TYPE",
+    "GENERIC_DOCUMENT_TYPE",
     "DocumentClassification",
+    "DocumentTypeFeatures",
+    "LOINC_DOCUMENT_ONTOLOGY_AXES",
+    "LOINC_DOCUMENT_TYPE_HINTS",
     "classify_document",
+    "extract_doctype_features",
 ]
