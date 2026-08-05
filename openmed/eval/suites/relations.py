@@ -76,6 +76,8 @@ class RelationTrap:
                 "relation trap references unknown relation ids: "
                 + ", ".join(unknown_ids)
             )
+        if data.get("zero_tolerance", True) is not True:
+            raise ValueError("relation trap zero_tolerance must be true")
 
         metadata = data.get("metadata") or {}
         if not isinstance(metadata, Mapping):
@@ -85,7 +87,7 @@ class RelationTrap:
             kind=kind,
             relation_ids=relation_ids,
             description=str(data.get("description") or ""),
-            zero_tolerance=bool(data.get("zero_tolerance", True)),
+            zero_tolerance=True,
             metadata=dict(metadata),
         )
 

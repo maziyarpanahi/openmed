@@ -143,9 +143,17 @@ def test_input_length_guard_allows_within_limit():
     RequestBudget(max_input_chars=8).check_input_length(8)  # exactly at limit is OK
 
 
-def test_wall_time_clock_raises_after_deadline():
+def test_wall_time_clock_raises_after_deadline(monkeypatch):
+    monotonic_time = [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return monotonic_time[0]
+
+    monkeypatch.setattr("openmed.core.budget.time", FakeTime)
     clock = RequestBudget(max_wall_time=0.001).start()
-    time.sleep(0.01)
+    monotonic_time[0] = 0.01
     with pytest.raises(BudgetExceededError) as excinfo:
         clock.check("unit_stage")
     assert excinfo.value.kind == "wall_time"
@@ -512,12 +520,19 @@ def test_batch_processor_input_budget_records_clean_error(monkeypatch):
 
 def test_batch_processor_wall_time_budget_is_fresh_per_item(monkeypatch):
     processed = []
+    monotonic_time = [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return monotonic_time[0]
 
     def fake_analyze_text(text, **kwargs):
         processed.append(text)
-        time.sleep(0.02)
+        monotonic_time[0] += 0.02
         return _name_prediction(text, model_name=kwargs.get("model_name", "stub"))
 
+    monkeypatch.setattr("openmed.core.budget.time", FakeTime)
     monkeypatch.setattr("openmed.analyze_text", fake_analyze_text)
 
     processor = BatchProcessor(

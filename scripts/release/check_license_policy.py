@@ -98,6 +98,7 @@ REVIEWED_LICENSES = {
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
     "langchain-core": "MIT",
+    "langgraph": "MIT",
     "llama-index-core": "MIT",
     "markdown-it-py": "MIT",
     "mcp": "MIT",
@@ -158,6 +159,7 @@ REVIEWED_LICENSES = {
     "transformers": "Apache-2.0",
     "typer": "MIT",
     "uvicorn": "BSD-3-Clause",
+    "yasbd-lib": "MPL-2.0",
 }
 
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")

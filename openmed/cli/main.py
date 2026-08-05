@@ -57,6 +57,7 @@ from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
+from .registry import add_registry_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -351,6 +352,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
+    add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
     add_airgap_command(subparsers)
@@ -1511,6 +1513,15 @@ def _add_omop_command(subparsers: argparse._SubParsersAction) -> None:
         dest="vocabulary_version",
         default=None,
         help="Optional vocabulary version recorded in SOURCE_TO_CONCEPT_MAP rows.",
+    )
+    load_parser.add_argument(
+        "--mode",
+        choices=("append", "replace-by-note"),
+        default="append",
+        help=(
+            "Append idempotently or replace rows for incoming note hashes "
+            "(default: append)."
+        ),
     )
     load_parser.add_argument(
         "--validate",
@@ -3975,10 +3986,12 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         write_omop_sqlite,
     )
 
+    load_mode = args.mode.replace("-", "_")
     try:
         tables = load_grounded_jsonl(
             args.input,
             vocabulary_version=args.vocabulary_version,
+            mode=load_mode,
         )
     except FileNotFoundError:
         raise CliError(
@@ -4006,7 +4019,11 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
             "parquet": write_omop_parquet,
         }
         try:
-            connection = writers[args.writer](tables, str(args.target))
+            connection = writers[args.writer](
+                tables,
+                str(args.target),
+                mode=load_mode,
+            )
             if hasattr(connection, "close"):
                 connection.close()
         except ImportError as exc:
@@ -4027,11 +4044,13 @@ def _handle_omop_load(args: argparse.Namespace) -> int:
         "input": str(args.input),
         "target": str(args.target) if args.target is not None else None,
         "writer": args.writer if args.target is not None else None,
+        "mode": tables.summary.mode,
         "vocabulary_version": args.vocabulary_version,
         "row_counts": dict(summary.row_counts),
         "rejection_counts": dict(summary.rejection_counts),
         "rejected_spans": [span.to_dict() for span in summary.rejected_spans],
         "source_note_hashes": list(summary.source_note_hashes),
+        "changed_note_hashes": list(summary.changed_note_hashes),
     }
 
     if args.validate:

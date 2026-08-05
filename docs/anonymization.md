@@ -434,7 +434,9 @@ placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
 The optional Indic NER adapter adds four user-configured routes (`gu`, `kn`,
 `ml`, and `pa`) and can also serve Assamese, Bengali, Hindi, Marathi, Odia,
 Tamil, and Telugu. It loads only an explicit path or repository from
-`OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint.
+`OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint. See the
+[Indic NER checkpoint compatibility matrix](indic-ner-checkpoints.md) for
+supported label maps, offset contracts, and opt-in real-checkpoint tests.
 Additional validator-backed national-ID providers cover ID-only locales such as
 Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale

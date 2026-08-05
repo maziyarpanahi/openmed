@@ -151,6 +151,17 @@ than the span schema, run the relation gate, and return a signed
 `RelationScorecard`. `run_relation_suite` exposes the same flow directly when a
 caller needs to supply a signing key, key id, or baseline explicitly.
 
+The fixture file is JSONL with one schema-version `1` document per line. Every
+row requires a globally unique `id`, source `text`, `metadata.synthetic=true`,
+and non-empty `entities` and `relations` arrays. Entity rows require unique
+`id`, `start`, `end`, and `label` fields. Relation rows require unique `id`, a
+normalized `type`, `head` and `tail` entity references, and a `scope` of either
+`sentence` or `document`. Optional `traps` rows require an `id`, a `kind`
+of `assertion` or `temporal`, one or more known `relation_ids`, and
+`zero_tolerance=true`. The loader rejects duplicate fixture, entity, or relation
+ids; invalid offsets; unknown references; unsupported versions; and
+non-synthetic rows before scoring.
+
 ```python
 from openmed.eval import run_relation_suite
 
@@ -171,8 +182,10 @@ Its signed payload contains:
 
 - strict and relaxed precision, recall, and F1, with relation-type, scope, and
   language breakdowns;
-- a SHA-256 hash of the exact fixture file plus a canonical hash for every
-  validated fixture;
+- assertion- and temporal-consistency sub-scores computed over the trapped
+  relations, alongside their evaluated and leaked relation counts;
+- a SHA-256 hash of the fixture bytes after canonicalizing platform line endings
+  to LF, plus a canonical hash for every validated fixture;
 - configured assertion and temporal trap summaries, aggregate leak counts, and
   hashes for leaked trap relations rather than relation text;
 - the complete relation regression gate result, reproducibility hash, and HMAC
@@ -189,6 +202,11 @@ artifacts first, then raises `RelationGateFailure` whenever a pinned strict-F1
 comparison, required baseline, or zero-tolerance trap check fails. The
 exception carries the signed failure scorecard for archival; it is not a model
 release authorization.
+
+Every `(family, relation-type)` baseline is bound to the SHA-256 hash of the
+fixture file that produced it. A missing, malformed, or different candidate
+fixture hash quarantines the run, even when all reported F1 values are above
+their pinned floors.
 
 Future relation, event, and coreference suites should keep raw notes and mention
 surfaces out of this evidence layer. Extensions should add typed aggregate
@@ -220,6 +238,52 @@ report = run_benchmark(fixtures, suite="my-suite", model_name="my-model", runner
 cold_ms = report.metrics["latency"]["cold_start_ms"]
 print(f"Cold-start latency: {cold_ms:.1f} ms")
 ```
+
+## Family-transfer evaluation
+
+`cross_lingual_family_transfer_report` scores the bundled synthetic Indic
+donor/target gold in three modes: an untargeted multilingual baseline, Hindi
+donor-adapter zero-shot inference for Telugu, and a Telugu-adapted path. The
+same report re-scores the donor before and after adaptation so target F1 is
+published alongside an explicit donor non-regression result.
+
+The runner receives `transfer_mode`, `evaluation_role`, `family`,
+`donor_language`, `target_language`, and `adapter_language` in fixture metadata.
+It can therefore select locally provisioned model and adapter assets without a
+network call. JSON and Markdown artifacts contain only aggregate metrics,
+language codes, and donor-to-target deltas; synthetic fixture text and spans
+are excluded.
+
+For release qualification, pass measured `AdapterParameterAccounting` keyed by
+the configured output adapter ID. The report then adds a `full_model` target
+mode on the same synthetic gold and jointly requires the adapted target to
+retain at least 90% of the full per-language model F1 while training no more
+than 10% of its parameters. Both thresholds are explicit arguments, and the
+aggregate JSON and Markdown evidence records the thresholds, observed ratios,
+and pass/fail results.
+
+```python
+from openmed.eval import cross_lingual_family_transfer_report
+from openmed.training.adapters import AdapterParameterAccounting
+
+report = cross_lingual_family_transfer_report(
+    "local-family-transfer-model",
+    runner=local_family_transfer_runner,
+    parameter_accounting_by_adapter={
+        "family-transfer/indic-hi-to-te": AdapterParameterAccounting(
+            shared_backbone_parameter_count=110_000_000,
+            adapter_trainable_parameter_count=524_288,
+            task_head_trainable_parameter_count=65_536,
+            full_language_model_trainable_parameter_count=110_065_536,
+        )
+    },
+)
+print(report.to_markdown())
+```
+
+The counts above are synthetic examples; release evidence must use measured
+counts from the locally provisioned backbone, adapter, task head, and full-model
+reference.
 
 ## Grounding accuracy gate
 

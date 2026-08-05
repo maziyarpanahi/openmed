@@ -7,6 +7,8 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from openmed.core.decoding.spans import (
     is_grapheme_boundary,
     iter_grapheme_clusters,
@@ -171,6 +173,23 @@ def test_golden_fixtures_parse_offsets_expected_output_and_round_trip():
 
         mapping = fixture.to_mapping()
         assert GoldenFixture.from_mapping(mapping).to_mapping() == mapping
+
+
+def test_golden_loader_rejects_duplicate_fixture_ids(tmp_path):
+    fixture = _one("date_arithmetic").to_mapping()
+    fixture_pack = {
+        "fixtures": [fixture],
+        "synthetic": True,
+        "version": 1,
+    }
+    for filename in ("first.json", "second.json"):
+        (tmp_path / filename).write_text(
+            json.dumps(fixture_pack),
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ValueError, match="duplicate golden fixture id"):
+        load_golden_fixtures(tmp_path)
 
 
 def test_golden_json_files_are_harness_loadable():

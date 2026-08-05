@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "tools": [
     {
       "description": "Run OpenMed named-entity recognition on clinical text.",
@@ -150,6 +150,470 @@
           "timestamp",
           "processing_time",
           "metadata"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Plan and validate declarative clinical stages without silently reordering them.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_external_llm": {
+            "default": false,
+            "description": "Reserve external LLM routing through the privacy gateway.",
+            "type": "boolean"
+          },
+          "options": {
+            "default": null,
+            "description": "Execution options reserved for later pipeline handlers.",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "session_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spans": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "enum": [
+                        "keep",
+                        "redact",
+                        "replace",
+                        "mask",
+                        "hash",
+                        "format_preserve"
+                      ],
+                      "type": "string"
+                    },
+                    "canonical_label": {
+                      "enum": [
+                        "ABNORMAL_FLAG",
+                        "ACCOUNT_NUMBER",
+                        "ADMINISTRATION_ROUTE",
+                        "AGE",
+                        "AIRWAY_MANAGEMENT",
+                        "AMOUNT",
+                        "ANATOMY",
+                        "ANESTHESIA_TYPE",
+                        "ANESTHETIC_AGENT",
+                        "ANTIBIOTIC",
+                        "API_KEY",
+                        "ASA_CLASS",
+                        "BIC",
+                        "BIOMARKER",
+                        "BITCOIN_ADDRESS",
+                        "BODY_SITE",
+                        "BUILDING_NUMBER",
+                        "CANCER",
+                        "CARE_INTERVENTION",
+                        "CELL",
+                        "CHEMICAL",
+                        "CKD_STAGE",
+                        "CLINICAL_SIGNIFICANCE",
+                        "CONDITION",
+                        "CREDIT_CARD",
+                        "CREDIT_CARD_ISSUER",
+                        "CURRENCY",
+                        "CVV",
+                        "DATE",
+                        "DATE_OF_BIRTH",
+                        "DEVELOPMENTAL_MILESTONE",
+                        "DEVICE",
+                        "DIALYSIS_MODALITY",
+                        "DIET_TYPE",
+                        "DISEASE",
+                        "DNA",
+                        "DOSAGE",
+                        "DOSE_NUMBER",
+                        "DRUG",
+                        "DURATION",
+                        "DYSPNEA_GRADE",
+                        "EMAIL",
+                        "ENDOSCOPIC_FINDING",
+                        "ETHEREUM_ADDRESS",
+                        "ETHNICITY",
+                        "EYE_COLOR",
+                        "FEEDING_ROUTE",
+                        "FINDING",
+                        "FIRST_NAME",
+                        "FORM",
+                        "FREQUENCY",
+                        "GENDER",
+                        "GENE",
+                        "GENE_OR_GENE_PRODUCT",
+                        "GENE_SYMBOL",
+                        "GI_SCORE",
+                        "GI_SYMPTOM",
+                        "GLYCEMIC_MEASURE",
+                        "GPS_COORDINATES",
+                        "GROWTH_PARAMETER",
+                        "GROWTH_PERCENTILE",
+                        "HEIGHT",
+                        "HORMONE_LEVEL",
+                        "IBAN",
+                        "ID_NUM",
+                        "IMAGING_MODALITY",
+                        "IMEI",
+                        "INDICATION",
+                        "INSULIN_REGIMEN",
+                        "INTAKE_OUTPUT",
+                        "IP_ADDRESS",
+                        "JOB_DEPARTMENT",
+                        "JOB_TITLE",
+                        "LAB_TEST",
+                        "LAB_VALUE",
+                        "LAST_NAME",
+                        "LATERALITY",
+                        "LINE_DRAIN_TUBE",
+                        "LITECOIN_ADDRESS",
+                        "LOCATION",
+                        "MAC_ADDRESS",
+                        "MASKED_NUMBER",
+                        "MEASUREMENT",
+                        "MEDICATION",
+                        "MICROORGANISM",
+                        "MIDDLE_NAME",
+                        "NURSING_RISK_SCORE",
+                        "NUTRITIONAL_STATUS",
+                        "NUTRITION_TARGET",
+                        "OCCUPATION",
+                        "ORDINAL_DIRECTION",
+                        "ORGAN",
+                        "ORGANISM",
+                        "ORGANIZATION",
+                        "OTHER",
+                        "OXYGEN_SUPPORT",
+                        "PASSWORD",
+                        "PATHOLOGY",
+                        "PERSON",
+                        "PHONE",
+                        "PIN",
+                        "POLYP_DESCRIPTOR",
+                        "PREFIX",
+                        "PROBLEM",
+                        "PROCEDURE",
+                        "PROTEIN",
+                        "PROTEIN_CHANGE",
+                        "REFERENCE_RANGE",
+                        "RENAL_FUNCTION_MEASURE",
+                        "RESPIRATORY_FINDING",
+                        "RNA",
+                        "ROUTE",
+                        "SEVERITY",
+                        "SPECIES",
+                        "SPIROMETRY_MEASURE",
+                        "SSN",
+                        "STREET_ADDRESS",
+                        "STRENGTH",
+                        "SUSCEPTIBILITY",
+                        "THYROID_MEASURE",
+                        "TIME",
+                        "TISSUE",
+                        "UNIT",
+                        "URINE_FINDING",
+                        "URL",
+                        "USERNAME",
+                        "USER_AGENT",
+                        "VACCINE_LOT",
+                        "VACCINE_NAME",
+                        "VACCINE_SERIES",
+                        "VARIANT_DESCRIPTOR",
+                        "VEHICLE_REGISTRATION",
+                        "VIN",
+                        "ZIPCODE",
+                        "ZYGOSITY"
+                      ],
+                      "type": "string"
+                    },
+                    "detector": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "doc_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "end": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "entity_type": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "evidence": {
+                      "type": "object"
+                    },
+                    "metadata": {
+                      "type": "object"
+                    },
+                    "policy_label": {
+                      "enum": [
+                        "DIRECT_IDENTIFIER",
+                        "QUASI_IDENTIFIER",
+                        "SENSITIVE_ATTRIBUTE",
+                        "CLINICAL_CONCEPT"
+                      ],
+                      "type": "string"
+                    },
+                    "regulatory_tags": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "replacement": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reversible_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "schema_version": {
+                      "const": 1,
+                      "type": "integer"
+                    },
+                    "score": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "start": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "text_hash": {
+                      "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "doc_id",
+                    "start",
+                    "end",
+                    "text_hash",
+                    "entity_type",
+                    "canonical_label",
+                    "policy_label",
+                    "regulatory_tags",
+                    "score",
+                    "detector",
+                    "evidence",
+                    "action",
+                    "replacement",
+                    "reversible_id",
+                    "section",
+                    "metadata"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional canonical OpenMedSpan artifacts."
+          },
+          "stages": {
+            "description": "Clinical workflow stages in canonical order: detect, context, sections, relations, ground, export, risk.",
+            "items": {
+              "enum": [
+                "detect",
+                "context",
+                "sections",
+                "relations",
+                "ground",
+                "export",
+                "risk"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "text": {
+            "default": null,
+            "description": "Optional clinical text reserved for later pipeline execution.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workflow_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "stages"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_clinical_pipeline",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifacts": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "enum": [
+                      "detect",
+                      "context",
+                      "sections",
+                      "relations",
+                      "ground",
+                      "export",
+                      "risk",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "stage",
+                  "details"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "final_output": {},
+          "schema_version": {
+            "enum": [
+              "openmed.clinical_pipeline.v1"
+            ],
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "enum": [
+                "detect",
+                "context",
+                "sections",
+                "relations",
+                "ground",
+                "export",
+                "risk"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "planned",
+              "completed",
+              "rejected",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "trace": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "stage": {
+                  "enum": [
+                    "detect",
+                    "context",
+                    "sections",
+                    "relations",
+                    "ground",
+                    "export",
+                    "risk"
+                  ],
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "planned",
+                    "completed"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stage",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "stages",
+          "artifacts",
+          "final_output",
+          "error",
+          "trace"
         ],
         "type": "object"
       },
@@ -440,6 +904,650 @@
       "version": "1.0.0"
     },
     {
+      "description": "Export canonical OpenMedSpan artifacts to a FHIR Bundle.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle_type": {
+            "default": "collection",
+            "enum": [
+              "collection",
+              "transaction",
+              "batch"
+            ],
+            "type": "string"
+          },
+          "doc_id": {
+            "default": "workflow",
+            "type": "string"
+          },
+          "resources": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional prebuilt standalone FHIR resources."
+          },
+          "spans": {
+            "description": "Canonical, text-free OpenMedSpan artifacts to process.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "keep",
+                    "redact",
+                    "replace",
+                    "mask",
+                    "hash",
+                    "format_preserve"
+                  ],
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "enum": [
+                    "ABNORMAL_FLAG",
+                    "ACCOUNT_NUMBER",
+                    "ADMINISTRATION_ROUTE",
+                    "AGE",
+                    "AIRWAY_MANAGEMENT",
+                    "AMOUNT",
+                    "ANATOMY",
+                    "ANESTHESIA_TYPE",
+                    "ANESTHETIC_AGENT",
+                    "ANTIBIOTIC",
+                    "API_KEY",
+                    "ASA_CLASS",
+                    "BIC",
+                    "BIOMARKER",
+                    "BITCOIN_ADDRESS",
+                    "BODY_SITE",
+                    "BUILDING_NUMBER",
+                    "CANCER",
+                    "CARE_INTERVENTION",
+                    "CELL",
+                    "CHEMICAL",
+                    "CKD_STAGE",
+                    "CLINICAL_SIGNIFICANCE",
+                    "CONDITION",
+                    "CREDIT_CARD",
+                    "CREDIT_CARD_ISSUER",
+                    "CURRENCY",
+                    "CVV",
+                    "DATE",
+                    "DATE_OF_BIRTH",
+                    "DEVELOPMENTAL_MILESTONE",
+                    "DEVICE",
+                    "DIALYSIS_MODALITY",
+                    "DIET_TYPE",
+                    "DISEASE",
+                    "DNA",
+                    "DOSAGE",
+                    "DOSE_NUMBER",
+                    "DRUG",
+                    "DURATION",
+                    "DYSPNEA_GRADE",
+                    "EMAIL",
+                    "ENDOSCOPIC_FINDING",
+                    "ETHEREUM_ADDRESS",
+                    "ETHNICITY",
+                    "EYE_COLOR",
+                    "FEEDING_ROUTE",
+                    "FINDING",
+                    "FIRST_NAME",
+                    "FORM",
+                    "FREQUENCY",
+                    "GENDER",
+                    "GENE",
+                    "GENE_OR_GENE_PRODUCT",
+                    "GENE_SYMBOL",
+                    "GI_SCORE",
+                    "GI_SYMPTOM",
+                    "GLYCEMIC_MEASURE",
+                    "GPS_COORDINATES",
+                    "GROWTH_PARAMETER",
+                    "GROWTH_PERCENTILE",
+                    "HEIGHT",
+                    "HORMONE_LEVEL",
+                    "IBAN",
+                    "ID_NUM",
+                    "IMAGING_MODALITY",
+                    "IMEI",
+                    "INDICATION",
+                    "INSULIN_REGIMEN",
+                    "INTAKE_OUTPUT",
+                    "IP_ADDRESS",
+                    "JOB_DEPARTMENT",
+                    "JOB_TITLE",
+                    "LAB_TEST",
+                    "LAB_VALUE",
+                    "LAST_NAME",
+                    "LATERALITY",
+                    "LINE_DRAIN_TUBE",
+                    "LITECOIN_ADDRESS",
+                    "LOCATION",
+                    "MAC_ADDRESS",
+                    "MASKED_NUMBER",
+                    "MEASUREMENT",
+                    "MEDICATION",
+                    "MICROORGANISM",
+                    "MIDDLE_NAME",
+                    "NURSING_RISK_SCORE",
+                    "NUTRITIONAL_STATUS",
+                    "NUTRITION_TARGET",
+                    "OCCUPATION",
+                    "ORDINAL_DIRECTION",
+                    "ORGAN",
+                    "ORGANISM",
+                    "ORGANIZATION",
+                    "OTHER",
+                    "OXYGEN_SUPPORT",
+                    "PASSWORD",
+                    "PATHOLOGY",
+                    "PERSON",
+                    "PHONE",
+                    "PIN",
+                    "POLYP_DESCRIPTOR",
+                    "PREFIX",
+                    "PROBLEM",
+                    "PROCEDURE",
+                    "PROTEIN",
+                    "PROTEIN_CHANGE",
+                    "REFERENCE_RANGE",
+                    "RENAL_FUNCTION_MEASURE",
+                    "RESPIRATORY_FINDING",
+                    "RNA",
+                    "ROUTE",
+                    "SEVERITY",
+                    "SPECIES",
+                    "SPIROMETRY_MEASURE",
+                    "SSN",
+                    "STREET_ADDRESS",
+                    "STRENGTH",
+                    "SUSCEPTIBILITY",
+                    "THYROID_MEASURE",
+                    "TIME",
+                    "TISSUE",
+                    "UNIT",
+                    "URINE_FINDING",
+                    "URL",
+                    "USERNAME",
+                    "USER_AGENT",
+                    "VACCINE_LOT",
+                    "VACCINE_NAME",
+                    "VACCINE_SERIES",
+                    "VARIANT_DESCRIPTOR",
+                    "VEHICLE_REGISTRATION",
+                    "VIN",
+                    "ZIPCODE",
+                    "ZYGOSITY"
+                  ],
+                  "type": "string"
+                },
+                "detector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "doc_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "object"
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "policy_label": {
+                  "enum": [
+                    "DIRECT_IDENTIFIER",
+                    "QUASI_IDENTIFIER",
+                    "SENSITIVE_ATTRIBUTE",
+                    "CLINICAL_CONCEPT"
+                  ],
+                  "type": "string"
+                },
+                "regulatory_tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "replacement": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "text_hash": {
+                  "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "doc_id",
+                "start",
+                "end",
+                "text_hash",
+                "entity_type",
+                "canonical_label",
+                "policy_label",
+                "regulatory_tags",
+                "score",
+                "detector",
+                "evidence",
+                "action",
+                "replacement",
+                "reversible_id",
+                "section",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "spans"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_export_fhir",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "enum": [
+                      "detect",
+                      "context",
+                      "sections",
+                      "relations",
+                      "ground",
+                      "export",
+                      "risk",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "stage",
+                  "details"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resource_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "schema_version": {
+            "enum": [
+              "openmed.export_fhir.v1"
+            ],
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "keep",
+                    "redact",
+                    "replace",
+                    "mask",
+                    "hash",
+                    "format_preserve"
+                  ],
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "enum": [
+                    "ABNORMAL_FLAG",
+                    "ACCOUNT_NUMBER",
+                    "ADMINISTRATION_ROUTE",
+                    "AGE",
+                    "AIRWAY_MANAGEMENT",
+                    "AMOUNT",
+                    "ANATOMY",
+                    "ANESTHESIA_TYPE",
+                    "ANESTHETIC_AGENT",
+                    "ANTIBIOTIC",
+                    "API_KEY",
+                    "ASA_CLASS",
+                    "BIC",
+                    "BIOMARKER",
+                    "BITCOIN_ADDRESS",
+                    "BODY_SITE",
+                    "BUILDING_NUMBER",
+                    "CANCER",
+                    "CARE_INTERVENTION",
+                    "CELL",
+                    "CHEMICAL",
+                    "CKD_STAGE",
+                    "CLINICAL_SIGNIFICANCE",
+                    "CONDITION",
+                    "CREDIT_CARD",
+                    "CREDIT_CARD_ISSUER",
+                    "CURRENCY",
+                    "CVV",
+                    "DATE",
+                    "DATE_OF_BIRTH",
+                    "DEVELOPMENTAL_MILESTONE",
+                    "DEVICE",
+                    "DIALYSIS_MODALITY",
+                    "DIET_TYPE",
+                    "DISEASE",
+                    "DNA",
+                    "DOSAGE",
+                    "DOSE_NUMBER",
+                    "DRUG",
+                    "DURATION",
+                    "DYSPNEA_GRADE",
+                    "EMAIL",
+                    "ENDOSCOPIC_FINDING",
+                    "ETHEREUM_ADDRESS",
+                    "ETHNICITY",
+                    "EYE_COLOR",
+                    "FEEDING_ROUTE",
+                    "FINDING",
+                    "FIRST_NAME",
+                    "FORM",
+                    "FREQUENCY",
+                    "GENDER",
+                    "GENE",
+                    "GENE_OR_GENE_PRODUCT",
+                    "GENE_SYMBOL",
+                    "GI_SCORE",
+                    "GI_SYMPTOM",
+                    "GLYCEMIC_MEASURE",
+                    "GPS_COORDINATES",
+                    "GROWTH_PARAMETER",
+                    "GROWTH_PERCENTILE",
+                    "HEIGHT",
+                    "HORMONE_LEVEL",
+                    "IBAN",
+                    "ID_NUM",
+                    "IMAGING_MODALITY",
+                    "IMEI",
+                    "INDICATION",
+                    "INSULIN_REGIMEN",
+                    "INTAKE_OUTPUT",
+                    "IP_ADDRESS",
+                    "JOB_DEPARTMENT",
+                    "JOB_TITLE",
+                    "LAB_TEST",
+                    "LAB_VALUE",
+                    "LAST_NAME",
+                    "LATERALITY",
+                    "LINE_DRAIN_TUBE",
+                    "LITECOIN_ADDRESS",
+                    "LOCATION",
+                    "MAC_ADDRESS",
+                    "MASKED_NUMBER",
+                    "MEASUREMENT",
+                    "MEDICATION",
+                    "MICROORGANISM",
+                    "MIDDLE_NAME",
+                    "NURSING_RISK_SCORE",
+                    "NUTRITIONAL_STATUS",
+                    "NUTRITION_TARGET",
+                    "OCCUPATION",
+                    "ORDINAL_DIRECTION",
+                    "ORGAN",
+                    "ORGANISM",
+                    "ORGANIZATION",
+                    "OTHER",
+                    "OXYGEN_SUPPORT",
+                    "PASSWORD",
+                    "PATHOLOGY",
+                    "PERSON",
+                    "PHONE",
+                    "PIN",
+                    "POLYP_DESCRIPTOR",
+                    "PREFIX",
+                    "PROBLEM",
+                    "PROCEDURE",
+                    "PROTEIN",
+                    "PROTEIN_CHANGE",
+                    "REFERENCE_RANGE",
+                    "RENAL_FUNCTION_MEASURE",
+                    "RESPIRATORY_FINDING",
+                    "RNA",
+                    "ROUTE",
+                    "SEVERITY",
+                    "SPECIES",
+                    "SPIROMETRY_MEASURE",
+                    "SSN",
+                    "STREET_ADDRESS",
+                    "STRENGTH",
+                    "SUSCEPTIBILITY",
+                    "THYROID_MEASURE",
+                    "TIME",
+                    "TISSUE",
+                    "UNIT",
+                    "URINE_FINDING",
+                    "URL",
+                    "USERNAME",
+                    "USER_AGENT",
+                    "VACCINE_LOT",
+                    "VACCINE_NAME",
+                    "VACCINE_SERIES",
+                    "VARIANT_DESCRIPTOR",
+                    "VEHICLE_REGISTRATION",
+                    "VIN",
+                    "ZIPCODE",
+                    "ZYGOSITY"
+                  ],
+                  "type": "string"
+                },
+                "detector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "doc_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "object"
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "policy_label": {
+                  "enum": [
+                    "DIRECT_IDENTIFIER",
+                    "QUASI_IDENTIFIER",
+                    "SENSITIVE_ATTRIBUTE",
+                    "CLINICAL_CONCEPT"
+                  ],
+                  "type": "string"
+                },
+                "regulatory_tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "replacement": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "text_hash": {
+                  "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "doc_id",
+                "start",
+                "end",
+                "text_hash",
+                "entity_type",
+                "canonical_label",
+                "policy_label",
+                "regulatory_tags",
+                "score",
+                "detector",
+                "evidence",
+                "action",
+                "replacement",
+                "reversible_id",
+                "section",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed",
+              "unimplemented"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "spans",
+          "bundle",
+          "resource_count",
+          "error"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
       "description": "Extract PII/PHI entities from clinical text.",
       "input_schema": {
         "additionalProperties": false,
@@ -702,6 +1810,643 @@
           "resourceType",
           "type",
           "entry"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Ground canonical OpenMedSpan artifacts to clinical coding systems.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_external_llm": {
+            "default": false,
+            "description": "Reserve privacy-gateway-mediated external LLM grounding.",
+            "type": "boolean"
+          },
+          "max_candidates": {
+            "default": 5,
+            "description": "Maximum grounding candidates per span.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "spans": {
+            "description": "Canonical, text-free OpenMedSpan artifacts to process.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "keep",
+                    "redact",
+                    "replace",
+                    "mask",
+                    "hash",
+                    "format_preserve"
+                  ],
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "enum": [
+                    "ABNORMAL_FLAG",
+                    "ACCOUNT_NUMBER",
+                    "ADMINISTRATION_ROUTE",
+                    "AGE",
+                    "AIRWAY_MANAGEMENT",
+                    "AMOUNT",
+                    "ANATOMY",
+                    "ANESTHESIA_TYPE",
+                    "ANESTHETIC_AGENT",
+                    "ANTIBIOTIC",
+                    "API_KEY",
+                    "ASA_CLASS",
+                    "BIC",
+                    "BIOMARKER",
+                    "BITCOIN_ADDRESS",
+                    "BODY_SITE",
+                    "BUILDING_NUMBER",
+                    "CANCER",
+                    "CARE_INTERVENTION",
+                    "CELL",
+                    "CHEMICAL",
+                    "CKD_STAGE",
+                    "CLINICAL_SIGNIFICANCE",
+                    "CONDITION",
+                    "CREDIT_CARD",
+                    "CREDIT_CARD_ISSUER",
+                    "CURRENCY",
+                    "CVV",
+                    "DATE",
+                    "DATE_OF_BIRTH",
+                    "DEVELOPMENTAL_MILESTONE",
+                    "DEVICE",
+                    "DIALYSIS_MODALITY",
+                    "DIET_TYPE",
+                    "DISEASE",
+                    "DNA",
+                    "DOSAGE",
+                    "DOSE_NUMBER",
+                    "DRUG",
+                    "DURATION",
+                    "DYSPNEA_GRADE",
+                    "EMAIL",
+                    "ENDOSCOPIC_FINDING",
+                    "ETHEREUM_ADDRESS",
+                    "ETHNICITY",
+                    "EYE_COLOR",
+                    "FEEDING_ROUTE",
+                    "FINDING",
+                    "FIRST_NAME",
+                    "FORM",
+                    "FREQUENCY",
+                    "GENDER",
+                    "GENE",
+                    "GENE_OR_GENE_PRODUCT",
+                    "GENE_SYMBOL",
+                    "GI_SCORE",
+                    "GI_SYMPTOM",
+                    "GLYCEMIC_MEASURE",
+                    "GPS_COORDINATES",
+                    "GROWTH_PARAMETER",
+                    "GROWTH_PERCENTILE",
+                    "HEIGHT",
+                    "HORMONE_LEVEL",
+                    "IBAN",
+                    "ID_NUM",
+                    "IMAGING_MODALITY",
+                    "IMEI",
+                    "INDICATION",
+                    "INSULIN_REGIMEN",
+                    "INTAKE_OUTPUT",
+                    "IP_ADDRESS",
+                    "JOB_DEPARTMENT",
+                    "JOB_TITLE",
+                    "LAB_TEST",
+                    "LAB_VALUE",
+                    "LAST_NAME",
+                    "LATERALITY",
+                    "LINE_DRAIN_TUBE",
+                    "LITECOIN_ADDRESS",
+                    "LOCATION",
+                    "MAC_ADDRESS",
+                    "MASKED_NUMBER",
+                    "MEASUREMENT",
+                    "MEDICATION",
+                    "MICROORGANISM",
+                    "MIDDLE_NAME",
+                    "NURSING_RISK_SCORE",
+                    "NUTRITIONAL_STATUS",
+                    "NUTRITION_TARGET",
+                    "OCCUPATION",
+                    "ORDINAL_DIRECTION",
+                    "ORGAN",
+                    "ORGANISM",
+                    "ORGANIZATION",
+                    "OTHER",
+                    "OXYGEN_SUPPORT",
+                    "PASSWORD",
+                    "PATHOLOGY",
+                    "PERSON",
+                    "PHONE",
+                    "PIN",
+                    "POLYP_DESCRIPTOR",
+                    "PREFIX",
+                    "PROBLEM",
+                    "PROCEDURE",
+                    "PROTEIN",
+                    "PROTEIN_CHANGE",
+                    "REFERENCE_RANGE",
+                    "RENAL_FUNCTION_MEASURE",
+                    "RESPIRATORY_FINDING",
+                    "RNA",
+                    "ROUTE",
+                    "SEVERITY",
+                    "SPECIES",
+                    "SPIROMETRY_MEASURE",
+                    "SSN",
+                    "STREET_ADDRESS",
+                    "STRENGTH",
+                    "SUSCEPTIBILITY",
+                    "THYROID_MEASURE",
+                    "TIME",
+                    "TISSUE",
+                    "UNIT",
+                    "URINE_FINDING",
+                    "URL",
+                    "USERNAME",
+                    "USER_AGENT",
+                    "VACCINE_LOT",
+                    "VACCINE_NAME",
+                    "VACCINE_SERIES",
+                    "VARIANT_DESCRIPTOR",
+                    "VEHICLE_REGISTRATION",
+                    "VIN",
+                    "ZIPCODE",
+                    "ZYGOSITY"
+                  ],
+                  "type": "string"
+                },
+                "detector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "doc_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "object"
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "policy_label": {
+                  "enum": [
+                    "DIRECT_IDENTIFIER",
+                    "QUASI_IDENTIFIER",
+                    "SENSITIVE_ATTRIBUTE",
+                    "CLINICAL_CONCEPT"
+                  ],
+                  "type": "string"
+                },
+                "regulatory_tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "replacement": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "text_hash": {
+                  "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "doc_id",
+                "start",
+                "end",
+                "text_hash",
+                "entity_type",
+                "canonical_label",
+                "policy_label",
+                "regulatory_tags",
+                "score",
+                "detector",
+                "evidence",
+                "action",
+                "replacement",
+                "reversible_id",
+                "section",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "vocabularies": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional grounding vocabularies to constrain."
+          }
+        },
+        "required": [
+          "spans"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_ground",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "enum": [
+                      "detect",
+                      "context",
+                      "sections",
+                      "relations",
+                      "ground",
+                      "export",
+                      "risk",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "stage",
+                  "details"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "grounded_concepts": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "enum": [
+              "openmed.ground.v1"
+            ],
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "keep",
+                    "redact",
+                    "replace",
+                    "mask",
+                    "hash",
+                    "format_preserve"
+                  ],
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "enum": [
+                    "ABNORMAL_FLAG",
+                    "ACCOUNT_NUMBER",
+                    "ADMINISTRATION_ROUTE",
+                    "AGE",
+                    "AIRWAY_MANAGEMENT",
+                    "AMOUNT",
+                    "ANATOMY",
+                    "ANESTHESIA_TYPE",
+                    "ANESTHETIC_AGENT",
+                    "ANTIBIOTIC",
+                    "API_KEY",
+                    "ASA_CLASS",
+                    "BIC",
+                    "BIOMARKER",
+                    "BITCOIN_ADDRESS",
+                    "BODY_SITE",
+                    "BUILDING_NUMBER",
+                    "CANCER",
+                    "CARE_INTERVENTION",
+                    "CELL",
+                    "CHEMICAL",
+                    "CKD_STAGE",
+                    "CLINICAL_SIGNIFICANCE",
+                    "CONDITION",
+                    "CREDIT_CARD",
+                    "CREDIT_CARD_ISSUER",
+                    "CURRENCY",
+                    "CVV",
+                    "DATE",
+                    "DATE_OF_BIRTH",
+                    "DEVELOPMENTAL_MILESTONE",
+                    "DEVICE",
+                    "DIALYSIS_MODALITY",
+                    "DIET_TYPE",
+                    "DISEASE",
+                    "DNA",
+                    "DOSAGE",
+                    "DOSE_NUMBER",
+                    "DRUG",
+                    "DURATION",
+                    "DYSPNEA_GRADE",
+                    "EMAIL",
+                    "ENDOSCOPIC_FINDING",
+                    "ETHEREUM_ADDRESS",
+                    "ETHNICITY",
+                    "EYE_COLOR",
+                    "FEEDING_ROUTE",
+                    "FINDING",
+                    "FIRST_NAME",
+                    "FORM",
+                    "FREQUENCY",
+                    "GENDER",
+                    "GENE",
+                    "GENE_OR_GENE_PRODUCT",
+                    "GENE_SYMBOL",
+                    "GI_SCORE",
+                    "GI_SYMPTOM",
+                    "GLYCEMIC_MEASURE",
+                    "GPS_COORDINATES",
+                    "GROWTH_PARAMETER",
+                    "GROWTH_PERCENTILE",
+                    "HEIGHT",
+                    "HORMONE_LEVEL",
+                    "IBAN",
+                    "ID_NUM",
+                    "IMAGING_MODALITY",
+                    "IMEI",
+                    "INDICATION",
+                    "INSULIN_REGIMEN",
+                    "INTAKE_OUTPUT",
+                    "IP_ADDRESS",
+                    "JOB_DEPARTMENT",
+                    "JOB_TITLE",
+                    "LAB_TEST",
+                    "LAB_VALUE",
+                    "LAST_NAME",
+                    "LATERALITY",
+                    "LINE_DRAIN_TUBE",
+                    "LITECOIN_ADDRESS",
+                    "LOCATION",
+                    "MAC_ADDRESS",
+                    "MASKED_NUMBER",
+                    "MEASUREMENT",
+                    "MEDICATION",
+                    "MICROORGANISM",
+                    "MIDDLE_NAME",
+                    "NURSING_RISK_SCORE",
+                    "NUTRITIONAL_STATUS",
+                    "NUTRITION_TARGET",
+                    "OCCUPATION",
+                    "ORDINAL_DIRECTION",
+                    "ORGAN",
+                    "ORGANISM",
+                    "ORGANIZATION",
+                    "OTHER",
+                    "OXYGEN_SUPPORT",
+                    "PASSWORD",
+                    "PATHOLOGY",
+                    "PERSON",
+                    "PHONE",
+                    "PIN",
+                    "POLYP_DESCRIPTOR",
+                    "PREFIX",
+                    "PROBLEM",
+                    "PROCEDURE",
+                    "PROTEIN",
+                    "PROTEIN_CHANGE",
+                    "REFERENCE_RANGE",
+                    "RENAL_FUNCTION_MEASURE",
+                    "RESPIRATORY_FINDING",
+                    "RNA",
+                    "ROUTE",
+                    "SEVERITY",
+                    "SPECIES",
+                    "SPIROMETRY_MEASURE",
+                    "SSN",
+                    "STREET_ADDRESS",
+                    "STRENGTH",
+                    "SUSCEPTIBILITY",
+                    "THYROID_MEASURE",
+                    "TIME",
+                    "TISSUE",
+                    "UNIT",
+                    "URINE_FINDING",
+                    "URL",
+                    "USERNAME",
+                    "USER_AGENT",
+                    "VACCINE_LOT",
+                    "VACCINE_NAME",
+                    "VACCINE_SERIES",
+                    "VARIANT_DESCRIPTOR",
+                    "VEHICLE_REGISTRATION",
+                    "VIN",
+                    "ZIPCODE",
+                    "ZYGOSITY"
+                  ],
+                  "type": "string"
+                },
+                "detector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "doc_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "object"
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "policy_label": {
+                  "enum": [
+                    "DIRECT_IDENTIFIER",
+                    "QUASI_IDENTIFIER",
+                    "SENSITIVE_ATTRIBUTE",
+                    "CLINICAL_CONCEPT"
+                  ],
+                  "type": "string"
+                },
+                "regulatory_tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "replacement": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "text_hash": {
+                  "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "doc_id",
+                "start",
+                "end",
+                "text_hash",
+                "entity_type",
+                "canonical_label",
+                "policy_label",
+                "regulatory_tags",
+                "score",
+                "detector",
+                "evidence",
+                "action",
+                "replacement",
+                "reversible_id",
+                "section",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed",
+              "unimplemented"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "spans",
+          "grounded_concepts",
+          "error"
         ],
         "type": "object"
       },
@@ -1034,6 +2779,655 @@
           "k_min",
           "singleton_records",
           "quasi_identifiers"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "description": "Score residual re-identification risk over de-identified clinical artifacts.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "deidentified_text": {
+            "default": null,
+            "description": "Optional de-identified text for residual-risk scoring.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quasi_identifiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional quasi-identifier field names."
+          },
+          "records": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional structured records for residual-risk scoring."
+          },
+          "spans": {
+            "description": "Canonical, text-free OpenMedSpan artifacts to process.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "keep",
+                    "redact",
+                    "replace",
+                    "mask",
+                    "hash",
+                    "format_preserve"
+                  ],
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "enum": [
+                    "ABNORMAL_FLAG",
+                    "ACCOUNT_NUMBER",
+                    "ADMINISTRATION_ROUTE",
+                    "AGE",
+                    "AIRWAY_MANAGEMENT",
+                    "AMOUNT",
+                    "ANATOMY",
+                    "ANESTHESIA_TYPE",
+                    "ANESTHETIC_AGENT",
+                    "ANTIBIOTIC",
+                    "API_KEY",
+                    "ASA_CLASS",
+                    "BIC",
+                    "BIOMARKER",
+                    "BITCOIN_ADDRESS",
+                    "BODY_SITE",
+                    "BUILDING_NUMBER",
+                    "CANCER",
+                    "CARE_INTERVENTION",
+                    "CELL",
+                    "CHEMICAL",
+                    "CKD_STAGE",
+                    "CLINICAL_SIGNIFICANCE",
+                    "CONDITION",
+                    "CREDIT_CARD",
+                    "CREDIT_CARD_ISSUER",
+                    "CURRENCY",
+                    "CVV",
+                    "DATE",
+                    "DATE_OF_BIRTH",
+                    "DEVELOPMENTAL_MILESTONE",
+                    "DEVICE",
+                    "DIALYSIS_MODALITY",
+                    "DIET_TYPE",
+                    "DISEASE",
+                    "DNA",
+                    "DOSAGE",
+                    "DOSE_NUMBER",
+                    "DRUG",
+                    "DURATION",
+                    "DYSPNEA_GRADE",
+                    "EMAIL",
+                    "ENDOSCOPIC_FINDING",
+                    "ETHEREUM_ADDRESS",
+                    "ETHNICITY",
+                    "EYE_COLOR",
+                    "FEEDING_ROUTE",
+                    "FINDING",
+                    "FIRST_NAME",
+                    "FORM",
+                    "FREQUENCY",
+                    "GENDER",
+                    "GENE",
+                    "GENE_OR_GENE_PRODUCT",
+                    "GENE_SYMBOL",
+                    "GI_SCORE",
+                    "GI_SYMPTOM",
+                    "GLYCEMIC_MEASURE",
+                    "GPS_COORDINATES",
+                    "GROWTH_PARAMETER",
+                    "GROWTH_PERCENTILE",
+                    "HEIGHT",
+                    "HORMONE_LEVEL",
+                    "IBAN",
+                    "ID_NUM",
+                    "IMAGING_MODALITY",
+                    "IMEI",
+                    "INDICATION",
+                    "INSULIN_REGIMEN",
+                    "INTAKE_OUTPUT",
+                    "IP_ADDRESS",
+                    "JOB_DEPARTMENT",
+                    "JOB_TITLE",
+                    "LAB_TEST",
+                    "LAB_VALUE",
+                    "LAST_NAME",
+                    "LATERALITY",
+                    "LINE_DRAIN_TUBE",
+                    "LITECOIN_ADDRESS",
+                    "LOCATION",
+                    "MAC_ADDRESS",
+                    "MASKED_NUMBER",
+                    "MEASUREMENT",
+                    "MEDICATION",
+                    "MICROORGANISM",
+                    "MIDDLE_NAME",
+                    "NURSING_RISK_SCORE",
+                    "NUTRITIONAL_STATUS",
+                    "NUTRITION_TARGET",
+                    "OCCUPATION",
+                    "ORDINAL_DIRECTION",
+                    "ORGAN",
+                    "ORGANISM",
+                    "ORGANIZATION",
+                    "OTHER",
+                    "OXYGEN_SUPPORT",
+                    "PASSWORD",
+                    "PATHOLOGY",
+                    "PERSON",
+                    "PHONE",
+                    "PIN",
+                    "POLYP_DESCRIPTOR",
+                    "PREFIX",
+                    "PROBLEM",
+                    "PROCEDURE",
+                    "PROTEIN",
+                    "PROTEIN_CHANGE",
+                    "REFERENCE_RANGE",
+                    "RENAL_FUNCTION_MEASURE",
+                    "RESPIRATORY_FINDING",
+                    "RNA",
+                    "ROUTE",
+                    "SEVERITY",
+                    "SPECIES",
+                    "SPIROMETRY_MEASURE",
+                    "SSN",
+                    "STREET_ADDRESS",
+                    "STRENGTH",
+                    "SUSCEPTIBILITY",
+                    "THYROID_MEASURE",
+                    "TIME",
+                    "TISSUE",
+                    "UNIT",
+                    "URINE_FINDING",
+                    "URL",
+                    "USERNAME",
+                    "USER_AGENT",
+                    "VACCINE_LOT",
+                    "VACCINE_NAME",
+                    "VACCINE_SERIES",
+                    "VARIANT_DESCRIPTOR",
+                    "VEHICLE_REGISTRATION",
+                    "VIN",
+                    "ZIPCODE",
+                    "ZYGOSITY"
+                  ],
+                  "type": "string"
+                },
+                "detector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "doc_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "object"
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "policy_label": {
+                  "enum": [
+                    "DIRECT_IDENTIFIER",
+                    "QUASI_IDENTIFIER",
+                    "SENSITIVE_ATTRIBUTE",
+                    "CLINICAL_CONCEPT"
+                  ],
+                  "type": "string"
+                },
+                "regulatory_tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "replacement": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "text_hash": {
+                  "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "doc_id",
+                "start",
+                "end",
+                "text_hash",
+                "entity_type",
+                "canonical_label",
+                "policy_label",
+                "regulatory_tags",
+                "score",
+                "detector",
+                "evidence",
+                "action",
+                "replacement",
+                "reversible_id",
+                "section",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "spans"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_risk_score",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "additionalProperties": true,
+                    "properties": {},
+                    "required": [],
+                    "type": "object"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "enum": [
+                      "detect",
+                      "context",
+                      "sections",
+                      "relations",
+                      "ground",
+                      "export",
+                      "risk",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "stage",
+                  "details"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "risk_report": {
+            "additionalProperties": true,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "schema_version": {
+            "enum": [
+              "openmed.risk_score.v1"
+            ],
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "keep",
+                    "redact",
+                    "replace",
+                    "mask",
+                    "hash",
+                    "format_preserve"
+                  ],
+                  "type": "string"
+                },
+                "canonical_label": {
+                  "enum": [
+                    "ABNORMAL_FLAG",
+                    "ACCOUNT_NUMBER",
+                    "ADMINISTRATION_ROUTE",
+                    "AGE",
+                    "AIRWAY_MANAGEMENT",
+                    "AMOUNT",
+                    "ANATOMY",
+                    "ANESTHESIA_TYPE",
+                    "ANESTHETIC_AGENT",
+                    "ANTIBIOTIC",
+                    "API_KEY",
+                    "ASA_CLASS",
+                    "BIC",
+                    "BIOMARKER",
+                    "BITCOIN_ADDRESS",
+                    "BODY_SITE",
+                    "BUILDING_NUMBER",
+                    "CANCER",
+                    "CARE_INTERVENTION",
+                    "CELL",
+                    "CHEMICAL",
+                    "CKD_STAGE",
+                    "CLINICAL_SIGNIFICANCE",
+                    "CONDITION",
+                    "CREDIT_CARD",
+                    "CREDIT_CARD_ISSUER",
+                    "CURRENCY",
+                    "CVV",
+                    "DATE",
+                    "DATE_OF_BIRTH",
+                    "DEVELOPMENTAL_MILESTONE",
+                    "DEVICE",
+                    "DIALYSIS_MODALITY",
+                    "DIET_TYPE",
+                    "DISEASE",
+                    "DNA",
+                    "DOSAGE",
+                    "DOSE_NUMBER",
+                    "DRUG",
+                    "DURATION",
+                    "DYSPNEA_GRADE",
+                    "EMAIL",
+                    "ENDOSCOPIC_FINDING",
+                    "ETHEREUM_ADDRESS",
+                    "ETHNICITY",
+                    "EYE_COLOR",
+                    "FEEDING_ROUTE",
+                    "FINDING",
+                    "FIRST_NAME",
+                    "FORM",
+                    "FREQUENCY",
+                    "GENDER",
+                    "GENE",
+                    "GENE_OR_GENE_PRODUCT",
+                    "GENE_SYMBOL",
+                    "GI_SCORE",
+                    "GI_SYMPTOM",
+                    "GLYCEMIC_MEASURE",
+                    "GPS_COORDINATES",
+                    "GROWTH_PARAMETER",
+                    "GROWTH_PERCENTILE",
+                    "HEIGHT",
+                    "HORMONE_LEVEL",
+                    "IBAN",
+                    "ID_NUM",
+                    "IMAGING_MODALITY",
+                    "IMEI",
+                    "INDICATION",
+                    "INSULIN_REGIMEN",
+                    "INTAKE_OUTPUT",
+                    "IP_ADDRESS",
+                    "JOB_DEPARTMENT",
+                    "JOB_TITLE",
+                    "LAB_TEST",
+                    "LAB_VALUE",
+                    "LAST_NAME",
+                    "LATERALITY",
+                    "LINE_DRAIN_TUBE",
+                    "LITECOIN_ADDRESS",
+                    "LOCATION",
+                    "MAC_ADDRESS",
+                    "MASKED_NUMBER",
+                    "MEASUREMENT",
+                    "MEDICATION",
+                    "MICROORGANISM",
+                    "MIDDLE_NAME",
+                    "NURSING_RISK_SCORE",
+                    "NUTRITIONAL_STATUS",
+                    "NUTRITION_TARGET",
+                    "OCCUPATION",
+                    "ORDINAL_DIRECTION",
+                    "ORGAN",
+                    "ORGANISM",
+                    "ORGANIZATION",
+                    "OTHER",
+                    "OXYGEN_SUPPORT",
+                    "PASSWORD",
+                    "PATHOLOGY",
+                    "PERSON",
+                    "PHONE",
+                    "PIN",
+                    "POLYP_DESCRIPTOR",
+                    "PREFIX",
+                    "PROBLEM",
+                    "PROCEDURE",
+                    "PROTEIN",
+                    "PROTEIN_CHANGE",
+                    "REFERENCE_RANGE",
+                    "RENAL_FUNCTION_MEASURE",
+                    "RESPIRATORY_FINDING",
+                    "RNA",
+                    "ROUTE",
+                    "SEVERITY",
+                    "SPECIES",
+                    "SPIROMETRY_MEASURE",
+                    "SSN",
+                    "STREET_ADDRESS",
+                    "STRENGTH",
+                    "SUSCEPTIBILITY",
+                    "THYROID_MEASURE",
+                    "TIME",
+                    "TISSUE",
+                    "UNIT",
+                    "URINE_FINDING",
+                    "URL",
+                    "USERNAME",
+                    "USER_AGENT",
+                    "VACCINE_LOT",
+                    "VACCINE_NAME",
+                    "VACCINE_SERIES",
+                    "VARIANT_DESCRIPTOR",
+                    "VEHICLE_REGISTRATION",
+                    "VIN",
+                    "ZIPCODE",
+                    "ZYGOSITY"
+                  ],
+                  "type": "string"
+                },
+                "detector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "doc_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "end": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "object"
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "policy_label": {
+                  "enum": [
+                    "DIRECT_IDENTIFIER",
+                    "QUASI_IDENTIFIER",
+                    "SENSITIVE_ATTRIBUTE",
+                    "CLINICAL_CONCEPT"
+                  ],
+                  "type": "string"
+                },
+                "regulatory_tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "replacement": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reversible_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "section": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "start": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "text_hash": {
+                  "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "doc_id",
+                "start",
+                "end",
+                "text_hash",
+                "entity_type",
+                "canonical_label",
+                "policy_label",
+                "regulatory_tags",
+                "score",
+                "detector",
+                "evidence",
+                "action",
+                "replacement",
+                "reversible_id",
+                "section",
+                "metadata"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed",
+              "unimplemented"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "spans",
+          "risk_report",
+          "error"
         ],
         "type": "object"
       },
@@ -1599,6 +3993,76 @@
         "type": "object"
       },
       "stability": "stable",
+      "version": "1.0.0"
+    }
+  ],
+  "workflows": [
+    {
+      "artifacts": [
+        {
+          "name": "deidentify",
+          "schema_id": "openmed.deidentified_handoff.v1",
+          "source_tool": "openmed_deidentify"
+        },
+        {
+          "name": "detect",
+          "schema_id": "openmed.clinical_artifact.detect.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "context",
+          "schema_id": "openmed.clinical_artifact.context.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "sections",
+          "schema_id": "openmed.clinical_artifact.sections.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "relations",
+          "schema_id": "openmed.clinical_artifact.relations.v1",
+          "source_tool": "openmed_clinical_pipeline"
+        },
+        {
+          "name": "ground",
+          "schema_id": "openmed.ground.v1",
+          "source_tool": "openmed_ground"
+        },
+        {
+          "name": "export",
+          "schema_id": "openmed.export_fhir.v1",
+          "source_tool": "openmed_export_fhir"
+        },
+        {
+          "name": "risk",
+          "schema_id": "openmed.risk_score.v1",
+          "source_tool": "openmed_risk_score"
+        }
+      ],
+      "default_execution": "local",
+      "description": "Local-first de-identification, clinical extraction, grounding, FHIR export, and residual-risk workflow with PHI-safe intermediate artifacts.",
+      "fixture_uri": "openmed://clinical-workflow/golden-agent-run",
+      "name": "openmed_clinical_workflow",
+      "prompt_name": "openmed-clinical-workflow",
+      "resource_uri": "openmed://clinical-workflow",
+      "stage_order": [
+        "deidentify",
+        "detect",
+        "context",
+        "sections",
+        "relations",
+        "ground",
+        "export",
+        "risk"
+      ],
+      "tools": [
+        "openmed_deidentify",
+        "openmed_clinical_pipeline",
+        "openmed_ground",
+        "openmed_export_fhir",
+        "openmed_risk_score"
+      ],
       "version": "1.0.0"
     }
   ]
