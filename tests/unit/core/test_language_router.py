@@ -9,6 +9,7 @@ from types import MappingProxyType
 
 import pytest
 
+from openmed.core.decoding import iter_grapheme_cluster_spans
 from openmed.core.language_pack import LanguagePack
 from openmed.core.language_router import (
     LanguagePrediction,
@@ -247,3 +248,47 @@ def test_document_decision_exposes_only_non_dominant_run_overrides():
     assert decision.dominant_pack.code == "en"
     assert decision.overrides
     assert {run.language for run in decision.overrides} == {"zh"}
+
+
+_ROUTING_LATIN = "Patient stable."
+_ROUTING_DEVANAGARI = "\u0930\u094b\u0917\u0940"
+_ROUTING_TAMIL = "\u0b95\u0bcd\u0bb7"
+_ROUTING_ARABIC = "\u0639\u0644\u064a"
+
+
+def test_run_metadata_is_complete_for_every_routed_run():
+    text = " ".join((_ROUTING_LATIN, _ROUTING_DEVANAGARI, _ROUTING_TAMIL))
+    runs = LanguageRouter(use_optional_lid=False).route_runs(text)
+
+    assert runs
+    for run in runs:
+        assert run.candidates
+        assert run.language in run.candidates or run.script == "Unknown"
+        assert run.normalizer in {"indic-nfc", "unicode-defense"}
+        assert run.tokenizer
+        assert run.numeral_set
+    by_script = {run.script: run for run in runs}
+    assert by_script["Latin"].normalizer == "unicode-defense"
+    assert by_script["Latin"].numeral_set == "ascii"
+    assert by_script["Devanagari"].normalizer == "indic-nfc"
+    assert by_script["Devanagari"].numeral_set == "devanagari"
+    assert by_script["Tamil"].normalizer == "indic-nfc"
+    assert by_script["Tamil"].numeral_set == "tamil"
+
+
+def test_routed_run_boundaries_are_grapheme_aligned():
+    text = _ROUTING_LATIN + _ROUTING_ARABIC + "\u0951" + _ROUTING_DEVANAGARI
+    runs = LanguageRouter(use_optional_lid=False).route_runs(text)
+    boundaries = {start for start, _ in iter_grapheme_cluster_spans(text)} | {len(text)}
+
+    for run in runs:
+        assert run.start in boundaries
+        assert run.end in boundaries
+    assert "".join(text[run.start : run.end] for run in runs) == text
+
+
+def test_route_runs_is_deterministic():
+    text = " ".join((_ROUTING_LATIN, _ROUTING_DEVANAGARI, _ROUTING_ARABIC))
+    router = LanguageRouter(use_optional_lid=False)
+
+    assert router.route_runs(text) == router.route_runs(text)

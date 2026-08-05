@@ -1,9 +1,13 @@
 import unicodedata
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from openmed.core.decoding import snap_span_to_grapheme_boundaries
+from openmed.core.decoding import (
+    iter_grapheme_cluster_spans,
+    snap_span_to_grapheme_boundaries,
+)
 from openmed.core.language_pack_catalog import (
     DEFAULT_PII_MODELS as BUILTIN_DEFAULT_PII_MODELS,
 )
@@ -18,9 +22,13 @@ from openmed.core.script_detect import (
     CONFUSABLE_DATA_LICENSE,
     CONFUSABLE_DATA_URL,
     CONFUSABLE_DATA_VERSION,
+    INDIC_SCRIPTS,
     SCRIPT_LANGUAGE_HINTS,
+    SCRIPT_NORMALIZERS,
+    SCRIPT_NUMERAL_SETS,
     SUPPORTED_SCRIPTS,
     UNKNOWN_SCRIPT,
+    ScriptRun,
     candidate_languages_for_script,
     confusable_skeleton,
     detect_mixed_script,
@@ -28,7 +36,12 @@ from openmed.core.script_detect import (
     is_han_dominant,
     mixed_script_spans,
     normalize_for_pii_detection,
+    normalizer_for_script,
+    numeral_set_for_script,
     segment_by_script,
+)
+from openmed.processing.text import (
+    INDIC_SCRIPTS as PROCESSING_INDIC_SCRIPTS,
 )
 
 
@@ -351,3 +364,214 @@ def test_han_confusable_normalization_preserves_original_offsets():
     assert normalized.mixed_script
     assert normalized.remap_span(8, 11) == (8, 11)
     assert text[slice(*normalized.remap_span(8, 11))] == "D\u3007E"
+
+
+# ---------------------------------------------------------------------------
+# Grapheme-aligned script-run segmentation
+#
+# Every fixture below is assembled from explicit Unicode code points in code.
+# None of it is real clinical text and none of it contains PHI.
+# ---------------------------------------------------------------------------
+
+_LATIN_A = "\u0061"
+_LATIN_B = "\u0062"
+_LATIN_R = "\u0052"
+_LATIN_I = "\u0069"
+_DEVANAGARI_KA = "\u0915"
+_DEVANAGARI_SSA = "\u0937"
+_DEVANAGARI_VIRAMA = "\u094d"
+_DEVANAGARI_NUKTA = "\u093c"
+_DEVANAGARI_UDATTA = "\u0951"
+_BENGALI_KA = "\u0995"
+_TAMIL_KA = "\u0b95"
+_TAMIL_SSA = "\u0bb7"
+_TAMIL_VIRAMA = "\u0bcd"
+_ZWJ = "\u200d"
+_ZWNJ = "\u200c"
+_MAN = "\U0001f468"
+_MEDICAL_SYMBOL = "\u2695\ufe0f"
+_REGIONAL_I = "\U0001f1ee"
+_REGIONAL_N = "\U0001f1f3"
+
+# Clusters whose combining mark belongs to a different script than its base.
+# Segmenting these by code point splits the cluster.
+_CROSS_SCRIPT_CLUSTER_CASES = (
+    ("latin_base_devanagari_udatta", _LATIN_A + _DEVANAGARI_UDATTA + _LATIN_B),
+    (
+        "latin_base_devanagari_nukta",
+        _LATIN_R + _LATIN_A + _DEVANAGARI_NUKTA + _LATIN_I,
+    ),
+    ("bengali_base_devanagari_udatta", _BENGALI_KA + _DEVANAGARI_UDATTA),
+)
+
+# Sequences that code-point segmentation already handled correctly. They are
+# retained as regression guards and must stay at zero boundary violations.
+_ALREADY_SAFE_CASES = (
+    (
+        "devanagari_virama_conjunct",
+        _DEVANAGARI_KA + _DEVANAGARI_VIRAMA + _DEVANAGARI_SSA,
+    ),
+    ("tamil_virama_conjunct", _TAMIL_KA + _TAMIL_VIRAMA + _TAMIL_SSA),
+    ("emoji_zwj_sequence", "Dr " + _MAN + _ZWJ + _MEDICAL_SYMBOL + " ok"),
+    ("regional_indicator_pair", _REGIONAL_I + _REGIONAL_N + " x"),
+    (
+        "zwnj_inside_devanagari",
+        _DEVANAGARI_KA + _DEVANAGARI_VIRAMA + _ZWNJ + _DEVANAGARI_SSA,
+    ),
+)
+
+
+def _grapheme_boundaries(text):
+    """Return every extended grapheme-cluster boundary offset in ``text``."""
+
+    return {start for start, _ in iter_grapheme_cluster_spans(text)} | {len(text)}
+
+
+@pytest.mark.parametrize(
+    "case",
+    _CROSS_SCRIPT_CLUSTER_CASES + _ALREADY_SAFE_CASES,
+    ids=lambda case: case[0],
+)
+def test_segment_by_script_never_splits_a_grapheme_cluster(case):
+    _name, text = case
+    boundaries = _grapheme_boundaries(text)
+    runs = list(segment_by_script(text))
+
+    assert runs
+    for run in runs:
+        assert run.start in boundaries, "run start bisects a grapheme cluster"
+        assert run.end in boundaries, "run end bisects a grapheme cluster"
+        assert run.start < run.end
+    assert "".join(text[run.start : run.end] for run in runs) == text
+
+
+@pytest.mark.parametrize("case", _CROSS_SCRIPT_CLUSTER_CASES, ids=lambda case: case[0])
+def test_cross_script_cluster_stays_whole_in_one_run(case):
+    """A combining mark never drags its base character into another run."""
+
+    _name, text = case
+    runs = list(segment_by_script(text))
+
+    for cluster_start, cluster_end in iter_grapheme_cluster_spans(text):
+        covering = [
+            run for run in runs if run.start <= cluster_start and cluster_end <= run.end
+        ]
+        assert len(covering) == 1
+
+
+def test_script_runs_stay_tuple_compatible_for_existing_callers():
+    """The richer run type must remain a plain tuple for existing unpackers."""
+
+    text = _DEVANAGARI_KA + " " + _LATIN_A
+    runs = list(segment_by_script(text))
+
+    assert runs == [(0, 2, "Devanagari"), (2, 3, "Latin")]
+    assert isinstance(runs[0], ScriptRun)
+    assert isinstance(runs[0], tuple)
+    start, end, script = runs[0]
+    assert (start, end, script) == (0, 2, "Devanagari")
+    assert runs[0].extract(text) == text[0:2]
+
+
+def test_indic_script_sets_agree_across_modules():
+    """Pin the aliased processing-layer tuple against this module's export.
+
+    ``script_detect`` imports ``openmed.processing.text.INDIC_SCRIPTS`` under an
+    alias so it cannot rebind its own identically named public export. This gate
+    fails if the two ever diverge or if the alias is collapsed.
+    """
+
+    assert frozenset(PROCESSING_INDIC_SCRIPTS) == INDIC_SCRIPTS
+    assert len(INDIC_SCRIPTS) == 9
+
+
+def test_script_routing_metadata_is_exact_and_complete():
+    routable = set(SUPPORTED_SCRIPTS) | {UNKNOWN_SCRIPT}
+    brahmi = {
+        "Bengali",
+        "Devanagari",
+        "Gujarati",
+        "Gurmukhi",
+        "Kannada",
+        "Malayalam",
+        "Odia",
+        "Tamil",
+        "Telugu",
+    }
+
+    assert set(SCRIPT_NORMALIZERS) == routable
+    assert set(SCRIPT_NUMERAL_SETS) == routable
+    assert {
+        script for script, name in SCRIPT_NORMALIZERS.items() if name == "indic-nfc"
+    } == brahmi
+    assert {
+        script for script, name in SCRIPT_NUMERAL_SETS.items() if name != "ascii"
+    } == brahmi | {"Arabic", "Thai"}
+    for script in brahmi:
+        assert SCRIPT_NUMERAL_SETS[script] == script.casefold()
+
+    # Arabic-script text writes numbers with its own digits, so declaring
+    # "ascii" here would tell a consumer no native numerals are present.
+    assert SCRIPT_NUMERAL_SETS["Arabic"] == "arabic-indic"
+    assert SCRIPT_NUMERAL_SETS["Thai"] == "thai"
+    assert SCRIPT_NORMALIZERS["Latin"] == "unicode-defense"
+    assert SCRIPT_NUMERAL_SETS["Latin"] == "ascii"
+    # Fullwidth digits are ASCII digits in a wide presentation form, folded by
+    # width normalization, so Han is correctly declared as "ascii".
+    assert SCRIPT_NUMERAL_SETS["Han"] == "ascii"
+
+
+def test_declared_arabic_numeral_set_matches_the_digits_actually_folded():
+    """The Arabic declaration must cover both blocks the pipeline folds."""
+
+    from openmed.core.pii_i18n import normalize_arabic_indic_digits
+
+    assert SCRIPT_NUMERAL_SETS["Arabic"] != "ascii"
+    for codepoint in (0x0660, 0x06F0):
+        native = "".join(chr(codepoint + digit) for digit in range(10))
+        assert detect_script(native + "\u0639") == "Arabic"
+        assert normalize_arabic_indic_digits(native) == "0123456789"
+    assert SCRIPT_NORMALIZERS[UNKNOWN_SCRIPT] == "unicode-defense"
+    assert normalizer_for_script("Devanagari") == "indic-nfc"
+    assert numeral_set_for_script("Tamil") == "tamil"
+    assert normalizer_for_script("NotAScript") == "unicode-defense"
+    assert numeral_set_for_script("NotAScript") == "ascii"
+
+
+def test_segment_by_script_stays_linear_on_adversarial_combining_runs(monkeypatch):
+    """Cluster resolution must not rewind once per extending mark.
+
+    A long cluster whose extending marks carry a different script from their
+    base used to send every mark back to the cluster start, making segmentation
+    quadratic. ``validate_pii_input`` accepts this shape because the combining
+    and format-sequence guards reset on each other's characters, so the only
+    thing standing between an untrusted document and quadratic work is this
+    bound. Predicate calls are counted instead of wall-clock time so the gate is
+    deterministic under CI load.
+    """
+
+    from openmed.core.decoding import spans as decoding_spans
+
+    calls = 0
+    real_checker = decoding_spans.grapheme_break_checker
+
+    def counting_checker(text):
+        predicate = real_checker(text)
+
+        def wrapper(index):
+            nonlocal calls
+            calls += 1
+            return predicate(index)
+
+        return wrapper
+
+    monkeypatch.setattr(decoding_spans, "grapheme_break_checker", counting_checker)
+
+    payload = _LATIN_A + (_DEVANAGARI_UDATTA * 63 + _ZWJ) * 40 + _LATIN_B
+    runs = list(segment_by_script(payload))
+
+    assert "".join(payload[run.start : run.end] for run in runs) == payload
+    # Linear: the memoized rewinds telescope, so total probes stay within a
+    # small constant factor of the input length. The pre-fix implementation
+    # issued roughly len(cluster) probes per mark, i.e. ~80,000 here.
+    assert calls <= 4 * len(payload), f"{calls} probes for {len(payload)} chars"

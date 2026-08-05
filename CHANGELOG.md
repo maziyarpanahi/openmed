@@ -57,7 +57,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixture exercising a native `ngày D tháng M năm YYYY` date, an `0xx` mobile,
   a 12-digit CCCD, and a diacritic-bearing address (#263).
 
+- Added grapheme-aligned mixed-script run routing. `segment_by_script` now
+  yields `ScriptRun`, a tuple-compatible `NamedTuple`, and every run boundary
+  falls on an extended grapheme-cluster boundary, so a run can no longer split a
+  combining sequence, an Indic virama conjunct, a zero-width joiner sequence, or
+  a regional-indicator pair. Each cluster takes the script of its first
+  script-bearing code point, keeping a cross-script combining mark attached to
+  the base character it decorates. `LanguageRun` gained `candidates`,
+  `normalizer`, `tokenizer`, and `numeral_set`, and `SCRIPT_NORMALIZERS`,
+  `SCRIPT_NUMERAL_SETS`, `normalizer_for_script`, and `numeral_set_for_script`
+  expose the per-script routing tables (#1570).
+
+### Changed
+
+- Script runs that previously began inside a grapheme cluster now begin at the
+  cluster boundary. A token opening with a combining mark, such as the Gurmukhi
+  addak U+0A71, starts one code point earlier because UAX #29 binds that mark to
+  the preceding separator. Offsets remain half-open code-point indices and every
+  run still tiles the source exactly (#1570).
+
 ### Fixed
+
+- Fixed quadratic script segmentation on text containing long combining-mark
+  runs whose marks carry a different script from their base. Such input passes
+  `validate_pii_input` because the combining and format-sequence guards reset on
+  each other's characters, and previously cost seconds per document in
+  `segment_by_script`, `route_runs`, and `is_indic_text`. Cluster starts are now
+  memoized so segmentation stays linear (#1570).
 
 - Fixed `Pipeline.stage2_language_script` rejecting national-ID-only and
   user-supplied language codes that `openmed.core.pii` already accepted, so an
