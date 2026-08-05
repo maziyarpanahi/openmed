@@ -1575,6 +1575,7 @@ class Pipeline:
             detector = _detector_for_entity(entity, default_detector)
             metadata = dict(getattr(entity, "metadata", None) or {})
             metadata.setdefault("pipeline_stage", stage)
+            hipaa_class = hipaa_class_for(canonical, lang=context.route.lang)
             spans.append(
                 OpenMedSpan(
                     doc_id=context.doc_id,
@@ -1584,9 +1585,7 @@ class Pipeline:
                     entity_type=label or canonical,
                     canonical_label=canonical,
                     policy_label=policy_label_for(canonical, lang=context.route.lang),
-                    regulatory_tags=(
-                        hipaa_class_for(canonical, lang=context.route.lang),
-                    ),
+                    regulatory_tags=(hipaa_class,) if hipaa_class is not None else (),
                     score=float(getattr(entity, "confidence", 0.0) or 0.0),
                     detector=detector,
                     evidence=_evidence_for_entity(entity),
@@ -1648,6 +1647,7 @@ class Pipeline:
                 metadata.setdefault("pipeline_stage", pipeline_stage)
                 metadata.setdefault("plugin_detector", spec.name)
                 evidence = _sanitize_plugin_mapping(span.evidence, surface)
+                hipaa_class = hipaa_class_for(canonical, lang=context.route.lang)
                 spans.append(
                     replace(
                         span,
@@ -1659,9 +1659,9 @@ class Pipeline:
                             canonical,
                             lang=context.route.lang,
                         ),
-                        regulatory_tags=(
-                            hipaa_class_for(canonical, lang=context.route.lang),
-                        ),
+                        regulatory_tags=(hipaa_class,)
+                        if hipaa_class is not None
+                        else (),
                         detector=detector_provenance(spec),
                         evidence=evidence,
                         section=span.section

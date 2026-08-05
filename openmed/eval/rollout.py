@@ -623,7 +623,8 @@ class RolloutStateMachine:
         ``CANARY -> STABLE``). The promotion is refused unless
         ``gate_report.decision`` is ``RELEASABLE`` and the report's coordinates
         match the key. Advancing a key that has no forward step (``STABLE`` or
-        ``ROLLED_BACK``) raises :class:`IllegalTransitionError`.
+        ``ROLLED_BACK``) raises :class:`IllegalTransitionError`; an unseeded key
+        raises :class:`RolloutStateError` rather than creating implicit state.
         """
 
         from_phase = self.current_phase(family, tier, format)
@@ -701,7 +702,11 @@ class RolloutStateMachine:
 
         key = baseline_key(family, tier, format)
         current = self.entries.get(key)
-        from_phase = current.phase if current is not None else PHASE_SHADOW
+        if current is None:
+            raise RolloutStateError(
+                f"rollout key must be seeded before transition: {key}"
+            )
+        from_phase = current.phase
 
         if (from_phase, to_phase) not in LEGAL_TRANSITIONS:
             raise IllegalTransitionError(

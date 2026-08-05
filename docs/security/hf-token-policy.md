@@ -20,8 +20,11 @@ OpenMed organization. This token is separate from runtime read tokens and packag
 
 ## CI Use
 
-The `convert-models.yml` workflow exposes the secret only to the protected `publish-hf` job. The publish guard uses a
-step-level environment binding:
+The manual `convert-models.yml` workflow exposes the secret only to the
+protected `publish-hf` job. The scheduled `nightly-release.yml` workflow binds
+its single release job to the same protected environment and checks both the
+write token and release-gate signing key before checkout, conversion, or
+publication. The manual publish guard uses a step-level environment binding:
 
 ```yaml
 environment:

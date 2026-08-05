@@ -16,10 +16,16 @@ from .config import (
     normalize_language_code,
 )
 from .family_transfer import (
+    FamilyAdapterFallback,
+    FamilyAdapterRoute,
+    FamilyTransferAdapterUnavailableError,
+    FamilyTransferRouter,
+    UnsupportedFamilyTransferLanguageError,
     adapter_metadata_for,
     donor_languages_for,
     primary_donor_for,
     resolve_family_transfer,
+    route_family_adapter,
 )
 from .recipe import (
     ADAPTER_METADATA_SCHEMA_VERSION,
@@ -54,12 +60,17 @@ __all__ = [
     "AdapterTrainingRecipeError",
     "AdapterTrainingSchedule",
     "DonorToTargetAdapterRecipe",
+    "FamilyAdapterFallback",
+    "FamilyAdapterRoute",
     "FamilyTransferConfig",
+    "FamilyTransferAdapterUnavailableError",
     "FamilyTransferResolution",
+    "FamilyTransferRouter",
     "LanguageFamily",
     "LocalTrainingAsset",
     "ParameterEfficientAdapterConfig",
     "TransferEdge",
+    "UnsupportedFamilyTransferLanguageError",
     "adapter_metadata_for",
     "build_donor_to_target_adapter_recipe",
     "donor_languages_for",
@@ -68,4 +79,5 @@ __all__ = [
     "normalize_language_code",
     "primary_donor_for",
     "resolve_family_transfer",
+    "route_family_adapter",
 ]

@@ -11,13 +11,17 @@ from openmed.training.adapters import (
     DEFAULT_LANGUAGE_FAMILIES,
     PERMISSIVE_ADAPTER_LICENSES,
     AdapterMetadata,
+    FamilyTransferAdapterUnavailableError,
     FamilyTransferConfig,
+    FamilyTransferRouter,
     TransferEdge,
+    UnsupportedFamilyTransferLanguageError,
     adapter_metadata_for,
     donor_languages_for,
     get_family_transfer_config,
     primary_donor_for,
     resolve_family_transfer,
+    route_family_adapter,
 )
 
 
@@ -41,6 +45,13 @@ def _edge(
             provenance="Synthetic offline unit-test adapter metadata",
         ),
         priority=priority,
+    )
+
+
+def _available_adapter(language: str) -> AdapterMetadata:
+    return AdapterMetadata(
+        adapter_id=f"synthetic-offline/{language}-adapter",
+        provenance=f"Synthetic offline {language} adapter fixture",
     )
 
 
@@ -125,6 +136,71 @@ def test_registry_route_without_donor_stays_native() -> None:
     assert route.donor_language is None
     assert route.adapter_id is None
     assert route.mode == "native"
+
+
+def test_family_router_prefers_an_available_target_adapter() -> None:
+    telugu_adapter = _available_adapter("te")
+    hindi_adapter = _available_adapter("hi")
+
+    route = route_family_adapter(
+        "te-IN",
+        {"te": telugu_adapter, "hi": hindi_adapter},
+    )
+
+    assert route.target_language == "te"
+    assert route.adapter_language == "te"
+    assert route.family_id == "indic"
+    assert route.backbone_model_id == telugu_adapter.backbone_model_id
+    assert route.adapter is telugu_adapter
+    assert route.mode == "target_adapter"
+    assert route.fallback is None
+
+
+def test_family_router_falls_back_from_telugu_to_hindi_with_scored_metadata() -> None:
+    hindi_adapter = _available_adapter("hi")
+
+    route = FamilyTransferRouter({"hi-IN": hindi_adapter}).route("te")
+
+    assert route.target_language == "te"
+    assert route.adapter_language == "hi"
+    assert route.backbone_model_id == hindi_adapter.backbone_model_id
+    assert route.adapter is hindi_adapter
+    assert route.mode == "zero_shot_fallback"
+    assert route.fallback is not None
+    assert route.fallback.donor == "hi"
+    assert route.fallback.target == "te"
+    assert route.fallback.score == pytest.approx(0.80)
+    assert "hi-to-te" in route.fallback.provenance
+    assert hindi_adapter.provenance in route.fallback.provenance
+    assert "configured expected_f1_floor" in route.fallback.provenance
+
+
+def test_family_router_keeps_donor_language_on_its_direct_adapter() -> None:
+    hindi_adapter = _available_adapter("hi")
+
+    route = FamilyTransferRouter({"hi": hindi_adapter}).route("hi-IN")
+
+    assert route.target_language == "hi"
+    assert route.adapter_language == "hi"
+    assert route.adapter is hindi_adapter
+    assert route.mode == "target_adapter"
+    assert route.fallback is None
+
+
+def test_family_router_rejects_unsupported_and_unavailable_targets() -> None:
+    router = FamilyTransferRouter({})
+
+    with pytest.raises(
+        UnsupportedFamilyTransferLanguageError,
+        match="unsupported family-transfer language 'xx'",
+    ):
+        router.route("xx")
+
+    with pytest.raises(
+        FamilyTransferAdapterUnavailableError,
+        match="no target or compatible donor adapter.*'te'",
+    ):
+        router.route("te")
 
 
 def test_transfer_config_rejects_missing_donor_family() -> None:

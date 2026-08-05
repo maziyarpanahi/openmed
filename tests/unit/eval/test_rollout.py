@@ -270,6 +270,23 @@ def test_unseeded_key_defaults_to_shadow_without_dwell() -> None:
     )
 
 
+def test_unseeded_key_cannot_transition_without_persisted_state() -> None:
+    """Mutation requires an explicit seed and preserves the empty document."""
+
+    machine = _machine()
+    before = machine.to_json()
+
+    with pytest.raises(RolloutStateError, match="must be seeded"):
+        machine.advance("pii", "tiny", "mlx-fp", _gate_report())
+    assert machine.to_json() == before
+
+    with pytest.raises(RolloutStateError, match="must be seeded"):
+        machine.transition(
+            "pii", "tiny", "mlx-fp", PHASE_CANARY, gate_report=_gate_report()
+        )
+    assert machine.to_json() == before
+
+
 def test_state_reproducible_from_committed_document(tmp_path) -> None:
     """State round-trips through JSON and replays deterministically, offline."""
 
