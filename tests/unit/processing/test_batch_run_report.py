@@ -8,6 +8,7 @@ no-raw-text logging guard. Nothing here reads a corpus or the network.
 from __future__ import annotations
 
 import json
+import math
 import re
 
 import pytest
@@ -26,6 +27,7 @@ from openmed.processing.run_report import (
     RUN_STATE_EXHAUSTED,
     RUN_STATE_IN_PROGRESS,
     UNRECOGNIZED_ERROR_TYPE,
+    RunReportError,
     RunReportPrivacyError,
     assert_no_raw_text,
     build_run_report,
@@ -590,6 +592,36 @@ def test_outputs_block_uses_the_validation_object_not_a_list() -> None:
         "missing": [2],
         "mismatched": [3],
     }
+    assert payload["run_state"] == RUN_STATE_IN_PROGRESS
+
+
+def test_output_validation_can_veto_an_apparently_complete_manifest() -> None:
+    manifest = _finished_manifest()
+    validation = ShardOutputValidation(valid=(0, 1, 2), missing=(3,))
+
+    payload = build_run_report(
+        manifest,
+        generated_at=3000.0,
+        validation=validation,
+    ).to_dict()
+
+    assert payload["status_counts"]["completed"] == manifest.shard_count
+    assert payload["run_state"] == RUN_STATE_IN_PROGRESS
+
+
+def test_report_rejects_a_resume_plan_for_another_manifest() -> None:
+    manifest = _finished_manifest()
+    other = _manifest(shard_count=5, documents=15)
+    foreign_plan = resume_plan(other, clock=lambda: 3000.0)
+
+    with pytest.raises(RunReportError, match="does not describe"):
+        build_run_report(manifest, generated_at=3000.0, resume=foreign_plan)
+
+
+@pytest.mark.parametrize("generated_at", [math.nan, math.inf, -math.inf, -1.0])
+def test_generated_at_must_be_finite_and_non_negative(generated_at: float) -> None:
+    with pytest.raises(RunReportError, match="finite non-negative"):
+        build_run_report(_finished_manifest(), generated_at=generated_at)
 
 
 # ---------------------------------------------------------------------------

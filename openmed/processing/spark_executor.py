@@ -105,14 +105,9 @@ class SparkShardExecutor:
     def ensure_available(self) -> None:
         """Resolve the Spark session now, raising if it is unavailable.
 
-        Call this **before** :func:`~openmed.processing.run_shard_plan` to keep
-        an unusable backend from costing a manifest attempt. ``run_shard_plan``
-        marks every shard ``RUNNING`` and increments ``attempts`` before it
-        calls the executor at all, so by the time :meth:`execute` runs the
-        bookkeeping is already durable. Resolving eagerly inside :meth:`execute`
-        therefore does *not* protect the manifest -- it only guarantees the
-        failure surfaces at a fixed point with no job submitted. This method is
-        the part that protects the manifest, and only when called first.
+        :func:`~openmed.processing.run_shard_plan` calls this automatically
+        before marking any shard ``RUNNING``. It remains public for operators
+        that want to probe a session before constructing a run.
         """
 
         self._resolve_session()
@@ -137,10 +132,9 @@ class SparkShardExecutor:
         # Eager, before the job is submitted, matching the local executor.
         reject_driver_only_state(pending)
         # Also eager: ``_execute`` is a generator, so resolving inside it would
-        # defer the failure to the first pull. This does not save the manifest
-        # -- ``run_shard_plan`` has already burned an attempt per shard by now
-        # -- it only makes the failure land at a fixed point with no job
-        # submitted. Call ``ensure_available`` first to protect the manifest.
+        # defer the failure to the first pull. ``run_shard_plan`` preflights
+        # through ``ensure_available``; direct protocol callers still get a
+        # fixed failure point here.
         session = self._resolve_session()
         return self._execute(pending, session)
 

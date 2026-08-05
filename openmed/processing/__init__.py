@@ -60,6 +60,13 @@ from .legacy_encoding import (
     iscii_to_unicode,
     unicode_to_iscii,
 )
+from .lists import (
+    ListItemSpan,
+    ListMarkerStyle,
+    list_boundary_f1,
+    parse_lists,
+    validate_list_items,
+)
 from .object_storage import (
     ObjectProgressCallback,
     ObjectStorageBatchResult,
@@ -120,7 +127,12 @@ from .run_report import (
     build_run_report,
     is_publishable_token,
 )
-from .sentences import SentenceSpan, segment_chinese_text, segment_text
+from .sentences import (
+    SentenceSpan,
+    segment_chinese_text,
+    segment_clinical_text,
+    segment_text,
+)
 from .shard_executor import (
     DRIVER_ONLY_TYPES,
     DriverOnlyStateError,
@@ -140,9 +152,11 @@ from .shard_executor import (
 from .spark_executor import SparkShardExecutor
 from .text import (
     INDIC_SCRIPTS,
+    BoilerplateSuppressionResult,
     IndicNormalization,
     IndicNormalizer,
     TextProcessor,
+    apply_boilerplate_suppression,
     normalize_indic_text,
     postprocess_text,
     preprocess_text,
@@ -198,21 +212,30 @@ from .zh_pinyin import (
     to_pinyin,
 )
 from .zh_segmentation import (
+    SEGMENTATION_BOUNDARY_F1_FLOOR,
+    SEGMENTATION_CONFORMANCE_CHECKS,
     ChineseSegmentationConfig,
     ChineseSegmenter,
     HanLPSegmenter,
     JiebaSegmenter,
     PkusegSegmenter,
+    SegmentationAlignmentError,
+    SegmentationConformanceCase,
+    SegmentationConformanceIssue,
+    SegmentationConformanceReport,
     UserDictionaryEntry,
     create_chinese_segmenter,
     create_chinese_segmenter_from_config,
     load_user_dictionary,
+    run_segmenter_conformance,
     segmentation_boundary_f1,
     validate_segmentation,
 )
 
 __all__ = [
     "TextProcessor",
+    "BoilerplateSuppressionResult",
+    "apply_boilerplate_suppression",
     "INDIC_SCRIPTS",
     "IndicNormalization",
     "IndicNormalizer",
@@ -246,9 +269,16 @@ __all__ = [
     "PkusegSegmenter",
     "HanLPSegmenter",
     "UserDictionaryEntry",
+    "SEGMENTATION_BOUNDARY_F1_FLOOR",
+    "SEGMENTATION_CONFORMANCE_CHECKS",
+    "SegmentationAlignmentError",
+    "SegmentationConformanceCase",
+    "SegmentationConformanceIssue",
+    "SegmentationConformanceReport",
     "create_chinese_segmenter",
     "create_chinese_segmenter_from_config",
     "load_user_dictionary",
+    "run_segmenter_conformance",
     "segmentation_boundary_f1",
     "validate_segmentation",
     "validate_user_dictionary_entry",
@@ -372,8 +402,14 @@ __all__ = [
     "deidentify_stream",
     "replay",
     "sentences",
+    "ListItemSpan",
+    "ListMarkerStyle",
+    "list_boundary_f1",
+    "parse_lists",
+    "validate_list_items",
     "SentenceSpan",
     "segment_chinese_text",
+    "segment_clinical_text",
     "segment_text",
     "LOSSY_CASES",
     "TransliterationResult",

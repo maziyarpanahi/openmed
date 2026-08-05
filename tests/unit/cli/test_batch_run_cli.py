@@ -409,6 +409,15 @@ def test_max_attempts_makes_a_run_reachably_exhausted(
     assert code == 1
     assert payload["data"]["run_state"] == "exhausted"
     assert payload["data"]["resume"]["is_exhausted"] is True
+    attempts = [row["attempts"] for row in payload["data"]["shards"]]
+
+    # A later unattended retry remains terminal. The planner's exhausted set
+    # must not be independently selected again by the executor.
+    code, out = _run(resume, capsys)
+    repeated = json.loads(out)
+    assert code == 1
+    assert repeated["data"]["run_state"] == "exhausted"
+    assert [row["attempts"] for row in repeated["data"]["shards"]] == attempts
 
 
 def test_duplicate_file_stems_are_diagnosable(tmp_path: Path, capsys) -> None:

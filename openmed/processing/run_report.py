@@ -40,6 +40,7 @@ unchanged.
 from __future__ import annotations
 
 import json
+import math
 import re
 import statistics
 from collections.abc import Mapping, Sequence
@@ -168,7 +169,12 @@ def _walk(value: Any, *, where: str, path: str) -> None:
             _walk(item, where=where, path=f"{path}[{index}]")
         return
 
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, (bool, int)):
+        return
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise RunReportPrivacyError(f"{where}: non-finite number at {path}")
         return
 
     if isinstance(value, str):
@@ -499,16 +505,38 @@ def build_run_report(
     re-queued forever, and it is counted here like any other completed shard.
     """
 
+    if not isinstance(generated_at, (int, float)) or isinstance(generated_at, bool):
+        raise RunReportError("generated_at must be a finite non-negative number")
+    if not math.isfinite(generated_at) or generated_at < 0:
+        raise RunReportError("generated_at must be a finite non-negative number")
+    if resume is not None and (
+        resume.run_id != manifest.run_id
+        or resume.plan_fingerprint != manifest.plan_fingerprint
+    ):
+        raise RunReportError("resume plan does not describe this run manifest")
+
     records = manifest.shards
     counts = {status.value: 0 for status in ShardStatus}
     for record in records:
         counts[record.status.value] += 1
 
+    completed_ids = tuple(
+        record.shard_id for record in records if record.status is ShardStatus.COMPLETED
+    )
+    outputs_complete = validation is None or (
+        validation.all_valid
+        and tuple(sorted(validation.valid)) == tuple(sorted(completed_ids))
+    )
+
     if resume is not None and resume.is_exhausted:
         run_state = RUN_STATE_EXHAUSTED
     elif resume is not None:
-        run_state = RUN_STATE_COMPLETE if resume.is_complete else RUN_STATE_IN_PROGRESS
-    elif counts[ShardStatus.COMPLETED.value] == len(records):
+        run_state = (
+            RUN_STATE_COMPLETE
+            if resume.is_complete and outputs_complete
+            else RUN_STATE_IN_PROGRESS
+        )
+    elif counts[ShardStatus.COMPLETED.value] == len(records) and outputs_complete:
         run_state = RUN_STATE_COMPLETE
     else:
         run_state = RUN_STATE_IN_PROGRESS

@@ -68,10 +68,8 @@ def test_spark_executor_raises_an_actionable_error_without_pyspark(monkeypatch):
 def test_missing_backend_raises_from_execute_not_from_the_generator(monkeypatch):
     """The failure lands at a fixed point, with nothing submitted.
 
-    This does **not** protect the manifest: ``run_shard_plan`` has already
-    burned an attempt per shard before it calls ``execute``. See
-    ``test_missing_backend_still_costs_a_manifest_attempt`` for that, and
-    ``ensure_available`` for the part that does prevent it.
+    Direct protocol use still fails eagerly; ``run_shard_plan`` additionally
+    calls ``ensure_available`` before it changes manifest state.
     """
 
     import openmed.processing.ray_executor as adapter
@@ -332,7 +330,7 @@ def test_shard_task_is_picklable_for_the_process_and_remote_paths(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# What eager resolution does and does not protect
+# Eager backend resolution
 # ---------------------------------------------------------------------------
 
 
@@ -347,14 +345,10 @@ def _plan_and_manifest(count=9, shards=3):
 
 
 @pytest.mark.parametrize("backend", ["ray", "spark"])
-def test_missing_backend_still_costs_a_manifest_attempt(tmp_path, monkeypatch, backend):
-    """The honest bound on eager resolution.
-
-    ``run_shard_plan`` marks every shard RUNNING and increments ``attempts``
-    before it calls ``execute`` at all, so resolving the backend eagerly inside
-    ``execute`` cannot prevent the attempt being burned. Pinning the real
-    behaviour keeps the docstrings from drifting back to the stronger claim.
-    """
+def test_run_shard_plan_preflights_before_burning_attempts(
+    tmp_path, monkeypatch, backend
+):
+    """A missing backend cannot leave the durable manifest in a running state."""
 
     from openmed.processing import InMemoryRunManifestStore, run_shard_plan
     from tests.unit.processing.test_distributed_executor_conformance import (
@@ -397,8 +391,8 @@ def test_missing_backend_still_costs_a_manifest_attempt(tmp_path, monkeypatch, b
         )
 
     saved = store.load()
-    assert [saved.shard(i).attempts for i in (0, 1, 2)] == [1, 1, 1]
-    assert all(saved.shard(i).status == ShardStatus.RUNNING for i in (0, 1, 2))
+    assert [saved.shard(i).attempts for i in (0, 1, 2)] == [0, 0, 0]
+    assert all(saved.shard(i).status == ShardStatus.PENDING for i in (0, 1, 2))
 
 
 @pytest.mark.parametrize("backend", ["ray", "spark"])

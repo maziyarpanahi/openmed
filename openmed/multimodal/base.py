@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
+from openmed.core.capabilities import is_backend_available as _is_backend_available
+
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 
 # Module name -> distribution name for the dependencies in the [multimodal] extra.
@@ -39,6 +41,15 @@ def _missing_multimodal_dependencies() -> list[str]:
         for module, distribution in _MULTIMODAL_DEPENDENCIES
         if importlib.util.find_spec(module) is None
     ]
+
+
+def is_multimodal_available() -> bool:
+    """Return True when the ``multimodal`` extra is fully importable.
+
+    Uses :func:`importlib.util.find_spec` under the hood so probing never
+    imports the heavy ingestion dependencies.
+    """
+    return _is_backend_available("multimodal")
 
 
 def ensure_multimodal_available() -> None:

@@ -290,7 +290,6 @@ pip install "openmed[ray]"
 from openmed.processing import RayShardExecutor
 
 executor = RayShardExecutor(num_cpus=1, max_in_flight=32)
-executor.ensure_available()          # see "Failing before the manifest" below
 result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
 ```
 
@@ -308,7 +307,6 @@ pip install "openmed[spark]"
 from openmed.processing import SparkShardExecutor
 
 executor = SparkShardExecutor(session=spark)
-executor.ensure_available()
 result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
 ```
 
@@ -316,13 +314,23 @@ The plan is parallelized with one slice per shard by default. A session is
 never created implicitly: pass `session=`, or leave it unset to reuse the
 active session.
 
+### Cluster storage contract
+
+Workers publish shard files directly, so every Ray or Spark worker and the
+driver must see `root` as the same absolute, run-scoped directory. A per-node
+local path is valid only for a single-host cluster; on multiple hosts it would
+scatter outputs across machines and the driver could not validate them. Use a
+shared filesystem only when it provides reliable same-directory atomic replace
+and durability semantics for your deployment. OpenMed does not assume those
+guarantees for NFS, SMB, or FUSE-backed object-storage mounts.
+
 ### Failing before the manifest
 
-`run_shard_plan` marks every shard `RUNNING` and increments its attempt counter
-*before* it calls the executor. A backend that turns out to be missing or
-unreachable at that point has already cost each shard an attempt. Calling
-`ensure_available()` first — it imports the backend, and for Ray also starts or
-attaches to the runtime — fails before any of that bookkeeping happens.
+`run_shard_plan` calls the adapter's `ensure_available()` hook before marking a
+shard `RUNNING` or incrementing its attempt counter. A missing dependency,
+unavailable Spark session, or Ray initialization failure therefore leaves the
+manifest unchanged. Operators may still call `ensure_available()` directly as
+an earlier cluster health check.
 
 ### Retries and duplicate execution
 

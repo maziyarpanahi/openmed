@@ -479,6 +479,18 @@ class ShardTask:
     #: non-deterministic handler cannot destroy output that is still good.
     expected_digest: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        """Bind every task to its shard's canonical run-relative output path."""
+
+        expected_path = shard_output_filename(self.shard.shard_id)
+        if self.relative_path != expected_path:
+            raise ShardExecutionError(
+                "relative_path must be the canonical path for the task shard"
+            )
+        if not callable(self.handler):
+            raise ShardExecutionError("shard handler must be callable")
+        object.__setattr__(self, "root", Path(self.root))
+
     @property
     def output_path(self) -> Path:
         """Absolute path the worker publishes this shard's output to."""
@@ -736,14 +748,18 @@ def run_shard_plan(
     store: Optional[RunManifestStore] = None,
     executor: Optional[ShardExecutor] = None,
     force: bool = False,
+    shard_ids: Optional[Sequence[int]] = None,
     hook: Optional[AtomicWriteHook] = None,
 ) -> ShardRunResult:
     """Execute the outstanding shards of ``plan`` and reduce them to a result.
 
     Only shards that still need work are dispatched, as decided by the manifest
-    and the shard outputs already on disk; ``force`` re-runs every shard. The
-    driver owns the manifest: it increments ``attempts`` at dispatch, marks the
-    shard ``RUNNING``, and records the outcome once the worker reports back.
+    and the shard outputs already on disk; ``force`` re-runs every shard.
+    ``shard_ids`` can further restrict that eligible set, which lets a resume
+    planner enforce an attempt budget without the executor independently
+    reselecting exhausted shards. The driver owns the manifest: it increments
+    ``attempts`` at dispatch, marks the shard ``RUNNING``, and records the
+    outcome once the worker reports back.
     Retry policy, straggler detection, and speculative execution are deliberately
     not implemented here -- a shard that fails is simply eligible again on the
     next run.
@@ -767,19 +783,39 @@ def run_shard_plan(
         raise ShardExecutionError(
             "hook applies to the default executor; configure it on a custom one"
         )
+    active_executor = (
+        executor if executor is not None else LocalShardExecutor(hook=hook)
+    )
 
     resolved_root = Path(root)
     resolved_root.mkdir(parents=True, exist_ok=True)
 
     planned_shards = {shard.shard_id: shard for shard in plan.shards}
     if force:
-        target_ids: tuple[int, ...] = tuple(sorted(planned_shards))
+        eligible_ids: tuple[int, ...] = tuple(sorted(planned_shards))
     else:
-        target_ids = tuple(shards_to_execute(manifest, root=resolved_root))
+        eligible_ids = tuple(shards_to_execute(manifest, root=resolved_root))
 
-    unknown_ids = [
-        shard_id for shard_id in target_ids if shard_id not in planned_shards
-    ]
+    requested_ids: set[int] | None = None
+    if shard_ids is not None:
+        requested_ids = set()
+        for shard_id in shard_ids:
+            if (
+                isinstance(shard_id, bool)
+                or not isinstance(shard_id, int)
+                or shard_id < 0
+            ):
+                raise ShardExecutionError(
+                    "shard_ids must contain non-negative integers"
+                )
+            requested_ids.add(shard_id)
+    target_ids = tuple(
+        shard_id
+        for shard_id in eligible_ids
+        if requested_ids is None or shard_id in requested_ids
+    )
+
+    unknown_ids = sorted((requested_ids or set()) - set(planned_shards))
     if unknown_ids:
         raise ShardExecutionError(
             f"Run manifest references shard ids absent from the plan: {unknown_ids}"
@@ -810,6 +846,10 @@ def run_shard_plan(
     # Validate before any bookkeeping. A rejected batch must not leave shards
     # marked RUNNING with a burned attempt when nothing was ever dispatched.
     reject_driver_only_state(tasks)
+    if tasks:
+        ensure_available = getattr(active_executor, "ensure_available", None)
+        if callable(ensure_available):
+            ensure_available()
 
     for task in tasks:
         record = manifest.shard(task.shard.shard_id)
@@ -825,10 +865,6 @@ def run_shard_plan(
         )
         if store is not None:
             store.save(manifest)
-
-    active_executor = (
-        executor if executor is not None else LocalShardExecutor(hook=hook)
-    )
 
     executions: list[ShardExecution] = []
     mismatched: list[int] = []

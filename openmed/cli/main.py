@@ -57,6 +57,7 @@ from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
+from .registry import add_registry_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -352,6 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
+    add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
     add_airgap_command(subparsers)
@@ -2815,7 +2817,7 @@ def _validated_report_path(path: Path | None) -> Path | None:
         return None
     if path.is_dir():
         raise CliError(
-            f"--report must name a file, not a directory: {path}",
+            "--report must name a file, not a directory.",
             code="invalid_report_path",
             exit_code=EXIT_USAGE,
         )
@@ -2827,7 +2829,7 @@ def _batch_run_documents(args: argparse.Namespace) -> list[dict[str, str]]:
 
     if not args.input_dir.is_dir():
         raise CliError(
-            f"Not a directory: {args.input_dir}",
+            "--input-dir must name a directory.",
             code="not_a_directory",
             exit_code=EXIT_USAGE,
         )
@@ -2952,7 +2954,7 @@ def _load_batch_run_manifest(run_dir: Path):
         )
     if manifest is None:
         raise CliError(
-            f"No run manifest under {run_dir}.",
+            "No run manifest exists in --run-dir.",
             code="run_not_found",
             exit_code=EXIT_ERROR,
         )
@@ -3064,6 +3066,7 @@ def _handle_batch_run_resume(args: argparse.Namespace) -> int:
             root=args.run_dir,
             store=store,
             executor=LocalShardExecutor(max_workers=args.workers),
+            shard_ids=recovery.shard_ids,
         )
         final = resume_plan(
             result.manifest,
