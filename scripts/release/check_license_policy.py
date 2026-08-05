@@ -98,6 +98,7 @@ REVIEWED_LICENSES = {
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
     "langchain-core": "MIT",
+    "langgraph": "MIT",
     "llama-index-core": "MIT",
     "markdown-it-py": "MIT",
     "mcp": "MIT",

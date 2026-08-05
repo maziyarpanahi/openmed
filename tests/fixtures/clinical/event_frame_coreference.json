@@ -1,0 +1,52 @@
+{
+  "cases": [
+    {
+      "id": "synthetic-treatment-representative",
+      "family": "treatment",
+      "text": "Synthetic drug alpha was started at 5 mg. Synthetic drug alpha was increased to 10 mg.",
+      "head_role": "drug",
+      "attribute_role": "new_dose",
+      "target_trigger": "increased",
+      "canonical_label": "MEDICATION",
+      "entity_type": "medication",
+      "head_surface": "Synthetic drug alpha",
+      "head_occurrences": [0, 1],
+      "event_mentions": [
+        {"id": "treatment-head-1", "label": "drug", "surface": "Synthetic drug alpha", "occurrence": 0},
+        {"id": "treatment-dose-1", "label": "new_dose", "surface": "5 mg", "occurrence": 0},
+        {"id": "treatment-head-2", "label": "drug", "surface": "Synthetic drug alpha", "occurrence": 1},
+        {"id": "treatment-dose-2", "label": "new_dose", "surface": "10 mg", "occurrence": 0}
+      ]
+    },
+    {
+      "id": "synthetic-test-representative",
+      "family": "test",
+      "text": "Synthetic assay beta was stable at 2 units. Synthetic assay beta was rising to 4 units.",
+      "head_role": "analyte",
+      "attribute_role": "magnitude",
+      "target_trigger": "rising",
+      "canonical_label": "LAB_TEST",
+      "entity_type": "lab_test",
+      "head_surface": "Synthetic assay beta",
+      "head_occurrences": [0, 1],
+      "event_mentions": [
+        {"id": "test-head-1", "label": "analyte", "surface": "Synthetic assay beta", "occurrence": 0},
+        {"id": "test-value-1", "label": "magnitude", "surface": "2 units", "occurrence": 0},
+        {"id": "test-head-2", "label": "analyte", "surface": "Synthetic assay beta", "occurrence": 1},
+        {"id": "test-value-2", "label": "magnitude", "surface": "4 units", "occurrence": 0}
+      ]
+    },
+    {
+      "id": "synthetic-problem-consolidation",
+      "family": "problem",
+      "text": "Synthetic finding gamma was documented. Synthetic finding gamma was severe.",
+      "head_role": "problem",
+      "attribute_role": "severity",
+      "canonical_label": "PROBLEM",
+      "entity_type": "condition",
+      "head_surface": "Synthetic finding gamma",
+      "head_occurrences": [0, 1],
+      "attribute_surface": "severe"
+    }
+  ]
+}

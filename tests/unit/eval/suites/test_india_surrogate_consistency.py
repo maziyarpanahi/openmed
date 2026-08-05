@@ -479,3 +479,14 @@ def test_metadata_is_offline_and_raw_text_free() -> None:
     serialized = json.dumps(metadata, ensure_ascii=False)
     for surface in _alias_surfaces() | _direct_identifier_surfaces():
         assert surface not in serialized
+
+
+def test_metadata_hashes_operator_controlled_fixture_paths() -> None:
+    metadata = india_surrogate_consistency_metadata(
+        fixture_path="/home/alice/private-synthetic-india.jsonl"
+    )
+
+    assert metadata["fixture_path_hash"].startswith("sha256:")
+    serialized = json.dumps(metadata, ensure_ascii=False)
+    assert "alice" not in serialized
+    assert "private-synthetic-india.jsonl" not in serialized

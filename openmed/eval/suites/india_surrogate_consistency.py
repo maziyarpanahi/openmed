@@ -67,6 +67,7 @@ and no DUA-restricted content. The gate is deterministic and fully offline.
 
 from __future__ import annotations
 
+import hashlib
 import random
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -402,9 +403,16 @@ def india_surrogate_consistency_metadata(
 
     from openmed.eval.datasets.clinical_phi import INDIA_CLINICAL_PHI_CORPUS_ID
 
+    fixture_path_hash = None
+    if fixture_path is not None:
+        normalized_path = Path(fixture_path).expanduser().as_posix()
+        fixture_path_hash = (
+            "sha256:" + hashlib.sha256(normalized_path.encode("utf-8")).hexdigest()
+        )
+
     return {
         "corpus_id": INDIA_CLINICAL_PHI_CORPUS_ID,
-        "fixture_path": str(fixture_path) if fixture_path is not None else None,
+        "fixture_path_hash": fixture_path_hash,
         "gated_mode": mode,
         "linked_identifier_types": list(LINKED_IDENTIFIER_TYPES),
         "recorded_not_gated_modes": [TRANSLITERATION_AWARE_NAME_MATCHING],
