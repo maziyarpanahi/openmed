@@ -104,6 +104,7 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .rtf import extract_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -177,6 +178,7 @@ __all__ = [
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
     "extract_epub",
+    "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
