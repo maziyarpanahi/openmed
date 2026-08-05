@@ -90,6 +90,13 @@ from openmed.eval.suites.code_mixed_routing import (
     load_code_mixed_routing_fixtures,
     run_code_mixed_routing,
 )
+from openmed.eval.suites.composite_normalization import (
+    COMPOSITE_NORMALIZATION,
+    build_composite_normalization_gold,
+    composite_normalization_metadata,
+    evaluate_composite_normalization,
+    run_composite_normalization,
+)
 from openmed.eval.suites.cross_lingual_grounding import (
     CROSS_LINGUAL_GROUNDING,
     CROSS_LINGUAL_LANGUAGES,
@@ -194,6 +201,18 @@ from openmed.eval.suites.shield import (
     load_shield_fixtures,
     run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
+)
+from openmed.eval.suites.temporal_tlinks import (
+    TEMPORAL_TLINK_FIXTURE_PATH,
+    TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION,
+    TemporalFixtureCandidate,
+    TemporalFixtureSpan,
+    TemporalTLinkEvaluationResult,
+    TemporalTLinkFixture,
+    assert_temporal_tlink_gate,
+    decode_temporal_tlink_fixture,
+    evaluate_temporal_tlink_fixtures,
+    load_temporal_tlink_fixtures,
 )
 
 GOLDEN = "golden"
@@ -438,6 +457,12 @@ __all__ = [
     "DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS",
     "RelationFixture",
     "RelationTrap",
+    "TEMPORAL_TLINK_FIXTURE_PATH",
+    "TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION",
+    "TemporalFixtureCandidate",
+    "TemporalFixtureSpan",
+    "TemporalTLinkEvaluationResult",
+    "TemporalTLinkFixture",
     "ComparatorAdapter",
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
@@ -493,6 +518,10 @@ __all__ = [
     "relation_suite_metadata",
     "relation_trap_summary",
     "score_relation_fixtures",
+    "assert_temporal_tlink_gate",
+    "decode_temporal_tlink_fixture",
+    "evaluate_temporal_tlink_fixtures",
+    "load_temporal_tlink_fixtures",
     "build_radiology_entity_relation_report",
     "radiology_entity_relation_suite_metadata",
     "run_synthetic_radiology_entity_relation_eval",

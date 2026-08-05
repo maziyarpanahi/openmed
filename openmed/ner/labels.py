@@ -38,6 +38,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
     "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
     "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
+    "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
 }
 _DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
     "immunization": (
