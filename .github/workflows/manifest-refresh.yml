@@ -29,6 +29,9 @@ jobs:
       - name: Validate regenerated manifest
         run: python -m scripts.manifest.validate_manifest
 
+      - name: Regenerate registry-derived surfaces
+        run: python scripts/release/registry_ctl.py regenerate
+
       - name: Open manifest refresh PR
         uses: peter-evans/create-pull-request@v8
         with:

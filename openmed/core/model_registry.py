@@ -12,7 +12,13 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from . import labels as label_taxonomy
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
+from .registry_service import (
+    load_registry_state,
+    pointer_targets,
+    semantic_version,
+)
 
 
 @dataclass
@@ -47,6 +53,7 @@ class ModelInfo:
     reproducibility_hash: Optional[str] = None
     released: Optional[str] = None
     provenance: Dict[str, Any] = field(default_factory=dict)
+    semantic_version: str = "0.0.0"
 
     @property
     def size_mb(self) -> Optional[int]:
@@ -362,8 +369,149 @@ _PII_ENTITY_TYPES = [
 ]
 
 _CATEGORY_ENTITY_TYPES = {
-    "Disease": ["DISEASE", "CONDITION", "PATHOLOGY"],
-    "Pharmaceutical": ["CHEM", "DRUG", "MEDICATION"],
+    "Disease": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Pharmaceutical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Oncology": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.CANCER,
+        label_taxonomy.CELL,
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Anatomy": [
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Genomics": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.GENE,
+        label_taxonomy.PROTEIN,
+        label_taxonomy.DNA,
+        label_taxonomy.RNA,
+        label_taxonomy.CELL,
+    ],
+    "Chemical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Species": [
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+    ],
+    "Microbiology": [
+        label_taxonomy.MICROORGANISM,
+        label_taxonomy.ANTIBIOTIC,
+        label_taxonomy.SUSCEPTIBILITY,
+    ],
+    "Protein": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.PROTEIN,
+    ],
+    "Pathology": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Hematology": [
+        label_taxonomy.CANCER,
+        label_taxonomy.DISEASE,
+        label_taxonomy.CELL,
+    ],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+        label_taxonomy.ANATOMY,
+    ],
+    "Ophthalmology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Radiology models; no such model is
+    # registered today (see issue #1971).
+    "Radiology": [
+        label_taxonomy.FINDING,
+        label_taxonomy.IMAGING_MODALITY,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.LATERALITY,
+        label_taxonomy.MEASUREMENT,
+    ],
+    # Forward metadata for future Anesthesia models; no such model is
+    # registered today (see issue #952).
+    "Anesthesia": [
+        label_taxonomy.ANESTHESIA_TYPE,
+        label_taxonomy.ANESTHETIC_AGENT,
+        label_taxonomy.AIRWAY_MANAGEMENT,
+        label_taxonomy.ASA_CLASS,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.CONDITION,
+    ],
+    # Nutrition- registered (see issue #951)
+    "Nutrition": [
+        label_taxonomy.DIET_TYPE,
+        label_taxonomy.NUTRITION_TARGET,
+        label_taxonomy.FEEDING_ROUTE,
+        label_taxonomy.NUTRITIONAL_STATUS,
+    ],
+    # Forward metadata for future Endocrinology models; no such model is
+    # registered today (see issue #895).
+    "Endocrinology": [
+        label_taxonomy.GLYCEMIC_MEASURE,
+        label_taxonomy.THYROID_MEASURE,
+        label_taxonomy.HORMONE_LEVEL,
+        label_taxonomy.INSULIN_REGIMEN,
+        label_taxonomy.CONDITION,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Gastroenterology models; no such model is
+    # registered today (see issue #894).
+    "Gastroenterology": [
+        label_taxonomy.ENDOSCOPIC_FINDING,
+        label_taxonomy.GI_SYMPTOM,
+        label_taxonomy.GI_SCORE,
+        label_taxonomy.POLYP_DESCRIPTOR,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Procedures models; no such model is
+    # registered today (see issue #313).
+    "Procedures": [
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Privacy": _PII_ENTITY_TYPES,
+}
+
+# Model-card labels remain visible in registry discovery results while the
+# category defaults above provide the canonical taxonomy spine.
+_FAMILY_NATIVE_ENTITY_TYPES = {
     "Oncology": [
         "SIMPLE_CHEMICAL",
         "CHEM",
@@ -384,94 +532,15 @@ _CATEGORY_ENTITY_TYPES = {
         "TISSUE",
         "PATHOLOGICAL_FORMATION",
     ],
-    "Anatomy": ["ORGAN", "TISSUE", "ANATOMY"],
-    "Genomics": [
-        "GENE_OR_GENE_PRODUCT",
-        "GENE",
-        "PROTEIN",
-        "DNA",
-        "RNA",
-        "CELL_LINE",
-        "CELL_TYPE",
-    ],
-    "Chemical": ["SIMPLE_CHEMICAL", "CHEM", "DRUG", "MEDICATION"],
-    "Species": ["ORGANISM", "SPECIES"],
-    "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
+    "Genomics": ["CELL_LINE", "CELL_TYPE"],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
     "Protein": [
-        "GENE_OR_GENE_PRODUCT",
-        "PROTEIN",
         "PROTEIN_COMPLEX",
         "PROTEIN_ENUM",
         "PROTEIN_FAMILIY_OR_GROUP",
         "PROTEIN_VARIANT",
     ],
-    "Pathology": ["DISEASE", "CONDITION", "PATHOLOGY"],
-    "Hematology": ["CANCER", "DISEASE", "CL"],
-    # Forward metadata for future Cardiology models; no Cardiology model is
-    # registered today (see issue #317).
-    "Cardiology": [
-        "CARDIAC_FINDING",
-        "ECG_FINDING",
-        "EJECTION_FRACTION",
-        "CARDIAC_PROCEDURE",
-        "CARDIAC_DEVICE",
-        "ANATOMY",
-    ],
-    # Forward metadata for future Dermatology/Ophthalmology models; no such
-    # model is registered today (see issue #318).
-    "Dermatology": ["SKIN_LESION", "MORPHOLOGY", "DISTRIBUTION", "ANATOMY"],
-    "Ophthalmology": [
-        "EYE_FINDING",
-        "VISUAL_ACUITY",
-        "INTRAOCULAR_PRESSURE",
-        "ANATOMY",
-    ],
-    # Forward metadata for future Anesthesia models; no such model is
-    # registered today (see issue #952).
-    "Anesthesia": [
-        "ANESTHESIA_TYPE",
-        "ANESTHETIC_AGENT",
-        "AIRWAY_MANAGEMENT",
-        "ASA_CLASS",
-        "MONITORING_MODALITY",
-        "INTRAOPERATIVE_EVENT",
-    ],
-    # Nutrition- registered (see issue #951)
-    "Nutrition": [
-        "DIET_TYPE",
-        "NUTRITION_TARGET",
-        "FEEDING_ROUTE",
-        "NUTRITIONAL_STATUS",
-    ],
-    # Forward metadata for future Endocrinology models; no such model is
-    # registered today (see issue #895).
-    "Endocrinology": [
-        "GLYCEMIC_MEASURE",
-        "THYROID_MEASURE",
-        "HORMONE_LEVEL",
-        "INSULIN_REGIMEN",
-        "CONDITION",
-        "BODY_SITE",
-    ],
-    # Forward metadata for future Gastroenterology models; no such model is
-    # registered today (see issue #894).
-    "Gastroenterology": [
-        "ENDOSCOPIC_FINDING",
-        "GI_SYMPTOM",
-        "GI_SCORE",
-        "POLYP_DESCRIPTOR",
-        "BODY_SITE",
-    ],
-    # Forward metadata for future Procedures models; no such model is
-    # registered today (see issue #313).
-    "Procedures": [
-        "PROCEDURE",
-        "SURGERY",
-        "DIAGNOSTIC_PROCEDURE",
-        "DEVICE",
-        "APPROACH",
-    ],
-    "Privacy": _PII_ENTITY_TYPES,
+    "Hematology": ["CL"],
 }
 
 _LEGACY_MODEL_ALIASES = {
@@ -636,10 +705,19 @@ def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
     if isinstance(labels, list) and labels:
         if category != "Privacy" and str(row.get("family") or "").upper() == "NER":
             return _dedupe_entity_types(
-                chain(labels, _CATEGORY_ENTITY_TYPES.get(category, ()))
+                chain(
+                    labels,
+                    _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+                    _CATEGORY_ENTITY_TYPES.get(category, ()),
+                )
             )
         return _dedupe_entity_types(labels)
-    return list(_CATEGORY_ENTITY_TYPES.get(category, []))
+    return _dedupe_entity_types(
+        chain(
+            _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+            _CATEGORY_ENTITY_TYPES.get(category, ()),
+        )
+    )
 
 
 def _recommended_confidence(category: str) -> float:
@@ -704,6 +782,7 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         provenance=dict(row.get("provenance") or {})
         if isinstance(row.get("provenance"), dict)
         else {},
+        semantic_version=semantic_version(str(row["repo_id"])),
     )
 
 
@@ -961,7 +1040,24 @@ def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     return aliases
 
 
-def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
+def _add_pointer_aliases(
+    registry: Dict[str, ModelInfo],
+    registry_state: Mapping[str, Any],
+) -> None:
+    by_repo_id = {model.model_id: model for model in registry.values()}
+    for family, pointers in pointer_targets(registry_state).items():
+        for pointer_name, repo_id in pointers.items():
+            if repo_id is None:
+                continue
+            model = by_repo_id.get(repo_id)
+            if model is not None:
+                registry[_slug(f"{family}_{pointer_name}")] = model
+
+
+def _build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
     registry: Dict[str, ModelInfo] = {}
     for row in rows:
         repo_id = row.get("repo_id")
@@ -974,11 +1070,23 @@ def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
 
         for alias in _compatibility_aliases(row):
             registry.setdefault(alias, info)
+    if registry_state is not None:
+        _add_pointer_aliases(registry, registry_state)
     return registry
 
 
+def build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
+    """Build model metadata and named-pointer aliases from committed inputs."""
+
+    return _build_registry(rows, registry_state)
+
+
 _MANIFEST_ROWS = load_manifest_rows()
-OPENMED_MODELS = _build_registry(_MANIFEST_ROWS)
+_REGISTRY_STATE = load_registry_state(missing_ok=True)
+OPENMED_MODELS = build_registry(_MANIFEST_ROWS, _REGISTRY_STATE)
 
 
 def _models_by_language_from_manifest(languages: Iterable[str]) -> Dict[str, ModelInfo]:
@@ -1153,6 +1261,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
         "Ophthalmology",
         "Contains ophthalmology terms",
+    ),
+    "\\bct\\b|\\bmri\\b|x[- ]?ray|ultrasound|radiograph|contrast|impression|nodule|opacity": (
+        "Radiology",
+        "Contains radiology/imaging terms",
     ),
     "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
         "Anesthesia",

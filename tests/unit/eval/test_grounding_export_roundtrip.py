@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from openmed.clinical.grounding import Candidate
 from openmed.eval.golden.loader import list_fixture_paths
@@ -12,6 +15,7 @@ from openmed.eval.medmentions_linking import (
     MEDMENTIONS_TOP1_TARGET,
     evaluate_medmentions_st21pv,
 )
+from openmed.eval.suites import grounding_export as grounding_export_suite
 from openmed.eval.suites.grounding_export import (
     run_grounding_export_suite,
     validate_fhir_r4_shape,
@@ -41,6 +45,38 @@ def test_structural_fhir_check_rejects_deliberately_broken_resource() -> None:
     }
 
     assert validate_fhir_r4_shape(broken) == ("Observation.code is missing",)
+
+
+def test_official_validator_allows_only_openmed_extension_domain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        commands.append(command)
+        output = Path(command[command.index("-output") + 1])
+        output.write_text(
+            json.dumps({"resourceType": "OperationOutcome", "issue": []}),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+
+    result = grounding_export_suite.validate_with_hl7_validator(
+        {"resourceType": "Bundle", "type": "collection", "entry": []},
+        validator_jar=validator_jar,
+    )
+
+    assert result.errors == 0
+    assert commands
+    extension_index = commands[0].index("-extension")
+    assert commands[0][extension_index + 1] == (
+        "https://openmed.ai/fhir/StructureDefinition/"
+    )
 
 
 def test_medmentions_top1_report_enforces_floor_without_bundling_corpus(

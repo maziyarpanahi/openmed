@@ -94,6 +94,19 @@ The corpus contains no real PHI, production data, restricted corpus material,
 or DUA data. It is an assist-only, non-decisional evaluation fixture, not
 clinical ground truth, and must not be used to make patient-care decisions.
 
+## Joint Entity and Relation Fixtures
+
+`fixtures/joint_entity_relation.jsonl` contains synthetic encoder states,
+token-to-character offsets, entity spans, typed relations, and explicit
+boundary, over-generation, and distractor traps for the backend-neutral joint
+span-pair head. Every row sets `metadata.synthetic=true` and
+`metadata.contains_real_phi=false`.
+
+The specialized fixture is intentionally excluded from the generic
+de-identification loader. Its states are small deterministic vectors used to
+measure combined entity-and-relation micro-F1, endpoint-confidence suppression,
+span-graph schema integrity, and false-positive relations on negative pairs.
+
 ## Relation Gold Fixtures
 
 `fixtures/relation_gold.jsonl` contains synthetic-only relation extraction

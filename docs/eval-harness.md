@@ -254,15 +254,36 @@ network call. JSON and Markdown artifacts contain only aggregate metrics,
 language codes, and donor-to-target deltas; synthetic fixture text and spans
 are excluded.
 
+For release qualification, pass measured `AdapterParameterAccounting` keyed by
+the configured output adapter ID. The report then adds a `full_model` target
+mode on the same synthetic gold and jointly requires the adapted target to
+retain at least 90% of the full per-language model F1 while training no more
+than 10% of its parameters. Both thresholds are explicit arguments, and the
+aggregate JSON and Markdown evidence records the thresholds, observed ratios,
+and pass/fail results.
+
 ```python
 from openmed.eval import cross_lingual_family_transfer_report
+from openmed.training.adapters import AdapterParameterAccounting
 
 report = cross_lingual_family_transfer_report(
     "local-family-transfer-model",
     runner=local_family_transfer_runner,
+    parameter_accounting_by_adapter={
+        "family-transfer/indic-hi-to-te": AdapterParameterAccounting(
+            shared_backbone_parameter_count=110_000_000,
+            adapter_trainable_parameter_count=524_288,
+            task_head_trainable_parameter_count=65_536,
+            full_language_model_trainable_parameter_count=110_065_536,
+        )
+    },
 )
 print(report.to_markdown())
 ```
+
+The counts above are synthetic examples; release evidence must use measured
+counts from the locally provisioned backbone, adapter, task head, and full-model
+reference.
 
 ## Grounding accuracy gate
 

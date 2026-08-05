@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from openmed.core.labels import normalize_label
 
-from ..context import ClinicalAssertion, RerankContext
+from ..context import ClinicalAssertion, ClinicalContextResult, RerankContext
 from .decompose import decompose_and_relink
 from .embeddings import AliasEncoder
 from .matcher import LexicalMatcher
+from .postcoordination import PostCoordinationStage
 from .ranker import CandidateRankingStage, RankingConfig
 from .restricted import UserKeyVocabularyLoader
 from .types import Candidate, GroundedSpan
@@ -65,6 +67,7 @@ def ground(
     source_language: str | None = None,
     normalize_composites: bool = False,
     composite_atomic_terms: Iterable[str] | None = None,
+    postcoordination: PostCoordinationStage | None = None,
 ) -> list[GroundedSpan]:
     """Ground clinical spans to one selected concept per requested system.
 
@@ -95,6 +98,9 @@ def ground(
             post-coordination abstentions.
         composite_atomic_terms: Additional atomic multi-word concepts that the
             opt-in normalizer must never split.
+        postcoordination: Optional user-key-gated SNOMED expression stage. It is
+            consulted only after lookup abstains or scores below the stage's
+            pre-coordination threshold.
 
     Returns:
         Grounded spans, including abstentions. The default returns one per input;
@@ -109,6 +115,10 @@ def ground(
     ordered_systems = _normalize_systems(systems)
     if not isinstance(normalize_composites, bool):
         raise TypeError("normalize_composites must be a boolean")
+    if postcoordination is not None and not isinstance(
+        postcoordination, PostCoordinationStage
+    ):
+        raise TypeError("postcoordination must be a PostCoordinationStage")
     if isinstance(composite_atomic_terms, (str, bytes)):
         raise TypeError("composite_atomic_terms must be an iterable of terms")
     atomic_terms = (
@@ -180,22 +190,26 @@ def ground(
                 source_language=span.source_language,
                 metadata=span.metadata,
             )
-            results.extend(decomposition.spans)
+            emitted = decomposition.spans
+            if postcoordination is not None:
+                emitted = tuple(postcoordination.apply(item) for item in emitted)
+            results.extend(emitted)
             continue
 
         candidates = link_surface(span.text)
-        results.append(
-            GroundedSpan(
-                text=span.text,
-                start=span.start,
-                end=span.end,
-                candidates=tuple(candidates),
-                canonical_label=span.canonical_label,
-                assertion=span.assertion,
-                source_language=span.source_language,
-                metadata=span.metadata,
-            )
+        grounded_span = GroundedSpan(
+            text=span.text,
+            start=span.start,
+            end=span.end,
+            candidates=tuple(candidates),
+            canonical_label=span.canonical_label,
+            assertion=span.assertion,
+            source_language=span.source_language,
+            metadata=span.metadata,
         )
+        if postcoordination is not None:
+            grounded_span = postcoordination.apply(grounded_span)
+        results.append(grounded_span)
     return results
 
 
@@ -260,6 +274,8 @@ def _coerce_span(
     default_language: str | None,
 ) -> GroundedSpan:
     if isinstance(raw_span, GroundedSpan):
+        if isinstance(raw_span.assertion, ClinicalContextResult):
+            return replace(raw_span, assertion=raw_span.assertion.to_assertion())
         return raw_span
     if isinstance(raw_span, str):
         return GroundedSpan(
@@ -279,9 +295,18 @@ def _coerce_span(
     if end is None:
         end = start + len(text)
     label = _first_value(raw_span, _LABEL_FIELDS)
-    assertion = _coerce_assertion(_first_value(raw_span, ("assertion", "context")))
     language = _first_value(raw_span, ("source_language", "language", "lang"))
     metadata = _first_value(raw_span, ("metadata", "meta")) or {}
+    assertion_value = _first_value(raw_span, ("assertion", "context"))
+    if assertion_value is None and isinstance(metadata, Mapping):
+        assertion_value = metadata.get("clinical_context")
+    if assertion_value is None and isinstance(raw_span, Mapping):
+        if any(
+            key in raw_span
+            for key in ("temporality", "certainty", "uncertainty", "negation")
+        ):
+            assertion_value = raw_span
+    assertion = _coerce_assertion(assertion_value)
     canonical_label = None
     if label is not None and str(label).strip():
         canonical_label = normalize_label(
@@ -304,9 +329,11 @@ def _coerce_assertion(value: Any) -> ClinicalAssertion | None:
         return None
     if isinstance(value, ClinicalAssertion):
         return value
+    if isinstance(value, ClinicalContextResult):
+        return value.to_assertion()
     if isinstance(value, Mapping):
         temporality = value.get("temporality")
-        certainty = value.get("certainty")
+        certainty = value.get("certainty", value.get("uncertainty"))
         if temporality is None or certainty is None:
             return None
         return ClinicalAssertion(
