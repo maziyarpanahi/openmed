@@ -153,6 +153,7 @@ REVIEWED_LICENSES = {
     "scrubadub": "Apache-2.0",
     "scispacy": "Apache-2.0",
     "spacy": "MIT",
+    "sqlalchemy": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
     "torch": "BSD-3-Clause",
