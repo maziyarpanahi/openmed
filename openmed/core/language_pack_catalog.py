@@ -345,6 +345,9 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
+    # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
+    # approximation entry and no conceptual backend mapping.
+    "ne": "ne_NP",
     "pa": "pa_IN",
 }
 
@@ -428,6 +431,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "mr",
+    "ne",
     "or",
     "as",
     "bn",

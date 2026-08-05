@@ -1628,9 +1628,16 @@ def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
 
 def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language."""
-    from .pii_i18n import DEFAULT_PII_MODELS, OPTIONAL_PII_MODEL
+    from .pii_i18n import (
+        DEFAULT_PII_MODELS,
+        OPTIONAL_PII_MODEL,
+        USER_SUPPLIED_PII_MODEL,
+    )
 
     model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id == USER_SUPPLIED_PII_MODEL:
+        # Publicly registered but ships no weights; the caller must supply one.
+        return None
     if model_id != OPTIONAL_PII_MODEL:
         return model_id
     from ..ner.families.indic import configured_indic_ner_model
