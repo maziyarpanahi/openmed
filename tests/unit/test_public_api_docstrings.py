@@ -1,6 +1,6 @@
 """Docstring and export-inventory gates for OpenMed's public API surface.
 
-The stdlib-only static checker resolves every name in the source
+The stdlib-only static checker resolves every eager or lazy name in the source
 ``openmed.__all__`` without importing the package. Runtime parity tests import
 ``openmed`` separately to prove that the live export order matches the static
 inventory. Exported functions/classes require meaningful docstrings; data
@@ -47,11 +47,11 @@ MIN_COVERAGE = 100.0
 EXPECTED_DATA_EXPORTS = {
     "__version__": ("openmed", str),
     "PII_PATTERNS": ("openmed.core.pii_entity_merger", list),
-    "SUPPORTED_LANGUAGES": ("openmed.core.pii_i18n", set),
+    "SUPPORTED_LANGUAGES": ("openmed.core.language_pack_catalog", set),
     "DEFAULT_PII_MODELS": ("openmed.core.pii_i18n", dict),
     "LANGUAGE_PII_PATTERNS": ("openmed.core.pii_i18n", dict),
     "CANONICAL_LABELS": ("openmed.core.labels", frozenset),
-    "LANG_TO_LOCALE": ("openmed.core.anonymizer.locales", dict),
+    "LANG_TO_LOCALE": ("openmed.core.language_pack_catalog", dict),
     "ENCRYPTION_SCHEME": ("openmed.core.surrogate_vault", str),
 }
 

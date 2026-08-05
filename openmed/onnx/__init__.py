@@ -5,7 +5,39 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
+from openmed.core.capabilities import is_backend_available as _is_backend_available
+from openmed.core.capabilities import require_backend as _require_backend
+
+
+def is_onnx_available() -> bool:
+    """Return True when the ``onnx`` extra is importable, without importing it."""
+
+    return _is_backend_available("onnx")
+
+
+def ensure_onnx_available() -> None:
+    """Raise an actionable error when the ``onnx`` extra is not installed."""
+
+    _require_backend("onnx", feature="ONNX export and inference")
+
+
+def is_openvino_available() -> bool:
+    """Return True when the ``openvino`` extra is importable, without importing."""
+
+    return _is_backend_available("openvino")
+
+
+def ensure_openvino_available() -> None:
+    """Raise an actionable error when the ``openvino`` extra is not installed."""
+
+    _require_backend("openvino", feature="OpenVINO export and inference")
+
+
 __all__ = [
+    "ensure_onnx_available",
+    "ensure_openvino_available",
+    "is_onnx_available",
+    "is_openvino_available",
     "ANDROID_ONNX_FORMAT",
     "ANDROID_ONNX_OPSET",
     "ANDROID_PROFILE_NAME",
@@ -13,8 +45,11 @@ __all__ = [
     "OPENVINO_INT8_FORMAT",
     "OPENVINO_PROFILE_NAME",
     "AndroidProfileValidation",
+    "BufferReleaseError",
     "ExportArtifact",
     "INT8_ONNX_FILENAME",
+    "LayerGroupSpec",
+    "LocalWeightsRequired",
     "ONNX_INT8_FORMAT",
     "OnnxEntity",
     "OnnxModel",
@@ -31,9 +66,18 @@ __all__ = [
     "certify_openvino_reference",
     "apply_int8_recall_certification",
     "OnnxOptimizationConfig",
+    "PeakRamProbe",
+    "PeakRamReport",
     "ORT_ANDROID_FORMAT",
     "OrtMobileConversionResult",
     "ShapeBucketConfig",
+    "RamBudget",
+    "RamBudgetExceeded",
+    "RamProbeUnavailable",
+    "ShardFormatError",
+    "StreamedLayerGroup",
+    "StreamingLoadReport",
+    "StreamingWeightLoader",
     "convert",
     "convert_android_onnx_to_ort",
     "export_android_fp16",
@@ -65,6 +109,26 @@ def __getattr__(name: str) -> Any:
     """Load conversion helpers lazily so ``python -m`` stays warning-free."""
 
     if name in __all__:
+        if name in {
+            "PeakRamProbe",
+            "PeakRamReport",
+            "RamBudget",
+            "RamBudgetExceeded",
+            "RamProbeUnavailable",
+        }:
+            module = import_module("openmed.onnx.ram_budget")
+            return getattr(module, name)
+        if name in {
+            "BufferReleaseError",
+            "LayerGroupSpec",
+            "LocalWeightsRequired",
+            "ShardFormatError",
+            "StreamedLayerGroup",
+            "StreamingLoadReport",
+            "StreamingWeightLoader",
+        }:
+            module = import_module("openmed.onnx.streaming_loader")
+            return getattr(module, name)
         if name in {"OnnxEntity", "OnnxModel", "load_onnx_model"}:
             module = import_module("openmed.onnx.inference")
             return getattr(module, name)

@@ -20,7 +20,7 @@ from openmed.eval.datasets import (
     load_multilingual_ner_fixtures,
 )
 from openmed.eval.datasets.cantemist import load_cantemist
-from openmed.eval.datasets.cmeee import load_cmeee
+from openmed.eval.datasets.cmeee import CMEEE_PATH_ENV, load_cmeee
 from openmed.eval.datasets.deft import load_deft
 from openmed.eval.datasets.pharmaconer import load_pharmaconer
 from openmed.eval.harness import (
@@ -114,7 +114,10 @@ def test_generic_loader_rejects_mismatched_duplicate_mention(tmp_path: Path) -> 
         load_pharmaconer(path)
 
 
-def test_loaders_require_explicit_external_paths() -> None:
+def test_loaders_require_explicit_external_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CMEEE_PATH_ENV, raising=False)
     for loader in _loaders().values():
         with pytest.raises(MultilingualNerCorpusRequired, match="explicit local"):
             loader()

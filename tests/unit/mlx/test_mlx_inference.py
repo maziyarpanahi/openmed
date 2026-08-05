@@ -395,6 +395,61 @@ class TestMLXModelResolve:
         )
         mock_convert.assert_not_called()
 
+    def test_direct_legacy_preconverted_repo_uses_converter_markers(self, tmp_path):
+        """Pre-manifest converter output remains loadable by direct Hub ID."""
+        from openmed.mlx import inference
+
+        (tmp_path / "config.json").write_text(
+            json.dumps(
+                {
+                    "_mlx_model_type": "deberta-v2",
+                    "_mlx_weights_format": "safetensors",
+                    "_name_or_path": "OpenMed/source-model",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (tmp_path / "weights.safetensors").write_bytes(b"weights")
+
+        with (
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                return_value=str(tmp_path),
+            ),
+            patch("openmed.mlx.convert.convert") as mock_convert,
+        ):
+            path, tok_name = inference._resolve_mlx_model(
+                "OpenMed/legacy-model-mlx",
+            )
+
+        assert path == str(tmp_path)
+        assert tok_name == "OpenMed/source-model"
+        mock_convert.assert_not_called()
+
+    def test_direct_manifestless_repo_requires_converter_markers(self, tmp_path):
+        """Unmarked ``-mlx`` repositories must not bypass manifest validation."""
+        from openmed.mlx import inference
+
+        (tmp_path / "config.json").write_text(
+            '{"_mlx_weights_format": "safetensors"}',
+            encoding="utf-8",
+        )
+        (tmp_path / "weights.safetensors").write_bytes(b"weights")
+
+        with (
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                return_value=str(tmp_path),
+            ),
+            patch("openmed.mlx.convert.convert") as mock_convert,
+            pytest.raises(ValueError, match="legacy MLX converter markers"),
+        ):
+            inference._resolve_mlx_model("OpenMed/unmarked-model-mlx")
+
+        mock_convert.assert_not_called()
+
     def test_direct_preconverted_repo_requires_weights(self, tmp_path):
         """A malformed direct MLX artifact must fail instead of converting it."""
         from openmed.mlx import inference
