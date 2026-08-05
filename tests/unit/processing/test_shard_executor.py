@@ -1378,3 +1378,24 @@ def test_shard_task_resolves_its_output_path(tmp_path: Path) -> None:
     )
 
     assert task.output_path == tmp_path / "shard-00000.jsonl"
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ["../outside.jsonl", r"..\outside.jsonl", "/tmp/outside.jsonl"],
+)
+def test_shard_task_refuses_noncanonical_output_paths(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    plan = _plan(count=2, shard_count=1)
+
+    with pytest.raises(ShardExecutionError, match="canonical path"):
+        ShardTask(
+            shard=plan.shards[0],
+            root=tmp_path,
+            relative_path=relative_path,
+            handler=deterministic_shard_handler,
+        )
+
+    assert not list(tmp_path.iterdir())

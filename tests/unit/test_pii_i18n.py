@@ -59,6 +59,7 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USCC_PII_PATTERNS,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     AfricanMobilePlan,
     build_african_mobile_pattern,
     get_patterns_for_language,
@@ -166,6 +167,7 @@ class TestConstants:
             "uk",
             "cs",
             "el",
+            "vi",
         }
 
     def test_national_id_only_languages(self):
@@ -185,13 +187,14 @@ class TestConstants:
             "hr",
             "bg",
             "fi",
-            "vi",
             "rw",
             "ur",
         }
 
     def test_language_names_keys(self):
-        assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        assert set(LANGUAGE_NAMES.keys()) == (
+            SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+        )
 
     def test_language_model_prefix(self):
         assert LANGUAGE_MODEL_PREFIX["am"] == "Amharic-"
@@ -224,10 +227,13 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["uk"] == "Ukrainian-"
         assert LANGUAGE_MODEL_PREFIX["cs"] == "Czech-"
         assert LANGUAGE_MODEL_PREFIX["el"] == "Greek-"
+        assert LANGUAGE_MODEL_PREFIX["vi"] == "Vietnamese-"
 
     def test_default_pii_models_all_languages(self):
-        assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES | (
-            INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}
+        assert set(DEFAULT_PII_MODELS.keys()) == (
+            SUPPORTED_LANGUAGES
+            | (INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"})
+            | USER_SUPPLIED_MODEL_LANGUAGES
         )
 
     def test_default_pii_models_naming(self):
@@ -265,6 +271,7 @@ class TestConstants:
         assert DEFAULT_PII_MODELS["uk"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["cs"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["el"] == "OpenMed/privacy-filter-multilingual"
+        assert "Vietnamese" in DEFAULT_PII_MODELS["vi"]
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -2972,6 +2979,27 @@ class TestVietnameseLanguagePack:
     def test_invalid_cccd_lengths_or_groupings(self, value):
         assert not validate_vietnamese_cccd(value)
 
+    def test_cccd_check_is_structural_by_design(self):
+        """CCCD has no public checksum, so length-only checking is deliberate.
+
+        Article 12 of Vietnam's 2023 Law on Identification guarantees only a
+        12-digit natural-number sequence. The province, century, gender and
+        birth-year encoding rules expired with Circular 59/2021/TT-BCA on
+        1 July 2024, so leading-digit ranges must not be enforced: doing so
+        would reject validly issued post-2024 numbers.
+        """
+        # Leading triples outside the retired 001-096 province range stay valid.
+        assert validate_vietnamese_cccd("999203123456")
+        assert validate_vietnamese_cccd("000000000001")
+        # Retired century/gender digit values must not gate acceptance either.
+        assert all(
+            validate_vietnamese_cccd(f"001{digit}03123456") for digit in "0123456789"
+        )
+        # The contract that is enforced is exactly twelve digits.
+        assert not validate_vietnamese_cccd("01234567890")
+        assert not validate_vietnamese_cccd("0123456789012")
+        assert not validate_vietnamese_cccd("00120312345A")
+
     @pytest.mark.parametrize("value", ("123456789", "123 456 789", "123-456-789"))
     def test_valid_cmnd_structures(self, value):
         assert validate_vietnamese_cmnd(value)
@@ -2981,8 +3009,12 @@ class TestVietnameseLanguagePack:
         assert not validate_vietnamese_cmnd(value)
 
     def test_locale_registry_and_cccd_surrogate_round_trip(self):
-        assert "vi" in NATIONAL_ID_ONLY_LANGUAGES
-        assert "vi" not in DEFAULT_PII_MODELS
+        assert "vi" in SUPPORTED_LANGUAGES
+        assert "vi" not in NATIONAL_ID_ONLY_LANGUAGES
+        assert (
+            DEFAULT_PII_MODELS["vi"]
+            == "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1"
+        )
         assert LANG_TO_LOCALE["vi"] == "vi_VN"
         assert LANGUAGE_PII_PATTERNS["vi"]
 
@@ -3049,6 +3081,107 @@ class TestVietnameseLanguagePack:
             for entity in negative_entities
         )
 
+    def test_replace_surrogates_render_vietnamese_dates_day_first(self):
+        """`method="replace"` must honour the `dmy` locale contract for `vi`.
+
+        `_gen_date`/`_gen_date_of_birth` consult
+        ``openmed.core.anonymizer.registry._DAY_FIRST_LOCALES``, which is a
+        separate set from the format-preserving one in ``anonymizer.engine``.
+        Both must list ``vi_VN`` or the replace path silently emits
+        ``MM/DD/YYYY`` for a language documented as day-first.
+        """
+        from openmed.core.anonymizer.registry import (
+            _DAY_FIRST_LOCALES,
+            _gen_date,
+            _gen_date_of_birth,
+        )
+
+        assert LANG_TO_LOCALE["vi"] in _DAY_FIRST_LOCALES
+
+        for generator in (_gen_date, _gen_date_of_birth):
+            faker = Faker("vi_VN")
+            faker.seed_instance(7)
+            vietnamese = generator(faker, "17/08/1985", locale="vi_VN")
+
+            reference = Faker("fr_FR")
+            reference.seed_instance(7)
+            french = generator(reference, "17/08/1985", locale="fr_FR")
+
+            day, month, year = vietnamese.split("/")
+            assert int(day) <= 31 and int(month) <= 12
+            # Same seed and shape as an established day-first pack.
+            assert (day, month) == tuple(french.split("/")[:2])
+            assert year == french.split("/")[2]
+
+    def test_golden_fixture_expected_output_round_trips_from_the_pipeline(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 2
+
+        label_map = {
+            "DATE": "date",
+            "PHONE": "phone_number",
+            "ID_NUM": "national_id",
+            "STREET_ADDRESS": "street_address",
+            "ZIPCODE": "postcode",
+        }
+
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-08-01T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang="vi",
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="mask",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang="vi",
+                consistent=False,
+                seed=None,
+                locale=None,
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["gold_spans"])
+            expected_spans = {
+                (label_map[span["label"]], span["start"], span["end"], span["text"])
+                for span in row["gold_spans"]
+            }
+            actual_spans = {
+                (entity.label, entity.start, entity.end, entity.text)
+                for entity in swept_result.entities
+            }
+            assert actual_spans == expected_spans
+
+            canonicalized_text = result.deidentified_text
+            for canonical_label, internal_label in label_map.items():
+                canonicalized_text = canonicalized_text.replace(
+                    f"[{internal_label}]",
+                    f"[{canonical_label}]",
+                )
+            assert canonicalized_text == row["metadata"]["expected_output"]["text"]
+
     def test_golden_fixture_offsets_and_offline_deidentification(self):
         from openmed.core.pii import (
             _apply_safety_sweep_to_result,
@@ -3058,12 +3191,27 @@ class TestVietnameseLanguagePack:
         from openmed.processing.outputs import PredictionResult
 
         fixture_path = Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
-        row = json.loads(fixture_path.read_text(encoding="utf-8").strip())
-        fixture = GoldenFixture.from_mapping(row)
-        assert fixture.language == "vi"
+        fixtures = [
+            GoldenFixture.from_mapping(json.loads(line))
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(fixtures) == 2
+        assert {fixture.language for fixture in fixtures} == {"vi"}
 
-        for span in fixture.gold_spans:
-            assert fixture.text[span.start : span.end] == span.text
+        for fixture in fixtures:
+            for span in fixture.gold_spans:
+                assert fixture.text[span.start : span.end] == span.text
+
+            self._assert_offline_deidentification_masks_every_span(fixture)
+
+    @staticmethod
+    def _assert_offline_deidentification_masks_every_span(fixture):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
 
         empty_result = PredictionResult(
             text=fixture.text,

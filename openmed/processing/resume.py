@@ -343,9 +343,7 @@ def resume_plan(
     """
 
     if run_id is not None and run_id != manifest.run_id:
-        raise RunIdMismatchError(
-            f"manifest belongs to run {manifest.run_id!r}, not {run_id!r}"
-        )
+        raise RunIdMismatchError("manifest belongs to a different run")
     if expected_plan is not None and expected_plan.fingerprint != (
         manifest.plan_fingerprint
     ):
@@ -353,8 +351,12 @@ def resume_plan(
             "manifest plan fingerprint does not match the expected shard plan; "
             "the corpus or shard count changed since the run started"
         )
-    if max_attempts is not None and max_attempts < 1:
-        raise ResumeError("max_attempts must be greater than zero")
+    if max_attempts is not None and (
+        isinstance(max_attempts, bool)
+        or not isinstance(max_attempts, int)
+        or max_attempts < 1
+    ):
+        raise ResumeError("max_attempts must be a positive integer")
 
     validation = validate_shard_outputs(manifest, root=root)
     missing = set(validation.missing)
@@ -460,10 +462,19 @@ def classify_stragglers(
     :func:`time.time`.
     """
 
-    if multiplier <= 0:
-        raise ResumeError("multiplier must be greater than zero")
-    if min_completed < 1:
-        raise ResumeError("min_completed must be greater than zero")
+    if (
+        isinstance(multiplier, bool)
+        or not isinstance(multiplier, (int, float))
+        or not math.isfinite(multiplier)
+        or multiplier <= 0
+    ):
+        raise ResumeError("multiplier must be a finite positive number")
+    if (
+        isinstance(min_completed, bool)
+        or not isinstance(min_completed, int)
+        or min_completed < 1
+    ):
+        raise ResumeError("min_completed must be a positive integer")
     if min_elapsed_seconds is not None and (
         not math.isfinite(min_elapsed_seconds) or min_elapsed_seconds < 0
     ):
@@ -543,9 +554,7 @@ def prepare_resume(
     """
 
     if plan.run_id != manifest.run_id:
-        raise RunIdMismatchError(
-            f"resume plan belongs to run {plan.run_id!r}, not {manifest.run_id!r}"
-        )
+        raise RunIdMismatchError("resume plan belongs to a different run")
     if plan.plan_fingerprint != manifest.plan_fingerprint:
         raise PlanFingerprintMismatchError(
             "resume plan was computed for a different shard plan than this "
@@ -604,6 +613,10 @@ def reconcile_shard_attempts(
     if first.fingerprint != second.fingerprint:
         raise ShardIdentityMismatchError(
             f"shard {first.shard_id} attempts disagree on the shard fingerprint"
+        )
+    if first.document_count != second.document_count:
+        raise ShardIdentityMismatchError(
+            f"shard {first.shard_id} attempts disagree on the document count"
         )
 
     first_done = first.status is ShardStatus.COMPLETED
@@ -703,6 +716,7 @@ def _attempt_rank(record: ShardRecord) -> tuple[Any, ...]:
 
     return (
         record.attempts,
+        record.status.value,
         record.worker_id is None,
         record.worker_id or "",
         record.started_at is None,
@@ -710,8 +724,12 @@ def _attempt_rank(record: ShardRecord) -> tuple[Any, ...]:
         record.completed_at is None,
         record.completed_at if record.completed_at is not None else 0.0,
         record.output_path or "",
+        record.output_digest is None,
+        record.output_digest or "",
         record.output_bytes is None,
         record.output_bytes if record.output_bytes is not None else 0,
+        record.error_type is None,
+        record.error_type or "",
     )
 
 

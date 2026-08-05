@@ -479,6 +479,18 @@ class ShardTask:
     #: non-deterministic handler cannot destroy output that is still good.
     expected_digest: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        """Bind every task to its shard's canonical run-relative output path."""
+
+        expected_path = shard_output_filename(self.shard.shard_id)
+        if self.relative_path != expected_path:
+            raise ShardExecutionError(
+                "relative_path must be the canonical path for the task shard"
+            )
+        if not callable(self.handler):
+            raise ShardExecutionError("shard handler must be callable")
+        object.__setattr__(self, "root", Path(self.root))
+
     @property
     def output_path(self) -> Path:
         """Absolute path the worker publishes this shard's output to."""
@@ -767,6 +779,9 @@ def run_shard_plan(
         raise ShardExecutionError(
             "hook applies to the default executor; configure it on a custom one"
         )
+    active_executor = (
+        executor if executor is not None else LocalShardExecutor(hook=hook)
+    )
 
     resolved_root = Path(root)
     resolved_root.mkdir(parents=True, exist_ok=True)
@@ -810,6 +825,10 @@ def run_shard_plan(
     # Validate before any bookkeeping. A rejected batch must not leave shards
     # marked RUNNING with a burned attempt when nothing was ever dispatched.
     reject_driver_only_state(tasks)
+    if tasks:
+        ensure_available = getattr(active_executor, "ensure_available", None)
+        if callable(ensure_available):
+            ensure_available()
 
     for task in tasks:
         record = manifest.shard(task.shard.shard_id)
@@ -825,10 +844,6 @@ def run_shard_plan(
         )
         if store is not None:
             store.save(manifest)
-
-    active_executor = (
-        executor if executor is not None else LocalShardExecutor(hook=hook)
-    )
 
     executions: list[ShardExecution] = []
     mismatched: list[int] = []

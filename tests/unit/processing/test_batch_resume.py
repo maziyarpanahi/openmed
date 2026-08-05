@@ -769,7 +769,7 @@ def test_median_baseline_resists_a_single_extreme_completed_shard() -> None:
 def _record(shard_id: int, **overrides) -> ShardRecord:
     payload = {
         "shard_id": shard_id,
-        "fingerprint": f"fingerprint-{shard_id}",
+        "fingerprint": hashlib.sha256(f"shard-{shard_id}".encode()).hexdigest(),
         "document_count": 4,
         "status": ShardStatus.COMPLETED,
         "attempts": 1,
@@ -824,7 +824,7 @@ def test_reconcile_prefers_a_completed_attempt_over_an_unfinished_one() -> None:
     done = _record(3)
     running = ShardRecord(
         shard_id=3,
-        fingerprint="fingerprint-3",
+        fingerprint=hashlib.sha256(b"shard-3").hexdigest(),
         document_count=4,
         status=ShardStatus.RUNNING,
         attempts=1,
@@ -846,7 +846,18 @@ def test_reconcile_rejects_digest_divergence_and_shard_mismatch() -> None:
     with pytest.raises(ShardIdentityMismatchError):
         reconcile_shard_attempts(first, _record(4))
     with pytest.raises(ShardIdentityMismatchError):
-        reconcile_shard_attempts(first, _record(3, fingerprint="other"))
+        reconcile_shard_attempts(first, _record(3, fingerprint="b" * 64))
+    with pytest.raises(ShardIdentityMismatchError, match="document count"):
+        reconcile_shard_attempts(first, _record(3, document_count=5))
+
+
+@pytest.mark.parametrize("multiplier", [float("nan"), float("inf"), float("-inf")])
+def test_straggler_multiplier_must_be_finite(multiplier: float) -> None:
+    with pytest.raises(ResumeError, match="finite positive"):
+        classify_stragglers(
+            build_run_manifest(_plan(), run_id=RUN_ID, created_at=0.0),
+            multiplier=multiplier,
+        )
 
 
 def test_resume_report_is_phi_free(tmp_path: Path) -> None:

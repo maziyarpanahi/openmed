@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -1172,6 +1172,164 @@ class TextProcessor:
             entities[key] = list(set(entities[key]))
 
         return entities
+
+
+@dataclass(frozen=True)
+class BoilerplateSuppressionResult:
+    """Clinical records retained after optional annotation-based suppression.
+
+    ``provenance`` contains counts and a fixed policy name only. It never
+    includes entity text, annotation source identifiers, or source surfaces.
+    """
+
+    records: tuple[object, ...]
+    provenance: Mapping[str, object]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provenance", dict(self.provenance))
+
+
+def apply_boilerplate_suppression(
+    records: Iterable[object],
+    annotations: Iterable[object] = (),
+    *,
+    suppress_boilerplate: bool = False,
+) -> BoilerplateSuppressionResult:
+    """Drop records fully contained by boilerplate/copy-forward annotations.
+
+    Suppression is opt-in and conservative. Records without valid offsets, or
+    records that only partially overlap an annotation, are retained. The
+    original records and annotations are never mutated.
+
+    Args:
+        records: Extracted entity mappings or objects with ``start``/``end``,
+            ``start_char``/``end_char``, or an ``offset``/``offsets`` pair.
+        annotations: Boilerplate or copy-forward span mappings/objects.
+        suppress_boilerplate: Whether to apply the drop policy. Defaults to
+            ``False`` so existing extraction behavior remains unchanged.
+
+    Returns:
+        Retained records and PHI-free aggregate suppression provenance.
+
+    Raises:
+        TypeError: If either input is a string/bytes value or suppression is
+            not a boolean.
+        ValueError: If a relevant annotation has malformed offsets.
+    """
+
+    if not isinstance(suppress_boilerplate, bool):
+        raise TypeError("suppress_boilerplate must be a boolean")
+    materialized_records = _materialize_suppression_items(records, label="records")
+    materialized_annotations = _materialize_suppression_items(
+        annotations, label="annotations"
+    )
+    flagged_spans = tuple(
+        span
+        for annotation in materialized_annotations
+        if (span := _suppression_annotation_span(annotation)) is not None
+    )
+
+    retained: list[object] = []
+    suppressed_count = 0
+    for record in materialized_records:
+        record_span = _record_span(record)
+        suppress = (
+            suppress_boilerplate
+            and record_span is not None
+            and any(
+                annotation_start <= record_span[0] and record_span[1] <= annotation_end
+                for annotation_start, annotation_end in flagged_spans
+            )
+        )
+        if suppress:
+            suppressed_count += 1
+        else:
+            retained.append(record)
+
+    provenance: dict[str, object] = {
+        "enabled": suppress_boilerplate,
+        "policy": "drop_fully_contained",
+        "input_entity_count": len(materialized_records),
+        "retained_entity_count": len(retained),
+        "suppressed_entity_count": suppressed_count,
+        "annotation_count": len(flagged_spans),
+    }
+    return BoilerplateSuppressionResult(
+        records=tuple(retained),
+        provenance=provenance,
+    )
+
+
+def _materialize_suppression_items(
+    values: Iterable[object],
+    *,
+    label: str,
+) -> tuple[object, ...]:
+    if isinstance(values, (str, bytes)):
+        raise TypeError(f"{label} must be an iterable of records")
+    try:
+        return tuple(values)
+    except TypeError:
+        raise TypeError(f"{label} must be an iterable of records") from None
+
+
+def _suppression_annotation_span(annotation: object) -> tuple[int, int] | None:
+    annotation_type = _suppression_field(annotation, "type")
+    if annotation_type not in {"boilerplate", "copy_forward"}:
+        return None
+    start = _suppression_field(annotation, "start")
+    end = _suppression_field(annotation, "end")
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or start < 0
+        or end <= start
+    ):
+        raise ValueError("suppression annotations require valid integer offsets")
+    return start, end
+
+
+def _record_span(record: object) -> tuple[int, int] | None:
+    for start_key, end_key in (
+        ("start", "end"),
+        ("start_char", "end_char"),
+        ("start_offset", "end_offset"),
+    ):
+        start = _suppression_field(record, start_key)
+        end = _suppression_field(record, end_key)
+        if start is not None or end is not None:
+            return _validated_record_span(start, end)
+
+    for pair_key in ("offset", "offsets"):
+        pair = _suppression_field(record, pair_key)
+        if pair is not None:
+            if not isinstance(pair, Sequence) or isinstance(pair, (str, bytes)):
+                return None
+            if len(pair) != 2:
+                return None
+            return _validated_record_span(pair[0], pair[1])
+    return None
+
+
+def _validated_record_span(start: object, end: object) -> tuple[int, int] | None:
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or start < 0
+        or end < start
+    ):
+        return None
+    return start, end
+
+
+def _suppression_field(source: object, field_name: str) -> object | None:
+    if isinstance(source, Mapping):
+        return source.get(field_name)
+    return getattr(source, field_name, None)
 
 
 def preprocess_text(

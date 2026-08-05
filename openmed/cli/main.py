@@ -57,6 +57,7 @@ from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
+from .registry import add_registry_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -351,6 +352,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
+    add_registry_command(subparsers)
     _add_release_command(subparsers)
     _add_config_command(subparsers)
     add_airgap_command(subparsers)

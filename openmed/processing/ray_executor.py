@@ -168,15 +168,9 @@ class RayShardExecutor:
     def ensure_available(self) -> None:
         """Import Ray and start or attach to a runtime, raising if either fails.
 
-        Call this **before** :func:`~openmed.processing.run_shard_plan` to keep
-        an unusable backend from costing a manifest attempt. ``run_shard_plan``
-        marks every shard ``RUNNING`` and increments ``attempts`` before it
-        calls the executor at all, so by the time :meth:`execute` runs the
-        bookkeeping is already durable. Resolving eagerly inside :meth:`execute`
-        therefore does *not* protect the manifest -- it only guarantees the
-        failure surfaces at a fixed point with no task submitted, rather than
-        part-way through iteration. This method is the part that protects the
-        manifest, and only when the caller invokes it first.
+        :func:`~openmed.processing.run_shard_plan` calls this automatically
+        before marking any shard ``RUNNING``. It remains public for operators
+        that want to probe a cluster before constructing a run.
         """
 
         self._prepare()
@@ -212,10 +206,8 @@ class RayShardExecutor:
         reject_driver_only_state(pending)
         # Also eager: ``_execute`` is a generator, so importing or initialising
         # inside it would defer the failure to the first pull, part-way through
-        # iteration. This does not save the manifest -- ``run_shard_plan`` has
-        # already burned an attempt per shard by now -- it only makes the
-        # failure land at a fixed point with nothing submitted. Callers who need
-        # the manifest protected must call ``ensure_available`` beforehand.
+        # iteration. ``run_shard_plan`` preflights through ``ensure_available``;
+        # direct protocol callers still get a fixed failure point here.
         ray = self._prepare()
         return self._execute(pending, ray)
 
