@@ -124,6 +124,10 @@ dask = [
   "dask[dataframe]>=2024.8",
 ]
 
+dagster = [
+  "dagster>=1.8,<2",
+]
+
 spacy = [
   "click>=8.0",
   "spacy>=3.8.9",
