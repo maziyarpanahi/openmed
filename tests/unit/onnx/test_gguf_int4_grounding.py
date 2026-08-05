@@ -1,0 +1,369 @@
+"""Tests for Q4_K_M GGUF grounding export and subprocess runtime."""
+
+from __future__ import annotations
+
+import importlib
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+
+
+def _export_module():
+    return importlib.import_module("openmed.onnx.gguf_int4_export")
+
+
+def _runtime_module():
+    return importlib.import_module("openmed.onnx.gguf_embed_runtime")
+
+
+class _MappingEmbedder:
+    def __init__(self, vectors: dict[str, list[float]]) -> None:
+        self.vectors = vectors
+
+    def encode(self, texts: list[str]) -> list[list[float]]:
+        return [self.vectors[text] for text in texts]
+
+
+class _FlippingEmbedder:
+    def __init__(
+        self, first: dict[str, list[float]], second: dict[str, list[float]]
+    ) -> None:
+        self._vectors = (first, second)
+        self._calls = 0
+
+    def encode(self, texts: list[str]) -> list[list[float]]:
+        vectors = self._vectors[min(self._calls, 1)]
+        self._calls += 1
+        return [vectors[text] for text in texts]
+
+
+@pytest.fixture
+def retrieval_fixture():
+    queries = ["synthetic query one", "synthetic query two"]
+    passages = [
+        "synthetic passage one",
+        "synthetic passage two",
+        "synthetic passage three",
+        "synthetic passage four",
+    ]
+    fp16_vectors = {
+        queries[0]: [1.0, 0.0],
+        queries[1]: [0.0, 1.0],
+        passages[0]: [1.0, 0.0],
+        passages[1]: [0.9, 0.1],
+        passages[2]: [0.0, 1.0],
+        passages[3]: [0.1, 0.9],
+    }
+    rejected_vectors = {
+        queries[0]: [1.0, 0.0],
+        queries[1]: [0.0, 1.0],
+        passages[0]: [0.0, 1.0],
+        passages[1]: [0.1, 0.9],
+        passages[2]: [1.0, 0.0],
+        passages[3]: [0.9, 0.1],
+    }
+    return queries, passages, fp16_vectors, rejected_vectors
+
+
+def _clock(*values: float):
+    samples = iter(values)
+    return lambda: next(samples)
+
+
+def test_subprocess_runtime_returns_vectors_without_in_process_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _runtime_module()
+    model = tmp_path / "model-q4_k_m.gguf"
+    model.write_bytes(b"GGUF")
+    executable = tmp_path / "llama-embedding"
+    executable.write_bytes(b"stub")
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='{"embedding": [1.0, 2.0, 3.0]}',
+            stderr="",
+        )
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    runtime = module.LlamaCppEmbeddingRuntime(model, executable)
+
+    vectors = runtime.encode(["synthetic query", "synthetic passage"])
+
+    assert vectors == [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+    assert len(calls) == 2
+    command, kwargs = calls[0]
+    assert command[0] == str(executable)
+    assert command[command.index("--model") + 1] == str(model)
+    assert "--embeddings" in command
+    assert command[command.index("--prompt") + 1] == "synthetic query"
+    assert kwargs["check"] is True
+    assert kwargs["capture_output"] is True
+    assert "shell" not in kwargs
+
+
+def test_subprocess_runtime_parses_llama_style_bracket_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _runtime_module()
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF")
+    executable = tmp_path / "llama-embedding"
+    executable.write_bytes(b"stub")
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="embedding: [-0.25, 0.5, 1e-1]\n",
+            stderr="",
+        ),
+    )
+
+    assert module.LlamaCppEmbeddingRuntime(model, executable).embed("synthetic") == [
+        -0.25,
+        0.5,
+        0.1,
+    ]
+
+
+def test_recall_certificate_passes_for_equivalent_rankings(retrieval_fixture) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, _ = retrieval_fixture
+
+    certification = module.certify_gguf_grounding(
+        _MappingEmbedder(fp16_vectors),
+        _MappingEmbedder(fp16_vectors),
+        queries=queries,
+        passages=passages,
+        top_k=2,
+        recall_delta_tolerance=0.0,
+        clock=_clock(1.0, 1.006, 2.0, 2.003),
+    )
+
+    assert certification.gate.passed is True
+    assert certification.gate.gate == "G4"
+    assert certification.gate.deterministic is True
+    assert certification.gate.mean_top_k_overlap == 1.0
+    assert certification.gate.recall_delta == 0.0
+    assert certification.fp16_latency.count == 6
+    assert certification.int4_latency.p50_ms == pytest.approx(0.5)
+
+
+def test_recall_certificate_rejects_rank_drift_and_nondeterminism(
+    retrieval_fixture,
+) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, rejected_vectors = retrieval_fixture
+
+    rejected = module.certify_gguf_grounding(
+        _MappingEmbedder(fp16_vectors),
+        _MappingEmbedder(rejected_vectors),
+        queries=queries,
+        passages=passages,
+        top_k=2,
+        recall_delta_tolerance=0.05,
+        clock=_clock(0.0, 0.0, 0.0, 0.0),
+    )
+    assert rejected.gate.passed is False
+    assert rejected.gate.recall_delta == 1.0
+
+    flipping = _FlippingEmbedder(fp16_vectors, rejected_vectors)
+    nondeterministic = module.certify_gguf_grounding(
+        _MappingEmbedder(fp16_vectors),
+        flipping,
+        queries=queries,
+        passages=passages,
+        top_k=2,
+        recall_delta_tolerance=1.0,
+        clock=_clock(0.0, 0.0, 0.0, 0.0),
+    )
+    assert nondeterministic.gate.passed is False
+    assert nondeterministic.gate.deterministic is False
+
+
+def test_export_quantizes_staged_om195_bundle_and_writes_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retrieval_fixture,
+) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, _ = retrieval_fixture
+    model = tmp_path / "synthetic-grounding-model"
+    model.mkdir()
+    (model / "config.json").write_text(
+        json.dumps(
+            {
+                "architectures": ["BertModel"],
+                "model_type": "bert",
+                "_commit_hash": "synthetic-revision",
+            }
+        ),
+        encoding="utf-8",
+    )
+    converter = tmp_path / "convert_hf_to_gguf.py"
+    converter.write_text("# synthetic converter\n", encoding="utf-8")
+    quantizer = tmp_path / "llama-quantize"
+    quantizer.write_bytes(b"synthetic quantizer")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        del kwargs
+        commands.append(command)
+        if "--outtype" in command:
+            output = Path(command[command.index("--outfile") + 1])
+            output.write_bytes(
+                b"GGUF-" + command[command.index("--outtype") + 1].encode()
+            )
+        else:
+            assert command[-1] == "Q4_K_M"
+            Path(command[2]).write_bytes(b"GGUF-Q4_K_M")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    output = tmp_path / "export"
+    result = module.export_gguf_int4(
+        model,
+        output,
+        converter_path=converter,
+        quantizer_path=quantizer,
+        source_model_id="local/synthetic-grounding-model",
+        fp16_embedder=_MappingEmbedder(fp16_vectors),
+        int4_embedder=_MappingEmbedder(fp16_vectors),
+        queries=queries,
+        passages=passages,
+        top_k=2,
+        recall_delta_tolerance=0.0,
+        clock=_clock(1.0, 1.006, 2.0, 2.003),
+    )
+
+    assert [command[-1] for command in commands] == ["f16", "q8_0", "Q4_K_M"]
+    assert result.q4_k_m_path.read_bytes() == b"GGUF-Q4_K_M"
+    assert result.recall_gate.passed is True
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["quantization"]["scheme"] == "Q4_K_M"
+    assert manifest["certification"]["gate"] == "G4"
+    assert any(
+        artifact["path"] == module.GGUF_INT4_FILENAME
+        for artifact in manifest["artifacts"]
+    )
+    report = json.loads(result.benchmark_report_path.read_text(encoding="utf-8"))
+    assert report["metadata"]["certified"] is True
+    assert report["metrics"]["resources"]["model_size_bytes"] > 0
+
+
+def test_export_rejects_failed_gate_before_publishing_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retrieval_fixture,
+) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, rejected_vectors = retrieval_fixture
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_text(
+        json.dumps({"architectures": ["BertModel"], "model_type": "bert"}),
+        encoding="utf-8",
+    )
+    converter = tmp_path / "converter.py"
+    converter.write_text("# synthetic\n", encoding="utf-8")
+    quantizer = tmp_path / "quantizer"
+    quantizer.write_bytes(b"synthetic")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        del kwargs
+        if "--outtype" in command:
+            Path(command[command.index("--outfile") + 1]).write_bytes(b"GGUF")
+        else:
+            Path(command[2]).write_bytes(b"Q4")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    output = tmp_path / "export"
+    with pytest.raises(module.GgufInt4Rejected, match="rejected"):
+        module.export_gguf_int4(
+            model,
+            output,
+            converter_path=converter,
+            quantizer_path=quantizer,
+            fp16_embedder=_MappingEmbedder(fp16_vectors),
+            int4_embedder=_MappingEmbedder(rejected_vectors),
+            queries=queries,
+            passages=passages,
+            top_k=2,
+            recall_delta_tolerance=0.05,
+            clock=_clock(0.0, 0.0, 0.0, 0.0),
+        )
+
+    assert not (output / module.GGUF_INT4_FILENAME).exists()
+    assert not (output / "openmed-gguf.json").exists()
+
+
+def test_loader_fails_closed_when_report_is_tampered(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retrieval_fixture,
+) -> None:
+    module = _export_module()
+    queries, passages, fp16_vectors, _ = retrieval_fixture
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_text(
+        json.dumps({"architectures": ["BertModel"], "model_type": "bert"}),
+        encoding="utf-8",
+    )
+    converter = tmp_path / "converter.py"
+    converter.write_text("# synthetic\n", encoding="utf-8")
+    quantizer = tmp_path / "quantizer"
+    quantizer.write_bytes(b"synthetic")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        del kwargs
+        if "--outtype" in command:
+            Path(command[command.index("--outfile") + 1]).write_bytes(b"GGUF")
+        else:
+            Path(command[2]).write_bytes(b"Q4")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    output = tmp_path / "export"
+    module.export_gguf_int4(
+        model,
+        output,
+        converter_path=converter,
+        quantizer_path=quantizer,
+        fp16_embedder=_MappingEmbedder(fp16_vectors),
+        int4_embedder=_MappingEmbedder(fp16_vectors),
+        queries=queries,
+        passages=passages,
+        top_k=2,
+        recall_delta_tolerance=0.0,
+        clock=_clock(0.0, 0.0, 0.0, 0.0),
+    )
+    report_path = output / module.GGUF_INT4_BENCHMARK_FILENAME
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["metrics"]["retrieval"]["passed"] = False
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    with pytest.raises(module.GgufInt4Rejected, match="consistent passing G4"):
+        module.load_gguf_grounding_embedder(
+            output,
+            command=["synthetic-llama-embedding"],
+        )
+
+
+def test_export_requires_recall_evidence_or_local_runtime(tmp_path: Path) -> None:
+    module = _export_module()
+
+    with pytest.raises(module.GgufInt4Rejected, match="requires fp16 and int4"):
+        module.export_gguf_int4(tmp_path / "model", tmp_path / "output")
