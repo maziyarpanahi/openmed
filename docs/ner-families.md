@@ -31,14 +31,14 @@ catalog describes extraction coverage only and is not clinical guidance.
 
 ## Hematology
 
-- **Entity types:** `CANCER`, `CL`, `DISEASE`
+- **Entity types:** `CANCER`, `CELL`, `CL`, `DISEASE`
 - **Available size categories:** `Tiny`, `Medium`, `Large`, `XLarge`
 - **Recommended confidence:** `0.65`
 - **Zero-shot domain:** [`hematology`](./clinical-domains.md#hematology)
 
 ## Chemical
 
-- **Entity types:** `CHEM`, `DRUG`, `MEDICATION`, `SIMPLE_CHEMICAL`
+- **Entity types:** `CHEM`, `CHEMICAL`, `DRUG`, `MEDICATION`, `SIMPLE_CHEMICAL`
 - **Available size categories:** `Tiny`, `Small`, `Medium`, `Large`, `XLarge`
 - **Recommended confidence:** `0.60`
 - **Zero-shot domain:** [`chemical`](./clinical-domains.md#chemical)
@@ -52,14 +52,14 @@ catalog describes extraction coverage only and is not clinical guidance.
 
 ## Genomics
 
-- **Entity types:** `CELL_LINE`, `CELL_TYPE`, `DNA`, `GENE`, `GENE_OR_GENE_PRODUCT`, `PROTEIN`, `RNA`
+- **Entity types:** `CELL`, `CELL_LINE`, `CELL_TYPE`, `DNA`, `GENE`, `GENE_OR_GENE_PRODUCT`, `PROTEIN`, `RNA`
 - **Available size categories:** `Tiny`, `Medium`, `Large`, `XLarge`
 - **Recommended confidence:** `0.65`
 - **Zero-shot domain:** [`genomics`](./clinical-domains.md#genomics)
 
 ## Oncology
 
-- **Entity types:** `AMINO_ACID`, `ANATOMICAL_SYSTEM`, `CANCER`, `CELL`, `CELLULAR_COMPONENT`, `CHEM`, `CONDITION`, `DEVELOPING_ANATOMICAL_STRUCTURE`, `DISEASE`, `GENE_OR_GENE_PRODUCT`, `IMMATERIAL_ANATOMICAL_ENTITY`, `MULTI_TISSUE_STRUCTURE`, `ORGAN`, `ORGANISM`, `ORGANISM_SUBDIVISION`, `ORGANISM_SUBSTANCE`, `PATHOLOGICAL_FORMATION`, `PATHOLOGY`, `PROTEIN`, `SIMPLE_CHEMICAL`, `SPECIES`, `TISSUE`
+- **Entity types:** `AMINO_ACID`, `ANATOMICAL_SYSTEM`, `ANATOMY`, `CANCER`, `CELL`, `CELLULAR_COMPONENT`, `CHEM`, `CHEMICAL`, `CONDITION`, `DEVELOPING_ANATOMICAL_STRUCTURE`, `DISEASE`, `GENE_OR_GENE_PRODUCT`, `IMMATERIAL_ANATOMICAL_ENTITY`, `MULTI_TISSUE_STRUCTURE`, `ORGAN`, `ORGANISM`, `ORGANISM_SUBDIVISION`, `ORGANISM_SUBSTANCE`, `PATHOLOGICAL_FORMATION`, `PATHOLOGY`, `PROTEIN`, `SIMPLE_CHEMICAL`, `SPECIES`, `TISSUE`
 - **Available size categories:** `Tiny`, `Small`, `Medium`, `Large`, `XLarge`
 - **Recommended confidence:** `0.65`
 - **Zero-shot domain:** [`oncology`](./clinical-domains.md#oncology)
@@ -80,7 +80,7 @@ catalog describes extraction coverage only and is not clinical guidance.
 
 ## Pharmaceutical
 
-- **Entity types:** `CHEM`, `DRUG`, `MEDICATION`
+- **Entity types:** `CHEM`, `CHEMICAL`, `DRUG`, `MEDICATION`
 - **Available size categories:** `Tiny`, `Medium`, `Large`, `XLarge`
 - **Recommended confidence:** `0.65`
 - **Zero-shot domain:** [`pharmaceutical`](./clinical-domains.md#pharmaceutical)
