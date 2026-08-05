@@ -354,9 +354,7 @@ def _chip_cdn_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
         candidates = []
     normalized_terms = [term.strip() for term in candidates if str(term).strip()]
     if not normalized_terms:
-        raise ValueError(
-            f"CHIP-CDN row {mention!r} requires at least one standard term"
-        )
+        raise ValueError("CHIP-CDN row requires at least one standard term")
 
     label = str(row.get("label") or row.get("type") or "dis")
     return {

@@ -222,6 +222,29 @@ def test_chip_cdn_accepts_the_native_double_hash_release_shape(tmp_path: Path) -
     assert record.metadata["license"]["redistribution"] == "user-supplied"
 
 
+def test_chip_cdn_validation_error_omits_the_source_mention(tmp_path: Path) -> None:
+    source = tmp_path / "chip_cdn_invalid.jsonl"
+    source.write_text(
+        json.dumps(
+            {
+                "id": "external-invalid",
+                "text": "甲区敏感诊断",
+                "normalized_result": "",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError, match="requires at least one standard term"
+    ) as caught:
+        load_cblue_task(CHIP_CDN, source)
+
+    assert "甲区敏感诊断" not in str(caught.value)
+
+
 @pytest.mark.parametrize("task", CBLUE_TASKS)
 def test_task_metadata_reports_availability_without_reading_content(
     task: str,

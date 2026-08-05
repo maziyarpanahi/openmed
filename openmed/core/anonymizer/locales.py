@@ -30,6 +30,12 @@ Notes:
   warning, so name surrogates remain in Odia script.
 - Tamil resolves to the native ``ta_IN`` Faker locale; patronymic-initial
   PERSON surrogates preserve the source's initial-plus-given-name shape.
+- Nepali (``ne``) resolves to Faker's native ``ne_NP`` locale, so it is neither
+  a documented approximation nor a conceptual locale needing a backend, and it
+  emits no warning. OpenMed ships no Nepali national-ID provider.
+- Vietnamese resolves to Faker's native ``vi_VN`` locale without an
+  approximation warning, so name and address surrogates keep their diacritics;
+  national-ID dispatch routes to the CCCD provider on the same locale.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -281,11 +287,15 @@ def locale_coherence_report() -> list[dict[str, object]]:
         INDIC_NER_LANGUAGES,
         NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
     )
 
     rows: list[dict[str, object]] = []
     reported_languages = (
-        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
     for lang in sorted(reported_languages):
         provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)

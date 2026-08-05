@@ -202,8 +202,12 @@ from .naamapadam import (
     naamapadam_suite_metadata,
 )
 from .public import (
+    CLINICAL_FAMILY_DATASET_BINDINGS,
+    CLINICAL_LINK_VOCABULARIES,
+    CLINICAL_MODEL_FAMILIES,
     PUBLIC_DATASETS,
     PUBLIC_LABEL_MAPS,
+    ClinicalDatasetBinding,
     DatasetLoadResult,
     DatasetUnavailable,
     PublicDatasetAdapter,
@@ -211,8 +215,10 @@ from .public import (
     PublicDatasetSpan,
     adapter_for,
     assert_no_gated_content_committed,
+    clinical_family_dataset_bindings,
     load_public_dataset,
     map_public_label,
+    validate_clinical_family_dataset_evidence,
 )
 
 __all__ = [
@@ -310,12 +316,16 @@ __all__ = [
     "CLINICAL_PHI_MANIFEST_ID",
     "CLINICAL_PHI_MANIFEST_REF",
     "CLINICAL_PRIVACY_MODEL_ID",
+    "CLINICAL_FAMILY_DATASET_BINDINGS",
+    "CLINICAL_LINK_VOCABULARIES",
+    "CLINICAL_MODEL_FAMILIES",
     "BiomedicalNerCorpus",
     "BiomedicalNerRecord",
     "BiomedicalNerSource",
     "BiomedicalNerSpan",
     "ClinicalPHIDatasetManifest",
     "ClinicalPHISource",
+    "ClinicalDatasetBinding",
     "DrugProtCorpus",
     "DrugProtEntity",
     "DrugProtRecord",
@@ -350,6 +360,7 @@ __all__ = [
     "adapter_for",
     "all_dua_stubs",
     "assert_no_gated_content_committed",
+    "clinical_family_dataset_bindings",
     "biomedical_ner_suite_metadata",
     "cmeee_suite_metadata",
     "collect_unmapped_labels",
@@ -404,6 +415,7 @@ __all__ = [
     "run_masakhaner_benchmark",
     "source_for",
     "validate_clinical_phi_manifest",
+    "validate_clinical_family_dataset_evidence",
     "validate_india_clinical_phi_corpus",
     "validate_india_clinical_phi_manifest",
 ]
