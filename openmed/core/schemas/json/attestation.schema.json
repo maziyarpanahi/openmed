@@ -1,0 +1,315 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/attestation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "template": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "hash"
+      ],
+      "type": "object"
+    },
+    "profile_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "disclaimer": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "jurisdiction": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "country_code": {
+          "pattern": "^[A-Z]{2}$",
+          "type": "string"
+        },
+        "legal_reference": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_url": {
+          "format": "uri",
+          "type": "string"
+        },
+        "attestation_title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "residency_statement": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "guide_field": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "country_code",
+        "legal_reference",
+        "source_url",
+        "attestation_title",
+        "residency_statement",
+        "guide_field"
+      ],
+      "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "posture": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "default_action": {
+          "enum": [
+            "keep",
+            "redact",
+            "replace",
+            "mask",
+            "hash",
+            "format_preserve"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "posture",
+        "schema_version",
+        "default_action"
+      ],
+      "type": "object"
+    },
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "host_local": {
+          "const": true,
+          "type": "boolean"
+        },
+        "host_local_statement": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "offline_statement": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "offline_assertion": {
+          "additionalProperties": false,
+          "properties": {
+            "asserted": {
+              "type": "boolean"
+            },
+            "local_only": {
+              "type": "boolean"
+            },
+            "source": {
+              "enum": [
+                "none",
+                "config",
+                "environment",
+                "config+environment"
+              ],
+              "type": "string"
+            },
+            "network_guard_requested": {
+              "type": "boolean"
+            },
+            "dependency_flags_enabled": {
+              "type": "boolean"
+            },
+            "environment_flags": {
+              "additionalProperties": false,
+              "properties": {
+                "OPENMED_OFFLINE": {
+                  "type": "boolean"
+                },
+                "HF_HUB_OFFLINE": {
+                  "type": "boolean"
+                },
+                "TRANSFORMERS_OFFLINE": {
+                  "type": "boolean"
+                },
+                "HF_DATASETS_OFFLINE": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "OPENMED_OFFLINE",
+                "HF_HUB_OFFLINE",
+                "TRANSFORMERS_OFFLINE",
+                "HF_DATASETS_OFFLINE"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "asserted",
+            "local_only",
+            "source",
+            "network_guard_requested",
+            "dependency_flags_enabled",
+            "environment_flags"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "host_local",
+        "host_local_statement",
+        "offline_statement",
+        "offline_assertion"
+      ],
+      "type": "object"
+    },
+    "models": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "checksum": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "file",
+              "directory"
+            ],
+            "type": "string"
+          },
+          "file_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "checksum",
+          "kind",
+          "file_count"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "run": {
+      "additionalProperties": false,
+      "properties": {
+        "document_length": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "span_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "deidentified_text_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "audit_repro_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "manifest_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "openmed_version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_length",
+        "span_count",
+        "input_hash",
+        "deidentified_text_hash",
+        "audit_repro_hash",
+        "manifest_hash",
+        "openmed_version"
+      ],
+      "type": "object"
+    },
+    "repro_hash": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "integrity_hash": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "template",
+    "profile_id",
+    "generated_at",
+    "disclaimer",
+    "jurisdiction",
+    "policy",
+    "execution",
+    "models",
+    "run",
+    "repro_hash",
+    "integrity_hash"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedDataResidencyAttestation",
+  "type": "object"
+}

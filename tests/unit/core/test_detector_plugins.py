@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -135,6 +136,56 @@ def test_fake_entry_point_is_discovered_once_without_explicit_registration(
         "fake_clinical"
     ]
     assert calls == 1
+
+
+def test_sdk_recognizer_participates_in_pipeline_arbitration(monkeypatch):
+    marker = "OPENMED_SYNTHETIC_PERSON"
+
+    class SyntheticRecognizer:
+        def recognize(self, text: str, **kwargs):
+            del kwargs
+            return (_plugin_span(text, marker),)
+
+    metadata = SimpleNamespace(
+        plugin_id="synthetic-runtime-plugin",
+        component_id="marker-recognizer",
+        qualified_id="synthetic-runtime-plugin:marker-recognizer",
+        kind="recognizer",
+        labels=("PERSON",),
+        languages=("en",),
+        metadata={},
+    )
+    registration = SimpleNamespace(
+        metadata=metadata,
+        component=SyntheticRecognizer(),
+        loaded_by_policy_opt_in=False,
+    )
+
+    monkeypatch.setattr(
+        detector_plugins.importlib_metadata,
+        "entry_points",
+        lambda *, group=None: (),
+    )
+    monkeypatch.setattr(
+        detector_plugins,
+        "_iter_sdk_plugins",
+        lambda kind, **policy: (registration,),
+    )
+
+    result = Pipeline(
+        model_detector=lambda text, **kwargs: _empty_prediction(
+            text,
+            kwargs["model_name"],
+        ),
+        use_safety_sweep=False,
+    ).run(f"Synthetic fixture {marker}", method="mask")
+
+    arbitration_span = result.stage("span_arbitration").spans[0]
+    assert arbitration_span.canonical_label == "PERSON"
+    assert (
+        arbitration_span.detector == "plugin:synthetic-runtime-plugin:marker-recognizer"
+    )
+    assert result.redacted_text == "Synthetic fixture [PERSON]"
 
 
 def test_broken_entry_point_logs_warning_and_pipeline_continues(

@@ -3,21 +3,30 @@
 import pytest
 
 from openmed.core.labels import (
+    ABNORMAL_FLAG,
     ACCOUNT_NUMBER,
     ADMINISTRATION_ROUTE,
     AGE,
     AIRWAY_MANAGEMENT,
     AMOUNT,
+    ANATOMY,
     ANESTHESIA_TYPE,
     ANESTHETIC_AGENT,
     ANTIBIOTIC,
     API_KEY,
     ASA_CLASS,
     BIC,
+    BIOMARKER,
+    BIOMEDICAL_LABEL_KIND,
+    BIOMEDICAL_LABELS,
     BITCOIN_ADDRESS,
     BODY_SITE,
     BUILDING_NUMBER,
+    CANCER,
     CANONICAL_LABELS,
+    CARE_INTERVENTION,
+    CELL,
+    CHEMICAL,
     CKD_STAGE,
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
@@ -29,17 +38,29 @@ from openmed.core.labels import (
     DATE,
     DATE_OF_BIRTH,
     DEVELOPMENTAL_MILESTONE,
+    DEVICE,
     DIALYSIS_MODALITY,
     DIET_TYPE,
+    DISEASE,
+    DNA,
+    DOSAGE,
     DOSE_NUMBER,
+    DRUG,
+    DURATION,
     DYSPNEA_GRADE,
     EMAIL,
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
+    ETHNICITY,
     EYE_COLOR,
     FEEDING_ROUTE,
+    FINDING,
     FIRST_NAME,
+    FORM,
+    FREQUENCY,
     GENDER,
+    GENE,
+    GENE_OR_GENE_PRODUCT,
     GENE_SYMBOL,
     GI_SCORE,
     GI_SYMPTOM,
@@ -56,43 +77,68 @@ from openmed.core.labels import (
     ID_SUBTYPE_NATIONAL_ID,
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
+    IMAGING_MODALITY,
     IMEI,
+    INDICATION,
     INSULIN_REGIMEN,
+    INTAKE_OUTPUT,
     IP_ADDRESS,
     JOB_DEPARTMENT,
     JOB_TITLE,
     LAB_TEST,
+    LAB_VALUE,
+    LABEL_METADATA,
+    LABEL_TO_HIPAA,
+    LABEL_TO_POPIA,
     LAST_NAME,
+    LATERALITY,
+    LINE_DRAIN_TUBE,
     LITECOIN_ADDRESS,
     LOCATION,
     MAC_ADDRESS,
     MASKED_NUMBER,
+    MEASUREMENT,
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
+    NURSING_RISK_SCORE,
     NUTRITION_TARGET,
     NUTRITIONAL_STATUS,
     OCCUPATION,
     ORDINAL_DIRECTION,
+    ORGAN,
+    ORGANISM,
     ORGANIZATION,
     OTHER,
     OXYGEN_SUPPORT,
     PASSWORD,
+    PATHOLOGY,
     PERSON,
     PHONE,
+    PII_LABEL_KIND,
     PIN,
     POLYP_DESCRIPTOR,
     PREFIX,
+    PROBLEM,
     PROCEDURE,
+    PROTEIN,
     PROTEIN_CHANGE,
+    REFERENCE_RANGE,
     RENAL_FUNCTION_MEASURE,
     RESPIRATORY_FINDING,
+    RNA,
+    ROUTE,
+    SEVERITY,
+    SPECIES,
     SPIROMETRY_MEASURE,
     SSN,
     STREET_ADDRESS,
+    STRENGTH,
     SUSCEPTIBILITY,
     THYROID_MEASURE,
     TIME,
+    TISSUE,
+    UNIT,
     URINE_FINDING,
     URL,
     USER_AGENT,
@@ -107,6 +153,8 @@ from openmed.core.labels import (
     ZYGOSITY,
     hipaa_class_for,
     id_subtype_for,
+    label_kind_for,
+    ndpa_classes_for,
     normalize_label,
     policy_label_for,
     risk_level_for,
@@ -425,6 +473,96 @@ class TestRegistryCoverage:
             )
 
 
+class TestBiomedicalEntityLabels:
+    """Canonical labels shared by biomedical NER domains."""
+
+    EXPECTED_LABELS = frozenset(
+        {
+            DISEASE,
+            CONDITION,
+            DRUG,
+            CHEMICAL,
+            GENE_OR_GENE_PRODUCT,
+            GENE,
+            PROTEIN,
+            DNA,
+            RNA,
+            ANATOMY,
+            ORGAN,
+            TISSUE,
+            CELL,
+            CANCER,
+            SPECIES,
+            ORGANISM,
+            PATHOLOGY,
+            BIOMARKER,
+            FINDING,
+            IMAGING_MODALITY,
+            LATERALITY,
+            MEASUREMENT,
+        }
+    )
+
+    def test_biomedical_taxonomy_is_canonical_and_round_trips(self):
+        assert BIOMEDICAL_LABELS == self.EXPECTED_LABELS
+        assert BIOMEDICAL_LABELS <= CANONICAL_LABELS
+        for label in BIOMEDICAL_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        ("alias", "expected"),
+        [
+            ("simple_chemical", CHEMICAL),
+            ("CHEM", CHEMICAL),
+            ("amino_acid", CHEMICAL),
+            ("gene_or_gene_product", GENE_OR_GENE_PRODUCT),
+            ("GENE OR GENE PRODUCT", GENE_OR_GENE_PRODUCT),
+            ("cell_line", CELL),
+            ("cellular_component", CELL),
+            ("protein_complex", PROTEIN),
+            ("protein_familiy_or_group", PROTEIN),
+            ("organism_subdivision", ORGANISM),
+            ("organism_substance", ORGANISM),
+            ("pathological_formation", PATHOLOGY),
+            ("radiology finding", FINDING),
+            ("imaging modality", IMAGING_MODALITY),
+            ("laterality", LATERALITY),
+            ("measurement", MEASUREMENT),
+            ("impression", FINDING),
+        ],
+    )
+    def test_family_native_aliases_normalize(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_biomedical_labels_are_non_pii_and_have_no_identifier_tags(self):
+        for label in BIOMEDICAL_LABELS:
+            metadata = LABEL_METADATA[label]
+            assert label_kind_for(label) == BIOMEDICAL_LABEL_KIND
+            assert metadata["policy_label"] == CLINICAL_CONCEPT
+            assert {"hipaa_tags", "identifier_tags", "regulatory_tags"}.isdisjoint(
+                metadata
+            )
+
+        newly_canonical = BIOMEDICAL_LABELS - {CONDITION}
+        assert newly_canonical.isdisjoint(LABEL_TO_HIPAA)
+        assert newly_canonical.isdisjoint(LABEL_TO_POPIA)
+        assert all(not ndpa_classes_for(label) for label in newly_canonical)
+
+    def test_existing_pii_labels_and_aliases_are_unchanged(self):
+        expected = {
+            "first_name": FIRST_NAME,
+            "B-EMAIL": EMAIL,
+            "phone_number": PHONE,
+            "date_of_birth": DATE_OF_BIRTH,
+            "medical_record_number": ID_NUM,
+            "ssn": SSN,
+            "street_address": STREET_ADDRESS,
+        }
+        for alias, canonical in expected.items():
+            assert normalize_label(alias) == canonical
+            assert label_kind_for(canonical) == PII_LABEL_KIND
+
+
 class TestClinicalConceptLabels:
     """Clinical-concept canonical labels added for grounding (issue #266)."""
 
@@ -441,20 +579,20 @@ class TestClinicalConceptLabels:
     @pytest.mark.parametrize(
         "alias,expected",
         [
-            ("disease", CONDITION),
-            ("diagnosis", CONDITION),
-            ("finding", CONDITION),
-            ("drug", MEDICATION),
+            ("disease", DISEASE),
+            ("diagnosis", PROBLEM),
+            ("finding", FINDING),
+            ("drug", DRUG),
             ("medication", MEDICATION),
-            ("chemical", MEDICATION),
+            ("chemical", CHEMICAL),
             ("test", LAB_TEST),
-            ("measurement", LAB_TEST),
+            ("measurement", MEASUREMENT),
             ("analyte", LAB_TEST),
             ("surgery", PROCEDURE),
             ("procedure", PROCEDURE),
             ("operation", PROCEDURE),
-            ("anatomy", BODY_SITE),
-            ("organ", BODY_SITE),
+            ("anatomy", ANATOMY),
+            ("organ", ORGAN),
             ("body site", BODY_SITE),
         ],
     )
@@ -651,6 +789,56 @@ class TestPediatricGrowthConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestNursingObservationConceptLabels:
+    """Nursing-care observation labels (issue #910)."""
+
+    NEW_LABELS = (
+        INTAKE_OUTPUT,
+        LINE_DRAIN_TUBE,
+        NURSING_RISK_SCORE,
+        CARE_INTERVENTION,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("intake output", INTAKE_OUTPUT),
+            ("intake and output", INTAKE_OUTPUT),
+            ("urine output", INTAKE_OUTPUT),
+            ("line drain tube", LINE_DRAIN_TUBE),
+            ("foley", LINE_DRAIN_TUBE),
+            ("foley catheter", LINE_DRAIN_TUBE),
+            ("central line", LINE_DRAIN_TUBE),
+            ("chest tube", LINE_DRAIN_TUBE),
+            ("nursing risk score", NURSING_RISK_SCORE),
+            ("braden score", NURSING_RISK_SCORE),
+            ("braden", NURSING_RISK_SCORE),
+            ("morse fall scale", NURSING_RISK_SCORE),
+            ("fall risk", NURSING_RISK_SCORE),
+            ("care intervention", CARE_INTERVENTION),
+            ("wound dressing", CARE_INTERVENTION),
+            ("dressing change", CARE_INTERVENTION),
+            ("repositioning", CARE_INTERVENTION),
+            ("mobility status", OTHER),
+            ("pain score", OTHER),
+            ("skin assessment", BODY_SITE),
+        ],
+    )
+    def test_nursing_observation_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_nursing_observation_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_nursing_observation_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -714,11 +902,26 @@ class TestClinicalLabelsAreAdditive:
 
     NEW_LABELS = frozenset(
         {
+            *BIOMEDICAL_LABELS,
             CONDITION,
             MEDICATION,
             LAB_TEST,
             PROCEDURE,
             BODY_SITE,
+            DEVICE,
+            PROBLEM,
+            SEVERITY,
+            DOSAGE,
+            ROUTE,
+            FREQUENCY,
+            DURATION,
+            FORM,
+            STRENGTH,
+            INDICATION,
+            LAB_VALUE,
+            UNIT,
+            REFERENCE_RANGE,
+            ABNORMAL_FLAG,
             ANESTHESIA_TYPE,
             ANESTHETIC_AGENT,
             AIRWAY_MANAGEMENT,
@@ -756,6 +959,11 @@ class TestClinicalLabelsAreAdditive:
             GROWTH_PARAMETER,
             GROWTH_PERCENTILE,
             DEVELOPMENTAL_MILESTONE,
+            ETHNICITY,
+            INTAKE_OUTPUT,
+            LINE_DRAIN_TUBE,
+            NURSING_RISK_SCORE,
+            CARE_INTERVENTION,
         }
     )
 
@@ -875,7 +1083,7 @@ class TestClinicalLabelsAreAdditive:
         "imei": IMEI,
         "microorganism": MICROORGANISM,
         "microbe": MICROORGANISM,
-        "organism": MICROORGANISM,
+        "organism": ORGANISM,
         "pathogen": MICROORGANISM,
         "antibiotic": ANTIBIOTIC,
         "antimicrobial": ANTIBIOTIC,

@@ -70,6 +70,9 @@ type PIILanguage string
 
 // Languages supported by the PII endpoints.
 const (
+	LangAM PIILanguage = "am"
+	LangAS PIILanguage = "as"
+	LangBN PIILanguage = "bn"
 	LangEN PIILanguage = "en"
 	LangFR PIILanguage = "fr"
 	LangDE PIILanguage = "de"
@@ -77,7 +80,16 @@ const (
 	LangES PIILanguage = "es"
 	LangNL PIILanguage = "nl"
 	LangHI PIILanguage = "hi"
+	LangGU PIILanguage = "gu"
+	LangKN PIILanguage = "kn"
+	LangML PIILanguage = "ml"
+	LangMR PIILanguage = "mr"
+	LangNE PIILanguage = "ne"
+	LangOR PIILanguage = "or"
+	LangPA PIILanguage = "pa"
+	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
+	LangUR PIILanguage = "ur"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"
 	LangHE PIILanguage = "he"
@@ -87,6 +99,18 @@ const (
 	LangTH PIILanguage = "th"
 	LangKO PIILanguage = "ko"
 	LangRO PIILanguage = "ro"
+	LangRU PIILanguage = "ru"
+	LangSV PIILanguage = "sv"
+	LangDA PIILanguage = "da"
+	LangNO PIILanguage = "no"
+	LangSW PIILanguage = "sw"
+	LangZU PIILanguage = "zu"
+	LangXH PIILanguage = "xh"
+	LangZH PIILanguage = "zh"
+	LangUK PIILanguage = "uk"
+	LangCS PIILanguage = "cs"
+	LangEL PIILanguage = "el"
+	LangVI PIILanguage = "vi"
 )
 
 // DeidentificationMethod selects how detected PII spans are transformed by the
@@ -295,6 +319,15 @@ type SMARTBackendIngestionRequest struct {
 	Lang                  PIILanguage            `json:"lang,omitempty"`
 	NormalizeAccents      *bool                  `json:"normalize_accents,omitempty"`
 	KeepAlive             any                    `json:"keep_alive,omitempty"`
+}
+
+// OMOPLoadRequest is the request body for POST /omop/load. RecordsJSONL carries
+// newline-delimited grounded note records and the response is a PHI-free load
+// summary.
+type OMOPLoadRequest struct {
+	RecordsJSONL        string `json:"records_jsonl"`
+	VocabularyVersion   string `json:"vocabulary_version,omitempty"`
+	ValidateConstraints bool   `json:"validate_constraints,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +546,30 @@ type JobResponse struct {
 	CompletedAt     *string               `json:"completed_at"`
 	ExpiresAt       string                `json:"expires_at"`
 	StatusURL       string                `json:"status_url,omitempty"`
+}
+
+// OMOPRejectedSpan is a PHI-free rejection detail from an /omop/load summary.
+type OMOPRejectedSpan struct {
+	Reason         string  `json:"reason"`
+	SourceNoteHash string  `json:"source_note_hash"`
+	Start          *int    `json:"start"`
+	End            *int    `json:"end"`
+	Domain         *string `json:"domain"`
+}
+
+// OMOPConstraintViolations summarizes CDM constraint violations by reason.
+type OMOPConstraintViolations struct {
+	Count    int            `json:"count"`
+	ByReason map[string]int `json:"by_reason"`
+}
+
+// OMOPLoadResponse is the PHI-free summary returned by POST /omop/load.
+type OMOPLoadResponse struct {
+	RowCounts            map[string]int            `json:"row_counts"`
+	RejectionCounts      map[string]int            `json:"rejection_counts"`
+	RejectedSpans        []OMOPRejectedSpan        `json:"rejected_spans"`
+	SourceNoteHashes     []string                  `json:"source_note_hashes"`
+	ConstraintViolations *OMOPConstraintViolations `json:"constraint_violations,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -906,6 +963,15 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 		return nil, err
 	}
 	if err := decodeInto("/models/unload", body, &out.Raw); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// LoadOMOP calls POST /omop/load and returns a PHI-free CDM load summary.
+func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
+	var out OMOPLoadResponse
+	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
