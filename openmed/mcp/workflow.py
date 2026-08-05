@@ -18,7 +18,9 @@ from openmed.clinical.exporters.fhir import to_bundle
 from openmed.core.schemas import OpenMedSpan
 from openmed.mcp.tool_registry import (
     CLINICAL_STAGE_ORDER,
+    CLINICAL_WORKFLOW_NAME,
     validate_registered_tool_output,
+    validate_registered_workflow_artifact,
 )
 
 WorkflowStepExecutor = Callable[..., Any]
@@ -404,6 +406,11 @@ def execute_clinical_pipeline(
             registered_tool = _REGISTERED_STAGE_TOOLS.get(stage)
             if registered_tool is not None:
                 output = validate_registered_tool_output(registered_tool, output)
+            output = validate_registered_workflow_artifact(
+                CLINICAL_WORKFLOW_NAME,
+                stage,
+                output,
+            )
             artifact = artifact.advance(stage, output)
             trace.append({"stage": stage, "status": "completed"})
         except Exception as exc:
