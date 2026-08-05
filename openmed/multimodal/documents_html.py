@@ -57,7 +57,7 @@ _BLOCK_TAGS = frozenset(
         "ul",
     }
 )
-_HARD_SUPPRESSION_TAGS = frozenset({"script", "style", "title"})
+_HARD_SUPPRESSION_TAGS = frozenset({"script", "style", "template", "title"})
 _NESTED_TITLE_START_RE = re.compile(r"<title(?=[\s>])", re.IGNORECASE)
 _LEGACY_ENTITY_NAMES = frozenset(name for name in html5 if not name.endswith(";"))
 _MAX_LEGACY_ENTITY_NAME_LENGTH = max(len(name) for name in _LEGACY_ENTITY_NAMES)

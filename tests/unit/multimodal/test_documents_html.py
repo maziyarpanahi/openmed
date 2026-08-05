@@ -108,11 +108,29 @@ def test_title_contents_are_always_suppressed(
     assert document.text == expected
 
 
-def test_title_is_excluded_from_detector_and_preserved_during_body_redaction(
+@pytest.mark.parametrize(
+    ("raw", "filename", "expected"),
+    [
+        (
+            "<title>Hidden Jane &amp; Roe</title><p>Visible Pat</p>",
+            "title-fragment.html",
+            "<title>Hidden Jane &amp; Roe</title><p>[PERSON]</p>",
+        ),
+        (
+            "<template><p>Hidden Jane &amp; Roe</p></template><p>Visible Pat</p>",
+            "template-fragment.html",
+            "<template><p>Hidden Jane &amp; Roe</p></template><p>[PERSON]</p>",
+        ),
+    ],
+    ids=("title", "template"),
+)
+def test_suppressed_container_is_excluded_from_detector_and_preserved(
     tmp_path: Path,
+    raw: str,
+    filename: str,
+    expected: str,
 ) -> None:
-    raw = "<title>Hidden Jane &amp; Roe</title><p>Visible Pat</p>"
-    source = tmp_path / "title-fragment.html"
+    source = tmp_path / filename
     output = tmp_path / "redacted.html"
     source.write_text(raw, encoding="utf-8")
     observed: list[tuple[str, str | None]] = []
@@ -129,9 +147,35 @@ def test_title_is_excluded_from_detector_and_preserved_during_body_redaction(
     )
 
     assert observed == [("Visible Pat", "en")]
-    assert output.read_text(encoding="utf-8") == (
-        "<title>Hidden Jane &amp; Roe</title><p>[PERSON]</p>"
-    )
+    assert output.read_text(encoding="utf-8") == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("<template>Hidden Jane</template><p>Visible</p>", "Visible"),
+        (
+            "<template><p>Hidden Jane &amp; Roe</p>"
+            "<script>Hidden Script</script><style>Hidden Style</style></template>"
+            "<p>Visible</p>",
+            "Visible",
+        ),
+        (
+            "<template>Hidden Jane<template>Hidden Roe</template>"
+            "Still Hidden</template><p>Visible</p>",
+            "Visible",
+        ),
+        ("<body><template>Hidden Jane</template><p>Visible</p></body>", "Visible"),
+        ("<template>Hidden Jane<body><p>Still hidden</p></body>", ""),
+    ],
+)
+def test_template_contents_are_always_suppressed(
+    source: str,
+    expected: str,
+) -> None:
+    document = extract_html(source)
+
+    assert document.text == expected
 
 
 def test_nested_heads_remain_suppressed_until_body_resets_depth() -> None:
