@@ -93,6 +93,18 @@ def test_default_section_detector_exposes_canonical_sections_to_pipeline():
     ]
 
 
+def test_default_stage_exposes_document_type_classification():
+    text = "RADIOLOGY REPORT\nFINDINGS: Clear.\nIMPRESSION: No acute finding."
+
+    result = Pipeline(
+        model_detector=_model_detector(),
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+
+    document_type = result.stage("doc_type_section").metadata["document_type"]
+    assert document_type == {"type": "radiology_report", "confidence": 0.98}
+
+
 def test_unavailable_section_hook_leaves_pipeline_output_unchanged():
     text = "Patient John Doe visited."
 

@@ -591,6 +591,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "zu_ZA",
         "xh_ZA",
         "el_GR",
+        "vi_VN",
     }
 )
 

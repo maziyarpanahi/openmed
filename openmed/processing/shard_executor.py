@@ -479,6 +479,18 @@ class ShardTask:
     #: non-deterministic handler cannot destroy output that is still good.
     expected_digest: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        """Bind every task to its shard's canonical run-relative output path."""
+
+        expected_path = shard_output_filename(self.shard.shard_id)
+        if self.relative_path != expected_path:
+            raise ShardExecutionError(
+                "relative_path must be the canonical path for the task shard"
+            )
+        if not callable(self.handler):
+            raise ShardExecutionError("shard handler must be callable")
+        object.__setattr__(self, "root", Path(self.root))
+
     @property
     def output_path(self) -> Path:
         """Absolute path the worker publishes this shard's output to."""

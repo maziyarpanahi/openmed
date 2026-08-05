@@ -76,13 +76,13 @@
     },
     "supported_pii_languages": {
       "status": "verified",
-      "value": 34,
-      "display": "34 supported PII routes",
+      "value": 35,
+      "display": "35 supported PII routes",
       "definition": "Exact keys in DEFAULT_PII_MODELS, including named placeholder routes; no locale aliases.",
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "34 supported PII language routes",
+      "public_wording": "35 supported PII language routes",
       "qualification": "Supported routes include the separately identified placeholder route; do not call every route model-backed.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -121,6 +121,7 @@
         "th",
         "tr",
         "uk",
+        "vi",
         "xh",
         "zh",
         "zu"
@@ -130,20 +131,20 @@
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, zu",
+      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, zu",
       "qualification": "Use codes only where the definition is visible.",
       "review_by": "2026-10-29",
       "follow_up_by": null
     },
     "model_backed_pii_languages": {
       "status": "verified",
-      "value": 33,
-      "display": "33 model-backed PII languages",
+      "value": 34,
+      "display": "34 model-backed PII languages",
       "definition": "DEFAULT_PII_MODELS keys minus DEFAULT_MODEL_PLACEHOLDER_LANGUAGES.",
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "33 model-backed PII languages",
+      "public_wording": "34 model-backed PII languages",
       "qualification": "Excludes placeholder and user-supplied routes.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -181,6 +182,7 @@
         "th",
         "tr",
         "uk",
+        "vi",
         "xh",
         "zh",
         "zu"
@@ -190,7 +192,7 @@
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, sv, sw, ta, te, th, tr, uk, xh, zh, zu",
+      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, sv, sw, ta, te, th, tr, uk, vi, xh, zh, zu",
       "qualification": "Codes are model-backed, not benchmark equivalence.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -249,7 +251,6 @@
         "sr",
         "tl",
         "ur",
-        "vi",
         "yo"
       ],
       "display": null,

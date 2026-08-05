@@ -1,0 +1,187 @@
+# OpenMed's starter ConText rule set.
+#
+# Provenance: common English trigger patterns adapted from the NegEx and
+# medspaCy ConText lexicon traditions. Those upstream projects publish their
+# reusable rule implementations and lexicons under Apache-2.0-compatible
+# terms. This compact adaptation is maintained with OpenMed under Apache-2.0;
+# it contains no patient data or restricted clinical terminology.
+#
+# These deterministic rules are the default shared primitive. Learned context
+# heads may be added by later layers only for axes and cases where rules
+# demonstrably under-perform; this file does not make per-axis decisions.
+
+schema_version: 1
+provenance:
+  sources:
+    - NegEx trigger lexicon
+    - medspaCy ConText rules
+  license: Apache-2.0
+  adaptation: OpenMed-maintained English starter cues; no clinical corpus data
+  restricted_data: false
+
+rules:
+  - cue: no evidence of
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: no sign of
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: negative for
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: absence of
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: denies
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: without
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: "no"
+    category: negation
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: ruled out
+    category: negation
+    direction: backward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: absent
+    category: negation
+    direction: bidirectional
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+
+  - cue: cannot exclude
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: concern for
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: suspicious for
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: rule out
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: possible
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: probable
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: suspected
+    category: uncertainty
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+
+  - cue: family history of
+    category: experiencer
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: mother
+    category: experiencer
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: father
+    category: experiencer
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: sister
+    category: experiencer
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: brother
+    category: experiencer
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+
+  - cue: history of
+    category: temporality
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: status post
+    category: temporality
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: previously
+    category: temporality
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: prior
+    category: temporality
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: if
+    category: temporality
+    direction: forward
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40
+  - cue: resolved
+    category: temporality
+    direction: bidirectional
+    scope: clause
+    terminators: [but, however, although, yet, ";"]
+    max_scope_tokens: 40

@@ -35,19 +35,20 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import Enum
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Protocol, runtime_checkable
 
 from openmed.__about__ import __version__
 from openmed.core.model_integrity import sha256_file
 from openmed.processing.batch import AtomicWriteHook, _atomic_write_bytes
-from openmed.processing.distributed import ShardPlan
+from openmed.processing.distributed import SHARDING_ALGORITHM, ShardPlan
 
 RUN_MANIFEST_SCHEMA_VERSION = 1
 
 MAX_LABEL_LENGTH = 128
 
 _DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+_FINGERPRINT_PATTERN = re.compile(r"[0-9a-f]{64}")
 _ERROR_TYPE_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -114,10 +115,7 @@ class ShardRecord:
         _require_integer(self.document_count, "document_count", minimum=0)
         _require_integer(self.attempts, "attempts", minimum=0)
 
-        if not isinstance(self.fingerprint, str):
-            raise RunManifestError("shard fingerprint must be a string")
-        if not self.fingerprint.strip():
-            raise RunManifestError("shard fingerprint must be non-empty")
+        _require_fingerprint(self.fingerprint, "shard fingerprint")
 
         for field_name in ("started_at", "completed_at"):
             value = getattr(self, field_name)
@@ -267,6 +265,12 @@ class BatchRunManifest:
         # run_id is operator-supplied and flows verbatim into reports and CLI
         # output, so it carries the same bounds as the other free-text labels.
         _require_label(self.run_id, "run_id")
+        _require_fingerprint(self.plan_fingerprint, "plan_fingerprint")
+        if self.algorithm != SHARDING_ALGORITHM:
+            raise RunManifestError(
+                f"algorithm must be {SHARDING_ALGORITHM!r} for schema version "
+                f"{RUN_MANIFEST_SCHEMA_VERSION}"
+            )
 
         for field_name in ("created_at", "updated_at"):
             _require_finite_float(getattr(self, field_name), field_name, minimum=0.0)
@@ -664,10 +668,24 @@ def _validate_output_path(output_path: str) -> None:
     if _CONTROL_CHARACTERS.search(output_path):
         raise RunManifestError("output_path must not contain control characters")
     pure = PurePosixPath(output_path)
-    if pure.is_absolute() or Path(output_path).is_absolute():
+    windows = PureWindowsPath(output_path)
+    if (
+        pure.is_absolute()
+        or windows.anchor
+        or windows.drive
+        or Path(output_path).is_absolute()
+    ):
         raise RunManifestError("output_path must be relative to the run root")
-    if ".." in pure.parts:
+    if ".." in pure.parts or ".." in windows.parts:
         raise RunManifestError("output_path must not escape the run root")
+
+
+def _require_fingerprint(value: Any, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise RunManifestError(f"{field_name} must be a string")
+    if not _FINGERPRINT_PATTERN.fullmatch(value):
+        raise RunManifestError(f"{field_name} must be a lowercase sha256 digest")
+    return value
 
 
 def _require_label(value: Any, field_name: str) -> str:

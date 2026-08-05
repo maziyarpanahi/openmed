@@ -7,6 +7,8 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
+from .capabilities import raise_missing_backend
+
 logger = logging.getLogger(__name__)
 
 HF_AVAILABLE = find_spec("transformers") is not None
@@ -19,10 +21,7 @@ pipeline: Any = None
 def _require_transformers() -> None:
     """Raise actionable guidance when Transformers is unavailable."""
     if not HF_AVAILABLE:
-        raise ImportError(
-            "HuggingFace transformers is required. "
-            "Install with: pip install transformers"
-        )
+        raise_missing_backend("hf", feature="HuggingFace Transformers inference")
 
 
 def _ensure_hf_auto_config() -> None:
@@ -92,6 +91,22 @@ from .offline import (
     is_local_only,
     network_blocked_if_offline,
 )
+
+
+def is_hf_available() -> bool:
+    """Return True when HuggingFace Transformers is importable.
+
+    Mirrors the module-level ``HF_AVAILABLE`` flag so callers can branch on the
+    ``hf`` backend using the same convention as the other optional seams.
+    """
+
+    return bool(HF_AVAILABLE)
+
+
+def ensure_hf_available() -> None:
+    """Raise an actionable error when the ``hf`` extra is not installed."""
+
+    _require_transformers()
 
 
 class ModelLoader:

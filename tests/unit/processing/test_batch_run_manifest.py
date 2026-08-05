@@ -196,7 +196,7 @@ def test_with_shard_refuses_to_rewrite_the_shard_plan_binding() -> None:
     original = manifest.shard(0)
 
     with pytest.raises(RunManifestError, match="fingerprint must not change"):
-        manifest.with_shard(replace(original, fingerprint="TOTALLY_DIFFERENT"))
+        manifest.with_shard(replace(original, fingerprint="b" * 64))
     with pytest.raises(RunManifestError, match="document_count must not change"):
         manifest.with_shard(replace(original, document_count=99_999))
 
@@ -227,6 +227,18 @@ def test_absolute_and_escaping_output_paths_are_refused() -> None:
         replace(manifest.shard(0), output_path="/var/run/shard-0.json")
     with pytest.raises(RunManifestError, match="escape the run root"):
         replace(manifest.shard(0), output_path="../shard-0.json", output_digest=digest)
+    with pytest.raises(RunManifestError, match="escape the run root"):
+        replace(
+            manifest.shard(0),
+            output_path=r"..\shard-0.json",
+            output_digest=digest,
+        )
+    with pytest.raises(RunManifestError, match="relative to the run root"):
+        replace(
+            manifest.shard(0),
+            output_path=r"C:\shards\shard-0.json",
+            output_digest=digest,
+        )
 
 
 def test_error_type_rejects_anything_that_looks_like_a_message() -> None:
@@ -632,6 +644,28 @@ def test_null_fingerprint_cannot_masquerade_as_a_valid_plan_binding() -> None:
         shard["fingerprint"] = None
 
     with pytest.raises(ManifestSchemaError, match="fingerprint must be a string"):
+        BatchRunManifest.from_dict(payload)
+
+
+def test_manifest_fingerprints_reject_foreign_text() -> None:
+    """Plan bindings cannot become a raw-text channel during deserialization."""
+
+    payload = _manifest().to_dict()
+    payload["plan_fingerprint"] = "Patient_Jane_Doe_MRN_12345"
+    with pytest.raises(RunManifestError, match="lowercase sha256 digest"):
+        BatchRunManifest.from_dict(payload)
+
+    payload = _manifest().to_dict()
+    payload["shards"][0]["fingerprint"] = "Patient_Jane_Doe_MRN_12345"
+    with pytest.raises(RunManifestError, match="lowercase sha256 digest"):
+        BatchRunManifest.from_dict(payload)
+
+
+def test_manifest_schema_rejects_an_unknown_sharding_algorithm() -> None:
+    payload = _manifest().to_dict()
+    payload["algorithm"] = "future-algorithm"
+
+    with pytest.raises(RunManifestError, match="algorithm must be"):
         BatchRunManifest.from_dict(payload)
 
 
