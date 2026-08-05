@@ -316,15 +316,15 @@ def build_tensorrt_engine(
         raise ValueError("tolerance must be non-negative")
 
     profile = shape_profile or TensorRTShapeProfile()
-    trt = trt_module or _tensorrt_api()
     calibration_spec = None
     calibration_sha256 = None
     recall_gate = None
     build_onnx = source_onnx
+    calibration_text_values: list[str] | None = None
 
     if normalized_precision == "int8":
-        texts = _normalize_calibration_texts(calibration_texts)
-        calibration_sha256 = calibration_texts_sha256(texts)
+        calibration_text_values = _normalize_calibration_texts(calibration_texts)
+        calibration_sha256 = calibration_texts_sha256(calibration_text_values)
         recall_gate = evaluate_quant_recall_delta(
             format_name=TENSORRT_INT8_FORMAT,
             candidate_recall=candidate_recall or {},
@@ -343,10 +343,14 @@ def build_tensorrt_engine(
                 recall_gate,
             )
 
+    trt = trt_module or _tensorrt_api()
+
+    if normalized_precision == "int8":
+        assert calibration_text_values is not None
         if _supports_legacy_int8_calibration(trt):
             calibration_spec = _CalibrationSpec(
                 tokenizer=calibration_tokenizer,
-                texts=tuple(texts),
+                texts=tuple(calibration_text_values),
                 cache_path=(
                     Path(calibration_cache_path)
                     if calibration_cache_path is not None
@@ -359,7 +363,7 @@ def build_tensorrt_engine(
                 source_onnx,
                 build_onnx,
                 tokenizer=calibration_tokenizer,
-                texts=texts,
+                texts=calibration_text_values,
                 shape_profile=profile,
             )
 
@@ -945,6 +949,14 @@ def _normalize_calibration_texts(texts: Iterable[str] | None) -> list[str]:
 
 
 def _supports_legacy_int8_calibration(trt: Any) -> bool:
+    version = str(getattr(trt, "__version__", "")).strip()
+    major_text = version.split(".", 1)[0]
+    try:
+        major_version = int(major_text)
+    except ValueError:
+        major_version = None
+    if major_version is not None and major_version >= 11:
+        return False
     return hasattr(trt, "IInt8EntropyCalibrator2") and _has_builder_flag(trt, "INT8")
 
 

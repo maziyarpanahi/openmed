@@ -32,6 +32,17 @@ def _trt11_module() -> types.SimpleNamespace:
     return types.SimpleNamespace(__version__="11.1.0")
 
 
+def test_trt11_uses_explicit_quantization_even_with_legacy_symbol() -> None:
+    module = _export_module()
+    trt11 = types.SimpleNamespace(
+        __version__="11.0.0",
+        BuilderFlag=types.SimpleNamespace(INT8=1),
+        IInt8EntropyCalibrator2=object,
+    )
+
+    assert module._supports_legacy_int8_calibration(trt11) is False
+
+
 def test_shape_profile_validates_and_serializes_ranges() -> None:
     module = _export_module()
     profile = module.TensorRTShapeProfile(
@@ -379,6 +390,30 @@ def test_int8_build_rejects_missing_or_over_budget_recall_evidence(
         )
     assert regression.value.gate.passed is False
     assert not (tmp_path / "regression.engine").exists()
+
+
+def test_int8_gate_rejects_before_optional_runtime_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _export_module()
+    onnx_path = tmp_path / "model.onnx"
+    onnx_path.write_bytes(b"onnx")
+
+    def fail_runtime_import():
+        pytest.fail("TensorRT must not be imported before the G4 decision")
+
+    monkeypatch.setattr(module, "_tensorrt_api", fail_runtime_import)
+    with pytest.raises(module.TensorRTQuantizationRejected) as rejected:
+        module.build_tensorrt_engine(
+            onnx_path,
+            tmp_path / "missing-evidence.engine",
+            family="bert",
+            precision="int8",
+            calibration_tokenizer=object(),
+        )
+
+    assert rejected.value.gate.source == "missing_evidence"
 
 
 def test_trt11_int8_uses_modelopt_explicit_quantization(
