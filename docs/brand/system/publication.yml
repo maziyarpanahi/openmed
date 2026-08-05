@@ -111,6 +111,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - model-registry.md
+    - ner-families.md
     - model-manifest.md
     - indic-encoders.md
     - indic-ner-checkpoints.md
