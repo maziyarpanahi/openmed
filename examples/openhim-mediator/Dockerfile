@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE /app/
+COPY models.jsonl /app/models.jsonl
 COPY openmed /app/openmed
 COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/adversarial_phi.jsonl
 COPY examples/openhim-mediator/mediator-config.json /etc/openmed/mediator-config.json

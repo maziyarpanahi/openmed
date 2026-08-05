@@ -33,6 +33,7 @@ from openmed.core.pii_i18n import (
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_ukrainian_rnokpp,
+    validate_vietnamese_cccd,
     validate_za_id_number,
 )
 from openmed.training.synthetic import (
@@ -74,6 +75,7 @@ _ID_VALIDATORS = {
     "uk": validate_ukrainian_rnokpp,
     "cs": validate_czech_rodne_cislo,
     "el": validate_greek_amka,
+    "vi": validate_vietnamese_cccd,
 }
 
 _SCRIPT_RANGES = {

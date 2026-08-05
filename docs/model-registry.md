@@ -34,6 +34,10 @@ for model_key, info, reason in suggestions:
 - `get_model_suggestions` leans on lightweight heuristics to recommend models based on text snippets or hints (disease,
   pharma, oncology, etc.).
 
+The committed registry state also publishes generated model cards for the
+[latest PII checkpoint](./model-cards/registry/pii-latest.md) and its
+[last-green rollback target](./model-cards/registry/pii-last-green.md).
+
 ## Metadata for UIs & validation
 
 - `ModelInfo.size_category`, `.size_mb`, `.latency_ms`, `.peak_ram_mb`, and `.recommended_tier` help you decide whether a

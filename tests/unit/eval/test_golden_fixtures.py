@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import date
 from pathlib import Path
+
+import pytest
 
 from openmed.core.decoding.spans import (
     is_grapheme_boundary,
@@ -43,6 +46,7 @@ from openmed.core.pii_i18n import (
     validate_romanian_cnp,
     validate_tamil_aadhaar,
     validate_tamil_nadu_puducherry_pin,
+    validate_vietnamese_cccd,
 )
 from openmed.eval import harness
 from openmed.eval.golden import (
@@ -169,6 +173,23 @@ def test_golden_fixtures_parse_offsets_expected_output_and_round_trip():
 
         mapping = fixture.to_mapping()
         assert GoldenFixture.from_mapping(mapping).to_mapping() == mapping
+
+
+def test_golden_loader_rejects_duplicate_fixture_ids(tmp_path):
+    fixture = _one("date_arithmetic").to_mapping()
+    fixture_pack = {
+        "fixtures": [fixture],
+        "synthetic": True,
+        "version": 1,
+    }
+    for filename in ("first.json", "second.json"):
+        (tmp_path / filename).write_text(
+            json.dumps(fixture_pack),
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ValueError, match="duplicate golden fixture id"):
+        load_golden_fixtures(tmp_path)
 
 
 def test_golden_json_files_are_harness_loadable():
@@ -339,6 +360,84 @@ def test_assamese_cues_disambiguate_the_shared_bengali_script():
     decision = router.route(bengali)
     assert decision.language == "bn"
     assert all(run.language != "as" for run in decision.runs)
+
+
+def _i18n_fixtures(code: str) -> list[GoldenFixture]:
+    return [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path(f"openmed/eval/golden/fixtures/i18n/{code}.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+
+
+def test_urdu_cues_disambiguate_the_shared_arabic_script():
+    # The catalog ships no ``ur`` pack yet (issue #1520 owns that), so the
+    # Urdu pack is injected here exactly as the Bengali pack is above. This
+    # proves the routing contract the built-in catalog will satisfy the moment
+    # a ``ur`` pack is registered, with no further change to the router.
+    arabic_pack = get_language_pack("ar")
+    assert arabic_pack is not None
+    urdu_pack = LanguagePack(
+        code="ur",
+        scripts=("Arabic",),
+        default_model="env:OPENMED_URDU_NER_MODEL",
+        segmenter_id="unicode-sentence",
+        recognizers=("builtin-patterns", "model"),
+        surrogate_locale="ur_PK",
+    )
+    router = LanguageRouter(packs=(arabic_pack, urdu_pack), use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ur"
+        assert any(run.source == "stdlib:urdu-cues" for run in decision.runs)
+        for run in decision.runs:
+            if run.script == "Arabic":
+                assert run.candidates == ("ur", "ar", "ha")
+
+    for fixture in _i18n_fixtures("ar"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ar"
+        assert all(run.language != "ur" for run in decision.runs)
+        assert all(run.source != "stdlib:urdu-cues" for run in decision.runs)
+        for run in decision.runs:
+            if run.script == "Arabic":
+                assert run.candidates == ("ar", "ha", "ur")
+
+
+def test_urdu_fixtures_fall_back_to_arabic_until_an_urdu_pack_ships():
+    router = LanguageRouter(use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ar"
+        assert any(run.source == "stdlib:arabic-fallback" for run in decision.runs)
+        # The unroutable Urdu evidence still reaches callers through the run
+        # metadata, so a consumer can see why the fallback fired.
+        assert any(run.candidates[:1] == ("ur",) for run in decision.runs)
+
+    for fixture in _i18n_fixtures("ar"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ar"
+        assert all(run.source != "stdlib:arabic-fallback" for run in decision.runs)
+        assert all(run.candidates[:1] != ("ur",) for run in decision.runs)
+
+
+def test_urdu_disambiguation_preserves_fixture_offsets_and_graphemes():
+    router = LanguageRouter(use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        runs = router.route_runs(fixture.text)
+        assert "".join(fixture.text[run.start : run.end] for run in runs) == (
+            fixture.text
+        )
+        for run in runs:
+            assert is_grapheme_boundary(run.start, fixture.text)
+            assert is_grapheme_boundary(run.end, fixture.text)
+        for span in fixture.gold_spans:
+            assert fixture.text[span.start : span.end] == span.text
 
 
 def test_assamese_fixtures_pass_zero_leakage_release_gate_offline():
@@ -798,6 +897,126 @@ def test_odia_fixtures_pass_zero_leakage_release_gate_offline():
     gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
     assert gate.passed is True
     assert gate.details["evaluated"] == {"or": 0.0}
+
+
+def test_vietnamese_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(fixtures) == 2
+    assert {fixture.language for fixture in fixtures} == {"vi"}
+    assert {fixture.metadata["locale"] for fixture in fixtures} == {"vi_VN"}
+    assert all(fixture.metadata["synthetic"] is True for fixture in fixtures)
+
+    cccd_values = []
+    phone_values = []
+    for fixture in fixtures:
+        # Vietnamese text must stay in NFC so codepoint offsets remain
+        # grapheme-aligned; NFD would split every tone mark into its own scalar.
+        assert unicodedata.normalize("NFC", fixture.text) == fixture.text
+
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert fixture.text[span.start : span.end] == span.text
+            if span.label == "ID_NUM":
+                if span.metadata.get("identifier_type") == "cccd":
+                    cccd_values.append(span.text)
+            elif span.label == "PHONE":
+                phone_values.append(span.text)
+
+    assert cccd_values
+    assert all(validate_vietnamese_cccd(value) for value in cccd_values)
+    assert all(value.startswith(("+84", "0")) for value in phone_values)
+    # Acceptance coverage: a native "ngay D thang M nam YYYY" date, a 0xx
+    # mobile, and a diacritic-bearing address all appear across the two rows.
+    all_spans = [span for fixture in fixtures for span in fixture.gold_spans]
+    assert any(
+        span.label == "DATE" and span.text.startswith("ngày ") for span in all_spans
+    )
+    assert any(
+        span.label == "PHONE" and span.text.startswith("0") for span in all_spans
+    )
+    assert any(
+        span.label == "STREET_ADDRESS" and any(char in span.text for char in "ườảãạệ")
+        for span in all_spans
+    )
+
+
+def test_vietnamese_fixtures_pass_zero_leakage_release_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    predictions = {}
+
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-08-01T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="vi",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "vi"))
+            for entity in swept_result.entities
+        }
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="vi",
+            consistent=False,
+            seed=None,
+            locale="vi_VN",
+            use_safety_sweep=True,
+        )
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-vietnamese",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-08-01T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["overall"] == 0.0
+    assert report.metrics["leakage"]["by_language"]["vi"] == 0.0
+
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"vi": 0.0}
 
 
 def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
