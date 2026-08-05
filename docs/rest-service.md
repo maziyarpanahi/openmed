@@ -20,6 +20,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /jobs`
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
+- `POST /omop/load`
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
 schema and returns `404` unless metrics are enabled.
@@ -562,6 +563,44 @@ Successful response shape:
   "audit": {
     "record_hash": "...",
     "verified": true
+  }
+}
+```
+
+### `POST /omop/load`
+
+Loads newline-delimited grounded note records into an in-memory OMOP CDM v5.4
+build over the existing `openmed.interop.omop` loader and returns a PHI-free
+summary. `records_jsonl` carries the grounded results as a JSONL string;
+`validate_constraints` optionally reports CDM constraint violations. The request
+body carries clinical text and must be treated as PHI, but the response contains
+only counts, hashed note identifiers, and span offsets.
+
+Request body:
+
+```json
+{
+  "records_jsonl": "{\"document_id\": \"note-1\", \"person_id\": \"patient-1\", \"note_text\": \"Patient reports diabetes.\", \"entities\": [{\"text\": \"diabetes\", \"domain_id\": \"Condition\", \"start\": 16, \"end\": 24, \"concept_id\": 201820, \"vocabulary_id\": \"SNOMED\"}]}\n",
+  "vocabulary_version": "SNOMED-2026",
+  "validate_constraints": true
+}
+```
+
+Successful response shape:
+
+```json
+{
+  "row_counts": {
+    "note": 1,
+    "note_nlp": 1,
+    "condition_occurrence": 1
+  },
+  "rejection_counts": {},
+  "rejected_spans": [],
+  "source_note_hashes": ["..."],
+  "constraint_violations": {
+    "count": 0,
+    "by_reason": {}
   }
 }
 ```

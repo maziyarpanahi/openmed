@@ -1,0 +1,17 @@
+{
+  "format": "openmed-segmenter-parity",
+  "format_version": 1,
+  "text": "患者张三在北京。 राहुल शर्मा",
+  "segments": [
+    {"text": "患者", "start": 0, "end": 6},
+    {"text": "张三", "start": 6, "end": 12},
+    {"text": "在", "start": 12, "end": 15},
+    {"text": "北京", "start": 15, "end": 21},
+    {"text": "。", "start": 21, "end": 24},
+    {"text": "रा", "start": 25, "end": 31},
+    {"text": "हु", "start": 31, "end": 37},
+    {"text": "ल", "start": 37, "end": 40},
+    {"text": "श", "start": 41, "end": 44},
+    {"text": "र्मा", "start": 44, "end": 56}
+  ]
+}
