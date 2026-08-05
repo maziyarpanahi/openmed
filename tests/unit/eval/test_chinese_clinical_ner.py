@@ -30,10 +30,12 @@ from openmed.eval.metrics import EvalSpan
 from openmed.eval.suites.chinese_clinical_ner import (
     CHINESE_CLINICAL_NER,
     CHINESE_CLINICAL_NER_MODEL_DIR_ENV,
+    MULTILINGUAL_FALLBACK_MODEL,
     ChineseClinicalNerAssetUnavailable,
     ChineseClinicalNerContractError,
     ChineseClinicalNerLeakageError,
     ChineseLocalModelAsset,
+    chinese_clinical_ner_metadata,
     chinese_local_model_asset_skip_reason,
     load_chinese_clinical_ner_fixtures,
     resolve_chinese_local_model_asset,
@@ -122,7 +124,34 @@ def test_synthetic_suite_reports_per_label_metrics_and_zero_leakage() -> None:
     assert report.metrics["per_label"][JOB_DEPARTMENT]["recall"] == 1.0
     assert report.metrics["per_label"][MICROORGANISM]["precision"] == 1.0
     assert "user-supplied local inputs" in report.metadata["data_boundary"]
-    assert "multilingual routing placeholder" in report.metadata["model_notice"]
+    assert "model-card evidence" in report.metadata["model_notice"]
+
+
+def test_model_evidence_tracks_the_routed_chinese_default() -> None:
+    from openmed.core.language_pack_catalog import (
+        DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+        DEFAULT_PII_MODELS,
+    )
+
+    evidence = chinese_clinical_ner_metadata()["model_evidence"]
+    placeholder_routed = "zh" in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+
+    # Track the catalog in both directions: if zh were ever demoted back to a
+    # placeholder the suite must report the fallback, not the catalog entry.
+    if placeholder_routed:
+        assert evidence["routed_default_model"] == MULTILINGUAL_FALLBACK_MODEL
+    else:
+        assert evidence["routed_default_model"] == DEFAULT_PII_MODELS["zh"]
+    assert evidence["weights_bundled"] is False
+    assert evidence["dedicated_zh_model"] is (
+        not placeholder_routed
+        and DEFAULT_PII_MODELS["zh"] != MULTILINGUAL_FALLBACK_MODEL
+    )
+    # The suite must not re-assert a fallback that master no longer routes to.
+    assert (
+        "multilingual routing placeholder"
+        not in (chinese_clinical_ner_metadata()["model_notice"])
+    )
 
 
 @pytest.mark.parametrize("threshold", [-0.01, 1.01, float("nan")])

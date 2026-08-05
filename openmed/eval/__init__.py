@@ -694,6 +694,16 @@ from openmed.eval.section_recall import (
     compute_section_detection_metrics,
     compute_section_recall,
 )
+from openmed.eval.suites.cblue_coverage import (
+    CBLUE_TASK_COVERAGE,
+    CblueProvenanceError,
+    CblueProvenanceFinding,
+    CblueTaskCoverage,
+    cblue_task_coverage_metadata,
+    load_cblue_task_coverage_fixtures,
+    run_cblue_task_coverage,
+    run_synthetic_cblue_task_coverage_smoke,
+)
 from openmed.eval.suites.policy_compliance import (
     PolicyProfileComplianceResult,
     run_policy_compliance,
@@ -756,6 +766,14 @@ __all__ = [
     "default_corpus",
     "run_api_once",
     "run_determinism_check",
+    "CBLUE_TASK_COVERAGE",
+    "CblueProvenanceError",
+    "CblueProvenanceFinding",
+    "CblueTaskCoverage",
+    "cblue_task_coverage_metadata",
+    "load_cblue_task_coverage_fixtures",
+    "run_cblue_task_coverage",
+    "run_synthetic_cblue_task_coverage_smoke",
     "DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR",
     "MIXED_SCRIPT_LEAKAGE_CEILING",
     "TEMPORAL_AWARENESS_F1_FLOOR",
