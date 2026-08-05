@@ -79,6 +79,23 @@ Walk through language-aware extraction and de-identification for:
 
 ---
 
+### [Chinese_Hindi_Deid_Tour.ipynb](./Chinese_Hindi_Deid_Tour.ipynb)
+
+**Runnable Chinese, Hindi, and Hinglish de-identification tour**
+
+Mirrors the two companion scripts with rendered output cells:
+
+- Fabricated Simplified Chinese, Hindi, and code-mixed Hinglish clinical notes
+- Structured PII entity output with offsets, labels, replacements, and sources
+- UTF-8 redacted text files created in a temporary tutorial workspace
+- Explicit assertions that no known synthetic identifier survives
+- A deterministic no-download loader for clean top-to-bottom execution
+
+**Recommended for:** Developers evaluating multilingual clinical
+de-identification who want an offline-friendly, fail-closed walkthrough.
+
+---
+
 ### [getting_started.ipynb](./getting_started.ipynb)
 
 **Introduction to OpenMed basics**
@@ -202,6 +219,7 @@ Get your token from: <https://huggingface.co/settings/tokens>
 | Notebook | Difficulty | Topics | Duration |
 |----------|-----------|--------|----------|
 | **PII_Detection_Complete_Guide** | Intermediate | PII, De-identification, HIPAA | 30-45 min |
+| **Chinese_Hindi_Deid_Tour** | Beginner | Chinese, Hindi, Hinglish, De-identification | 10-15 min |
 | **getting_started** | Beginner | Basics, Installation | 10-15 min |
 | **Sentence_Detection_Batching** | Intermediate | Batch processing | 15-20 min |
 | **Medical_Tokenizer_Demo** | Intermediate | Tokenization | 10-15 min |
@@ -220,8 +238,9 @@ Get your token from: <https://huggingface.co/settings/tokens>
 ### Path 2: PII Detection & De-identification
 
 1. `getting_started.ipynb` - Basics first
-2. `PII_Detection_Complete_Guide.ipynb` - Complete PII guide
-3. Practice with your own clinical notes
+2. `Chinese_Hindi_Deid_Tour.ipynb` - Synthetic multilingual walkthrough
+3. `PII_Detection_Complete_Guide.ipynb` - Complete PII guide
+4. Practice with your own authorized or synthetic clinical notes
 
 ### Path 3: Advanced NER
 

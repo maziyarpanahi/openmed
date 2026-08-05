@@ -437,6 +437,44 @@
         "synthetic": true
       },
       "text": "מטופלת: דנה כהן. תאריך לידה 15/03/1985, טלפון +972 54-123-4567, תעודת זהות 123456782, מיקוד 6423905, כתובת רחוב הרצל 12 תל אביב."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 9,
+          "label": "PERSON",
+          "start": 7,
+          "text": "王芳"
+        },
+        {
+          "end": 24,
+          "label": "DATE",
+          "start": 14,
+          "text": "1985年3月15日"
+        },
+        {
+          "end": 36,
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "synthetic_record_id"
+          },
+          "start": 28,
+          "text": "CN123456"
+        }
+      ],
+      "id": "golden-multilingual-zh-synthetic-record",
+      "language": "zh",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "合成病历：患者[PERSON]，出生日期[DATE]，病历号[ID_NUM]。"
+        },
+        "identifier_type": "synthetic_record_id",
+        "locale": "zh_CN",
+        "synthetic": true
+      },
+      "text": "合成病历：患者王芳，出生日期1985年3月15日，病历号CN123456。"
     }
   ],
   "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",

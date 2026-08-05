@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "corpus_version": "openmed-synthetic-boilerplate-v1",
+  "provenance": {
+    "source": "OpenMed synthetic clinical template phrases",
+    "license": "Apache-2.0",
+    "restricted_data": false,
+    "synthetic": true
+  },
+  "templates": [
+    {
+      "id": "constitutional-normal-exam",
+      "source_type": "synthetic",
+      "text": "Constitutional: well developed, well nourished, and in no acute distress."
+    },
+    {
+      "id": "head-normal-exam",
+      "source_type": "synthetic",
+      "text": "Head: normocephalic and atraumatic."
+    },
+    {
+      "id": "eyes-normal-exam",
+      "source_type": "synthetic",
+      "text": "Eyes: pupils equal, round, and reactive to light."
+    },
+    {
+      "id": "cardiovascular-normal-exam",
+      "source_type": "synthetic",
+      "text": "Cardiovascular: regular rate and rhythm without murmurs, rubs, or gallops."
+    },
+    {
+      "id": "respiratory-normal-exam",
+      "source_type": "synthetic",
+      "text": "Respiratory: clear to auscultation bilaterally without wheezes, rales, or rhonchi."
+    },
+    {
+      "id": "abdomen-normal-exam",
+      "source_type": "synthetic",
+      "text": "Abdomen: soft, non-tender, and non-distended with bowel sounds present."
+    },
+    {
+      "id": "extremities-normal-exam",
+      "source_type": "synthetic",
+      "text": "Extremities: no clubbing, cyanosis, or edema."
+    },
+    {
+      "id": "neurologic-normal-exam",
+      "source_type": "synthetic",
+      "text": "Neurologic: alert and oriented with cranial nerves grossly intact."
+    },
+    {
+      "id": "review-of-systems-catchall",
+      "source_type": "synthetic",
+      "text": "Review of systems is otherwise negative except as documented above."
+    },
+    {
+      "id": "chart-review-attestation",
+      "source_type": "synthetic",
+      "text": "The patient was seen and examined and the chart was reviewed."
+    },
+    {
+      "id": "consent-attestation",
+      "source_type": "synthetic",
+      "text": "Risks, benefits, and alternatives were discussed with the patient."
+    }
+  ]
+}

@@ -17,35 +17,59 @@ from __future__ import annotations
 import json
 import math
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
 from itertools import product
 from typing import Any, Mapping, Sequence
 
 from openmed.core.audit import stable_hash
 
 from .reid import (
-    _coerce_records,
+    _coerce_records as _legacy_coerce_records,
+)
+from .reid import (
     _field_category,
     _field_is_direct_identifier,
     _normalize_qi_value,
     _profile_record,
+    _Record,
 )
 
-__all__ = ["build_generalization_hierarchies", "enforce_kanon", "kanon_report"]
+__all__ = [
+    "MemoryCeilingError",
+    "StreamingKanonDecision",
+    "StreamingKanonState",
+    "build_generalization_hierarchies",
+    "enforce_kanon",
+    "kanon_report",
+]
 
 _SUPPORTED_L_METRICS = ("distinct", "entropy")
 _SUPPORTED_T_DISTANCES = ("variational",)
 _SUPPRESSED_VALUE = "*"
+_INTERNAL_QI_TOKEN_PREFIX = "__OPENMED_INTERNAL_QI__:"
 _SUPPORTED_USER_LEVEL_KEYS = frozenset({"name", "values", "default", "loss"})
+_DEFAULT_MAX_LATTICE_NODES = 100_000
+_DEFAULT_MAX_SUPPRESSION_SUBSETS = 100_000
+_TEXT_FIELDS = (
+    "text",
+    "note",
+    "content",
+    "document",
+    "deidentified_text",
+    "original_text",
+)
 
 
 @dataclass(frozen=True)
 class _GeneralizationLevel:
     name: str
     loss: float
-    transform: Callable[[Any], str]
+    transform: Callable[[Any], Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "loss": float(self.loss)}
@@ -60,6 +84,357 @@ class _Candidate:
     information_loss: float
     generalization_loss: float
     suppression_loss: float
+
+
+@dataclass(frozen=True)
+class _InternalQIState:
+    kind: str
+    values: tuple[Any, ...] = ()
+
+
+@dataclass
+class _SuppressionSearchState:
+    evaluated: int
+    maximum: int
+    total_known: bool = True
+
+    def consume(self) -> None:
+        self.evaluated += 1
+        if self.evaluated > self.maximum:
+            raise ValueError(
+                "Suppression subset search exceeds the configured search budget: "
+                f"more than {self.maximum} eligible class subsets. Reduce the "
+                "suppression cap, provide coarser hierarchies, or raise "
+                "max_suppression_subsets deliberately."
+            )
+
+    def mark_total_unknown(self) -> None:
+        self.total_known = False
+
+
+_MISSING_QI = _InternalQIState("missing")
+_NULL_QI = _InternalQIState("null")
+_EMPTY_QI = _InternalQIState("empty")
+
+
+def _validated_columns(
+    value: Sequence[str] | None,
+    *,
+    name: str,
+    allow_none: bool,
+) -> tuple[str, ...] | None:
+    if value is None:
+        if allow_none:
+            return None
+        return ()
+    if isinstance(value, (str, bytes, bytearray)):
+        raise TypeError(f"{name} must be a sequence of column names, not a string")
+    if not isinstance(value, Sequence):
+        raise TypeError(f"{name} must be a sequence of column names")
+    columns: list[str] = []
+    for column in value:
+        if not isinstance(column, str) or not column:
+            raise ValueError(f"{name} must contain non-empty string column names")
+        columns.append(column)
+    return tuple(sorted(dict.fromkeys(columns)))
+
+
+def _coerce_records(data: Any, *, source: str) -> list[_Record]:
+    """Coerce structured rows without applying document-container semantics."""
+
+    _validate_dataframe_temporal_precision(data)
+    dataframe_columns = getattr(data, "columns", None)
+    is_dataframe_like = dataframe_columns is not None
+    if dataframe_columns is not None:
+        try:
+            columns = list(dataframe_columns)
+        except TypeError:
+            raise TypeError("DataFrame columns must be an iterable schema") from None
+        if any(type(column) is not str for column in columns):
+            raise TypeError("DataFrame column names must be strings")
+        if len(columns) != len(set(columns)):
+            raise ValueError("DataFrame column names must be unique")
+
+    to_dicts = getattr(data, "to_dicts", None)
+    if callable(to_dicts):
+        data = to_dicts()
+    else:
+        to_dict = getattr(data, "to_dict", None)
+        if callable(to_dict) and not isinstance(data, Mapping):
+            data = to_dict("records")
+
+    if isinstance(data, Mapping):
+        rows: Sequence[Mapping[Any, Any]] = [data]
+    elif isinstance(data, Sequence) and not isinstance(
+        data,
+        (str, bytes, bytearray),
+    ):
+        if not all(isinstance(row, Mapping) for row in data):
+            return _legacy_coerce_records(data, source=source)
+        rows = data
+    else:
+        return _legacy_coerce_records(data, source=source)
+
+    records: list[_Record] = []
+    for index, row in enumerate(rows):
+        fields: dict[str, Any] = {}
+        for column_index, (field, value) in enumerate(row.items()):
+            if type(field) is not str:
+                raise TypeError(
+                    "Structured column names must be strings; unsupported name "
+                    f"at row offset {index}, column offset {column_index}"
+                )
+            fields[field] = (
+                _normalized_dataframe_scalar(value) if is_dataframe_like else value
+            )
+        text = next(
+            (
+                value
+                for field in _TEXT_FIELDS
+                if isinstance((value := fields.get(field)), str)
+            ),
+            "",
+        )
+        records.append(
+            _Record(
+                index=index,
+                record_id=None,
+                text=text,
+                fields=fields,
+                spans=(),
+                source=source,
+            )
+        )
+    return records
+
+
+def _validate_dataframe_temporal_precision(data: Any) -> None:
+    """Reject DataFrame temporal dtypes that lose precision on conversion."""
+
+    if not type(data).__module__.startswith("polars"):
+        return
+    schema = getattr(data, "schema", None)
+    if callable(schema):
+        schema = schema()
+    if not isinstance(schema, Mapping):
+        return
+    for dtype in schema.values():
+        rendered = str(dtype)
+        if rendered == "Time" or (
+            rendered.startswith("Datetime(")
+            and getattr(dtype, "time_unit", None) == "ns"
+        ):
+            raise ValueError(
+                "Polars temporal columns with sub-microsecond precision are unsupported"
+            )
+
+
+def _normalized_dataframe_scalar(value: Any) -> Any:
+    """Convert common DataFrame scalar wrappers to supported Python scalars."""
+
+    module = type(value).__module__
+    type_name = type(value).__name__
+    if module.startswith("pandas") and type_name in {"NAType", "NaTType"}:
+        return None
+    if module.startswith("pandas"):
+        to_pydatetime = getattr(value, "to_pydatetime", None)
+        if callable(to_pydatetime):
+            if getattr(value, "nanosecond", 0):
+                raise ValueError(
+                    "DataFrame timestamps with sub-microsecond precision are "
+                    "unsupported"
+                )
+            converted = to_pydatetime()
+            if type(converted) is datetime:
+                return converted
+    if module.startswith("numpy"):
+        if type_name == "datetime64":
+            microseconds = value.astype("datetime64[us]")
+            converted = microseconds.item()
+            if converted is not None and bool(
+                microseconds.astype(value.dtype) != value
+            ):
+                raise ValueError(
+                    "DataFrame timestamps with sub-microsecond precision are "
+                    "unsupported"
+                )
+        elif type_name == "timedelta64":
+            raise TypeError("DataFrame time durations are unsupported")
+        else:
+            item = getattr(value, "item", None)
+            converted = item() if callable(item) else value
+        if converted is not value:
+            return converted
+    return value
+
+
+def _typed_sensitive_value(value: Any) -> str:
+    return _typed_scalar_token(value)
+
+
+def _typed_sensitive_distribution_value(value: Any) -> str:
+    payload = _exact_qi_scalar_payload(value)
+    return (
+        _INTERNAL_QI_TOKEN_PREFIX
+        + "sensitive-distribution:"
+        + json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+
+
+def _typed_qi_value(field: str, value: Any) -> str:
+    del field
+    payload = _exact_qi_scalar_payload(value)
+    return (
+        _INTERNAL_QI_TOKEN_PREFIX
+        + "typed:"
+        + json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+
+
+def _typed_scalar_token(value: Any) -> str:
+    payload = _canonical_scalar_payload(value)
+    return (
+        _INTERNAL_QI_TOKEN_PREFIX
+        + "typed:"
+        + json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+
+
+def _exact_qi_scalar_payload(value: Any) -> dict[str, Any]:
+    """Return the typed representation materialized for a released QI."""
+
+    payload = _canonical_scalar_payload(value)
+    if type(value) is float:
+        return {"type": "float", "value": repr(value)}
+    if type(value) is str:
+        return {"type": "str", "value": value}
+    if type(value) is Decimal:
+        return {"type": "decimal", "value": str(value)}
+    if type(value) is datetime:
+        if value.tzinfo is not None and value.utcoffset() is None:
+            raise ValueError("datetime timezone offsets must be determinate")
+        return {"type": "datetime", "value": value.isoformat()}
+    return payload
+
+
+def _canonical_scalar_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, _InternalQIState):
+        return {
+            "type": value.kind,
+            "value": (
+                [_exact_qi_scalar_payload(item) for item in value.values]
+                if value.values
+                else None
+            ),
+        }
+    if value is None:
+        return {"type": "null", "value": None}
+    if type(value) is bool:
+        return {"type": "bool", "value": value}
+    if type(value) is int:
+        return {"type": "int", "value": value}
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise ValueError("floating-point values must be finite")
+        return {
+            "type": "float",
+            "value": "0" if value == 0.0 else format(value, ".17g"),
+        }
+    if type(value) is str:
+        return {"type": "str", "value": unicodedata.normalize("NFC", value)}
+    if type(value) is Decimal:
+        if not value.is_finite():
+            raise ValueError("decimal values must be finite")
+        return {"type": "decimal", "value": _canonical_decimal_text(value)}
+    if type(value) is datetime:
+        if value.tzinfo is not None and value.utcoffset() is None:
+            raise ValueError("datetime timezone offsets must be determinate")
+        canonical = (
+            value.astimezone(timezone.utc) if value.tzinfo is not None else value
+        )
+        return {"type": "datetime", "value": canonical.isoformat()}
+    if type(value) is date:
+        return {"type": "date", "value": value.isoformat()}
+    if type(value) is time:
+        if value.tzinfo is not None and value.utcoffset() is not None:
+            raise ValueError("timezone-aware time values are unsupported")
+        return {"type": "time", "value": value.isoformat()}
+    if type(value) is bytes:
+        return {"type": "bytes", "value": value.hex()}
+    raise TypeError("structured values must be supported tabular scalars")
+
+
+def _canonical_decimal_text(value: Decimal) -> str:
+    """Canonicalize a finite Decimal without applying context precision."""
+
+    if value.is_zero():
+        return "0"
+    components = value.as_tuple()
+    if not isinstance(components.exponent, int):
+        raise ValueError("decimal values must be finite")
+    sign, digits, exponent = (
+        components.sign,
+        components.digits,
+        components.exponent,
+    )
+    trimmed = list(digits)
+    while trimmed[-1] == 0:
+        trimmed.pop()
+        exponent += 1
+    coefficient = "".join(str(digit) for digit in trimmed)
+    prefix = "-" if sign else ""
+    return f"{prefix}{coefficient}e{exponent}"
+
+
+def _escaped_literal_string(value: str) -> str:
+    if not value.startswith(_INTERNAL_QI_TOKEN_PREFIX):
+        return value
+    return (
+        _INTERNAL_QI_TOKEN_PREFIX
+        + "literal:"
+        + json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+    )
+
+
+def _canonical_hash_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(field): _canonical_hash_value(item) for field, item in value.items()
+        }
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    ):
+        return [_canonical_hash_value(item) for item in value]
+    return _canonical_scalar_payload(value)
+
+
+def _record_hash(record: Mapping[str, Any]) -> str:
+    return stable_hash(
+        {
+            "kind": "openmed-kanon-record",
+            "fields": _canonical_hash_value(record),
+        }
+    )
 
 
 def kanon_report(
@@ -101,44 +476,90 @@ def kanon_report(
             f"supported: {', '.join(_SUPPORTED_T_DISTANCES)}."
         )
 
+    qis = _validated_columns(
+        quasi_identifiers,
+        name="quasi_identifiers",
+        allow_none=True,
+    )
+    sensitive = (
+        _validated_columns(
+            sensitive_attributes,
+            name="sensitive_attributes",
+            allow_none=True,
+        )
+        or ()
+    )
     coerced = _coerce_records(records, source="deidentified")
-    sensitive = sorted(dict.fromkeys(sensitive_attributes or []))
 
     members: defaultdict[Any, list[int]] = defaultdict(list)
     json_keys: dict[Any, list[Any]] = {}
     sensitive_values: dict[int, dict[str, str]] = {}
+    sensitive_distribution_values: dict[int, dict[str, str]] = {}
 
     for record in coerced:
-        hash_key, json_key = _equivalence_key(record, quasi_identifiers)
+        hash_key, json_key = _equivalence_key(record, qis)
         members[hash_key].append(record.index)
         json_keys.setdefault(hash_key, json_key)
-        sensitive_values[record.index] = {
-            attr: str(record.fields.get(attr)) for attr in sensitive
-        }
+        sensitive_values[record.index] = {}
+        sensitive_distribution_values[record.index] = {}
+        for attr in sensitive:
+            if attr not in record.fields:
+                raise ValueError(
+                    f"Sensitive attribute {attr!r} is missing at record offset "
+                    f"{record.index}; missing values cannot count toward "
+                    "l-diversity"
+                )
+            value = record.fields[attr]
+            if (
+                value is None
+                or (
+                    isinstance(value, str)
+                    and (not value.strip() or value != value.strip())
+                )
+                or (type(value) is bytes and not value)
+            ):
+                raise ValueError(
+                    f"Sensitive attribute {attr!r} is empty or has surrounding "
+                    f"whitespace at record offset {record.index}; ambiguous "
+                    "values cannot count toward l-diversity"
+                )
+            try:
+                sensitive_values[record.index][attr] = _typed_sensitive_value(value)
+                sensitive_distribution_values[record.index][attr] = (
+                    _typed_sensitive_distribution_value(value)
+                )
+            except (TypeError, ValueError) as exc:
+                raise type(exc)(
+                    f"Sensitive attribute {attr!r} is unsupported or non-finite "
+                    f"at record offset {record.index}"
+                ) from None
 
     global_dist = {
         attr: _distribution(
-            sensitive_values[idx][attr]
-            for idx in sensitive_values
-            if attr in sensitive_values[idx]
+            sensitive_distribution_values[idx][attr]
+            for idx in sensitive_distribution_values
+            if attr in sensitive_distribution_values[idx]
         )
         for attr in sensitive
     }
 
-    classes = []
+    classes: list[dict[str, Any]] = []
     for hash_key in members:
         indices = sorted(members[hash_key])
         per_class_l: dict[str, Any] = {}
         per_class_t: dict[str, float] = {}
         for attr in sensitive:
-            values = [sensitive_values[idx][attr] for idx in indices]
-            counts = Counter(values)
+            l_values = [sensitive_values[idx][attr] for idx in indices]
+            distribution_values = [
+                sensitive_distribution_values[idx][attr] for idx in indices
+            ]
+            counts = Counter(l_values)
             per_class_l[attr] = {
                 "distinct": len(counts),
                 "entropy": _entropy(counts),
             }
             per_class_t[attr] = _variational_distance(
-                _distribution(values), global_dist[attr]
+                _distribution(distribution_values), global_dist[attr]
             )
         classes.append(
             {
@@ -152,7 +573,7 @@ def kanon_report(
 
     classes.sort(key=lambda cls: json.dumps(cls["key"], sort_keys=True))
 
-    sizes = [cls["size"] for cls in classes]
+    sizes: list[int] = [int(cls["size"]) for cls in classes]
     overall_l = {
         attr: {
             "min_distinct": min(
@@ -176,7 +597,7 @@ def kanon_report(
 
     return {
         "record_count": len(coerced),
-        "quasi_identifiers": _reported_quasi_identifiers(quasi_identifiers, classes),
+        "quasi_identifiers": _reported_quasi_identifiers(qis, classes),
         "sensitive_attributes": sorted(sensitive),
         "k": min(sizes) if sizes else 0,
         "class_count": len(classes),
@@ -206,8 +627,13 @@ def build_generalization_hierarchies(
     optional ``default`` and optional ``loss`` keys.
     """
 
+    explicit_qis = _validated_columns(
+        quasi_identifiers,
+        name="quasi_identifiers",
+        allow_none=True,
+    )
     coerced = _coerce_records(records, source="deidentified")
-    qis = _resolve_quasi_identifier_fields(coerced, quasi_identifiers)
+    qis = _resolve_quasi_identifier_fields(coerced, explicit_qis)
     levels = _build_hierarchy_levels(coerced, qis, hierarchies)
     return {
         field: [level.to_dict() for level in field_levels]
@@ -227,6 +653,9 @@ def enforce_kanon(
     suppression_rate: float = 0.0,
     hierarchies: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
     remove_direct_identifiers: bool = True,
+    l_metric: str = "distinct",
+    max_lattice_nodes: int = _DEFAULT_MAX_LATTICE_NODES,
+    max_suppression_subsets: int = _DEFAULT_MAX_SUPPRESSION_SUBSETS,
 ) -> dict[str, Any]:
     """Generalize and suppress records until the declared k/l/t policy holds.
 
@@ -246,10 +675,30 @@ def enforce_kanon(
     sensitive value confidence and the joint identity-plus-sensitive event.
     """
 
-    _validate_policy(target_k, target_l, target_t, suppression_rate)
+    _validate_policy(
+        target_k,
+        target_l,
+        target_t,
+        suppression_rate,
+        l_metric=l_metric,
+        max_lattice_nodes=max_lattice_nodes,
+        max_suppression_subsets=max_suppression_subsets,
+    )
+    explicit_qis = _validated_columns(
+        quasi_identifiers,
+        name="quasi_identifiers",
+        allow_none=True,
+    )
+    sensitive = (
+        _validated_columns(
+            sensitive_attributes,
+            name="sensitive_attributes",
+            allow_none=True,
+        )
+        or ()
+    )
     coerced = _coerce_records(records, source="deidentified")
-    qis = _resolve_quasi_identifier_fields(coerced, quasi_identifiers)
-    sensitive = sorted(str(attr) for attr in sensitive_attributes or [])
+    qis = _resolve_quasi_identifier_fields(coerced, explicit_qis)
     if target_l > 1 and not sensitive:
         raise ValueError("target_l > 1 requires at least one sensitive attribute")
     if target_t < 1.0 and not sensitive:
@@ -257,7 +706,10 @@ def enforce_kanon(
 
     if not coerced:
         empty_report = kanon_report(
-            [], quasi_identifiers=qis, sensitive_attributes=sensitive
+            [],
+            quasi_identifiers=qis,
+            sensitive_attributes=sensitive,
+            l_metric=l_metric,
         )
         return {
             "schema_version": 1,
@@ -266,6 +718,7 @@ def enforce_kanon(
             "suppressed_count": 0,
             "target_k": int(target_k),
             "target_l": int(target_l),
+            "l_metric": l_metric,
             "target_t": float(target_t),
             "quasi_identifiers": qis,
             "sensitive_attributes": sensitive,
@@ -279,6 +732,16 @@ def enforce_kanon(
                 "generalization_loss": 0.0,
                 "suppression_loss": 0.0,
                 "optimality_tolerance": 0.0,
+                "search": "full-domain exhaustive lattice",
+                "search_space_size": 0,
+                "nodes_evaluated": 0,
+                "max_lattice_nodes": int(max_lattice_nodes),
+                "suppression_search": "exhaustive equivalence-class subsets",
+                "suppression_subsets_evaluated": 0,
+                "suppression_subsets_possible": 0,
+                "max_suppression_subsets": int(max_suppression_subsets),
+                "search_complete": True,
+                "optimum_proven": True,
             },
             "bounds": _bound_report(
                 [],
@@ -288,16 +751,30 @@ def enforce_kanon(
                 target_l=target_l,
                 target_t=target_t,
                 sensitive_attributes=sensitive,
+                l_metric=l_metric,
             ),
         }
 
     levels = _build_hierarchy_levels(coerced, qis, hierarchies)
+    search_space_size = math.prod(len(levels[field]) for field in qis)
+    if search_space_size > max_lattice_nodes:
+        raise ValueError(
+            "Generalization lattice exceeds the configured search budget: "
+            f"{search_space_size} nodes for {len(qis)} quasi-identifiers, "
+            f"max_lattice_nodes={max_lattice_nodes}. Reduce the quasi-identifier "
+            "set, provide coarser explicit hierarchies, or raise the budget "
+            "deliberately."
+        )
     budget = _suppression_budget(
         len(coerced),
         suppression_limit=suppression_limit,
         suppression_rate=suppression_rate,
     )
-    candidate = _search_lattice(
+    suppression_search = _SuppressionSearchState(
+        evaluated=0,
+        maximum=max_suppression_subsets,
+    )
+    candidate, nodes_evaluated = _search_lattice(
         coerced,
         qis,
         sensitive,
@@ -307,12 +784,32 @@ def enforce_kanon(
         target_t=target_t,
         suppression_budget=budget,
         remove_direct_identifiers=remove_direct_identifiers,
+        l_metric=l_metric,
+        suppression_search=suppression_search,
     )
     if candidate is None:
         raise ValueError(
             "No generalization satisfies the requested k/l/t targets within "
             f"the suppression cap ({budget} of {len(coerced)} records)."
         )
+    suppression_subsets_possible = (
+        suppression_search.evaluated if suppression_search.total_known else None
+    )
+    search_complete = (
+        nodes_evaluated == search_space_size
+        and suppression_subsets_possible == suppression_search.evaluated
+    )
+    optimum_proven = search_complete or candidate.information_loss == 0.0
+    search_strategy = (
+        "full-domain exhaustive lattice"
+        if search_complete
+        else "zero-loss lower-bound lattice"
+    )
+    suppression_strategy = (
+        "exhaustive equivalence-class subsets"
+        if suppression_subsets_possible == suppression_search.evaluated
+        else "zero-loss lower-bound subset pruning"
+    )
 
     field_order = tuple(qis)
     node_by_field = {
@@ -335,6 +832,7 @@ def enforce_kanon(
         target_l=target_l,
         target_t=target_t,
         sensitive_attributes=sensitive,
+        l_metric=l_metric,
     )
     return {
         "schema_version": 1,
@@ -344,6 +842,7 @@ def enforce_kanon(
         "suppression_limit": budget,
         "target_k": int(target_k),
         "target_l": int(target_l),
+        "l_metric": l_metric,
         "target_t": float(target_t),
         "quasi_identifiers": field_order,
         "sensitive_attributes": sensitive,
@@ -359,7 +858,16 @@ def enforce_kanon(
             "generalization_loss": candidate.generalization_loss,
             "suppression_loss": candidate.suppression_loss,
             "optimality_tolerance": 0.0,
-            "search": "full-domain exhaustive lattice",
+            "search": search_strategy,
+            "search_space_size": int(search_space_size),
+            "nodes_evaluated": int(nodes_evaluated),
+            "max_lattice_nodes": int(max_lattice_nodes),
+            "suppression_search": suppression_strategy,
+            "suppression_subsets_evaluated": suppression_search.evaluated,
+            "suppression_subsets_possible": suppression_subsets_possible,
+            "max_suppression_subsets": int(max_suppression_subsets),
+            "search_complete": search_complete,
+            "optimum_proven": optimum_proven,
         },
         "bounds": bounds,
     }
@@ -372,7 +880,7 @@ def _equivalence_key(
     """Return (hashable grouping key, JSON-serializable key) for a record."""
     if quasi_identifiers:
         pairs = tuple(
-            (field, _normalize_qi_value(field, record.fields.get(field, "")))
+            (field, _explicit_qi_value(record.fields, field))
             for field in sorted(quasi_identifiers)
         )
         return pairs, [[field, value] for field, value in pairs]
@@ -380,6 +888,58 @@ def _equivalence_key(
     profile_key = _profile_record(record).key
     json_key = [[category, list(values)] for category, values in profile_key]
     return profile_key, json_key
+
+
+def _explicit_qi_value(fields: Mapping[str, Any], field: str) -> str:
+    """Return a collision-resistant value for one explicitly declared QI."""
+
+    if field not in fields:
+        return _typed_qi_value(field, _MISSING_QI)
+    value = fields[field]
+    if value is None:
+        return _typed_qi_value(field, _NULL_QI)
+    if isinstance(value, str) and not value:
+        return _typed_qi_value(field, _EMPTY_QI)
+    return _typed_qi_value(field, value)
+
+
+def _exact_qi_value(field: str, value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return value
+    if _is_internal_qi_token(value):
+        suffix = (
+            ""
+            if not value.values
+            else ":"
+            + json.dumps(
+                [_exact_qi_scalar_payload(item) for item in value.values],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return f"{_INTERNAL_QI_TOKEN_PREFIX}state:{value.kind}{suffix}"
+    _typed_qi_value(field, value)
+    if isinstance(value, str):
+        return _escaped_literal_string(value)
+    return value
+
+
+def _is_internal_qi_token(value: Any) -> bool:
+    return isinstance(value, _InternalQIState)
+
+
+def _is_ordered_multiset(value: Any) -> bool:
+    return isinstance(value, _InternalQIState) and value.kind == "ordered-multiset"
+
+
+def _suppress_qi_value(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_SUPPRESSED_VALUE for _item in value.values),
+        )
+    return _SUPPRESSED_VALUE
 
 
 def _distribution(values: Any) -> dict[str, float]:
@@ -447,15 +1007,38 @@ def _validate_policy(
     target_l: int,
     target_t: float,
     suppression_rate: float,
+    *,
+    l_metric: str = "distinct",
+    max_lattice_nodes: int = _DEFAULT_MAX_LATTICE_NODES,
+    max_suppression_subsets: int = _DEFAULT_MAX_SUPPRESSION_SUBSETS,
 ) -> None:
-    if target_k < 1:
-        raise ValueError("target_k must be >= 1")
-    if target_l < 1:
-        raise ValueError("target_l must be >= 1")
-    if not 0.0 <= float(target_t) <= 1.0:
+    if type(target_k) is not int or target_k < 1:
+        raise ValueError("target_k must be an integer >= 1")
+    if type(target_l) is not int or target_l < 1:
+        raise ValueError("target_l must be an integer >= 1")
+    if (
+        not isinstance(target_t, (int, float))
+        or isinstance(target_t, bool)
+        or not math.isfinite(float(target_t))
+        or not 0.0 <= float(target_t) <= 1.0
+    ):
         raise ValueError("target_t must be between 0.0 and 1.0")
-    if not 0.0 <= float(suppression_rate) <= 1.0:
+    if (
+        not isinstance(suppression_rate, (int, float))
+        or isinstance(suppression_rate, bool)
+        or not math.isfinite(float(suppression_rate))
+        or not 0.0 <= float(suppression_rate) <= 1.0
+    ):
         raise ValueError("suppression_rate must be between 0.0 and 1.0")
+    if l_metric not in _SUPPORTED_L_METRICS:
+        raise ValueError(
+            f"Unsupported l_metric {l_metric!r}; "
+            f"supported: {', '.join(_SUPPORTED_L_METRICS)}."
+        )
+    if type(max_lattice_nodes) is not int or max_lattice_nodes < 1:
+        raise ValueError("max_lattice_nodes must be an integer >= 1")
+    if type(max_suppression_subsets) is not int or max_suppression_subsets < 1:
+        raise ValueError("max_suppression_subsets must be an integer >= 1")
 
 
 def _resolve_quasi_identifier_fields(
@@ -488,6 +1071,11 @@ def _build_hierarchy_levels(
     supplied: Mapping[str, Sequence[Mapping[str, Any]]] | None,
 ) -> dict[str, tuple[_GeneralizationLevel, ...]]:
     supplied = supplied or {}
+    unknown = sorted(set(supplied) - set(quasi_identifiers))
+    if unknown:
+        raise ValueError(
+            f"Hierarchies were supplied for undeclared quasi-identifiers: {unknown!r}"
+        )
     result: dict[str, tuple[_GeneralizationLevel, ...]] = {}
     for field in quasi_identifiers:
         if field in supplied:
@@ -505,6 +1093,7 @@ def _user_hierarchy(
         raise ValueError(f"Hierarchy for {field!r} must contain at least one level")
 
     built: list[_GeneralizationLevel] = []
+    partition_levels: list[tuple[dict[str, str], str | None]] = []
     max_index = max(1, len(levels) - 1)
     for index, level in enumerate(levels):
         unknown = set(level) - _SUPPORTED_USER_LEVEL_KEYS
@@ -515,18 +1104,79 @@ def _user_hierarchy(
         values = level.get("values")
         if values is not None and not isinstance(values, Mapping):
             raise ValueError(f"Hierarchy level {field!r}[{index}] values must be a map")
-        value_map = {str(key): str(value) for key, value in dict(values or {}).items()}
+        if index == 0 and (values is not None or "default" in level):
+            raise ValueError(
+                f"Hierarchy level {field!r}[0] must be a canonical identity "
+                "level without values or a default"
+            )
+        value_map: dict[str, str] = {}
+        for key, mapped_value in (values or {}).items():
+            coerced_key = str(key)
+            if coerced_key in value_map:
+                raise ValueError(
+                    f"Hierarchy level {field!r}[{index}] keys collide after "
+                    "string coercion"
+                )
+            value_map[coerced_key] = str(mapped_value)
         default = level.get("default")
+        default_text = str(default) if default is not None else None
+        if any(
+            value.startswith(_INTERNAL_QI_TOKEN_PREFIX) for value in value_map.values()
+        ) or (
+            default_text is not None
+            and default_text.startswith(_INTERNAL_QI_TOKEN_PREFIX)
+        ):
+            raise ValueError(
+                f"Hierarchy level {field!r}[{index}] outputs cannot use the "
+                "reserved internal namespace"
+            )
         loss = _optional_float(level.get("loss"))
+        if "loss" in level and loss is None:
+            raise ValueError(f"Hierarchy level {field!r}[{index}] loss must be finite")
         if loss is None:
             loss = index / max_index
+        if index == 0 and loss != 0.0:
+            raise ValueError(f"Hierarchy level {field!r}[0] identity loss must be 0")
+        if index > 0 and loss <= 0.0:
+            raise ValueError(
+                f"Hierarchy coarsening level {field!r}[{index}] loss must be "
+                "greater than 0"
+            )
+        if not 0.0 <= loss <= 1.0:
+            raise ValueError(
+                f"Hierarchy level {field!r}[{index}] loss must be between 0 and 1"
+            )
+        if built and loss < built[-1].loss:
+            raise ValueError(f"Hierarchy losses for {field!r} must be non-decreasing")
 
         def transform(
             value: Any,
             *,
             mapping: Mapping[str, str] = value_map,
             default_value: Any = default,
-        ) -> str:
+            level_index: int = index,
+        ) -> Any:
+            if level_index == 0:
+                return _exact_qi_value(field, value)
+            if _is_ordered_multiset(value):
+                return _InternalQIState(
+                    "ordered-multiset",
+                    tuple(
+                        transform(
+                            item,
+                            mapping=mapping,
+                            default_value=default_value,
+                            level_index=level_index,
+                        )
+                        for item in value.values
+                    ),
+                )
+            if _is_internal_qi_token(value):
+                return (
+                    str(default_value)
+                    if default_value is not None
+                    else _SUPPRESSED_VALUE
+                )
             exact = str(value)
             normalized = _normalize_qi_value(field, value)
             if exact in mapping:
@@ -535,7 +1185,7 @@ def _user_hierarchy(
                 return mapping[normalized]
             if default_value is not None:
                 return str(default_value)
-            return normalized
+            return _escaped_literal_string(normalized)
 
         built.append(
             _GeneralizationLevel(
@@ -544,7 +1194,65 @@ def _user_hierarchy(
                 transform=transform,
             )
         )
+        partition_levels.append((value_map, default_text))
+    _validate_user_hierarchy_partitions(field, partition_levels)
     return tuple(built)
+
+
+def _validate_user_hierarchy_partitions(
+    field: str,
+    levels: Sequence[tuple[Mapping[str, str], str | None]],
+) -> None:
+    representative_values = {
+        source for mapping, _default in levels for source in mapping
+    }
+    representative_values.update(
+        output_value
+        for mapping, default in levels
+        for output_value in (
+            *mapping.values(),
+            *((default,) if default is not None else ()),
+        )
+    )
+    # Defaults describe every source value not named in a mapping. Include two
+    # explicit representatives for that open domain so a later exception
+    # cannot split a class that an earlier default merged.
+    sentinel_index = 0
+    while len(representative_values) < 2 or sentinel_index < 2:
+        sentinel = f"__openmed_hierarchy_unmapped_{sentinel_index}__"
+        sentinel_index += 1
+        if sentinel not in representative_values:
+            representative_values.add(sentinel)
+    known_values = sorted(representative_values)
+
+    def output(
+        source: str,
+        level: tuple[Mapping[str, str], str | None],
+    ) -> str:
+        mapping, default = level
+        normalized = _normalize_qi_value(field, source)
+        if source in mapping:
+            return mapping[source]
+        if normalized in mapping:
+            return mapping[normalized]
+        if default is not None:
+            return default
+        return _escaped_literal_string(normalized)
+
+    for index in range(1, len(levels) - 1):
+        current = levels[index]
+        following = levels[index + 1]
+        merged: defaultdict[str, list[str]] = defaultdict(list)
+        for source in known_values:
+            merged[output(source, current)].append(source)
+        for sources in merged.values():
+            if len(sources) < 2:
+                continue
+            if len({output(source, following) for source in sources}) > 1:
+                raise ValueError(
+                    f"Hierarchy level {field!r}[{index + 1}] splits values "
+                    f"merged at level {index}"
+                )
 
 
 def _default_hierarchy(
@@ -554,55 +1262,59 @@ def _default_hierarchy(
     category = _field_category(field) or field
     if category == "age":
         return (
-            _level("exact", 0.0, lambda value: _normalize_qi_value("age", value)),
+            _level("exact", 0.0, lambda value: _exact_qi_value("age", value)),
             _level("age_5_year_band", 0.25, lambda value: _age_band(value, 5)),
             _level("age_10_year_band", 0.5, lambda value: _age_band(value, 10)),
             _level("age_20_year_band", 0.75, lambda value: _age_band(value, 20)),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+            _level("suppressed", 1.0, _suppress_qi_value),
         )
     if category == "date":
         return (
-            _level("exact", 0.0, lambda value: _normalize_qi_value("date", value)),
+            _level("exact", 0.0, lambda value: _exact_qi_value("date", value)),
             _level("month", 0.25, _date_month),
             _level("year", 0.5, _date_year),
             _level("decade", 0.75, _date_decade),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+            _level("suppressed", 1.0, _suppress_qi_value),
         )
     if category == "geography":
         return (
-            _level("exact", 0.0, lambda value: _normalize_qi_value("geography", value)),
+            _level(
+                "exact",
+                0.0,
+                lambda value: _exact_qi_value("geography", value),
+            ),
             _level("regional", 0.4, _geography_region),
             _level("broad_region", 0.7, _geography_broad_region),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+            _level("suppressed", 1.0, _suppress_qi_value),
         )
 
-    values = {
-        _normalize_qi_value(field, record.fields.get(field, ""))
-        for record in records
-        if record.fields.get(field) is not None
-    }
-    has_prefix_signal = any(len(value) > 1 for value in values)
-    if has_prefix_signal:
-        return (
-            _level("exact", 0.0, lambda value: _normalize_qi_value(field, value)),
-            _level("prefix", 0.5, lambda value: _generic_prefix(field, value)),
-            _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
-        )
+    # Arbitrary categories, facilities, and clinical codes do not have a
+    # defensible hierarchy that can be inferred from their spelling. In
+    # particular, a first-character prefix is not a semantic parent. Callers
+    # that need useful intermediate levels must provide an explicit, reviewed
+    # hierarchy; the safe fallback is exact-or-suppressed.
     return (
-        _level("exact", 0.0, lambda value: _normalize_qi_value(field, value)),
-        _level("suppressed", 1.0, lambda value: _SUPPRESSED_VALUE),
+        _level("exact", 0.0, lambda value: _exact_qi_value(field, value)),
+        _level("suppressed", 1.0, _suppress_qi_value),
     )
 
 
 def _level(
     name: str,
     loss: float,
-    transform: Callable[[Any], str],
+    transform: Callable[[Any], Any],
 ) -> _GeneralizationLevel:
     return _GeneralizationLevel(name=name, loss=loss, transform=transform)
 
 
-def _age_band(value: Any, width: int) -> str:
+def _age_band(value: Any, width: int) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_age_band(item, width) for item in value.values),
+        )
+    if _is_internal_qi_token(value):
+        return _SUPPRESSED_VALUE
     normalized = _normalize_qi_value("age", value)
     parsed = _optional_int(normalized)
     if parsed is None:
@@ -613,6 +1325,8 @@ def _age_band(value: Any, width: int) -> str:
 
 
 def _date_parts(value: Any) -> tuple[int, int | None] | None:
+    if _is_internal_qi_token(value):
+        return None
     text = _normalize_qi_value("date", value)
     match = re.match(r"^(\d{4})(?:[-/](\d{1,2}))?", text)
     if not match:
@@ -626,7 +1340,12 @@ def _date_parts(value: Any) -> tuple[int, int | None] | None:
     return year, month
 
 
-def _date_month(value: Any) -> str:
+def _date_month(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_date_month(item) for item in value.values),
+        )
     parts = _date_parts(value)
     if parts is None:
         return _SUPPRESSED_VALUE
@@ -636,14 +1355,24 @@ def _date_month(value: Any) -> str:
     return f"{year:04d}-{month:02d}"
 
 
-def _date_year(value: Any) -> str:
+def _date_year(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_date_year(item) for item in value.values),
+        )
     parts = _date_parts(value)
     if parts is None:
         return _SUPPRESSED_VALUE
     return f"{parts[0]:04d}"
 
 
-def _date_decade(value: Any) -> str:
+def _date_decade(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_date_decade(item) for item in value.values),
+        )
     parts = _date_parts(value)
     if parts is None:
         return _SUPPRESSED_VALUE
@@ -651,7 +1380,14 @@ def _date_decade(value: Any) -> str:
     return f"{decade:04d}s"
 
 
-def _geography_region(value: Any) -> str:
+def _geography_region(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_geography_region(item) for item in value.values),
+        )
+    if _is_internal_qi_token(value):
+        return _SUPPRESSED_VALUE
     text = _normalize_qi_value("geography", value)
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 5:
@@ -664,7 +1400,14 @@ def _geography_region(value: Any) -> str:
     return text[:3] + "*" if len(text) > 3 else text or _SUPPRESSED_VALUE
 
 
-def _geography_broad_region(value: Any) -> str:
+def _geography_broad_region(value: Any) -> Any:
+    if _is_ordered_multiset(value):
+        return _InternalQIState(
+            "ordered-multiset",
+            tuple(_geography_broad_region(item) for item in value.values),
+        )
+    if _is_internal_qi_token(value):
+        return _SUPPRESSED_VALUE
     text = _normalize_qi_value("geography", value)
     digits = re.sub(r"\D", "", text)
     if len(digits) >= 5:
@@ -673,21 +1416,16 @@ def _geography_broad_region(value: Any) -> str:
     return region[:1] + "*" if len(region) > 1 else region
 
 
-def _generic_prefix(field: str, value: Any) -> str:
-    normalized = _normalize_qi_value(field, value)
-    if not normalized:
-        return _SUPPRESSED_VALUE
-    return normalized[:1] + "*"
-
-
 def _suppression_budget(
     record_count: int,
     *,
     suppression_limit: int | None,
     suppression_rate: float,
 ) -> int:
-    if suppression_limit is not None and suppression_limit < 0:
-        raise ValueError("suppression_limit must be >= 0")
+    if suppression_limit is not None and (
+        type(suppression_limit) is not int or suppression_limit < 0
+    ):
+        raise ValueError("suppression_limit must be an integer >= 0")
     rate_budget = math.floor(record_count * suppression_rate)
     if suppression_limit is None:
         return rate_budget
@@ -707,11 +1445,15 @@ def _search_lattice(
     target_t: float,
     suppression_budget: int,
     remove_direct_identifiers: bool,
-) -> _Candidate | None:
+    l_metric: str = "distinct",
+    suppression_search: _SuppressionSearchState,
+) -> tuple[_Candidate | None, int]:
     field_order = tuple(quasi_identifiers)
-    candidates: list[_Candidate] = []
+    best: _Candidate | None = None
+    nodes_evaluated = 0
     ranges = [range(len(levels[field])) for field in field_order]
     for node in product(*ranges):
+        nodes_evaluated += 1
         candidate = _evaluate_lattice_node(
             records,
             field_order,
@@ -723,20 +1465,26 @@ def _search_lattice(
             target_t=target_t,
             suppression_budget=suppression_budget,
             remove_direct_identifiers=remove_direct_identifiers,
+            l_metric=l_metric,
+            suppression_search=suppression_search,
         )
-        if candidate is not None:
-            candidates.append(candidate)
-    if not candidates:
-        return None
-    candidates.sort(
-        key=lambda candidate: (
-            candidate.information_loss,
-            candidate.suppression_loss,
-            sum(candidate.node),
-            candidate.node,
-        )
+        if candidate is None:
+            continue
+        if best is None or _candidate_sort_key(candidate) < _candidate_sort_key(best):
+            best = candidate
+            if candidate.information_loss == 0.0:
+                return candidate, nodes_evaluated
+    return best, nodes_evaluated
+
+
+def _candidate_sort_key(candidate: _Candidate) -> tuple[Any, ...]:
+    return (
+        candidate.information_loss,
+        candidate.suppression_loss,
+        sum(candidate.node),
+        candidate.node,
+        candidate.suppressed_positions,
     )
-    return candidates[0]
 
 
 def _evaluate_lattice_node(
@@ -751,7 +1499,14 @@ def _evaluate_lattice_node(
     target_t: float,
     suppression_budget: int,
     remove_direct_identifiers: bool,
+    l_metric: str = "distinct",
+    suppression_search: _SuppressionSearchState | None = None,
 ) -> _Candidate | None:
+    if suppression_search is None:
+        suppression_search = _SuppressionSearchState(
+            evaluated=0,
+            maximum=_DEFAULT_MAX_SUPPRESSION_SUBSETS,
+        )
     transformed = tuple(
         _transform_record(
             record,
@@ -762,69 +1517,160 @@ def _evaluate_lattice_node(
         )
         for record in records
     )
-    suppressed: set[int] = set()
-
-    while True:
-        remaining_positions = [
-            position
-            for position in range(len(transformed))
-            if position not in suppressed
-        ]
-        if not remaining_positions:
-            return None
-        remaining_records = [transformed[position] for position in remaining_positions]
-        report = kanon_report(
-            remaining_records,
-            quasi_identifiers=quasi_identifiers,
-            sensitive_attributes=sensitive_attributes,
+    initial_report = kanon_report(
+        transformed,
+        quasi_identifiers=quasi_identifiers,
+        sensitive_attributes=sensitive_attributes,
+        l_metric=l_metric,
+    )
+    classes = [
+        item
+        for item in initial_report.get("equivalence_classes", [])
+        if isinstance(item, Mapping)
+    ]
+    class_positions = tuple(
+        tuple(
+            member
+            for member in (
+                _optional_int(value) for value in equivalence_class.get("members", [])
+            )
+            if member is not None and 0 <= member < len(transformed)
         )
-        failing_positions = _failing_positions(
-            report,
-            remaining_positions,
+        for equivalence_class in classes
+    )
+    mandatory_indices = {
+        index
+        for index, equivalence_class in enumerate(classes)
+        if not _class_satisfies_k_l(
+            equivalence_class,
+            target_k=target_k,
+            target_l=target_l,
+            sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
+        )
+    }
+    mandatory_positions = {
+        position for index in mandatory_indices for position in class_positions[index]
+    }
+    if len(mandatory_positions) > suppression_budget:
+        return None
+
+    generalization_loss = _generalization_loss(quasi_identifiers, levels, node)
+    optional_classes = tuple(
+        positions
+        for index, positions in enumerate(class_positions)
+        if index not in mandatory_indices
+    )
+    remaining_budget = suppression_budget - len(mandatory_positions)
+    if (
+        not mandatory_positions
+        and generalization_loss == 0.0
+        and _report_satisfies(
+            initial_report,
             target_k=target_k,
             target_l=target_l,
             target_t=target_t,
             sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
         )
-        if not failing_positions:
-            break
-        before = len(suppressed)
-        suppressed.update(failing_positions)
-        if len(suppressed) > suppression_budget or len(suppressed) == before:
-            return None
-
-    final_positions = [
-        position for position in range(len(transformed)) if position not in suppressed
-    ]
-    if not final_positions:
-        return None
-    final_records = tuple(transformed[position] for position in final_positions)
-    final_report = kanon_report(
-        final_records,
-        quasi_identifiers=quasi_identifiers,
-        sensitive_attributes=sensitive_attributes,
-    )
-    if not _report_satisfies(
-        final_report,
-        target_k=target_k,
-        target_l=target_l,
-        target_t=target_t,
-        sensitive_attributes=sensitive_attributes,
     ):
-        return None
+        suppression_search.mark_total_unknown()
+        suppression_search.consume()
+        return _Candidate(
+            node=node,
+            records=transformed,
+            report=initial_report,
+            suppressed_positions=(),
+            information_loss=0.0,
+            generalization_loss=0.0,
+            suppression_loss=0.0,
+        )
+    best: _Candidate | None = None
+    for optional_positions in _class_subset_positions(
+        optional_classes,
+        remaining_budget,
+    ):
+        suppression_search.consume()
+        suppressed = mandatory_positions | set(optional_positions)
+        final_positions = [
+            position
+            for position in range(len(transformed))
+            if position not in suppressed
+        ]
+        if not final_positions:
+            continue
+        final_records = tuple(transformed[position] for position in final_positions)
+        final_report = kanon_report(
+            final_records,
+            quasi_identifiers=quasi_identifiers,
+            sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
+        )
+        if not _report_satisfies(
+            final_report,
+            target_k=target_k,
+            target_l=target_l,
+            target_t=target_t,
+            sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
+        ):
+            continue
+        suppression_loss = len(suppressed) / len(records) if records else 0.0
+        candidate = _Candidate(
+            node=node,
+            records=final_records,
+            report=final_report,
+            suppressed_positions=tuple(sorted(suppressed)),
+            information_loss=generalization_loss + suppression_loss,
+            generalization_loss=generalization_loss,
+            suppression_loss=suppression_loss,
+        )
+        if best is None or _candidate_sort_key(candidate) < _candidate_sort_key(best):
+            best = candidate
+    return best
 
-    generalization_loss = _generalization_loss(quasi_identifiers, levels, node)
-    suppression_loss = len(suppressed) / len(records) if records else 0.0
-    information_loss = generalization_loss + suppression_loss
-    return _Candidate(
-        node=node,
-        records=final_records,
-        report=final_report,
-        suppressed_positions=tuple(sorted(suppressed)),
-        information_loss=information_loss,
-        generalization_loss=generalization_loss,
-        suppression_loss=suppression_loss,
-    )
+
+def _class_subset_positions(
+    classes: Sequence[Sequence[int]],
+    budget: int,
+) -> Any:
+    """Yield every class subset whose total row count fits ``budget``."""
+
+    stack: list[tuple[int, int, tuple[int, ...]]] = [(0, 0, ())]
+    while stack:
+        index, used, selected = stack.pop()
+        if index == len(classes):
+            yield selected
+            continue
+        positions = tuple(classes[index])
+        next_used = used + len(positions)
+        if next_used <= budget:
+            stack.append((index + 1, next_used, (*selected, *positions)))
+        stack.append((index + 1, used, selected))
+
+
+def _class_satisfies_k_l(
+    equivalence_class: Mapping[str, Any],
+    *,
+    target_k: int,
+    target_l: int,
+    sensitive_attributes: Sequence[str],
+    l_metric: str,
+) -> bool:
+    if int(equivalence_class.get("size", 0)) < target_k:
+        return False
+    l_diversity = _mapping(equivalence_class.get("l_diversity"))
+    for attribute in sensitive_attributes:
+        attribute_l = _mapping(l_diversity.get(attribute))
+        if l_metric == "entropy":
+            achieved_l = float(attribute_l.get("entropy", 0.0))
+            required_l = math.log2(target_l)
+        else:
+            achieved_l = float(attribute_l.get("distinct", 0))
+            required_l = float(target_l)
+        if achieved_l + 1e-12 < required_l:
+            return False
+    return True
 
 
 def _transform_record(
@@ -846,8 +1692,51 @@ def _transform_record(
             fields.pop(field, None)
             continue
         level = levels[field][node[index]]
-        fields[field] = level.transform(record.fields.get(field, ""))
+        fields[field] = level.transform(_hierarchy_input(record.fields, field))
+    _canonicalize_ordered_multiset_fields(fields, quasi_identifiers)
     return fields
+
+
+def _canonicalize_ordered_multiset_fields(
+    fields: dict[str, Any],
+    quasi_identifiers: Sequence[str],
+) -> None:
+    profiles = [
+        (field, fields[field])
+        for field in quasi_identifiers
+        if field in fields and _is_ordered_multiset(fields[field])
+    ]
+    if not profiles:
+        return
+    lengths = {len(profile.values) for _field, profile in profiles}
+    if len(lengths) != 1:
+        raise ValueError("Longitudinal QI profiles must have aligned row counts")
+    row_count = lengths.pop()
+    ordered_rows = []
+    for index in range(row_count):
+        values = tuple(profile.values[index] for _field, profile in profiles)
+        tokens = tuple(
+            _typed_qi_value(field, value)
+            for (field, _profile), value in zip(profiles, values, strict=True)
+        )
+        ordered_rows.append((tokens, values))
+    ordered_rows.sort(key=lambda item: item[0])
+    for field_index, (field, _profile) in enumerate(profiles):
+        fields[field] = _InternalQIState(
+            "ordered-multiset",
+            tuple(values[field_index] for _tokens, values in ordered_rows),
+        )
+
+
+def _hierarchy_input(fields: Mapping[str, Any], field: str) -> Any:
+    if field not in fields:
+        return _MISSING_QI
+    value = fields[field]
+    if value is None:
+        return _NULL_QI
+    if isinstance(value, str) and not value:
+        return _EMPTY_QI
+    return value
 
 
 def _failing_positions(
@@ -858,6 +1747,7 @@ def _failing_positions(
     target_l: int,
     target_t: float,
     sensitive_attributes: Sequence[str],
+    l_metric: str = "distinct",
 ) -> set[int]:
     failing: set[int] = set()
     for cls in report.get("equivalence_classes", []):
@@ -869,6 +1759,7 @@ def _failing_positions(
             target_l=target_l,
             target_t=target_t,
             sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
         ):
             continue
         for member in cls.get("members", []):
@@ -885,6 +1776,7 @@ def _report_satisfies(
     target_l: int,
     target_t: float,
     sensitive_attributes: Sequence[str],
+    l_metric: str = "distinct",
 ) -> bool:
     if int(report.get("record_count", 0)) <= 0:
         return False
@@ -899,6 +1791,7 @@ def _report_satisfies(
             target_l=target_l,
             target_t=target_t,
             sensitive_attributes=sensitive_attributes,
+            l_metric=l_metric,
         ):
             return False
     return True
@@ -911,6 +1804,7 @@ def _class_satisfies(
     target_l: int,
     target_t: float,
     sensitive_attributes: Sequence[str],
+    l_metric: str = "distinct",
 ) -> bool:
     if int(cls.get("size", 0)) < target_k:
         return False
@@ -918,7 +1812,13 @@ def _class_satisfies(
     t_closeness = _mapping(cls.get("t_closeness"))
     for attr in sensitive_attributes:
         attr_l = _mapping(l_diversity.get(attr))
-        if int(attr_l.get("distinct", 0)) < target_l:
+        if l_metric == "entropy":
+            achieved_l = float(attr_l.get("entropy", 0.0))
+            required_l = math.log2(target_l)
+        else:
+            achieved_l = float(attr_l.get("distinct", 0))
+            required_l = float(target_l)
+        if achieved_l + 1e-12 < required_l:
             return False
         parsed_t = _optional_float(t_closeness.get(attr))
         if parsed_t is None or parsed_t > target_t + 1e-12:
@@ -949,7 +1849,7 @@ def _suppressed_records(
         {
             "record_index": int(position),
             "offset": int(position),
-            "record_hash": stable_hash(records[position].fields),
+            "record_hash": _record_hash(records[position].fields),
             "reason": reason,
         }
         for position in positions
@@ -965,6 +1865,7 @@ def _bound_report(
     target_l: int,
     target_t: float,
     sensitive_attributes: Sequence[str],
+    l_metric: str = "distinct",
 ) -> dict[str, Any]:
     class_by_member: dict[int, Mapping[str, Any]] = {}
     for cls in report.get("equivalence_classes", []):
@@ -977,7 +1878,7 @@ def _bound_report(
 
     global_dist = {
         attr: _distribution(
-            str(record.get(attr))
+            _typed_sensitive_distribution_value(record[attr])
             for record in records
             if attr in record and record.get(attr) is not None
         )
@@ -1017,7 +1918,7 @@ def _bound_report(
         per_record.append(
             {
                 "record_index": index,
-                "record_hash": stable_hash(record),
+                "record_hash": _record_hash(record),
                 "equivalence_class_size": class_size,
                 "reidentification_upper_bound": identity_bound,
                 "sensitive_attribute_upper_bounds": sensitive_bounds,
@@ -1029,7 +1930,12 @@ def _bound_report(
         (item["reidentification_upper_bound"] for item in per_record),
         default=0.0,
     )
-    l_ok = _l_targets_satisfied(report, sensitive_attributes, target_l)
+    l_ok = _l_targets_satisfied(
+        report,
+        sensitive_attributes,
+        target_l,
+        l_metric=l_metric,
+    )
     t_ok = _t_targets_satisfied(report, sensitive_attributes, target_t)
     numeric_self_check = {
         "passed": not violations and l_ok and t_ok,
@@ -1042,14 +1948,15 @@ def _bound_report(
             "Released records are partitioned by the published "
             "quasi-identifier key. Each class has size at least target_k, so "
             "any quasi-identifier-only linkage attack has probability at most "
-            "1/class_size for each member, which is <= 1/target_k. Distinct "
-            "l-diversity and variational t-closeness are checked per class and "
-            "reported as sensitive-attribute confidence caps."
+            "1/class_size for each member, which is <= 1/target_k. The selected "
+            "l-diversity variant and variational t-closeness are checked per "
+            "class and reported separately from the identity bound."
         ),
         "target_reidentification_upper_bound": target_bound,
         "max_reidentification_upper_bound": max_bound,
         "target_k": int(target_k),
         "target_l": int(target_l),
+        "l_metric": l_metric,
         "target_t": float(target_t),
         "suppressed_count": len(suppressed_positions),
         "numeric_self_check": numeric_self_check,
@@ -1074,9 +1981,12 @@ def _sensitive_bounds(
     class_size = len(members)
     result: dict[str, dict[str, Any]] = {}
     for attr in sensitive_attributes:
-        values = [str(records[index].get(attr)) for index in members]
+        values = [
+            _typed_sensitive_distribution_value(records[index][attr])
+            for index in members
+        ]
         counts = Counter(values)
-        record_value = str(record.get(attr))
+        record_value = _typed_sensitive_distribution_value(record[attr])
         observed = counts.get(record_value, 0) / class_size if class_size else 1.0
         attr_t = _optional_float(_mapping(cls.get("t_closeness")).get(attr)) or 0.0
         t_cap = min(1.0, global_dist.get(attr, {}).get(record_value, 0.0) + attr_t)
@@ -1096,6 +2006,8 @@ def _l_targets_satisfied(
     report: Mapping[str, Any],
     sensitive_attributes: Sequence[str],
     target_l: int,
+    *,
+    l_metric: str = "distinct",
 ) -> bool:
     for cls in report.get("equivalence_classes", []):
         if not isinstance(cls, Mapping):
@@ -1103,7 +2015,13 @@ def _l_targets_satisfied(
         l_diversity = _mapping(cls.get("l_diversity"))
         for attr in sensitive_attributes:
             attr_l = _mapping(l_diversity.get(attr))
-            if int(attr_l.get("distinct", 0)) < target_l:
+            if l_metric == "entropy":
+                achieved_l = float(attr_l.get("entropy", 0.0))
+                required_l = math.log2(target_l)
+            else:
+                achieved_l = float(attr_l.get("distinct", 0))
+                required_l = float(target_l)
+            if achieved_l + 1e-12 < required_l:
                 return False
     return True
 
@@ -1147,3 +2065,252 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+# Approximate resident footprint charged for one distinct equivalence class in
+# the streaming census: a dict entry, its integer count, and the small tuple of
+# quasi-identifier tokens that key it. The exact number is not load-bearing; it
+# only needs to grow with the number of *distinct* classes so a caller can bound
+# the census independently of the row count.
+_PER_CLASS_OVERHEAD_BYTES = 96
+
+
+class MemoryCeilingError(ValueError):
+    """Raised when the streaming quasi-identifier census exceeds its ceiling.
+
+    The census only grows with the number of *distinct* generalized
+    quasi-identifier classes, never with the number of rows, so this signals a
+    genuinely high-cardinality quasi-identifier space rather than a large file.
+    Coarsen the generalization node, declare fewer quasi-identifiers, or raise
+    ``memory_ceiling`` deliberately.
+    """
+
+
+@dataclass(frozen=True)
+class StreamingKanonDecision:
+    """Aggregate outcome of a streaming k-anonymity pass.
+
+    Every field is a count derived from the global equivalence-class census;
+    no cell value, record identifier, or class key is retained, so the decision
+    is safe to log or serialize.
+    """
+
+    record_count: int
+    released_count: int
+    suppressed_count: int
+    released_k: int
+    class_count: int
+    suppressed_class_count: int
+    census_bytes: int
+
+    def to_dict(self) -> dict[str, int]:
+        """Return the decision as a JSON-serializable aggregate mapping."""
+
+        return {
+            "record_count": self.record_count,
+            "released_count": self.released_count,
+            "suppressed_count": self.suppressed_count,
+            "released_k": self.released_k,
+            "class_count": self.class_count,
+            "suppressed_class_count": self.suppressed_class_count,
+            "census_bytes": self.census_bytes,
+        }
+
+
+class StreamingKanonState:
+    """Bounded-memory, two-pass k-anonymity over an externally-iterated table.
+
+    The state derives global equivalence classes from a fixed generalization
+    node and suppresses every class whose *global* size is below ``target_k``.
+    Because generalization is applied per value and the census is keyed by the
+    generalized quasi-identifier tuple, the working set scales with the number
+    of distinct classes rather than the number of rows, and the suppression
+    decision is identical no matter how the rows are batched across chunks or
+    Parquet row groups.
+
+    Usage is two passes over the same source. Pass one calls :meth:`observe`
+    for every row; :meth:`resolve` then fixes the global census. Pass two calls
+    :meth:`generalize` and :meth:`is_released` per row to route surviving rows
+    to output. Equivalence-class keys reuse the same value normalization as
+    :func:`kanon_report`, so re-reading the released rows and measuring them
+    reproduces the ``released_k`` reported here.
+    """
+
+    def __init__(
+        self,
+        quasi_identifiers: Sequence[str],
+        *,
+        target_k: int = 2,
+        generalization: Mapping[str, int] | None = None,
+        hierarchies: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+        remove_direct_identifiers: bool = True,
+        memory_ceiling: int | None = None,
+    ) -> None:
+        qis = _validated_columns(
+            quasi_identifiers,
+            name="quasi_identifiers",
+            allow_none=False,
+        )
+        if not qis:
+            raise ValueError("quasi_identifiers must contain at least one column")
+        if type(target_k) is not int or target_k < 1:
+            raise ValueError("target_k must be an integer >= 1")
+        if memory_ceiling is not None and (
+            type(memory_ceiling) is not int or memory_ceiling < 1
+        ):
+            raise ValueError("memory_ceiling must be a positive integer of bytes")
+
+        self._qis: tuple[str, ...] = qis
+        self._target_k = int(target_k)
+        self._remove_direct = bool(remove_direct_identifiers)
+        self._memory_ceiling = memory_ceiling
+        self._levels = _build_hierarchy_levels([], qis, hierarchies)
+        self._node = self._resolve_node(generalization)
+
+        self._counts: Counter[tuple[str, ...]] = Counter()
+        self._census_bytes = 0
+        self._record_count = 0
+        self._resolved = False
+        self._suppressed: frozenset[tuple[str, ...]] = frozenset()
+        self._decision: StreamingKanonDecision | None = None
+
+    def _resolve_node(
+        self,
+        generalization: Mapping[str, int] | None,
+    ) -> dict[str, int]:
+        node = {field: 0 for field in self._qis}
+        if generalization is None:
+            return node
+        if not isinstance(generalization, Mapping):
+            raise TypeError("generalization must map quasi-identifier names to levels")
+        unknown = sorted(set(generalization) - set(self._qis))
+        if unknown:
+            raise ValueError(
+                f"generalization targets undeclared quasi-identifiers: {unknown!r}"
+            )
+        for field, level in generalization.items():
+            if type(level) is not int or level < 0 or level >= len(self._levels[field]):
+                raise ValueError(
+                    f"generalization level for {field!r} must be an integer in "
+                    f"[0, {len(self._levels[field]) - 1}]"
+                )
+            node[field] = int(level)
+        return node
+
+    @property
+    def quasi_identifiers(self) -> tuple[str, ...]:
+        """Return the sorted quasi-identifier column names."""
+
+        return self._qis
+
+    @property
+    def generalization_node(self) -> dict[str, int]:
+        """Return the per-quasi-identifier generalization level in effect."""
+
+        return dict(self._node)
+
+    @property
+    def class_count(self) -> int:
+        """Return the number of distinct global equivalence classes seen."""
+
+        return len(self._counts)
+
+    @property
+    def census_bytes(self) -> int:
+        """Return the approximate resident footprint of the class census."""
+
+        return self._census_bytes
+
+    @property
+    def record_count(self) -> int:
+        """Return the number of rows observed during the first pass."""
+
+        return self._record_count
+
+    def generalize(self, fields: Mapping[str, Any]) -> dict[str, Any]:
+        """Return ``fields`` with direct identifiers dropped and QIs generalized.
+
+        Non-quasi-identifier, non-direct-identifier columns (sensitive, free
+        text, and safe columns) pass through untouched so the caller can route
+        free-text cells through de-identification separately.
+        """
+
+        transformed: dict[str, Any] = {}
+        for name, value in fields.items():
+            if self._remove_direct and _field_is_direct_identifier(name):
+                continue
+            transformed[name] = value
+        for field in self._qis:
+            if self._remove_direct and _field_is_direct_identifier(field):
+                transformed.pop(field, None)
+                continue
+            level = self._levels[field][self._node[field]]
+            transformed[field] = level.transform(_hierarchy_input(fields, field))
+        return transformed
+
+    def class_key(self, generalized: Mapping[str, Any]) -> tuple[str, ...]:
+        """Return the equivalence-class key for already-generalized fields."""
+
+        return tuple(_explicit_qi_value(generalized, field) for field in self._qis)
+
+    def observe(self, fields: Mapping[str, Any]) -> None:
+        """Fold one source row into the global census (first pass)."""
+
+        if self._resolved:
+            raise RuntimeError("cannot observe rows after resolve()")
+        key = self.class_key(self.generalize(fields))
+        self._record_count += 1
+        if key not in self._counts:
+            projected = self._census_bytes + self._class_bytes(key)
+            if self._memory_ceiling is not None and projected > self._memory_ceiling:
+                raise MemoryCeilingError(
+                    "streaming quasi-identifier census would exceed the "
+                    f"{self._memory_ceiling}-byte ceiling at "
+                    f"{len(self._counts) + 1} distinct classes; coarsen the "
+                    "generalization, declare fewer quasi-identifiers, or raise "
+                    "memory_ceiling"
+                )
+            self._census_bytes = projected
+        self._counts[key] += 1
+
+    @staticmethod
+    def _class_bytes(key: tuple[str, ...]) -> int:
+        return _PER_CLASS_OVERHEAD_BYTES + sum(len(token) for token in key)
+
+    def resolve(self) -> StreamingKanonDecision:
+        """Fix the global census and compute the release/suppression decision."""
+
+        if not self._resolved:
+            suppressed = frozenset(
+                key for key, count in self._counts.items() if count < self._target_k
+            )
+            released_counts = [
+                count for key, count in self._counts.items() if key not in suppressed
+            ]
+            released_count = sum(released_counts)
+            self._suppressed = suppressed
+            self._resolved = True
+            self._decision = StreamingKanonDecision(
+                record_count=self._record_count,
+                released_count=released_count,
+                suppressed_count=self._record_count - released_count,
+                released_k=min(released_counts) if released_counts else 0,
+                class_count=len(self._counts),
+                suppressed_class_count=len(suppressed),
+                census_bytes=self._census_bytes,
+            )
+        assert self._decision is not None
+        return self._decision
+
+    @property
+    def decision(self) -> StreamingKanonDecision:
+        """Return the resolved decision, computing it on first access."""
+
+        return self.resolve()
+
+    def is_released(self, key: tuple[str, ...]) -> bool:
+        """Return whether rows in equivalence class ``key`` are released."""
+
+        if not self._resolved:
+            raise RuntimeError("call resolve() before is_released()")
+        return key not in self._suppressed and self._counts.get(key, 0) > 0

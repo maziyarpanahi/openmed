@@ -56,6 +56,44 @@ def configure_offline_mode(config: Any = None) -> bool:
     return False
 
 
+def offline_mode_assertion(config: Any = None) -> dict[str, Any]:
+    """Return PHI-free evidence describing the configured offline posture.
+
+    The assertion distinguishes OpenMed's socket guard from dependency-specific
+    cache-only flags.  Hugging Face flags alone do not prove that OpenMed's
+    outbound socket guard was requested, while ``OPENMED_OFFLINE`` or
+    ``config.local_only`` does.
+    """
+
+    config_local_only = bool(getattr(config, "local_only", False))
+    environment_local_only = env_flag_enabled(os.getenv(OFFLINE_ENV_VAR))
+    local_only = config_local_only or environment_local_only
+    environment_flags = {
+        OFFLINE_ENV_VAR: environment_local_only,
+        **{name: env_flag_enabled(os.getenv(name)) for name in HF_OFFLINE_ENV_VARS},
+    }
+    dependency_flags_enabled = all(
+        environment_flags[name] for name in HF_OFFLINE_ENV_VARS
+    )
+    if config_local_only and environment_local_only:
+        source = "config+environment"
+    elif config_local_only:
+        source = "config"
+    elif environment_local_only:
+        source = "environment"
+    else:
+        source = "none"
+
+    return {
+        "asserted": bool(local_only and dependency_flags_enabled),
+        "local_only": local_only,
+        "source": source,
+        "network_guard_requested": local_only,
+        "dependency_flags_enabled": dependency_flags_enabled,
+        "environment_flags": environment_flags,
+    }
+
+
 def raise_offline_error(action: str) -> None:
     """Raise a clear error for a blocked remote action."""
     raise OfflineModeError(f"{OFFLINE_NETWORK_ERROR} Blocked action: {action}.")
