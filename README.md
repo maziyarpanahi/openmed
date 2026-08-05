@@ -4,6 +4,11 @@
 
 <h2>Your Data. Your Model. Your Hardware.</h2>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/40195?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/40195/daily?language=Python" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
+</p>
+
 <p><b>Turn clinical text into structured, de-identified insight on hardware you control.</b><br/>
 OpenMed's core local runtime performs extraction and de-identification after required model artifacts are available. Model downloads, remote-provider adapters, telemetry-enabled paths, and user-configured integrations may use a network; review each model and dataset's terms.</p>
 
