@@ -1,4 +1,4 @@
-"""Stamp exported FHIR codings with caller-supplied version provenance.
+"""Stamp exported FHIR codings with caller-supplied terminology provenance.
 
 FHIR R4 ``Coding`` supports a ``version`` element, but OpenMed cannot bundle
 terminology release data or guess which release a caller used. This helper is
@@ -10,18 +10,49 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 from .codeable_concept_simple import system_uri
 
 __all__ = [
     "CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL",
+    "USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL",
+    "USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER",
+    "UserSuppliedTerminologyProvenance",
     "stamp_coding_provenance",
+    "stamp_user_supplied_terminology_provenance",
 ]
 
 CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL = (
     "https://openmed.ai/fhir/StructureDefinition/code-system-version-source"
 )
+USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL = (
+    "https://openmed.ai/fhir/StructureDefinition/user-supplied-terminology-provenance"
+)
+USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER = (
+    "Assist-only terminology grounding for human review; not a clinical coding, "
+    "treatment, or billing decision."
+)
+
+
+@dataclass(frozen=True)
+class UserSuppliedTerminologyProvenance:
+    """Provenance carried by one coding from a user-supplied dictionary."""
+
+    source_name: str
+    license_id: str
+    restricted: bool
+
+    def __post_init__(self) -> None:
+        source_name = self.source_name.strip()
+        license_id = self.license_id.strip()
+        if not source_name:
+            raise ValueError("terminology source_name must not be blank")
+        if not license_id:
+            raise ValueError("terminology license_id must not be blank")
+        object.__setattr__(self, "source_name", source_name)
+        object.__setattr__(self, "license_id", license_id)
 
 
 def stamp_coding_provenance(
@@ -69,6 +100,48 @@ def stamp_coding_provenance(
     result["version"] = version
     if source_label is not None:
         _stamp_source_label(result, source_label)
+    return result
+
+
+def stamp_user_supplied_terminology_provenance(
+    coding: Mapping[str, Any],
+    provenance: UserSuppliedTerminologyProvenance,
+) -> dict[str, Any]:
+    """Return a coding copy stamped with source, license, and assist-only scope.
+
+    Local paths and dictionary surfaces are deliberately excluded. Repeated
+    stamping replaces the OpenMed extension so output remains deterministic.
+    """
+
+    result: dict[str, Any] = deepcopy(dict(coding))
+    extension = {
+        "url": USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL,
+        "extension": [
+            {"url": "sourceName", "valueString": provenance.source_name},
+            {"url": "license", "valueString": provenance.license_id},
+            {"url": "restricted", "valueBoolean": provenance.restricted},
+            {"url": "assistOnly", "valueBoolean": True},
+            {
+                "url": "disclaimer",
+                "valueString": USER_SUPPLIED_TERMINOLOGY_ASSIST_ONLY_DISCLAIMER,
+            },
+        ],
+    }
+    extensions = result.get("extension")
+    if extensions is None:
+        result["extension"] = [extension]
+        return result
+    if not isinstance(extensions, list):
+        raise TypeError("Coding.extension must be a list when present")
+    result["extension"] = [
+        item
+        for item in extensions
+        if not (
+            isinstance(item, Mapping)
+            and item.get("url") == USER_SUPPLIED_TERMINOLOGY_PROVENANCE_EXTENSION_URL
+        )
+    ]
+    result["extension"].append(extension)
     return result
 
 
