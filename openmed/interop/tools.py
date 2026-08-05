@@ -87,6 +87,7 @@ PIILanguage = Literal[
     "uk",
     "cs",
     "el",
+    "vi",
 ]
 
 

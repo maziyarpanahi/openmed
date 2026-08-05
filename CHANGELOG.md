@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default model and raise an actionable `ValueError` naming every user-supplied
   code when `model_name` is omitted, while `SUPPORTED_LANGUAGES` stays
   model-backed-only so documented model-backed counts are unchanged (#1569).
+- Promoted Vietnamese (`vi`) to a model-backed PII language pack routed to
+  `OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1`, taking
+  `SUPPORTED_LANGUAGES` to 35 codes. Adds Vietnamese month names, deterministic
+  locale PHI generation, `vi_VN` surrogate and CCCD provider coverage across the
+  REST, MCP, TypeScript, and Go surfaces, and a second synthetic golden i18n
+  fixture exercising a native `ngày D tháng M năm YYYY` date, an `0xx` mobile,
+  a 12-digit CCCD, and a diacritic-bearing address (#263).
 
 ### Fixed
 
@@ -61,7 +68,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advertise on their language enums instead of returning `unsupported_language`
   for `ne` and `ur`. `include_national_id` still toggles exactly
   `NATIONAL_ID_ONLY_LANGUAGES` (#1569).
-
+- Fixed day-first date handling for Vietnamese so shifted, replacement, and
+  format-preserving date surrogates all render `DD/MM/YYYY` instead of
+  `MM/DD/YYYY`, matching the `dmy` locale contract already declared for `vi`
+  (#263).
+- Corrected the `languages` metadata on the 18 `OpenMed-PII-Vietnamese-*`
+  manifest rows from `["en"]` to `["vi"]`, so Vietnamese PII checkpoints resolve
+  through `get_pii_models_by_language("vi")`. Those 34 registry keys move from
+  `pii_vietnamese_*` to `pii_vi_*` and, as with the Bengali, Chinese, and Tamil
+  reclassification, they no longer appear in
+  `get_pii_models_by_language("en")`, which drops from 219 to 185 entries
+  (#263).
 - Fixed the PySpark batch de-identification adapter so
   `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
   UDF construction instead of failing with an unsupported `Any` signature
