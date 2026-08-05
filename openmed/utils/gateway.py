@@ -234,14 +234,24 @@ def normalize_text(
 
 
 def _default_supported_languages(*, include_national_id: bool) -> set[str]:
-    """Return the canonical PII language set from the core catalog."""
+    """Return the canonical PII language set from the core catalog.
+
+    ``USER_SUPPLIED_MODEL_LANGUAGES`` is part of the base set: those codes are
+    publicly registered on the REST, MCP, and client language enums and are
+    accepted by ``openmed.core.pii._resolve_effective_pii_model``. They ship no
+    bundled weights, so the resolver asks for an explicit ``model_name``; the
+    gateway must not reject them one layer earlier.
+    """
     from openmed.core.pii_i18n import (
         INDIC_NER_LANGUAGES,
         NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
     )
 
-    languages = set(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)
+    languages = set(
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
     if include_national_id:
         languages.update(NATIONAL_ID_ONLY_LANGUAGES)
     return languages
@@ -261,6 +271,9 @@ def validate_language(
             used when omitted.
         include_national_id: Whether default validation includes deterministic
             national-ID-only languages. Ignored when ``supported`` is supplied.
+            A code that is both national-ID-only and user-supplied-model (such
+            as Urdu) stays accepted either way, because it is registered on the
+            public language enums.
 
     Returns:
         Lowercase validated language code.

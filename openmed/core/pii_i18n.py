@@ -89,6 +89,13 @@ INDIC_NER_MODEL_ENV = "OPENMED_INDIC_NER_MODEL"
 OPTIONAL_PII_MODEL = f"env:{INDIC_NER_MODEL_ENV}"
 OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 
+# Sentinel default for languages that are routable and publicly registered but
+# ship no bundled weights at all. Callers must pass ``model_name`` explicitly;
+# :func:`openmed.core.model_registry.get_default_pii_model` maps this sentinel
+# back to ``None`` so the resolver raises an actionable error instead of
+# treating it as a repository identifier.
+USER_SUPPLIED_PII_MODEL = "user-supplied"
+
 # The central catalog keeps user-supplied model routes separate from bundled
 # language packs. This compatibility map lets the 11 optional Indic routes
 # resolve explicitly configured weights without advertising them as built-in
@@ -96,7 +103,16 @@ OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
 for _language in INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}:
     DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
+# Remaining user-supplied routes (Nepali and Urdu) have neither bundled weights
+# nor an optional Indic NER adapter, so they take the explicit sentinel. This
+# only touches the compatibility copy; the language-pack catalog keeps claiming
+# no default model for them.
+for _language in USER_SUPPLIED_MODEL_LANGUAGES:
+    DEFAULT_PII_MODELS.setdefault(_language, USER_SUPPLIED_PII_MODEL)
 
+# ``ne`` here is the ISO 639-1 code for Nepali. It is unrelated to the ``"ne"``
+# token-language label used for named entities in
+# :mod:`openmed.core.lang_id_codemix`; the two namespaces never meet.
 LANGUAGE_NAMES: Dict[str, str] = {
     "as": "Assamese",
     "bn": "Bengali",
@@ -111,10 +127,12 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "kn": "Kannada",
     "ml": "Malayalam",
     "mr": "Marathi",
+    "ne": "Nepali",
     "or": "Odia",
     "pa": "Punjabi",
     "ta": "Tamil",
     "te": "Telugu",
+    "ur": "Urdu",
     "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
@@ -136,6 +154,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "uk": "Ukrainian",
     "cs": "Czech",
     "el": "Greek",
+    "vi": "Vietnamese",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -152,10 +171,12 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "kn": "Kannada-",
     "ml": "Malayalam-",
     "mr": "Marathi-",
+    "ne": "Nepali-",
     "or": "Odia-",
     "pa": "Punjabi-",
     "ta": "Tamil-",
     "te": "Telugu-",
+    "ur": "Urdu-",
     "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
@@ -177,6 +198,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "uk": "Ukrainian-",
     "cs": "Czech-",
     "el": "Greek-",
+    "vi": "Vietnamese-",
 }
 
 # ---------------------------------------------------------------------------
@@ -3464,6 +3486,23 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Οκτώβριος",
         "Νοέμβριος",
         "Δεκέμβριος",
+    ],
+    # Vietnamese spells months out as "Tháng" plus the cardinal number, with
+    # "Tháng Tư" (not "Tháng Bốn") for April. The numeric "tháng M" form used by
+    # the "ngày D tháng M năm YYYY" detector stays handled by that pattern.
+    "vi": [
+        "Tháng Một",
+        "Tháng Hai",
+        "Tháng Ba",
+        "Tháng Tư",
+        "Tháng Năm",
+        "Tháng Sáu",
+        "Tháng Bảy",
+        "Tháng Tám",
+        "Tháng Chín",
+        "Tháng Mười",
+        "Tháng Mười Một",
+        "Tháng Mười Hai",
     ],
 }
 
@@ -11245,6 +11284,7 @@ def get_patterns_for_language(
         SUPPORTED_LANGUAGES
         | NATIONAL_ID_ONLY_LANGUAGES
         | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
         | locale_overlay_languages
     )
     base_lang = _normalize_pattern_language(lang)
