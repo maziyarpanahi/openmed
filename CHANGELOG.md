@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a weekday-themed model release orchestrator that chains conversion,
+  synthetic evaluation, signed release gates, model-card generation,
+  publication, fresh-environment smoke checks, last-green rollback, quarantine
+  reporting, and an append-only offline audit ledger (#1243).
+- Added offline family-transfer adapter routing that prefers installed target
+  adapters, falls back to compatible donor adapters with scored provenance,
+  and returns explicit unsupported or unavailable routing failures (#1331).
+- Completed clinical temporal timeline composition with DCT/TIMEX anchors on
+  every ordered event, transitively reduced public TLINK graphs, metric-ready
+  edge keys, and retained/pruned privacy-safe decision provenance (#1253).
+- Added closure-aware temporal TLINK F1, PHI-safe transitive-closure
+  consistency scoring, a zero-violation blocking gate, and synthetic
+  discharge-summary gold with DCT, EVENT-TIMEX, EVENT-EVENT, reduction, and
+  contradiction-trap coverage (#1309).
 - Added deterministic OncoTree tumor-type mapping
   (`openmed.clinical.load_oncotree`, `map_tumor_type`) against a
   caller-supplied local release snapshot (path / `OPENMED_ONCOTREE_PATH` and
@@ -35,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default model and raise an actionable `ValueError` naming every user-supplied
   code when `model_name` is omitted, while `SUPPORTED_LANGUAGES` stays
   model-backed-only so documented model-backed counts are unchanged (#1569).
+- Promoted Vietnamese (`vi`) to a model-backed PII language pack routed to
+  `OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1`, taking
+  `SUPPORTED_LANGUAGES` to 35 codes. Adds Vietnamese month names, deterministic
+  locale PHI generation, `vi_VN` surrogate and CCCD provider coverage across the
+  REST, MCP, TypeScript, and Go surfaces, and a second synthetic golden i18n
+  fixture exercising a native `ngày D tháng M năm YYYY` date, an `0xx` mobile,
+  a 12-digit CCCD, and a diacritic-bearing address (#263).
 
 - Added grapheme-aligned mixed-script run routing. `segment_by_script` now
   yields `ScriptRun`, a tuple-compatible `NamedTuple`, and every run boundary
@@ -73,7 +94,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advertise on their language enums instead of returning `unsupported_language`
   for `ne` and `ur`. `include_national_id` still toggles exactly
   `NATIONAL_ID_ONLY_LANGUAGES` (#1569).
-
+- Fixed day-first date handling for Vietnamese so shifted, replacement, and
+  format-preserving date surrogates all render `DD/MM/YYYY` instead of
+  `MM/DD/YYYY`, matching the `dmy` locale contract already declared for `vi`
+  (#263).
+- Corrected the `languages` metadata on the 18 `OpenMed-PII-Vietnamese-*`
+  manifest rows from `["en"]` to `["vi"]`, so Vietnamese PII checkpoints resolve
+  through `get_pii_models_by_language("vi")`. Those 34 registry keys move from
+  `pii_vietnamese_*` to `pii_vi_*` and, as with the Bengali, Chinese, and Tamil
+  reclassification, they no longer appear in
+  `get_pii_models_by_language("en")`, which drops from 219 to 185 entries
+  (#263).
 - Fixed the PySpark batch de-identification adapter so
   `make_deidentify_udf()` supplies concrete pandas `Series` annotations during
   UDF construction instead of failing with an unsupported `Any` signature

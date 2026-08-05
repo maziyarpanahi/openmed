@@ -113,6 +113,7 @@ routing is first requested, and do not download or bundle model weights.
 | `zh`   | Chinese    | `OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1`         | `zh_CN`      | Dedicated Chinese PII registry entry.                        |
 | `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
 | `uk`   | Ukrainian  | `OpenMed/privacy-filter-multilingual`                       | `uk_UA`      | RNOKPP checksum-aware surrogates.                            |
+| `vi`   | Vietnamese | `OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1` | `vi_VN`      | Native `vi_VN` Faker locale; structural CCCD surrogates.     |
 
 Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
@@ -592,4 +593,19 @@ After:  Igama lesiguli: [NAME]. Inombolo kamazisi [ID]
 ```text
 Before: Пацієнтка Олена Коваль, РНОКПП 2974281300
 After:  Пацієнтка [NAME], РНОКПП [ID]
+```
+
+### Vietnamese — `vi`
+
+- Model: `OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1` · locale `vi_VN`
+
+Dates parse day-first (`17/08/1985` and `ngày 8 tháng 12 năm 1970`), mobile
+numbers follow the `+84`/`0[3,5,7,8,9]` plan, and postal codes are the current
+five-digit format. CCCD detection requires an explicit `CCCD` or
+`căn cước công dân` cue and is validated structurally — the 12-digit contract
+from Article 12 of the 2023 Law on Identification, with no public checksum.
+
+```text
+Before: Bệnh nhân Nguyễn Minh Anh, CCCD 001203123456
+After:  Bệnh nhân [NAME], CCCD [ID]
 ```

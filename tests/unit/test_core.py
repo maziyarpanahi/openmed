@@ -300,6 +300,51 @@ class TestAnalyzeTextBehaviour:
         )
         assert result.model_name == str(model_dir)
 
+    def test_analyze_text_context_stage_is_explicit_and_attaches_all_axes(self):
+        text = "No evidence of pneumonia."
+        start = text.index("pneumonia")
+        loader = Mock()
+        loader.config = OpenMedConfig(use_medical_tokenizer=False)
+        pipeline = Mock(
+            return_value=[
+                {
+                    "entity_group": "CONDITION",
+                    "score": 0.99,
+                    "start": start,
+                    "end": start + len("pneumonia"),
+                    "word": "pneumonia",
+                }
+            ]
+        )
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 128
+
+        from openmed import analyze_text
+
+        plain = analyze_text(
+            text,
+            model_name="model",
+            loader=loader,
+            sentence_detection=False,
+        )
+        contextualized = analyze_text(
+            text,
+            model_name="model",
+            loader=loader,
+            sentence_detection=False,
+            assert_context=True,
+        )
+
+        assert "clinical_context" not in plain.entities[0].metadata
+        assert contextualized.entities[0].metadata["clinical_context"] == {
+            "negation": "negated",
+            "uncertainty": "certain",
+            "experiencer": "patient",
+            "temporality": "recent",
+        }
+        assert "assert_context" not in loader.create_pipeline.call_args.kwargs
+
     def test_analyze_text_rejects_model_name_and_model_id_together(self):
         """Ambiguous model selection should fail before loading anything."""
         from openmed import analyze_text
