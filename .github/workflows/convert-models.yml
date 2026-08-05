@@ -34,7 +34,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -72,7 +72,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -107,7 +107,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -157,18 +157,6 @@ jobs:
       url: https://huggingface.co/OpenMed
 
     steps:
-    - uses: actions/checkout@v7
-
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.12"
-
-    - name: Install publish dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[hf]"
-
     - name: Require HF write token before publish
       env:
         HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
@@ -177,6 +165,18 @@ jobs:
           echo "::error title=Missing HF_WRITE_TOKEN::Configure HF_WRITE_TOKEN in the hf-publish protected environment before enabling publish."
           exit 1
         fi
+
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+
+    - name: Install publish dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[hf]"
 
     - name: Download MLX model
       if: contains(github.event.inputs.formats, 'mlx')

@@ -1,10 +1,16 @@
 """DUA-respecting multilingual clinical NER benchmark loaders.
 
-PharmaCoNER, CANTEMIST, DEFT, and CMeEE are external benchmark corpora.
-This module never downloads, vendors, or discovers those records
-automatically. Callers must pass an explicit local path that they are allowed
-to use. The small fixtures committed with OpenMed are synthetic smoke inputs
-only and can be loaded by tests with ``allow_repo_path=True``.
+PharmaCoNER, CANTEMIST, DEFT, CMeEE, CHIP-CDN, and IMCS-V2-NER are external
+benchmark corpora. This module never downloads, vendors, or discovers those
+records automatically. Callers must pass an explicit local path that they are
+allowed to use. The small fixtures committed with OpenMed are synthetic smoke
+inputs only and can be loaded by tests with ``allow_repo_path=True``.
+
+Benchmarks whose native release shape is not already a text-plus-spans row can
+supply a ``row_adapter`` to ``load_multilingual_ner_benchmark``. The adapter
+normalizes one raw source row into the shared row shape before span decoding,
+which keeps the license boundary, offset validation, and canonical label
+mapping identical for every registered task shape.
 """
 
 from __future__ import annotations
@@ -16,17 +22,20 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.labels import (
     BODY_SITE,
     CANONICAL_LABELS,
+    CMEEE_LABEL_TO_CANONICAL,
     CONDITION,
     LAB_TEST,
+    LOCATION,
     MEDICATION,
     MICROORGANISM,
     ORGANIZATION,
     OTHER,
+    PERSON,
     PROCEDURE,
     normalize_label,
 )
@@ -39,6 +48,9 @@ PHARMACONER = "pharmaconer"
 CANTEMIST = "cantemist"
 DEFT = "deft"
 CMEEE = "cmeee"
+CHIP_CDN = "chip-cdn"
+IMCS_V2_NER = "imcs-v2-ner"
+NAAMAPADAM = "naamapadam"
 DEFAULT_SPLIT = "test"
 
 MULTILINGUAL_NER_BENCHMARKS: tuple[str, ...] = (
@@ -47,6 +59,9 @@ MULTILINGUAL_NER_BENCHMARKS: tuple[str, ...] = (
     DEFT,
     CMEEE,
 )
+
+#: Normalizes one raw source row into the shared text-plus-spans row shape.
+RowAdapter = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ROW_EXTENSIONS = {".json", ".jsonl", ".ndjson"}
@@ -138,6 +153,7 @@ class MultilingualNerRecord:
 
     def to_benchmark_fixture(self) -> BenchmarkFixture:
         source = source_for(self.benchmark)
+        suite = str(self.metadata.get("suite") or MULTILINGUAL_NER)
         unmapped = tuple(
             sorted({span.source_label for span in self.spans if not span.mapped})
         )
@@ -159,7 +175,7 @@ class MultilingualNerRecord:
                 "display_name": source.display_name,
                 "language": self.language,
                 "split": self.split,
-                "suite": MULTILINGUAL_NER,
+                "suite": suite,
                 "task": "clinical_ner",
                 "text_hash": _text_hash(self.text),
                 "unmapped_labels": unmapped,
@@ -250,26 +266,50 @@ MULTILINGUAL_NER_SOURCES: Mapping[str, MultilingualNerSource] = {
         language="zh",
         source_url="https://tianchi.aliyun.com/dataset/95414",
         label_mapping={
-            "bod": BODY_SITE,
-            "body": BODY_SITE,
-            "body_site": BODY_SITE,
-            "dep": ORGANIZATION,
-            "department": ORGANIZATION,
+            **CMEEE_LABEL_TO_CANONICAL,
+        },
+    ),
+    CHIP_CDN: MultilingualNerSource(
+        benchmark=CHIP_CDN,
+        display_name="CHIP-CDN",
+        language="zh",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        access_note="requires an authorized local CBLUE corpus path",
+        label_mapping={
             "dis": CONDITION,
-            "disease": CONDITION,
-            "dru": MEDICATION,
-            "drug": MEDICATION,
-            "equ": OTHER,
-            "equipment": OTHER,
-            "ite": LAB_TEST,
-            "item": LAB_TEST,
-            "lab_test": LAB_TEST,
-            "mic": MICROORGANISM,
-            "microorganism": MICROORGANISM,
-            "pro": PROCEDURE,
-            "procedure": PROCEDURE,
-            "sym": CONDITION,
+            "diagnosis": CONDITION,
+            "diagnostic_term": CONDITION,
+            "condition": CONDITION,
+        },
+    ),
+    IMCS_V2_NER: MultilingualNerSource(
+        benchmark=IMCS_V2_NER,
+        display_name="IMCS-V2-NER",
+        language="zh",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        access_note="requires an authorized local CBLUE corpus path",
+        label_mapping={
             "symptom": CONDITION,
+            "drug": MEDICATION,
+            "drug_category": MEDICATION,
+            "medical_examination": LAB_TEST,
+            "operation": PROCEDURE,
+        },
+    ),
+    NAAMAPADAM: MultilingualNerSource(
+        benchmark=NAAMAPADAM,
+        display_name="Naamapadam / IndicGLUE NER",
+        language="hi",
+        source_url="https://huggingface.co/datasets/ai4bharat/naamapadam",
+        access_note="loaded by reference from an explicit local corpus path",
+        label_mapping={
+            "loc": LOCATION,
+            "location": LOCATION,
+            "org": ORGANIZATION,
+            "organization": ORGANIZATION,
+            "organisation": ORGANIZATION,
+            "per": PERSON,
+            "person": PERSON,
         },
     ),
 }
@@ -282,7 +322,7 @@ def source_for(benchmark: str) -> MultilingualNerSource:
     try:
         return MULTILINGUAL_NER_SOURCES[key]
     except KeyError as exc:
-        allowed = ", ".join(MULTILINGUAL_NER_BENCHMARKS)
+        allowed = ", ".join(sorted(MULTILINGUAL_NER_SOURCES))
         raise ValueError(
             f"unknown multilingual NER benchmark {benchmark!r}: {allowed}"
         ) from exc
@@ -355,17 +395,23 @@ def load_multilingual_ner_benchmark(
     *,
     split: str = DEFAULT_SPLIT,
     allow_repo_path: bool = False,
+    row_adapter: RowAdapter | None = None,
 ) -> MultilingualNerLoadResult:
     """Load one user-supplied multilingual benchmark split.
 
     Args:
-        benchmark: One of ``pharmaconer``, ``cantemist``, ``deft``, or
-            ``cmeee``.
+        benchmark: A registered benchmark key, for example ``pharmaconer``,
+            ``cantemist``, ``deft``, ``cmeee``, ``chip-cdn``, or
+            ``imcs-v2-ner``.
         path: Explicit local file or directory containing records in a common
             JSON/JSONL, BRAT standoff, or BIO/CoNLL token-label shape.
         split: Split label to attach to fixture metadata.
         allow_repo_path: Internal test escape hatch for committed synthetic
             smoke fixtures. Keep this false for real benchmark paths.
+        row_adapter: Optional normalizer applied to every raw source row
+            before span decoding. Task shapes whose native release layout is
+            not already text-plus-spans supply one here so that offset
+            validation and canonical label mapping stay shared.
 
     Raises:
         MultilingualNerCorpusRequired: If no path is supplied, the path is
@@ -379,9 +425,12 @@ def load_multilingual_ner_benchmark(
         path,
         allow_repo_path=allow_repo_path,
     )
+    rows: Iterable[Mapping[str, Any]] = _load_rows(root)
+    if row_adapter is not None:
+        rows = [row_adapter(row) for row in rows]
     records = tuple(
         _record_from_row(source, row, index, split=split, source_path=root)
-        for index, row in enumerate(_load_rows(root))
+        for index, row in enumerate(rows)
     )
     unmapped = tuple(
         sorted(
@@ -896,12 +945,15 @@ def collect_unmapped_labels(
 
 __all__ = [
     "CANTEMIST",
+    "CHIP_CDN",
     "CMEEE",
     "DEFT",
     "DEFAULT_SPLIT",
+    "IMCS_V2_NER",
     "MULTILINGUAL_NER",
     "MULTILINGUAL_NER_BENCHMARKS",
     "MULTILINGUAL_NER_SOURCES",
+    "NAAMAPADAM",
     "PHARMACONER",
     "LabelMappingResult",
     "MultilingualNerCorpusRequired",
@@ -909,6 +961,7 @@ __all__ = [
     "MultilingualNerRecord",
     "MultilingualNerSource",
     "MultilingualNerSpan",
+    "RowAdapter",
     "collect_unmapped_labels",
     "load_multilingual_ner_benchmark",
     "load_multilingual_ner_fixtures",

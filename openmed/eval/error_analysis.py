@@ -20,21 +20,37 @@ from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import (
     BenchmarkFixture,
     ModelRunner,
+    PipelineStageOutput,
     default_model_runner,
     load_fixtures,
 )
-from openmed.eval.metrics import EvalSpan, normalize_eval_spans
+from openmed.eval.metrics import (
+    PIPELINE_EVAL_STAGES,
+    EvalSpan,
+    FaithfulnessFinding,
+    FaithfulnessMetrics,
+    PipelineFact,
+    compute_span_grounded_faithfulness,
+    normalize_eval_spans,
+    normalize_pipeline_facts,
+    pipeline_fact_mismatch_fields,
+)
 from openmed.eval.report import _format_value, _plain
 
 MISSED = "missed"
 SPURIOUS = "spurious"
 ERROR_BUCKETS: tuple[str, str] = (MISSED, SPURIOUS)
+FAITHFULNESS_DISCLAIMER = (
+    "This span-grounded faithfulness check is an assistive safeguard, "
+    "not a clinical decision."
+)
 LABELS: tuple[str, ...] = tuple(sorted(CANONICAL_LABELS))
 MATRIX_LABELS: tuple[str, ...] = LABELS + ERROR_BUCKETS
 DEFAULT_EXAMPLE_CAP = 5
 DEFAULT_CONTEXT_WINDOW = 24
 DEFAULT_DEDUPE_SIMILARITY = 0.92
 LABELING_QUEUE_SCHEMA_VERSION = "openmed.eval.labeling_queue.v1"
+PIPELINE_ATTRIBUTION_SCHEMA_VERSION = "openmed.eval.pipeline_attribution.v1"
 
 _RAW_TEXT_KEYS = frozenset(
     {
@@ -295,6 +311,235 @@ class ErrorAnalysisReport:
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(self.to_markdown(), encoding="utf-8")
+        return output_path
+
+
+@dataclass(frozen=True)
+class FaithfulnessErrorAnalysisReport:
+    """Serializable ungrounded-fact triage report."""
+
+    suite: str
+    model_name: str
+    fixture_count: int
+    faithfulness: FaithfulnessMetrics
+    disclaimer: str = FAITHFULNESS_DISCLAIMER
+    generated_at: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def ungrounded_facts(self) -> tuple[FaithfulnessFinding, ...]:
+        return self.faithfulness.findings
+
+    def to_dict(self, *, include_span_text: bool = True) -> dict[str, Any]:
+        """Return a JSON-ready report dictionary with stable keys."""
+
+        return {
+            "disclaimer": self.disclaimer,
+            "faithfulness": self.faithfulness.to_dict(include_findings=False),
+            "fixture_count": int(self.fixture_count),
+            "generated_at": self.generated_at,
+            "metadata": _plain(self.metadata),
+            "model_name": self.model_name,
+            "suite": self.suite,
+            "ungrounded_facts": [
+                finding.to_dict(include_span_text=include_span_text)
+                for finding in self.ungrounded_facts
+            ],
+        }
+
+    def to_json(self, *, indent: int = 2, include_span_text: bool = True) -> str:
+        """Serialize the report to deterministic JSON."""
+
+        return json.dumps(
+            self.to_dict(include_span_text=include_span_text),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def write_json(
+        self,
+        path: str | Path,
+        *,
+        indent: int = 2,
+        include_span_text: bool = True,
+    ) -> Path:
+        """Write deterministic JSON to *path*."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            self.to_json(indent=indent, include_span_text=include_span_text) + "\n",
+            encoding="utf-8",
+        )
+        return output_path
+
+    def to_markdown(self) -> str:
+        """Serialize the report to deterministic Markdown."""
+
+        lines = [
+            f"# Faithfulness Error Analysis Report: {self.suite}",
+            "",
+            self.disclaimer,
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            f"| Suite | `{self.suite}` |",
+            f"| Model | `{self.model_name}` |",
+            f"| Fixtures | {self.fixture_count} |",
+            (
+                "| Ungrounded Fact Rate | "
+                f"{self.faithfulness.ungrounded_fact_rate:.6f} |"
+            ),
+            f"| Ungrounded Facts | {self.faithfulness.ungrounded_facts} |",
+            f"| Total Facts | {self.faithfulness.total_facts} |",
+        ]
+        if self.generated_at is not None:
+            lines.append(f"| Generated At | `{self.generated_at}` |")
+
+        lines.extend(
+            [
+                "",
+                "## Ungrounded Facts",
+                "",
+                "| Type | Fixture | Fact | Reason | Span | Span Text | Value Hash |",
+                "|---|---|---|---|---|---|---|",
+            ]
+        )
+        if not self.ungrounded_facts:
+            lines.append("| _None_ |  |  |  |  |  |  |")
+        for finding in self.ungrounded_facts:
+            span = ""
+            if finding.start is not None and finding.end is not None:
+                span = f"{finding.start}:{finding.end}"
+            span_text = finding.support_text.replace("|", "\\|")
+            lines.append(
+                "| "
+                f"`{finding.fact_type}` | "
+                f"`{finding.fixture_id}` | "
+                f"`{finding.fact_id}` | "
+                f"`{finding.reason}` | "
+                f"{span} | "
+                f"{span_text} | "
+                f"`{finding.value_hash}` |"
+            )
+
+        if self.metadata:
+            lines.extend(["", "## Metadata", "", "| Key | Value |", "|---|---|"])
+            for key, value in _flatten(_plain(self.metadata)):
+                lines.append(f"| `{key}` | {_format_value(value)} |")
+
+        return "\n".join(lines) + "\n"
+
+    def write_markdown(self, path: str | Path) -> Path:
+        """Write deterministic Markdown to *path*."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_markdown(), encoding="utf-8")
+        return output_path
+
+
+@dataclass(frozen=True)
+class PipelineErrorAttribution:
+    """One final logical fact error assigned to its first defective stage."""
+
+    fixture_id: str
+    fact_id: str
+    stage: str
+    kind: str
+    reason: str
+    mismatched_fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.stage not in PIPELINE_EVAL_STAGES:
+            raise ValueError(f"unknown pipeline attribution stage {self.stage!r}")
+        if self.kind not in {"lost_or_corrupted", "spurious"}:
+            raise ValueError(f"unknown pipeline attribution kind {self.kind!r}")
+        if not self.fixture_id or not self.fact_id:
+            raise ValueError("pipeline attribution requires fixture_id and fact_id")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return raw-text-free attribution evidence."""
+
+        return {
+            "fact_id": self.fact_id,
+            "fixture_id": self.fixture_id,
+            "kind": self.kind,
+            "mismatched_fields": list(self.mismatched_fields),
+            "reason": self.reason,
+            "stage": self.stage,
+        }
+
+
+@dataclass(frozen=True)
+class PipelineAttributionReport:
+    """Deterministic per-stage first-error breakdown with no double counting."""
+
+    suite: str
+    fixture_count: int
+    findings: tuple[PipelineErrorAttribution, ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    schema_version: str = PIPELINE_ATTRIBUTION_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        ordered = tuple(
+            sorted(
+                self.findings,
+                key=lambda finding: (
+                    PIPELINE_EVAL_STAGES.index(finding.stage),
+                    finding.fixture_id,
+                    finding.fact_id,
+                    finding.kind,
+                ),
+            )
+        )
+        object.__setattr__(self, "findings", ordered)
+        if self.fixture_count < 0:
+            raise ValueError("pipeline attribution fixture_count must be non-negative")
+
+    @property
+    def stage_error_counts(self) -> dict[str, int]:
+        """Return every canonical stage bucket, including zero-count buckets."""
+
+        return {
+            stage: sum(1 for finding in self.findings if finding.stage == stage)
+            for stage in PIPELINE_EVAL_STAGES
+        }
+
+    @property
+    def total_end_to_end_errors(self) -> int:
+        """Return logical final fact errors counted exactly once."""
+
+        return len(self.findings)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return deterministic JSON-ready attribution evidence."""
+
+        stage_counts = self.stage_error_counts
+        if sum(stage_counts.values()) != self.total_end_to_end_errors:
+            raise RuntimeError("pipeline attribution contains double-counted errors")
+        return {
+            "findings": [finding.to_dict() for finding in self.findings],
+            "fixture_count": self.fixture_count,
+            "metadata": _privacy_safe_pipeline_metadata(self.metadata),
+            "schema_version": self.schema_version,
+            "stage_error_counts": stage_counts,
+            "suite": self.suite,
+            "total_end_to_end_errors": self.total_end_to_end_errors,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the attribution report deterministically."""
+
+        return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write the attribution report for release-gate evidence bundles."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
         return output_path
 
 
@@ -1045,6 +1290,158 @@ def _context_tokens(value: str) -> tuple[str, ...]:
     return tuple(_TOKEN_RE.findall(value.upper()))
 
 
+def attribute_pipeline_errors(
+    *,
+    fixture_id: str,
+    gold_facts: Iterable[PipelineFact | Mapping[str, Any]],
+    stage_outputs: Mapping[str, PipelineStageOutput] | Sequence[PipelineStageOutput],
+) -> PipelineAttributionReport:
+    """Assign each final logical fact error to its first defective stage.
+
+    A gold fact that is correct in the final FHIR output is not reported even if
+    an intermediate stage temporarily diverged. For a final error, the first
+    missing or mismatched snapshot wins. Final spurious facts are assigned to
+    the first stage where their stable fact id appeared.
+    """
+
+    gold = normalize_pipeline_facts(gold_facts)
+    outputs = _pipeline_outputs_by_stage(stage_outputs)
+    facts_by_stage = {
+        stage: {fact.fact_id: fact for fact in outputs[stage].facts}
+        for stage in PIPELINE_EVAL_STAGES
+    }
+    gold_by_id = {fact.fact_id: fact for fact in gold}
+    final_by_id = facts_by_stage["fhir"]
+    findings: list[PipelineErrorAttribution] = []
+
+    for expected in gold:
+        final = final_by_id.get(expected.fact_id)
+        if final is not None and not pipeline_fact_mismatch_fields(
+            expected,
+            final,
+            stage="fhir",
+        ):
+            continue
+        for stage in PIPELINE_EVAL_STAGES:
+            observed = facts_by_stage[stage].get(expected.fact_id)
+            if observed is None:
+                findings.append(
+                    PipelineErrorAttribution(
+                        fixture_id=fixture_id,
+                        fact_id=expected.fact_id,
+                        stage=stage,
+                        kind="lost_or_corrupted",
+                        reason=_pipeline_missing_reason(stage),
+                    )
+                )
+                break
+            mismatched = pipeline_fact_mismatch_fields(
+                expected,
+                observed,
+                stage=stage,
+            )
+            if mismatched:
+                findings.append(
+                    PipelineErrorAttribution(
+                        fixture_id=fixture_id,
+                        fact_id=expected.fact_id,
+                        stage=stage,
+                        kind="lost_or_corrupted",
+                        reason=_pipeline_mismatch_reason(stage),
+                        mismatched_fields=mismatched,
+                    )
+                )
+                break
+
+    for fact_id in sorted(set(final_by_id) - set(gold_by_id)):
+        first_stage = next(
+            stage for stage in PIPELINE_EVAL_STAGES if fact_id in facts_by_stage[stage]
+        )
+        findings.append(
+            PipelineErrorAttribution(
+                fixture_id=fixture_id,
+                fact_id=fact_id,
+                stage=first_stage,
+                kind="spurious",
+                reason=f"spurious_fact_introduced_by_{first_stage}",
+            )
+        )
+
+    return PipelineAttributionReport(
+        suite=fixture_id,
+        fixture_count=1,
+        findings=tuple(findings),
+    )
+
+
+def merge_pipeline_attribution_reports(
+    reports: Iterable[PipelineAttributionReport],
+    *,
+    suite: str = "pipeline-e2e",
+    metadata: Mapping[str, Any] | None = None,
+) -> PipelineAttributionReport:
+    """Merge fixture reports while preserving one finding per logical error."""
+
+    values = tuple(reports)
+    return PipelineAttributionReport(
+        suite=suite,
+        fixture_count=sum(report.fixture_count for report in values),
+        findings=tuple(finding for report in values for finding in report.findings),
+        metadata=dict(metadata or {}),
+    )
+
+
+def _pipeline_outputs_by_stage(
+    stage_outputs: Mapping[str, PipelineStageOutput] | Sequence[PipelineStageOutput],
+) -> dict[str, PipelineStageOutput]:
+    if isinstance(stage_outputs, Mapping):
+        outputs = dict(stage_outputs)
+    else:
+        outputs = {output.stage: output for output in stage_outputs}
+    missing = [stage for stage in PIPELINE_EVAL_STAGES if stage not in outputs]
+    if missing:
+        raise ValueError(
+            "pipeline attribution requires stage output(s): " + ", ".join(missing)
+        )
+    return {stage: outputs[stage] for stage in PIPELINE_EVAL_STAGES}
+
+
+def _pipeline_missing_reason(stage: str) -> str:
+    return {
+        "deid": "over_redaction",
+        "ner": "ner_miss",
+        "assertion": "assertion_fact_lost",
+        "grounding": "grounding_fact_lost",
+        "fhir": "fhir_mapping_omission",
+    }[stage]
+
+
+def _pipeline_mismatch_reason(stage: str) -> str:
+    return {
+        "deid": "over_redaction",
+        "ner": "wrong_ner_span_or_label",
+        "assertion": "wrong_assertion",
+        "grounding": "wrong_grounding",
+        "fhir": "wrong_fhir_mapping",
+    }[stage]
+
+
+def _privacy_safe_pipeline_metadata(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        safe: dict[str, Any] = {}
+        for raw_key in sorted(value, key=str):
+            key = str(raw_key)
+            item = value[raw_key]
+            if key.lower() in _RAW_TEXT_KEYS:
+                safe[f"{key}_hash"] = stable_hash({"value": str(item)})
+            else:
+                safe[key] = _privacy_safe_pipeline_metadata(item)
+        return safe
+    if isinstance(value, (list, tuple)):
+        return [_privacy_safe_pipeline_metadata(item) for item in value]
+    return _plain(value)
+
+
 def error_report(
     model: str | ModelRunner,
     suite: str | Path | Sequence[BenchmarkFixture | Mapping[str, Any]],
@@ -1107,6 +1504,33 @@ def error_report(
         false_negatives=false_negatives,
         false_positives=false_positives,
         example_cap=example_cap,
+        generated_at=generated_at,
+        metadata=dict(metadata or {}),
+    )
+
+
+def faithfulness_report(
+    facts: Iterable[Any],
+    *,
+    source_text: str,
+    suite: str = "faithfulness",
+    model_name: str = "extraction-output",
+    fixture_id: str = "fixture",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> FaithfulnessErrorAnalysisReport:
+    """Build an ungrounded-fact triage report for one source document."""
+
+    faithfulness = compute_span_grounded_faithfulness(
+        facts,
+        source_text=source_text,
+        fixture_id=fixture_id,
+    )
+    return FaithfulnessErrorAnalysisReport(
+        suite=suite,
+        model_name=model_name,
+        fixture_count=1,
+        faithfulness=faithfulness,
         generated_at=generated_at,
         metadata=dict(metadata or {}),
     )
@@ -1568,17 +1992,25 @@ __all__ = [
     "DEFAULT_DEDUPE_SIMILARITY",
     "DEFAULT_EXAMPLE_CAP",
     "ERROR_BUCKETS",
+    "FAITHFULNESS_DISCLAIMER",
     "LABELS",
     "LABELING_QUEUE_SCHEMA_VERSION",
+    "PIPELINE_ATTRIBUTION_SCHEMA_VERSION",
     "MATRIX_LABELS",
     "MISSED",
     "SPURIOUS",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
+    "FaithfulnessErrorAnalysisReport",
     "HardNegativeOverRedactionReport",
     "LabelingQueueArtifact",
     "LabelingQueueItem",
+    "PipelineAttributionReport",
+    "PipelineErrorAttribution",
+    "attribute_pipeline_errors",
     "error_report",
+    "faithfulness_report",
     "hard_negative_over_redaction_report",
     "mine_gate_failure_labeling_queue",
+    "merge_pipeline_attribution_reports",
 ]
