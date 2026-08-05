@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>اجرای محلی‌محور</b> &nbsp;·&nbsp; <b>33 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>اجرای محلی‌محور</b> &nbsp;·&nbsp; <b>34 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -331,7 +331,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII چندزبانه (34 مسیر پشتیبانی‌شده؛ 33 مسیر با مدل)
+## PII چندزبانه (35 مسیر پشتیبانی‌شده؛ 34 مسیر با مدل)
 
 استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr`، در مجموع **فهرست ثبت‌شدهٔ مدل‌های PII**.
 

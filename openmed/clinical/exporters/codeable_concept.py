@@ -16,6 +16,9 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
+from openmed.clinical.grounding.postcoordination import (
+    is_postcoordinated_candidate,
+)
 from openmed.clinical.grounding.types import GroundedSpan
 
 from .code_provenance import stamp_coding_provenance
@@ -69,6 +72,17 @@ def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
                 coding,
                 {coding["system"]: candidate.vocab_version},
                 source_label="grounding candidate",
+            )
+        if is_postcoordinated_candidate(candidate):
+            from .fhir.codeable_concept import stamp_postcoordination_provenance
+
+            if not candidate.vocab_version:
+                raise ValueError(
+                    "post-coordinated SNOMED candidate requires an edition version"
+                )
+            coding = stamp_postcoordination_provenance(
+                coding,
+                edition_uri=candidate.vocab_version,
             )
         codings.append(coding)
     result = _build_codeable_concept(codings, text=grounded_span.text)

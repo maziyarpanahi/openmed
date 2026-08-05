@@ -12,6 +12,11 @@ from .__about__ import __version__
 
 if TYPE_CHECKING:
     from .core import ModelLoader, OpenMedConfig
+    from .core.capabilities import (
+        BackendSpec,
+        BackendStatus,
+        MissingOptionalDependencyError,
+    )
     from .core.pii import (
         DeidentificationResult,
         PIIEntity,
@@ -27,6 +32,13 @@ _LAZY_IMPORTS = {
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
     "load_model": ".core",
+    "BackendSpec": ".core.capabilities",
+    "BackendStatus": ".core.capabilities",
+    "MissingOptionalDependencyError": ".core.capabilities",
+    "available_backends": ".core.capabilities",
+    "backend_status": ".core.capabilities",
+    "is_backend_available": ".core.capabilities",
+    "require_backend": ".core.capabilities",
     "LANG_TO_LOCALE": ".core.anonymizer",
     "Anonymizer": ".core.anonymizer",
     "AnonymizerConfig": ".core.anonymizer",
@@ -367,6 +379,7 @@ def analyze_text(
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
     sentence_backend: Literal["auto", "yasbd"] = "auto",
+    assert_context: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
@@ -401,6 +414,9 @@ def analyze_text(
         sentence_backend: Sentence segmentation engine to use.
             It can be ``"auto"`` (default, unchanged routing) or ``"yasbd"``
             (experimental opt-in; requires ``openmed[yasbd]``).
+        assert_context: Attach deterministic negation, uncertainty,
+            experiencer, and temporality labels to each entity under
+            ``metadata["clinical_context"]``. Disabled by default.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
@@ -750,6 +766,16 @@ def analyze_text(
             logger.warning("Failed to remap predictions to medical tokens: %s", exc)
             base_metadata.setdefault("medical_tokenizer", False)
 
+    if assert_context and flattened_predictions:
+        from .clinical.context import assert_context as attach_context
+
+        flattened_predictions = attach_context(
+            validated_text,
+            flattened_predictions,
+            sentences=processed_segments,
+            language=sentence_language,
+        )
+
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,
         "group_entities": group_entities,
@@ -795,6 +821,13 @@ __all__ = [
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",
+    "BackendSpec",
+    "BackendStatus",
+    "MissingOptionalDependencyError",
+    "available_backends",
+    "backend_status",
+    "is_backend_available",
+    "require_backend",
     "TextProcessor",
     "IndicNormalization",
     "IndicNormalizer",
