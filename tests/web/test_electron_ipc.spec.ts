@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import http from "node:http";
+import https from "node:https";
 import net from "node:net";
 import { join } from "node:path";
+import tls from "node:tls";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -95,6 +97,14 @@ test("Electron IPC returns only renderer-safe spans matching the golden", async 
     );
     assert.throws(
       () => net.connect(443, "example.invalid"),
+      /Network access is disabled/,
+    );
+    assert.throws(
+      () => https.request("https://example.invalid/model.onnx"),
+      /Network access is disabled/,
+    );
+    assert.throws(
+      () => tls.connect(443, "example.invalid"),
       /Network access is disabled/,
     );
 
