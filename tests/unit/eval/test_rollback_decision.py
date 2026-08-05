@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 from datetime import datetime, timezone
 
@@ -218,6 +219,12 @@ def test_tolerance_boundary_uses_the_same_operator_as_g7() -> None:
     assert decision.audit_record.regressions[0].drop == drop
 
 
+def test_recall_tolerance_is_not_caller_configurable() -> None:
+    """Callers cannot silently loosen the release-gate tolerance."""
+
+    assert "recall_tolerance" not in inspect.signature(decide_rollback).parameters
+
+
 def test_advance_requires_a_releasable_report() -> None:
     """A non-releasable report with no regression holds rather than advancing."""
 
@@ -396,8 +403,8 @@ def test_disjoint_baseline_metrics_are_visible_as_an_empty_comparison() -> None:
 
     assert decision.audit_record.compared_metrics == ()
     assert decision.audit_record.regressions == ()
-    assert decision.decision == DECISION_ADVANCE
-    assert "0 metric(s)" in decision.reasons[0]
+    assert decision.decision == DECISION_HOLD
+    assert "no monitored metrics overlap" in decision.reasons[0]
 
 
 def test_audit_record_records_the_compared_metric_surface() -> None:

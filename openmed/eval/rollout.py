@@ -1295,7 +1295,6 @@ def decide_rollback(
     rollout_state: "RolloutStateMachine | PhaseState | None" = None,
     *,
     baseline_path: str | Path = BASELINE_PATH,
-    recall_tolerance: float = G7_RECALL_DROP_LIMIT,
 ) -> RollbackDecision:
     """Decide whether a candidate holds, advances, or rolls back.
 
@@ -1319,11 +1318,11 @@ def decide_rollback(
     rollback target: ``last_green`` is read from committed state and returned
     verbatim, never parsed out of a repo name.
 
-    Only metrics present in *both* the report and the baseline are compared, so
-    a baseline entry that tracks a different metric surface yields an empty
-    comparison rather than a false clean bill. ``compared_metrics`` on the audit
-    record names exactly what was scored, so a no-op comparison is visible in
-    the evidence instead of reading as a pass.
+    Only metrics present in *both* the report and the baseline are compared. A
+    baseline entry that tracks a different metric surface yields ``HOLD`` rather
+    than a false clean bill. ``compared_metrics`` on the audit record names
+    exactly what was scored, so a no-op comparison is visible in the evidence
+    and can never authorize an advance.
 
     Raises:
         RolloutStateError: if the report's reproducibility hash does not
@@ -1355,7 +1354,7 @@ def decide_rollback(
         baseline_path=baseline_path,
         rank_limit=None,
     )
-    regressions = _monitored_regressions(diff, recall_tolerance=recall_tolerance)
+    regressions = _monitored_regressions(diff)
     compared = tuple(sorted(diff.metrics))
 
     reasons: list[str] = []
@@ -1369,6 +1368,12 @@ def decide_rollback(
                 f"(baseline={row.baseline:.6g} current={row.current:.6g}) "
                 f"beyond tolerance {row.tolerance:.6g}"
             )
+    elif not compared:
+        decision = DECISION_HOLD
+        reasons.append(
+            "no monitored metrics overlap the current report and baseline; "
+            "refusing to advance"
+        )
     elif current_report.decision == RELEASABLE:
         decision = DECISION_ADVANCE
         reasons.append(
@@ -1425,8 +1430,6 @@ def _monitored_metrics_payload(report: GateReport) -> dict[str, Any]:
 
 def _monitored_regressions(
     diff: BenchmarkHistoryDiff,
-    *,
-    recall_tolerance: float,
 ) -> list[MetricRegression]:
     """Return every monitored metric that regressed past its tolerance."""
 
@@ -1436,7 +1439,7 @@ def _monitored_regressions(
         if delta.verdict != REGRESSION:
             continue
         if metric.startswith(f"{RECALL_METRIC_PREFIX}."):
-            tolerance = recall_tolerance
+            tolerance = G7_RECALL_DROP_LIMIT
         elif metric == LEAKAGE_METRIC:
             tolerance = LEAKAGE_REGRESSION_TOLERANCE
         else:
