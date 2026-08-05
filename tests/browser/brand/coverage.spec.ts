@@ -310,28 +310,33 @@ test("standalone theme control cycles through only light and dark", async ({
   expectCleanAudit(audit);
 });
 
-test("browser demo completes a same-origin synthetic local inference", async ({
+test("browser demo completes same-origin streamed Maple inference", async ({
   baseURL,
   page,
 }) => {
-  const runtimePath = "/docs/demo/web/test-runtime.js";
+  const runtimePath = "/docs/demo/web/test-maple-runtime.js";
   await page.route(`**${runtimePath}`, async (route) => {
     await route.fulfill({
       body: `
-        export async function createOpenMedPipeline(options) {
-          if (options.backend !== "wasm") {
-            throw new Error("test runtime only exposes WASM");
-          }
-          return async function detect(text) {
-            const value = "John Doe";
-            const start = text.indexOf(value);
-            return [{
-              entity_group: "NAME",
-              score: 0.99,
-              start,
-              end: start + value.length,
-              word: value,
-            }];
+        export async function createOpenMedMapleRuntime(options) {
+          options.onProgress({
+            phase: "READY", loaded: 5310000000, total: 5310000000,
+          });
+          return {
+            async *generate() {
+              const output = JSON.stringify({
+                redacted_text: "[NAME_1] visited the synthetic clinic on [DATE_1].",
+                spans: [
+                  { text: "John Doe", type: "NAME" },
+                  { text: "2026-07-29", type: "DATE" },
+                ],
+                warnings: [],
+              });
+              yield { delta: output.slice(0, 40), index: 0 };
+              yield { delta: output.slice(40), index: 1 };
+            },
+            details() { return { device: "Synthetic WebGPU" }; },
+            dispose() {},
           };
         }
       `,
@@ -346,17 +351,19 @@ test("browser demo completes a same-origin synthetic local inference", async ({
   const syntheticInput =
     "John Doe visited the synthetic clinic on 2026-07-29.";
   await page.locator("#runtime-module").fill(`.${runtimePath.split("/web")[1]}`);
-  await page.locator("#repo-id").fill("./models/synthetic/");
+  await page.locator("#repo-id").fill("./models/maple-synthetic/");
   await page.locator("#input-text").fill(syntheticInput);
-  await page.locator("#run-selected").click();
+  await page.locator("#load-model").click();
+  await expect(page.locator("#model-state")).toHaveText("Ready");
+  await page.locator("#run-task").click();
 
   await expect(page.locator("#status")).toContainText(
-    /WASM inference completed/i,
+    /PII removal completed locally/i,
   );
-  await expect(page.locator("#results mark")).toHaveText("John Doe");
-  await expect(page.locator("#entities")).toContainText("NAME: John Doe");
-  await expect(page.locator("#wasm-load")).not.toHaveText("—");
-  await expect(page.locator("#wasm-first")).not.toHaveText("—");
+  await expect(page.locator("#results mark").first()).toHaveText("[NAME_1]");
+  await expect(page.locator("#entities")).toContainText("NAME · 0–8");
+  await expect(page.locator("#metric-latency")).not.toHaveText("—");
+  await expect(page.locator("#metric-tokens")).not.toHaveText("—");
   expectCleanAudit(audit);
 
   const persistedInput = await page.evaluate((marker) => {

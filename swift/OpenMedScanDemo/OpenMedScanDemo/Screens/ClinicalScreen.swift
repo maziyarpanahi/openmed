@@ -23,13 +23,13 @@ public struct ClinicalScreen: View {
             ScanStageHeader(
                 eyebrow: ScanStage.clinical.eyebrow,
                 spans: [.plain("Pick what to "), .accent("extract"), .plain(".")],
-                subhead: "Choose a task preset or edit the label set. GLiNER Relex does the rest.",
+                subhead: "Choose a task preset or edit the label set. Maple extracts entities and their relationships on-device.",
                 scale: .lg
             )
 
             presetPicker
             labelEditor
-            thresholdCard
+            extractionContractCard
             modelGate
         }
     }
@@ -133,19 +133,15 @@ public struct ClinicalScreen: View {
         )
     }
 
-    private var thresholdCard: some View {
+    private var extractionContractCard: some View {
         OMCard(padding: OM.Space.s4) {
             VStack(alignment: .leading, spacing: OM.Space.s3) {
                 HStack {
-                    Text("THRESHOLD").omEyebrow()
+                    Text("STRUCTURED OUTPUT").omEyebrow()
                     Spacer()
-                    Text(String(format: "%.2f", flow.clinicalThreshold))
-                        .font(.om.mono(13, weight: .semibold))
-                        .foregroundStyle(Color.omInk)
+                    OMBadge("Validated", tone: .positive, systemImage: "checkmark.shield.fill")
                 }
-                Slider(value: $flow.clinicalThreshold, in: 0.1...0.9, step: 0.05)
-                    .tint(Color.omTealAccent)
-                Text("Lower values surface more tentative signals; higher values keep only strong matches.")
+                Text("Maple is generative, so it does not expose calibrated confidence scores. OpenMedKit validates source spans, enforces the selected label set, and drops relations whose endpoints were not extracted.")
                     .font(.om.body(13))
                     .foregroundStyle(Color.omFgMuted)
             }
@@ -154,12 +150,12 @@ public struct ClinicalScreen: View {
 
     @ViewBuilder
     private var modelGate: some View {
-        if let entry = downloads.entries[.glinerRelex], entry.state != .ready {
+        if let entry = downloads.entries[flow.clinicalModelID], entry.state != .ready {
             OMDownloadRow(
-                modelID: .glinerRelex,
+                modelID: flow.clinicalModelID,
                 entry: entry,
-                onStart: { downloads.prepare(.glinerRelex) },
-                onCancel: { downloads.cancel(.glinerRelex) }
+                onStart: { downloads.prepare(flow.clinicalModelID) },
+                onCancel: { downloads.cancel(flow.clinicalModelID) }
             )
         }
     }

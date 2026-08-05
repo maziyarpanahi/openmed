@@ -413,7 +413,7 @@ def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() ->
     assert 'name="robots" content="noindex,nofollow"' in rtl
     assert "SYNTH-AR-0042" in rtl
     assert "https://" not in demo_app
-    assert "import(runtimeUrl.href)" in demo_app
+    assert "import(configuration.runtimeUrl.href)" in demo_app
     assert "resolved.origin !== window.location.origin" in demo_app
     assert publication["fixtures"] == [
         {

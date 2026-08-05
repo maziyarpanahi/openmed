@@ -1,9 +1,11 @@
-import Foundation
 import Combine
+import Foundation
+import OpenMedKit
 import SwiftUI
 import os.log
+
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 /// Single source of truth for the redesigned flow. Owns every piece of
@@ -18,7 +20,7 @@ public final class ScanFlowViewModel: ObservableObject {
     // MARK: Input
 
     #if canImport(UIKit)
-    @Published public var documentImages: [UIImage] = []
+        @Published public var documentImages: [UIImage] = []
     #endif
     @Published public var pastedOrScannedText: String = ""
     @Published public var needsOCR: Bool = false
@@ -29,9 +31,9 @@ public final class ScanFlowViewModel: ObservableObject {
         case none, paste, scan, sample
         public var label: String {
             switch self {
-            case .none:   return ""
-            case .paste:  return "Pasted"
-            case .scan:   return "Scanned"
+            case .none: return ""
+            case .paste: return "Pasted"
+            case .scan: return "Scanned"
             case .sample: return "Sample"
             }
         }
@@ -45,15 +47,17 @@ public final class ScanFlowViewModel: ObservableObject {
     @Published public var openMedPIIOutput: PIIOutput?
     @Published public var privacyFilterPIIOutput: PIIOutput?
     @Published public var multilingualPIIOutput: PIIOutput?
+    @Published public var maplePIIOutput: PIIOutput?
 
     private static let engineKey = "com.openmed.scan.pii-engine"
 
     private static func loadPersistedEngine() -> PIIEngine {
         if let raw = UserDefaults.standard.string(forKey: engineKey),
-           let engine = PIIEngine(rawValue: raw) {
+            let engine = PIIEngine(rawValue: raw)
+        {
             return engine
         }
-        return .openMed
+        return .maple
     }
 
     private static func persistEngine(_ engine: PIIEngine) {
@@ -61,28 +65,31 @@ public final class ScanFlowViewModel: ObservableObject {
     }
 
     public enum PIIEngine: String, CaseIterable, Identifiable, Hashable, Sendable {
-        case openMed, privacyFilter, multilingual
+        case maple, openMed, privacyFilter, multilingual
 
         public var id: String { rawValue }
         public var modelID: ScanModelID {
             switch self {
-            case .openMed:       return .piiLiteClinical
+            case .maple: return .maplePreview
+            case .openMed: return .piiLiteClinical
             case .privacyFilter: return .openaiPrivacyFilter
-            case .multilingual:  return .multilingualPrivacyFilter
+            case .multilingual: return .multilingualPrivacyFilter
             }
         }
         public var displayName: String {
             switch self {
-            case .openMed:       return "OpenMed PII"
+            case .maple: return "Maple Preview"
+            case .openMed: return "OpenMed PII"
             case .privacyFilter: return "OpenAI Nemotron Privacy Filter"
-            case .multilingual:  return "OpenMed Multilingual Privacy Filter"
+            case .multilingual: return "OpenMed Multilingual Privacy Filter"
             }
         }
         public var eyebrow: String {
             switch self {
-            case .openMed:       return "OPENMED · LOCAL"
+            case .maple: return "DEEPGROVE MAPLE · 2-BIT"
+            case .openMed: return "OPENMED · LOCAL"
             case .privacyFilter: return "OPENAI NEMOTRON · 8-BIT"
-            case .multilingual:  return "OPENMED MULTILINGUAL · 8-BIT"
+            case .multilingual: return "OPENMED MULTILINGUAL · 8-BIT"
             }
         }
     }
@@ -93,9 +100,10 @@ public final class ScanFlowViewModel: ObservableObject {
 
     public func output(for engine: PIIEngine) -> PIIOutput? {
         switch engine {
-        case .openMed:       return openMedPIIOutput
+        case .maple: return maplePIIOutput
+        case .openMed: return openMedPIIOutput
         case .privacyFilter: return privacyFilterPIIOutput
-        case .multilingual:  return multilingualPIIOutput
+        case .multilingual: return multilingualPIIOutput
         }
     }
 
@@ -103,6 +111,29 @@ public final class ScanFlowViewModel: ObservableObject {
 
     @Published public var clinicalThreshold: Double = 0.6
     @Published public var clinicalOutput: ClinicalOutput?
+
+    // MARK: Maple reasoning + chat
+
+    public struct MapleChatTurn: Identifiable, Hashable, Sendable {
+        public enum Role: String, Sendable {
+            case user
+            case assistant
+        }
+
+        public let id: UUID
+        public let role: Role
+        public let content: String
+
+        public init(id: UUID = UUID(), role: Role, content: String) {
+            self.id = id
+            self.role = role
+            self.content = content
+        }
+    }
+
+    @Published public var mapleBrief: String?
+    @Published public var mapleChatTurns: [MapleChatTurn] = []
+    @Published public var mapleChatDraft: String = ""
 
     // MARK: Status + errors
 
@@ -143,6 +174,8 @@ public final class ScanFlowViewModel: ObservableObject {
 
     public var activeLabels: [String] { presets.selectedPreset.labels }
 
+    public var clinicalModelID: ScanModelID { .maplePreview }
+
     // MARK: - Input actions
 
     public func useSample(text: String) {
@@ -161,14 +194,14 @@ public final class ScanFlowViewModel: ObservableObject {
     }
 
     #if canImport(UIKit)
-    public func usePages(_ images: [UIImage]) {
-        reset(clearing: .all)
-        documentImages = images
-        currentSource = .scan
-        pastedOrScannedText = ""
-        needsOCR = true
-        pageCount = images.count
-    }
+        public func usePages(_ images: [UIImage]) {
+            reset(clearing: .all)
+            documentImages = images
+            currentSource = .scan
+            pastedOrScannedText = ""
+            needsOCR = true
+            pageCount = images.count
+        }
     #endif
 
     // MARK: - Stage transitions
@@ -199,23 +232,26 @@ public final class ScanFlowViewModel: ObservableObject {
     // MARK: - Pipeline actions
 
     #if canImport(UIKit)
-    public func runOCRIfNeeded() async {
-        guard needsOCR, !documentImages.isEmpty, !isWorking else { return }
-        isWorking = true
-        status = PipelineProgress(phase: .recognizing, detail: "Vision OCR on \(documentImages.count) page(s)")
-        defer { isWorking = false; status = nil }
-        do {
-            let result = try await runtime.recognizeText(in: documentImages)
-            pastedOrScannedText = result.text
-            needsOCR = false
-            pageCount = result.pageCount
-            HapticsCenter.notify(.success)
-        } catch {
-            errorMessage = error.localizedDescription
-            HapticsCenter.notify(.error)
-            log.error("OCR failed: \(error.localizedDescription, privacy: .public)")
+        public func runOCRIfNeeded() async {
+            guard needsOCR, !documentImages.isEmpty, !isWorking else { return }
+            isWorking = true
+            status = PipelineProgress(phase: .recognizing, detail: "Vision OCR on \(documentImages.count) page(s)")
+            defer {
+                isWorking = false
+                status = nil
+            }
+            do {
+                let result = try await runtime.recognizeText(in: documentImages)
+                pastedOrScannedText = result.text
+                needsOCR = false
+                pageCount = result.pageCount
+                HapticsCenter.notify(.success)
+            } catch {
+                errorMessage = error.localizedDescription
+                HapticsCenter.notify(.error)
+                log.error("OCR failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
-    }
     #endif
 
     public func runPIIForCurrentEngine() async {
@@ -229,7 +265,10 @@ public final class ScanFlowViewModel: ObservableObject {
         }
         isWorking = true
         status = PipelineProgress(phase: .inferencing, detail: "Running \(engine.displayName) on-device")
-        defer { isWorking = false; status = nil }
+        defer {
+            isWorking = false
+            status = nil
+        }
         do {
             let output = try await runtime.runPII(
                 text: text,
@@ -261,7 +300,10 @@ public final class ScanFlowViewModel: ObservableObject {
 
         isWorking = true
         status = PipelineProgress(phase: .inferencing, detail: "Running \(selectedEngine.displayName) on-device")
-        defer { isWorking = false; status = nil }
+        defer {
+            isWorking = false
+            status = nil
+        }
 
         do {
             let output = try await runtime.runPII(text: text, modelID: selectedEngine.modelID)
@@ -278,7 +320,9 @@ public final class ScanFlowViewModel: ObservableObject {
         }
 
         guard revision == piiRevision, text == trimmedText else { return }
+        if selectedEngine == .maple { return }
         for engine in PIIEngine.allCases where engine != selectedEngine {
+            guard engine != .maple else { continue }
             guard downloads.state(for: engine.modelID) == .ready else { continue }
             status = PipelineProgress(phase: .inferencing, detail: "Running \(engine.displayName) on-device")
             do {
@@ -294,20 +338,24 @@ public final class ScanFlowViewModel: ObservableObject {
 
     public func runClinical() async {
         guard let masked = currentPIIOutput?.maskedText, !isWorking else { return }
-        guard downloads.state(for: .glinerRelex) == .ready else {
+        let modelID = clinicalModelID
+        guard downloads.state(for: modelID) == .ready else {
             errorMessage = "Clinical model not ready — download it first."
             return
         }
         isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Freeing PII models before GLiNER")
-        defer { isWorking = false; status = nil }
+        status = PipelineProgress(phase: .inferencing, detail: "Preparing Maple for extraction")
+        defer {
+            isWorking = false
+            status = nil
+        }
         do {
-            await runtime.unloadPIIRuntimes()
-            status = PipelineProgress(phase: .inferencing, detail: "Running GLiNER Relex")
+            status = PipelineProgress(phase: .inferencing, detail: "Extracting entities + relations with Maple")
             let output = try await runtime.runClinical(
                 maskedText: masked,
                 labels: activeLabels,
-                threshold: Float(clinicalThreshold)
+                threshold: Float(clinicalThreshold),
+                modelID: modelID
             )
             clinicalOutput = output
             HapticsCenter.impact(.soft)
@@ -315,6 +363,75 @@ public final class ScanFlowViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             HapticsCenter.notify(.error)
             log.error("Clinical run failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    public func generateMapleBrief() async {
+        guard let masked = currentPIIOutput?.maskedText, !isWorking else { return }
+        guard downloads.state(for: .maplePreview) == .ready else {
+            errorMessage = "Maple is not ready — download it first."
+            return
+        }
+        isWorking = true
+        status = PipelineProgress(phase: .inferencing, detail: "Maple is reviewing the de-identified note")
+        defer {
+            isWorking = false
+            status = nil
+        }
+        do {
+            mapleBrief = try await runtime.reason(
+                maskedText: masked,
+                question: "What are the key clinical facts, relationships, uncertainties, and follow-up items?",
+                messages: []
+            )
+            HapticsCenter.impact(.soft)
+        } catch {
+            errorMessage = error.localizedDescription
+            HapticsCenter.notify(.error)
+            log.error("Maple brief failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    public func askMaple() async {
+        let question = mapleChatDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let masked = currentPIIOutput?.maskedText,
+            !question.isEmpty,
+            !isWorking
+        else { return }
+        guard downloads.state(for: .maplePreview) == .ready else {
+            errorMessage = "Maple is not ready — download it first."
+            return
+        }
+
+        let history = mapleChatTurns.suffix(8).map { turn in
+            OpenMedMapleMessage(
+                role: turn.role == .user ? .user : .assistant,
+                content: turn.content
+            )
+        }
+        let pendingTurn = MapleChatTurn(role: .user, content: question)
+        mapleChatTurns.append(pendingTurn)
+        mapleChatDraft = ""
+        isWorking = true
+        status = PipelineProgress(phase: .inferencing, detail: "Maple is answering on-device")
+        defer {
+            isWorking = false
+            status = nil
+        }
+        do {
+            let answer = try await runtime.reason(
+                maskedText: masked,
+                question: question,
+                messages: history
+            )
+            mapleChatTurns.append(MapleChatTurn(role: .assistant, content: answer))
+            HapticsCenter.impact(.soft)
+        } catch {
+            mapleChatTurns.removeAll { $0.id == pendingTurn.id }
+            mapleChatDraft = question
+            errorMessage = error.localizedDescription
+            HapticsCenter.notify(.error)
+            log.error("Maple chat failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -330,7 +447,7 @@ public final class ScanFlowViewModel: ObservableObject {
         case .all:
             piiRevision += 1
             #if canImport(UIKit)
-            documentImages = []
+                documentImages = []
             #endif
             pastedOrScannedText = ""
             needsOCR = false
@@ -339,7 +456,11 @@ public final class ScanFlowViewModel: ObservableObject {
             openMedPIIOutput = nil
             privacyFilterPIIOutput = nil
             multilingualPIIOutput = nil
+            maplePIIOutput = nil
             clinicalOutput = nil
+            mapleBrief = nil
+            mapleChatTurns = []
+            mapleChatDraft = ""
             hasRunAnalysis = false
             status = nil
             summaryCategoryFilter = nil
@@ -348,20 +469,28 @@ public final class ScanFlowViewModel: ObservableObject {
             openMedPIIOutput = nil
             privacyFilterPIIOutput = nil
             multilingualPIIOutput = nil
+            maplePIIOutput = nil
             clinicalOutput = nil
+            mapleBrief = nil
+            mapleChatTurns = []
+            mapleChatDraft = ""
             hasRunAnalysis = false
             status = nil
             summaryCategoryFilter = nil
         case .clinicalOnly:
             clinicalOutput = nil
+            mapleBrief = nil
+            mapleChatTurns = []
+            mapleChatDraft = ""
         }
     }
 
     private func setPIIOutput(_ output: PIIOutput, for engine: PIIEngine) {
         switch engine {
-        case .openMed:       openMedPIIOutput = output
+        case .maple: maplePIIOutput = output
+        case .openMed: openMedPIIOutput = output
         case .privacyFilter: privacyFilterPIIOutput = output
-        case .multilingual:  multilingualPIIOutput = output
+        case .multilingual: multilingualPIIOutput = output
         }
     }
 }

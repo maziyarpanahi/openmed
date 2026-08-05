@@ -78,6 +78,7 @@ ALLOWED_FORMATS = (
     "mlx-fp",
     "mlx-8bit",
     "mlx-4bit",
+    "mlx-2bit",
     "onnx",
     "onnx-android",
     "onnx-int8",
