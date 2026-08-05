@@ -362,6 +362,84 @@ def test_assamese_cues_disambiguate_the_shared_bengali_script():
     assert all(run.language != "as" for run in decision.runs)
 
 
+def _i18n_fixtures(code: str) -> list[GoldenFixture]:
+    return [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path(f"openmed/eval/golden/fixtures/i18n/{code}.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+
+
+def test_urdu_cues_disambiguate_the_shared_arabic_script():
+    # The catalog ships no ``ur`` pack yet (issue #1520 owns that), so the
+    # Urdu pack is injected here exactly as the Bengali pack is above. This
+    # proves the routing contract the built-in catalog will satisfy the moment
+    # a ``ur`` pack is registered, with no further change to the router.
+    arabic_pack = get_language_pack("ar")
+    assert arabic_pack is not None
+    urdu_pack = LanguagePack(
+        code="ur",
+        scripts=("Arabic",),
+        default_model="env:OPENMED_URDU_NER_MODEL",
+        segmenter_id="unicode-sentence",
+        recognizers=("builtin-patterns", "model"),
+        surrogate_locale="ur_PK",
+    )
+    router = LanguageRouter(packs=(arabic_pack, urdu_pack), use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ur"
+        assert any(run.source == "stdlib:urdu-cues" for run in decision.runs)
+        for run in decision.runs:
+            if run.script == "Arabic":
+                assert run.candidates == ("ur", "ar", "ha")
+
+    for fixture in _i18n_fixtures("ar"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ar"
+        assert all(run.language != "ur" for run in decision.runs)
+        assert all(run.source != "stdlib:urdu-cues" for run in decision.runs)
+        for run in decision.runs:
+            if run.script == "Arabic":
+                assert run.candidates == ("ar", "ha", "ur")
+
+
+def test_urdu_fixtures_fall_back_to_arabic_until_an_urdu_pack_ships():
+    router = LanguageRouter(use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ar"
+        assert any(run.source == "stdlib:arabic-fallback" for run in decision.runs)
+        # The unroutable Urdu evidence still reaches callers through the run
+        # metadata, so a consumer can see why the fallback fired.
+        assert any(run.candidates[:1] == ("ur",) for run in decision.runs)
+
+    for fixture in _i18n_fixtures("ar"):
+        decision = router.route(fixture.text)
+        assert decision.language == "ar"
+        assert all(run.source != "stdlib:arabic-fallback" for run in decision.runs)
+        assert all(run.candidates[:1] != ("ur",) for run in decision.runs)
+
+
+def test_urdu_disambiguation_preserves_fixture_offsets_and_graphemes():
+    router = LanguageRouter(use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        runs = router.route_runs(fixture.text)
+        assert "".join(fixture.text[run.start : run.end] for run in runs) == (
+            fixture.text
+        )
+        for run in runs:
+            assert is_grapheme_boundary(run.start, fixture.text)
+            assert is_grapheme_boundary(run.end, fixture.text)
+        for span in fixture.gold_spans:
+            assert fixture.text[span.start : span.end] == span.text
+
+
 def test_assamese_fixtures_pass_zero_leakage_release_gate_offline():
     from openmed.core.pii import (
         _apply_safety_sweep_to_result,

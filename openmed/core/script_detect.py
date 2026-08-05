@@ -1187,6 +1187,64 @@ def assamese_language_evidence(text: str) -> int:
     return ra_wa_count + (2 * month_count)
 
 
+_URDU_EXCLUSIVE_LETTERS = frozenset(
+    {
+        "ٹ",  # tteh
+        "ڈ",  # ddal
+        "ڑ",  # rreh
+        "ں",  # noon ghunna
+        "ھ",  # heh doachashmee
+        "ے",  # yeh barree
+    }
+)
+_ARABIC_PRESENTATION_RANGES = ((0xFB50, 0xFDFF), (0xFE70, 0xFEFF))
+_EXTENDED_ARABIC_INDIC_DIGITS = frozenset(
+    chr(codepoint) for codepoint in range(0x06F0, 0x06FA)
+)
+
+
+def _urdu_presentation_forms() -> frozenset[str]:
+    """Derive the Arabic presentation forms of the Urdu-exclusive letters.
+
+    Only single-character NFKC decompositions count. Multi-character ligatures
+    are excluded on purpose: U+FDF0 and U+FDF1 (the Koranic stop signs salla
+    and qala) decompose through yeh barree yet occur in Arabic religious text,
+    so treating them as Urdu evidence would misroute Arabic.
+    """
+
+    forms = set()
+    for start, end in _ARABIC_PRESENTATION_RANGES:
+        for codepoint in range(start, end + 1):
+            char = chr(codepoint)
+            folded = unicodedata.normalize("NFKC", char)
+            if len(folded) == 1 and folded in _URDU_EXCLUSIVE_LETTERS:
+                forms.add(char)
+    return frozenset(forms)
+
+
+_URDU_LETTER_EVIDENCE = _URDU_EXCLUSIVE_LETTERS | _urdu_presentation_forms()
+
+
+def urdu_language_evidence(text: str) -> int:
+    """Return deterministic Urdu evidence in Arabic-script text.
+
+    The score counts the Urdu-exclusive letters tteh, ddal, rreh, noon ghunna,
+    heh doachashmee and yeh barree (U+0679, U+0688, U+0691, U+06BA, U+06BE,
+    U+06D2) together with their Arabic presentation forms. Extended
+    Arabic-Indic digits (U+06F0-U+06F9) reinforce an existing letter signal but
+    never trigger one on their own, because Persian uses the same digits and
+    none of the six letters. Shared Arabic block membership is not evidence.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    letter_count = sum(char in _URDU_LETTER_EVIDENCE for char in text)
+    if letter_count == 0:
+        return 0
+    digit_count = sum(char in _EXTENDED_ARABIC_INDIC_DIGITS for char in text)
+    return letter_count + digit_count
+
+
 def candidate_languages_for_text(
     text: str,
     script: str | None = None,
@@ -1196,19 +1254,27 @@ def candidate_languages_for_text(
     Bengali and Assamese share a Unicode block. Assamese-exclusive ra/wa
     letters and Assamese month spellings move ``"as"`` ahead of ``"bn"``;
     without that evidence the catalog's established Bengali-first order is
-    preserved.
+    preserved. Arabic and Urdu share a block in the same way, and the
+    Urdu-exclusive letters move ``"ur"`` ahead of ``"ar"`` under the same rule.
     """
 
     detected_script = detect_script(text) if script is None else script
     candidates = candidate_languages_for_script(detected_script)
     if (
-        detected_script != "Bengali"
-        or "as" not in candidates
-        or "bn" not in candidates
-        or assamese_language_evidence(text) == 0
+        detected_script == "Bengali"
+        and "as" in candidates
+        and "bn" in candidates
+        and assamese_language_evidence(text) > 0
     ):
-        return candidates
-    return ("as", *(code for code in candidates if code != "as"))
+        return ("as", *(code for code in candidates if code != "as"))
+    if (
+        detected_script == "Arabic"
+        and "ur" in candidates
+        and "ar" in candidates
+        and urdu_language_evidence(text) > 0
+    ):
+        return ("ur", *(code for code in candidates if code != "ur"))
+    return candidates
 
 
 def confusable_skeleton(text: str) -> str:
@@ -1934,4 +2000,5 @@ __all__ = [
     "numeral_set_for_script",
     "render_indian_name",
     "segment_by_script",
+    "urdu_language_evidence",
 ]

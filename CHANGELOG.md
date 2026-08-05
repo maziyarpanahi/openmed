@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged; opt-in spans are normalized to OpenMed's exact contiguous-offset
   contract, with explicit errors for missing dependencies, unknown backends,
   and conflicting preconstructed segmenters (#1848).
+- Added deterministic Urdu-versus-Arabic disambiguation for shared Arabic
+  script runs. `urdu_language_evidence()` scores the six Urdu-exclusive letters
+  (tteh, ddal, rreh, noon ghunna, heh doachashmee, yeh barree) and their sixteen
+  Arabic presentation forms, derived from single-character NFKC decompositions
+  so the Koranic stop-sign ligatures `U+FDF0`/`U+FDF1` are excluded. Extended
+  Arabic-Indic digits reinforce an existing letter signal but never trigger one,
+  keeping Persian on the Arabic route. Evidence moves `ur` ahead of `ar` in the
+  run's candidate order, and runs report `stdlib:urdu-cues` when an Urdu pack is
+  registered or `stdlib:arabic-fallback` at a lower confidence when none is.
+  Script-run offsets and grapheme boundaries are unchanged (#1571).
+
 - Registered the Indic and Urdu routing candidates (`mr`, `ne`, `bn`, `as`,
   `ta`, `kn`, `ml`, `gu`, `pa`, `or`, `ur`) across the public language
   surfaces. Nepali and Urdu now have display names, model prefixes, and REST,
