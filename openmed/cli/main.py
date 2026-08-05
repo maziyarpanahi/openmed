@@ -13,6 +13,7 @@ import tempfile
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping as MappingABC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 
@@ -30,7 +31,13 @@ from ..core.config import (
     save_profile,
     set_config,
 )
-from ..core.hf_hub import get_remote_model_size_mb, list_cached_models
+from ..core.hf_hub import (
+    clear_cached_model,
+    get_remote_model_size_mb,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from ..core.manifest_diff import ManifestDiff, diff_manifests
 from ..core.model_card import render_model_card
 from ..core.model_integrity import ModelIntegrityError, verify_cached_models
@@ -1602,6 +1609,55 @@ def _add_export_command(subparsers: argparse._SubParsersAction) -> None:
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
+
+    models_cache = models_sub.add_parser(
+        "cache",
+        help="Download, inspect, or clear cached OpenMed models.",
+    )
+    models_cache_sub = models_cache.add_subparsers(dest="models_cache_command")
+
+    models_cache_download = models_cache_sub.add_parser(
+        "download",
+        help="Download an OpenMed model into the local Hugging Face cache.",
+    )
+    models_cache_download.add_argument(
+        "repo_id",
+        help="Registry alias or Hugging Face repository id to download.",
+    )
+    models_cache_download.add_argument(
+        "--revision",
+        default=None,
+        help="Optional branch, tag, or commit to download.",
+    )
+    models_cache_download.add_argument(
+        "--allow-patterns",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Only download files matching PATTERN; repeat for multiple patterns.",
+    )
+    models_cache_download.set_defaults(handler=_handle_models_cache_download)
+
+    models_cache_list = models_cache_sub.add_parser(
+        "list",
+        help="List OpenMed models in the local Hugging Face cache.",
+    )
+    models_cache_list.set_defaults(handler=_handle_models_cache_list)
+
+    models_cache_clear = models_cache_sub.add_parser(
+        "clear",
+        help="Remove one OpenMed model from the local Hugging Face cache.",
+    )
+    models_cache_clear.add_argument(
+        "repo_id",
+        help="Registry alias or Hugging Face repository id to remove.",
+    )
+    models_cache_clear.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm deletion of the selected model cache.",
+    )
+    models_cache_clear.set_defaults(handler=_handle_models_cache_clear)
 
     models_pull = models_sub.add_parser(
         "pull",
@@ -5358,6 +5414,138 @@ def _format_param_count(param_count: int | None) -> str:
     if param_count is None:
         return "unknown"
     return f"{param_count:,}"
+
+
+def _format_models_cache_last_used(value: Any) -> str:
+    if (
+        value is None
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+    ):
+        return "never" if value is None else "unknown"
+
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat(
+            timespec="seconds"
+        )
+    except (OverflowError, OSError, ValueError):
+        return "unknown"
+
+
+def _models_cache_payload(cached_models: Sequence[Any]) -> dict[str, Any]:
+    models = []
+    for cached in cached_models:
+        size_on_disk = cached.size_on_disk
+        models.append(
+            {
+                "repo_id": cached.repo_id,
+                "size_bytes": size_on_disk,
+                "size_mb": round(size_on_disk / 1_000_000, 3),
+                "last_accessed": cached.last_accessed,
+                "last_used": _format_models_cache_last_used(cached.last_accessed),
+            }
+        )
+    return {"count": len(models), "models": models}
+
+
+def _format_models_cache_table(payload: Mapping[str, Any]) -> str:
+    rows = [
+        {
+            "repo_id": str(model["repo_id"]),
+            "size_mb": f"{float(model['size_mb']):.3f} MB",
+            "last_used": str(model["last_used"]),
+        }
+        for model in payload["models"]
+    ]
+    if not rows:
+        return "No cached OpenMed models.\n"
+
+    columns = (
+        ("repo_id", "repo_id"),
+        ("size_mb", "size_mb"),
+        ("last_used", "last_used"),
+    )
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+    lines = [
+        "  ".join(header.ljust(widths[key]) for key, header in columns),
+        "  ".join("-" * widths[key] for key, _header in columns),
+        *[
+            "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+            for row in rows
+        ],
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_models_cache_download(args: argparse.Namespace) -> int:
+    config = _load_and_apply_config(args)
+    try:
+        repo_id = resolve_repo_id(args.repo_id)
+        path = prefetch_model(
+            repo_id,
+            revision=args.revision,
+            allow_patterns=args.allow_patterns,
+            config=config,
+        )
+    except (ImportError, OfflineModeError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to download model {args.repo_id}: {exc}",
+            code="download_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    path_text = str(path)
+    return emit(
+        args,
+        {"repo_id": repo_id, "path": path_text},
+        human=f"Model ready: {path_text}",
+    )
+
+
+def _handle_models_cache_list(args: argparse.Namespace) -> int:
+    try:
+        cached_models = sorted(
+            list_cached_models(),
+            key=lambda cached: cached.repo_id,
+        )
+    except (ImportError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to list model cache: {exc}",
+            code="cache_list_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    payload = _models_cache_payload(cached_models)
+    return emit(args, payload, human=_format_models_cache_table(payload))
+
+
+def _handle_models_cache_clear(args: argparse.Namespace) -> int:
+    if not args.yes:
+        raise CliError(
+            f"Refusing to clear {args.repo_id} without --yes confirmation.",
+            code="confirmation_required",
+            exit_code=EXIT_USAGE,
+        )
+
+    try:
+        repo_id = resolve_repo_id(args.repo_id)
+        removed = clear_cached_model(repo_id)
+    except (ImportError, OSError, ValueError) as exc:
+        raise CliError(
+            f"Failed to clear model cache {args.repo_id}: {exc}",
+            code="cache_clear_failed",
+            exit_code=EXIT_ERROR,
+        ) from exc
+
+    if removed:
+        human = f"Cleared model cache: {repo_id}"
+    else:
+        human = f"No cached model found: {repo_id}"
+    return emit(args, {"repo_id": repo_id, "removed": removed}, human=human)
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
