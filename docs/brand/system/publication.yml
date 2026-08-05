@@ -140,6 +140,7 @@ classification:
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
+    - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
     - clinical-validation-protocol.md
