@@ -153,12 +153,13 @@ class OpenMedKit {
         'must be a non-empty local filesystem path',
       );
     }
+    final String localDirectory = Directory(modelDirectory).absolute.path;
     _validateThreshold(defaultThreshold);
     final MethodChannel channel =
         platformChannel ?? const MethodChannel(openMedKitFlutterChannelName);
     final String? preparedDirectory = await channel.invokeMethod<String>(
       'prepareModel',
-      <String, Object>{'modelDirectory': modelDirectory},
+      <String, Object>{'modelDirectory': localDirectory},
     );
     if (preparedDirectory == null || preparedDirectory.isEmpty) {
       throw const OpenMedFfiException(
@@ -306,7 +307,8 @@ class OpenMedKit {
     T Function(
       ffi.Pointer<Utf8> text,
       ffi.Pointer<_NativeTokenBatch> batch,
-    ) operation,
+    )
+        operation,
   ) {
     final ffi.Pointer<Utf8> nativeText = text.toNativeUtf8();
     final ffi.Pointer<ffi.Int64> inputIds = calloc<ffi.Int64>(batch.tokenCount);
@@ -361,8 +363,12 @@ class OpenMedKit {
   }
 
   static void _validateText(String text) {
-    if (text.isEmpty) {
-      throw ArgumentError.value(text, 'text', 'must not be empty');
+    if (text.isEmpty || text.contains('\u0000')) {
+      throw ArgumentError.value(
+        text,
+        'text',
+        'must be non-empty and must not contain NUL bytes',
+      );
     }
   }
 
@@ -375,7 +381,9 @@ class OpenMedKit {
   static void _validateBatch(String text, OpenMedTokenBatch batch) {
     final int textLength = text.runes.length;
     for (final OpenMedTokenOffset offset in batch.offsets) {
-      if (offset.end > textLength) {
+      if (offset.start < 0 ||
+          offset.end < offset.start ||
+          offset.end > textLength) {
         throw ArgumentError(
           'token offsets must be Unicode-scalar offsets within the source text',
         );
@@ -385,13 +393,16 @@ class OpenMedKit {
 
   static bool _looksRemote(String value) {
     final String normalized = value.trim().toLowerCase();
-    return normalized.startsWith('http://') ||
-        normalized.startsWith('https://');
+    return RegExp(r'^[a-z][a-z0-9+.-]*://').hasMatch(normalized);
   }
 
   static String _resolveModelPath(String directory, String variant) {
+    final String normalizedVariant = variant.trim();
+    if (normalizedVariant.isEmpty) {
+      throw ArgumentError.value(variant, 'variant', 'must not be empty');
+    }
     final List<String> candidates;
-    switch (variant.trim().toLowerCase()) {
+    switch (normalizedVariant.toLowerCase()) {
       case 'auto':
         candidates = _autoModelNames;
         break;
@@ -405,11 +416,12 @@ class OpenMedKit {
         candidates = const <String>['model_fp16.onnx'];
         break;
       default:
-        candidates = <String>[variant];
+        candidates = <String>[normalizedVariant];
     }
     for (final String candidate in candidates) {
       final File file = File(_join(directory, candidate));
-      if (file.existsSync()) {
+      if (file.existsSync() &&
+          file.statSync().type == FileSystemEntityType.file) {
         return file.absolute.path;
       }
     }

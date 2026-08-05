@@ -606,8 +606,8 @@ static openmed_status decode_logits(
     }
 
     for (token_index = 0; token_index < sequence_length; ++token_index) {
-        const float *row = logits + token_index * output_label_count;
-        size_t label_index = maximum_label_index(row, output_label_count);
+        const float *row;
+        size_t label_index;
         const char *label;
         size_t label_length;
         char prefix;
@@ -616,10 +616,20 @@ static openmed_status decode_logits(
         double score;
         openmed_status status;
 
-        if (start < 0 || end < start || (size_t)end > text_length) {
+        if (start < 0 || end < start ||
+            (uint64_t)end > (uint64_t)text_length) {
             set_error("token offsets fall outside the source text");
             return OPENMED_STATUS_INVALID_OUTPUT;
         }
+        if (batch->attention_mask[token_index] == 0) {
+            status = append_pending(spans, &pending, threshold);
+            if (status != OPENMED_STATUS_OK) {
+                return status;
+            }
+            continue;
+        }
+        row = logits + token_index * output_label_count;
+        label_index = maximum_label_index(row, output_label_count);
         parse_label(
             runtime->labels[label_index],
             &prefix,

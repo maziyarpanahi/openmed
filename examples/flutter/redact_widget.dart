@@ -4,7 +4,7 @@ import 'package:openmedkit_flutter/openmedkit.dart';
 /// Small offline example that redacts a fully synthetic clinical note.
 class RedactSyntheticNote extends StatefulWidget {
   const RedactSyntheticNote({Key? key, required this.openMedKit})
-    : super(key: key);
+      : super(key: key);
 
   final OpenMedKit openMedKit;
 
@@ -23,8 +23,8 @@ class _RedactSyntheticNoteState extends State<RedactSyntheticNote> {
   Future<void> _redact() async {
     setState(() => _working = true);
     try {
-      final OpenMedDeidentificationResult result = await widget.openMedKit
-          .deidentify(_syntheticNote);
+      final OpenMedDeidentificationResult result =
+          await widget.openMedKit.deidentify(_syntheticNote);
       if (mounted) {
         setState(() => _displayText = result.deidentifiedText);
       }

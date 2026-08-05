@@ -40,7 +40,8 @@ void main() {
     await modelDirectory.delete(recursive: true);
   });
 
-  test('deidentifies a synthetic note and matches the committed golden', () async {
+  test('deidentifies a synthetic note and matches the committed golden',
+      () async {
     final File goldenFile = File(
       '${Directory.current.path}${Platform.pathSeparator}..${Platform.pathSeparator}..'
       '${Platform.pathSeparator}tests${Platform.pathSeparator}mobile'
@@ -75,8 +76,8 @@ void main() {
             platformChannel: channel,
           );
           final List<OpenMedSpan> extracted = await runtime!.extractPii(text);
-          final OpenMedDeidentificationResult result = await runtime!
-              .deidentify(text);
+          final OpenMedDeidentificationResult result =
+              await runtime!.deidentify(text);
 
           expect(result.deidentifiedText, golden['deidentified_text']);
           _expectSpansMatchGolden(
@@ -126,6 +127,61 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test(
+    'rejects invalid source text and token offsets before native marshalling',
+    () async {
+      OpenMedKit? runtime;
+      try {
+        runtime = await OpenMedKit.loadModel(
+          modelDirectory: modelDirectory.path,
+          tokenizer: (String text) => OpenMedTokenBatch(
+            inputIds: const <int>[101],
+            offsets: <OpenMedTokenOffset>[
+              OpenMedTokenOffset(0, text == 'Patient' ? 8 : 0),
+            ],
+          ),
+          nativeLibraryPath: Platform.environment['OPENMED_FFI_LIBRARY'],
+          platformChannel: channel,
+        );
+        await expectLater(
+          runtime.extractPii('Patient'),
+          throwsArgumentError,
+        );
+        await expectLater(
+          runtime.extractPii('Patient\u0000Name'),
+          throwsArgumentError,
+        );
+      } finally {
+        runtime?.close();
+      }
+    },
+  );
+
+  test('does not return spans for masked tokens', () async {
+    OpenMedKit? runtime;
+    try {
+      runtime = await OpenMedKit.loadModel(
+        modelDirectory: modelDirectory.path,
+        tokenizer: _maskedFixtureTokenizer,
+        nativeLibraryPath: Platform.environment['OPENMED_FFI_LIBRARY'],
+        platformChannel: channel,
+      );
+      final List<OpenMedSpan> spans = await runtime.extractPii(
+        'Patient Alice Nguyen was born on 1979-04-12. '
+        'Email alice@example.org.',
+      );
+      expect(spans, hasLength(2));
+      expect(spans[0].start, 33);
+      expect(spans[0].end, 43);
+      expect(spans[0].label, 'DATE_OF_BIRTH');
+      expect(spans[1].start, 51);
+      expect(spans[1].end, 68);
+      expect(spans[1].label, 'EMAIL');
+    } finally {
+      runtime?.close();
+    }
+  });
 }
 
 OpenMedTokenBatch _fixtureTokenizer(String text) {
@@ -143,6 +199,15 @@ OpenMedTokenBatch _fixtureTokenizer(String text) {
       OpenMedTokenOffset(51, 68),
       OpenMedTokenOffset(0, 0),
     ],
+  );
+}
+
+OpenMedTokenBatch _maskedFixtureTokenizer(String text) {
+  final OpenMedTokenBatch batch = _fixtureTokenizer(text);
+  return OpenMedTokenBatch(
+    inputIds: batch.inputIds,
+    attentionMask: const <int>[1, 0, 1, 1, 1],
+    offsets: batch.offsets,
   );
 }
 
