@@ -11,6 +11,7 @@ from __future__ import annotations
 import html as html_lib
 import posixpath
 import zipfile
+import zlib
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -403,6 +404,8 @@ def _read_required(archive: zipfile.ZipFile, path: str) -> bytes:
         return archive.read(path)
     except KeyError as exc:
         raise UnsupportedDocumentError(f"EPUB archive is missing {path}") from exc
+    except (NotImplementedError, zlib.error) as exc:
+        raise UnsupportedDocumentError("EPUB must be a valid ZIP archive") from exc
 
 
 def _decode_text(data: bytes) -> str:

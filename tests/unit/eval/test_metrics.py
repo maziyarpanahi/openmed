@@ -16,13 +16,19 @@ from openmed.eval.metrics import (
     apply_abstention_policy,
     compute_abstention_metrics,
     compute_character_recall,
+    compute_coreference_clustering_score,
     compute_critical_finding_recall,
+    compute_date_shift_consistency,
     compute_exact_span_f1,
     compute_extraction_reemission_leakage,
+    compute_latency_summary,
     compute_leakage_rate,
     compute_metrics_bundle,
+    compute_over_redaction_loss,
     compute_recall_slices,
     compute_relaxed_span_f1,
+    compute_resource_metrics,
+    compute_surrogate_consistency,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -45,7 +51,15 @@ def test_eval_modules_import_cleanly():
         "policy_compliance",
         "biomedical-ner",
         "multilingual-clinical-ner",
+        "masakhaner",
+        "cmeee",
+        "naamapadam",
+        "chinese-clinical-ner",
         "multimodal_dicom",
+        "code_mixed_routing",
+        "india_health_id_leakage",
+        "indian_multi_id",
+        "indic-name-consistency",
     )
 
 
@@ -200,6 +214,74 @@ def test_exact_and_relaxed_f1_differ_on_boundary_drift():
     assert relaxed.f1 == 1.0
     assert exact.false_negatives == 1
     assert relaxed.true_positives == 1
+
+
+def test_utility_latency_and_resource_metrics_cover_edge_values():
+    utility = compute_over_redaction_loss(
+        [{"start": 0, "end": 4, "label": "PERSON"}],
+        [
+            {"start": 0, "end": 4, "label": "PERSON"},
+            {"start": 5, "end": 8, "label": "OTHER"},
+        ],
+        text_length=12,
+    )
+    latency = compute_latency_summary([40, 10, 30, 20])
+    resources = compute_resource_metrics(
+        peak_rss_bytes=2 * 1024 * 1024,
+        model_size_bytes=3 * 1024 * 1024,
+    )
+
+    assert utility.rate == pytest.approx(3 / 8)
+    assert utility.numerator == 3
+    assert utility.denominator == 8
+    assert latency.p50_ms == 20.0
+    assert latency.p95_ms == 40.0
+    assert resources.peak_rss_mib == 2.0
+    assert resources.model_size_mib == 3.0
+
+
+def test_date_shift_consistency_is_patient_scoped_and_rejects_surviving_dates():
+    result = compute_date_shift_consistency(
+        ["2026-01-01", "2026-01-08", "2026-03-01", "2026-04-01"],
+        ["2026-01-31", "2026-02-07", "2026-05-30", "2026-04-01"],
+        patient_ids=["patient-a", "patient-a", "patient-b", "patient-c"],
+    )
+    serialized = json.dumps(result.to_dict(), sort_keys=True)
+
+    assert result.score == pytest.approx(3 / 4)
+    assert result.violations == {"date_index:3": ["unchanged_date"]}
+    assert "2026-04-01" not in serialized
+    assert "patient-" not in serialized
+
+
+def test_surrogate_consistency_is_document_scoped_checksum_aware_and_phi_free():
+    result = compute_surrogate_consistency(
+        ["Synthetic Alice", "Synthetic Alice", "Synthetic Alice", "Synthetic ID"],
+        ["Person One", "Person Two", "Person Three", "000-invalid"],
+        document_ids=["doc-a", "doc-a", "doc-b", "doc-b"],
+        checksum_valid=[None, None, None, False],
+    )
+    serialized = json.dumps(result.to_dict(), sort_keys=True)
+
+    assert result.score == pytest.approx(1 / 3)
+    assert result.violations == {
+        "entity_group:0": ["inconsistent_surrogate"],
+        "entity_group:3": ["checksum_invalid"],
+    }
+    assert "Synthetic Alice" not in serialized
+    assert "Person One" not in serialized
+    assert "000-invalid" not in serialized
+
+
+def test_coreference_clustering_metric_uses_documented_bcubed_proxy():
+    gold = {"m1": "a", "m2": "a", "m3": "b"}
+    predicted = {"m1": "x", "m2": "x", "m3": "y"}
+
+    score = compute_coreference_clustering_score(predicted, gold)
+
+    assert score.metric == "bcubed"
+    assert score.item_count == 3
+    assert score.f1 == 1.0
 
 
 def test_critical_abstentions_route_to_redaction_not_passthrough():
@@ -394,6 +476,24 @@ def test_harness_runs_with_injected_runner_without_loading_models():
             "text": "Patient John",
             "language": "en",
             "gold_spans": [{"start": 8, "end": 12, "label": "PERSON"}],
+            "metadata": {
+                "date_chain": {
+                    "original_dates": ["2026-01-01", "2026-01-08"],
+                    "shifted_dates": ["2026-01-31", "2026-02-07"],
+                },
+                "surrogate_pairs": [
+                    {
+                        "original": "Synthetic John",
+                        "surrogate": "Synthetic Person",
+                        "checksum_valid": True,
+                    },
+                    {
+                        "original": "Synthetic John",
+                        "surrogate": "Synthetic Person",
+                        "checksum_valid": True,
+                    },
+                ],
+            },
         }
     )
 
@@ -413,6 +513,8 @@ def test_harness_runs_with_injected_runner_without_loading_models():
     assert report.fixture_count == 1
     assert report.metrics["leakage"]["overall"] == 0.0
     assert report.metrics["exact_span_f1"]["f1"] == 1.0
+    assert report.metrics["date_shift_consistency"]["score"] == 1.0
+    assert report.metrics["surrogate_consistency"]["score"] == 1.0
 
 
 def test_harness_surfaces_abstention_metrics_with_thresholds():

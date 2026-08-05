@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 
 VERSION_PATTERN = re.compile(r'__version__\s*=\s*"([^"]+)"')
+SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 CONVENTIONAL_PATTERN = re.compile(
     r"^(?P<type>[A-Za-z][A-Za-z0-9-]*)"
     r"(?:\((?P<scope>[^)]+)\))?"
@@ -142,6 +143,39 @@ def bump_version(current_version: str, bump: str) -> str:
     if bump == "patch":
         return f"{major}.{minor}.{patch + 1}"
     raise ValueError(f"Unknown SemVer bump {bump!r}")
+
+
+def parse_semver(version: str) -> tuple[int, int, int]:
+    """Parse a stable SemVer version into a comparable tuple."""
+    match = SEMVER_PATTERN.fullmatch(version)
+    if not match:
+        raise ValueError(f"Expected SemVer version X.Y.Z, got {version!r}")
+    return tuple(int(part) for part in match.groups())
+
+
+def validate_release_version(
+    current_version: str,
+    minimum_version: str,
+    release_version: str,
+) -> None:
+    """Require a release to advance and meet the computed minimum bump.
+
+    Conventional commits provide the minimum safe bump. Release owners may
+    intentionally choose a larger minor or major version.
+    """
+    current = parse_semver(current_version)
+    minimum = parse_semver(minimum_version)
+    release = parse_semver(release_version)
+
+    if release <= current:
+        raise ValueError(
+            f"Release version {release_version} must be newer than {current_version}"
+        )
+    if release < minimum:
+        raise ValueError(
+            f"Release version {release_version} is below the computed minimum "
+            f"{minimum_version}"
+        )
 
 
 def changelog_section_for(commit: ConventionalCommit) -> str | None:
@@ -281,6 +315,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Base SemVer version. Defaults to the latest v* tag, then openmed/__about__.py.",
     )
     parser.add_argument(
+        "--release-version",
+        help=(
+            "Validate an explicit release version against the computed minimum. "
+            "Larger intentional minor or major versions are accepted."
+        ),
+    )
+    parser.add_argument(
         "--date",
         default=date.today().isoformat(),
         help="Release date for the rendered changelog section.",
@@ -315,6 +356,16 @@ def main(argv: list[str] | None = None) -> int:
 
     commits = read_commits(repo, range_spec)
     notes = build_release_notes(current_version, commits, args.date)
+    if args.release_version:
+        try:
+            validate_release_version(
+                current_version,
+                notes.next_version,
+                args.release_version,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     payload = {
         "bump": notes.bump,
