@@ -1,5 +1,6 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.segmentation.IcuTextSegmenter
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -7,9 +8,9 @@ import java.math.RoundingMode
  * A single entity predicted by the OpenMedKit token-classification pipeline.
  *
  * Mirrors the Swift `OpenMedKit.EntityPrediction` value type and the Python
- * `OpenMedSpan` char-offset conventions: [start] and [end] are half-open
- * character offsets into the original text (`start` inclusive, `end`
- * exclusive), so `end >= start` and `end - start` is the span length.
+ * `OpenMedSpan` conventions: [start] and [end] are half-open Unicode scalar
+ * (code point) offsets into the exact original text. They are never Kotlin
+ * UTF-16 indices.
  */
 data class EntityPrediction(
     val label: String,
@@ -21,6 +22,39 @@ data class EntityPrediction(
     /** Python-compatible entity type used by de-identification exports. */
     val entityType: String
         get() = label
+
+    /**
+     * Return the native Kotlin UTF-16 range represented by this entity.
+     */
+    fun utf16SpanIn(source: String): Utf16Span? {
+        val scalarLength = UnicodeOffsetContract.scalarLength(source)
+        if (start !in 0..scalarLength || end !in start..scalarLength) {
+            return null
+        }
+        return UnicodeOffsetContract.utf16Span(source, start, end)
+    }
+
+    /**
+     * Return a copy whose scalar offsets enclose complete grapheme clusters.
+     *
+     * The copied [text] is sliced from [source] after converting the snapped
+     * scalar coordinates to Kotlin's native UTF-16 indices.
+     */
+    fun snappedToGraphemeBoundaries(
+        source: String,
+        segmenter: IcuTextSegmenter = IcuTextSegmenter(),
+    ): EntityPrediction {
+        val snapped = segmenter.snapScalarSpan(source, start, end)
+        return copy(
+            text = UnicodeOffsetContract.substring(
+                source,
+                snapped.start,
+                snapped.end,
+            ),
+            start = snapped.start,
+            end = snapped.end,
+        )
+    }
 
     /**
      * Human-readable description matching the Swift `EntityPrediction`

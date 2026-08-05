@@ -1,0 +1,41 @@
+{
+  "organisationUnits": [
+    {
+      "id": "ouCountry01",
+      "level": 1,
+      "name": "Synthetic Country"
+    },
+    {
+      "id": "ouProvince1",
+      "level": 2,
+      "name": "Synthetic Province",
+      "parent": {
+        "id": "ouCountry01"
+      }
+    },
+    {
+      "id": "ouDistrict1",
+      "level": 3,
+      "name": "Synthetic District",
+      "parent": {
+        "id": "ouProvince1"
+      }
+    },
+    {
+      "id": "ouFacility1",
+      "level": 4,
+      "name": "Synthetic Rural Clinic",
+      "parent": {
+        "id": "ouDistrict1"
+      }
+    },
+    {
+      "id": "ouFacility2",
+      "level": 4,
+      "name": "Synthetic Community Clinic",
+      "parent": {
+        "id": "ouDistrict1"
+      }
+    }
+  ]
+}

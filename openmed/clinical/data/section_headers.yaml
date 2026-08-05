@@ -1,0 +1,63 @@
+schema_version: 1
+provenance:
+  task: OM-086
+  source: OpenMed curated deterministic clinical section header lexicon.
+  license: Apache-2.0 repository asset.
+  restricted_data: false
+  synthetic: true
+sections:
+  history_of_present_illness:
+    - History of Present Illness
+    - Present Illness
+    - HPI
+  past_medical_history:
+    - Past Medical History
+    - Medical History
+    - Past History
+    - PMH
+  medications:
+    - Medications
+    - Current Medications
+    - Home Medications
+    - Medication List
+    - Meds
+  allergies:
+    - Allergies
+    - Drug Allergies
+    - Allergy List
+    - Known Allergies
+  problem_list:
+    - Problem List
+    - Active Problems
+    - Problems
+  social_history:
+    - Social History
+    - Social Hx
+    - Soc Hx
+    - SH
+  assessment_and_plan:
+    - Assessment/Plan
+    - Assessment and Plan
+    - A/P
+  findings:
+    - Findings
+    - Observations
+  impression:
+    - Impression
+    - Conclusion
+  chief_complaint:
+    - Chief Complaint
+    - CC
+  review_of_systems:
+    - Review of Systems
+    - ROS
+  history:
+    - History
+  family_history:
+    - Family History
+    - Family Medical History
+    - FH
+  assessment:
+    - Assessment
+  plan:
+    - Plan
