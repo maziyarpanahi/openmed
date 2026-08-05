@@ -39,6 +39,7 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
+      - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
       - Indic Encoder Backbones: indic-encoders.md
       - Indic NER Checkpoint Compatibility: indic-ner-checkpoints.md
@@ -67,6 +68,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
