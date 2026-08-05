@@ -13,6 +13,9 @@ KeepAliveValue = int | float | str
 AggregationStrategy = Literal["simple", "first", "average", "max"]
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
 PIILanguage = Literal[
+    "am",
+    "as",
+    "bn",
     "en",
     "fr",
     "de",
@@ -20,7 +23,16 @@ PIILanguage = Literal[
     "es",
     "nl",
     "hi",
+    "gu",
+    "kn",
+    "ml",
+    "mr",
+    "ne",
+    "or",
+    "pa",
+    "ta",
     "te",
+    "ur",
     "pt",
     "ar",
     "ja",
@@ -30,6 +42,18 @@ PIILanguage = Literal[
     "th",
     "ko",
     "ro",
+    "ru",
+    "sv",
+    "da",
+    "no",
+    "sw",
+    "zu",
+    "xh",
+    "zh",
+    "uk",
+    "cs",
+    "el",
+    "vi",
 ]
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"

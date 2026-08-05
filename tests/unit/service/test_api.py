@@ -443,18 +443,24 @@ def test_pii_extract_invalid_lang_returns_validation_error(client):
 
 
 def test_pii_lang_literal_matches_supported_languages():
-    """The REST schema must accept exactly the languages the core supports.
+    """The REST schema must accept built-in and optional core languages.
 
     Regression guard: ar/ja/tr shipped with published PII models and were in
     ``SUPPORTED_LANGUAGES`` but were missing from the schema ``Literal``, so the
-    REST/MCP layer rejected them. Keep the two in lockstep.
+    REST/MCP layer rejected them. Keep all accepted core routes in lockstep.
     """
     from typing import get_args
 
-    from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+    from openmed.core.pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
     from openmed.service.schemas import PIILanguage
 
-    assert set(get_args(PIILanguage)) == set(SUPPORTED_LANGUAGES)
+    assert set(get_args(PIILanguage)) == (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
 
 def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
@@ -479,7 +485,9 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
     assert payload["method"] == "mask"
 
 
-@pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
+# ``ne`` and ``ur`` ship no bundled weights: the REST layer must still accept
+# them so a caller that supplies its own model is not rejected at the edge.
+@pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr", "ne", "ur"])
 def test_pii_deidentify_accepts_new_langs(client, monkeypatch, fake_loader_cls, lang):
     result = _sample_deid_result()
 

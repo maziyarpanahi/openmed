@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.quant_delta import evaluate_onnx_logit_parity
 from openmed.mlx.artifact import find_tokenizer_files
@@ -57,6 +58,11 @@ from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
     export_transformersjs_bundle,
+)
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
+    validate_segmenter_resources,
 )
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
@@ -216,10 +222,7 @@ def export_onnx(
         import torch
         from transformers import AutoModelForTokenClassification, AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "torch and transformers are required for ONNX export. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="ONNX export", cause=exc)
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -315,10 +318,7 @@ def export_webgpu(
         import onnx
         from onnxruntime.transformers.float16 import convert_float_to_float16
     except ImportError as exc:
-        raise ImportError(
-            "onnx and onnxruntime are required for WebGPU export. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="WebGPU export", cause=exc)
 
     onnx_path = Path(onnx_path)
     output_path = Path(output_path)
@@ -362,6 +362,7 @@ def convert(
     publish_token_env: str = "HF_WRITE_TOKEN",
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
+    segmenter_id: str | None = None,
 ) -> OnnxConversionResult:
     """Export ONNX artifacts and optionally publish the resulting directory."""
 
@@ -410,6 +411,11 @@ def convert(
         max_seq_length=max_seq_length,
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
+    )
+    segmenter = (
+        package_segmenter_resources(output_dir, segmenter_id)
+        if segmenter_id is not None
+        else None
     )
     if should_optimize_onnx and unoptimized_path is not None:
         optimization_manifest = optimize_onnx_graph(
@@ -546,6 +552,7 @@ def convert(
             tokenizer_source=output_dir,
             config_source=output_dir / "config.json",
             update_manifest=False,
+            segmenter_id=segmenter_id,
         )
         artifacts.append(
             ExportArtifact(
@@ -596,6 +603,7 @@ def convert(
         shape_buckets=shape_bucket_config,
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
+        segmenter=segmenter,
     )
     if recall_report is not None:
         apply_int8_recall_certification(
@@ -645,10 +653,7 @@ def save_source_assets(
     try:
         from transformers import AutoConfig, AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "transformers is required for ONNX export metadata. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="ONNX export metadata", cause=exc)
 
     output_dir = Path(output_dir)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir).to_dict()
@@ -707,6 +712,7 @@ def write_export_manifest(
     shape_buckets: ShapeBucketConfig | Mapping[str, Any] | None = None,
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
 
@@ -748,11 +754,33 @@ def write_export_manifest(
             "files": list(tokenizer_files or find_tokenizer_files(output_dir)),
         },
     }
+    if segmenter is not None:
+        manifest["segmenter"] = dict(segmenter)
 
     manifest_path = output_dir / MANIFEST_FILENAME
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
+    validate_onnx_bundle(output_dir)
     return manifest_path
+
+
+def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
+    """Validate optional manifest-declared resources in an ONNX bundle."""
+
+    root = Path(output_dir)
+    manifest_path = root / MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        raise ValueError(f"ONNX bundle is missing {MANIFEST_FILENAME}: {root}")
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict):
+        raise ValueError("ONNX manifest must be a JSON object")
+    segmenter = manifest.get("segmenter")
+    if segmenter is not None:
+        if not isinstance(segmenter, Mapping):
+            raise ValueError("ONNX segmenter descriptor must be an object")
+        validate_segmenter_resources(root, segmenter)
+    return manifest
 
 
 def optimize_onnx_graph(
@@ -817,10 +845,7 @@ def validate_optimized_onnx_export(
         import onnxruntime as ort
         from transformers import AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "numpy, onnxruntime, and transformers are required for optimized "
-            "ONNX validation. Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="Optimized ONNX validation", cause=exc)
 
     shape_bucket_config = shape_bucket_config or ShapeBucketConfig()
     optimization_config = _normalise_optimization_config(optimization_config)
@@ -1039,10 +1064,9 @@ def _optimize_with_ort_session(
     try:
         import onnxruntime as ort
     except ImportError as exc:
-        raise ImportError(
-            "onnxruntime is required for post-export graph optimization. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend(
+            "onnx", feature="Post-export graph optimization", cause=exc
+        )
 
     session_options = ort.SessionOptions()
     session_options.graph_optimization_level = _graph_optimization_level(ort, config)
@@ -1289,10 +1313,9 @@ def _check_onnx_model(path: Path) -> None:
     try:
         import onnx
     except ImportError as exc:
-        raise ImportError(
-            "onnx is required to validate exported artifacts. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend(
+            "onnx", feature="Validating exported ONNX artifacts", cause=exc
+        )
     onnx.checker.check_model(str(path))
 
 
@@ -1430,10 +1453,9 @@ def _transformers_tokenizer_loader(*, cache_dir: str | None) -> Any:
     try:
         from transformers import AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "transformers is required for OpenVINO export verification. "
-            "Install with: pip install openmed[openvino]"
-        ) from exc
+        raise_missing_backend(
+            "openvino", feature="OpenVINO export verification", cause=exc
+        )
 
     def load_tokenizer(model_id: str, **kwargs: Any) -> Any:
         options = dict(kwargs)
@@ -1637,6 +1659,12 @@ def main() -> None:
         help="Synthetic note used for export and runtime verification",
     )
     parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    parser.add_argument(
         "--eval-suite",
         default=None,
         help="Benchmark fixture JSON/JSONL used to certify android INT8 recall",
@@ -1712,6 +1740,7 @@ def main() -> None:
         validation_lengths=_parse_int_tuple(args.validation_lengths),
         cache_dir=args.cache_dir,
         sample_text=args.sample_text,
+        segmenter_id=args.segmenter,
         eval_suite_path=args.eval_suite,
         recall_delta_report_path=args.recall_delta_report,
         publish_to_hub=args.publish_to_hub,

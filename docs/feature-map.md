@@ -3,9 +3,12 @@
 This page inventories the main surfaced capabilities in OpenMed and maps them
 back to source modules, docs, and runnable examples. For release-specific
 coverage, see
+[OpenMed v2.0.0 Release Notes](./release/v2.0.0.md), the
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
 [OpenMed v1.8.0 Release Notes](./release/v1.8.0.md), and the historical
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
+For the model families available by clinical specialty, use the
+[clinical-domain model guide](clinical-domains.md).
 
 ## Privacy And De-identification
 
@@ -15,7 +18,7 @@ coverage, see
 | Canonical span contracts | Versioned `OpenMedSpan`, schema fingerprints, redaction action schemas, provenance, and compatibility gates. | `openmed/core/schemas/`, [De-identification API](./api/deidentification.md), `examples/v16_policy_audit_release_gates.py` |
 | Audit and review evidence | Signed audit reports, reproducibility hashes, review bundles, FHIR `Provenance`/`AuditEvent`, audit diffs, and PHI-safe previews. | `openmed/core/audit.py`, `openmed/core/redaction_preview.py`, `openmed/risk/audit_diff.py`, `openmed/clinical/exporters/fhir/provenance.py`, `examples/v16_policy_audit_release_gates.py` |
 | Runtime de-identification features | `DeidentificationResult.to_dataframe`, surrogate vaults, patient-keyed date shifting, format-preserving redaction, minimum-necessary action selection, streaming redaction, explain traces, section stamping, and risk budgets. | `openmed/core/pii.py`, `openmed/core/surrogate_vault.py`, `openmed/core/date_shift.py`, `openmed/core/anonymizer/format_preserve.py`, `openmed/core/redaction_strength.py`, `openmed/core/streaming.py`, `openmed/core/explain.py`, `openmed/risk/budget.py` |
-| Multilingual PII | 17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr in the model-backed allow-list; locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers for additional locales. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
+| Multilingual PII | 35 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter adds four optional routes and can also serve Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
 
 ## Multimodal And Structured Inputs
 
@@ -23,9 +26,10 @@ coverage, see
 | --- | --- | --- |
 | Multimodal document contract | `ExtractedDocument`, `SourceSpan`, lazy handler registration, source-offset mapping, and dispatcher-based redaction. | `openmed/multimodal/base.py`, `examples/v17_multimodal_browser_interop.py` |
 | OCR and scanned documents | Shared OCR result contract, fake test engine, Tesseract, PaddleOCR, EasyOCR, docTR, OCR language selection, and available-engine discovery. | `openmed/multimodal/ocr.py`, `tests/unit/multimodal/test_ocr_engines.py`, `examples/v17_multimodal_browser_interop.py` |
-| Markup and metadata | Markdown/AsciiDoc and EPUB extraction, DOCX offset extraction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_docx.py`, `openmed/multimodal/epub.py`, `openmed/multimodal/metadata_scrub.py`, `examples/v17_multimodal_browser_interop.py` |
+| Markup and metadata | Markdown/AsciiDoc, EPUB, and RTF extraction, DOCX offset extraction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_docx.py`, `openmed/multimodal/epub.py`, `openmed/multimodal/rtf.py`, `openmed/multimodal/metadata_scrub.py`, [RTF Extraction](./multimodal/rtf-extraction.md), `examples/v17_multimodal_browser_interop.py` |
 | DICOM, contacts, and PDFs | DICOM header de-identification, burned-in pixel OCR redaction, vCard/iCalendar PHI redaction, and redacted-PDF text-layer leakage/fidelity checks. | `openmed/multimodal/dicom.py`, `openmed/multimodal/contacts_calendar.py`, `openmed/multimodal/verify_pdf.py`, [EPUB Extraction](./multimodal/epub-extraction.md) |
 | Chat logs and tabular data | JSONL chat-log redaction with speaker pseudonymization, CSV/TSV PHI column classification, column actions, and PHI-safe manifests. | `openmed/multimodal/chatlog_jsonl.py`, `openmed/multimodal/tabular_csv.py`, `examples/v17_multimodal_browser_interop.py` |
+| Community health worker forms | ODK, CommCare, and KoBoToolbox JSON/CSV export detection, XForm path semantics, repeat preservation, narrative de-identification, metadata hashing, and coordinate generalization. | `openmed/multimodal/chw_forms.py`, [CHW Form Export De-identification](./chw-form-deid.md), `examples/chw_form_deid.py` |
 
 ## Health-data Interop
 
@@ -42,6 +46,7 @@ coverage, see
 | Area | What it covers | Where to look |
 | --- | --- | --- |
 | Clinical context | Negation, temporality, uncertainty, experiencer, section-aware priors, context offsets, multilingual cue lexicons, and negation-scope boundaries. | `openmed/clinical/context.py`, `openmed/clinical/negation_scope.py`, `openmed/clinical/lexicons/context_cues.py`, [Clinical Context & Extraction Depth](./clinical/context-and-extraction.md) |
+| Clinical relations | Medication attributes plus character-offset Chinese and Hindi relation candidates, constrained graph decoding, assertion propagation, and per-language relation F1. | `openmed/clinical/relations/`, `openmed/eval/relation_metrics.py`, [Multilingual Clinical Relations](./clinical/multilingual-relations.md) |
 | Clinical normalization | Labs, vitals, medication sigs, problem-list status, summary cards, assertion graphs, event frames, terminology normalization, UCUM units, and flat-table export. | `openmed/clinical/`, `openmed/clinical/assertion_graph.py`, `openmed/clinical/events/`, `openmed/clinical/normalization/`, `openmed/clinical/units/`, [Clinical Context & Extraction Depth](./clinical/context-and-extraction.md) |
 | Clinical grounding | Free vocabulary grounding, lexical aliases, RxNorm, ICD-10-CM, HPO, and CodeableConcept export. | `openmed/clinical/grounding/`, `openmed/clinical/exporters/codeable_concept.py` |
 | Zero-shot domains | GLiNER label maps, clinical NER families, cardiology, dermatology, ophthalmology, microbiology, nutrition, anesthesia, endocrinology, gastroenterology, clinical genomics, and routing metadata. | `openmed/zero_shot/`, `openmed/ner/families/`, [Zero-shot Toolkit](./zero-shot-ner.md), [Zero-shot NER How-to](./zero-shot-howto.md) |
@@ -81,12 +86,12 @@ coverage, see
 | --- | --- | --- |
 | Responsible disclosure | Private vulnerability reporting, security issue routing, breach notification runbook, and breach report template. | `SECURITY.md`, `docs/security/disclosure-policy.md`, `docs/compliance/breach-notification-runbook.md`, `docs/compliance/templates/breach-report-template.md` |
 | Dependency and release controls | License policy, pip-audit ignores, SBOM generation, container SBOMs, image signing, SLSA provenance, secret scanning, vulnerability scanning, reproducible locks, GitHub Actions ref validation, lockfile drift, repo policy, and doctest-backed examples. | `docs/security/`, `docs/supply-chain/`, `scripts/release/`, `scripts/security/`, `docs/contributing/reproducible-dependencies.md`, `tests/unit/release/` |
-| Privacy-safe diagnostics | PHI-safe progress callbacks, NDJSON errors, active-learning records, hashed examples, explain traces, dataset cards, metadata scrubbing, and no-raw-PHI guidance. | `openmed/multimodal/metadata_scrub.py`, `openmed/training/active_learning.py`, `openmed/eval/dataset_card.py`, `docs/compliance.md`, `docs/security/secret-handling.md` |
+| Privacy-safe diagnostics | PHI-safe progress callbacks, NDJSON errors, active-learning records, hashed examples, explain traces, dataset cards, metadata scrubbing, and no-raw-PHI guidance. | `openmed/multimodal/metadata_scrub.py`, `openmed/training/active_learning.py`, `openmed/eval/dataset_card.py`, [Compliance Posture](./compliance.md), [Secret Handling](./security/secret-handling.md) |
 
 ## Suggested Reading Order
 
 1. [Quick Start](./getting-started.md) - install plus first inference.
-2. [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) - review the latest patch fixes, release coverage, and migration notes.
+2. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) - review the current major-version contract, release coverage, and migration notes.
 3. [Examples](./examples.md) - runnable notebooks and scripts.
 4. [PII Anonymization](./anonymization.md) - de-identification methods and policy workflows.
 5. [REST Service](./rest-service.md), [Swift Package](./swift-openmedkit.md), and [Transformers.js Export](./export-transformersjs.md) - deployment surfaces.

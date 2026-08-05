@@ -42,9 +42,32 @@ Release candidates such as `1.9.0rc1` are reserved for pre-stable cuts.
 - MAJOR: breaking API change, label-schema break, or migration that requires a
   downstream code change.
 
-Public APIs are deprecated for two minor releases before removal. Deprecations
-must emit `DeprecationWarning`, name the replacement, and appear in
-`CHANGELOG.md` under `Deprecated`.
+## Deprecation Policy
+
+Public APIs receive at least one full minor-version warning window before
+removal. A deprecation introduced in `1.9` remains usable throughout the `1.9`
+line; its scheduled removal must still respect SemVer, so this notice window is
+not permission to make a breaking removal in a later `1.x` release.
+
+New deprecations use `openmed.utils.deprecated`, emit `DeprecationWarning`, name
+the replacement when one exists, and appear in `CHANGELOG.md` under
+`Deprecated`. The decorator records the introduction and planned-removal
+versions so the static API-surface differ can classify the symbol as an
+intentional deprecation:
+
+```python
+from openmed.utils import deprecated
+
+
+@deprecated(since="1.9", remove_in="2.0", replacement="openmed.new_api")
+def legacy_api() -> None:
+    """Compatibility entry point retained during the warning window."""
+```
+
+Every breaking or deprecated change must also have a before/after entry in the
+relevant migration guide. Version-scoped tag builds compare the candidate
+against the release baseline and fail when the guide omits either kind of
+required change.
 
 ## Release Gates
 
@@ -53,3 +76,40 @@ releasable. A candidate must satisfy critical-leakage, recall, quantization
 delta, device-tier, span-integrity, and regression checks before it can move to
 stable. Library releases must also pass the repository policy, dependency
 license policy, and test suite.
+
+## Nightly Model Orchestration
+
+`.github/workflows/nightly-release.yml` runs at 02:17 UTC each weekday. Its
+reviewed control plane is `gates/nightly_release_queue.json`, which maps Monday
+through Friday to a named theme and at least two explicit model candidates. A
+queue row fixes the source and target repositories, family, tier, format,
+parameter count, synthetic fixture path, and evaluation suite. Queue identifiers
+and repository identifiers are validated before any conversion starts.
+
+For each candidate, `scripts/release/orchestrate.py run` executes conversion,
+the shared evaluation harness, the signed `ReleaseGate`, artifact-backed model
+card generation, publication, registry promotion, and a fresh-environment smoke
+test in that order. A non-`RELEASABLE` report halts that candidate before model
+card generation or publication. The remaining candidates continue, while the
+run becomes `PARTIAL` and a PHI-free quarantine issue records identifiers,
+hashes, the failing stage, the run id, and the git SHA.
+
+The smoke test downloads the just-published repository into a new virtual
+environment and calls both `extract_pii` and `deidentify` on a synthetic probe.
+It emits only a span count and offsets hash. Failure immediately flips the
+family's `latest` registry pointer back to committed `last_green` evidence.
+
+Every final candidate outcome is appended to `gates/release_runs.jsonl`. The
+row binds the gate-report path and hash, artifact digest, decision, final pointer
+target, smoke state, start/completion timestamps, run status, and git SHA under
+a provenance hash. Gate reports live under `gates/release_reports/<run-id>/`.
+The workflow opens a review PR containing the ledger, reports, manifest, and
+registry state. Reconstruct and validate a run without a live API call with:
+
+```bash
+python scripts/release/orchestrate.py audit \
+  --run-id <workflow-run-id>-<attempt>
+```
+
+Publication uses the protected `hf-publish` environment and follows the
+[HF write-token policy](../security/hf-token-policy.md).

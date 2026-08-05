@@ -3,7 +3,9 @@
 OpenMed publishes the `openmed` wheel and source distribution from the
 tag-driven `.github/workflows/publish.yml` workflow. The same workflow validates
 and publishes the `openmed` npm package for browsers and Node.js. Both packages
-must match the release tag before either registry upload begins.
+must match the release tag before either registry upload begins. A guarded
+manual dispatch exists only to recover an existing immutable tag after a
+workflow-only failure.
 
 The current PyPI path uses the project-scoped `PYPI_API_TOKEN` GitHub secret.
 The npm path uses the short-lived `NPM_ACCESS_TOKEN` secret from the GitHub
@@ -17,7 +19,11 @@ this repository, workflow file, and GitHub environment.
 
 The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 
-- It runs from `push` events for `v*` tags only.
+- It runs automatically from `push` events for `v*` tags.
+- A maintainer may manually dispatch it with an existing `vX.Y.Z` tag to
+  recover a failed tag run. The workflow checks out that exact tag, verifies
+  the checked-out commit against the tag, and repeats every build and
+  verification gate before publishing.
 - It does not run from `pull_request` or forked pull request events.
 - The reusable provenance job in `.github/workflows/provenance.yml` builds and
   checks the distributions, generates SLSA provenance, and verifies the
@@ -36,8 +42,14 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 - The evidence job runs after the publish job, so it cannot gate the PyPI
   upload on GitHub OIDC or Sigstore availability. Signing is best effort, but
   evidence that is produced must verify against the `publish.yml` workflow
-  identity and the release commit before it is attached to the release, or the
-  evidence job fails.
+  identity and triggering workflow revision before it is attached to the
+  release, or the evidence job fails. The attached `release-source.json`
+  separately records the exact immutable tag commit that was checked out,
+  including during a recovery dispatch from `master`.
+- Conventional commits determine the minimum safe version bump. The tag may
+  intentionally select a larger minor or major version, but it must be newer
+  than the previous tag, meet or exceed that minimum, and exactly match both
+  package manifests.
 
 Do not add a second PyPI publishing workflow. Do not add `hatch publish` or
 Twine upload commands back to release CI.
@@ -131,6 +143,18 @@ pushed.
 After the tagged publish succeeds, verify the PyPI release page lists the
 uploaded wheel and source distribution. For the repository-level SLSA
 provenance check, see [SLSA Build Provenance](../supply-chain/provenance.md).
+
+If an immutable tag run fails before either registry upload, fix and merge the
+workflow guard first, then recover the existing tag through the same production
+workflow:
+
+```bash
+gh workflow run publish.yml --ref master -f tag=vX.Y.Z
+```
+
+Do not delete, move, or recreate the tag. Do not use the recovery dispatch when
+either registry already contains the version without first determining whether
+the other publish can be safely resumed.
 
 ## Token Handling
 
