@@ -24,7 +24,7 @@ O runtime local principal do OpenMed realiza extração e desidentificação dep
 </p>
 
 <p>
-  <b>Execução local em primeiro lugar</b> &nbsp;·&nbsp; <b>33 idiomas PII com suporte de modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Execução local em primeiro lugar</b> &nbsp;·&nbsp; <b>34 idiomas PII com suporte de modelos</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -275,7 +275,7 @@ Em hosts que não são Apple Silicon, os nomes de modelo MLX são substituídos 
 
 ---
 
-## PII multilíngue (34 rotas suportadas; 33 com suporte de modelos)
+## PII multilíngue (35 rotas suportadas; 34 com suporte de modelos)
 
 Extração e des-identificação em `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` e `tr`, **o catálogo registrado de modelos PII** no total.
 

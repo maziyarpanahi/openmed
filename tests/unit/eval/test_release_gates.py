@@ -33,6 +33,9 @@ from openmed.risk import (
 )
 
 SIGNING_KEY = "unit-release-key"
+RELATION_FIXTURE_HASH = (
+    "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187"
+)
 
 
 def _calibration_files(tmp_path: Path) -> tuple[Path, Path]:
@@ -328,6 +331,7 @@ def _relation_golden_metric(
     strict_by_type: dict[str, float] | None = None,
     assertion_leaks: int = 0,
     temporal_leaks: int = 0,
+    fixture_hash: str = RELATION_FIXTURE_HASH,
 ) -> dict[str, object]:
     strict_by_type = strict_by_type or {
         "ASSERTED_ABSENT": 1.0,
@@ -340,6 +344,7 @@ def _relation_golden_metric(
                 relation_type: {"strict": {"f1": strict_f1}}
                 for relation_type, strict_f1 in strict_by_type.items()
             },
+            "fixture_set_hash": fixture_hash,
             "trap_leaks": {
                 "assertion": assertion_leaks,
                 "temporal": temporal_leaks,
@@ -349,15 +354,12 @@ def _relation_golden_metric(
 
 
 def _relation_golden_baseline_store() -> dict[str, object]:
-    fixture_hash = (
-        "sha256:eefd1e98cb6026cb843cd8f0dfcc084825f3323de4e9ff98efc8f62677578187"
-    )
     entries: dict[str, object] = {}
     for relation_type in ("ASSERTED_ABSENT", "TEMPORALLY_BEFORE", "TREATS"):
         key = relation_baseline_key("Relation", relation_type)
         entries[key] = {
             "family": "Relation",
-            "fixture_hash": fixture_hash,
+            "fixture_hash": RELATION_FIXTURE_HASH,
             "key": key,
             "relation_type": relation_type,
             "strict_f1": 1.0,
@@ -643,6 +645,39 @@ def test_relation_golden_gate_quarantines_strict_f1_regression(
     assert check.passed is False
     assert regression["candidate"] == 0.989
     assert regression["minimum"] == 0.99
+
+
+def test_relation_golden_gate_quarantines_fixture_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    candidate_hash = f"sha256:{'0' * 64}"
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "family": "Relation",
+                "relation_golden_regression_required": True,
+            },
+            metric_updates=_relation_golden_metric(fixture_hash=candidate_hash),
+        ),
+        _relation_golden_baseline_store(),
+    )
+
+    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+    mismatches = check.details["violations"]["fixture_hash_mismatches"]
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.reason == "relation golden fixture hash does not match pinned baseline"
+    assert set(mismatches) == {
+        "ASSERTED_ABSENT",
+        "TEMPORALLY_BEFORE",
+        "TREATS",
+    }
+    assert mismatches["TREATS"] == {
+        "baseline": RELATION_FIXTURE_HASH,
+        "candidate": candidate_hash,
+    }
 
 
 def test_relation_golden_gate_quarantines_missing_type_baseline(

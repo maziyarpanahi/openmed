@@ -6,12 +6,17 @@ import logging
 import re
 import time
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
 from .__about__ import __version__
 
 if TYPE_CHECKING:
     from .core import ModelLoader, OpenMedConfig
+    from .core.capabilities import (
+        BackendSpec,
+        BackendStatus,
+        MissingOptionalDependencyError,
+    )
     from .core.pii import (
         DeidentificationResult,
         PIIEntity,
@@ -27,6 +32,13 @@ _LAZY_IMPORTS = {
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
     "load_model": ".core",
+    "BackendSpec": ".core.capabilities",
+    "BackendStatus": ".core.capabilities",
+    "MissingOptionalDependencyError": ".core.capabilities",
+    "available_backends": ".core.capabilities",
+    "backend_status": ".core.capabilities",
+    "is_backend_available": ".core.capabilities",
+    "require_backend": ".core.capabilities",
     "LANG_TO_LOCALE": ".core.anonymizer",
     "Anonymizer": ".core.anonymizer",
     "AnonymizerConfig": ".core.anonymizer",
@@ -89,6 +101,13 @@ _LAZY_IMPORTS = {
     "india_clinical_route_active": ".core.pii_i18n",
     "redaction_preview": ".core.redaction_preview",
     "render_redaction_preview": ".core.redaction_preview",
+    "ReviewFeedback": ".core.review_workflow",
+    "ReviewItem": ".core.review_workflow",
+    "ReviewQueue": ".core.review_workflow",
+    "append_feedback": ".core.review_workflow",
+    "build_review_queue": ".core.review_workflow",
+    "critical_labels": ".core.review_workflow",
+    "record_review_decision": ".core.review_workflow",
     "get_result_cache": ".core.result_cache",
     "make_cache_key": ".core.result_cache",
     "AnalyzeResult": ".core.results",
@@ -359,6 +378,8 @@ def analyze_text(
     sentence_language: str = "en",
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
+    sentence_backend: Literal["auto", "yasbd"] = "auto",
+    assert_context: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
@@ -384,10 +405,18 @@ def analyze_text(
             :func:`openmed.processing.format_predictions`.
         metadata: Optional metadata to attach to the result.
         use_fast_tokenizer: Prefer fast tokenizers when available.
-        sentence_detection: Enable pySBD-powered sentence detection (default: True).
+        sentence_detection: Enable sentence detection (default: True). The
+            engine is selected by ``sentence_backend``.
         sentence_language: Language hint for the sentence detector.
-        sentence_clean: Whether to enable pySBD's cleaning heuristics.
-        sentence_segmenter: Optional preconstructed pySBD segmenter to reuse.
+        sentence_clean: Whether to enable the sentence detector's cleaning heuristics.
+        sentence_segmenter: Optional preconstructed segmenter object to reuse.
+            It cannot be combined with ``sentence_backend="yasbd"``.
+        sentence_backend: Sentence segmentation engine to use.
+            It can be ``"auto"`` (default, unchanged routing) or ``"yasbd"``
+            (experimental opt-in; requires ``openmed[yasbd]``).
+        assert_context: Attach deterministic negation, uncertainty,
+            experiencer, and temporality labels to each entity under
+            ``metadata["clinical_context"]``. Disabled by default.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
@@ -512,8 +541,11 @@ def analyze_text(
                 language=sentence_language,
                 clean=sentence_clean,
                 segmenter=sentence_segmenter,
+                backend=sentence_backend,
             )
         except ImportError:
+            if sentence_backend != "auto":
+                raise
             sentence_detection = False
     if not raw_segments:
         sentence_detection = False
@@ -734,6 +766,16 @@ def analyze_text(
             logger.warning("Failed to remap predictions to medical tokens: %s", exc)
             base_metadata.setdefault("medical_tokenizer", False)
 
+    if assert_context and flattened_predictions:
+        from .clinical.context import assert_context as attach_context
+
+        flattened_predictions = attach_context(
+            validated_text,
+            flattened_predictions,
+            sentences=processed_segments,
+            language=sentence_language,
+        )
+
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,
         "group_entities": group_entities,
@@ -779,6 +821,13 @@ __all__ = [
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",
+    "BackendSpec",
+    "BackendStatus",
+    "MissingOptionalDependencyError",
+    "available_backends",
+    "backend_status",
+    "is_backend_available",
+    "require_backend",
     "TextProcessor",
     "IndicNormalization",
     "IndicNormalizer",
@@ -871,6 +920,13 @@ __all__ = [
     "stream_token_classifier",
     "redaction_preview",
     "render_redaction_preview",
+    "ReviewFeedback",
+    "ReviewItem",
+    "ReviewQueue",
+    "append_feedback",
+    "build_review_queue",
+    "critical_labels",
+    "record_review_decision",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
     "merge_india_code_mixed_spans",

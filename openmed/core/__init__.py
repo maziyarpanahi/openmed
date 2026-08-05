@@ -63,6 +63,15 @@ from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
 from .redaction_preview import redaction_preview, render_redaction_preview
+from .review_workflow import (
+    ReviewFeedback,
+    ReviewItem,
+    ReviewQueue,
+    append_feedback,
+    build_review_queue,
+    critical_labels,
+    record_review_decision,
+)
 from .rtl_render import (
     BIDI_CONTROL_CHARS,
     RTL_SCRIPTS,
@@ -77,6 +86,8 @@ from .script_detect import (
     CJK_SCRIPTS,
     INDIC_SCRIPTS,
     SCRIPT_LANGUAGE_HINTS,
+    SCRIPT_NORMALIZERS,
+    SCRIPT_NUMERAL_SETS,
     SUPPORTED_SCRIPTS,
     UNKNOWN_SCRIPT,
     ZERO_WIDTH_CHARS,
@@ -84,11 +95,14 @@ from .script_detect import (
     ChineseScriptVariant,
     DetectionNormalization,
     ScriptDetectionWindow,
+    ScriptRun,
     candidate_languages_for_script,
     detect_chinese_script,
     detect_script,
     india_clinical_script_windows,
     normalize_for_pii_detection,
+    normalizer_for_script,
+    numeral_set_for_script,
     segment_by_script,
 )
 from .surrogate_vault import (
@@ -127,6 +141,13 @@ __all__ = [
     "verify_chain",
     "redaction_preview",
     "render_redaction_preview",
+    "ReviewQueue",
+    "ReviewItem",
+    "ReviewFeedback",
+    "build_review_queue",
+    "record_review_decision",
+    "append_feedback",
+    "critical_labels",
     "BIDI_CONTROL_CHARS",
     "RTL_SCRIPTS",
     "RenderedRedaction",
@@ -173,7 +194,12 @@ __all__ = [
     "detect_chinese_script",
     "detect_script",
     "india_clinical_script_windows",
+    "normalizer_for_script",
+    "numeral_set_for_script",
     "normalize_for_pii_detection",
+    "SCRIPT_NORMALIZERS",
+    "SCRIPT_NUMERAL_SETS",
+    "ScriptRun",
     "segment_by_script",
     "OfflineModeError",
     "RequestBudget",

@@ -133,10 +133,10 @@ def test_registered_language_without_fixtures_fails_gate(cue_registry) -> None:
 
     This is the failure mode the shipped eval cannot see: its
     ``context_gate_passed`` flag is computed only over languages that have
-    fixture rows, so a pack with zero fixtures leaves it green while
-    ``context_lexicon_coverage`` advertises healthy cue counts. The first two
-    assertions pin that stale behaviour so this test fails if the coverage gate
-    is ever reimplemented by delegating to it.
+    fixture rows, so a runtime-only pack with zero fixtures leaves it green
+    while ``context_lexicon_coverage`` advertises healthy cue counts. The
+    assertions pin that distinction so this test fails if the coverage gate is
+    ever reimplemented by delegating to runtime registration state.
     """
 
     register_clinical_cue_lexicon(_synthetic_pack("qa"))
@@ -177,8 +177,9 @@ def test_registered_language_without_fixtures_fails_gate(cue_registry) -> None:
 def test_empty_fixture_does_not_score_one(tmp_path: Path) -> None:
     """Zero fixture rows must never macro-average to a perfect score.
 
-    The harness macro-F1 helper returns ``1.0`` when both label sequences are
-    empty, so an untested language would otherwise be reported as flawless.
+    The harness already fails an entirely empty fixture set closed. The
+    coverage report must preserve that verdict while adding explicit
+    per-language ``registered_without_fixtures`` diagnostics.
     """
 
     fixture = _write_fixture(tmp_path / "empty.jsonl", [])
@@ -186,7 +187,7 @@ def test_empty_fixture_does_not_score_one(tmp_path: Path) -> None:
     legacy = run_context_multilingual_eval(fixture)
     assert legacy.fixture_count == 0
     assert legacy.metrics["context_macro_f1"] == {}
-    assert legacy.metrics["context_gate_passed"] is True
+    assert legacy.metrics["context_gate_passed"] is False
 
     report = run_context_coverage(fixture)
 
@@ -375,6 +376,7 @@ def test_harness_entry_points_remain_backward_compatible() -> None:
         "context_macro_f1",
         "context_thresholds",
         "context_gate_passed",
+        "context_language_summary",
         "context_lexicon_coverage",
     }
     assert report.metadata["parent_issue"] == "OM-724"

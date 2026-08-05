@@ -39,6 +39,14 @@ class IndicNerWeightsUnavailable(RuntimeError):
     """Raised when no user-supplied Indic NER model is configured."""
 
 
+class IndicNerCheckpointUnavailable(RuntimeError):
+    """Raised when explicitly configured Indic NER weights cannot be loaded."""
+
+
+class IndicNerCompatibilityError(ValueError):
+    """Raised when an Indic NER checkpoint violates the safe adapter contract."""
+
+
 @dataclass(frozen=True)
 class IndicNerPrediction:
     """One PHI-safe prediction containing offsets and labels, never raw text."""
@@ -75,12 +83,18 @@ class IndicNerAdapter:
 
     def __post_init__(self) -> None:
         config = getattr(self.model, "config", None)
-        raw_mapping = getattr(config, "id2label", None)
-        if not isinstance(raw_mapping, Mapping) or not raw_mapping:
-            raise ValueError("Indic NER model config must define id2label")
-        self._id2label = {
-            int(index): str(label) for index, label in raw_mapping.items()
-        }
+        self._id2label = _compatible_label_mapping(config)
+        self._label_count = len(self._id2label)
+
+        num_labels = getattr(config, "num_labels", None)
+        if num_labels is not None and (
+            not isinstance(num_labels, int)
+            or isinstance(num_labels, bool)
+            or num_labels != self._label_count
+        ):
+            raise IndicNerCompatibilityError(
+                "Indic NER model config num_labels does not match its label map"
+            )
 
     def predict(
         self,
@@ -101,34 +115,74 @@ class IndicNerAdapter:
             "truncation": True,
         }
         if max_length is not None:
-            tokenizer_kwargs["max_length"] = int(max_length)
-        encoded = self.tokenizer(text, **tokenizer_kwargs)
-        model_inputs = dict(encoded)
+            if not isinstance(max_length, int) or isinstance(max_length, bool):
+                raise TypeError("max_length must be an integer")
+            if max_length <= 0:
+                raise ValueError("max_length must be positive")
+            tokenizer_kwargs["max_length"] = max_length
+        encoded = _safe_checkpoint_call(
+            "Indic NER tokenizer failed while processing input",
+            lambda: self.tokenizer(text, **tokenizer_kwargs),
+        )
+        model_inputs = _safe_checkpoint_call(
+            "Indic NER tokenizer returned an incompatible encoding",
+            lambda: dict(encoded),
+        )
         offsets = model_inputs.pop("offset_mapping", None)
         if offsets is None:
-            raise ValueError("Indic NER requires a fast tokenizer with offset mappings")
+            raise IndicNerCompatibilityError(
+                "Indic NER requires a fast tokenizer with offset mappings"
+            )
 
-        outputs = self.model(**model_inputs)
+        outputs = _safe_checkpoint_call(
+            "Indic NER checkpoint failed during inference",
+            lambda: self.model(**model_inputs),
+        )
         logits = getattr(outputs, "logits", None)
+        if logits is None and isinstance(outputs, Mapping):
+            logits = outputs.get("logits")
         if logits is None:
-            raise ValueError("Indic NER model output must include logits")
+            raise IndicNerCompatibilityError(
+                "Indic NER model output must include logits"
+            )
 
-        offset_rows = _first_batch(_to_python(offsets))
-        logit_rows = _first_batch(_to_python(logits))
+        offset_rows = _safe_checkpoint_call(
+            "Indic NER tokenizer offsets are incompatible",
+            lambda: _first_batch(_to_python(offsets)),
+        )
+        logit_rows = _safe_checkpoint_call(
+            "Indic NER checkpoint logits are incompatible",
+            lambda: _first_batch(_to_python(logits)),
+        )
         if len(offset_rows) != len(logit_rows):
-            raise ValueError(
+            raise IndicNerCompatibilityError(
                 "Indic NER tokenizer offsets and logits have different lengths"
             )
 
         tagged_tokens: list[tuple[int, int, str, str, float]] = []
+        previous_end = 0
         for raw_offset, raw_logits in zip(offset_rows, logit_rows):
-            if not isinstance(raw_offset, Sequence) or len(raw_offset) != 2:
+            start, end = _validated_token_offset(raw_offset, text_length=len(text))
+            if start == end == 0:
                 continue
-            start, end = int(raw_offset[0]), int(raw_offset[1])
-            if start < 0 or end <= start or end > len(text):
-                continue
-            label_id, confidence = _argmax_with_confidence(raw_logits)
-            source_label = self._id2label.get(label_id, "O")
+            if start < previous_end:
+                raise IndicNerCompatibilityError(
+                    "Indic NER tokenizer offsets overlap or move backwards"
+                )
+            previous_end = end
+            if (
+                not isinstance(raw_logits, Sequence)
+                or isinstance(raw_logits, (str, bytes))
+                or len(raw_logits) != self._label_count
+            ):
+                raise IndicNerCompatibilityError(
+                    "Indic NER checkpoint logit width does not match its label map"
+                )
+            label_id, confidence = _safe_checkpoint_call(
+                "Indic NER checkpoint logits are incompatible",
+                lambda: _argmax_with_confidence(raw_logits),
+            )
+            source_label = self._id2label[label_id]
             tag = _canonical_tag(source_label)
             if tag is None:
                 tagged_tokens.append((start, end, "O", "O", confidence))
@@ -161,8 +215,15 @@ def load_indic_ner_adapter(
     model_path: str | None = None,
     *,
     cache_dir: str | None = None,
+    token: str | None = None,
+    revision: str | None = None,
+    local_files_only: bool = False,
 ) -> IndicNerAdapter:
-    """Load a user-configured local path or model repo without a bundled default."""
+    """Load a user-configured local path or model repo without a bundled default.
+
+    Existing filesystem paths are always loaded locally. Repository identifiers
+    can resolve remotely only after the caller explicitly supplies one.
+    """
 
     model_id = configured_indic_ner_model(model_path)
     if model_id is None:
@@ -170,27 +231,210 @@ def load_indic_ner_adapter(
             f"{INDIC_NER_MODEL_ENV} is not configured; optional Indic NER weights "
             "were not loaded"
         )
+    if not isinstance(local_files_only, bool):
+        raise TypeError("local_files_only must be a boolean")
     try:
         transformers = importlib.import_module("transformers")
     except ImportError as exc:
         raise MissingDependencyError("transformers", _NER_INSTALL_HINT) from exc
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
+    tokenizer_loader = getattr(transformers, "AutoTokenizer", None)
+    model_loader = getattr(transformers, "AutoModelForTokenClassification", None)
+    if not callable(getattr(tokenizer_loader, "from_pretrained", None)) or not callable(
+        getattr(model_loader, "from_pretrained", None)
+    ):
+        raise IndicNerCompatibilityError(
+            "installed transformers package lacks token-classification loaders"
+        )
+
+    load_kwargs: dict[str, Any] = {
+        "local_files_only": local_files_only or _is_existing_path(model_id),
+        "trust_remote_code": False,
+    }
+    if cache_dir is not None:
+        load_kwargs["cache_dir"] = cache_dir
+    if token:
+        load_kwargs["token"] = token
+    if revision:
+        load_kwargs["revision"] = revision
+
+    tokenizer = _load_checkpoint_component(
+        tokenizer_loader,
         model_id,
-        cache_dir=cache_dir,
-        trust_remote_code=False,
+        component="tokenizer",
         use_fast=True,
+        **load_kwargs,
     )
-    if getattr(tokenizer, "is_fast", True) is not True:
-        raise ValueError("Indic NER requires a fast tokenizer for exact offsets")
-    model = transformers.AutoModelForTokenClassification.from_pretrained(
+    if getattr(tokenizer, "is_fast", False) is not True:
+        raise IndicNerCompatibilityError(
+            "Indic NER requires a fast tokenizer for exact offsets"
+        )
+    model = _load_checkpoint_component(
+        model_loader,
         model_id,
-        cache_dir=cache_dir,
-        trust_remote_code=False,
+        component="model",
+        **load_kwargs,
     )
     if callable(getattr(model, "eval", None)):
-        model.eval()
+        _safe_checkpoint_call(
+            "Indic NER checkpoint failed while entering evaluation mode",
+            model.eval,
+        )
     return IndicNerAdapter(model_id=model_id, tokenizer=tokenizer, model=model)
+
+
+def _load_checkpoint_component(
+    loader: Any,
+    model_id: str,
+    *,
+    component: str,
+    **kwargs: Any,
+) -> Any:
+    try:
+        return loader.from_pretrained(model_id, **kwargs)
+    except (ImportError, OSError, RuntimeError, ValueError) as exc:
+        failure_type = type(exc).__name__
+    raise IndicNerCheckpointUnavailable(
+        f"configured Indic NER {component} could not be loaded ({failure_type})"
+    )
+
+
+def _compatible_label_mapping(config: Any) -> dict[int, str]:
+    candidates: list[dict[int, str]] = []
+    raw_id2label = getattr(config, "id2label", None)
+    raw_label2id = getattr(config, "label2id", None)
+
+    if isinstance(raw_id2label, Mapping) and raw_id2label:
+        try:
+            candidates.append(_normalize_id2label(raw_id2label))
+        except IndicNerCompatibilityError:
+            pass
+    if isinstance(raw_label2id, Mapping) and raw_label2id:
+        try:
+            candidates.append(_normalize_label2id(raw_label2id))
+        except IndicNerCompatibilityError:
+            pass
+
+    compatible = [mapping for mapping in candidates if _is_conll_mapping(mapping)]
+    if not compatible:
+        raise IndicNerCompatibilityError(
+            "Indic NER model config must define a compatible id2label or label2id "
+            "map for O, PER, LOC, and ORG"
+        )
+    if any(mapping != compatible[0] for mapping in compatible[1:]):
+        raise IndicNerCompatibilityError(
+            "Indic NER model config defines conflicting label maps"
+        )
+    return compatible[0]
+
+
+def _normalize_id2label(mapping: Mapping[Any, Any]) -> dict[int, str]:
+    normalized: dict[int, str] = {}
+    for raw_index, raw_label in mapping.items():
+        index = _label_index(raw_index)
+        label = _label_name(raw_label)
+        if index in normalized:
+            raise IndicNerCompatibilityError(
+                "Indic NER model config contains duplicate label indices"
+            )
+        normalized[index] = label
+    _validate_contiguous_indices(normalized)
+    return normalized
+
+
+def _normalize_label2id(mapping: Mapping[Any, Any]) -> dict[int, str]:
+    normalized: dict[int, str] = {}
+    for raw_label, raw_index in mapping.items():
+        label = _label_name(raw_label)
+        index = _label_index(raw_index)
+        if index in normalized:
+            raise IndicNerCompatibilityError(
+                "Indic NER model config contains duplicate label indices"
+            )
+        normalized[index] = label
+    _validate_contiguous_indices(normalized)
+    return normalized
+
+
+def _label_index(value: Any) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        index = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        index = int(value.strip())
+    else:
+        raise IndicNerCompatibilityError(
+            "Indic NER model config label indices must be non-negative integers"
+        )
+    if index < 0:
+        raise IndicNerCompatibilityError(
+            "Indic NER model config label indices must be non-negative integers"
+        )
+    return index
+
+
+def _label_name(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise IndicNerCompatibilityError(
+            "Indic NER model config label names must be non-empty strings"
+        )
+    return value.strip()
+
+
+def _validate_contiguous_indices(mapping: Mapping[int, str]) -> None:
+    if set(mapping) != set(range(len(mapping))):
+        raise IndicNerCompatibilityError(
+            "Indic NER model config label indices must be contiguous from zero"
+        )
+
+
+def _is_conll_mapping(mapping: Mapping[int, str]) -> bool:
+    has_outside = any(label.upper() == "O" for label in mapping.values())
+    canonical_labels = {
+        tag[1]
+        for label in mapping.values()
+        if (tag := _canonical_tag(label)) is not None
+    }
+    return has_outside and _SUPPORTED_LABELS.issubset(canonical_labels)
+
+
+def _safe_checkpoint_call(message: str, operation: Any) -> Any:
+    try:
+        return operation()
+    except Exception:
+        pass
+    raise IndicNerCompatibilityError(message)
+
+
+def _validated_token_offset(
+    value: Any,
+    *,
+    text_length: int,
+) -> tuple[int, int]:
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, (str, bytes))
+        or len(value) != 2
+    ):
+        raise IndicNerCompatibilityError(
+            "Indic NER tokenizer returned an invalid character offset"
+        )
+    start, end = value
+    if (
+        not isinstance(start, int)
+        or isinstance(start, bool)
+        or not isinstance(end, int)
+        or isinstance(end, bool)
+    ):
+        raise IndicNerCompatibilityError(
+            "Indic NER tokenizer offsets must use integer boundaries"
+        )
+    if start == end == 0:
+        return 0, 0
+    if start < 0 or end <= start or end > text_length:
+        raise IndicNerCompatibilityError(
+            "Indic NER tokenizer returned an out-of-bounds character offset"
+        )
+    return start, end
 
 
 def _canonical_tag(source_label: str) -> tuple[str, str] | None:
@@ -267,6 +511,8 @@ def _argmax_with_confidence(logits: Any) -> tuple[int, float]:
     values = [float(value) for value in logits]
     if not values:
         raise ValueError("Indic NER token logits cannot be empty")
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("Indic NER token logits must be finite")
     label_id = max(range(len(values)), key=values.__getitem__)
     peak = max(values)
     denominator = sum(math.exp(value - peak) for value in values)
@@ -528,6 +774,8 @@ __all__ = [
     "IndicEncoderLoadResult",
     "IndicEncoderSpec",
     "IndicNerAdapter",
+    "IndicNerCheckpointUnavailable",
+    "IndicNerCompatibilityError",
     "IndicNerPrediction",
     "IndicNerWeightsUnavailable",
     "configured_indic_ner_model",

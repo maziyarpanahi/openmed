@@ -300,10 +300,28 @@ def test_cli_writes_report_and_returns_success(tmp_path):
 def test_release_workflow_gates_publish_on_readiness():
     workflow = Path(".github/workflows/release-gates.yml").read_text(encoding="utf-8")
 
+    assert "Stage candidate before evaluation" in workflow
+    assert "Run golden and public SHIELD benchmarks" in workflow
+    assert "--suite golden" in workflow
+    assert "--suite shield" in workflow
+    assert "--baseline-store gates/baseline.json" in workflow
+    assert "Compare public SHIELD leakage to last green" in workflow
     assert "Generate API compatibility evidence" in workflow
     assert "tests/integration/test_end_to_end.py" in workflow
     assert "Run release-readiness gate" in workflow
     assert "--gate-report release-gate-report.json" in workflow
     assert "--output release-readiness-report.json" in workflow
+    assert "Promote staged manifest and write last-green baseline" in workflow
+    assert "gate.recompute_repro_hash() != gate.repro_hash" in workflow
+    assert "Regenerate green trust artifacts from manifest" in workflow
+    assert "scripts/release/build_model_card.py" in workflow
+    assert "scripts/status/generate_status.py" in workflow
+    assert "Publish green promotion bundle" in workflow
+    assert "Quarantine incomplete or failing candidate" in workflow
+    assert "No manifest pointer or last-green baseline was changed." in workflow
+    assert "Run nightly full suite and status monitor" in workflow
+    assert "release-status-regression" in workflow
+    assert "openmed release rollback" in workflow
+    assert 'if [ "$elapsed_seconds" -ge 600 ]' in workflow
     assert "steps.readiness.outcome == 'success'" in workflow
     assert "steps.readiness.outcome != 'success'" in workflow

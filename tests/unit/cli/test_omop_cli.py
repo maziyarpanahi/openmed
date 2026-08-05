@@ -114,6 +114,63 @@ def test_omop_load_is_idempotent_in_append_mode(
     assert note_rows == 2
 
 
+def test_omop_load_replace_by_note_preserves_unrelated_notes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = tmp_path / "omop.sqlite"
+    initial_args = [
+        "omop",
+        "load",
+        "--input",
+        str(FIXTURE),
+        "--target",
+        str(target),
+        "--json",
+    ]
+    initial = _run(initial_args, capsys)["data"]
+
+    records = [
+        json.loads(line)
+        for line in FIXTURE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    replacement_record = records[0]
+    replacement_record["entities"] = replacement_record["entities"][:1]
+    replacement = tmp_path / "replacement.jsonl"
+    replacement.write_text(json.dumps(replacement_record) + "\n", encoding="utf-8")
+
+    replaced = _run(
+        [
+            "omop",
+            "load",
+            "--input",
+            str(replacement),
+            "--target",
+            str(target),
+            "--mode",
+            "replace-by-note",
+            "--json",
+        ],
+        capsys,
+    )["data"]
+
+    assert initial["mode"] == "append"
+    assert replaced["mode"] == "replace_by_note"
+    assert replaced["changed_note_hashes"] == replaced["source_note_hashes"]
+    assert len(replaced["changed_note_hashes"]) == 1
+
+    connection = sqlite3.connect(target)
+    try:
+        counts = {
+            table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("note", "note_nlp", "drug_exposure")
+        }
+    finally:
+        connection.close()
+    assert counts == {"note": 2, "note_nlp": 3, "drug_exposure": 0}
+
+
 def test_omop_load_validate_reports_zero_violations(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

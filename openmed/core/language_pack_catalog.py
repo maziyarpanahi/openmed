@@ -308,6 +308,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("no_NO", "ssn"),
     ),
+    _pack(
+        "vi",
+        "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1",
+        "vi_VN",
+        ("Latin",),
+        national_id_provider=("vi_VN", "vietnamese_cccd"),
+    ),
 )
 
 
@@ -335,7 +342,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "hr": NationalIdOnlyCapability("hr_HR", ("hr_HR", "ssn")),
     "bg": NationalIdOnlyCapability("bg_BG", ("bg_BG", "egn")),
     "fi": NationalIdOnlyCapability("fi_FI", ("fi_FI", "ssn")),
-    "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
     "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
     "rw": NationalIdOnlyCapability("rw_RW", ("rw_RW", "rwanda_id")),
 }
@@ -345,6 +351,9 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "gu": "gu_IN",
     "kn": "kn_IN",
     "ml": "ml_IN",
+    # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
+    # approximation entry and no conceptual backend mapping.
+    "ne": "ne_NP",
     "pa": "pa_IN",
 }
 
@@ -428,6 +437,7 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "mr",
+    "ne",
     "or",
     "as",
     "bn",

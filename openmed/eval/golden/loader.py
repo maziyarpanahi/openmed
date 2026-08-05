@@ -46,12 +46,17 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
     {
         "code_mixed_hinglish.jsonl",
         "context_multilingual.jsonl",
+        "doclevel_relations.jsonl",
+        "event_coref.jsonl",
         "code_mixed_deidentification.jsonl",
         "grounding_crosslingual.jsonl",
+        "grounded_codeable_concepts.jsonl",
         "grounding_export.jsonl",
         "grounding_vocab_synthetic.jsonl",
         "india_clinical.jsonl",
         "indic_name_variants.json",
+        "joint_entity_relation.jsonl",
+        "relation_calibration.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
         "relations_indic.jsonl",
@@ -65,7 +70,10 @@ _SPECIALIZED_FIXTURE_NAMES = frozenset(
         "radiology_entity_relations.jsonl",
         "hgvs_parse.jsonl",
         "measurement_trend.jsonl",
+        "norm_multilingual.jsonl",
+        "temporal_tlinks.jsonl",
         "tnm_stage.jsonl",
+        "oncotree_map.jsonl",
     }
 )
 
@@ -205,6 +213,7 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
 def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:
     """Load and validate all golden fixtures under *path*."""
     fixtures: list[GoldenFixture] = []
+    fixture_paths: dict[str, Path] = {}
     for fixture_path in list_fixture_paths(path):
         if fixture_path.suffix.lower() == ".jsonl":
             rows = [
@@ -212,20 +221,28 @@ def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:
                 for line in fixture_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
-            fixtures.extend(GoldenFixture.from_mapping(row) for row in rows)
-            continue
+        else:
+            raw = json.loads(fixture_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, Mapping):
+                raise ValueError(f"{fixture_path} must contain a mapping")
+            if raw.get("version") != _FIXTURE_VERSION:
+                raise ValueError(f"{fixture_path} has unsupported fixture version")
+            if raw.get("synthetic") is not True:
+                raise ValueError(f"{fixture_path} must be marked synthetic")
+            rows = raw.get("fixtures")
+            if not isinstance(rows, list):
+                raise ValueError(f"{fixture_path} must contain a fixtures list")
 
-        raw = json.loads(fixture_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, Mapping):
-            raise ValueError(f"{fixture_path} must contain a mapping")
-        if raw.get("version") != _FIXTURE_VERSION:
-            raise ValueError(f"{fixture_path} has unsupported fixture version")
-        if raw.get("synthetic") is not True:
-            raise ValueError(f"{fixture_path} must be marked synthetic")
-        rows = raw.get("fixtures")
-        if not isinstance(rows, list):
-            raise ValueError(f"{fixture_path} must contain a fixtures list")
-        fixtures.extend(GoldenFixture.from_mapping(row) for row in rows)
+        for row in rows:
+            fixture = GoldenFixture.from_mapping(row)
+            first_path = fixture_paths.get(fixture.fixture_id)
+            if first_path is not None:
+                raise ValueError(
+                    f"duplicate golden fixture id {fixture.fixture_id!r}: "
+                    f"{first_path} and {fixture_path}"
+                )
+            fixture_paths[fixture.fixture_id] = fixture_path
+            fixtures.append(fixture)
     return fixtures
 
 

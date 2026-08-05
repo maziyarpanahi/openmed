@@ -43,6 +43,7 @@ from openmed.core.pii_i18n import (
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_ukrainian_rnokpp,
+    validate_vietnamese_cccd,
     validate_za_id_number,
 )
 
@@ -85,6 +86,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "uk",
     "cs",
     "el",
+    "vi",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -460,6 +462,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Ημερομηνία επανελέγχου ",
         ".",
     ),
+    "vi": (
+        "Ghi chú lâm sàng: bệnh nhân ",
+        " sinh ngày ",
+        ". CCCD ",
+        ". Điện thoại ",
+        ". Địa chỉ ",
+        ". Ngày tái khám ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -494,6 +505,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "uk": validate_ukrainian_rnokpp,
     "cs": validate_czech_rodne_cislo,
     "el": validate_greek_amka,
+    "vi": validate_vietnamese_cccd,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -528,6 +540,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "uk": "pii_i18n.validate_ukrainian_rnokpp",
     "cs": "pii_i18n.validate_czech_rodne_cislo",
     "el": "pii_i18n.validate_greek_amka",
+    "vi": "pii_i18n.validate_vietnamese_cccd",
 }
 
 
