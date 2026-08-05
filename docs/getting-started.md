@@ -3,16 +3,34 @@
 This guide gets you from a blank workstation to copying results from the docs within minutes. It uses
 [uv](https://github.com/astral-sh/uv) for dependency management, but any Python 3.11+ environment works.
 
+Working with intermittent connectivity, offline clinics, OpenMRS, or DHIS2?
+Use the [African developer onboarding guide](africa-onboarding.md) for a
+low-bandwidth model setup, local-only inference, privacy-profile pointers, and
+FHIR-based integration recipes.
+
 ## 1. Bootstrap the environment
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh  # install uv (skip if already installed)
-uv venv --python 3.11                           # create a dedicated virtualenv
-source .venv/bin/activate                       # or use `uv python` directly
+=== "macOS/Linux"
 
-# install OpenMed with Hugging Face extras and doc tooling
-uv pip install ".[hf]"
-```
+    ```bash
+    curl -LsSf https://astral.sh/uv/install.sh | sh  # install uv (skip if already installed)
+    uv venv --python 3.11                           # create a dedicated virtualenv
+    source .venv/bin/activate                       # or use `uv python` directly
+
+    # install OpenMed with Hugging Face extras and doc tooling
+    uv pip install ".[hf]"
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    uv venv --python 3.11
+    .venv\Scripts\Activate.ps1
+
+    # install OpenMed with Hugging Face extras and doc tooling
+    uv pip install ".[hf]"
+    ```
 
 Need the zero-shot GLiNER stack or dev tools? Stack extras as needed:
 
@@ -20,6 +38,11 @@ Need the zero-shot GLiNER stack or dev tools? Stack extras as needed:
 uv pip install ".[hf,gliner]"      # add GLiNER + transformers
 uv pip install ".[dev]"            # pytest + coverage + linting
 ```
+
+Installing behind an institutional proxy or package mirror, or preparing for
+a metered/offline deployment? Follow the
+[low-bandwidth, mirror, and proxy installation guide](low-bandwidth-install.md)
+to configure pip, `HF_ENDPOINT`, the shared model cache, and diagnostics.
 
 For scanned images and document OCR, install the multimodal extra plus the
 system Tesseract binary:
@@ -94,14 +117,38 @@ print(result.deidentified_text)
 `shift_dates`) — see the [Anonymization quickstart](anonymization.md#quickstart-choosing-a-method)
 for a runnable example of each, plus how to reverse one with `reidentify()`.
 
-## 4. Copy code snippets from the docs
+## 4. Pull a model reliably for offline use
+
+Use the model pull command to warm the Hugging Face cache before working
+offline. Downloads resume after interrupted transfers, retry transient network
+failures, and verify every file against Hub metadata:
+
+```bash
+openmed models pull disease_detection_superclinical
+```
+
+On a metered or unstable connection, pin the revision, limit transfer speed,
+and tune the retry count explicitly:
+
+```bash
+openmed models pull disease_detection_superclinical \
+  --revision main \
+  --max-bandwidth 524288 \
+  --retries 5
+```
+
+Progress contains only repository filenames and byte/file totals. After the
+pull completes, set `OPENMED_OFFLINE=1`; the same command then performs a
+cache-only lookup and never attempts a network connection.
+
+## 5. Copy code snippets from the docs
 
 All code blocks ship with Material for MkDocs copy buttons. Invoking the command palette (`/` or `cmd/ctrl + K`) lets you
 search for “GLiNER,” “OpenMedConfig,” or “token classification,” then copy the snippet that appears in the preview pane.
 If you rely on AI copilots (ChatGPT, Copilot, etc.), point them at the published docs URL so they crawl the same
 structured Markdown and surface canonical answers.
 
-## 5. Optional: pin configuration
+## 6. Optional: pin configuration
 
 ```python
 from openmed.core import OpenMedConfig, ModelLoader
@@ -116,4 +163,5 @@ ner = loader.create_pipeline("disease_detection_superclinical")
 entities = ner("Hydroxyurea dose reduced after platelet drop.")
 ```
 
-Continue to the **Configuration** section for the full YAML/ENV schema, PHI-aware validation helpers, and logging setup.
+Continue to the **Configuration** section for the full YAML/ENV schema,
+PHI-aware validation helpers, and logging setup.

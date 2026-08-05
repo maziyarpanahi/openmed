@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from types import MappingProxyType
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+
+from . import labels as label_taxonomy
+from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
+from .registry_service import (
+    load_registry_state,
+    pointer_targets,
+    semantic_version,
+)
 
 
 @dataclass
@@ -33,11 +44,16 @@ class ModelInfo:
     benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
     latency_ms: Dict[str, float] = field(default_factory=dict)
     peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    download_mb: Optional[float] = None
+    disk_mb: Optional[float] = None
     recommended_tier: Optional[str] = None
+    script_coverage: Dict[str, Dict[str, float | str]] = field(default_factory=dict)
     arxiv: Optional[str] = None
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
     released: Optional[str] = None
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    semantic_version: str = "0.0.0"
 
     @property
     def size_mb(self) -> Optional[int]:
@@ -85,6 +101,18 @@ class ModelInfo:
 
 
 @dataclass(frozen=True)
+class ModelSizeEstimate:
+    """Offline-safe storage and memory estimate for a manifest model."""
+
+    repo_id: str
+    task: str
+    download_mb: Optional[float]
+    disk_mb: Optional[float]
+    peak_ram_mb: Optional[float]
+    source: str
+
+
+@dataclass(frozen=True)
 class DraftModelInfo:
     """Separate draft-model artifact metadata for speculative decoding."""
 
@@ -100,6 +128,118 @@ class DraftModelInfo:
     def permissive_license(self) -> bool:
         """Return whether the declared draft license is permissive."""
         return self.license.lower() in PERMISSIVE_DRAFT_MODEL_LICENSES
+
+
+@dataclass(frozen=True)
+class IndicEncoderConfig:
+    """Explicit user configuration for an optional Indic encoder backbone."""
+
+    source: str
+    family: str
+    languages: tuple[str, ...]
+    cache_dir: Optional[str] = None
+    token: Optional[str] = field(default=None, repr=False, compare=False)
+    revision: Optional[str] = None
+    local_files_only: bool = False
+    device: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class IndicEncoderSpec:
+    """Permissive-license metadata for a supported Indic encoder family."""
+
+    family: str
+    display_name: str
+    license_id: str
+    source_url: str
+    languages: frozenset[str]
+    supports_transliterated_text: bool = False
+
+
+@dataclass(frozen=True)
+class IndicEncoderLoadResult:
+    """Result of resolving optional encoder weights without hard failure."""
+
+    handle: Any | None
+    skip_reason: str | None
+    metadata: IndicEncoderSpec | None = None
+
+    @property
+    def available(self) -> bool:
+        """Return whether a tokenizer/backbone handle was loaded."""
+
+        return self.handle is not None
+
+
+@dataclass(frozen=True)
+class PiiFamilyTransferRoute:
+    """Registry-facing PII model and family-transfer metadata.
+
+    This is a metadata resolution result, not a loaded model or an instruction
+    to perform automatic clinical fallback.
+    """
+
+    language: str
+    family_id: str
+    family_display_name: str
+    target_model_id: Optional[str]
+    backbone_model_id: str
+    donor_language: Optional[str] = None
+    donor_model_id: Optional[str] = None
+    adapter_id: Optional[str] = None
+    adapter_license: Optional[str] = None
+    adapter_provenance: Optional[str] = None
+    clinical_disclaimer: Optional[str] = None
+    offline_runnable: bool = True
+    mode: str = "native"
+
+
+INDIC_ENCODER_SPECS: Mapping[str, IndicEncoderSpec] = MappingProxyType(
+    {
+        "muril": IndicEncoderSpec(
+            family="muril",
+            display_name="MuRIL",
+            license_id="Apache-2.0",
+            source_url="https://huggingface.co/google/muril-base-cased",
+            languages=frozenset(
+                {
+                    "as",
+                    "bn",
+                    "en",
+                    "gu",
+                    "hi",
+                    "kn",
+                    "ks",
+                    "ml",
+                    "mr",
+                    "ne",
+                    "or",
+                    "pa",
+                    "sa",
+                    "sd",
+                    "ta",
+                    "te",
+                    "ur",
+                }
+            ),
+            supports_transliterated_text=True,
+        ),
+        "indicbert": IndicEncoderSpec(
+            family="indicbert",
+            display_name="IndicBERT",
+            license_id="MIT",
+            source_url="https://huggingface.co/ai4bharat/indic-bert",
+            languages=frozenset(
+                {"as", "bn", "en", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+            ),
+        ),
+    }
+)
+
+_INDIC_ENCODER_OFFICIAL_SOURCES = {
+    "google/muril-base-cased": "muril",
+    "ai4bharat/indic-bert": "indicbert",
+}
 
 
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
@@ -128,6 +268,8 @@ GENERATION_DRAFT_MODELS: Dict[str, DraftModelInfo] = {
     ),
 }
 
+_INDIC_ENCODER_CONFIG: Optional[IndicEncoderConfig] = None
+
 _GENERATION_DRAFT_TARGET_ALIASES = {
     "laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
     "kogai/laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
@@ -139,20 +281,31 @@ _VERSION_RE = re.compile(r"^v\d+$", re.IGNORECASE)
 
 _LANGUAGE_NAME_TO_CODE = {
     "arabic": "ar",
+    "assamese": "as",
+    "bengali": "bn",
+    "chinese": "zh",
     "dutch": "nl",
     "english": "en",
     "french": "fr",
     "german": "de",
+    "gujarati": "gu",
     "hebrew": "he",
     "hindi": "hi",
     "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
+    "kannada": "kn",
+    "malayalam": "ml",
+    "marathi": "mr",
+    "odia": "or",
     "portuguese": "pt",
+    "punjabi": "pa",
     "spanish": "es",
+    "tamil": "ta",
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
+    "vietnamese": "vi",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
     code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"
@@ -217,8 +370,149 @@ _PII_ENTITY_TYPES = [
 ]
 
 _CATEGORY_ENTITY_TYPES = {
-    "Disease": ["DISEASE", "CONDITION", "PATHOLOGY"],
-    "Pharmaceutical": ["CHEM", "DRUG", "MEDICATION"],
+    "Disease": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Pharmaceutical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Oncology": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.CANCER,
+        label_taxonomy.CELL,
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Anatomy": [
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Genomics": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.GENE,
+        label_taxonomy.PROTEIN,
+        label_taxonomy.DNA,
+        label_taxonomy.RNA,
+        label_taxonomy.CELL,
+    ],
+    "Chemical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Species": [
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+    ],
+    "Microbiology": [
+        label_taxonomy.MICROORGANISM,
+        label_taxonomy.ANTIBIOTIC,
+        label_taxonomy.SUSCEPTIBILITY,
+    ],
+    "Protein": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.PROTEIN,
+    ],
+    "Pathology": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Hematology": [
+        label_taxonomy.CANCER,
+        label_taxonomy.DISEASE,
+        label_taxonomy.CELL,
+    ],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+        label_taxonomy.ANATOMY,
+    ],
+    "Ophthalmology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Radiology models; no such model is
+    # registered today (see issue #1971).
+    "Radiology": [
+        label_taxonomy.FINDING,
+        label_taxonomy.IMAGING_MODALITY,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.LATERALITY,
+        label_taxonomy.MEASUREMENT,
+    ],
+    # Forward metadata for future Anesthesia models; no such model is
+    # registered today (see issue #952).
+    "Anesthesia": [
+        label_taxonomy.ANESTHESIA_TYPE,
+        label_taxonomy.ANESTHETIC_AGENT,
+        label_taxonomy.AIRWAY_MANAGEMENT,
+        label_taxonomy.ASA_CLASS,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.CONDITION,
+    ],
+    # Nutrition- registered (see issue #951)
+    "Nutrition": [
+        label_taxonomy.DIET_TYPE,
+        label_taxonomy.NUTRITION_TARGET,
+        label_taxonomy.FEEDING_ROUTE,
+        label_taxonomy.NUTRITIONAL_STATUS,
+    ],
+    # Forward metadata for future Endocrinology models; no such model is
+    # registered today (see issue #895).
+    "Endocrinology": [
+        label_taxonomy.GLYCEMIC_MEASURE,
+        label_taxonomy.THYROID_MEASURE,
+        label_taxonomy.HORMONE_LEVEL,
+        label_taxonomy.INSULIN_REGIMEN,
+        label_taxonomy.CONDITION,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Gastroenterology models; no such model is
+    # registered today (see issue #894).
+    "Gastroenterology": [
+        label_taxonomy.ENDOSCOPIC_FINDING,
+        label_taxonomy.GI_SYMPTOM,
+        label_taxonomy.GI_SCORE,
+        label_taxonomy.POLYP_DESCRIPTOR,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Procedures models; no such model is
+    # registered today (see issue #313).
+    "Procedures": [
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Privacy": _PII_ENTITY_TYPES,
+}
+
+# Model-card labels remain visible in registry discovery results while the
+# category defaults above provide the canonical taxonomy spine.
+_FAMILY_NATIVE_ENTITY_TYPES = {
     "Oncology": [
         "SIMPLE_CHEMICAL",
         "CHEM",
@@ -239,85 +533,15 @@ _CATEGORY_ENTITY_TYPES = {
         "TISSUE",
         "PATHOLOGICAL_FORMATION",
     ],
-    "Anatomy": ["ORGAN", "TISSUE", "ANATOMY"],
-    "Genomics": [
-        "GENE_OR_GENE_PRODUCT",
-        "GENE",
-        "PROTEIN",
-        "DNA",
-        "RNA",
-        "CELL_LINE",
-        "CELL_TYPE",
-    ],
-    "Chemical": ["SIMPLE_CHEMICAL", "CHEM", "DRUG", "MEDICATION"],
-    "Species": ["ORGANISM", "SPECIES"],
-    "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
+    "Genomics": ["CELL_LINE", "CELL_TYPE"],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
     "Protein": [
-        "GENE_OR_GENE_PRODUCT",
-        "PROTEIN",
         "PROTEIN_COMPLEX",
         "PROTEIN_ENUM",
         "PROTEIN_FAMILIY_OR_GROUP",
         "PROTEIN_VARIANT",
     ],
-    "Pathology": ["DISEASE", "CONDITION", "PATHOLOGY"],
-    "Hematology": ["CANCER", "DISEASE", "CL"],
-    # Forward metadata for future Cardiology models; no Cardiology model is
-    # registered today (see issue #317).
-    "Cardiology": [
-        "CARDIAC_FINDING",
-        "ECG_FINDING",
-        "EJECTION_FRACTION",
-        "CARDIAC_PROCEDURE",
-        "CARDIAC_DEVICE",
-        "ANATOMY",
-    ],
-    # Forward metadata for future Dermatology/Ophthalmology models; no such
-    # model is registered today (see issue #318).
-    "Dermatology": ["SKIN_LESION", "MORPHOLOGY", "DISTRIBUTION", "ANATOMY"],
-    "Ophthalmology": [
-        "EYE_FINDING",
-        "VISUAL_ACUITY",
-        "INTRAOCULAR_PRESSURE",
-        "ANATOMY",
-    ],
-    # Forward metadata for future Anesthesia models; no such model is
-    # registered today (see issue #952).
-    "Anesthesia": [
-        "ANESTHESIA_TYPE",
-        "ANESTHETIC_AGENT",
-        "AIRWAY_MANAGEMENT",
-        "ASA_CLASS",
-        "MONITORING_MODALITY",
-        "INTRAOPERATIVE_EVENT",
-    ],
-    # Nutrition- registered (see issue #951)
-    "Nutrition": [
-        "DIET_TYPE",
-        "NUTRITION_TARGET",
-        "FEEDING_ROUTE",
-        "NUTRITIONAL_STATUS",
-    ],
-    # Forward metadata for future Endocrinology models; no such model is
-    # registered today (see issue #895).
-    "Endocrinology": [
-        "GLYCEMIC_MEASURE",
-        "THYROID_MEASURE",
-        "HORMONE_LEVEL",
-        "INSULIN_REGIMEN",
-        "CONDITION",
-        "BODY_SITE",
-    ],
-    # Forward metadata for future Gastroenterology models; no such model is
-    # registered today (see issue #894).
-    "Gastroenterology": [
-        "ENDOSCOPIC_FINDING",
-        "GI_SYMPTOM",
-        "GI_SCORE",
-        "POLYP_DESCRIPTOR",
-        "BODY_SITE",
-    ],
-    "Privacy": _PII_ENTITY_TYPES,
+    "Hematology": ["CL"],
 }
 
 _LEGACY_MODEL_ALIASES = {
@@ -361,6 +585,10 @@ def load_manifest_rows(path: Path = MANIFEST_PATH) -> List[Dict[str, Any]]:
     """Load model manifest rows from the committed JSONL snapshot."""
     if not path.exists():
         return []
+
+    from .model_integrity import verify_manifest_signature_if_present
+
+    verify_manifest_signature_if_present(path)
 
     rows: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -478,10 +706,19 @@ def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
     if isinstance(labels, list) and labels:
         if category != "Privacy" and str(row.get("family") or "").upper() == "NER":
             return _dedupe_entity_types(
-                chain(labels, _CATEGORY_ENTITY_TYPES.get(category, ()))
+                chain(
+                    labels,
+                    _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+                    _CATEGORY_ENTITY_TYPES.get(category, ()),
+                )
             )
         return _dedupe_entity_types(labels)
-    return list(_CATEGORY_ENTITY_TYPES.get(category, []))
+    return _dedupe_entity_types(
+        chain(
+            _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+            _CATEGORY_ENTITY_TYPES.get(category, ()),
+        )
+    )
 
 
 def _recommended_confidence(category: str) -> float:
@@ -533,13 +770,20 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         benchmark=_benchmark_from_row(row),
         latency_ms=_number_map_from_row(row, "latency_ms"),
         peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        download_mb=_positive_number_from_row(row, "download_mb"),
+        disk_mb=_positive_number_from_row(row, "disk_mb"),
         recommended_tier=row.get("recommended_tier")
         if isinstance(row.get("recommended_tier"), str)
         else None,
+        script_coverage=_script_coverage_from_row(row),
         arxiv=row.get("arxiv"),
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
         released=row.get("released"),
+        provenance=dict(row.get("provenance") or {})
+        if isinstance(row.get("provenance"), dict)
+        else {},
+        semantic_version=semantic_version(str(row["repo_id"])),
     )
 
 
@@ -561,6 +805,123 @@ def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, floa
         for device, measurement in value.items()
         if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
     }
+
+
+def _script_coverage_from_row(
+    row: Dict[str, Any],
+) -> Dict[str, Dict[str, float | str]]:
+    value = row.get("script_coverage")
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(script): {
+            str(metric): measurement
+            for metric, measurement in metrics.items()
+            if isinstance(measurement, (int, float, str))
+            and not isinstance(measurement, bool)
+        }
+        for script, metrics in value.items()
+        if isinstance(metrics, dict)
+    }
+
+
+def _positive_number_from_row(row: Dict[str, Any], field_name: str) -> Optional[float]:
+    value = row.get(field_name)
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or value <= 0
+    ):
+        return None
+    return float(value)
+
+
+def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
+    recorded = _positive_number_from_row(row, "download_mb")
+    if recorded is not None:
+        return recorded
+
+    param_count = row.get("param_count")
+    if not isinstance(param_count, int) or isinstance(param_count, bool):
+        return None
+
+    formats = set(row.get("formats") or ())
+    if formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+        bytes_per_parameter = 0.55
+    elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
+        bytes_per_parameter = 1.05
+    else:
+        bytes_per_parameter = 2.0
+
+    # Allow for tokenizer/config files in addition to the model weights.
+    return (param_count * bytes_per_parameter / 1_000_000) + 1.5
+
+
+def _estimated_peak_ram_mb(
+    row: Dict[str, Any], disk_mb: Optional[float]
+) -> Optional[float]:
+    recorded = _number_map_from_row(row, "peak_ram_mb")
+    if recorded:
+        return max(recorded.values())
+    if disk_mb is None:
+        return None
+    return max(256.0, disk_mb * 1.25)
+
+
+def estimate_model_sizes(
+    model_key: Optional[str] = None,
+    *,
+    manifest_path: Path = MANIFEST_PATH,
+) -> List[ModelSizeEstimate]:
+    """Return deterministic model size estimates from committed metadata.
+
+    The function is deliberately network-free. Explicit manifest measurements
+    win; otherwise the download estimate is derived from parameter count and
+    artifact format. ``model_key`` may be a registry alias or a full repo id.
+
+    Args:
+        model_key: Optional registry alias or model repository id.
+        manifest_path: Manifest snapshot to read.
+
+    Returns:
+        Estimates sorted by repository id.
+    """
+
+    rows = load_manifest_rows(manifest_path)
+    if model_key is not None:
+        resolved = get_model_info(model_key)
+        repo_id = resolved.model_id if resolved is not None else model_key
+        rows = [row for row in rows if row.get("repo_id") == repo_id]
+
+    estimates: List[ModelSizeEstimate] = []
+    for row in rows:
+        repo_id = row.get("repo_id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+        download_mb = _estimated_download_mb(row)
+        disk_mb = _positive_number_from_row(row, "disk_mb") or download_mb
+        estimates.append(
+            ModelSizeEstimate(
+                repo_id=repo_id,
+                task=str(row.get("task") or "unknown"),
+                download_mb=_rounded_mb(download_mb),
+                disk_mb=_rounded_mb(disk_mb),
+                peak_ram_mb=_rounded_mb(_estimated_peak_ram_mb(row, disk_mb)),
+                source=(
+                    "manifest"
+                    if _positive_number_from_row(row, "download_mb") is not None
+                    else "estimated"
+                ),
+            )
+        )
+    return sorted(estimates, key=lambda estimate: estimate.repo_id.lower())
+
+
+def _rounded_mb(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return round(value, 3)
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -680,7 +1041,24 @@ def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     return aliases
 
 
-def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
+def _add_pointer_aliases(
+    registry: Dict[str, ModelInfo],
+    registry_state: Mapping[str, Any],
+) -> None:
+    by_repo_id = {model.model_id: model for model in registry.values()}
+    for family, pointers in pointer_targets(registry_state).items():
+        for pointer_name, repo_id in pointers.items():
+            if repo_id is None:
+                continue
+            model = by_repo_id.get(repo_id)
+            if model is not None:
+                registry[_slug(f"{family}_{pointer_name}")] = model
+
+
+def _build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
     registry: Dict[str, ModelInfo] = {}
     for row in rows:
         repo_id = row.get("repo_id")
@@ -693,11 +1071,23 @@ def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
 
         for alias in _compatibility_aliases(row):
             registry.setdefault(alias, info)
+    if registry_state is not None:
+        _add_pointer_aliases(registry, registry_state)
     return registry
 
 
+def build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
+    """Build model metadata and named-pointer aliases from committed inputs."""
+
+    return _build_registry(rows, registry_state)
+
+
 _MANIFEST_ROWS = load_manifest_rows()
-OPENMED_MODELS = _build_registry(_MANIFEST_ROWS)
+_REGISTRY_STATE = load_registry_state(missing_ok=True)
+OPENMED_MODELS = build_registry(_MANIFEST_ROWS, _REGISTRY_STATE)
 
 
 def _models_by_language_from_manifest(languages: Iterable[str]) -> Dict[str, ModelInfo]:
@@ -873,6 +1263,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "Ophthalmology",
         "Contains ophthalmology terms",
     ),
+    "\\bct\\b|\\bmri\\b|x[- ]?ray|ultrasound|radiograph|contrast|impression|nodule|opacity": (
+        "Radiology",
+        "Contains radiology/imaging terms",
+    ),
     "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
         "Anesthesia",
         "Contains anesthesia-record terms",
@@ -912,6 +1306,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "gastroenterolog|endoscopy|endoscopic|colonoscopy|polyp|varices|bowel\\s*prep|bristol\\s*stool|mayo\\s*score|abdominal\\s*pain|cramping": (
         "Gastroenterology",
         "Contains gastroenterology/endoscopy terms",
+    ),
+    "surgery|resection|biopsy|endoscopy|catheter|implant|procedure|laparoscopic": (
+        "Procedures",
+        "Contains procedure/surgical terms",
     ),
 }
 
@@ -962,49 +1360,336 @@ def get_entity_types_by_category(category: str) -> List[str]:
     return sorted(entity_types)
 
 
+def get_indic_encoder_spec(
+    family: str | None = None,
+    *,
+    source: str | None = None,
+) -> IndicEncoderSpec:
+    """Return normalized family metadata, inferring from a known repo name."""
+
+    if family is not None:
+        if not isinstance(family, str):
+            raise TypeError("family must be a string or None")
+        normalized = family.strip().casefold().replace("-", "").replace("_", "")
+    else:
+        if source is not None and not isinstance(source, str):
+            raise TypeError("source must be a string or None")
+        normalized_source = (source or "").strip().casefold().rstrip("/")
+        try:
+            normalized = _INDIC_ENCODER_OFFICIAL_SOURCES[normalized_source]
+        except KeyError as exc:
+            raise ValueError(
+                "family must be 'muril' or 'indicbert' for an unrecognized source"
+            ) from exc
+    try:
+        return INDIC_ENCODER_SPECS[normalized]
+    except KeyError as exc:
+        allowed = ", ".join(sorted(INDIC_ENCODER_SPECS))
+        raise ValueError(
+            f"unsupported Indic encoder family {family!r}; expected {allowed}"
+        ) from exc
+
+
+def configure_indic_encoder(
+    source: str | Path,
+    *,
+    family: str | None = None,
+    languages: Iterable[str] | None = None,
+    cache_dir: str | Path | None = None,
+    token: str | None = None,
+    revision: str | None = None,
+    local_files_only: bool = False,
+    device: str | None = None,
+) -> IndicEncoderConfig:
+    """Configure user-supplied MuRIL or IndicBERT weights for PII discovery.
+
+    Configuration does not load or download weights. Loading happens only when
+    :func:`load_configured_indic_encoder` is called explicitly.
+    """
+
+    if not isinstance(source, (str, Path)):
+        raise TypeError("Indic encoder source must be a string or path")
+    if not isinstance(local_files_only, bool):
+        raise TypeError("local_files_only must be a boolean")
+    source_value = str(source).strip()
+    if not source_value:
+        raise ValueError("Indic encoder source must not be empty")
+    metadata = get_indic_encoder_spec(family, source=source_value)
+
+    if languages is None:
+        from .pii_i18n import INDIC_ENCODER_PII_LANGUAGES
+
+        normalized_languages = tuple(sorted(INDIC_ENCODER_PII_LANGUAGES))
+    else:
+        if isinstance(languages, (str, bytes)):
+            raise TypeError("languages must be an iterable of language codes")
+        language_values = tuple(languages)
+        if any(not isinstance(language, str) for language in language_values):
+            raise TypeError("each Indic encoder language must be a string")
+        normalized_languages = tuple(
+            sorted({language.strip().casefold() for language in language_values})
+        )
+    if not normalized_languages or any(
+        not language for language in normalized_languages
+    ):
+        raise ValueError("at least one Indic encoder language must be configured")
+    unsupported = set(normalized_languages) - metadata.languages
+    if unsupported:
+        raise ValueError(
+            f"{metadata.display_name} does not support language codes: "
+            + ", ".join(sorted(unsupported))
+        )
+
+    config = IndicEncoderConfig(
+        source=source_value,
+        family=metadata.family,
+        languages=normalized_languages,
+        cache_dir=str(cache_dir) if cache_dir is not None else None,
+        token=token,
+        revision=revision,
+        local_files_only=local_files_only,
+        device=device,
+    )
+    global _INDIC_ENCODER_CONFIG
+    _INDIC_ENCODER_CONFIG = config
+    return config
+
+
+def get_indic_encoder_config() -> IndicEncoderConfig | None:
+    """Return the active Indic encoder configuration, if one was supplied."""
+
+    return _INDIC_ENCODER_CONFIG
+
+
+def clear_indic_encoder_config() -> None:
+    """Remove the process-local Indic encoder configuration."""
+
+    global _INDIC_ENCODER_CONFIG
+    _INDIC_ENCODER_CONFIG = None
+
+
+def load_configured_indic_encoder() -> IndicEncoderLoadResult:
+    """Load the configured encoder or return a result carrying a skip reason."""
+
+    config = get_indic_encoder_config()
+    if config is None:
+        return IndicEncoderLoadResult(
+            handle=None,
+            skip_reason="no Indic encoder weights are configured",
+        )
+
+    from openmed.ner.families.indic import load_indic_encoder
+
+    return load_indic_encoder(
+        config.source,
+        family=config.family,
+        cache_dir=config.cache_dir,
+        token=config.token,
+        revision=config.revision,
+        local_files_only=config.local_files_only,
+        device=config.device,
+    )
+
+
+def _configured_indic_encoder_pii_models(lang: str) -> Dict[str, ModelInfo]:
+    config = get_indic_encoder_config()
+    if config is None or lang not in config.languages:
+        return {}
+    if not _is_indic_encoder_runtime_available():
+        return {}
+
+    metadata = get_indic_encoder_spec(config.family)
+    key = f"pii_{lang}_{metadata.family}_encoder"
+    transliteration = (
+        " Includes transliterated-text support for Hinglish and code-mixed paths."
+        if metadata.supports_transliterated_text
+        else ""
+    )
+    return {
+        key: ModelInfo(
+            model_id=config.source,
+            display_name=f"{metadata.display_name} Indic encoder adapter",
+            category="Privacy",
+            specialization="Indic encoder-backed PII",
+            description=(
+                "Optional backbone-only encoder configured from user-supplied weights."
+                + transliteration
+            ),
+            entity_types=list(_PII_ENTITY_TYPES),
+            size_category="Unknown",
+            family=metadata.display_name,
+            task="feature-extraction",
+            languages=list(config.languages),
+            architecture="Transformer encoder",
+            base_model=config.source,
+            formats=["transformers"],
+            license=metadata.license_id,
+            provenance={
+                "source": config.source,
+                "weights": "user-supplied",
+                "bundled": False,
+                "revision": config.revision,
+            },
+        )
+    }
+
+
+def _is_indic_encoder_runtime_available() -> bool:
+    try:
+        return all(
+            importlib.util.find_spec(module_name) is not None
+            for module_name in ("transformers", "torch")
+        )
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
 def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
-    """Return all single-language PII models for a given language."""
+    """Return script-compatible PII models and configured Indic adapters."""
     if lang == "en":
         localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS
-        return {
+        language_models = {
             key: info
             for key, info in OPENMED_MODELS.items()
             if key.startswith("pii_")
             and info.category == "Privacy"
             and "en" in (info.languages or ["en"])
+            and _supports_pii_language(info, lang)
             and not any(key.startswith(f"pii_{lc}_") for lc in localized_prefixes)
         }
-
-    prefix = f"pii_{lang}_"
-    language_models = {
-        key: info
-        for key, info in OPENMED_MODELS.items()
-        if key.startswith(prefix)
-        and info.category == "Privacy"
-        and lang in (info.languages or [])
-    }
-    if language_models:
-        return language_models
+    else:
+        prefix = f"pii_{lang}_"
+        language_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith(prefix)
+            and info.category == "Privacy"
+            and lang in (info.languages or [])
+            and _supports_pii_language(info, lang)
+        }
+    optional_indic = _configured_indic_pii_model(lang)
 
     from .pii_i18n import DEFAULT_PII_MODELS
 
     default_model_id = DEFAULT_PII_MODELS.get(lang)
-    if not default_model_id:
+    if default_model_id:
+        # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
+        # so language-pack callers can reuse multilingual privacy filters safely.
+        fallback_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith("pii_")
+            and info.category == "Privacy"
+            and info.model_id == default_model_id
+            and lang in (info.languages or [])
+            and _supports_pii_language(info, lang)
+        }
+        language_models.update(fallback_models)
+
+    language_models.update(optional_indic)
+    language_models.update(_configured_indic_encoder_pii_models(lang))
+    return language_models
+
+
+def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
+    from ..ner.families.indic import configured_indic_ner_model
+    from .pii_i18n import INDIC_NER_LANGUAGES, LANGUAGE_NAMES
+
+    if lang not in INDIC_NER_LANGUAGES:
         return {}
-    # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
-    # so language-pack callers can reuse multilingual privacy filters safely.
+    model_id = configured_indic_ner_model()
+    if model_id is None:
+        return {}
     return {
-        key: info
-        for key, info in OPENMED_MODELS.items()
-        if key.startswith("pii_")
-        and info.category == "Privacy"
-        and info.model_id == default_model_id
-        and lang in (info.languages or [])
+        f"pii_{lang}_indic_ner": ModelInfo(
+            model_id=model_id,
+            display_name=f"{LANGUAGE_NAMES[lang]} Indic NER (optional)",
+            category="Privacy",
+            specialization="Indic PER/LOC/ORG de-identification",
+            description="User-configured CoNLL-2003 Indic NER adapter",
+            entity_types=["PERSON", "LOCATION", "ORGANIZATION"],
+            size_category="Unknown",
+            recommended_confidence=0.50,
+            family="IndicNER",
+            task="token-classification",
+            languages=[lang],
+            formats=["transformers"],
+        )
     }
+
+
+def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
+    normalized = lang.lower().replace("_", "-")
+    scripts = LANGUAGE_SCRIPT_TARGETS.get(normalized, ())
+    return not any(
+        info.script_coverage.get(script, {}).get("verdict") == "unsupported"
+        for script in scripts
+    )
 
 
 def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language."""
-    from .pii_i18n import DEFAULT_PII_MODELS
+    from .pii_i18n import (
+        DEFAULT_PII_MODELS,
+        OPTIONAL_PII_MODEL,
+        USER_SUPPLIED_PII_MODEL,
+    )
 
-    return DEFAULT_PII_MODELS.get(lang)
+    model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id == USER_SUPPLIED_PII_MODEL:
+        # Publicly registered but ships no weights; the caller must supply one.
+        return None
+    if model_id != OPTIONAL_PII_MODEL:
+        return model_id
+    from ..ner.families.indic import configured_indic_ner_model
+
+    return configured_indic_ner_model()
+
+
+def resolve_pii_family_transfer_route(
+    lang: str,
+) -> Optional[PiiFamilyTransferRoute]:
+    """Return offline registry metadata for a PII family-transfer target.
+
+    Args:
+        lang: Supported PII language code, optionally with a region or script.
+
+    Returns:
+        Target model, family, backbone, and primary donor-adapter metadata, or
+        ``None`` when the language is not in the built-in taxonomy.
+    """
+
+    from openmed.training.adapters.config import DEFAULT_BACKBONE_MODEL_ID
+    from openmed.training.adapters.family_transfer import resolve_family_transfer
+
+    resolution = resolve_family_transfer(lang)
+    if resolution is None:
+        return None
+
+    target_model_id = get_default_pii_model(resolution.language)
+    edge = resolution.primary_edge
+    if edge is None:
+        return PiiFamilyTransferRoute(
+            language=resolution.language,
+            family_id=resolution.family.family_id,
+            family_display_name=resolution.family.display_name,
+            target_model_id=target_model_id,
+            backbone_model_id=DEFAULT_BACKBONE_MODEL_ID,
+        )
+
+    adapter = edge.adapter
+    return PiiFamilyTransferRoute(
+        language=resolution.language,
+        family_id=resolution.family.family_id,
+        family_display_name=resolution.family.display_name,
+        target_model_id=target_model_id,
+        backbone_model_id=adapter.backbone_model_id,
+        donor_language=edge.donor_language,
+        donor_model_id=get_default_pii_model(edge.donor_language),
+        adapter_id=adapter.adapter_id,
+        adapter_license=adapter.license,
+        adapter_provenance=adapter.provenance,
+        clinical_disclaimer=adapter.disclaimer,
+        offline_runnable=adapter.offline_runnable,
+        mode=edge.mode,
+    )
