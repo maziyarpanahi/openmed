@@ -219,7 +219,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -494,7 +495,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -640,7 +642,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -759,7 +762,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -898,7 +902,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"
@@ -1045,7 +1050,8 @@
               "zh",
               "uk",
               "cs",
-              "el"
+              "el",
+              "vi"
             ],
             "title": "Lang",
             "type": "string"

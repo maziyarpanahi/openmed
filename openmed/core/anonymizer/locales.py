@@ -33,6 +33,9 @@ Notes:
 - Nepali (``ne``) resolves to Faker's native ``ne_NP`` locale, so it is neither
   a documented approximation nor a conceptual locale needing a backend, and it
   emits no warning. OpenMed ships no Nepali national-ID provider.
+- Vietnamese resolves to Faker's native ``vi_VN`` locale without an
+  approximation warning, so name and address surrogates keep their diacritics;
+  national-ID dispatch routes to the CCCD provider on the same locale.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a

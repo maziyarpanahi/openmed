@@ -56,10 +56,28 @@ from .language_pack_catalog import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
+from .registry_service import manifest_pii_languages
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+# Model-backed routes are generated from the committed manifest. Explicit
+# placeholder routes remain catalog-owned because their weights are supplied by
+# the user rather than represented by a manifest checkpoint.
+_MANIFEST_PII_LANGUAGES = manifest_pii_languages()
+_UNREGISTERED_MANIFEST_LANGUAGES = _MANIFEST_PII_LANGUAGES - set(SUPPORTED_LANGUAGES)
+if _UNREGISTERED_MANIFEST_LANGUAGES:
+    raise RuntimeError(
+        "manifest advertises PII languages without registered language packs: "
+        + ", ".join(sorted(_UNREGISTERED_MANIFEST_LANGUAGES))
+    )
+_EXPECTED_SUPPORTED_LANGUAGES = _MANIFEST_PII_LANGUAGES | set(
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+)
+if SUPPORTED_LANGUAGES != _EXPECTED_SUPPORTED_LANGUAGES:
+    SUPPORTED_LANGUAGES.clear()
+    SUPPORTED_LANGUAGES.update(_EXPECTED_SUPPORTED_LANGUAGES)
 
 # Naamapadam languages supported by the optional Indic NER adapter. Existing
 # Bengali, Hindi, Tamil, and Telugu defaults remain available; the shared CoNLL
@@ -136,6 +154,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "uk": "Ukrainian",
     "cs": "Czech",
     "el": "Greek",
+    "vi": "Vietnamese",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -179,6 +198,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "uk": "Ukrainian-",
     "cs": "Czech-",
     "el": "Greek-",
+    "vi": "Vietnamese-",
 }
 
 # ---------------------------------------------------------------------------
@@ -3466,6 +3486,23 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Οκτώβριος",
         "Νοέμβριος",
         "Δεκέμβριος",
+    ],
+    # Vietnamese spells months out as "Tháng" plus the cardinal number, with
+    # "Tháng Tư" (not "Tháng Bốn") for April. The numeric "tháng M" form used by
+    # the "ngày D tháng M năm YYYY" detector stays handled by that pattern.
+    "vi": [
+        "Tháng Một",
+        "Tháng Hai",
+        "Tháng Ba",
+        "Tháng Tư",
+        "Tháng Năm",
+        "Tháng Sáu",
+        "Tháng Bảy",
+        "Tháng Tám",
+        "Tháng Chín",
+        "Tháng Mười",
+        "Tháng Mười Một",
+        "Tháng Mười Hai",
     ],
 }
 
