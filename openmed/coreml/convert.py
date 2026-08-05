@@ -24,12 +24,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.decoding import build_label_info, labels_to_token_spans
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.metrics import compute_recall_slices, normalize_eval_spans
 from openmed.eval.quant_delta import (
     COREML_RECALL_DELTA_LIMIT,
     evaluate_coreml_span_parity,
+)
+from openmed.processing.tokenization import (
+    SEGMENTER_IDS,
+    package_segmenter_resources,
+    validate_segmenter_resources,
 )
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
@@ -185,6 +191,7 @@ def convert(
     swift_parity_corpus_path: str | Path | None = None,
     latency_iterations: int = 3,
     optimize_for_ane: bool = True,
+    segmenter_id: str | None = None,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
 
@@ -212,6 +219,7 @@ def convert(
         latency_iterations: Number of prediction calls used for latency
             evidence when the CoreML object supports local prediction.
         optimize_for_ane: Use static rank-2 input shapes for fp16 ANE exports.
+        segmenter_id: Optional compact Han/Indic resource set to package.
 
     Returns:
         Path to the created ``.mlpackage``.
@@ -240,9 +248,7 @@ def convert(
             AutoTokenizer,
         )
     except ImportError as e:
-        raise ImportError(
-            f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
-        ) from e
+        raise_missing_backend("coreml", feature="CoreML model conversion", cause=e)
 
     source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
     model_type = resolve_supported_model_type(source_config)
@@ -392,6 +398,13 @@ def convert(
                 quantized_size,
             )
 
+    segmenter: Mapping[str, Any] | None = None
+    if segmenter_id is not None:
+        for path in variant_paths.values():
+            packaged = package_segmenter_resources(path, segmenter_id)
+            if segmenter is None:
+                segmenter = packaged
+
     residency_by_variant = _analyze_residency_for_variants(
         variant_paths,
         residency_plan_path=residency_plan_path,
@@ -442,6 +455,7 @@ def convert(
         max_seq_length=max_seq_length,
         optimize_for_ane=optimize_for_ane,
         variants=records,
+        segmenter=segmenter,
     )
 
     logger.info("CoreML model saved to %s", output_path)
@@ -1061,6 +1075,7 @@ def _write_coreml_conversion_manifest(
     max_seq_length: int,
     optimize_for_ane: bool,
     variants: Sequence[CoreMLVariantRecord],
+    segmenter: Mapping[str, Any] | None = None,
 ) -> Path:
     payload = {
         "schema_version": COREML_MANIFEST_VERSION,
@@ -1075,6 +1090,8 @@ def _write_coreml_conversion_manifest(
         ),
         "variants": [variant.to_dict() for variant in variants],
     }
+    if segmenter is not None:
+        payload["segmenter"] = dict(segmenter)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
@@ -1087,7 +1104,29 @@ def _write_coreml_conversion_manifest(
             with package_manifest.open("w", encoding="utf-8") as handle:
                 json.dump(payload, handle, indent=2, sort_keys=True)
                 handle.write("\n")
+            validate_coreml_bundle(package_path)
     return manifest_path
+
+
+def validate_coreml_bundle(package_path: str | Path) -> dict[str, Any]:
+    """Validate optional manifest-declared resources in a CoreML package."""
+
+    root = Path(package_path)
+    manifest_path = root / COREML_MANIFEST_FILENAME
+    if not manifest_path.is_file():
+        raise ValueError(
+            f"CoreML package is missing {COREML_MANIFEST_FILENAME}: {root}"
+        )
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict):
+        raise ValueError("CoreML manifest must be a JSON object")
+    segmenter = manifest.get("segmenter")
+    if segmenter is not None:
+        if not isinstance(segmenter, Mapping):
+            raise ValueError("CoreML segmenter descriptor must be an object")
+        validate_segmenter_resources(root, segmenter)
+    return manifest
 
 
 def _capture_spans(
@@ -1160,10 +1199,9 @@ def _hf_token_classification_runner(
                     pipeline,
                 )
             except ImportError as exc:
-                raise ImportError(
-                    "transformers is required to certify CoreML parity. "
-                    "Install with: pip install transformers"
-                ) from exc
+                raise_missing_backend(
+                    "hf", feature="Certifying CoreML parity", cause=exc
+                )
 
             tokenizer = get_tokenizer_with_loader(
                 model_id,
@@ -1203,10 +1241,11 @@ def _coreml_artifact_runner(
                 import numpy as np
                 from transformers import AutoTokenizer
             except ImportError as exc:
-                raise ImportError(
-                    "coremltools, numpy, and transformers are required to run "
-                    "CoreML parity fixtures."
-                ) from exc
+                raise_missing_backend(
+                    "coreml",
+                    feature="Running CoreML parity fixtures",
+                    cause=exc,
+                )
 
             id2label = _load_id2label_for_package(model_path)
             pipeline_state["np"] = np
@@ -1432,6 +1471,12 @@ def main():
         help="HuggingFace model cache directory",
     )
     parser.add_argument(
+        "--segmenter",
+        choices=SEGMENTER_IDS,
+        default=None,
+        help="Package a compact Han and/or Indic segmenter resource set",
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -1499,6 +1544,7 @@ def main():
         swift_parity_corpus_path=args.swift_parity_corpus,
         latency_iterations=args.latency_iterations,
         optimize_for_ane=not args.disable_ane_static_shapes,
+        segmenter_id=args.segmenter,
     )
 
 

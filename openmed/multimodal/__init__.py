@@ -1,10 +1,10 @@
 """Multimodal ingestion and redaction package for section 4.2.
 
-Provides the shared ingest/redact contract (``ExtractedDocument`` and the
-``redact_document`` dispatcher) that PDF/DOCX/HTML/image/DICOM ingesters build
-on. The per-format parsers and OCR adapters live in sibling modules and are
-registered lazily via :func:`register_handler`; this package stays importable
-without the ``multimodal`` extra installed.
+Intended contents include PDF/DOCX/HTML->text+offsets extraction, OCR, and
+image/DICOM redaction. The per-format parsers and OCR adapters use the shared
+``ExtractedDocument`` contract and are registered lazily via
+:func:`register_handler`, so this package stays importable without the
+``multimodal`` extra installed.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from .base import (
     ExtractedDocument,
     SourceSpan,
     ensure_multimodal_available,
+    is_multimodal_available,
     redact_document,
     register_handler,
 )
@@ -35,6 +36,14 @@ from .chatlog_jsonl import (
     iter_redacted_chatlog_jsonl,
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
+)
+from .chw_forms import (
+    ACTION_GENERALIZE_GEO,
+    ChwFieldDecision,
+    RedactedChwForm,
+    classify_chw_field,
+    parse_xform_path,
+    redact_chw_form,
 )
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
@@ -95,13 +104,31 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .rtf import extract_rtf
+from .sms_messages import (
+    DEFAULT_SMS_MODEL,
+    SHORT_TEXT,
+    SHORT_TEXT_PRESET,
+    RedactedSMSExport,
+    ShortTextPreset,
+    SMSRedactionSummary,
+    coarsen_timestamp,
+    deidentify_short_text,
+    iter_redacted_sms_records,
+    redact_sms_csv,
+    redact_sms_export,
+    redact_sms_json,
+    resolve_short_text_preset,
+)
 from .tabular_csv import (
     ColumnDecision,
     RedactedTable,
     TableView,
     classify_columns,
+    derive_date_shift_days,
     read_table,
     redact_table,
+    shift_quasi_identifier_date,
 )
 from .verify_pdf import (
     PdfFidelityReport,
@@ -116,6 +143,7 @@ __all__ = [
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
+    "is_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "ChatLogRedactionSummary",
@@ -125,6 +153,12 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "ACTION_GENERALIZE_GEO",
+    "ChwFieldDecision",
+    "RedactedChwForm",
+    "classify_chw_field",
+    "parse_xform_path",
+    "redact_chw_form",
     "redact_contacts_calendar",
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
@@ -144,6 +178,7 @@ __all__ = [
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
     "extract_epub",
+    "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
@@ -168,12 +203,27 @@ __all__ = [
     "register_ocr_engine",
     "available_ocr_engines",
     "run_doctr_ocr",
+    "DEFAULT_SMS_MODEL",
+    "SHORT_TEXT",
+    "SHORT_TEXT_PRESET",
+    "RedactedSMSExport",
+    "SMSRedactionSummary",
+    "ShortTextPreset",
+    "coarsen_timestamp",
+    "deidentify_short_text",
+    "iter_redacted_sms_records",
+    "redact_sms_csv",
+    "redact_sms_export",
+    "redact_sms_json",
+    "resolve_short_text_preset",
     "ColumnDecision",
     "TableView",
     "RedactedTable",
     "read_table",
     "classify_columns",
     "redact_table",
+    "derive_date_shift_days",
+    "shift_quasi_identifier_date",
     "extract_markdown",
     "extract_asciidoc",
     "redact_source_text",

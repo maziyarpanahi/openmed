@@ -10,6 +10,9 @@ export type KeepAliveValue = number | string;
 export type AggregationStrategy = "simple" | "first" | "average" | "max";
 
 export type PIILanguage =
+  | "am"
+  | "as"
+  | "bn"
   | "en"
   | "fr"
   | "de"
@@ -17,7 +20,16 @@ export type PIILanguage =
   | "es"
   | "nl"
   | "hi"
+  | "gu"
+  | "kn"
+  | "ml"
+  | "mr"
+  | "ne"
+  | "or"
+  | "pa"
+  | "ta"
   | "te"
+  | "ur"
   | "pt"
   | "ar"
   | "he"
@@ -26,7 +38,19 @@ export type PIILanguage =
   | "id"
   | "th"
   | "ko"
-  | "ro";
+  | "ro"
+  | "ru"
+  | "sv"
+  | "da"
+  | "no"
+  | "sw"
+  | "zu"
+  | "xh"
+  | "zh"
+  | "uk"
+  | "cs"
+  | "el"
+  | "vi";
 
 export type DeidentificationMethod =
   | "mask"
@@ -158,6 +182,33 @@ export interface SMARTBackendIngestionRequest {
   lang?: PIILanguage;
   normalize_accents?: boolean | null;
   keep_alive?: KeepAliveValue | null;
+}
+
+export interface OMOPLoadRequest {
+  records_jsonl: string;
+  vocabulary_version?: string | null;
+  validate_constraints?: boolean;
+}
+
+export interface OMOPRejectedSpan {
+  reason: string;
+  source_note_hash: string;
+  start: number | null;
+  end: number | null;
+  domain: string | null;
+}
+
+export interface OMOPConstraintViolations {
+  count: number;
+  by_reason: Record<string, number>;
+}
+
+export interface OMOPLoadResponse {
+  row_counts: Record<string, number>;
+  rejection_counts: Record<string, number>;
+  rejected_spans: OMOPRejectedSpan[];
+  source_note_hashes: string[];
+  constraint_violations?: OMOPConstraintViolations;
 }
 
 export interface EntityPrediction {
@@ -456,6 +507,10 @@ export class OpenMedClient {
     request: ModelUnloadRequest,
   ): Promise<ModelUnloadResponse> {
     return this.post("/models/unload", request);
+  }
+
+  async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
+    return this.post("/omop/load", request);
   }
 
   async startSmartBackendIngestion(

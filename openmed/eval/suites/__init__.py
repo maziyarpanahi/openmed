@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+import warnings
+from dataclasses import replace
+from pathlib import Path
+from typing import Any, Mapping
 
 from openmed.eval.comparators import (
     ComparatorAdapter,
@@ -17,6 +20,19 @@ from openmed.eval.datasets.biomedical_ner import (
     load_biomedical_ner_fixtures,
     run_biomedical_ner_benchmark,
 )
+from openmed.eval.datasets.cblue import (
+    CBLUE_PATH_ENV,
+    CBLUE_TASKS,
+    CHIP_CDN,
+    IMCS_V2_NER,
+)
+from openmed.eval.datasets.cmeee import (
+    CMEEE,
+    CMEEE_PATH_ENV,
+    cmeee_suite_metadata,
+    configured_cmeee_path,
+    load_cmeee_fixtures,
+)
 from openmed.eval.datasets.drugprot import (
     DRUGPROT,
     drugprot_suite_metadata,
@@ -29,13 +45,181 @@ from openmed.eval.datasets.i2b2 import (
     i2b2_suite_metadata,
     load_i2b2_deid,
 )
+from openmed.eval.datasets.masakhaner import (
+    MASAKHANER,
+    load_masakhaner_fixtures,
+    masakhaner_suite_metadata,
+    run_masakhaner_benchmark,
+)
 from openmed.eval.datasets.multilingual_ner import (
     MULTILINGUAL_NER,
     load_multilingual_ner_fixtures,
     multilingual_ner_suite_metadata,
 )
+from openmed.eval.datasets.naamapadam import (
+    NAAMAPADAM_PATH_ENV,
+    configured_naamapadam_path,
+)
+from openmed.eval.datasets.naamapadam import (
+    load_naamapadam_fixtures as load_naamapadam_corpus_fixtures,
+)
+from openmed.eval.datasets.naamapadam import (
+    naamapadam_suite_metadata as naamapadam_corpus_suite_metadata,
+)
 from openmed.eval.golden import load_benchmark_fixtures
-from openmed.eval.harness import BenchmarkFixture
+from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
+from openmed.eval.report import BenchmarkReport
+from openmed.eval.suites.candidate_ranking import (
+    CANDIDATE_RANKING,
+    build_candidate_ranking_gold,
+    candidate_ranking_metadata,
+    evaluate_candidate_ranking,
+    run_candidate_ranking,
+)
+from openmed.eval.suites.cblue_coverage import (
+    CBLUE_TASK_COVERAGE,
+    CblueProvenanceError,
+    CblueProvenanceFinding,
+    CblueTaskCoverage,
+    cblue_task_coverage_metadata,
+    load_cblue_task_coverage_fixtures,
+    run_cblue_task_coverage,
+    run_synthetic_cblue_task_coverage_smoke,
+)
+from openmed.eval.suites.chinese_clinical_ner import (
+    CHINESE_CLINICAL_NER,
+    CHINESE_CLINICAL_NER_MODEL_DIR_ENV,
+    ChineseClinicalNerAdapter,
+    ChineseClinicalNerAssetUnavailable,
+    ChineseClinicalNerContractError,
+    ChineseClinicalNerLeakageError,
+    ChineseLocalModelAsset,
+    PhiTokenLeakageFinding,
+    chinese_clinical_ner_metadata,
+    chinese_local_model_asset_skip_reason,
+    load_chinese_clinical_ner_fixtures,
+    resolve_chinese_local_model_asset,
+    run_chinese_clinical_ner_conformance,
+    run_chinese_clinical_ner_suite,
+    run_synthetic_chinese_clinical_ner_smoke,
+)
+from openmed.eval.suites.chinese_terminology import (
+    ChineseTerminologyLeakageReport,
+    evaluate_chinese_terminology_leakage,
+)
+from openmed.eval.suites.code_mixed_routing import (
+    CODE_MIXED_ROUTING,
+    code_mixed_routing_metadata,
+    evaluate_code_mixed_routing,
+    load_code_mixed_fixtures,
+    load_code_mixed_routing_fixtures,
+    run_code_mixed_routing,
+)
+from openmed.eval.suites.composite_normalization import (
+    COMPOSITE_NORMALIZATION,
+    build_composite_normalization_gold,
+    composite_normalization_metadata,
+    evaluate_composite_normalization,
+    run_composite_normalization,
+)
+from openmed.eval.suites.cross_lingual_grounding import (
+    CROSS_LINGUAL_GROUNDING,
+    CROSS_LINGUAL_LANGUAGES,
+    NON_ENGLISH_LANGUAGES,
+    NON_ENGLISH_TOP1_FLOOR,
+    CrossLingualGroundingCase,
+    CrossLingualGroundingReport,
+    assert_cross_lingual_grounding_gate,
+    build_fixture_grounder,
+    cross_lingual_grounding_metadata,
+    load_cross_lingual_grounding_fixtures,
+    run_cross_lingual_grounding,
+    scan_restricted_corpus_markers,
+)
+from openmed.eval.suites.grounding_index_recall import (
+    evaluate_grounding_index_recall,
+    grounding_index_recall_metadata,
+    load_grounding_index_fixtures,
+    run_grounding_index_recall,
+)
+from openmed.eval.suites.india_clinical_leakage import (
+    INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES,
+    INDIA_CLINICAL_MUST_DETECT_TYPES,
+    INDIA_CLINICAL_PHI_LEAKAGE,
+    INDIA_CLINICAL_PHI_POLICY,
+    MUST_DETECT_IDENTIFIER_MISSED,
+    RESIDUAL_IDENTIFIER_SURVIVED,
+    IndiaClinicalLabelVerdict,
+    IndiaClinicalLeakageFinding,
+    IndiaClinicalLeakageResult,
+    assert_india_clinical_leakage_gate,
+    deidentify_india_clinical_record,
+    evaluate_india_clinical_leakage,
+    india_clinical_leakage_metadata,
+    run_india_clinical_leakage_gate,
+)
+from openmed.eval.suites.india_health_ids import (
+    INDIA_HEALTH_ID_LEAKAGE,
+    assert_india_health_id_leakage_gate,
+    india_health_id_metadata,
+    load_india_health_id_fixtures,
+    run_india_health_id_leakage_gate,
+)
+from openmed.eval.suites.india_surrogate_consistency import (
+    ALIAS_SURFACE_SURVIVED,
+    DEFAULT_NAME_MATCHING,
+    IDENTIFIER_LINKAGE_LANGUAGE_SCOPED,
+    IDENTIFIER_SURROGATE_COLLIDED,
+    IDENTIFIER_SURROGATE_INVALID,
+    IDENTIFIER_SURROGATE_UNSTABLE,
+    IDENTITY_SPLIT_ACROSS_SCRIPTS,
+    INDIA_CLINICAL_SUITE,
+    INDIA_SURROGATE_CONSISTENCY,
+    LANGUAGE_SCOPED_IDENTIFIER_KEYS,
+    LINKED_IDENTIFIER_TYPES,
+    NEGATIVE_IDENTIFIER_COLLISION,
+    NEGATIVE_IDENTIFIER_COUNT,
+    NEGATIVE_IDENTIFIER_INVALID,
+    NONDETERMINISTIC_RUN,
+    SUPPORTED_NAME_MATCHING_MODES,
+    SURROGATE_NOT_REUSED,
+    SURROGATE_NOT_STABLE,
+    SURROGATE_SCRIPT_MISMATCH,
+    TRANSLITERATION_AWARE_NAME_MATCHING,
+    UNKNOWN_MATCHING_MODE,
+    IndiaClinicalSuiteReport,
+    IndiaIdentifierLinkageVerdict,
+    IndiaSurrogateConsistencyResult,
+    IndiaSurrogateDivergence,
+    IndiaSurrogateIdentityVerdict,
+    assert_india_surrogate_consistency_gate,
+    evaluate_india_surrogate_consistency,
+    india_clinical_suite_metadata,
+    india_surrogate_consistency_metadata,
+    load_india_surrogate_consistency_fixtures,
+    run_india_clinical_suite_report,
+    run_india_surrogate_consistency_gate,
+    validate_name_matching_mode,
+)
+from openmed.eval.suites.indian_ids import (
+    INDIAN_MULTI_ID,
+    evaluate_indian_id_recognizer,
+    indian_id_suite_metadata,
+    load_indian_id_fixtures,
+    run_indian_id_evaluation,
+)
+from openmed.eval.suites.indic_encoder import (
+    INDIC_ENCODER_RECALL_DELTA,
+    IndicRecallDeltaReport,
+    SyntheticIndicFixture,
+    run_indic_encoder_recall_delta,
+)
+from openmed.eval.suites.indic_name_consistency import (
+    INDIC_NAME_CONSISTENCY,
+    evaluate_indic_name_consistency,
+    indic_name_consistency_metadata,
+    load_indic_name_fixtures,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -43,15 +227,31 @@ from openmed.eval.suites.multimodal_dicom import (
     multimodal_dicom_metadata,
     run_multimodal_dicom,
 )
+from openmed.eval.suites.naamapadam import (
+    NAAMAPADAM,
+    load_naamapadam_fixtures,
+    naamapadam_suite_metadata,
+    run_naamapadam,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
     policy_compliance_metadata,
 )
+from openmed.eval.suites.radiology_relations import (
+    RADIOLOGY_ENTITY_RELATION,
+    RADIOLOGY_MEDICAL_DEVICE_DISCLAIMER,
+    build_radiology_entity_relation_report,
+    radiology_entity_relation_suite_metadata,
+    run_synthetic_radiology_entity_relation_eval,
+    score_radiology_entity_relation_fixtures,
+)
 from openmed.eval.suites.relations import (
+    DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS,
     RELATIONS,
     RelationFixture,
     RelationTrap,
+    load_multilingual_relation_fixtures,
     load_relation_fixtures,
     relation_suite_metadata,
     relation_trap_summary,
@@ -60,10 +260,24 @@ from openmed.eval.suites.relations import (
 from openmed.eval.suites.shield import (
     SHIELD,
     load_shield_fixtures,
+    run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
+)
+from openmed.eval.suites.temporal_tlinks import (
+    TEMPORAL_TLINK_FIXTURE_PATH,
+    TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION,
+    TemporalFixtureCandidate,
+    TemporalFixtureSpan,
+    TemporalTLinkEvaluationResult,
+    TemporalTLinkFixture,
+    assert_temporal_tlink_gate,
+    decode_temporal_tlink_fixture,
+    evaluate_temporal_tlink_fixtures,
+    load_temporal_tlink_fixtures,
 )
 
 GOLDEN = "golden"
+GROUNDING_CALIBRATION = "grounding_calibration"
 N2C2 = "n2c2"
 
 DEFAULT_SUITES: tuple[str, ...] = (
@@ -75,14 +289,26 @@ DEFAULT_SUITES: tuple[str, ...] = (
     POLICY_COMPLIANCE,
     BIOMEDICAL_NER,
     MULTILINGUAL_NER,
+    MASAKHANER,
+    CMEEE,
+    NAAMAPADAM,
+    CHINESE_CLINICAL_NER,
+    CBLUE_TASK_COVERAGE,
     MULTIMODAL_DICOM,
+    CODE_MIXED_ROUTING,
+    INDIA_HEALTH_ID_LEAKAGE,
+    INDIAN_MULTI_ID,
+    INDIC_NAME_CONSISTENCY,
+    INDIA_CLINICAL_PHI_LEAKAGE,
+    INDIA_SURROGATE_CONSISTENCY,
 )
+SUPPORTED_SUITES: tuple[str, ...] = DEFAULT_SUITES + (GROUNDING_CALIBRATION,)
 
 
 def validate_suite_name(name: str) -> str:
     """Return *name* if it is one of the scaffolded benchmark suites."""
-    if name not in DEFAULT_SUITES:
-        allowed = ", ".join(DEFAULT_SUITES)
+    if name not in SUPPORTED_SUITES:
+        allowed = ", ".join(SUPPORTED_SUITES)
         raise ValueError(
             f"unknown benchmark suite {name!r}; expected one of: {allowed}"
         )
@@ -94,6 +320,13 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     suite = validate_suite_name(name)
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == GROUNDING_CALIBRATION:
+        from openmed.eval.suites.grounding_calibration import load_grounding_gold
+
+        path = kwargs.get("path", kwargs.get("gold_path"))
+        if path is None:
+            raise ValueError("grounding calibration suite requires path or gold_path")
+        return list(load_grounding_gold(path))
     if suite == I2B2:
         return load_i2b2_deid(
             path=kwargs.get("path"),
@@ -110,8 +343,43 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     if suite == MULTILINGUAL_NER:
         paths = kwargs.pop("paths", kwargs.pop("path", None))
         return load_multilingual_ner_fixtures(paths=paths, **kwargs)
+    if suite == MASAKHANER:
+        paths = kwargs.pop("paths", kwargs.pop("path", None))
+        return load_masakhaner_fixtures(paths=paths, **kwargs)
+    if suite == CMEEE:
+        path = kwargs.pop("path", None)
+        if configured_cmeee_path(path) is None:
+            _warn_skipped_suite(CMEEE, CMEEE_PATH_ENV)
+            return []
+        return load_cmeee_fixtures(path=path, **kwargs)
+    if suite == NAAMAPADAM:
+        path = kwargs.pop("path", None)
+        if configured_naamapadam_path(path) is None:
+            _warn_skipped_suite(NAAMAPADAM, NAAMAPADAM_PATH_ENV)
+            return []
+        return load_naamapadam_corpus_fixtures(path=path, **kwargs)
+    if suite == CHINESE_CLINICAL_NER:
+        return load_chinese_clinical_ner_fixtures(kwargs.get("path"))
+    if suite == CBLUE_TASK_COVERAGE:
+        return load_cblue_task_coverage_fixtures(
+            _cblue_task_paths(kwargs.get("paths", kwargs.get("path"))),
+            tasks=kwargs.get("tasks", CBLUE_TASKS),
+        )
     if suite == MULTIMODAL_DICOM:
         return load_multimodal_dicom_fixtures(**kwargs)
+    if suite == CODE_MIXED_ROUTING:
+        return load_code_mixed_fixtures(kwargs.get("path"))
+    if suite == INDIA_HEALTH_ID_LEAKAGE:
+        return load_india_health_id_fixtures(**kwargs)
+    if suite == INDIAN_MULTI_ID:
+        return load_indian_id_fixtures(kwargs.get("path"))
+    if suite == INDIC_NAME_CONSISTENCY:
+        return load_indic_name_fixtures(kwargs.get("path"))
+    if suite in {INDIA_CLINICAL_PHI_LEAKAGE, INDIA_SURROGATE_CONSISTENCY}:
+        return load_india_surrogate_consistency_fixtures(
+            kwargs.get("manifest_path"),
+            kwargs.get("fixture_path", kwargs.get("path")),
+        )
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -131,15 +399,140 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return policy_compliance_metadata(**kwargs)
     if suite == BIOMEDICAL_NER:
         return biomedical_ner_suite_metadata(**kwargs)
+    if suite == GROUNDING_CALIBRATION:
+        from openmed.eval.suites.grounding_calibration import (
+            grounding_calibration_metadata,
+        )
+
+        return grounding_calibration_metadata(**kwargs)
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
+    if suite == MASAKHANER:
+        return masakhaner_suite_metadata(**kwargs)
+    if suite == CMEEE:
+        return cmeee_suite_metadata(path=kwargs.get("path"))
+    if suite == NAAMAPADAM:
+        return naamapadam_corpus_suite_metadata(path=kwargs.get("path"))
+    if suite == CHINESE_CLINICAL_NER:
+        return chinese_clinical_ner_metadata()
+    if suite == CBLUE_TASK_COVERAGE:
+        return cblue_task_coverage_metadata(
+            _cblue_task_paths(kwargs.get("paths", kwargs.get("path"))),
+            tasks=kwargs.get("tasks", CBLUE_TASKS),
+        )
     if suite == MULTIMODAL_DICOM:
         return multimodal_dicom_metadata(**kwargs)
+    if suite == CODE_MIXED_ROUTING:
+        return code_mixed_routing_metadata(fixture_path=kwargs.get("fixture_path"))
+    if suite == INDIA_HEALTH_ID_LEAKAGE:
+        return india_health_id_metadata(**kwargs)
+    if suite == INDIAN_MULTI_ID:
+        return indian_id_suite_metadata(**kwargs)
+    if suite == INDIC_NAME_CONSISTENCY:
+        return indic_name_consistency_metadata(**kwargs)
+    if suite == INDIA_CLINICAL_PHI_LEAKAGE:
+        return india_clinical_leakage_metadata(**kwargs)
+    if suite == INDIA_SURROGATE_CONSISTENCY:
+        return india_surrogate_consistency_metadata(**kwargs)
     return {"suite": suite}
+
+
+def run_script_ner_benchmark(
+    name: str,
+    *,
+    model_name: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    load_kwargs: Mapping[str, Any] | None = None,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Run a CMeEE or Naamapadam suite with micro-F1 per writing script."""
+
+    suite = validate_suite_name(name)
+    if suite not in {CMEEE, NAAMAPADAM}:
+        raise ValueError("script-aware NER reporting supports cmeee and naamapadam")
+    loader_options = dict(load_kwargs or {})
+    fixtures = load_suite_fixtures(suite, **loader_options)
+    metadata = suite_metadata(suite, path=loader_options.get("path"))
+    if not fixtures:
+        skip_reason = str(metadata["availability"]["reason"])
+        return BenchmarkReport(
+            suite=suite,
+            model_name=model_name,
+            device=device,
+            fixture_count=0,
+            generated_at=generated_at,
+            metrics={
+                "micro_f1_by_script": {},
+                "skip_reason": skip_reason,
+                "skipped": True,
+            },
+            metadata=metadata,
+        )
+
+    overall = run_benchmark(
+        fixtures,
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        runner=runner,
+        generated_at=generated_at,
+        metadata=metadata,
+    )
+    grouped: dict[str, list[BenchmarkFixture]] = {}
+    for fixture in fixtures:
+        script = str(fixture.metadata.get("script") or "Unknown")
+        grouped.setdefault(script, []).append(fixture)
+    micro_f1_by_script: dict[str, float] = {}
+    for script, script_fixtures in sorted(grouped.items()):
+        script_report = run_benchmark(
+            script_fixtures,
+            suite=suite,
+            model_name=model_name,
+            device=device,
+            runner=runner,
+            generated_at=generated_at,
+            metadata={**metadata, "script": script},
+        )
+        micro_f1_by_script[script] = float(script_report.metrics["exact_span_f1"]["f1"])
+    metrics = dict(overall.metrics)
+    metrics.update(
+        {
+            "micro_f1": float(overall.metrics["exact_span_f1"]["f1"]),
+            "micro_f1_by_script": micro_f1_by_script,
+            "skipped": False,
+        }
+    )
+    return replace(overall, metrics=metrics)
+
+
+def _cblue_task_paths(paths: Any) -> dict[str, Any] | None:
+    """Normalize CBLUE loader paths into a per-task mapping.
+
+    A mapping is passed through, a single root path is expanded into one
+    ``<root>/<task>`` entry per supported task, and ``None`` keeps the bundled
+    synthetic smoke fixtures in play so the suite stays runnable offline.
+    """
+
+    if paths is None:
+        return None
+    if isinstance(paths, Mapping):
+        return {str(task): path for task, path in paths.items()}
+    root = Path(paths)
+    return {task: root / task for task in CBLUE_TASKS}
+
+
+def _warn_skipped_suite(suite: str, path_env: str) -> None:
+    warnings.warn(
+        f"Skipping {suite}: {path_env} is not set and no explicit path was provided",
+        UserWarning,
+        stacklevel=2,
+    )
 
 
 __all__ = [
     "GOLDEN",
+    "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
     "SHIELD",
@@ -147,39 +540,191 @@ __all__ = [
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
+    "MASAKHANER",
+    "CMEEE",
+    "NAAMAPADAM",
+    "CHINESE_CLINICAL_NER",
+    "CBLUE_PATH_ENV",
+    "CBLUE_TASKS",
+    "CBLUE_TASK_COVERAGE",
+    "CHIP_CDN",
+    "IMCS_V2_NER",
     "MULTIMODAL_DICOM",
+    "CODE_MIXED_ROUTING",
+    "INDIA_HEALTH_ID_LEAKAGE",
+    "INDIAN_MULTI_ID",
+    "INDIC_NAME_CONSISTENCY",
+    "INDIA_SURROGATE_CONSISTENCY",
+    "INDIA_CLINICAL_SUITE",
+    "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
+    "RADIOLOGY_ENTITY_RELATION",
+    "RADIOLOGY_MEDICAL_DEVICE_DISCLAIMER",
+    "DEFAULT_MULTILINGUAL_RELATION_GOLD_PATHS",
     "RelationFixture",
     "RelationTrap",
+    "TEMPORAL_TLINK_FIXTURE_PATH",
+    "TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION",
+    "TemporalFixtureCandidate",
+    "TemporalFixtureSpan",
+    "TemporalTLinkEvaluationResult",
+    "TemporalTLinkFixture",
     "ComparatorAdapter",
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
     "ComparatorUnavailable",
+    "ChineseTerminologyLeakageReport",
+    "IndicRecallDeltaReport",
+    "SyntheticIndicFixture",
+    "CROSS_LINGUAL_GROUNDING",
+    "CROSS_LINGUAL_LANGUAGES",
+    "NON_ENGLISH_LANGUAGES",
+    "NON_ENGLISH_TOP1_FLOOR",
+    "CrossLingualGroundingCase",
+    "CrossLingualGroundingReport",
+    "assert_cross_lingual_grounding_gate",
+    "build_fixture_grounder",
+    "cross_lingual_grounding_metadata",
+    "load_cross_lingual_grounding_fixtures",
+    "run_cross_lingual_grounding",
+    "scan_restricted_corpus_markers",
     "DEFAULT_SUITES",
+    "SUPPORTED_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
     "run_comparator_matrix",
+    "run_indic_encoder_recall_delta",
+    "evaluate_chinese_terminology_leakage",
+    "run_script_ner_benchmark",
     "load_i2b2_deid",
     "i2b2_suite_metadata",
     "biomedical_ner_suite_metadata",
     "multilingual_ner_suite_metadata",
+    "masakhaner_suite_metadata",
+    "CHINESE_CLINICAL_NER_MODEL_DIR_ENV",
+    "ChineseClinicalNerAdapter",
+    "ChineseClinicalNerAssetUnavailable",
+    "ChineseClinicalNerContractError",
+    "ChineseClinicalNerLeakageError",
+    "ChineseLocalModelAsset",
+    "PhiTokenLeakageFinding",
+    "chinese_clinical_ner_metadata",
+    "chinese_local_model_asset_skip_reason",
+    "load_chinese_clinical_ner_fixtures",
+    "resolve_chinese_local_model_asset",
+    "run_chinese_clinical_ner_conformance",
+    "run_chinese_clinical_ner_suite",
+    "run_synthetic_chinese_clinical_ner_smoke",
+    "CblueProvenanceError",
+    "CblueProvenanceFinding",
+    "CblueTaskCoverage",
+    "cblue_task_coverage_metadata",
+    "load_cblue_task_coverage_fixtures",
+    "run_cblue_task_coverage",
+    "run_synthetic_cblue_task_coverage_smoke",
     "load_drugprot_fixtures",
     "load_biomedical_ner_fixtures",
     "load_multilingual_ner_fixtures",
+    "load_masakhaner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
+    "run_clinical_phi_shield_benchmark",
     "shield_suite_metadata",
     "load_policy_compliance_fixtures",
     "policy_compliance_metadata",
     "load_relation_fixtures",
+    "load_multilingual_relation_fixtures",
     "relation_suite_metadata",
     "relation_trap_summary",
     "score_relation_fixtures",
+    "assert_temporal_tlink_gate",
+    "decode_temporal_tlink_fixture",
+    "evaluate_temporal_tlink_fixtures",
+    "load_temporal_tlink_fixtures",
+    "build_radiology_entity_relation_report",
+    "radiology_entity_relation_suite_metadata",
+    "run_synthetic_radiology_entity_relation_eval",
+    "score_radiology_entity_relation_fixtures",
     "run_biomedical_ner_benchmark",
+    "run_masakhaner_benchmark",
+    "load_naamapadam_fixtures",
+    "naamapadam_suite_metadata",
+    "run_naamapadam",
     "load_multimodal_dicom_fixtures",
     "multimodal_dicom_metadata",
     "run_multimodal_dicom",
     "generate_synthetic_dicom_corpus",
+    "evaluate_code_mixed_routing",
+    "load_code_mixed_fixtures",
+    "load_code_mixed_routing_fixtures",
+    "code_mixed_routing_metadata",
+    "run_code_mixed_routing",
+    "evaluate_grounding_index_recall",
+    "grounding_index_recall_metadata",
+    "load_grounding_index_fixtures",
+    "run_grounding_index_recall",
+    "CANDIDATE_RANKING",
+    "build_candidate_ranking_gold",
+    "candidate_ranking_metadata",
+    "evaluate_candidate_ranking",
+    "run_candidate_ranking",
+    "assert_india_health_id_leakage_gate",
+    "india_health_id_metadata",
+    "load_india_health_id_fixtures",
+    "run_india_health_id_leakage_gate",
+    "INDIA_CLINICAL_DIRECT_IDENTIFIER_TYPES",
+    "INDIA_CLINICAL_MUST_DETECT_TYPES",
+    "INDIA_CLINICAL_PHI_LEAKAGE",
+    "INDIA_CLINICAL_PHI_POLICY",
+    "MUST_DETECT_IDENTIFIER_MISSED",
+    "RESIDUAL_IDENTIFIER_SURVIVED",
+    "IndiaClinicalLabelVerdict",
+    "IndiaClinicalLeakageFinding",
+    "IndiaClinicalLeakageResult",
+    "assert_india_clinical_leakage_gate",
+    "deidentify_india_clinical_record",
+    "evaluate_india_clinical_leakage",
+    "india_clinical_leakage_metadata",
+    "run_india_clinical_leakage_gate",
+    "evaluate_indian_id_recognizer",
+    "indian_id_suite_metadata",
+    "load_indian_id_fixtures",
+    "run_indian_id_evaluation",
+    "load_indic_name_fixtures",
+    "indic_name_consistency_metadata",
+    "evaluate_indic_name_consistency",
+    "ALIAS_SURFACE_SURVIVED",
+    "DEFAULT_NAME_MATCHING",
+    "IDENTIFIER_SURROGATE_COLLIDED",
+    "IDENTIFIER_SURROGATE_INVALID",
+    "IDENTIFIER_LINKAGE_LANGUAGE_SCOPED",
+    "IDENTIFIER_SURROGATE_UNSTABLE",
+    "LANGUAGE_SCOPED_IDENTIFIER_KEYS",
+    "IDENTITY_SPLIT_ACROSS_SCRIPTS",
+    "LINKED_IDENTIFIER_TYPES",
+    "NEGATIVE_IDENTIFIER_COLLISION",
+    "NEGATIVE_IDENTIFIER_COUNT",
+    "NEGATIVE_IDENTIFIER_INVALID",
+    "NONDETERMINISTIC_RUN",
+    "SUPPORTED_NAME_MATCHING_MODES",
+    "SURROGATE_NOT_REUSED",
+    "SURROGATE_NOT_STABLE",
+    "SURROGATE_SCRIPT_MISMATCH",
+    "TRANSLITERATION_AWARE_NAME_MATCHING",
+    "UNKNOWN_MATCHING_MODE",
+    "IndiaClinicalSuiteReport",
+    "IndiaIdentifierLinkageVerdict",
+    "IndiaSurrogateConsistencyResult",
+    "IndiaSurrogateDivergence",
+    "IndiaSurrogateIdentityVerdict",
+    "assert_india_surrogate_consistency_gate",
+    "evaluate_india_surrogate_consistency",
+    "india_clinical_suite_metadata",
+    "india_surrogate_consistency_metadata",
+    "load_india_surrogate_consistency_fixtures",
+    "run_india_clinical_suite_report",
+    "run_india_surrogate_consistency_gate",
+    "validate_name_matching_mode",
 ]

@@ -1,9 +1,9 @@
 # AWQ Export
 
-Use AWQ when you need a compact 4-bit Hugging Face artifact for CUDA or CPU
-serving and can run an offline calibration step before release. OpenMed keeps
-AWQ separate from the base install because the quantization stack is large and
-hardware-sensitive.
+Use AWQ on Linux when you need a compact 4-bit Hugging Face artifact for CUDA
+or CPU serving and can run an offline calibration step before release. OpenMed
+keeps AWQ separate from the base install because the quantization stack is large
+and hardware-sensitive.
 
 For Apple apps or Apple Silicon Python inference, prefer the MLX and CoreML
 paths described in the MLX backend and CoreML packaging guides. AWQ is the
@@ -16,14 +16,18 @@ checkpoints with AWQ-compatible runtimes.
 uv pip install -e ".[awq]"
 ```
 
-The `awq` extra installs `autoawq`. Importing `openmed` does not import
+The `awq` extra installs AutoAWQ on Linux. Importing `openmed` does not import
 AutoAWQ; the dependency is loaded only when `quantize_awq()` is called. Without
 the extra, the entry point raises an actionable install error instead of failing
 at module import time.
 
-Use a dedicated export environment for AWQ conversion. AutoAWQ manages its own
-Transformers compatibility window, so do not reuse that environment as the
-general OpenMed HF inference runtime unless you have verified the combined
+AutoAWQ is archived, so OpenMed pins the last release together with the first
+Transformer 5 line containing all current HIGH-severity fixes. That exact pair
+is import-smoked on Linux and isolated from incompatible runtime extras. Use the
+MLX or CoreML path on macOS; OpenMed does not install AutoAWQ there.
+
+Use a dedicated export environment for AWQ conversion. Do not reuse it as the
+general OpenMed inference runtime unless you have verified the combined
 dependency set.
 
 ## Quantize
