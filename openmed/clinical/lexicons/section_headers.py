@@ -10,6 +10,27 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+DEFAULT_SECTION_HEADERS_RESOURCE = "data/section_headers.yaml"
+_SECTION_HEADERS_PACKAGE = "openmed.clinical"
+_REQUIRED_ENGLISH_SECTION_LABELS = frozenset(
+    {
+        "allergies",
+        "assessment_and_plan",
+        "findings",
+        "history_of_present_illness",
+        "impression",
+        "medications",
+        "past_medical_history",
+        "problem_list",
+        "social_history",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -21,36 +42,73 @@ class SectionLexicon:
     token_boundaries: bool = True
 
 
+def load_section_headers(path: str | Path | None = None) -> dict[str, tuple[str, ...]]:
+    """Load and validate the committed English section-header lexicon.
+
+    Args:
+        path: Optional YAML path used by callers that validate a replacement
+            lexicon. The packaged synthetic lexicon is used when omitted.
+
+    Returns:
+        Canonical section labels mapped to their recognized header forms.
+    """
+
+    if path is None:
+        resource = resources.files(_SECTION_HEADERS_PACKAGE).joinpath(
+            DEFAULT_SECTION_HEADERS_RESOURCE
+        )
+        payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    else:
+        payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return _validate_section_headers_payload(payload)
+
+
+def _validate_section_headers_payload(payload: Any) -> dict[str, tuple[str, ...]]:
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != 1:
+        raise ValueError("section header lexicon requires schema_version 1")
+
+    provenance = payload.get("provenance")
+    if (
+        not isinstance(provenance, Mapping)
+        or not provenance.get("source")
+        or provenance.get("restricted_data") is not False
+    ):
+        raise ValueError(
+            "section header lexicon requires local unrestricted provenance"
+        )
+
+    raw_sections = payload.get("sections")
+    if not isinstance(raw_sections, Mapping):
+        raise ValueError("section header lexicon requires a sections mapping")
+
+    sections: dict[str, tuple[str, ...]] = {}
+    for raw_label, raw_headers in raw_sections.items():
+        if not isinstance(raw_label, str) or not raw_label.strip():
+            raise ValueError("section labels require header lists")
+        label = raw_label.strip()
+        if not isinstance(raw_headers, list) or any(
+            not isinstance(header, str) or not header.strip() for header in raw_headers
+        ):
+            raise ValueError(f"section {label!r} requires non-empty string headers")
+        headers = tuple(header.strip() for header in raw_headers)
+        if not headers:
+            raise ValueError(f"section {label!r} must include headers")
+        if len(headers) != len(set(headers)):
+            raise ValueError(f"section {label!r} headers must be unique")
+        sections[label] = headers
+
+    missing = _REQUIRED_ENGLISH_SECTION_LABELS.difference(sections)
+    if missing:
+        raise ValueError(
+            "section header lexicon is missing canonical labels: "
+            + ", ".join(sorted(missing))
+        )
+    return sections
+
+
 ENGLISH_SECTION_LEXICON = SectionLexicon(
     language="en",
-    sections={
-        "past_medical_history": (
-            "Past Medical History",
-            "PMH",
-            "Medical History",
-        ),
-        "history": ("History",),
-        "family_history": (
-            "Family History",
-            "Family Medical History",
-            "FH",
-        ),
-        "social_history": (
-            "Social History",
-            "Social Hx",
-            "SH",
-        ),
-        "history_of_present_illness": (
-            "History of Present Illness",
-            "HPI",
-        ),
-        "assessment": (
-            "Assessment",
-            "Impression",
-            "Assessment and Plan",
-        ),
-        "plan": ("Plan",),
-    },
+    sections=load_section_headers(),
 )
 
 SPANISH_SECTION_LEXICON = SectionLexicon(
@@ -246,9 +304,9 @@ def section_header_aliases(language: str | None = None) -> dict[str, str]:
     for code in languages:
         lexicon = get_section_lexicon(code)
         for canonical, headers in lexicon.sections.items():
-            aliases[canonical] = canonical
+            aliases.setdefault(canonical, canonical)
             for header in headers:
-                aliases[header] = canonical
+                aliases.setdefault(header, canonical)
     return aliases
 
 
@@ -292,9 +350,11 @@ for _lexicon in (
 
 
 __all__ = [
+    "DEFAULT_SECTION_HEADERS_RESOURCE",
     "SectionLexicon",
     "available_section_languages",
     "get_section_lexicon",
+    "load_section_headers",
     "normalize_section_header",
     "normalized_section_header_aliases",
     "register_section_lexicon",

@@ -283,9 +283,15 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
 
 
 def test_client_pii_language_literal_matches_core() -> None:
-    from openmed.core.pii_i18n import INDIC_NER_LANGUAGES, SUPPORTED_LANGUAGES
+    from openmed.core.pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
 
-    assert set(get_args(PIILanguage)) == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+    assert set(get_args(PIILanguage)) == (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
 
 def _request_body_schema(
