@@ -111,6 +111,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - model-registry.md
+    - ner-families.md
     - model-manifest.md
     - indic-encoders.md
     - indic-ner-checkpoints.md
@@ -139,6 +140,7 @@ classification:
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
+    - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
     - clinical-validation-protocol.md
