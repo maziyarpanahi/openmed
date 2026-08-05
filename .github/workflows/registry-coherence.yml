@@ -1,0 +1,60 @@
+name: Registry coherence
+
+on:
+  pull_request:
+    paths:
+      - "models.jsonl"
+      - "gates/registry_state.json"
+      - "openmed/core/manifest_diff.py"
+      - "openmed/core/model_registry.py"
+      - "openmed/core/pii_i18n.py"
+      - "openmed/core/registry_service.py"
+      - "scripts/release/registry_ctl.py"
+      - "README.md"
+      - "docs/model-cards/registry/**"
+      - ".github/workflows/registry-coherence.yml"
+  push:
+    branches: [master]
+    paths:
+      - "models.jsonl"
+      - "gates/registry_state.json"
+      - "openmed/core/manifest_diff.py"
+      - "openmed/core/model_registry.py"
+      - "openmed/core/pii_i18n.py"
+      - "openmed/core/registry_service.py"
+      - "scripts/release/registry_ctl.py"
+      - "README.md"
+      - "docs/model-cards/registry/**"
+      - ".github/workflows/registry-coherence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  registry-coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install offline registry runtime
+        run: python -m pip install -e .
+
+      - name: Regenerate committed registry surfaces
+        run: python scripts/release/registry_ctl.py regenerate
+
+      - name: Validate pointer and lineage coherence
+        run: python scripts/release/registry_ctl.py check
+
+      - name: Fail on registry surface drift
+        run: >-
+          git diff --exit-code --
+          README.md
+          gates/registry_state.json
+          docs/model-cards/registry

@@ -111,6 +111,17 @@ def _tool_handler(
             **kwargs,
             runtime_provider=runtime_provider,
         ),
+        "openmed_ground": lambda **kwargs: mcp_server.openmed_ground(**kwargs),
+        "openmed_export_fhir": lambda **kwargs: mcp_server.openmed_export_fhir(
+            **kwargs
+        ),
+        "openmed_risk_score": lambda **kwargs: mcp_server.openmed_risk_score(**kwargs),
+        "openmed_clinical_pipeline": (
+            lambda **kwargs: mcp_server.openmed_clinical_pipeline(
+                **kwargs,
+                runtime_provider=runtime_provider,
+            )
+        ),
         "openmed_fhir_bundle": lambda **kwargs: mcp_server.openmed_fhir_bundle(
             **kwargs
         ),
@@ -129,6 +140,10 @@ def _tool_handler(
     }
     try:
         return handlers[name]
+    except KeyError:
+        pass
+    try:
+        return TOOL_REGISTRY.handler(name)
     except KeyError as exc:
         raise KeyError(f"unknown OpenMed tool {name!r}") from exc
 

@@ -295,13 +295,14 @@ def risk_report(
 ) -> dict[str, Any]:
     """Score residual re-identification risk for text or table records.
 
-    Inputs may be a string, a prediction-result-like mapping with ``text`` and
-    span dictionaries, a row mapping, a sequence of records, or a
-    DataFrame-like object exposing ``to_dict("records")``. Existing OpenMed
-    span offsets are preferred: when a span provides ``start`` and ``end``,
-    the quasi-identifier value is sliced from the source text and its section
-    metadata is carried into the report. Regex and column-name extraction are
-    deliberately small hooks until grounding-driven QI classification lands.
+    Inputs may be a string, a prediction result exposing ``to_dict()``, a
+    prediction-result-like mapping with ``text`` and span dictionaries, a row
+    mapping, a sequence of records, or a DataFrame-like object exposing
+    ``to_dict("records")``. Existing OpenMed span offsets are preferred: when a
+    span provides ``start`` and ``end``, the quasi-identifier value is sliced
+    from the source text and its section metadata is carried into the report.
+    Regex and column-name extraction are deliberately small hooks until
+    grounding-driven QI classification lands.
     ``quasi_identifier_fields`` selects an exact tabular key for equivalence
     classes. This keeps arbitrary-schema table scans byte-compatible with the
     keys emitted for singleton records while preserving scalar types.
@@ -878,6 +879,10 @@ def _coerce_records(data: Any, *, source: str) -> list[_Record]:
     dataframe_records = _maybe_dataframe_records(data)
     if dataframe_records is not None:
         data = dataframe_records
+    else:
+        mapping_record = _maybe_mapping_record(data)
+        if mapping_record is not None:
+            data = mapping_record
 
     if isinstance(data, str):
         return [_Record(0, None, data, {}, (), source)]
@@ -918,6 +923,17 @@ def _maybe_dataframe_records(data: Any) -> list[Mapping[str, Any]] | None:
     if isinstance(records, list) and all(isinstance(item, Mapping) for item in records):
         return records
     return None
+
+
+def _maybe_mapping_record(data: Any) -> Mapping[str, Any] | None:
+    to_dict = getattr(data, "to_dict", None)
+    if to_dict is None or isinstance(data, Mapping):
+        return None
+    try:
+        record = to_dict()
+    except TypeError:
+        return None
+    return record if isinstance(record, Mapping) else None
 
 
 def _first_container(data: Mapping[str, Any]) -> Any | None:

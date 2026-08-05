@@ -114,7 +114,7 @@ CSV export is handy when you need to feed BI tools or spreadsheets without addit
 
 ## Sentence spans & metadata
 
-- `analyze_text` attaches sentence spans (when pySBD is enabled) and forwards `metadata` objects so each entity can carry
+- `analyze_text` attaches sentence spans (using the default routing or the experimental YASBD backend) and forwards `metadata` objects so each entity can carry
   extra context (e.g., the originating service, clinical section, or ontological hints).
 - Aggregated entities are split at detected sentence boundaries and hard line
   breaks, so adjacent list items such as `Cyclopalm` and `Ondam` remain

@@ -29,6 +29,12 @@ from openmed.core.pii_i18n import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.core.registry_service import (
+    REGISTRY_STATE_PATH,
+    RegistryStateError,
+    load_registry_state,
+    registry_state_errors,
+)
 from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
@@ -108,6 +114,7 @@ PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "mr": 0.0,
     "or": 0.0,
     "ta": 0.0,
+    "vi": 0.0,
 }
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
@@ -1217,6 +1224,7 @@ def _manifest_coherence_check(
     manifest_path = _manifest_path(metadata)
     manifest_rows: list[dict[str, Any]] = []
     manifest_row: Mapping[str, Any] | None = None
+    registry_state_path: Path | None = None
     if manifest_path is not None:
         try:
             manifest_rows = _load_manifest_rows(manifest_path)
@@ -1246,6 +1254,26 @@ def _manifest_coherence_check(
         mismatches.update(
             _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
         )
+        registry_state_path = _optional_path(metadata.get("registry_state_path"))
+        if registry_state_path is None and _is_default_path(
+            manifest_path, _DEFAULT_MANIFEST_PATH
+        ):
+            registry_state_path = REGISTRY_STATE_PATH
+        if registry_state_path is not None:
+            try:
+                registry_state = load_registry_state(registry_state_path)
+            except RegistryStateError as exc:
+                mismatches["registry_state"] = {
+                    "path": str(registry_state_path),
+                    "errors": [str(exc)],
+                }
+            else:
+                state_errors = registry_state_errors(manifest_rows, registry_state)
+                if state_errors:
+                    mismatches["registry_state"] = {
+                        "path": str(registry_state_path),
+                        "errors": state_errors,
+                    }
 
     card = _model_card_metadata(metadata)
     if card and manifest_row is not None:
@@ -1268,6 +1296,9 @@ def _manifest_coherence_check(
             "manifest_path": str(manifest_path) if manifest_path is not None else None,
             "manifest_rows": len(manifest_rows),
             "candidate_manifest_row": manifest_row is not None,
+            "registry_state_path": (
+                str(registry_state_path) if registry_state_path is not None else None
+            ),
         },
     )
 
@@ -3384,9 +3415,10 @@ def evaluate_relation_golden_regression_gate(
     """Gate per-type strict relation F1 and zero-tolerance trap leaks.
 
     Candidate evidence uses ``relation_golden.by_type`` with the same strict
-    metric payload produced by :func:`compute_relation_metrics`, plus integer
-    ``trap_leaks`` counts for ``assertion`` and ``temporal``. Baselines come
-    from the committed ``relation_golden`` baseline-store section.
+    metric payload produced by :func:`compute_relation_metrics`, the evaluated
+    fixture-set hash, plus integer ``trap_leaks`` counts for ``assertion`` and
+    ``temporal``. Baselines come from the committed ``relation_golden``
+    baseline-store section and must be pinned to the same fixture set.
     """
 
     metadata = metadata or {}
@@ -3403,6 +3435,9 @@ def evaluate_relation_golden_regression_gate(
         )
 
     candidate_f1, invalid_candidates = _candidate_relation_strict_f1(evidence)
+    candidate_fixture_hash, fixture_hash_error = _candidate_relation_fixture_hash(
+        evidence, metadata
+    )
     family_baselines, invalid_baselines = _relation_golden_baselines(
         baseline, family=family
     )
@@ -3410,6 +3445,7 @@ def evaluate_relation_golden_regression_gate(
     missing_baselines: list[str] = []
     missing_candidates: list[str] = []
     regressions: dict[str, Any] = {}
+    fixture_hash_mismatches: dict[str, Any] = {}
 
     relation_types = sorted(
         set(candidate_f1)
@@ -3436,6 +3472,7 @@ def evaluate_relation_golden_regression_gate(
         comparison = {
             "baseline": baseline_f1,
             "baseline_key": pinned["key"],
+            "candidate_fixture_hash": candidate_fixture_hash,
             "candidate": candidate,
             "drop": drop,
             "fixture_hash": pinned["fixture_hash"],
@@ -3443,6 +3480,14 @@ def evaluate_relation_golden_regression_gate(
             "tolerance": tolerance,
         }
         comparisons[relation_type] = comparison
+        if (
+            candidate_fixture_hash is not None
+            and candidate_fixture_hash != pinned["fixture_hash"]
+        ):
+            fixture_hash_mismatches[relation_type] = {
+                "baseline": pinned["fixture_hash"],
+                "candidate": candidate_fixture_hash,
+            }
         if candidate + 1e-12 < minimum:
             regressions[relation_type] = comparison
 
@@ -3463,6 +3508,10 @@ def evaluate_relation_golden_regression_gate(
         violations["missing_candidate_relation_types"] = missing_candidates
     if invalid_candidates:
         violations["invalid_candidate_strict_f1"] = invalid_candidates
+    if fixture_hash_error is not None:
+        violations["candidate_fixture_hash"] = fixture_hash_error
+    if fixture_hash_mismatches:
+        violations["fixture_hash_mismatches"] = fixture_hash_mismatches
     if regressions:
         violations["strict_f1_regressions"] = regressions
     if missing_traps:
@@ -3479,6 +3528,8 @@ def evaluate_relation_golden_regression_gate(
         reason = "zero-tolerance assertion or temporal trap leak"
     elif missing_baselines or invalid_baselines:
         reason = "relation golden baseline is missing or invalid"
+    elif fixture_hash_mismatches:
+        reason = "relation golden fixture hash does not match pinned baseline"
     elif regressions:
         reason = "strict relation F1 regressed beyond pinned tolerance"
     else:
@@ -3576,6 +3627,27 @@ def _candidate_relation_strict_f1(
             continue
         values[relation_type] = parsed
     return values, invalid
+
+
+def _candidate_relation_fixture_hash(
+    evidence: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> tuple[str | None, str | None]:
+    nested_metrics = _mapping(evidence.get("metrics"))
+    nested_metadata = _mapping(evidence.get("metadata"))
+    raw_hash = _first_value(
+        evidence.get("fixture_set_hash"),
+        evidence.get("fixture_hash"),
+        nested_metrics.get("fixture_set_hash"),
+        nested_metadata.get("fixture_set_hash"),
+        metadata.get("fixture_set_hash"),
+    )
+    if raw_hash is None:
+        return None, "fixture_set_hash is required"
+    if not isinstance(raw_hash, str) or not raw_hash.startswith("sha256:"):
+        return None, "fixture_set_hash must be a sha256 digest"
+    if not _is_privacy_safe_digest(raw_hash):
+        return None, "fixture_set_hash must be a sha256 digest"
+    return raw_hash, None
 
 
 def _relation_golden_baselines(
