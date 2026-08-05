@@ -165,6 +165,42 @@ from openmed.eval.suites.india_health_ids import (
     load_india_health_id_fixtures,
     run_india_health_id_leakage_gate,
 )
+from openmed.eval.suites.india_surrogate_consistency import (
+    ALIAS_SURFACE_SURVIVED,
+    DEFAULT_NAME_MATCHING,
+    IDENTIFIER_LINKAGE_LANGUAGE_SCOPED,
+    IDENTIFIER_SURROGATE_COLLIDED,
+    IDENTIFIER_SURROGATE_INVALID,
+    IDENTIFIER_SURROGATE_UNSTABLE,
+    IDENTITY_SPLIT_ACROSS_SCRIPTS,
+    INDIA_CLINICAL_SUITE,
+    INDIA_SURROGATE_CONSISTENCY,
+    LANGUAGE_SCOPED_IDENTIFIER_KEYS,
+    LINKED_IDENTIFIER_TYPES,
+    NEGATIVE_IDENTIFIER_COLLISION,
+    NEGATIVE_IDENTIFIER_COUNT,
+    NEGATIVE_IDENTIFIER_INVALID,
+    NONDETERMINISTIC_RUN,
+    SUPPORTED_NAME_MATCHING_MODES,
+    SURROGATE_NOT_REUSED,
+    SURROGATE_NOT_STABLE,
+    SURROGATE_SCRIPT_MISMATCH,
+    TRANSLITERATION_AWARE_NAME_MATCHING,
+    UNKNOWN_MATCHING_MODE,
+    IndiaClinicalSuiteReport,
+    IndiaIdentifierLinkageVerdict,
+    IndiaSurrogateConsistencyResult,
+    IndiaSurrogateDivergence,
+    IndiaSurrogateIdentityVerdict,
+    assert_india_surrogate_consistency_gate,
+    evaluate_india_surrogate_consistency,
+    india_clinical_suite_metadata,
+    india_surrogate_consistency_metadata,
+    load_india_surrogate_consistency_fixtures,
+    run_india_clinical_suite_report,
+    run_india_surrogate_consistency_gate,
+    validate_name_matching_mode,
+)
 from openmed.eval.suites.indian_ids import (
     INDIAN_MULTI_ID,
     evaluate_indian_id_recognizer,
@@ -263,6 +299,8 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIA_HEALTH_ID_LEAKAGE,
     INDIAN_MULTI_ID,
     INDIC_NAME_CONSISTENCY,
+    INDIA_CLINICAL_PHI_LEAKAGE,
+    INDIA_SURROGATE_CONSISTENCY,
 )
 SUPPORTED_SUITES: tuple[str, ...] = DEFAULT_SUITES + (GROUNDING_CALIBRATION,)
 
@@ -337,6 +375,11 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_indian_id_fixtures(kwargs.get("path"))
     if suite == INDIC_NAME_CONSISTENCY:
         return load_indic_name_fixtures(kwargs.get("path"))
+    if suite in {INDIA_CLINICAL_PHI_LEAKAGE, INDIA_SURROGATE_CONSISTENCY}:
+        return load_india_surrogate_consistency_fixtures(
+            kwargs.get("manifest_path"),
+            kwargs.get("fixture_path", kwargs.get("path")),
+        )
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -387,6 +430,10 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return indian_id_suite_metadata(**kwargs)
     if suite == INDIC_NAME_CONSISTENCY:
         return indic_name_consistency_metadata(**kwargs)
+    if suite == INDIA_CLINICAL_PHI_LEAKAGE:
+        return india_clinical_leakage_metadata(**kwargs)
+    if suite == INDIA_SURROGATE_CONSISTENCY:
+        return india_surrogate_consistency_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -507,6 +554,8 @@ __all__ = [
     "INDIA_HEALTH_ID_LEAKAGE",
     "INDIAN_MULTI_ID",
     "INDIC_NAME_CONSISTENCY",
+    "INDIA_SURROGATE_CONSISTENCY",
+    "INDIA_CLINICAL_SUITE",
     "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
     "RADIOLOGY_ENTITY_RELATION",
@@ -646,4 +695,36 @@ __all__ = [
     "load_indic_name_fixtures",
     "indic_name_consistency_metadata",
     "evaluate_indic_name_consistency",
+    "ALIAS_SURFACE_SURVIVED",
+    "DEFAULT_NAME_MATCHING",
+    "IDENTIFIER_SURROGATE_COLLIDED",
+    "IDENTIFIER_SURROGATE_INVALID",
+    "IDENTIFIER_LINKAGE_LANGUAGE_SCOPED",
+    "IDENTIFIER_SURROGATE_UNSTABLE",
+    "LANGUAGE_SCOPED_IDENTIFIER_KEYS",
+    "IDENTITY_SPLIT_ACROSS_SCRIPTS",
+    "LINKED_IDENTIFIER_TYPES",
+    "NEGATIVE_IDENTIFIER_COLLISION",
+    "NEGATIVE_IDENTIFIER_COUNT",
+    "NEGATIVE_IDENTIFIER_INVALID",
+    "NONDETERMINISTIC_RUN",
+    "SUPPORTED_NAME_MATCHING_MODES",
+    "SURROGATE_NOT_REUSED",
+    "SURROGATE_NOT_STABLE",
+    "SURROGATE_SCRIPT_MISMATCH",
+    "TRANSLITERATION_AWARE_NAME_MATCHING",
+    "UNKNOWN_MATCHING_MODE",
+    "IndiaClinicalSuiteReport",
+    "IndiaIdentifierLinkageVerdict",
+    "IndiaSurrogateConsistencyResult",
+    "IndiaSurrogateDivergence",
+    "IndiaSurrogateIdentityVerdict",
+    "assert_india_surrogate_consistency_gate",
+    "evaluate_india_surrogate_consistency",
+    "india_clinical_suite_metadata",
+    "india_surrogate_consistency_metadata",
+    "load_india_surrogate_consistency_fixtures",
+    "run_india_clinical_suite_report",
+    "run_india_surrogate_consistency_gate",
+    "validate_name_matching_mode",
 ]

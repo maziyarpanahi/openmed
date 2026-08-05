@@ -61,6 +61,8 @@ def test_eval_modules_import_cleanly():
         "india_health_id_leakage",
         "indian_multi_id",
         "indic-name-consistency",
+        "india_clinical_phi_leakage",
+        "india_surrogate_consistency",
     )
 
 
