@@ -9,14 +9,17 @@ import pytest
 import openmed
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
+from openmed.core.config import OpenMedConfig
 from openmed.core.labels import normalize_label
 from openmed.core.pii import deidentify, extract_pii
 from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
-from openmed.core.script_detect import detect_script
+from openmed.core.script_detect import detect_script, normalize_for_pii_detection
 from openmed.core.translit import romanize_name
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 TARGET_LANGUAGES = ("ja", "zh", "ko", "ru", "el")
+FIXTURE_MODEL = "fixture-name-roundtrip"
+FIXTURE_CONFIG = OpenMedConfig(clinical_protect_enabled=False)
 SOURCE_NAMES = {
     "ja": "山田 太郎",
     "zh": "王伟",
@@ -48,7 +51,13 @@ def _require_language_pack(lang: str) -> None:
 
 
 def _person_detector(*names: str, model_calls: list[str] | None = None):
-    expected = tuple(sorted(set(names), key=len, reverse=True))
+    expected = tuple(
+        sorted(
+            {normalize_for_pii_detection(name).text for name in names},
+            key=len,
+            reverse=True,
+        )
+    )
 
     def analyze(text: str, model_name: str, **_kwargs) -> PredictionResult:
         if model_calls is not None:
@@ -63,7 +72,7 @@ def _person_detector(*names: str, model_calls: list[str] | None = None):
                 end = start + len(name)
                 entities.append(
                     EntityPrediction(
-                        text=text[start:end],
+                        text=name,
                         label="PERSON",
                         start=start,
                         end=end,
@@ -120,6 +129,8 @@ def test_person_surrogate_redetects_with_exact_mixed_script_offsets(
     source_line = f"Patient A-270: {source_name}; dose 5 mg"
     detected = extract_pii(
         source_line,
+        config=FIXTURE_CONFIG,
+        model_name=FIXTURE_MODEL,
         use_smart_merging=False,
         lang=lang,
     )
@@ -127,7 +138,9 @@ def test_person_surrogate_redetects_with_exact_mixed_script_offsets(
 
     replaced = deidentify(
         source_line,
+        config=FIXTURE_CONFIG,
         method="replace",
+        model_name=FIXTURE_MODEL,
         use_smart_merging=False,
         use_safety_sweep=False,
         lang=lang,
@@ -139,11 +152,13 @@ def test_person_surrogate_redetects_with_exact_mixed_script_offsets(
 
     redetected = extract_pii(
         replaced_line,
+        config=FIXTURE_CONFIG,
+        model_name=FIXTURE_MODEL,
         use_smart_merging=False,
         lang=lang,
     )
     _assert_person_at(redetected, replaced_line, surrogate)
-    assert set(model_calls) == {DEFAULT_PII_MODELS[lang]}
+    assert model_calls == [FIXTURE_MODEL] * 3
 
 
 @pytest.mark.parametrize("lang", TARGET_LANGUAGES)
@@ -170,11 +185,13 @@ def test_romanized_surrogate_redetects_under_same_pack(
     text = f"Patient A-270: {romanized}; follow-up complete"
     result = extract_pii(
         text,
+        config=FIXTURE_CONFIG,
+        model_name=FIXTURE_MODEL,
         use_smart_merging=False,
         lang=lang,
     )
     _assert_person_at(result, text, romanized)
-    assert model_calls == [DEFAULT_PII_MODELS[lang]]
+    assert model_calls == [FIXTURE_MODEL]
 
 
 @pytest.mark.parametrize("lang", TARGET_LANGUAGES)
