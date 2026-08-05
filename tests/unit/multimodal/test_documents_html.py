@@ -121,8 +121,19 @@ def test_title_contents_are_always_suppressed(
             "template-fragment.html",
             "<template><p>Hidden Jane &amp; Roe</p></template><p>[PERSON]</p>",
         ),
+        (
+            "<head><template><template><body><title>Hidden Title</title>"
+            "<script>Hidden Script</script><style>Hidden Style</style></body>"
+            "</template></template>Hidden Head</head>"
+            "<body><p>Visible Pat</p></body>",
+            "template-state.html",
+            "<head><template><template><body><title>Hidden Title</title>"
+            "<script>Hidden Script</script><style>Hidden Style</style></body>"
+            "</template></template>Hidden Head</head>"
+            "<body><p>[PERSON]</p></body>",
+        ),
     ],
-    ids=("title", "template"),
+    ids=("title", "template", "template-state"),
 )
 def test_suppressed_container_is_excluded_from_detector_and_preserved(
     tmp_path: Path,
@@ -139,7 +150,7 @@ def test_suppressed_container_is_excluded_from_detector_and_preserved(
         observed.append((text, lang))
         return [(0, len(text), "PERSON")]
 
-    multimodal.redact_document(
+    document = multimodal.redact_document(
         source,
         models=detector,
         lang="en",
@@ -147,6 +158,7 @@ def test_suppressed_container_is_excluded_from_detector_and_preserved(
     )
 
     assert observed == [("Visible Pat", "en")]
+    assert document.text == "Visible Pat"
     assert output.read_text(encoding="utf-8") == expected
 
 
@@ -176,6 +188,29 @@ def test_template_contents_are_always_suppressed(
     document = extract_html(source)
 
     assert document.text == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        (
+            "<head><template><body></template>Hidden Jane</head>"
+            "<body><p>Visible Pat</p></body>"
+        ),
+        "<template><head></template><p>Visible Pat</p>",
+        (
+            "<head><template></head></template>Hidden Jane"
+            "<body><p>Visible Pat</p></body>"
+        ),
+    ],
+    ids=("body-start", "head-start", "head-end"),
+)
+def test_template_tags_cannot_change_outer_head_body_state(source: str) -> None:
+    document = extract_html(source)
+
+    assert document.text == "Visible Pat"
+    start, end = _source_range(document, document.text.index("Visible Pat"))
+    assert source[start : end + len("Visible Pat") - 1] == "Visible Pat"
 
 
 def test_nested_heads_remain_suppressed_until_body_resets_depth() -> None:

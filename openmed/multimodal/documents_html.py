@@ -167,15 +167,17 @@ class _HtmlTextParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         normalized = tag.lower()
+        if normalized in _HARD_SUPPRESSION_TAGS:
+            self._hard_suppression[normalized] += 1
+            return
+        if self._hard_suppressed:
+            return
         if normalized == "head" and not self._body_started:
             self._head_depth += 1
         elif normalized == "body":
             self._body_started = True
             self._head_depth = 0
-        if normalized in _HARD_SUPPRESSION_TAGS:
-            self._hard_suppression[normalized] += 1
-            return
-        if self._suppressed:
+        if self._head_depth:
             return
         if normalized in _BREAK_TAGS or normalized in _BLOCK_TAGS:
             start = self._source_offset()
@@ -197,11 +199,13 @@ class _HtmlTextParser(HTMLParser):
             if self._hard_suppression[normalized]:
                 self._hard_suppression[normalized] -= 1
             return
+        if self._hard_suppressed:
+            return
         if normalized == "head":
             if self._head_depth:
                 self._head_depth -= 1
             return
-        if self._suppressed:
+        if self._head_depth:
             return
         if normalized in _BLOCK_TAGS:
             start = self._source_offset()
@@ -296,8 +300,12 @@ class _HtmlTextParser(HTMLParser):
         )
 
     @property
+    def _hard_suppressed(self) -> bool:
+        return any(self._hard_suppression.values())
+
+    @property
     def _suppressed(self) -> bool:
-        return bool(self._head_depth) or any(self._hard_suppression.values())
+        return bool(self._head_depth) or self._hard_suppressed
 
     def document(self) -> ExtractedDocument:
         while self._parts and self._parts[-1] == "\n":
