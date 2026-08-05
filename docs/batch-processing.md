@@ -402,3 +402,107 @@ with open("results.json", "w") as f:
 # Export summary only
 summary = result.summary()
 ```
+
+## Distributed shard execution
+
+For corpora too large for a single process, a run can be split into
+deterministic shards and executed across worker processes, a Ray cluster, or a
+Spark cluster. All three backends sit behind one `ShardExecutor` protocol, so
+the surrounding code is identical and only the executor changes.
+
+Importing `openmed.processing` imports neither Ray nor PySpark. Each adapter
+imports its backend only when it runs.
+
+```python
+from openmed.processing import (
+    LocalShardExecutor,
+    build_run_manifest,
+    plan_document_shards,
+    run_shard_plan,
+)
+
+def handler(shard):
+    # Return the bytes this shard publishes. Must be deterministic.
+    return b"".join(redact(doc) for doc in load(shard.document_ids))
+
+plan = plan_document_shards(documents, shard_count=64)
+manifest = build_run_manifest(run_id="corpus-2026-08", plan=plan)
+
+result = run_shard_plan(
+    plan, handler,
+    manifest=manifest,
+    root="/data/runs/corpus-2026-08",
+    executor=LocalShardExecutor(max_workers=8, use_processes=True),
+)
+```
+
+### Ray
+
+```bash
+pip install "openmed[ray]"
+```
+
+```python
+from openmed.processing import RayShardExecutor
+
+executor = RayShardExecutor(num_cpus=1, max_in_flight=32)
+result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
+```
+
+`max_in_flight` bounds how many shards are submitted at once; leave it unset to
+submit the whole plan. Extra keyword arguments are forwarded to `ray.remote`.
+A runtime is started or attached to automatically unless `auto_init=False`.
+
+### Spark
+
+```bash
+pip install "openmed[spark]"
+```
+
+```python
+from openmed.processing import SparkShardExecutor
+
+executor = SparkShardExecutor(session=spark)
+result = run_shard_plan(plan, handler, manifest=manifest, root=root, executor=executor)
+```
+
+The plan is parallelized with one slice per shard by default. A session is
+never created implicitly: pass `session=`, or leave it unset to reuse the
+active session.
+
+### Cluster storage contract
+
+Workers publish shard files directly, so every Ray or Spark worker and the
+driver must see `root` as the same absolute, run-scoped directory. A per-node
+local path is valid only for a single-host cluster; on multiple hosts it would
+scatter outputs across machines and the driver could not validate them. Use a
+shared filesystem only when it provides reliable same-directory atomic replace
+and durability semantics for your deployment. OpenMed does not assume those
+guarantees for NFS, SMB, or FUSE-backed object-storage mounts.
+
+### Failing before the manifest
+
+`run_shard_plan` calls the adapter's `ensure_available()` hook before marking a
+shard `RUNNING` or incrementing its attempt counter. A missing dependency,
+unavailable Spark session, or Ray initialization failure therefore leaves the
+manifest unchanged. Operators may still call `ensure_available()` directly as
+an earlier cluster health check.
+
+### Retries and duplicate execution
+
+Neither adapter configures retry policy. Ray retries a task on worker death by
+default, and Spark may run speculative duplicates, so a shard can execute more
+than once. This is safe because the write path is idempotent: a worker
+publishes through a temporary file and an atomic replace, and a re-executed
+shard is compared against the digest it published earlier before its output is
+replaced.
+
+The one case this does not cover is a handler that is not deterministic. Such a
+shard is reported as a digest mismatch and its existing output is left
+untouched, rather than being silently overwritten — so make `handler` a pure
+function of the shard it is given.
+
+### Errors
+
+Workers return PHI-free metadata only: a shard failure is recorded as an
+exception *type* name, never a message, since messages can quote document text.

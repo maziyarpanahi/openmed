@@ -779,6 +779,9 @@ def run_shard_plan(
         raise ShardExecutionError(
             "hook applies to the default executor; configure it on a custom one"
         )
+    active_executor = (
+        executor if executor is not None else LocalShardExecutor(hook=hook)
+    )
 
     resolved_root = Path(root)
     resolved_root.mkdir(parents=True, exist_ok=True)
@@ -822,6 +825,10 @@ def run_shard_plan(
     # Validate before any bookkeeping. A rejected batch must not leave shards
     # marked RUNNING with a burned attempt when nothing was ever dispatched.
     reject_driver_only_state(tasks)
+    if tasks:
+        ensure_available = getattr(active_executor, "ensure_available", None)
+        if callable(ensure_available):
+            ensure_available()
 
     for task in tasks:
         record = manifest.shard(task.shard.shard_id)
@@ -837,10 +844,6 @@ def run_shard_plan(
         )
         if store is not None:
             store.save(manifest)
-
-    active_executor = (
-        executor if executor is not None else LocalShardExecutor(hook=hook)
-    )
 
     executions: list[ShardExecution] = []
     mismatched: list[int] = []

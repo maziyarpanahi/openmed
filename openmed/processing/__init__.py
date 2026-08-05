@@ -75,6 +75,7 @@ from .object_storage import (
 )
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
+from .ray_executor import RayShardExecutor
 from .resume import (
     DEFAULT_MIN_COMPLETED_BASELINE,
     DEFAULT_STRAGGLER_MULTIPLIER,
@@ -135,6 +136,7 @@ from .shard_executor import (
     shard_output_filename,
     write_shard_output,
 )
+from .spark_executor import SparkShardExecutor
 from .text import (
     INDIC_SCRIPTS,
     BoilerplateSuppressionResult,
@@ -337,6 +339,8 @@ __all__ = [
     "ShardRunResult",
     "ShardTask",
     "LocalShardExecutor",
+    "RayShardExecutor",
+    "SparkShardExecutor",
     "execute_shard_task",
     "run_shard_plan",
     "shard_output_filename",
