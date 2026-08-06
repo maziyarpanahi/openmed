@@ -39,11 +39,18 @@ from openmed.eval.datasets.drugprot import (
     load_drugprot_fixtures,
 )
 from openmed.eval.datasets.i2b2 import (
+    BIORED,
     I2B2,
     I2B2_PATH_ENV,
     I2B2_YEAR_ENV,
+    N2C2_2018,
+    N2C2_2022,
+    dua_relation_suite_metadata,
     i2b2_suite_metadata,
+    load_biored_relation_fixtures,
     load_i2b2_deid,
+    load_n2c2_2018_relation_fixtures,
+    load_n2c2_2022_relation_fixtures,
 )
 from openmed.eval.datasets.masakhaner import (
     MASAKHANER,
@@ -284,6 +291,11 @@ from openmed.eval.suites.temporal_tlinks import (
 
 GOLDEN = "golden"
 GROUNDING_CALIBRATION = "grounding_calibration"
+PROMOTION_ONLY_RELATION_SUITES: tuple[str, ...] = (
+    BIORED,
+    N2C2_2018,
+    N2C2_2022,
+)
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
@@ -307,7 +319,9 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIA_CLINICAL_PHI_LEAKAGE,
     INDIA_SURROGATE_CONSISTENCY,
 )
-SUPPORTED_SUITES: tuple[str, ...] = DEFAULT_SUITES + (GROUNDING_CALIBRATION,)
+SUPPORTED_SUITES: tuple[str, ...] = (
+    DEFAULT_SUITES + PROMOTION_ONLY_RELATION_SUITES + (GROUNDING_CALIBRATION,)
+)
 
 
 def validate_suite_name(name: str) -> str:
@@ -337,6 +351,12 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
             path=kwargs.get("path"),
             year=kwargs.get("year", kwargs.get("corpus_year")),
         )
+    if suite == BIORED:
+        return load_biored_relation_fixtures(kwargs.get("path"))
+    if suite == N2C2_2018:
+        return load_n2c2_2018_relation_fixtures(kwargs.get("path"))
+    if suite == N2C2_2022:
+        return load_n2c2_2022_relation_fixtures(kwargs.get("path"))
     if suite == N2C2:
         return load_n2c2_2018_deid(path=kwargs.get("path"))
     if suite == SHIELD:
@@ -398,6 +418,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         metadata["path_config"] = kwargs.get("path_config", I2B2_PATH_ENV)
         metadata["year_config"] = kwargs.get("year_config", I2B2_YEAR_ENV)
         return metadata
+    if suite in PROMOTION_ONLY_RELATION_SUITES:
+        return dua_relation_suite_metadata(suite)
     if suite == N2C2:
         metadata = n2c2_suite_metadata()
         metadata["path_config"] = kwargs.get("path_config", N2C2_PATH_ENV)
@@ -542,13 +564,17 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "BIORED",
     "GOLDEN",
     "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
+    "N2C2_2018",
+    "N2C2_2022",
     "SHIELD",
     "DRUGPROT",
     "POLICY_COMPLIANCE",
+    "PROMOTION_ONLY_RELATION_SUITES",
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
     "MASAKHANER",
@@ -610,7 +636,11 @@ __all__ = [
     "evaluate_chinese_terminology_leakage",
     "run_script_ner_benchmark",
     "load_i2b2_deid",
+    "load_biored_relation_fixtures",
+    "load_n2c2_2018_relation_fixtures",
+    "load_n2c2_2022_relation_fixtures",
     "i2b2_suite_metadata",
+    "dua_relation_suite_metadata",
     "load_n2c2_2018_deid",
     "n2c2_suite_metadata",
     "biomedical_ner_suite_metadata",
