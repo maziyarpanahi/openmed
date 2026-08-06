@@ -372,6 +372,32 @@ def test_unknown_column_type_is_rejected():
         anonymize_table(_mixed_table(), {"age": "salary"})
 
 
+@pytest.mark.parametrize(
+    ("rows", "quasi_identifiers", "canary"),
+    [
+        (
+            [{"age": "synthetic-age-canary"}],
+            {"age": "age"},
+            "synthetic-age-canary",
+        ),
+        (
+            [{"zip": "synthetic-zip-canary!"}],
+            {"zip": "zip"},
+            "synthetic-zip-canary!",
+        ),
+    ],
+)
+def test_invalid_qi_errors_do_not_echo_source_values(rows, quasi_identifiers, canary):
+    with pytest.raises(AnonymizationError) as raised:
+        anonymize_table(rows, quasi_identifiers, k=1)
+    assert canary not in str(raised.value)
+
+
+def test_non_string_column_type_is_rejected_as_anonymization_error():
+    with pytest.raises(AnonymizationError, match="unknown column type"):
+        anonymize_table(_mixed_table(), {"age": ["age"]})
+
+
 def test_clinical_code_qi_requires_caller_supplied_parent_data():
     with pytest.raises(AnonymizationError, match="parent-chain data"):
         anonymize_table([{"code": "A1"}, {"code": "A2"}], {"code": "clinical_code"})
