@@ -146,6 +146,7 @@ nav:
       - Onboarding: onboarding.md
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
+      - Model Release Queue: model-release-queue.md
       - Nix Development: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
