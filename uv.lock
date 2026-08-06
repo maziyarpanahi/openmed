@@ -6202,6 +6202,7 @@ scrubadub = [
     { name = "scrubadub" },
 ]
 service = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "grpcio" },
     { name = "httpx" },
@@ -6247,6 +6248,7 @@ requires-dist = [
     { name = "coremltools", marker = "extra == 'coreml'", specifier = ">=8.0" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=50,<51" },
     { name = "cryptography", marker = "extra == 'integrity'", specifier = ">=50,<51" },
+    { name = "cryptography", marker = "extra == 'service'", specifier = ">=50,<51" },
     { name = "dask", extras = ["dataframe"], marker = "extra == 'dask'", specifier = ">=2024.8" },
     { name = "dask", extras = ["dataframe"], marker = "extra == 'dev'", specifier = ">=2024.8" },
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.0,<2" },

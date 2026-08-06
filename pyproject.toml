@@ -259,6 +259,7 @@ hf = [
 ]
 
 service = [
+  "cryptography>=50,<51",
   "fastapi>=0.110",
   "grpcio>=1.64",
   "httpx>=0.27",

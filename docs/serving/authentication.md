@@ -87,3 +87,9 @@ OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=peer
 
 The failure limiter only counts failed authentication attempts. Successful
 authenticated requests are not charged against it.
+
+## Mutual TLS
+
+For certificate-bearing workload identity, including deployments that require
+mTLS before JWT or API-key authorization, see
+[Mutual TLS Client Authentication](mtls.md).
