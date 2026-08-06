@@ -360,6 +360,105 @@ class TestPatientGrouping:
 
 
 class TestEntityDeduplication:
+    def test_repeated_event_entities_in_one_document_remain_distinct(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "encounter-1",
+                    "Synthetic repeated creatinine results.",
+                    patient_id="patient-a",
+                    entities=[
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "text": "creatinine",
+                        },
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "text": "creatinine",
+                        },
+                    ],
+                )
+            ]
+        )[0]
+
+        assert len(cluster.entities) == 2
+        assert [
+            occurrence.entity_index
+            for entity in cluster.entities
+            for occurrence in entity.provenance
+        ] == [0, 1]
+
+    def test_coded_event_surfaces_remain_distinct_in_linked_documents(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "encounter-1",
+                    LONG_TEXT,
+                    "2026-01-01",
+                    patient_id="patient-a",
+                    entities=[
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "value": "5.1",
+                        }
+                    ],
+                ),
+                _doc(
+                    "encounter-2",
+                    LONG_TEXT,
+                    "2026-01-02",
+                    patient_id="patient-a",
+                    entities=[
+                        {
+                            "category": "lab",
+                            "system": "loinc",
+                            "code": "2160-0",
+                            "value": "7.2",
+                        }
+                    ],
+                ),
+            ]
+        )[0]
+
+        assert len(cluster.edges) == 1
+        assert len(cluster.entities) == 2
+
+    def test_summary_card_uses_canonical_category_aliases(self):
+        cluster = link_documents(
+            [
+                _doc(
+                    "encounter-1",
+                    "Synthetic longitudinal category aliases.",
+                    patient_id="patient-a",
+                    entities=[
+                        {"category": "conditions", "text": "diabetes"},
+                        {"category": "diagnoses", "text": "hypertension"},
+                        {"category": "medicines", "text": "aspirin"},
+                        {
+                            "category": "laboratory_tests",
+                            "system": "loinc",
+                            "code": "2160-0",
+                        },
+                        {"category": "procedures", "text": "appendectomy"},
+                    ],
+                )
+            ]
+        )[0]
+
+        card = build_summary_card(cluster)
+
+        assert card.problems == 2
+        assert card.medications == 1
+        assert card.labs == 1
+        assert card.procedures == 1
+        assert card.other == 0
+
     def test_carried_forward_entities_count_once_with_every_occurrence(self):
         first_text = "Diabetes mellitus. Continue metformin."
         second_text = "DM is stable. Continue metformin. New asthma."

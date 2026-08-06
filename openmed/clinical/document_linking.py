@@ -72,21 +72,51 @@ _CONTEXT_FIELD_NAMES = (
 )
 _CATEGORY_ALIASES = {
     "condition": "problems",
+    "conditions": "problems",
     "diagnosis": "problems",
+    "diagnoses": "problems",
     "disease": "problems",
+    "diseases": "problems",
     "disorder": "problems",
+    "disorders": "problems",
     "finding": "problems",
+    "findings": "problems",
     "problem": "problems",
+    "problem_list": "problems",
     "problems": "problems",
     "symptom": "problems",
+    "symptoms": "problems",
     "drug": "medications",
+    "drugs": "medications",
     "medication": "medications",
     "medications": "medications",
+    "medicine": "medications",
+    "medicines": "medications",
+    "rx": "medications",
+    "rxnorm": "medications",
+    "antibiotic": "medications",
+    "antibiotics": "medications",
     "lab": "labs",
+    "labs": "labs",
     "lab_result": "labs",
+    "lab_results": "labs",
     "laboratory": "labs",
+    "laboratory_test": "labs",
+    "laboratory_tests": "labs",
+    "test_result": "labs",
+    "test_results": "labs",
+    "loinc": "labs",
+    "microorganism": "labs",
+    "susceptibility": "labs",
     "procedure": "procedures",
+    "procedures": "procedures",
     "surgery": "procedures",
+    "surgeries": "procedures",
+    "operation": "procedures",
+    "operations": "procedures",
+    "intervention": "procedures",
+    "interventions": "procedures",
+    "proc": "procedures",
 }
 
 _MERSENNE_PRIME: int = (1 << 61) - 1
@@ -529,6 +559,13 @@ def _entity_surface(entity: object) -> str:
         value = _field_value(entity, field_name)
         if isinstance(value, str) and value.strip():
             return _normalise_text(value)
+        if (
+            field_name == "value"
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        ):
+            return _normalise_text(str(value))
     return ""
 
 
@@ -583,6 +620,7 @@ def _entity_identity(
     doc_id: str,
     entity_index: int,
     lineage_id: str,
+    occurrence_ordinal: int = 0,
 ) -> tuple[str, str, tuple[tuple[str, str], ...], str]:
     category = _entity_category(entity)
     codings = _entity_codings(entity)
@@ -590,12 +628,20 @@ def _entity_identity(
     context = _entity_context(entity)
     if codings:
         core = ("codes", category, repr(codings))
+        if category not in {"problems", "medications"} and surface:
+            core = (*core, "surface", surface)
     elif surface:
         core = ("surface", category, surface)
     else:
         core = ("occurrence", category, doc_id, str(entity_index))
     if category not in {"problems", "medications"}:
-        core = (*core, "document_lineage", lineage_id)
+        core = (
+            *core,
+            "document_lineage",
+            lineage_id,
+            "occurrence_ordinal",
+            str(occurrence_ordinal),
+        )
     identity = repr((*core, context))
     surface_hash = hashlib.blake2s(
         (surface or identity).encode("utf-8"), digest_size=16
@@ -614,6 +660,7 @@ def _deduplicate_entities(
         tuple[str, tuple[tuple[str, str], ...], list[EntityOccurrence]],
     ] = {}
     lineage_ids = _document_lineage_ids(documents, edges)
+    event_ordinals: dict[tuple[str, str], int] = {}
     for document in documents:
         doc_id = str(document["doc_id"])
         doc_provenance = _document_provenance(document)
@@ -624,6 +671,18 @@ def _deduplicate_entities(
                 entity_index=entity_index,
                 lineage_id=lineage_ids[doc_id],
             )
+            if category not in {"problems", "medications"}:
+                event_key = (doc_id, identity)
+                occurrence_ordinal = event_ordinals.get(event_key, 0)
+                event_ordinals[event_key] = occurrence_ordinal + 1
+                if occurrence_ordinal:
+                    category, identity, codings, surface_hash = _entity_identity(
+                        entity,
+                        doc_id=doc_id,
+                        entity_index=entity_index,
+                        lineage_id=lineage_ids[doc_id],
+                        occurrence_ordinal=occurrence_ordinal,
+                    )
             start, end = _entity_offsets(
                 entity,
                 doc_id=doc_id,
