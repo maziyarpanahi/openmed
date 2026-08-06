@@ -488,6 +488,12 @@ _VOCABULARY_FIELDS = ("vocabulary_id", "source_vocabulary_id", "system")
 _CODE_FIELDS = ("concept_code", "code", "source_code", "coding_code")
 _CONCEPT_NAME_FIELDS = ("concept_name", "display", "code_display")
 _METADATA_FIELDS = ("metadata", "meta")
+_ASSERTION_CONTAINER_FIELDS = ("assertion", "context")
+_NEGATION_FIELDS = ("negation", "polarity")
+_TEMPORALITY_FIELDS = ("temporality", "temporal_status", "term_temporal")
+_CERTAINTY_FIELDS = ("certainty",)
+_EXPERIENCER_FIELDS = ("experiencer",)
+_TERM_EXISTS_FIELDS = ("term_exists", "exists", "present")
 _CODING_FIELDS = ("coding", "codings", "code", "codeable_concept")
 
 
@@ -1225,9 +1231,9 @@ def _load_entity(
             "note_nlp_source_concept_id": int(concept["source_concept_id"]),
             "nlp_system": "openmed.interop.omop.cdm_loader",
             "nlp_date": None,
-            "term_exists": "Y",
-            "term_temporal": None,
-            "term_modifiers": None,
+            "term_exists": _entity_term_exists(entity),
+            "term_temporal": _entity_term_temporal(entity),
+            "term_modifiers": _entity_term_modifiers(entity),
             "note_nlp_event_id": domain_row_id,
             "note_nlp_event_field_concept_id": UNMAPPED_CONCEPT_ID,
         },
@@ -1524,12 +1530,55 @@ def _entity_text(entity: Any) -> str:
 
 def _entity_sources(entity: Any) -> tuple[Any, ...]:
     sources: list[Any] = [entity]
-    for source in tuple(sources):
-        for name in _METADATA_FIELDS:
-            metadata = _value(source, name)
-            if metadata is not _MISSING and metadata is not None:
-                sources.append(metadata)
+    seen = {id(entity)}
+    for source in sources:
+        for name in (*_METADATA_FIELDS, *_ASSERTION_CONTAINER_FIELDS):
+            nested = _value(source, name)
+            if nested is _MISSING or nested is None or id(nested) in seen:
+                continue
+            seen.add(id(nested))
+            sources.append(nested)
     return tuple(sources)
+
+
+def _entity_term_exists(entity: Any) -> str:
+    sources = _entity_sources(entity)
+    explicit = _first_value(sources, _TERM_EXISTS_FIELDS)
+    if explicit is not _MISSING:
+        if isinstance(explicit, bool):
+            return "Y" if explicit else "N"
+        normalized = str(explicit).strip().casefold()
+        if normalized in {"n", "no", "false", "0", "absent", "negated"}:
+            return "N"
+        if normalized in {"y", "yes", "true", "1", "present", "affirmed"}:
+            return "Y"
+
+    negation = _first_text(sources, _NEGATION_FIELDS).casefold()
+    temporality = _first_text(sources, _TEMPORALITY_FIELDS).casefold()
+    if negation and negation not in {"affirmed", "positive", "present"}:
+        return "N"
+    if temporality == "hypothetical":
+        return "N"
+    return "Y"
+
+
+def _entity_term_temporal(entity: Any) -> str | None:
+    value = _first_text(_entity_sources(entity), _TEMPORALITY_FIELDS).casefold()
+    return value or None
+
+
+def _entity_term_modifiers(entity: Any) -> str | None:
+    sources = _entity_sources(entity)
+    axes = {
+        "certainty": _first_text(sources, _CERTAINTY_FIELDS).casefold(),
+        "experiencer": _first_text(sources, _EXPERIENCER_FIELDS).casefold(),
+        "negation": _first_text(sources, _NEGATION_FIELDS).casefold(),
+        "temporality": _first_text(sources, _TEMPORALITY_FIELDS).casefold(),
+    }
+    payload = {key: value for key, value in axes.items() if value}
+    if not payload:
+        return None
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def _entity_and_coding_sources(entity: Any) -> tuple[Any, ...]:

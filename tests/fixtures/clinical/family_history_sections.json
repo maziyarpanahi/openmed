@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "suite": "clinical_family_history_sections",
+  "synthetic": true,
+  "provenance": "Synthetic offline family-history sentences; not copied from a clinical corpus.",
+  "cases": [
+    {
+      "case_id": "multiple_relatives_and_conditions",
+      "synthetic": true,
+      "text": "Family History:\nMother had breast cancer at 42 and diabetes. Father had myocardial infarction at 50 and hypertension and is deceased.\nAssessment:\nPatient has asthma.",
+      "spans": [
+        {"text": "breast cancer", "label": "CONDITION", "start": 27, "end": 40},
+        {"text": "42", "label": "AGE", "start": 44, "end": 46},
+        {"text": "diabetes", "label": "CONDITION", "start": 51, "end": 59},
+        {"text": "myocardial infarction", "label": "CONDITION", "start": 72, "end": 93},
+        {"text": "50", "label": "AGE", "start": 97, "end": 99},
+        {"text": "hypertension", "label": "CONDITION", "start": 104, "end": 116},
+        {"text": "deceased", "label": "VITAL_STATUS", "start": 124, "end": 132},
+        {"text": "asthma", "label": "CONDITION", "start": 158, "end": 164}
+      ],
+      "expected": [
+        {"relative_role": "mother", "condition_span": [27, 40], "onset_age": 42, "vital_status": null},
+        {"relative_role": "mother", "condition_span": [51, 59], "onset_age": null, "vital_status": null},
+        {"relative_role": "father", "condition_span": [72, 93], "onset_age": 50, "vital_status": "deceased"},
+        {"relative_role": "father", "condition_span": [104, 116], "onset_age": null, "vital_status": "deceased"}
+      ]
+    }
+  ]
+}
