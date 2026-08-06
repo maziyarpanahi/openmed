@@ -92,6 +92,7 @@ class DocumentStreamResult:
     _spans: tuple[OpenMedSpan, ...] = field(default=(), repr=False)
     _source_text: str | None = field(default=None, repr=False)
     _redacted_chunks: tuple[str, ...] = field(default=(), repr=False)
+    _preserve_whitespace: bool = field(default=False, repr=False)
 
     @property
     def spans(self) -> tuple[OpenMedSpan, ...]:
@@ -104,14 +105,19 @@ class DocumentStreamResult:
         """Return the redacted document without retaining another source copy."""
 
         if self._source_text is not None:
-            leading = len(self._source_text) - len(self._source_text.lstrip())
-            stripped = self._source_text.strip()
+            if self._preserve_whitespace:
+                leading = 0
+                stripped = self._source_text
+            else:
+                leading = len(self._source_text) - len(self._source_text.lstrip())
+                stripped = self._source_text.strip()
             return _render_redacted_region(
                 stripped,
                 region_start=leading,
                 entities=self.pii_entities,
             )
-        return "".join(self._redacted_chunks).strip()
+        redacted = "".join(self._redacted_chunks)
+        return redacted if self._preserve_whitespace else redacted.strip()
 
     @property
     def deidentified_text(self) -> str:
@@ -381,6 +387,7 @@ class DocumentStreamDeidentifier:
         loader: Any = None,
         policy: Optional[str] = None,
         calibration_thresholds_path: Optional[str | Path] = None,
+        preserve_whitespace: bool = False,
         pipeline: Pipeline | None = None,
     ) -> None:
         if window_chars < 1:
@@ -399,6 +406,11 @@ class DocumentStreamDeidentifier:
         self.seed = seed
         self.locale = locale
         self.lang = lang
+        self.preserve_whitespace = bool(
+            preserve_whitespace
+            if pipeline is None
+            else getattr(pipeline, "preserve_whitespace", preserve_whitespace)
+        )
 
         self.pipeline = pipeline or Pipeline(
             model_name=model_name,
@@ -415,6 +427,7 @@ class DocumentStreamDeidentifier:
                 if calibration_thresholds_path is not None
                 else None
             ),
+            preserve_whitespace=preserve_whitespace,
         )
 
     def run(self, source: str | Iterable[str]) -> DocumentStreamResult:
@@ -510,6 +523,7 @@ class DocumentStreamDeidentifier:
             _spans=ordered_spans,
             _source_text=source if isinstance(source, str) else None,
             _redacted_chunks=tuple(redacted_chunks or ()),
+            _preserve_whitespace=self.preserve_whitespace,
         )
 
     def _process_window(
@@ -522,12 +536,6 @@ class DocumentStreamDeidentifier:
         if not window_text.strip():
             return
 
-        # ``Pipeline.run`` strips leading/trailing whitespace and returns offsets
-        # relative to the stripped text, so recover the stripped-text base offset
-        # within the window and add the window's global base.
-        leading = len(window_text) - len(window_text.lstrip())
-        base = window.start + leading
-
         result = self.pipeline.run(
             window_text,
             method=self.method,
@@ -539,6 +547,19 @@ class DocumentStreamDeidentifier:
             seed=self.seed,
             locale=self.locale,
         )
+
+        # Pipeline spans are relative to ``PipelineResult.original_text``. The
+        # default pipeline strips the window before inference, while a caller
+        # may provide a preserve-whitespace pipeline. Derive the local base from
+        # the actual result instead of assuming either mode.
+        result_original = getattr(result, "original_text", None)
+        if isinstance(result_original, str) and result_original:
+            leading = window_text.find(result_original)
+            if leading < 0:
+                leading = len(window_text) - len(window_text.lstrip())
+        else:
+            leading = len(window_text) - len(window_text.lstrip())
+        base = window.start + leading
 
         window_entities = result.deidentification_result.pii_entities
         window_spans = list(result.spans)

@@ -404,3 +404,26 @@ def test_stream_over_empty_and_whitespace_documents():
     result = deidentify_document_stream("   \n\t  ", pipeline=_pipeline())
     assert result.pii_entities == []
     assert result.window_count in (0, 1)
+
+
+def test_preserve_whitespace_pipeline_keeps_global_offsets_and_redaction_layout():
+    text = "  Patient Jane Doe was called at jane.patient@example.com.  \n"
+    result = deidentify_document_stream(
+        text,
+        window_chars=32,
+        overlap_chars=8,
+        pipeline=Pipeline(
+            model_detector=_regex_detector,
+            preserve_whitespace=True,
+            use_safety_sweep=True,
+        ),
+        preserve_whitespace=True,
+    )
+
+    assert _entity_signature(result.pii_entities) == [
+        ("NAME", 10, 18),
+        ("EMAIL", 33, 57),
+    ]
+    assert result.redacted_text == ("  Patient [NAME] was called at [EMAIL].  \n")
+    for entity in result.pii_entities:
+        assert text[entity.start : entity.end] == entity.text
