@@ -339,6 +339,25 @@ def test_date_shift_range_overflow_raises_typed_error():
         )
 
 
+def test_date_shift_preserves_canonical_iso_format_at_year_boundary():
+    patient_key = "boundary-padding-2"
+    max_days = 1
+    offset = stable_offset_for(patient_key, max_days=max_days, secret=SECRET)
+    assert offset > 0
+
+    shifted = generalize_value(
+        COLUMN_TYPE_DATE,
+        date.min,
+        0,
+        patient_key=patient_key,
+        secret=SECRET,
+        max_days=max_days,
+    )
+
+    assert shifted == (date.min + timedelta(days=offset)).isoformat()
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", shifted)
+
+
 @pytest.mark.parametrize(
     "value",
     [

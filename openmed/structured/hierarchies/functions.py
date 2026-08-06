@@ -177,7 +177,7 @@ def _shift_date(
         shifted = parsed + timedelta(days=offset)
     except OverflowError as exc:
         raise HierarchyError("date shift exceeds the supported date range") from exc
-    return shifted.strftime(_ISO_DATE_FORMAT)
+    return shifted.isoformat()
 
 
 def _truncate_month(value: object) -> str:
