@@ -40,11 +40,11 @@ regexes = ['''patient_key="synthetic-patient-0001"''']
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
-description = "Synthetic patient key in the date boundary regression fixture"
+description = "Synthetic historical patient key in the date boundary regression fixture"
 condition = "AND"
 regexTarget = "line"
 paths = ['''tests/unit/structured/test_hierarchies\.py$''']
-regexes = ['''patient_key\s*=\s*"boundary-patient"''']
+regexes = ['''patient_key\s*=\s*"boundary-padding-2"''']
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
