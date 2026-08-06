@@ -52,6 +52,21 @@ baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
 local-first pipeline.
 
+## R8 And ProGuard
+
+The OpenMedKit AAR includes consumer rules for its ONNX Runtime and DJL native
+bindings, service-loaded tokenizer providers, and model-catalog boundary. R8 and
+ProGuard apply these rules automatically when a consuming application enables
+shrinking or obfuscation; consumers do not need additional OpenMedKit keep rules.
+
+The release packaging check builds the AAR and verifies that every rule from
+`openmedkit/consumer-rules.pro` is present in its packaged `proguard.txt`:
+
+```bash
+cd android
+./gradlew :openmedkit:verifyReleaseConsumerRules
+```
+
 ## Optional Maven Central Publishing
 
 JitPack is the public installation path documented above. The separate, optional
