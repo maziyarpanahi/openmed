@@ -340,20 +340,37 @@ def _pdf_handler(
     lang: str | None = None,
 ) -> ExtractedDocument:
     document = extract_pdf(path)
-    entities = _iter_entities(_detect_entities(document, models, lang))
-    rectangles = project_text_spans(document, entities)
-    if not rectangles:
-        return document
+    # Keep the OM-060 flat extraction as the canonical text/offset map while
+    # adding structured boxes for table cells and caption lines.
+    from .documents_pdf_tables import extract_pdf_regions, project_structured_spans
 
+    regions = extract_pdf_regions(path, document=document)
+    entities = _iter_entities(_detect_entities(document, models, lang))
+    rectangles = project_structured_spans(document, regions, entities)
     metadata = dict(document.metadata)
     metadata.update(
         {
-            "detected_span_count": len(entities),
-            "redaction_rectangles": [rectangle.to_dict() for rectangle in rectangles],
+            "table_regions": [
+                table.to_dict(include_text=False) for table in regions.tables
+            ],
+            "caption_regions": [
+                caption.to_dict(include_text=False) for caption in regions.captions
+            ],
         }
     )
+    if rectangles:
+        metadata.update(
+            {
+                "detected_span_count": len(entities),
+                "redaction_rectangles": [
+                    rectangle.to_dict() for rectangle in rectangles
+                ],
+            }
+        )
     if policy is not None:
         metadata["policy"] = policy
+    if metadata == document.metadata:
+        return document
     return ExtractedDocument(
         text=document.text,
         spans=document.spans,
