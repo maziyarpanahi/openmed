@@ -95,11 +95,13 @@ BIORED_ENTITY_TO_CANONICAL: Mapping[str, str] = {
     "organism": MICROORGANISM,
     "organismtaxon": MICROORGANISM,
     "sequencevariant": VARIANT_DESCRIPTOR,
+    "species": MICROORGANISM,
     "variant": VARIANT_DESCRIPTOR,
 }
 BIORED_RELATION_TO_CANONICAL: Mapping[str, str] = {
     "association": "ASSOCIATED_WITH",
     "bind": "BINDS",
+    "cause": "CAUSES",
     "comparison": "COMPARED_WITH",
     "conversion": "CONVERTS_TO",
     "cotreatment": "CO_TREATMENT",

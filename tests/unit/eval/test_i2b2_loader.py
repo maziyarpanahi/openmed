@@ -373,6 +373,8 @@ def test_dua_relation_suite_registry_and_license_metadata(tmp_path: Path) -> Non
         assert "never redistributed" in dataset_license.redistribution
 
     assert map_biored_entity_label("DiseaseOrPhenotypicFeature") == CONDITION
+    assert map_biored_entity_label("Species") == "MICROORGANISM"
+    assert map_dua_relation_type(BIORED, "Cause") == "CAUSES"
     assert map_dua_relation_type(BIORED, "Drug_Interaction") == "DRUG_INTERACTION"
 
 
