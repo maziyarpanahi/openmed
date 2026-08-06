@@ -12,21 +12,33 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import socket
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from openmed.core.anonymizer import AnonymizerConfig
+from openmed.core.audit import stable_hash
 from openmed.core.decoding import build_label_info
 from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.manifest_schema import validate_manifest_row
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
+from openmed.eval.datasets.public import (
+    CLINICAL_MODEL_FAMILIES,
+    validate_clinical_family_dataset_evidence,
+)
 from openmed.eval.metrics import compute_leakage_rate, compute_recall_slices
+
+if TYPE_CHECKING:
+    from openmed.eval.release_gates import GateReport
 
 CONFIG_SCHEMA_VERSION = "openmed.training.recipe.v1"
 QLORA_CONFIG_SCHEMA_VERSION = "openmed.training.qlora_recipe.v1"
 QLORA_SMOKE_RESULT_SCHEMA_VERSION = "openmed.training.qlora_smoke_result.v1"
+CLINICAL_FAMILY_RELEASE_SCHEMA_VERSION = "openmed.training.clinical_family_release.v1"
 MAX_LORA_TRAINABLE_RATIO = 0.015
 CONFIG_DIR = Path(__file__).with_name("configs")
 QLORA_SMOKE_PRESET = "qlora_smoke"
@@ -36,6 +48,11 @@ PRESET_BY_MODE = {
     "C": "large_teacher",
 }
 MODE_BY_PRESET = {preset: mode for mode, preset in PRESET_BY_MODE.items()}
+_CLINICAL_RELEASE_TIERS_BY_MODE = {
+    "A": frozenset({"Tiny"}),
+    "B": frozenset({"Base"}),
+    "C": frozenset({"Large", "XLarge"}),
+}
 
 _REQUIRED_ROOT_FIELDS = frozenset(
     {
@@ -53,7 +70,7 @@ _REQUIRED_ROOT_FIELDS = frozenset(
         "seed",
     }
 )
-_OPTIONAL_ROOT_FIELDS = frozenset({"head_contract"})
+_OPTIONAL_ROOT_FIELDS = frozenset({"clinical_family_targets", "head_contract"})
 _QLORA_REQUIRED_ROOT_FIELDS = frozenset(
     {
         "schema_version",
@@ -156,6 +173,86 @@ class QuantizationConfig:
 
 
 @dataclass(frozen=True)
+class ClinicalModelFamilySpec:
+    """Stable training and runtime contract for one clinical model family."""
+
+    family: str
+    manifest_family: str
+    repo_prefix: str
+    task: str
+    label_set_ref: str
+    head_contract: str
+    runtime_ref: str
+    allowed_modes: tuple[str, ...]
+    allowed_tiers: tuple[str, ...]
+    required_gates: tuple[str, ...] = ("G5", "G6")
+
+
+CLINICAL_MODEL_FAMILY_SPECS: Mapping[str, ClinicalModelFamilySpec] = MappingProxyType(
+    {
+        "doctype": ClinicalModelFamilySpec(
+            family="doctype",
+            manifest_family="DocType",
+            repo_prefix="OpenMed/OpenMed-DocType-",
+            task="text-classification",
+            label_set_ref=(
+                "openmed.clinical.sections.doctype:"
+                "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE@v1"
+            ),
+            head_contract="document-classification:first-window@v1",
+            runtime_ref="openmed.clinical.sections:classify_document",
+            allowed_modes=("A", "B"),
+            allowed_tiers=("Tiny", "Base"),
+        ),
+        "section": ClinicalModelFamilySpec(
+            family="section",
+            manifest_family="Section",
+            repo_prefix="OpenMed/OpenMed-Section-",
+            task="token-classification",
+            label_set_ref="openmed.clinical.context:CANONICAL_SECTION_LABELS@v1",
+            head_contract="token-classification:bio-section-boundary@v1",
+            runtime_ref="openmed.clinical.sections:detect_sections",
+            allowed_modes=("A", "B"),
+            allowed_tiers=("Tiny", "Base"),
+        ),
+        "relex_med": ClinicalModelFamilySpec(
+            family="relex_med",
+            manifest_family="RelEx-Med",
+            repo_prefix="OpenMed/OpenMed-RelEx-Med-",
+            task="relation-extraction",
+            label_set_ref="openmed.clinical.relations:RELATION_ORDER@v2",
+            head_contract="openmed.clinical.relations:JointSpanPairHead@v1",
+            runtime_ref="openmed.clinical.relations:extract_medication_relations",
+            allowed_modes=("B", "C"),
+            allowed_tiers=("Base", "Large", "XLarge"),
+        ),
+        "relex_ade": ClinicalModelFamilySpec(
+            family="relex_ade",
+            manifest_family="RelEx-ADE",
+            repo_prefix="OpenMed/OpenMed-RelEx-ADE-",
+            task="relation-extraction",
+            label_set_ref="openmed.eval.datasets.drugprot:DRUGPROT_RELATION_TYPES@v1",
+            head_contract="openmed.clinical.relations:JointSpanPairHead@v1",
+            runtime_ref="openmed.clinical.relations:extract_relations",
+            allowed_modes=("B", "C"),
+            allowed_tiers=("Base", "Large", "XLarge"),
+        ),
+        "link": ClinicalModelFamilySpec(
+            family="link",
+            manifest_family="Link",
+            repo_prefix="OpenMed/OpenMed-Link-",
+            task="feature-extraction",
+            label_set_ref="openmed.clinical.grounding.vocab:FREE_VOCAB_SYSTEMS@v1",
+            head_contract="span-to-concept:sparse-dense-reranker@v1",
+            runtime_ref="openmed.clinical.grounding:ground",
+            allowed_modes=("B", "C"),
+            allowed_tiers=("Base", "Large", "XLarge"),
+        ),
+    }
+)
+
+
+@dataclass(frozen=True)
 class TrainingRecipeConfig:
     schema_version: str
     preset_name: str
@@ -170,6 +267,7 @@ class TrainingRecipeConfig:
     quantization: QuantizationConfig
     seed: int
     head_contract: str | None = None
+    clinical_family_targets: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, raw_config: Mapping[str, Any]) -> "TrainingRecipeConfig":
@@ -215,6 +313,9 @@ class TrainingRecipeConfig:
             quantization=_parse_quantization(_require_mapping(data, "quantization")),
             seed=seed,
             head_contract=_optional_str(data, "head_contract"),
+            clinical_family_targets=_parse_clinical_family_targets(
+                data.get("clinical_family_targets", ())
+            ),
         )
         _validate_output_tier(config.output_tier)
         return config
@@ -236,6 +337,8 @@ class TrainingRecipeConfig:
         }
         if self.head_contract is not None:
             payload["head_contract"] = self.head_contract
+        if self.clinical_family_targets:
+            payload["clinical_family_targets"] = list(self.clinical_family_targets)
         return payload
 
 
@@ -273,6 +376,70 @@ class DryRunResult:
             "quant_default": self.quant_default,
             "seed": self.seed,
         }
+
+
+@dataclass(frozen=True)
+class ClinicalFamilyRelease:
+    """Validated release artifacts for one externally trained checkpoint."""
+
+    family: str
+    recipe_mode: str
+    recipe_preset: str
+    manifest_row: Mapping[str, Any]
+    dataset_evidence: Mapping[str, Mapping[str, Any]]
+    gate_report: GateReport
+    model_card: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the metadata-only checkpoint release manifest.
+
+        Returns:
+            Canonical release metadata with a deterministic release hash.
+        """
+
+        payload = {
+            "dataset_evidence": _plain(self.dataset_evidence),
+            "family": self.family,
+            "gate_report_hash": self.gate_report.repro_hash,
+            "model_manifest": _plain(self.manifest_row),
+            "recipe_config_hash": clinical_family_recipe_hash(
+                self.family, self.recipe_mode
+            ),
+            "recipe_mode": self.recipe_mode,
+            "recipe_preset": self.recipe_preset,
+            "required_gates": ["G5", "G6"],
+            "schema_version": CLINICAL_FAMILY_RELEASE_SCHEMA_VERSION,
+        }
+        payload["release_hash"] = stable_hash(payload)
+        return payload
+
+    def write(self, output_dir: str | Path) -> dict[str, Path]:
+        """Write the checkpoint manifest, signed gate report, and model card.
+
+        Args:
+            output_dir: Local directory that receives the release metadata.
+
+        Returns:
+            Paths to the three generated release artifacts.
+        """
+
+        destination = Path(output_dir)
+        destination.mkdir(parents=True, exist_ok=True)
+        paths = {
+            "checkpoint_manifest": destination / "checkpoint-manifest.json",
+            "gate_report": destination / "gate-report.json",
+            "model_card": destination / "README.md",
+        }
+        paths["checkpoint_manifest"].write_text(
+            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        paths["gate_report"].write_text(
+            json.dumps(self.gate_report.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        paths["model_card"].write_text(self.model_card, encoding="utf-8")
+        return paths
 
 
 @dataclass(frozen=True)
@@ -524,6 +691,139 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
     return _parse_yaml_subset(text)
 
 
+def clinical_model_family_spec(family: str) -> ClinicalModelFamilySpec:
+    """Return the immutable label, head, runtime, recipe, and tier contract.
+
+    Args:
+        family: Canonical clinical family identifier.
+
+    Returns:
+        The family-specific training and runtime contract.
+
+    Raises:
+        ValueError: If ``family`` is unknown.
+    """
+
+    try:
+        return CLINICAL_MODEL_FAMILY_SPECS[family]
+    except KeyError as exc:
+        raise ValueError(f"unknown clinical model family: {family}") from exc
+
+
+def clinical_family_recipe_hash(family: str, recipe_mode: str) -> str:
+    """Hash the base recipe together with a family's label/head contract.
+
+    Args:
+        family: Canonical clinical family identifier.
+        recipe_mode: Mode or preset accepted by :func:`load_preset`.
+
+    Returns:
+        Stable SHA-256 recipe and family contract hash.
+
+    Raises:
+        RecipeConfigError: If the recipe cannot produce the requested family.
+        ValueError: If ``family`` is unknown.
+    """
+
+    spec = clinical_model_family_spec(family)
+    recipe = load_preset(recipe_mode)
+    if recipe.mode not in spec.allowed_modes:
+        raise RecipeConfigError(
+            f"clinical family {family} does not support recipe mode {recipe.mode}"
+        )
+    if recipe.mode in {"B", "C"} and family not in recipe.clinical_family_targets:
+        raise RecipeConfigError(
+            f"preset {recipe.preset_name} does not declare clinical family {family}"
+        )
+    return stable_hash(
+        {
+            "base_recipe": recipe.to_dict(),
+            "family": spec.family,
+            "head_contract": spec.head_contract,
+            "label_set_ref": spec.label_set_ref,
+            "runtime_ref": spec.runtime_ref,
+        }
+    )
+
+
+def build_clinical_family_release(
+    family: str,
+    *,
+    recipe_mode: str,
+    manifest_row: Mapping[str, Any],
+    gate_report: GateReport | Mapping[str, Any],
+    dataset_evidence: Mapping[str, Mapping[str, Any]],
+    signing_key: bytes | str,
+) -> ClinicalFamilyRelease:
+    """Build release artifacts only from a completed, signed external run.
+
+    This function never trains a model, reads corpus rows, or publishes to a
+    remote service. It validates the checkpoint manifest, the family-specific
+    dataset policy, and signed G5/G6 evidence before rendering metadata-only
+    local release artifacts.
+
+    Args:
+        family: Canonical clinical family identifier.
+        recipe_mode: Mode or preset used by the completed training run.
+        manifest_row: Checkpoint manifest row to certify.
+        gate_report: Signed gate report object or serialized mapping.
+        dataset_evidence: Aggregate-only dataset provenance and metrics.
+        signing_key: Key used to verify the report signature.
+
+    Returns:
+        Validated local release artifacts ready for an external publisher.
+
+    Raises:
+        RecipeConfigError: If manifest, provenance, tier, or gates disagree.
+        TypeError: If supplied evidence has an invalid mapping shape.
+        ValueError: If family or dataset policy validation fails.
+    """
+
+    from openmed.core.model_card import append_model_card_sections, render_model_card
+    from openmed.eval.release_gates import GateReport
+
+    spec = clinical_model_family_spec(family)
+    recipe = load_preset(recipe_mode)
+    if recipe.mode not in spec.allowed_modes:
+        raise RecipeConfigError(
+            f"clinical family {family} does not support recipe mode {recipe.mode}"
+        )
+    if recipe.mode in {"B", "C"} and family not in recipe.clinical_family_targets:
+        raise RecipeConfigError(
+            f"preset {recipe.preset_name} does not declare clinical family {family}"
+        )
+
+    row = _plain_mapping(manifest_row, "manifest_row")
+    violations = validate_manifest_row(row, 1)
+    if violations:
+        raise RecipeConfigError(
+            "clinical checkpoint manifest is invalid: "
+            + "; ".join(violation.message for violation in violations)
+        )
+    evidence = validate_clinical_family_dataset_evidence(family, dataset_evidence)
+    report = (
+        gate_report
+        if isinstance(gate_report, GateReport)
+        else GateReport.from_dict(gate_report)
+    )
+
+    _validate_clinical_manifest_identity(spec, recipe, row, evidence)
+    _validate_clinical_gate_report(spec, row, report, signing_key=signing_key)
+    model_card = append_model_card_sections(
+        render_model_card(row),
+        [_render_clinical_family_evidence(spec, recipe, report, evidence)],
+    )
+    return ClinicalFamilyRelease(
+        family=family,
+        recipe_mode=recipe.mode,
+        recipe_preset=recipe.preset_name,
+        manifest_row=row,
+        dataset_evidence=evidence,
+        gate_report=report,
+        model_card=model_card,
+    )
+
+
 def load_qlora_preset(name: str = QLORA_SMOKE_PRESET) -> QloraRecipeConfig:
     """Load a committed QLoRA smoke preset without importing trainer backends."""
 
@@ -681,6 +981,22 @@ def _copy_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(dict(value))
 
 
+def _plain(value: Any) -> Any:
+    try:
+        return json.loads(json.dumps(value, sort_keys=True))
+    except (TypeError, ValueError) as exc:
+        raise RecipeConfigError("release metadata must be JSON serializable") from exc
+
+
+def _plain_mapping(value: Any, field: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RecipeConfigError(f"{field} must be a mapping")
+    plain = _plain(value)
+    if not isinstance(plain, dict):
+        raise RecipeConfigError(f"{field} must be a mapping")
+    return plain
+
+
 def _reject_root_shape(data: Mapping[str, Any]) -> None:
     keys = set(data)
     missing = sorted(_REQUIRED_ROOT_FIELDS - keys)
@@ -801,6 +1117,225 @@ def _parse_quantization(data: Mapping[str, Any]) -> QuantizationConfig:
         default=_require_str(data, "default"),
         allow_fp32_fallback=allow_fp32_fallback,
     )
+
+
+def _parse_clinical_family_targets(value: Any) -> tuple[str, ...]:
+    if value in (None, ()):
+        return ()
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise RecipeConfigError("clinical_family_targets must be a list of strings")
+    targets = tuple(str(item) for item in value if isinstance(item, str) and item)
+    if len(targets) != len(value):
+        raise RecipeConfigError(
+            "clinical_family_targets must contain non-empty strings"
+        )
+    if len(set(targets)) != len(targets):
+        raise RecipeConfigError("clinical_family_targets must not contain duplicates")
+    unknown = sorted(set(targets) - set(CLINICAL_MODEL_FAMILIES))
+    if unknown:
+        raise RecipeConfigError(
+            "clinical_family_targets contains unknown family: " + ", ".join(unknown)
+        )
+    return targets
+
+
+def _validate_clinical_manifest_identity(
+    spec: ClinicalModelFamilySpec,
+    recipe: TrainingRecipeConfig,
+    row: Mapping[str, Any],
+    evidence: Mapping[str, Mapping[str, Any]],
+) -> None:
+    repo_id = str(row.get("repo_id") or "")
+    tier = str(row.get("tier") or "")
+    if row.get("family") != spec.manifest_family:
+        raise RecipeConfigError(
+            f"manifest family must be {spec.manifest_family!r} for {spec.family}"
+        )
+    if row.get("task") != spec.task:
+        raise RecipeConfigError(
+            f"manifest task must be {spec.task!r} for {spec.family}"
+        )
+    if tier not in spec.allowed_tiers:
+        raise RecipeConfigError(
+            f"manifest tier {tier!r} is not supported by {spec.family}"
+        )
+    if tier not in _CLINICAL_RELEASE_TIERS_BY_MODE[recipe.mode]:
+        raise RecipeConfigError(
+            f"manifest tier {tier!r} does not fit recipe mode {recipe.mode}"
+        )
+
+    expected_prefix = spec.repo_prefix
+    if spec.family == "link":
+        vocab = str(evidence["redistributable_vocabulary"].get("vocab") or "")
+        expected_prefix = f"{expected_prefix}{vocab}-"
+    if not repo_id.startswith(expected_prefix):
+        raise RecipeConfigError(f"manifest repo_id must start with {expected_prefix!r}")
+    if not repo_id.endswith(tier) and f"-{tier}-" not in repo_id:
+        raise RecipeConfigError("manifest repo_id must include its declared tier")
+    labels = row.get("canonical_labels")
+    if not isinstance(labels, list) or not labels:
+        raise RecipeConfigError("clinical checkpoint manifest requires label metadata")
+
+    provenance = row.get("training_provenance")
+    if not isinstance(provenance, Mapping):
+        raise RecipeConfigError(
+            "clinical checkpoint manifest requires training_provenance"
+        )
+    if provenance.get("recipe_config_hash") != clinical_family_recipe_hash(
+        spec.family, recipe.mode
+    ):
+        raise RecipeConfigError(
+            "training_provenance recipe_config_hash does not match the recipe"
+        )
+    expected_data_hash = stable_hash(_plain(evidence))
+    if provenance.get("data_manifest_hash") != expected_data_hash:
+        raise RecipeConfigError(
+            "training_provenance data_manifest_hash does not match dataset evidence"
+        )
+
+    benchmark = row.get("benchmark")
+    if not isinstance(benchmark, Mapping) or not benchmark.get("dataset"):
+        raise RecipeConfigError("clinical checkpoint manifest requires a benchmark")
+    dataset_name = str(benchmark["dataset"]).casefold()
+    if spec.family.startswith("relex_") and "drugprot" not in dataset_name:
+        raise RecipeConfigError("RelEx checkpoint benchmark must report DrugProt")
+    if spec.family == "link" and "medmentions" not in dataset_name:
+        raise RecipeConfigError("Link checkpoint benchmark must report MedMentions")
+
+
+def _validate_clinical_gate_report(
+    spec: ClinicalModelFamilySpec,
+    row: Mapping[str, Any],
+    report: GateReport,
+    *,
+    signing_key: bytes | str,
+) -> None:
+    if not report.verify(signing_key):
+        raise RecipeConfigError("clinical checkpoint gate report signature is invalid")
+    if report.decision != "RELEASABLE":
+        raise RecipeConfigError("clinical checkpoint gate decision is not RELEASABLE")
+
+    identity = {
+        "family": (report.family, row.get("family")),
+        "param_count": (report.param_count, row.get("param_count")),
+        "repo_id": (report.repo_id, row.get("repo_id")),
+        "tier": (report.tier, row.get("tier")),
+    }
+    mismatches = [
+        key
+        for key, (reported, manifested) in identity.items()
+        if reported != manifested
+    ]
+    if mismatches:
+        raise RecipeConfigError(
+            "gate report identity diverges from manifest: " + ", ".join(mismatches)
+        )
+    formats = row.get("formats")
+    if not isinstance(formats, list) or report.format not in formats:
+        raise RecipeConfigError("gate report format is absent from manifest formats")
+
+    checks = {check.gate: check for check in report.gate_results}
+    missing = [gate for gate in spec.required_gates if gate not in checks]
+    failed = [
+        gate
+        for gate in spec.required_gates
+        if gate in checks and checks[gate].passed is not True
+    ]
+    if missing or failed:
+        parts = []
+        if missing:
+            parts.append("missing " + ", ".join(missing))
+        if failed:
+            parts.append("failed " + ", ".join(failed))
+        raise RecipeConfigError(
+            "clinical checkpoint requires passing G5/G6: " + "; ".join(parts)
+        )
+    measurements = {
+        "p50": report.p50_ms,
+        "p95": report.p95_ms,
+        "ram": report.ram_mb,
+    }
+    if any(
+        value is None or not math.isfinite(float(value)) or float(value) <= 0
+        for value in measurements.values()
+    ):
+        raise RecipeConfigError("G5/G6 require positive p50, p95, and RAM evidence")
+
+    latency = _measurement_map(row.get("latency_ms"), field="latency_ms")
+    peak_ram = _measurement_map(row.get("peak_ram_mb"), field="peak_ram_mb")
+    expected_measurements = {
+        "latency_ms.p50": (latency.get("p50"), report.p50_ms),
+        "latency_ms.p95": (latency.get("p95"), report.p95_ms),
+        "peak_ram_mb.measured": (peak_ram.get("measured"), report.ram_mb),
+    }
+    divergent = [
+        key
+        for key, (manifest_value, report_value) in expected_measurements.items()
+        if not _same_measurement(manifest_value, report_value)
+    ]
+    if divergent:
+        raise RecipeConfigError(
+            "manifest does not document signed G5/G6 measurements: "
+            + ", ".join(divergent)
+        )
+
+
+def _render_clinical_family_evidence(
+    spec: ClinicalModelFamilySpec,
+    recipe: TrainingRecipeConfig,
+    report: GateReport,
+    evidence: Mapping[str, Mapping[str, Any]],
+) -> str:
+    lines = [
+        "## Clinical Family Release Evidence",
+        "",
+        "| Field | Value |",
+        "|---|---|",
+        f"| Recipe | Mode {recipe.mode} (`{recipe.preset_name}`) |",
+        f"| Label space | `{spec.label_set_ref}` |",
+        f"| Head contract | `{spec.head_contract}` |",
+        f"| Runtime | `{spec.runtime_ref}` |",
+        f"| G5 tier fit | passed ({report.ram_mb:g} MB peak RAM) |",
+        f"| G6 latency | passed (p50 {report.p50_ms:g} ms / p95 {report.p95_ms:g} ms) |",
+        "",
+        "### Dataset Evidence",
+        "",
+        "| Dataset | Uses | Access | Aggregate metrics |",
+        "|---|---|---|---|",
+    ]
+    for dataset, item in evidence.items():
+        metrics = item.get("metrics")
+        metric_text = (
+            ", ".join(
+                f"{name}={float(value):g}" for name, value in sorted(metrics.items())
+            )
+            if isinstance(metrics, Mapping) and metrics
+            else "manifested; no aggregate metric"
+        )
+        lines.append(
+            f"| {dataset} | {', '.join(item['uses'])} | {item['access']} | "
+            f"{metric_text} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Corpus rows and restricted-vocabulary content are not bundled. "
+            "Optional licensed evaluations remain caller-supplied and local.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _measurement_map(value: Any, *, field: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RecipeConfigError(f"clinical checkpoint manifest requires {field}")
+    return value
+
+
+def _same_measurement(left: Any, right: Any) -> bool:
+    if isinstance(left, bool) or not isinstance(left, (int, float)) or right is None:
+        return False
+    return math.isclose(float(left), float(right), rel_tol=0.0, abs_tol=1e-9)
 
 
 def _parse_qlora_base_model(data: Mapping[str, Any]) -> QloraBaseModelConfig:

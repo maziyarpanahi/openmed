@@ -29,10 +29,13 @@ from openmed.training.adapters.config import (
     TransferEdge,
     normalize_language_code,
 )
+from openmed.training.adapters.recipe import AdapterParameterAccounting
 
-FAMILY_TRANSFER_SCHEMA_VERSION = 1
+FAMILY_TRANSFER_SCHEMA_VERSION = 2
 FAMILY_TRANSFER_ARTIFACT_TYPE = "openmed.cross_lingual_family_transfer"
 DEFAULT_ADAPTED_TARGET_F1_FLOOR = 0.80
+DEFAULT_ADAPTED_F1_FRACTION_OF_FULL_MODEL_FLOOR = 0.90
+DEFAULT_TRAINABLE_FRACTION_OF_FULL_MODEL_CEILING = 0.10
 FAMILY_TRANSFER_FIXTURES_PATH = (
     Path(__file__).resolve().parent
     / "golden"
@@ -43,6 +46,7 @@ FAMILY_TRANSFER_FIXTURES_PATH = (
 _BASELINE = "baseline"
 _ZERO_SHOT = "zero_shot"
 _ADAPTED = "adapted"
+_FULL_MODEL = "full_model"
 _DONOR = "donor"
 _TARGET = "target"
 
@@ -77,6 +81,94 @@ class FamilyTransferModeMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class FamilyTransferEfficiencyQualification:
+    """Joint F1-retention and trainable-parameter evidence for one adapter."""
+
+    full_language_model: FamilyTransferModeMetrics
+    adapted_target_f1: float
+    parameter_accounting: AdapterParameterAccounting
+    adapted_f1_fraction_floor: float
+    trainable_fraction_ceiling: float
+
+    def __post_init__(self) -> None:
+        """Validate aggregate metrics and explicit qualification thresholds."""
+
+        if not isinstance(self.full_language_model, FamilyTransferModeMetrics):
+            raise TypeError("full_language_model must be FamilyTransferModeMetrics")
+        if not isinstance(self.parameter_accounting, AdapterParameterAccounting):
+            raise TypeError("parameter_accounting must be AdapterParameterAccounting")
+        object.__setattr__(
+            self,
+            "adapted_target_f1",
+            _validate_probability(self.adapted_target_f1, "adapted_target_f1"),
+        )
+        object.__setattr__(
+            self,
+            "adapted_f1_fraction_floor",
+            _validate_probability(
+                self.adapted_f1_fraction_floor,
+                "adapted_f1_fraction_floor",
+            ),
+        )
+        ceiling = _validate_probability(
+            self.trainable_fraction_ceiling,
+            "trainable_fraction_ceiling",
+        )
+        if ceiling == 0.0:
+            raise ValueError("trainable_fraction_ceiling must be greater than zero")
+        object.__setattr__(self, "trainable_fraction_ceiling", ceiling)
+
+    @property
+    def adapted_f1_fraction_of_full_model(self) -> float:
+        """Return adapted target F1 divided by full per-language model F1."""
+
+        if self.full_language_model.f1 == 0.0:
+            return 0.0
+        return self.adapted_target_f1 / self.full_language_model.f1
+
+    @property
+    def adapted_f1_fraction_passed(self) -> bool:
+        """Return whether adapted F1 retains the declared reference fraction."""
+
+        return (
+            self.full_language_model.f1 > 0.0
+            and self.adapted_f1_fraction_of_full_model >= self.adapted_f1_fraction_floor
+        )
+
+    @property
+    def parameter_efficiency_passed(self) -> bool:
+        """Return whether trainable parameters stay below the declared ceiling."""
+
+        return (
+            self.parameter_accounting.trainable_fraction_of_full_model
+            <= self.trainable_fraction_ceiling
+        )
+
+    @property
+    def passed(self) -> bool:
+        """Return whether both F1 retention and parameter efficiency pass."""
+
+        return self.adapted_f1_fraction_passed and self.parameter_efficiency_passed
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return aggregate qualification evidence without fixture content."""
+
+        return {
+            "adapted_f1_fraction_floor": self.adapted_f1_fraction_floor,
+            "adapted_f1_fraction_of_full_model": (
+                self.adapted_f1_fraction_of_full_model
+            ),
+            "adapted_f1_fraction_passed": self.adapted_f1_fraction_passed,
+            "adapted_target_f1": self.adapted_target_f1,
+            "full_language_model": self.full_language_model.to_dict(),
+            "parameter_accounting": self.parameter_accounting.to_dict(),
+            "parameter_efficiency_passed": self.parameter_efficiency_passed,
+            "passed": self.passed,
+            "trainable_fraction_ceiling": self.trainable_fraction_ceiling,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class FamilyTransferComparison:
     """Baseline, zero-shot, adapted, and non-regression metrics for one edge."""
 
@@ -90,6 +182,7 @@ class FamilyTransferComparison:
     target_adapted: FamilyTransferModeMetrics
     target_f1_floor: float
     donor_non_regression_tolerance: float
+    efficiency: FamilyTransferEfficiencyQualification | None = None
 
     @property
     def donor_delta(self) -> float:
@@ -115,7 +208,7 @@ class FamilyTransferComparison:
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic aggregate comparison payload."""
 
-        return {
+        payload = {
             "family": self.family,
             "donor": self.donor_language,
             "target": self.target_language,
@@ -150,6 +243,9 @@ class FamilyTransferComparison:
             "donor_non_regression_tolerance": self.donor_non_regression_tolerance,
             "donor_non_regression": self.donor_non_regression,
         }
+        if self.efficiency is not None:
+            payload["efficiency"] = self.efficiency.to_dict()
+        return payload
 
     def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
@@ -173,6 +269,7 @@ class FamilyTransferReport:
             comparison.adapted_target_passed
             and comparison.donor_non_regression
             and comparison.target_zero_shot.f1 > comparison.target_baseline.f1
+            and (comparison.efficiency is None or comparison.efficiency.passed)
             for comparison in self.comparisons
         )
 
@@ -182,6 +279,25 @@ class FamilyTransferReport:
         families: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
         for comparison in self.comparisons:
             families[comparison.family].append(comparison.to_dict())
+        summary = {
+            "family_count": len(families),
+            "transfer_count": len(self.comparisons),
+            "all_adapted_targets_passed": bool(self.comparisons)
+            and all(item.adapted_target_passed for item in self.comparisons),
+            "all_donors_non_regressed": bool(self.comparisons)
+            and all(item.donor_non_regression for item in self.comparisons),
+            "all_zero_shot_improved": bool(self.comparisons)
+            and all(
+                item.target_zero_shot.f1 > item.target_baseline.f1
+                for item in self.comparisons
+            ),
+            "passed": self.passed,
+        }
+        if any(item.efficiency is not None for item in self.comparisons):
+            summary["all_efficiency_qualifications_passed"] = all(
+                item.efficiency is not None and item.efficiency.passed
+                for item in self.comparisons
+            )
         return {
             "schema_version": FAMILY_TRANSFER_SCHEMA_VERSION,
             "artifact_type": FAMILY_TRANSFER_ARTIFACT_TYPE,
@@ -189,20 +305,7 @@ class FamilyTransferReport:
             "model_name": self.model_name,
             "device": self.device,
             "fixture_count": self.fixture_count,
-            "summary": {
-                "family_count": len(families),
-                "transfer_count": len(self.comparisons),
-                "all_adapted_targets_passed": bool(self.comparisons)
-                and all(item.adapted_target_passed for item in self.comparisons),
-                "all_donors_non_regressed": bool(self.comparisons)
-                and all(item.donor_non_regression for item in self.comparisons),
-                "all_zero_shot_improved": bool(self.comparisons)
-                and all(
-                    item.target_zero_shot.f1 > item.target_baseline.f1
-                    for item in self.comparisons
-                ),
-                "passed": self.passed,
-            },
+            "summary": summary,
             "families": {family: families[family] for family in sorted(families)},
         }
 
@@ -259,6 +362,37 @@ class FamilyTransferReport:
                 f"{_format_delta(comparison.target_adapted.f1 - comparison.target_baseline.f1)} | "
                 f"{'yes' if comparison.donor_non_regression else 'no'} |"
             )
+        qualified = [
+            comparison
+            for comparison in self.comparisons
+            if comparison.efficiency is not None
+        ]
+        if qualified:
+            lines.extend(
+                [
+                    "",
+                    "## Adapter efficiency qualification",
+                    "",
+                    "| Family | Donor | Target | Full-model F1 | "
+                    "Adapted/full F1 | Required F1 fraction | "
+                    "Trainable/full parameters | Parameter ceiling | Result |",
+                    "|---|---|---|---:|---:|---:|---:|---:|---|",
+                ]
+            )
+            for comparison in qualified:
+                efficiency = comparison.efficiency
+                assert efficiency is not None
+                lines.append(
+                    "| "
+                    f"`{comparison.family}` | `{comparison.donor_language}` | "
+                    f"`{comparison.target_language}` | "
+                    f"{_format_metric(efficiency.full_language_model.f1)} | "
+                    f"{_format_metric(efficiency.adapted_f1_fraction_of_full_model)} | "
+                    f"{_format_metric(efficiency.adapted_f1_fraction_floor)} | "
+                    f"{_format_metric(efficiency.parameter_accounting.trainable_fraction_of_full_model)} | "
+                    f"{_format_metric(efficiency.trainable_fraction_ceiling)} | "
+                    f"{'passed' if efficiency.passed else 'failed'} |"
+                )
         return "\n".join(lines) + "\n"
 
     def write_markdown(self, path: str | Path) -> Path:
@@ -318,14 +452,25 @@ def cross_lingual_family_transfer_report(
     device: str = "cpu",
     config: FamilyTransferConfig = DEFAULT_FAMILY_TRANSFER_CONFIG,
     donor_non_regression_tolerance: float = 0.0,
+    parameter_accounting_by_adapter: Mapping[str, AdapterParameterAccounting]
+    | None = None,
+    adapted_f1_fraction_floor: float = (
+        DEFAULT_ADAPTED_F1_FRACTION_OF_FULL_MODEL_FLOOR
+    ),
+    trainable_fraction_ceiling: float = (
+        DEFAULT_TRAINABLE_FRACTION_OF_FULL_MODEL_CEILING
+    ),
 ) -> FamilyTransferReport:
     """Evaluate baseline, zero-shot, and adapted family-transfer paths.
 
     The runner receives a copy of each fixture with aggregate-safe routing
     metadata: ``transfer_mode`` (``baseline``, ``zero_shot``, or ``adapted``),
     ``evaluation_role`` (``donor`` or ``target``), ``family``,
-    ``donor_language``, ``target_language``, and ``adapter_language``. This
-    keeps the runner contract offline and model-agnostic.
+    ``donor_language``, ``target_language``, and ``adapter_language``. When
+    parameter accounting is supplied, the runner also receives a
+    ``full_model`` target mode so F1 retention and trainable-parameter savings
+    are qualified on the same synthetic gold. This keeps the runner contract
+    offline and model-agnostic.
 
     Args:
         model: Model identifier or a harness-compatible runner callable.
@@ -336,12 +481,33 @@ def cross_lingual_family_transfer_report(
         device: Device tag forwarded to the runner.
         config: Offline family taxonomy and donor graph.
         donor_non_regression_tolerance: Maximum tolerated donor F1 reduction.
+        parameter_accounting_by_adapter: Measured counts keyed by configured
+            output adapter id. Supplying this enables full-model qualification
+            and requires evidence for every evaluated transfer.
+        adapted_f1_fraction_floor: Minimum adapted target F1 divided by the
+            full per-language reference F1.
+        trainable_fraction_ceiling: Maximum trainable parameter count divided
+            by the full per-language model count.
 
     Returns:
         Aggregate per-family donor/target metrics and transfer deltas.
     """
 
     tolerance = _validate_tolerance(donor_non_regression_tolerance)
+    f1_fraction_floor = _validate_probability(
+        adapted_f1_fraction_floor,
+        "adapted_f1_fraction_floor",
+    )
+    parameter_fraction_ceiling = _validate_probability(
+        trainable_fraction_ceiling,
+        "trainable_fraction_ceiling",
+    )
+    if parameter_fraction_ceiling == 0.0:
+        raise ValueError("trainable_fraction_ceiling must be greater than zero")
+    if parameter_accounting_by_adapter is not None and not isinstance(
+        parameter_accounting_by_adapter, Mapping
+    ):
+        raise TypeError("parameter_accounting_by_adapter must be a mapping")
     resolved_fixtures = (
         load_family_transfer_fixtures(config=config)
         if fixtures is None
@@ -400,6 +566,34 @@ def cross_lingual_family_transfer_report(
             device=device,
         )
         edge = _transfer_edge(pair, config)
+        efficiency = None
+        if parameter_accounting_by_adapter is not None:
+            accounting = parameter_accounting_by_adapter.get(edge.adapter.adapter_id)
+            if accounting is None:
+                raise ValueError(
+                    "missing parameter accounting for adapter "
+                    f"{edge.adapter.adapter_id!r}"
+                )
+            if not isinstance(accounting, AdapterParameterAccounting):
+                raise TypeError(
+                    "parameter accounting values must be AdapterParameterAccounting"
+                )
+            full_language_model = _score_mode(
+                target_fixtures,
+                pair=pair,
+                mode=_FULL_MODEL,
+                role=_TARGET,
+                model_name=model_name,
+                model_runner=model_runner,
+                device=device,
+            )
+            efficiency = FamilyTransferEfficiencyQualification(
+                full_language_model=full_language_model,
+                adapted_target_f1=target_adapted.f1,
+                parameter_accounting=accounting,
+                adapted_f1_fraction_floor=f1_fraction_floor,
+                trainable_fraction_ceiling=parameter_fraction_ceiling,
+            )
         comparisons.append(
             FamilyTransferComparison(
                 family=pair.family,
@@ -416,6 +610,7 @@ def cross_lingual_family_transfer_report(
                     else DEFAULT_ADAPTED_TARGET_F1_FLOOR
                 ),
                 donor_non_regression_tolerance=tolerance,
+                efficiency=efficiency,
             )
         )
 
@@ -587,7 +782,7 @@ def _routed_fixture(
         else pair.target_language
     )
     adapter_language: str | None
-    if mode == _BASELINE and role == _TARGET:
+    if role == _TARGET and mode in {_BASELINE, _FULL_MODEL}:
         adapter_language = None
     elif role == _DONOR or mode == _ZERO_SHOT:
         adapter_language = pair.donor_language
@@ -607,6 +802,7 @@ def _routed_fixture(
             "adapter_language": adapter_language,
             "zero_shot": role == _TARGET and mode == _ZERO_SHOT,
             "adapted": mode == _ADAPTED,
+            "full_language_model": mode == _FULL_MODEL,
         }
     )
     if role == _TARGET and mode == _ZERO_SHOT:
@@ -686,6 +882,15 @@ def _validate_tolerance(value: float) -> float:
     return tolerance
 
 
+def _validate_probability(value: float, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{field_name} must be a number")
+    probability = float(value)
+    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError(f"{field_name} must be a finite probability")
+    return probability
+
+
 def _require_text(value: object, field_name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a string")
@@ -709,10 +914,13 @@ def _format_delta(value: float) -> str:
 
 __all__ = [
     "DEFAULT_ADAPTED_TARGET_F1_FLOOR",
+    "DEFAULT_ADAPTED_F1_FRACTION_OF_FULL_MODEL_FLOOR",
+    "DEFAULT_TRAINABLE_FRACTION_OF_FULL_MODEL_CEILING",
     "FAMILY_TRANSFER_ARTIFACT_TYPE",
     "FAMILY_TRANSFER_FIXTURES_PATH",
     "FAMILY_TRANSFER_SCHEMA_VERSION",
     "FamilyTransferComparison",
+    "FamilyTransferEfficiencyQualification",
     "FamilyTransferModeMetrics",
     "FamilyTransferReport",
     "cross_lingual_family_transfer_report",

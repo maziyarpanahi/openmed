@@ -12,6 +12,11 @@ from .__about__ import __version__
 
 if TYPE_CHECKING:
     from .core import ModelLoader, OpenMedConfig
+    from .core.capabilities import (
+        BackendSpec,
+        BackendStatus,
+        MissingOptionalDependencyError,
+    )
     from .core.pii import (
         DeidentificationResult,
         PIIEntity,
@@ -27,6 +32,13 @@ _LAZY_IMPORTS = {
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
     "load_model": ".core",
+    "BackendSpec": ".core.capabilities",
+    "BackendStatus": ".core.capabilities",
+    "MissingOptionalDependencyError": ".core.capabilities",
+    "available_backends": ".core.capabilities",
+    "backend_status": ".core.capabilities",
+    "is_backend_available": ".core.capabilities",
+    "require_backend": ".core.capabilities",
     "LANG_TO_LOCALE": ".core.anonymizer",
     "Anonymizer": ".core.anonymizer",
     "AnonymizerConfig": ".core.anonymizer",
@@ -140,6 +152,7 @@ _LAZY_IMPORTS = {
     "format_predictions": ".processing",
     "postprocess_text": ".processing",
     "preprocess_text": ".processing",
+    "resolve_sections": ".processing",
     "process_batch": ".processing",
     "redact_dataset": ".processing",
     "sentence_utils": ".processing",
@@ -809,11 +822,19 @@ __all__ = [
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",
+    "BackendSpec",
+    "BackendStatus",
+    "MissingOptionalDependencyError",
+    "available_backends",
+    "backend_status",
+    "is_backend_available",
+    "require_backend",
     "TextProcessor",
     "IndicNormalization",
     "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
+    "resolve_sections",
     "TokenizationHelper",
     "OutputFormatter",
     "format_predictions",
