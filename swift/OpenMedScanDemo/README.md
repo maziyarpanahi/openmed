@@ -21,6 +21,15 @@ An iOS SwiftUI demo that shows the full native Apple flow:
 8. In **Maple Insights**, generate a grounded brief or ask document questions. Maple receives only the masked note, and its responses are labeled for clinician review rather than diagnosis or treatment.
 9. To test disconnected mode, run the demo once while online so Maple is cached, then disable network access and run the same sample or scan flow again.
 
+## Simulator Recording Reel
+
+Add `--maple-simulator-demo` to the scheme's launch arguments to show a
+deterministic 15-second recording reel on iOS Simulator. The reel covers model
+download, PII masking, entity and relation extraction, and grounded chat. It is
+persistently labeled **Simulator Preview · Synthetic Results**, never
+initializes MLX, and must not be presented as inference evidence. Use a physical
+iPhone or iPad for a recording of the real Maple weights and outputs.
+
 ## What It Demonstrates
 
 - no Python service

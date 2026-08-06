@@ -65,6 +65,7 @@
 		B1000055 /* JetBrainsMono.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000056 /* JetBrainsMono.ttf */; };
 		B1000056 /* JetBrainsMono-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000057 /* JetBrainsMono-Italic.ttf */; };
 		B1000057 /* MapleInsightsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000058 /* MapleInsightsScreen.swift */; };
+		B1000058 /* MapleSimulatorDemoReelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000059 /* MapleSimulatorDemoReelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -126,6 +127,7 @@
 		B2000056 /* JetBrainsMono.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = JetBrainsMono.ttf; sourceTree = "<group>"; };
 		B2000057 /* JetBrainsMono-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = JetBrainsMono-Italic.ttf; sourceTree = "<group>"; };
 		B2000058 /* MapleInsightsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapleInsightsScreen.swift; sourceTree = "<group>"; };
+		B2000059 /* MapleSimulatorDemoReelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapleSimulatorDemoReelView.swift; sourceTree = "<group>"; };
 		A2000010 /* OpenMedScanDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenMedScanDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -258,6 +260,7 @@
 			B2000046 /* ClinicalScreen.swift */,
 			B2000047 /* SummaryScreen.swift */,
 			B2000058 /* MapleInsightsScreen.swift */,
+			B2000059 /* MapleSimulatorDemoReelView.swift */,
 		);
 		path = Screens;
 		sourceTree = "<group>";
@@ -408,6 +411,7 @@
 			B1000045 /* ClinicalScreen.swift in Sources */,
 			B1000046 /* SummaryScreen.swift in Sources */,
 			B1000057 /* MapleInsightsScreen.swift in Sources */,
+			B1000058 /* MapleSimulatorDemoReelView.swift in Sources */,
 			B1000047 /* ScannerSheet.swift in Sources */,
 			B1000048 /* ModelDownloadSheet.swift in Sources */,
 			B1000049 /* LabelEditorSheet.swift in Sources */,
