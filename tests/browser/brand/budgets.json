@@ -2,8 +2,8 @@
   "schema_version": 2,
   "artifact": {
     "maximum_files": 300,
-    "maximum_total_bytes": 20971520,
-    "maximum_unique_payload_bytes": 20552090,
+    "maximum_total_bytes": 21233664,
+    "maximum_unique_payload_bytes": 20971520,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -13,13 +13,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 2359296
+    "json": 2621440
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 2359296
+    "docs/search/search_index.json": 2621440
   },
   "route_transfer_bytes": {
     "/": 3145728,

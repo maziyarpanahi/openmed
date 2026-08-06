@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from openmed.core.labels import CONDITION
+from openmed.core.labels import CONDITION, FINDING
 
 from ..registry import register_linker
 from .base import VocabLinker
@@ -20,6 +20,7 @@ class HpoLinker(VocabLinker):
     system = "HPO"
     key = "hpo"
     required_label = CONDITION
+    compatible_labels = frozenset({FINDING})
 
     def _format_code(self, code: str) -> str:
         code = str(code).strip()

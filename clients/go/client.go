@@ -84,10 +84,12 @@ const (
 	LangKN PIILanguage = "kn"
 	LangML PIILanguage = "ml"
 	LangMR PIILanguage = "mr"
+	LangNE PIILanguage = "ne"
 	LangOR PIILanguage = "or"
 	LangPA PIILanguage = "pa"
 	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
+	LangUR PIILanguage = "ur"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"
 	LangHE PIILanguage = "he"
@@ -108,6 +110,7 @@ const (
 	LangUK PIILanguage = "uk"
 	LangCS PIILanguage = "cs"
 	LangEL PIILanguage = "el"
+	LangVI PIILanguage = "vi"
 )
 
 // DeidentificationMethod selects how detected PII spans are transformed by the
@@ -325,6 +328,19 @@ type OMOPLoadRequest struct {
 	RecordsJSONL        string `json:"records_jsonl"`
 	VocabularyVersion   string `json:"vocabulary_version,omitempty"`
 	ValidateConstraints bool   `json:"validate_constraints,omitempty"`
+}
+
+// ConceptAncestorRequest is one caller-supplied Athena hierarchy edge.
+type ConceptAncestorRequest struct {
+	AncestorConceptID   int `json:"ancestor_concept_id"`
+	DescendantConceptID int `json:"descendant_concept_id"`
+}
+
+// CohortResolveRequest is the request body for POST /cohort/resolve.
+type CohortResolveRequest struct {
+	Phenotype        JSONObject               `json:"phenotype"`
+	RecordsJSONL     string                   `json:"records_jsonl"`
+	ConceptAncestors []ConceptAncestorRequest `json:"concept_ancestors,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -567,6 +583,36 @@ type OMOPLoadResponse struct {
 	RejectedSpans        []OMOPRejectedSpan        `json:"rejected_spans"`
 	SourceNoteHashes     []string                  `json:"source_note_hashes"`
 	ConstraintViolations *OMOPConstraintViolations `json:"constraint_violations,omitempty"`
+}
+
+// CohortEvidencePointer identifies matched grounded evidence without raw text.
+type CohortEvidencePointer struct {
+	CriterionID    string `json:"criterion_id"`
+	ConceptSetID   string `json:"concept_set_id"`
+	ConceptID      int64  `json:"concept_id"`
+	Vocabulary     string `json:"vocabulary"`
+	DomainTable    string `json:"domain_table"`
+	EventID        int64  `json:"event_id"`
+	NoteID         int64  `json:"note_id"`
+	NoteNLPID      int64  `json:"note_nlp_id"`
+	SourceNoteHash string `json:"source_note_hash"`
+	Start          int64  `json:"start"`
+	End            int64  `json:"end"`
+}
+
+// CohortPatientEvidence groups matched pointers by internal patient ID.
+type CohortPatientEvidence struct {
+	PatientID int64                   `json:"patient_id"`
+	Matches   []CohortEvidencePointer `json:"matches"`
+}
+
+// CohortResolveResponse is the privacy-minimized cohort result.
+type CohortResolveResponse struct {
+	SchemaVersion string                  `json:"schema_version"`
+	Advisory      string                  `json:"advisory"`
+	PatientIDs    []int64                 `json:"patient_ids"`
+	Evidence      []CohortPatientEvidence `json:"evidence"`
+	Provenance    JSONObject              `json:"provenance"`
 }
 
 // ---------------------------------------------------------------------------
@@ -969,6 +1015,15 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 func (c *Client) LoadOMOP(ctx context.Context, req OMOPLoadRequest) (*OMOPLoadResponse, error) {
 	var out OMOPLoadResponse
 	if err := c.post(ctx, "/omop/load", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ResolveCohort calls POST /cohort/resolve and returns PHI-free match pointers.
+func (c *Client) ResolveCohort(ctx context.Context, req CohortResolveRequest) (*CohortResolveResponse, error) {
+	var out CohortResolveResponse
+	if err := c.post(ctx, "/cohort/resolve", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

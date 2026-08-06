@@ -1,5 +1,7 @@
 """Clinical relation extraction public API."""
 
+from importlib import import_module
+
 from .assertion_filter import (
     ASSERTION_FILTER_ADVISORY,
     RELATION_ASSERTION_STATUSES,
@@ -20,6 +22,7 @@ from .candidate import (
     DRUG_TO_INDICATION,
     DRUG_TO_ROUTE,
     DRUG_TO_STRENGTH,
+    PROBLEM_ATTRIBUTE_RELATION_TYPES,
     RELATION_ATTRIBUTE_TYPES,
     RELATION_ORDER,
     RELATION_SCHEMA_VERSION,
@@ -30,16 +33,30 @@ from .candidate import (
     MedicationRelation,
     MedicationRelationGroup,
     MedicationRelationType,
+    ProblemAttributeType,
+    ProblemRelationType,
     Relation,
+    RelationAttributeType,
     RelationCandidate,
     RelationCandidateBatch,
     RelationCandidateRule,
+    RelationType,
     SpanPairCandidate,
     SpanReference,
     build_relation_candidates,
     enumerate_joint_span_candidates,
     enumerate_span_pair_candidates,
     sample_negative_span_pairs,
+    split_sentence_offsets,
+)
+from .document_level import (
+    DOCUMENT_RELATION_ADVISORY,
+    DOCUMENT_RELATION_SCHEMA_VERSION,
+    DocumentLevelRelation,
+    MentionPairEvidence,
+    SafeRelationMention,
+    aggregate_document_relations,
+    extract_document_relations,
 )
 from .joint_head import (
     JOINT_HEAD_SCHEMA_VERSION,
@@ -51,11 +68,13 @@ from .joint_head import (
     JointSpanPairScore,
     decode_joint_span_pairs,
 )
+from .lab_results import LAB_RESULT_ADVISORY, LabResult, extract_lab_results
 from .medication_links import (
     MEDICATION_LINK_ADVISORY,
     MedicationRelationScorer,
     MedicationStatementRecord,
     extract_medication_relations,
+    extract_relations,
     link_medication_attributes,
     reconstruct_medication_statements,
 )
@@ -68,10 +87,14 @@ from .multilingual import (
     RELATION_TYPE_REGISTRY,
     MultilingualRelation,
     available_multilingual_relation_languages,
-    extract_relations,
     map_relation_type,
     multilingual_relation_rules,
     relation_type_mapping,
+)
+from .problem_links import (
+    PROBLEM_RELATION_ADVISORY,
+    PROBLEM_STATUS_CUES,
+    extract_problem_relations,
 )
 from .temporal import (
     TEMPORAL_GRAPH_SCHEMA_VERSION,
@@ -104,8 +127,12 @@ __all__ = [
     "DRUG_TO_INDICATION",
     "DRUG_TO_ROUTE",
     "DRUG_TO_STRENGTH",
+    "PROBLEM_ATTRIBUTE_RELATION_TYPES",
+    "DOCUMENT_RELATION_ADVISORY",
+    "DOCUMENT_RELATION_SCHEMA_VERSION",
     "CoreferenceProvenance",
     "CoreferenceSourceReference",
+    "DocumentLevelRelation",
     "JOINT_HEAD_SCHEMA_VERSION",
     "JointEntityScore",
     "JointHeadConfig",
@@ -114,6 +141,8 @@ __all__ = [
     "JointSpanCandidate",
     "JointSpanPairHead",
     "JointSpanPairScore",
+    "LAB_RESULT_ADVISORY",
+    "LabResult",
     "MEDICATION_LINK_ADVISORY",
     "MedicationAttributeType",
     "MedicationRelation",
@@ -121,7 +150,13 @@ __all__ = [
     "MedicationRelationScorer",
     "MedicationStatementRecord",
     "MedicationRelationType",
+    "MentionPairEvidence",
+    "ProblemAttributeType",
+    "ProblemRelationType",
+    "PROBLEM_RELATION_ADVISORY",
+    "PROBLEM_STATUS_CUES",
     "Relation",
+    "RelationAttributeType",
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
@@ -131,18 +166,24 @@ __all__ = [
     "RelationCandidate",
     "RelationCandidateBatch",
     "RelationCandidateRule",
+    "RelationType",
     "SpanPairCandidate",
     "SpanReference",
+    "SafeRelationMention",
     "TemporalCueReference",
     "TemporalRelationCandidate",
     "TemporalRelationType",
     "TemporalSpanReference",
     "TemporalSpanRole",
     "build_relation_candidates",
+    "aggregate_document_relations",
     "decode_joint_span_pairs",
     "decode_tlink_candidates",
     "extract_tlink_candidates",
+    "extract_lab_results",
     "extract_medication_relations",
+    "extract_document_relations",
+    "extract_problem_relations",
     "enumerate_joint_span_candidates",
     "enumerate_span_pair_candidates",
     "link_medication_attributes",
@@ -160,4 +201,65 @@ __all__ = [
     "multilingual_relation_rules",
     "relation_type_mapping",
     "sample_negative_span_pairs",
+    "split_sentence_offsets",
+    "DEFAULT_MAX_RELATION_ABSTENTION_RATE",
+    "DEFAULT_MIN_ISOTONIC_SAMPLES",
+    "DEFAULT_MIN_RETAINED_RELATION_ACCURACY",
+    "DEFAULT_RELATION_RELIABILITY_BINS",
+    "RELATION_CALIBRATION_ADVISORY",
+    "RELATION_CALIBRATION_SCHEMA_VERSION",
+    "RELATION_STATUS_ASSERTED",
+    "RELATION_STATUS_UNCERTAIN",
+    "CalibratedRelation",
+    "RelationAbstentionResult",
+    "RelationCalibrationConsistencyError",
+    "RelationCalibrationRecord",
+    "RelationCalibrator",
+    "RelationOperatingPoint",
+    "RelationTypeCalibrator",
+    "apply_relation_abstention",
+    "assert_relation_consistency_gate",
+    "calibrate_relation_scores",
+    "coerce_relation_calibration_records",
+    "evaluate_relation_consistency_gate",
+    "fit_relation_calibrator",
+    "relation_calibration_report",
+    "select_relation_operating_points",
 ]
+
+_CALIBRATION_EXPORTS = frozenset(
+    {
+        "DEFAULT_MAX_RELATION_ABSTENTION_RATE",
+        "DEFAULT_MIN_ISOTONIC_SAMPLES",
+        "DEFAULT_MIN_RETAINED_RELATION_ACCURACY",
+        "DEFAULT_RELATION_RELIABILITY_BINS",
+        "RELATION_CALIBRATION_ADVISORY",
+        "RELATION_CALIBRATION_SCHEMA_VERSION",
+        "RELATION_STATUS_ASSERTED",
+        "RELATION_STATUS_UNCERTAIN",
+        "CalibratedRelation",
+        "RelationAbstentionResult",
+        "RelationCalibrationConsistencyError",
+        "RelationCalibrationRecord",
+        "RelationCalibrator",
+        "RelationOperatingPoint",
+        "RelationTypeCalibrator",
+        "apply_relation_abstention",
+        "assert_relation_consistency_gate",
+        "calibrate_relation_scores",
+        "coerce_relation_calibration_records",
+        "evaluate_relation_consistency_gate",
+        "fit_relation_calibrator",
+        "relation_calibration_report",
+        "select_relation_operating_points",
+    }
+)
+
+
+def __getattr__(name: str) -> object:
+    """Load evaluator-dependent relation calibration exports on demand."""
+
+    if name in _CALIBRATION_EXPORTS:
+        calibration = import_module(".calibration", __name__)
+        return getattr(calibration, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
