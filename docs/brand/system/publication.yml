@@ -202,6 +202,7 @@ classification:
     - runtimes/onnxruntime-web.md
     - runtimes/low-ram-loading.md
     - android-quickstart.md
+    - android-integration.md
     - export-onnx-android.md
     - android-tokenization.md
     - android-parity.md
