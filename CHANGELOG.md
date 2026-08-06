@@ -97,6 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   report plus committed baseline and rollout state with no live API call, and
   emits a PHI-free audit record carrying metric names, numeric deltas, store
   keys and hashes only (#1803).
+- Added a read-only catalog coherence gate that checks every `models.jsonl`
+  `canonical_labels` value against `openmed.core.labels.CANONICAL_LABELS`,
+  resolving aliases (`CHEM`/`SIMPLE_CHEMICAL` -> `CHEMICAL`) while still
+  rejecting labels that only survive `normalize_label`'s `OTHER` fallthrough;
+  exposed as `openmed.core.labels.is_recognized_label`,
+  `openmed.core.catalog_coherence.manifest_label_errors`, and a `Catalog
+  coherence` workflow (#2246).
 
 ### Changed
 
