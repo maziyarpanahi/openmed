@@ -42,6 +42,33 @@ offline operation, pre-stage normalized vocabulary artifacts and use
 `local_only=True`. A download is attempted only when local-only mode is off and
 a source has an expected SHA-256; checksum-free downloads are refused.
 
+## Load a local RxNorm release
+
+RxNorm is freely redistributable, but its release files are not bundled with
+OpenMed. Obtain a release from the [NLM RxNorm distribution](https://www.nlm.nih.gov/research/umls/rxnorm/),
+keep the downloaded archive or its unpacked files under the terms of that
+distribution, and pass the local path to the TTY-aware loader:
+
+```python
+from openmed.clinical.grounding import RxNormLoader
+
+rxnorm = RxNormLoader("/srv/vocab/rxnorm")
+matches = rxnorm.resolve("Tylenol 500 MG Oral Tablet", tty="SBD")
+match = matches[0]
+assert match.code == match.metadata["ingredient_rxcui"]
+print(match.metadata["tty"], match.metadata["normalized_ingredient"])
+```
+
+The path may be an unpacked release directory containing `RXNCONSO.RRF` and,
+when available, `RXNREL.RRF` and `RXNSAT.RRF`; a release archive and small
+caller-created JSONL/TSV projections are also accepted. Product and brand
+records roll up through local relationship rows to an ingredient RXCUI, while
+TTY filtering falls back in a documented deterministic order when a requested
+term type is absent (the default preference is `SBD`, `SCD`, `BN`, `IN`, `PIN`,
+then `MIN`). Dose-form relationships are exposed in
+`match.metadata["dose_form"]`. Loading is local-only and performs no network
+request; no RxNorm rows are stored in the repository.
+
 ## Restricted vocabularies
 
 UMLS and SNOMED CT content is never bundled or downloaded. Activating either
