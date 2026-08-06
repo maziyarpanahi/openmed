@@ -110,6 +110,24 @@ def test_content_accuracy_detects_missing_and_mismatched_nodes():
     assert gold_items[0]["node_path"] in accuracy.missing_nodes
 
 
+def test_content_accuracy_requires_exact_empty_value_matches():
+    gold_items = [
+        {
+            "concept_name": "Report",
+            "value_type": "CONTAINER",
+            "value": "",
+            "unit_code": None,
+            "node_path": "1",
+        }
+    ]
+    predicted_items = [dict(gold_items[0], value=None)]
+
+    accuracy = compute_sr_content_accuracy(predicted_items, gold_items)
+
+    assert accuracy.accuracy == 0.0
+    assert accuracy.mismatched_nodes == ("1",)
+
+
 def test_extractor_meets_offline_accuracy_gate(tmp_path: Path):
     pytest.importorskip("pydicom")
     from openmed.multimodal import extract_dicom_sr

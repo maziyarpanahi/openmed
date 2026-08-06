@@ -2848,11 +2848,11 @@ def compute_sr_content_accuracy(
     predicted_by_path = {
         str(item.get("node_path", "")): item for item in predicted_items
     }
+    gold_paths = {str(item.get("node_path", "")) for item in gold_items}
     total = len(gold_items)
     matched = 0
     missing: list[str] = []
     mismatched: list[str] = []
-    matched_paths: set[str] = set()
 
     for gold in gold_items:
         path = str(gold.get("node_path", ""))
@@ -2860,7 +2860,6 @@ def compute_sr_content_accuracy(
         if prediction is None:
             missing.append(path)
             continue
-        matched_paths.add(path)
         if all(
             _sr_field_equal(prediction.get(field), gold.get(field))
             for field in _SR_MATCH_FIELDS
@@ -2869,11 +2868,7 @@ def compute_sr_content_accuracy(
         else:
             mismatched.append(path)
 
-    extra = [
-        path
-        for path in predicted_by_path
-        if path not in {str(gold.get("node_path", "")) for gold in gold_items}
-    ]
+    extra = [path for path in predicted_by_path if path not in gold_paths]
 
     accuracy = matched / total if total else 1.0
     return SrContentAccuracy(
@@ -2887,10 +2882,6 @@ def compute_sr_content_accuracy(
 
 
 def _sr_field_equal(left: Any, right: Any) -> bool:
-    if left is None or (isinstance(left, str) and left == ""):
-        left = None
-    if right is None or (isinstance(right, str) and right == ""):
-        right = None
     return left == right
 
 
