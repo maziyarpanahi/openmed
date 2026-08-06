@@ -6,7 +6,10 @@ import json
 
 import pytest
 
-from openmed.eval.error_analysis import hard_negative_over_redaction_report
+from openmed.eval.error_analysis import (
+    error_report,
+    hard_negative_over_redaction_report,
+)
 from openmed.eval.golden import (
     HARD_NEGATIVE_CATEGORY,
     GoldenFixture,
@@ -14,6 +17,13 @@ from openmed.eval.golden import (
     MemoryBudgetExceeded,
     build_hard_negative_fixture_pack,
     mine_hard_negative_candidates,
+)
+from openmed.eval.hard_negative_mining import (
+    FALSE_NEGATIVE,
+    FALSE_POSITIVE,
+    HardNegativeManifestError,
+    load_hard_negative_manifest,
+    mine_hard_negative_manifest,
 )
 from openmed.eval.harness import BenchmarkFixture
 
@@ -177,6 +187,105 @@ def test_hard_negatives_raise_over_redaction_rate_on_heldout_check() -> None:
     assert baseline.over_redaction_rate == 0.0
     assert enriched.over_redaction_rate > baseline.over_redaction_rate
     assert enriched.over_redacted_candidates > 0
+
+
+def test_error_miner_deduplicates_errors_and_exports_harness_items(tmp_path) -> None:
+    fixtures = [
+        {
+            "id": "synthetic-fn",
+            "language": "en",
+            "metadata": {"synthetic": True},
+            "text": "Training note for Alex Mercer.",
+            "gold_spans": [
+                _span("Training note for Alex Mercer.", "Alex Mercer", "PERSON")
+            ],
+        },
+        {
+            "id": "synthetic-fp",
+            "language": "en",
+            "metadata": {"synthetic": True},
+            "text": "Follow-up note for Alex Mercer.",
+            "gold_spans": [],
+        },
+        {
+            "id": "synthetic-rare",
+            "language": "en",
+            "metadata": {"synthetic": True},
+            "text": "Training code ZX-12345 stayed visible.",
+            "gold_spans": [],
+        },
+    ]
+
+    def runner(fixture, model_name, device):
+        assert model_name == "synthetic-error-model"
+        assert device == "cpu"
+        if fixture.fixture_id == "synthetic-fp":
+            return [_span(fixture.text, "Alex Mercer", "PERSON")]
+        if fixture.fixture_id == "synthetic-rare":
+            return [_span(fixture.text, "ZX-12345", "ID_NUM")]
+        return []
+
+    report = error_report(
+        "synthetic-error-model",
+        fixtures,
+        runner=runner,
+        example_cap=10,
+        context_window=5,
+    )
+    manifest = mine_hard_negative_manifest(
+        report,
+        fixtures=fixtures,
+        context_window=5,
+        label_gate_impacts={"PERSON": 2.0, "ID_NUM": 1.0},
+    )
+
+    assert manifest.scanned_error_count == 3
+    assert manifest.duplicate_count == 1
+    assert manifest.entries[0].label == "PERSON"
+    assert manifest.entries[0].frequency == 2
+    assert manifest.entries[0].error_types == (FALSE_NEGATIVE, FALSE_POSITIVE)
+    assert manifest.to_dict()["entries"][0]["labels"] == []
+    assert manifest.to_dict()["entries"][0]["source_label"] == "PERSON"
+    assert manifest.entries[0].context == " for Alex Mercer."
+    assert (
+        manifest.entries[0].context[
+            manifest.entries[0].relative_start : manifest.entries[0].relative_end
+        ]
+        == "Alex Mercer"
+    )
+    assert manifest.entries[1].label == "ID_NUM"
+
+    training_item = manifest.to_training_items()[0]
+    assert training_item["labels"] == []
+    assert training_item["is_hard_negative"] is True
+    assert training_item["metadata"]["label"] == "PERSON"
+
+    fixture_pack = manifest.to_fixture_pack()
+    candidate = fixture_pack["fixtures"][0]["metadata"]["hard_negative_candidates"][0]
+    assert (
+        fixture_pack["fixtures"][0]["text"][candidate["start"] : candidate["end"]]
+        == candidate["text"]
+    )
+
+    output_path = manifest.write_json(tmp_path / "hard-negatives.json")
+    restored = load_hard_negative_manifest(output_path)
+    assert restored.to_json() == manifest.to_json()
+
+
+def test_error_miner_rejects_non_synthetic_source_text() -> None:
+    errors = [
+        {
+            "error_type": FALSE_POSITIVE,
+            "fixture_id": "unmarked-fixture",
+            "label": "EMAIL",
+            "start": 0,
+            "end": 18,
+            "text": "patient@example.test",
+        }
+    ]
+
+    with pytest.raises(HardNegativeManifestError, match="synthetic"):
+        mine_hard_negative_manifest(errors)
 
 
 def _synthetic_records() -> list[dict[str, object]]:
