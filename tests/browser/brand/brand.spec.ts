@@ -488,6 +488,21 @@ async function expectNoRunningAnimations(page: Page): Promise<void> {
   expect(running, "reduced motion left active animations").toEqual([]);
 }
 
+async function waitForFiniteAnimations(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const finiteAnimations = document.getAnimations().filter((animation) => {
+      const effect = animation.effect as KeyframeEffect | null;
+      const endTime = effect?.getComputedTiming().endTime;
+      return typeof endTime === "number" && Number.isFinite(endTime);
+    });
+    await Promise.all(
+      finiteAnimations.map((animation) =>
+        animation.finished.catch(() => undefined),
+      ),
+    );
+  });
+}
+
 function expectCleanAudit(audit: Audit): void {
   expect(audit.consoleErrors, "browser console errors").toEqual([]);
   expect(audit.pageErrors, "uncaught page errors").toEqual([]);
@@ -599,6 +614,7 @@ for (const surface of surfaces) {
                     : "light",
                 reducedMotion: "no-preference",
               });
+              await waitForFiniteAnimations(page);
             }
           }
 
