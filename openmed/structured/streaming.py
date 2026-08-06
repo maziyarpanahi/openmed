@@ -51,6 +51,7 @@ from .table_io import (
 SUPPORTED_STREAMING_SUFFIXES = frozenset({".csv", ".tsv", ".parquet"})
 DEFAULT_CHUNK_SIZE = 4_096
 DEFAULT_MEMORY_CEILING = 64 * 1024 * 1024
+_PARQUET_OUTPUT_ROW_GROUP_SIZE = DEFAULT_CHUNK_SIZE
 
 Deidentifier = Callable[..., Any]
 
@@ -98,7 +99,8 @@ def stream_deidentify_table(
         remove_direct_identifiers: Drop columns recognized as direct
             identifiers from the release.
         chunk_size: Rows per CSV batch / Parquet row-group batch. Bounds the
-            second-pass write buffer.
+            input-side working set. Parquet output uses a fixed row-group size
+            so its bytes do not depend on input chunk or row-group boundaries.
         memory_ceiling: Byte ceiling on both the first-pass class census and
             additional peak process RSS after input initialization. ``None``
             disables both guards. Raises :class:`MemoryCeilingError` if either
@@ -171,7 +173,6 @@ def stream_deidentify_table(
         output_suffix,
         output_columns,
         released_rows(),
-        chunk_size=chunk_size,
     )
     memory_guard.check(stage="completion")
 
@@ -436,8 +437,6 @@ def _write_stream(
     suffix: str,
     columns: Sequence[str],
     rows: Iterator[Mapping[str, Any]],
-    *,
-    chunk_size: int,
 ) -> None:
     if not columns:
         raise ValueError("Release output must contain at least one column")
@@ -462,7 +461,6 @@ def _write_stream(
                 temporary,
                 columns,
                 rows,
-                chunk_size=chunk_size,
             )
         if not wrote_any:
             raise ValueError(
@@ -510,8 +508,6 @@ def _write_parquet_stream(
     path: Path,
     columns: Sequence[str],
     rows: Iterator[Mapping[str, Any]],
-    *,
-    chunk_size: int,
 ) -> bool:
     pa, pq = _import_pyarrow()
     ordered = list(columns)
@@ -544,7 +540,7 @@ def _write_parquet_stream(
         buffer: list[Mapping[str, Any]] = []
         for row in rows:
             buffer.append(row)
-            if len(buffer) >= chunk_size:
+            if len(buffer) >= _PARQUET_OUTPUT_ROW_GROUP_SIZE:
                 canonical = canonical_batch(buffer)
                 table = pa.Table.from_pylist(canonical)
                 if writer is None:
