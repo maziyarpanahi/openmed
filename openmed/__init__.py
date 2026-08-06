@@ -12,15 +12,15 @@ from .__about__ import __version__
 
 if TYPE_CHECKING:
     from .core import ModelLoader, OpenMedConfig
-    from .core.document_stream import (
-        DocumentStreamDeidentifier,
-        DocumentStreamResult,
-        deidentify_document_stream,
-    )
     from .core.capabilities import (
         BackendSpec,
         BackendStatus,
         MissingOptionalDependencyError,
+    )
+    from .core.document_stream import (
+        DocumentStreamDeidentifier,
+        DocumentStreamResult,
+        deidentify_document_stream,
     )
     from .core.pii import (
         DeidentificationResult,

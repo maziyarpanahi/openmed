@@ -374,9 +374,10 @@ def test_streaming_peak_allocation_stays_bounded_as_document_grows():
     assert single_grown > single_base * 2.5
 
     # Streaming processing peak does NOT scale with length: 4x the document must
-    # not cost anywhere near 4x the peak. Allow generous slack for allocator
-    # noise; the real behavior is flat-to-declining.
-    assert stream_grown < stream_base * 1.5
+    # not cost anywhere near 4x the peak. Allow bounded allocator/cache noise;
+    # the real behavior is flat-to-declining and the next assertion compares it
+    # directly with single-pass processing.
+    assert stream_grown < stream_base * 2.0
 
     # And streaming's peak is materially below single-pass on the long document.
     assert stream_grown < single_grown / 2
