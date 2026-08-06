@@ -13,10 +13,11 @@ from importlib import resources
 from types import MappingProxyType
 from typing import TypedDict
 
-from .detect import detect_sections
 from openmed.clinical.data.doctype_loinc_ontology import (
     get_document_type_mapping,
 )
+
+from .detect import detect_sections
 
 DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE = "data/doctype_signatures.json"
 UNKNOWN_DOCUMENT_TYPE = "unknown"
