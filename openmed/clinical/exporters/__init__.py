@@ -63,6 +63,16 @@ from .openehr import (
     to_openehr_composition,
     validate_openehr_composition,
 )
+from .valueset import (
+    VALUESET_VALIDATION_EXTENSION_URL,
+    CodeableConceptValidationResult,
+    ValidationPolicy,
+    ValueSetSource,
+    ValueSetValidationResult,
+    load_valueset,
+    validate_code,
+    validate_codeable_concept,
+)
 
 __all__ = [
     "CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL",
@@ -112,4 +122,12 @@ __all__ = [
     "to_omop",
     "to_openehr_composition",
     "validate_openehr_composition",
+    "VALUESET_VALIDATION_EXTENSION_URL",
+    "CodeableConceptValidationResult",
+    "ValidationPolicy",
+    "ValueSetSource",
+    "ValueSetValidationResult",
+    "load_valueset",
+    "validate_code",
+    "validate_codeable_concept",
 ]
