@@ -682,6 +682,14 @@ def _resolve_imported_symbols(surface: Mapping[str, Symbol]) -> dict[str, Symbol
 
     resolved = dict(surface)
     for _ in range(8):
+        class_members: dict[str, list[Symbol]] = {
+            symbol.name: [] for symbol in resolved.values() if symbol.kind == "class"
+        }
+        for member in resolved.values():
+            parent_name, separator, _ = member.name.rpartition(".")
+            if separator and parent_name in class_members:
+                class_members[parent_name].append(member)
+
         updates: dict[str, Symbol] = {}
         for symbol in tuple(resolved.values()):
             if symbol.kind != "import" or symbol.source_target is None:
@@ -706,9 +714,7 @@ def _resolve_imported_symbols(surface: Mapping[str, Symbol]) -> dict[str, Symbol
                 continue
             target_prefix = f"{target.name}."
             alias_prefix = f"{symbol.name}."
-            for member in tuple(resolved.values()):
-                if not member.name.startswith(target_prefix):
-                    continue
+            for member in class_members.get(target.name, ()):
                 suffix = member.name[len(target_prefix) :]
                 alias_name = alias_prefix + suffix
                 updates.setdefault(

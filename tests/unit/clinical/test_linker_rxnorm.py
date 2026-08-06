@@ -102,7 +102,7 @@ class TestMedicationGate:
         assert linker.link("aspirin", canonical_label="DATE") == []
 
     def test_gate_allows_drug_alias(self, linker):
-        # 'drug' normalizes to MEDICATION via the canonical label taxonomy.
+        # DRUG is a canonical biomedical label accepted by the medication linker.
         assert linker.link("aspirin", canonical_label="drug")
 
 
