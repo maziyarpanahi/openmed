@@ -109,6 +109,14 @@ from .registry import (
 )
 from .restricted import RESTRICTED_SYSTEM_URIS, UserKeyVocabularyLoader
 from .retrieval import TwoStageRetriever, retrieve_candidates
+from .section_context import (
+    DEFAULT_SECTION_CONTEXT_CONFIG,
+    DEFAULT_SECTION_CONTEXT_RULES,
+    SECTION_CONTEXT_RULES,
+    SectionContextConfig,
+    SectionContextRule,
+    apply_section_context,
+)
 from .types import Candidate, GroundedSpan
 from .vocab import (
     FREE_VOCAB_SYSTEMS,
@@ -146,6 +154,8 @@ __all__ = [
     "DEFAULT_CROSSWALK_RESOURCES",
     "DenseCandidateGenerator",
     "DEFAULT_GROUNDING_SYSTEMS",
+    "DEFAULT_SECTION_CONTEXT_CONFIG",
+    "DEFAULT_SECTION_CONTEXT_RULES",
     "ECLConstraint",
     "ECLResolver",
     "ECLValidationError",
@@ -192,6 +202,9 @@ __all__ = [
     "SparseCandidateGenerator",
     "RulesPostCoordinationDecomposer",
     "SnomedExpression",
+    "SECTION_CONTEXT_RULES",
+    "SectionContextConfig",
+    "SectionContextRule",
     "TwoStageRetriever",
     "UserKeyVocabularyLoader",
     "VocabConcept",
@@ -205,6 +218,7 @@ __all__ = [
     "VocabularyNotFoundError",
     "VocabularyRegistryError",
     "assertion_grounding_status",
+    "apply_section_context",
     "available_linkers",
     "available_loaders",
     "build_index",

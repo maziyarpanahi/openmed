@@ -80,7 +80,8 @@ class ConceptMatch:
     ``match_type`` records whether the original term matched exactly, only
     after normalization, or through an abbreviation.  ``matched_term`` is the
     vocabulary term, not the caller's query, so match results do not duplicate
-    arbitrary source text.
+    arbitrary source text.  Optional section fields are populated by the
+    section-context layer and remain separate from vocabulary metadata.
     """
 
     system_uri: str
@@ -90,6 +91,10 @@ class ConceptMatch:
     match_type: MatchType
     matched_term: str
     metadata: Mapping[str, object] = field(default_factory=dict, hash=False)
+    section: str | None = None
+    experiencer: str | None = None
+    section_bias: float = 0.0
+    context_score: float | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "system_uri", _validate_system_uri(self.system_uri))
@@ -109,12 +114,35 @@ class ConceptMatch:
         if not isinstance(self.metadata, Mapping):
             raise TypeError("metadata must be a mapping")
         object.__setattr__(self, "metadata", dict(self.metadata))
+        if self.section is not None and (
+            not isinstance(self.section, str) or not self.section.strip()
+        ):
+            raise ValueError("section must be non-empty when provided")
+        if self.experiencer is not None and (
+            not isinstance(self.experiencer, str) or not self.experiencer.strip()
+        ):
+            raise ValueError("experiencer must be non-empty when provided")
+        section_bias = float(self.section_bias)
+        if not math.isfinite(section_bias):
+            raise ValueError("section_bias must be finite")
+        object.__setattr__(self, "section_bias", section_bias)
+        if self.context_score is not None:
+            context_score = float(self.context_score)
+            if not math.isfinite(context_score):
+                raise ValueError("context_score must be finite when provided")
+            object.__setattr__(self, "context_score", context_score)
 
     @property
     def key(self) -> tuple[str, str]:
         """Return the stable vocabulary URI and code identity."""
 
         return (self.system_uri, self.code)
+
+    @property
+    def ranking_score(self) -> float:
+        """Return the context-adjusted score used for deterministic ordering."""
+
+        return self.score if self.context_score is None else self.context_score
 
 
 @dataclass(frozen=True)
@@ -197,13 +225,20 @@ class LexicalMatcher:
         return self._concept_count
 
     def lookup(
-        self, query: str, *, limit: int | None = None
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        sections: object | None = None,
+        experiencer: str | None = None,
+        section_rules: Mapping[str, object] | None = None,
     ) -> tuple[ConceptMatch, ...]:
         """Return deterministically ranked concepts for ``query``.
 
         Exact matches rank ahead of normalized matches, which rank ahead of
         abbreviation matches.  A concept reachable through multiple terms is
-        returned once at its best score.
+        returned once at its best score.  When ``sections`` or ``experiencer``
+        is provided, section context is applied before ``limit`` is enforced.
         """
 
         if not isinstance(query, str):
@@ -237,26 +272,49 @@ class LexicalMatcher:
             "abbreviation",
         )
 
-        matches = sorted(
-            best.values(),
-            key=lambda match: (
-                -match.score,
-                match.system_uri,
-                match.code,
-                match.display,
-                order_by_key[match.key],
-            ),
+        matches = tuple(
+            sorted(
+                best.values(),
+                key=lambda match: (
+                    -match.score,
+                    match.system_uri,
+                    match.code,
+                    match.display,
+                    order_by_key[match.key],
+                ),
+            )
         )
+        if sections is not None or experiencer is not None:
+            from .section_context import apply_section_context
+
+            matches = apply_section_context(
+                matches,
+                sections,
+                experiencer,
+                rules=section_rules,
+            )
         if limit is not None:
             matches = matches[:limit]
-        return tuple(matches)
+        return matches
 
     def match(
-        self, query: str, *, limit: int | None = None
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        sections: object | None = None,
+        experiencer: str | None = None,
+        section_rules: Mapping[str, object] | None = None,
     ) -> tuple[ConceptMatch, ...]:
         """Alias for :meth:`lookup`."""
 
-        return self.lookup(query, limit=limit)
+        return self.lookup(
+            query,
+            limit=limit,
+            sections=sections,
+            experiencer=experiencer,
+            section_rules=section_rules,
+        )
 
     def _build_abbreviation_index(
         self, abbreviations: AbbreviationMap
