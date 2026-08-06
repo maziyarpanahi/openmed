@@ -12,6 +12,10 @@ from inspect import Signature
 from typing import Annotated, Any, Callable, Dict, Optional
 
 import openmed
+from openmed.agent.security.injection_guard import (
+    InjectionGuard,
+    PromptInjectionDetected,
+)
 from openmed.clinical.exporters.fhir import to_bundle, to_fhir
 from openmed.clinical.grounding import (
     DEFAULT_GROUNDING_SYSTEMS,
@@ -151,6 +155,8 @@ def _json_resource(payload: Any) -> str:
 def _error_envelope(error: BaseException) -> Dict[str, Any]:
     """Return a PHI-safe structured tool error without echoing input or output."""
 
+    if isinstance(error, PromptInjectionDetected):
+        return {"error": error.to_dict(), "is_error": True}
     error_module = error.__class__.__module__
     if isinstance(error, ToolSchemaValidationError):
         code = "invalid_result"
@@ -211,6 +217,7 @@ def _mcp_return_annotation(spec: ToolSpec) -> Any:
 def _render_structured_mcp_tool(
     spec: ToolSpec,
     handler: Callable[..., Dict[str, Any]],
+    injection_guard: Optional[InjectionGuard] = None,
 ) -> Callable[..., Any]:
     """Render one registry tool with structured success and error results."""
 
@@ -219,7 +226,12 @@ def _render_structured_mcp_tool(
 
     def _tool(*args: Any, **kwargs: Any) -> Any:
         try:
-            payload = registry_tool(*args, **kwargs)
+            if injection_guard is None:
+                payload = registry_tool(*args, **kwargs)
+            else:
+                bound = spec.signature.bind_partial(*args, **kwargs)
+                guarded = injection_guard.guard_input(bound.arguments)
+                payload = registry_tool(**guarded.value)
         except Exception as error:
             return _call_tool_result(_error_envelope(error), is_error=True)
         return _call_tool_result(payload, is_error=False)
@@ -260,10 +272,17 @@ def _synchronize_registered_schemas(server: Any, spec: ToolSpec) -> None:
     registered.__dict__.pop("output_schema", None)
 
 
-def _structured_fastmcp(base_class: Any) -> Any:
+def _structured_fastmcp(
+    base_class: Any,
+    injection_guard: Optional[InjectionGuard] = None,
+) -> Any:
     """Return a FastMCP class that envelopes malformed calls without logging data."""
 
     from jsonschema import validate
+
+    selected_guard = injection_guard or InjectionGuard.from_env(
+        "OPENMED_MCP_INJECTION_GUARD_MODE"
+    )
 
     class _OpenMedFastMCP(base_class):
         async def call_tool(
@@ -275,8 +294,9 @@ def _structured_fastmcp(base_class: Any) -> Any:
                 tool = self._tool_manager.get_tool(name)
                 if tool is None:
                     raise KeyError(name)
-                validate(instance=arguments, schema=tool.parameters)
-                return await super().call_tool(name, arguments)
+                guarded = selected_guard.guard_arguments(arguments)
+                validate(instance=guarded.value, schema=tool.parameters)
+                return await super().call_tool(name, guarded.value)
             except Exception as error:
                 return _call_tool_result(_error_envelope(error), is_error=True)
 
@@ -1464,6 +1484,7 @@ MCP_TOOL_NAMES: frozenset[str] = frozenset(build_mcp_tool_handlers(None))
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
+    injection_guard: Optional[InjectionGuard] = None,
 ) -> None:
     handlers = build_mcp_tool_handlers(runtime_provider)
     for spec in TOOL_REGISTRY.latest_specs():
@@ -1473,7 +1494,13 @@ def _register_tools(
             description=spec.description,
             annotations=_mcp_annotations(spec),
             structured_output=True,
-        )(_render_structured_mcp_tool(spec, handlers[spec.name]))
+        )(
+            _render_structured_mcp_tool(
+                spec,
+                handlers[spec.name],
+                injection_guard,
+            )
+        )
         _synchronize_registered_schemas(server, spec)
 
 
@@ -1589,9 +1616,17 @@ def create_mcp_server(
     host: Optional[str] = None,
     port: Optional[int] = None,
     streamable_http_path: str = "/mcp",
+    injection_guard_mode: Optional[str] = None,
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
-    FastMCP = _structured_fastmcp(_load_fastmcp())
+    if injection_guard_mode is None:
+        injection_guard = InjectionGuard.from_env("OPENMED_MCP_INJECTION_GUARD_MODE")
+    else:
+        injection_guard = InjectionGuard(mode=injection_guard_mode)
+    FastMCP = _structured_fastmcp(
+        _load_fastmcp(),
+        injection_guard=injection_guard,
+    )
     server = FastMCP(
         "OpenMed",
         instructions=MCP_INSTRUCTIONS,
@@ -1602,7 +1637,7 @@ def create_mcp_server(
         stateless_http=True,
         json_response=True,
     )
-    _register_tools(server, runtime_provider)
+    _register_tools(server, runtime_provider, injection_guard)
     _register_resources(server, runtime_provider)
     _register_prompts(server)
     return server
