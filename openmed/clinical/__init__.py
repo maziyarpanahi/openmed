@@ -151,6 +151,7 @@ from .document_linking import (
     EntityOccurrence,
     link_documents,
 )
+from .drug_interactions import find_interactions
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -611,6 +612,7 @@ __all__ = [
     "build_guarded_suggestion",
     "guarded_suggestion",
     "validate_guarded_suggestion",
+    "find_interactions",
     "COREFERENCE_FEATURES",
     "COREFERENCE_RESOLUTION_ADVISORY",
     "DEFAULT_COREFERENCE_THRESHOLD",
