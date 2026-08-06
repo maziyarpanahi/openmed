@@ -92,7 +92,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 - [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, Apple runtimes, browser export, multimodal inputs, and FHIR/HL7.
 - [ONNX and WebGPU Export](./export-onnx-webgpu.md) – export, manifest, runtime-loading, and publication guidance for ONNX browser artifacts.
 - [Transformers.js Export](./export-transformersjs.md) – browser/WebGPU packaging for token classification bundles.
-- [FHIR Interop Helpers](./fhir-interop.md), [HL7 v2 De-identification](./hl7v2-deidentification.md), and [OMOP/lakehouse integrations](./integrations/lakehouse-redaction.md) – structured health-data workflows.
+- [FHIR Interop Helpers](./fhir-interop.md), [FHIR-to-OMOP round-trip conformance](./interop/fhir-omop-matrix.md), [HL7 v2 De-identification](./hl7v2-deidentification.md), and [OMOP/lakehouse integrations](./integrations/lakehouse-redaction.md) – structured health-data workflows.
 - [MLX Backend](./mlx-backend.md), [OpenMedKit](./swift-openmedkit.md), [Android Span Parity](./android-parity.md), and [CoreML Packaging](./coreml-export.md) – local mobile/runtime paths.
 
 ## How these docs are structured
