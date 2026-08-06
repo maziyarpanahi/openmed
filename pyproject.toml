@@ -213,6 +213,10 @@ agents = [
   "llama-index-core>=0.10,<1",
 ]
 
+beam = [
+  "apache-beam>=2.73,<3",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -326,6 +330,15 @@ openmed = "openmed.cli:main"
 openmed-mcp = "openmed.mcp.server:main"
 
 [tool.uv]
+constraint-dependencies = [
+  "betterproto==2.0.0b6; python_version >= '3.11'",
+]
+override-dependencies = [
+  # Beam 2.75 caps these below their patched releases even though its
+  # DirectRunner remains compatible with the secure versions.
+  "cryptography>=50,<51",
+  "httplib2>=0.32",
+]
 conflicts = [
   [
     { extra = "awq" },
