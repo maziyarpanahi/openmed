@@ -286,6 +286,14 @@ from openmed.eval.frontier import (
     frontier_point_from_reports,
     frontier_report,
 )
+from openmed.eval.generalization import (
+    GENERALIZATION_ARTIFACT_TYPE,
+    GENERALIZATION_METRICS,
+    GENERALIZATION_SCHEMA_VERSION,
+    GENERALIZATION_SUITE,
+    GeneralizationReport,
+    cross_corpus_report,
+)
 from openmed.eval.golden import (
     HARD_NEGATIVE_CATEGORY,
     HARD_NEGATIVE_PACK_VERSION,
@@ -841,6 +849,12 @@ __all__ = [
     "run_cblue_task_coverage",
     "run_synthetic_cblue_task_coverage_smoke",
     "DEFAULT_MIXED_SCRIPT_DETECTION_FLOOR",
+    "GENERALIZATION_ARTIFACT_TYPE",
+    "GENERALIZATION_METRICS",
+    "GENERALIZATION_SCHEMA_VERSION",
+    "GENERALIZATION_SUITE",
+    "GeneralizationReport",
+    "cross_corpus_report",
     "DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING",
     "DEFAULT_SYNTHETIC_CORRELATION_MAE_CAP",
     "DEFAULT_SYNTHETIC_MARGINAL_MAE_CAP",
