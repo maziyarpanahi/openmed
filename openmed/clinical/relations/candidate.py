@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Literal
@@ -30,6 +31,14 @@ MedicationRelationType = Literal[
     "drug_to_strength",
     "drug_to_indication",
 ]
+ProblemAttributeType = Literal["severity", "body_site", "status"]
+ProblemRelationType = Literal[
+    "problem_to_severity",
+    "problem_to_body_site",
+    "problem_to_status",
+]
+RelationAttributeType = MedicationAttributeType | ProblemAttributeType
+RelationType = MedicationRelationType | ProblemRelationType
 
 RELATION_SCHEMA_VERSION = 2
 DRUG_TO_DOSE: MedicationRelationType = "drug_to_dose"
@@ -62,6 +71,15 @@ ATTRIBUTE_RELATION_TYPES: dict[MedicationAttributeType, MedicationRelationType] 
     attribute_type: relation_type
     for relation_type, attribute_type in RELATION_ATTRIBUTE_TYPES.items()
 }
+PROBLEM_ATTRIBUTE_RELATION_TYPES: dict[ProblemAttributeType, ProblemRelationType] = {
+    "severity": "problem_to_severity",
+    "body_site": "problem_to_body_site",
+    "status": "problem_to_status",
+}
+_ALL_ATTRIBUTE_RELATION_TYPES: dict[RelationAttributeType, RelationType] = {
+    **ATTRIBUTE_RELATION_TYPES,
+    **PROBLEM_ATTRIBUTE_RELATION_TYPES,
+}
 
 
 @dataclass(frozen=True)
@@ -74,6 +92,7 @@ class SpanReference:
     end: int
     score: float
     section: str | None = None
+    derived: bool = False
 
     @classmethod
     def from_entity(
@@ -116,6 +135,8 @@ class SpanReference:
         }
         if self.section is not None:
             payload["section"] = self.section
+        if self.derived:
+            payload["derived"] = True
         return payload
 
 
@@ -158,13 +179,235 @@ class RelationCandidateBatch:
 
 
 @dataclass(frozen=True)
+class JointSpanCandidate:
+    """One contiguous token span considered by the joint decoder head.
+
+    Token offsets are half-open indices into the encoder sequence. Character
+    offsets are half-open Python code-point indices into the source text.
+
+    Args:
+        token_start: Inclusive encoder-token index.
+        token_end: Exclusive encoder-token index.
+        start: Inclusive source character offset.
+        end: Exclusive source character offset.
+    """
+
+    token_start: int
+    token_end: int
+    start: int
+    end: int
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.token_start < self.token_end:
+            raise ValueError("token offsets must satisfy 0 <= start < end")
+        if not 0 <= self.start < self.end:
+            raise ValueError("character offsets must satisfy 0 <= start < end")
+
+    @property
+    def token_width(self) -> int:
+        """Return the number of encoder tokens covered by the span."""
+
+        return self.token_end - self.token_start
+
+    def stable_key(self) -> tuple[int, int, int, int]:
+        """Return the deterministic identity used for sampling and sorting."""
+
+        return self.token_start, self.token_end, self.start, self.end
+
+
+@dataclass(frozen=True)
+class SpanPairCandidate:
+    """One directed span pair and its optional training relation label.
+
+    Args:
+        head: Directed relation source span.
+        tail: Directed relation target span.
+        relation_label: Typed relation label, or ``None`` for a negative pair.
+    """
+
+    head: JointSpanCandidate
+    tail: JointSpanCandidate
+    relation_label: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.head == self.tail:
+            raise ValueError("span pair head and tail must differ")
+        if _token_spans_overlap(self.head, self.tail):
+            raise ValueError("span pair head and tail must not overlap")
+        if self.relation_label == "":
+            raise ValueError("relation_label must be non-empty when provided")
+
+    @property
+    def is_negative(self) -> bool:
+        """Return whether this pair is a no-relation training example."""
+
+        return self.relation_label is None
+
+    def stable_key(self) -> tuple[int, ...]:
+        """Return a deterministic directed pair identity."""
+
+        return (*self.head.stable_key(), *self.tail.stable_key())
+
+
+def enumerate_joint_span_candidates(
+    token_offsets: Sequence[tuple[int, int]],
+    *,
+    max_span_width: int,
+) -> tuple[JointSpanCandidate, ...]:
+    """Enumerate contiguous SpERT-style spans over encoder token offsets.
+
+    Args:
+        token_offsets: Monotonic half-open source character offsets for every
+            encoder token.
+        max_span_width: Maximum number of encoder tokens in one candidate.
+
+    Returns:
+        Candidate spans in deterministic token-boundary order.
+    """
+
+    if max_span_width < 1:
+        raise ValueError("max_span_width must be positive")
+    normalized_offsets = _validate_token_offsets(token_offsets)
+    candidates: list[JointSpanCandidate] = []
+    for token_start in range(len(normalized_offsets)):
+        limit = min(len(normalized_offsets), token_start + max_span_width)
+        for token_end in range(token_start + 1, limit + 1):
+            candidates.append(
+                JointSpanCandidate(
+                    token_start=token_start,
+                    token_end=token_end,
+                    start=normalized_offsets[token_start][0],
+                    end=normalized_offsets[token_end - 1][1],
+                )
+            )
+    return tuple(candidates)
+
+
+def enumerate_span_pair_candidates(
+    spans: Sequence[JointSpanCandidate],
+    *,
+    max_token_distance: int | None = None,
+) -> tuple[SpanPairCandidate, ...]:
+    """Enumerate directed, non-overlapping span pairs for relation scoring.
+
+    Args:
+        spans: Contiguous entity-span candidates.
+        max_token_distance: Optional maximum count of tokens between endpoints.
+
+    Returns:
+        Span pairs in deterministic directed order.
+    """
+
+    if max_token_distance is not None and max_token_distance < 0:
+        raise ValueError("max_token_distance must be non-negative when provided")
+    pairs: list[SpanPairCandidate] = []
+    for head in spans:
+        for tail in spans:
+            if head == tail or _token_spans_overlap(head, tail):
+                continue
+            if (
+                max_token_distance is not None
+                and _span_token_distance(head, tail) > max_token_distance
+            ):
+                continue
+            pairs.append(SpanPairCandidate(head=head, tail=tail))
+    return tuple(sorted(pairs, key=SpanPairCandidate.stable_key))
+
+
+def sample_negative_span_pairs(
+    spans: Sequence[JointSpanCandidate],
+    positive_pairs: Iterable[SpanPairCandidate],
+    *,
+    max_negatives: int,
+    seed: int = 0,
+    max_token_distance: int | None = None,
+) -> tuple[SpanPairCandidate, ...]:
+    """Sample deterministic no-relation pairs for joint-head training.
+
+    Positive direction is significant: the reverse of a typed relation may be
+    sampled as a negative. Selection uses a stable SHA-256 rank rather than a
+    process-global random generator, so repeated offline recipes are identical.
+
+    Args:
+        spans: Contiguous entity-span candidates.
+        positive_pairs: Directed pairs carrying gold typed relations.
+        max_negatives: Maximum no-relation examples to return.
+        seed: Stable offline sampling seed.
+        max_token_distance: Optional maximum count of tokens between endpoints.
+
+    Returns:
+        Deterministically selected pairs whose ``relation_label`` is ``None``.
+    """
+
+    if max_negatives < 0:
+        raise ValueError("max_negatives must be non-negative")
+    if max_negatives == 0:
+        return ()
+    positive_keys = {pair.stable_key() for pair in positive_pairs}
+    negatives = [
+        pair
+        for pair in enumerate_span_pair_candidates(
+            spans,
+            max_token_distance=max_token_distance,
+        )
+        if pair.stable_key() not in positive_keys
+    ]
+    ranked = sorted(
+        negatives,
+        key=lambda pair: (
+            hashlib.sha256(f"{seed}\0{pair.stable_key()}".encode("ascii")).hexdigest(),
+            pair.stable_key(),
+        ),
+    )
+    return tuple(sorted(ranked[:max_negatives], key=SpanPairCandidate.stable_key))
+
+
+def _validate_token_offsets(
+    token_offsets: Sequence[tuple[int, int]],
+) -> tuple[tuple[int, int], ...]:
+    normalized: list[tuple[int, int]] = []
+    previous_end = 0
+    for offset in token_offsets:
+        if len(offset) != 2:
+            raise ValueError("each token offset must contain start and end")
+        start, end = offset
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, int)
+            or not isinstance(end, int)
+        ):
+            raise TypeError("token offsets must be integers")
+        if start < previous_end or end <= start:
+            raise ValueError("token offsets must be monotonic and non-overlapping")
+        normalized.append((start, end))
+        previous_end = end
+    return tuple(normalized)
+
+
+def _token_spans_overlap(
+    left: JointSpanCandidate,
+    right: JointSpanCandidate,
+) -> bool:
+    return left.token_start < right.token_end and right.token_start < left.token_end
+
+
+def _span_token_distance(
+    left: JointSpanCandidate,
+    right: JointSpanCandidate,
+) -> int:
+    if left.token_end <= right.token_start:
+        return right.token_start - left.token_end
+    if right.token_end <= left.token_start:
+        return left.token_start - right.token_end
+    return 0
+
+
+@dataclass(frozen=True)
 class _MatchedCue:
     cue: str
     start: int
     end: int
-
-
-_SENTENCE_BOUNDARY_RE = re.compile(r"[.!?。！？；;\n]")
 
 
 def build_relation_candidates(
@@ -173,21 +416,29 @@ def build_relation_candidates(
     rules: Iterable[RelationCandidateRule],
     *,
     language: str,
+    max_sentence_distance: int = 0,
 ) -> RelationCandidateBatch:
-    """Build graph candidates from existing spans without word tokenization.
+    """Build bounded graph candidates without word tokenization.
 
     Args:
         text: Original clinical text.
         spans: Existing NER spans with character offsets into ``text``.
         rules: Language-keyed relation rules.
         language: Language code recorded as safe graph provenance.
+        max_sentence_distance: Maximum number of sentence boundaries between
+            relation endpoints. The default preserves sentence-local candidate
+            generation; positive values enable bounded document-level pairs.
 
     Returns:
         Nodes, candidate edges, and the stable node-to-span lookup used by the
         shared :func:`openmed.core.decoding.decode_span_graph` decoder.
     """
 
+    if max_sentence_distance < 0:
+        raise ValueError("max_sentence_distance must be non-negative")
+
     references = _coerce_relation_spans(text, spans)
+    sentence_offsets = split_sentence_offsets(text)
     nodes: list[SpanNode] = []
     spans_by_node_id: dict[str, SpanReference] = {}
     for index, reference in enumerate(references):
@@ -215,10 +466,12 @@ def build_relation_candidates(
                 continue
             head = spans_by_node_id[head_node.node_id]
             tail = spans_by_node_id[tail_node.node_id]
-            distance = _character_distance(head, tail)
-            between = _text_between(text, head, tail)
-            if _SENTENCE_BOUNDARY_RE.search(between):
+            head_sentence_index = _sentence_index_for_span(sentence_offsets, head)
+            tail_sentence_index = _sentence_index_for_span(sentence_offsets, tail)
+            sentence_distance = abs(head_sentence_index - tail_sentence_index)
+            if sentence_distance > max_sentence_distance:
                 continue
+            distance = _character_distance(head, tail)
             window_start = min(head.start, tail.start)
             window = text[window_start : max(head.end, tail.end)]
             for rule in ordered_rules:
@@ -231,6 +484,20 @@ def build_relation_candidates(
                 matched_cue = _matched_cue(window, rule.cues)
                 if matched_cue is None:
                     continue
+                cue_start = window_start + matched_cue.start
+                cue_sentence_index = _sentence_index_for_offset(
+                    sentence_offsets,
+                    cue_start,
+                )
+                evidence_sentence_offsets = tuple(
+                    sorted(
+                        {
+                            sentence_offsets[head_sentence_index],
+                            sentence_offsets[tail_sentence_index],
+                            sentence_offsets[cue_sentence_index],
+                        }
+                    )
+                )
                 candidates.append(
                     SpanEdge(
                         head=head_node.node_id,
@@ -240,10 +507,19 @@ def build_relation_candidates(
                         metadata={
                             "character_distance": distance,
                             "cue_end": window_start + matched_cue.end,
-                            "cue_start": window_start + matched_cue.start,
+                            "cue_start": cue_start,
+                            "cross_sentence": sentence_distance > 0,
+                            "evidence_sentence_offsets": evidence_sentence_offsets,
+                            "head_sentence_offset": sentence_offsets[
+                                head_sentence_index
+                            ],
                             "language": language,
                             "matched_cue": matched_cue.cue,
+                            "sentence_distance": sentence_distance,
                             "source_relation": rule.source_relation,
+                            "tail_sentence_offset": sentence_offsets[
+                                tail_sentence_index
+                            ],
                         },
                     )
                 )
@@ -257,6 +533,58 @@ def build_relation_candidates(
             )
         ),
         spans_by_node_id=MappingProxyType(spans_by_node_id),
+    )
+
+
+def split_sentence_offsets(text: str) -> tuple[tuple[int, int], ...]:
+    """Return deterministic half-open offsets for document sentences."""
+
+    offsets: list[tuple[int, int]] = []
+    cursor = 0
+    for boundary in re.finditer(r"[.!?。！？；;\n]+", text):
+        start, end = _trim_sentence_offset(text, cursor, boundary.end())
+        if start < end:
+            offsets.append((start, end))
+        cursor = boundary.end()
+    start, end = _trim_sentence_offset(text, cursor, len(text))
+    if start < end:
+        offsets.append((start, end))
+    if not offsets:
+        return ((0, len(text)),)
+    return tuple(offsets)
+
+
+def _trim_sentence_offset(text: str, start: int, end: int) -> tuple[int, int]:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+def _sentence_index_for_span(
+    sentence_offsets: tuple[tuple[int, int], ...],
+    span: SpanReference,
+) -> int:
+    for index, (start, end) in enumerate(sentence_offsets):
+        if start <= span.start and span.end <= end:
+            return index
+    return _sentence_index_for_offset(sentence_offsets, span.start)
+
+
+def _sentence_index_for_offset(
+    sentence_offsets: tuple[tuple[int, int], ...],
+    offset: int,
+) -> int:
+    for index, (start, end) in enumerate(sentence_offsets):
+        if start <= offset < end:
+            return index
+    return min(
+        range(len(sentence_offsets)),
+        key=lambda index: min(
+            abs(offset - sentence_offsets[index][0]),
+            abs(offset - sentence_offsets[index][1]),
+        ),
     )
 
 
@@ -316,18 +644,6 @@ def _coerce_relation_spans(
             ),
         )
     )
-
-
-def _text_between(
-    text: str,
-    left: SpanReference,
-    right: SpanReference,
-) -> str:
-    if left.end <= right.start:
-        return text[left.end : right.start]
-    if right.end <= left.start:
-        return text[right.end : left.start]
-    return ""
 
 
 def _character_distance(left: SpanReference, right: SpanReference) -> int:
@@ -442,26 +758,32 @@ class MedicationRelation:
 
 @dataclass(frozen=True)
 class Relation:
-    """Public medication relation tuple with a bounded confidence score."""
+    """Public clinical relation tuple with a bounded confidence score.
+
+    Source-backed tails round-trip through ``start``/``end``. A derived tail,
+    such as status consumed from clinical context metadata, carries
+    ``derived=True`` and reuses its head offsets as provenance rather than
+    claiming that the normalized status value occurs literally in the text.
+    """
 
     head: SpanReference
-    type: MedicationAttributeType
+    type: RelationAttributeType
     tail: SpanReference
     score: float
 
     def __post_init__(self) -> None:
         """Validate the generic relation confidence contract."""
 
-        if self.type not in ATTRIBUTE_RELATION_TYPES:
-            raise ValueError(f"unsupported medication relation type: {self.type!r}")
+        if self.type not in _ALL_ATTRIBUTE_RELATION_TYPES:
+            raise ValueError(f"unsupported clinical relation type: {self.type!r}")
         if not 0.0 <= self.score <= 1.0:
             raise ValueError("relation score must be between 0 and 1")
 
     @property
-    def relation_type(self) -> MedicationRelationType:
-        """Return the medication-specific edge label."""
+    def relation_type(self) -> RelationType:
+        """Return the head-specific edge label."""
 
-        return ATTRIBUTE_RELATION_TYPES[self.type]
+        return _ALL_ATTRIBUTE_RELATION_TYPES[self.type]
 
     def to_dict(self) -> dict[str, Any]:
         """Return the roadmap relation shape as a deterministic mapping."""
@@ -581,13 +903,24 @@ __all__ = [
     "MedicationRelation",
     "MedicationRelationGroup",
     "MedicationRelationType",
+    "ProblemAttributeType",
+    "ProblemRelationType",
+    "JointSpanCandidate",
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
     "RELATION_SCHEMA_VERSION",
+    "RelationAttributeType",
+    "RelationType",
+    "PROBLEM_ATTRIBUTE_RELATION_TYPES",
     "RelationCandidateBatch",
     "RelationCandidateRule",
     "RelationCandidate",
     "Relation",
+    "SpanPairCandidate",
     "SpanReference",
     "build_relation_candidates",
+    "enumerate_joint_span_candidates",
+    "enumerate_span_pair_candidates",
+    "sample_negative_span_pairs",
+    "split_sentence_offsets",
 ]

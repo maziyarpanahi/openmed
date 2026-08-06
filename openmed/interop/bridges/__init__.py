@@ -16,7 +16,20 @@ from .snomed_terminology_bridge import (
     SNOMEDTerminologyServerError,
 )
 
+from .icd10cn import (
+    ICD10CNBridge,
+    ICD10CNMapping,
+    load_icd10cn_crosswalk,
+    map_icd10_to_icd10cn,
+    map_icd10cn_code,
+)
+
 __all__ = [
+    "ICD10CNBridge",
+    "ICD10CNMapping",
+    "load_icd10cn_crosswalk",
+    "map_icd10_to_icd10cn",
+    "map_icd10cn_code",
     "DEFAULT_SCTID_PATTERN",
     "SNOMED_SYSTEM_URI",
     "SNOMED_TERMINOLOGY_SYSTEM",

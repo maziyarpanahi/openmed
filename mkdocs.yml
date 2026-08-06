@@ -39,6 +39,7 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
+      - NER Families: ner-families.md
       - Model Manifest: model-manifest.md
       - Indic Encoder Backbones: indic-encoders.md
       - Indic NER Checkpoint Compatibility: indic-ner-checkpoints.md
@@ -51,6 +52,7 @@ nav:
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
+      - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
@@ -68,6 +70,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
+      - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
@@ -144,6 +147,7 @@ nav:
       - Onboarding: onboarding.md
       - v1 to v2 Migration: migration.md
       - Contributing & Releases: contributing.md
+      - Model Release Queue: model-release-queue.md
       - Nix Development: development.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md

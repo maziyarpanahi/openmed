@@ -90,9 +90,50 @@ identifier shapes, address/PIN pairing, script coverage, and cross-document
 identity metadata. The JSONL file is intentionally excluded from the generic
 golden loader because its richer corpus schema is validated separately.
 
+The `india_clinical_phi_leakage` and `india_surrogate_consistency` suites are
+registered in `openmed.eval.suites.DEFAULT_SUITES`, so `load_suite_fixtures`
+and `suite_metadata` discover them without caller-specific wiring. The
+consistency suite verifies that every declared alias of one synthetic person
+resolves to a single surrogate identity across documents and across Latin,
+Devanagari, and Tamil; that each rendered surrogate stays in its source script;
+that no alias surface survives replacement; and that an identifier repeated
+across documents keeps one surrogate that still satisfies its own shape or
+checksum validator.
+
+`openmed.eval.run_india_clinical_suite_report` combines DPDP per-label policy
+coverage, the residual zero-leak verdict, and the surrogate-consistency verdict
+into one report of counts, canonical labels, offsets, and HMAC hashes; no raw
+identifier or alias surface appears in it.
+
+The consistency gate covers the default name-matching path. Two behaviours are
+recorded in every result as un-gated `known_divergences` entries, so a passing
+verdict is never read as broader assurance than it is:
+
+1. The opt-in `transliteration_aware_name_matching` path does not collapse
+   these aliases into one identity, because the Devanagari inherent vowel and
+   the Tamil surname rendering fold to different Latin keys.
+2. The vault normalizes the key language for personal names to `india` but
+   keeps the document language for structured identifiers, so the same Aadhaar
+   in the Hindi and Tamil notes yields two surrogates. Names link across
+   languages; identifiers do not. The gated linkage check is therefore scoped
+   to `(value, language)`, the granularity the vault actually guarantees.
+
 The corpus contains no real PHI, production data, restricted corpus material,
 or DUA data. It is an assist-only, non-decisional evaluation fixture, not
 clinical ground truth, and must not be used to make patient-care decisions.
+
+## Joint Entity and Relation Fixtures
+
+`fixtures/joint_entity_relation.jsonl` contains synthetic encoder states,
+token-to-character offsets, entity spans, typed relations, and explicit
+boundary, over-generation, and distractor traps for the backend-neutral joint
+span-pair head. Every row sets `metadata.synthetic=true` and
+`metadata.contains_real_phi=false`.
+
+The specialized fixture is intentionally excluded from the generic
+de-identification loader. Its states are small deterministic vectors used to
+measure combined entity-and-relation micro-F1, endpoint-confidence suppression,
+span-graph schema integrity, and false-positive relations on negative pairs.
 
 ## Relation Gold Fixtures
 

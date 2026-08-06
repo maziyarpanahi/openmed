@@ -82,6 +82,16 @@ class OcrResult:
             blocks, separator=separator, metadata=dict(self.metadata)
         )
 
+    def to_layout(self, **kwargs: Any) -> Any:
+        """Reconstruct layout-aware reading order from positioned OCR words.
+
+        The layout module is imported only when this helper is called, keeping
+        the OCR contract's module-load behavior unchanged.
+        """
+        from .layout import parse_layout
+
+        return parse_layout(self, **kwargs)
+
 
 @runtime_checkable
 class OcrEngine(Protocol):

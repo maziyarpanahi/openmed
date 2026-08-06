@@ -14,6 +14,7 @@ from ...context import (
     PATIENT_EXPERIENCER,
     RECENT,
     ClinicalAssertion,
+    ClinicalContextResult,
 )
 from ...coreference import CoreferenceChain
 from ...grounding.assertion_grounding import (
@@ -25,9 +26,13 @@ from ...grounding.assertion_grounding import (
     assertion_grounding_status,
 )
 from ...grounding.types import GroundedSpan
-from ..codeable_concept import to_codeable_concept
 from .bundle import to_bundle
-from .codeable_concept import POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL
+from .codeable_concept import (
+    GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
+    MEDICAL_DEVICE_ASSIST_EXTENSION_URL,
+    POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL,
+    to_codeable_concept,
+)
 from .condition import to_condition
 
 __all__ = [
@@ -358,12 +363,16 @@ def _resource_type(grounded: GroundedSpan, resource: str | None) -> str:
 
 
 def _asserted_span(grounded: GroundedSpan) -> AssertedGroundedSpan:
-    assertion = grounded.assertion or ClinicalAssertion(
-        temporality=RECENT,
-        certainty=CERTAIN,
-        negation=AFFIRMED,
-        experiencer=PATIENT_EXPERIENCER,
-    )
+    raw_assertion = grounded.assertion
+    if isinstance(raw_assertion, ClinicalContextResult):
+        assertion = raw_assertion.to_assertion()
+    else:
+        assertion = raw_assertion or ClinicalAssertion(
+            temporality=RECENT,
+            certainty=CERTAIN,
+            negation=AFFIRMED,
+            experiencer=PATIENT_EXPERIENCER,
+        )
     return AssertedGroundedSpan(
         grounded=grounded,
         assertion=assertion,
@@ -389,6 +398,11 @@ def _remove_internal_fields(node: Any) -> None:
         node.pop("_score", None)
         extensions = node.get("extension")
         if isinstance(extensions, list):
+            retained_urls = {
+                GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
+                MEDICAL_DEVICE_ASSIST_EXTENSION_URL,
+                POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL,
+            }
             retained = [
                 extension
                 for extension in extensions
@@ -397,8 +411,7 @@ def _remove_internal_fields(node: Any) -> None:
                     and str(extension.get("url") or "").startswith(
                         "https://openmed.ai/fhir/StructureDefinition/"
                     )
-                    and extension.get("url")
-                    != POSTCOORDINATED_CODING_PROVENANCE_EXTENSION_URL
+                    and extension.get("url") not in retained_urls
                 )
             ]
             if retained:
