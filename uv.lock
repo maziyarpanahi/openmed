@@ -6193,7 +6193,7 @@ quickumls = [
     { name = "quickumls" },
 ]
 ray = [
-    { name = "ray" },
+    { name = "ray", extra = ["data"] },
 ]
 scispacy = [
     { name = "scispacy" },
@@ -6356,7 +6356,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "quickumls", marker = "extra == 'quickumls'", specifier = ">=1.4,<2" },
     { name = "rapidfuzz", marker = "extra == 'grounding'", specifier = ">=3.9,<4" },
-    { name = "ray", marker = "extra == 'ray'", specifier = ">=2.30,<3" },
+    { name = "ray", extras = ["data"], marker = "extra == 'ray'", specifier = ">=2.30,<3" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
     { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.22" },
@@ -8951,6 +8951,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/63/ac/74597352f729f9f7d998a93c6dd1de5efca3e6a5750f720d04a42f22bb3e/ray-2.56.1-cp314-cp314-manylinux2014_x86_64.whl", hash = "sha256:ae91fe578fadea38c13a208a0fec27e1ced238ccdf5fff95ef3e30ac3071dec9", size = 74099698, upload-time = "2026-07-17T21:29:26.649Z" },
 ]
 
+[package.optional-dependencies]
+data = [
+    { name = "fsspec" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+]
 [[package]]
 name = "readchar"
 version = "4.2.2"

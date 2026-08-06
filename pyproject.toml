@@ -238,7 +238,7 @@ cloud = [
 ]
 
 ray = [
-  "ray>=2.30,<3",
+  "ray[data]>=2.30,<3",
 ]
 
 spark = [

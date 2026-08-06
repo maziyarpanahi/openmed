@@ -156,6 +156,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="pydeid",
         description="pyDeid PHI span adapter",
     ),
+    "ray": AdapterSpec(
+        name="ray",
+        module="openmed.interop.ray_data",
+        extra="ray",
+        description="Ray Data actor operator for batch column de-identification",
+    ),
     "scrubadub": AdapterSpec(
         name="scrubadub",
         module="openmed.interop.scrubadub",
