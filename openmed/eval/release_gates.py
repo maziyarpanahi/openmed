@@ -94,6 +94,7 @@ G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
 G9_DUA_PROMOTION_CADENCE = "human-run"
 G9_DUA_PROMOTION_TIER = "promotion"
+_DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
 RELATION_GOLDEN_REGRESSION_GATE = "relation_golden_regression"
 RELATION_GOLDEN_TRAP_KINDS = ("assertion", "temporal")
 G13_STRICT_ENTITY_F1_FLOOR = 0.900
@@ -3349,8 +3350,10 @@ def evaluate_dua_relation_promotion_gate(
 
     payload = _report_payload(report)
     metrics = _mapping(payload.get("metrics"))
+    raw_metadata = _mapping(payload.get("metadata"))
+    contract_violations = _dua_relation_promotion_contract_violations(raw_metadata)
     metadata = {
-        **_mapping(payload.get("metadata")),
+        **raw_metadata,
         "relation_extraction_required": True,
         "task": "relation",
     }
@@ -3359,6 +3362,9 @@ def evaluate_dua_relation_promotion_gate(
         metadata,
         require_relaxed=False,
     )
+    violations = dict(_mapping(base.details.get("violations")))
+    if contract_violations:
+        violations["promotion_contract"] = contract_violations
     details = {
         **dict(base.details),
         "cadence": G9_DUA_PROMOTION_CADENCE,
@@ -3367,14 +3373,62 @@ def evaluate_dua_relation_promotion_gate(
         "promotion_blocking": True,
         "strict_lower_ci_required": True,
         "relaxed_lower_ci_required": False,
+        "violations": violations,
     }
+    passed = base.passed and not contract_violations
+    reason = base.reason
+    if contract_violations:
+        reason = "DUA relation promotion metadata contract is invalid"
     return GateCheck(
         gate=base.gate,
-        passed=base.passed,
-        reason=base.reason,
+        passed=passed,
+        reason=reason,
         details=details,
         blocking_format=base.blocking_format,
     )
+
+
+def _dua_relation_promotion_contract_violations(
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return violations in the serialized DUA promotion-run contract."""
+
+    violations: dict[str, Any] = {}
+    expected_values = {
+        "cadence": G9_DUA_PROMOTION_CADENCE,
+        "daily_blocking": False,
+        "dua_relation_promotion_required": True,
+        "gate_tier": G9_DUA_PROMOTION_TIER,
+        "promotion_blocking": True,
+        "task": "relation",
+    }
+    for key, expected in expected_values.items():
+        if metadata.get(key) != expected:
+            violations[key] = {
+                "expected": expected,
+                "observed": metadata.get(key),
+            }
+
+    raw_corpora = metadata.get("dua_relation_corpora")
+    if raw_corpora is None:
+        raw_corpora = metadata.get("dataset")
+    if isinstance(raw_corpora, str):
+        values = (raw_corpora,)
+    elif isinstance(raw_corpora, (list, tuple, set, frozenset)):
+        values = tuple(raw_corpora)
+    else:
+        values = ()
+    corpora = {
+        str(value).strip().casefold().replace("_", "-")
+        for value in values
+        if str(value).strip()
+    }
+    if not corpora or not corpora <= _DUA_RELATION_PROMOTION_CORPORA:
+        violations["dua_relation_corpora"] = {
+            "expected": sorted(_DUA_RELATION_PROMOTION_CORPORA),
+            "observed": sorted(corpora),
+        }
+    return violations
 
 
 def _relation_extraction_evidence(

@@ -996,7 +996,7 @@ def _brat_entity_from_line(
     text: str,
     corpus: str,
 ) -> DrugProtEntity:
-    columns = line.split("\t")
+    columns = line.split("\t", 2)
     if len(columns) < 3:
         raise ValueError(f"malformed {corpus} BRAT entity line")
     entity_id = columns[0]

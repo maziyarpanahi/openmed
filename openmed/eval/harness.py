@@ -1800,29 +1800,43 @@ def run_dua_relation_promotion_benchmark(
     daily cadence, while a failed G9 result blocks this promotion run.
     """
 
+    resolved_suite = str(suite).strip().casefold().replace("_", "-")
     fixture_corpora = {
-        str(getattr(fixture, "metadata", {}).get("dataset") or "")
+        str(fixture_metadata.get("dataset") or "").strip().casefold().replace("_", "-")
         for fixture in fixtures
-        if isinstance(getattr(fixture, "metadata", {}), Mapping)
+        for fixture_metadata in (
+            getattr(fixture, "metadata", {})
+            if isinstance(getattr(fixture, "metadata", {}), Mapping)
+            else {},
+        )
+        if str(fixture_metadata.get("dataset") or "").strip()
     }
-    if not fixture_corpora or not fixture_corpora <= DUA_RELATION_PROMOTION_CORPORA:
+    if resolved_suite not in DUA_RELATION_PROMOTION_CORPORA or fixture_corpora != {
+        resolved_suite
+    }:
         allowed = ", ".join(sorted(DUA_RELATION_PROMOTION_CORPORA))
         raise ValueError(
-            "DUA relation promotion fixtures must identify one of: " + allowed
+            "DUA relation promotion requires suite and fixture dataset to match "
+            f"one of: {allowed}"
         )
     report_metadata = {
         **dict(metadata or {}),
         "cadence": "human-run",
         "daily_blocking": False,
+        "dataset": resolved_suite,
         "dua_relation_corpora": sorted(fixture_corpora),
         "dua_relation_promotion_required": True,
+        "eval_only": True,
         "gate_tier": "promotion",
+        "network_fetch": False,
         "promotion_blocking": True,
+        "suite": resolved_suite,
+        "cache_corpus_rows": False,
         "task": "relation",
     }
     report = run_relation_benchmark(
         fixtures,
-        suite=suite,
+        suite=resolved_suite,
         model_name=model_name,
         runner=runner,
         device=device,

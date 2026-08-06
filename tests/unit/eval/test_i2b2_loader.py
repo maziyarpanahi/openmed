@@ -291,6 +291,20 @@ def test_n2c2_2022_loader_maps_employment_type_argument(tmp_path: Path) -> None:
     ]
 
 
+def test_n2c2_loader_preserves_tabs_in_brat_entity_text(tmp_path: Path) -> None:
+    source = tmp_path / "n2c2-2018"
+    source.mkdir()
+    (source / "tabbed.txt").write_text("Drug\tname", encoding="utf-8")
+    (source / "tabbed.ann").write_text(
+        "T1\tDrug 0 9\tDrug\tname\n",
+        encoding="utf-8",
+    )
+
+    fixture = load_n2c2_2018_relation_fixtures(source)[0]
+
+    assert fixture.entities[0].text == "Drug\tname"
+
+
 @pytest.mark.parametrize(
     "corpus",
     (BIORED, N2C2_2018, N2C2_2022),
@@ -322,6 +336,20 @@ def test_each_dua_relation_loader_scores_through_promotion_g9(
     assert gate["details"]["gate_tier"] == "promotion"
     assert gate["details"]["daily_blocking"] is False
     assert report.metadata["promotion_blocking"] is True
+
+
+def test_dua_relation_promotion_requires_matching_suite_and_fixture_dataset(
+    tmp_path: Path,
+) -> None:
+    fixtures = _write_and_load_n2c2_2022(tmp_path)
+
+    with pytest.raises(ValueError, match="suite and fixture dataset"):
+        run_dua_relation_promotion_benchmark(
+            fixtures,
+            suite=BIORED,
+            model_name="synthetic-relation-model",
+            runner=lambda fixture, _model, _device: fixture.relations,
+        )
 
 
 def test_dua_relation_suite_registry_and_license_metadata(tmp_path: Path) -> None:
