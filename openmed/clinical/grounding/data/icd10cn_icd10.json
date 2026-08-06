@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "name": "openmed-icd10cn-icd10-starter",
+  "version": "2026.08.0",
+  "license": "CC0-1.0",
+  "redistributable": true,
+  "entries": [
+    {
+      "source_system": "ICD-10-CN",
+      "source_code": "E11.900",
+      "locale": "zh-CN",
+      "aliases": ["2型糖尿病", "Ⅱ型糖尿病"],
+      "target_system": "ICD10",
+      "target_code": "E11.9",
+      "target_display": "Type 2 diabetes mellitus without complications"
+    },
+    {
+      "source_system": "ICD-10-CN",
+      "source_code": "I10.x00",
+      "locale": "zh-CN",
+      "aliases": ["原发性高血压", "高血压病"],
+      "target_system": "ICD10",
+      "target_code": "I10",
+      "target_display": "Essential primary hypertension"
+    },
+    {
+      "source_system": "ICD-10-CN",
+      "source_code": "J18.900",
+      "locale": "zh-CN",
+      "aliases": ["肺炎", "未特指病原体的肺炎"],
+      "target_system": "ICD10",
+      "target_code": "J18.9",
+      "target_display": "Pneumonia unspecified organism"
+    }
+  ]
+}

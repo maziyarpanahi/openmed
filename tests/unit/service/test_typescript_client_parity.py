@@ -69,7 +69,15 @@ def test_typescript_client_package_is_dependency_light_and_strict() -> None:
 
 
 def test_typescript_pii_languages_match_core_and_openapi() -> None:
-    from openmed.core.pii_i18n import INDIC_NER_LANGUAGES, SUPPORTED_LANGUAGES
+    from openmed.core.pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
+
+    registered_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
     match = re.search(
@@ -89,10 +97,8 @@ def test_typescript_pii_languages_match_core_and_openapi() -> None:
         if isinstance(properties.get("lang"), dict) and "enum" in properties["lang"]
     }
 
-    assert typescript_languages == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
-    assert openapi_language_sets == {
-        frozenset(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)
-    }
+    assert typescript_languages == registered_languages
+    assert openapi_language_sets == {frozenset(registered_languages)}
 
 
 def test_typescript_client_error_mapping_is_implemented_and_documented() -> None:
