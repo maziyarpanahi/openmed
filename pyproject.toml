@@ -243,10 +243,6 @@ spark = [
   "pyarrow>=16",
 ]
 
-ray = [
-  "ray[data]>=2.9,<3",
-]
-
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
