@@ -11,6 +11,14 @@ from openmed.clinical.data.doctype_loinc_ontology import (
     document_type_loinc_coverage,
     get_document_type_mapping,
 )
+from openmed.clinical.data.section_loinc_map import (
+    LOINC_SECTION_CODES,
+    LOINC_SYSTEM,
+    SECTION_LOINC_MAP,
+    section_codes,
+    section_codings,
+    section_loinc_code,
+)
 
 from .detect import (
     CONTEXT_SECTION_LOINC_CODES,
@@ -43,6 +51,15 @@ from .doctype import (
     extract_doctype_features,
 )
 from .history import segment_history_family
+from .learned import (
+    LEARNED_SOURCE,
+    SECTION_MODEL_ENV,
+    LearnedSectionCandidate,
+    LearnedSectionHead,
+    SectionHead,
+    load_section_head,
+    predict_section_candidates,
+)
 
 __all__ = [
     "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE",
@@ -57,6 +74,8 @@ __all__ = [
     "LOINC_DOCUMENT_PROVENANCE",
     "LOINC_DOCUMENT_SUBSET",
     "LOINC_DOCUMENT_SUBSET_MAX_ROWS",
+    "LOINC_SECTION_CODES",
+    "LOINC_SYSTEM",
     "UNKNOWN_DOCUMENT_TYPE",
     "DocumentClassification",
     "DocumentTypeFeatures",
@@ -66,6 +85,7 @@ __all__ = [
     "LIST_BEARING_SECTION_LABELS",
     "LIST_BEARING_SECTION_LOINC_CODES",
     "LIST_SECTION_LOINC_CODES",
+    "SECTION_LOINC_MAP",
     "SECTION_LOINC_CODES",
     "SectionSpan",
     "UNSECTIONED_SECTION",
@@ -74,6 +94,9 @@ __all__ = [
     "detect_sections",
     "extract_doctype_features",
     "get_document_type_mapping",
+    "section_codings",
+    "section_codes",
+    "section_loinc_code",
     "is_list_bearing_section",
     "list_section_label",
     "parse_section_lists",
@@ -81,4 +104,11 @@ __all__ = [
     "section_label_from_loinc",
     "validate_sections",
     "validate_section_spans",
+    "LEARNED_SOURCE",
+    "SECTION_MODEL_ENV",
+    "LearnedSectionCandidate",
+    "LearnedSectionHead",
+    "SectionHead",
+    "load_section_head",
+    "predict_section_candidates",
 ]
