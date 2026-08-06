@@ -383,8 +383,8 @@ def _write_and_load_biored(tmp_path: Path):
                                 "id": "R1",
                                 "infons": {"type": "Negative_Correlation"},
                                 "nodes": [
-                                    {"refid": "T1", "role": "entity1"},
                                     {"refid": "T2", "role": "entity2"},
+                                    {"refid": "T1", "role": "entity1"},
                                 ],
                             }
                         ],

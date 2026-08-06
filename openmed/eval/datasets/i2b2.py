@@ -512,6 +512,7 @@ def _load_biored_relation_fixtures(root: Path) -> list[DrugProtRelationFixture]:
     sources = _biored_source_files(root)
     fixtures: list[DrugProtRelationFixture] = []
     for source in sources:
+        _refuse_relation_source(source, BIORED)
         for document in _biored_documents(source):
             fixtures.append(
                 _biored_fixture_from_mapping(document, source=source, root=root)
@@ -824,14 +825,35 @@ def _biored_relation_from_mapping(
     nodes_value = relation.get("nodes") or relation.get("arguments") or []
     if not isinstance(nodes_value, list) or len(nodes_value) != 2:
         raise ValueError("BioRED relation must contain exactly two nodes")
+    node_rows = [_require_mapping(node, "BioRED relation node") for node in nodes_value]
     node_ids = [
-        str(
-            _require_mapping(node, "BioRED relation node").get("refid")
-            or _require_mapping(node, "BioRED relation node").get("id")
-            or ""
-        )
-        for node in nodes_value
+        str(row.get("refid") or row.get("id") or "").strip() for row in node_rows
     ]
+    if any(not node_id for node_id in node_ids):
+        raise ValueError("BioRED relation nodes require an entity reference")
+    role_indexes = {
+        "arg1": 0,
+        "argument1": 0,
+        "entity1": 0,
+        "head": 0,
+        "source": 0,
+        "subject": 0,
+        "arg2": 1,
+        "argument2": 1,
+        "entity2": 1,
+        "object": 1,
+        "tail": 1,
+        "target": 1,
+    }
+    ordered_node_ids: list[str | None] = [None, None]
+    for node_id, row in zip(node_ids, node_rows, strict=True):
+        role_index = role_indexes.get(_mapping_key(str(row.get("role") or "")))
+        if role_index is None or ordered_node_ids[role_index] is not None:
+            ordered_node_ids = [None, None]
+            break
+        ordered_node_ids[role_index] = node_id
+    if all(node_id is not None for node_id in ordered_node_ids):
+        node_ids = [node_id for node_id in ordered_node_ids if node_id is not None]
     try:
         arg1, arg2 = (entities_by_id[node_id] for node_id in node_ids)
     except KeyError as exc:
@@ -909,7 +931,9 @@ def _n2c2_fixture_from_brat(
     root: Path,
     corpus: str,
 ) -> DrugProtRelationFixture:
-    text = text_path.read_text(encoding="utf-8")
+    _refuse_relation_source(text_path, corpus)
+    _refuse_relation_source(annotation_path, corpus)
+    text = _read_relation_text(text_path)
     fixture_id = _dua_fixture_id(corpus, text_path, root, text_path.stem)
     lines = annotation_path.read_text(encoding="utf-8").splitlines()
     entities_by_id: dict[str, DrugProtEntity] = {}
@@ -1129,6 +1153,13 @@ def _brat_argument_id(value: str) -> str:
     return argument_id
 
 
+def _read_relation_text(path: Path) -> str:
+    """Read BRAT text without normalizing newlines used by span offsets."""
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
 def _map_n2c2_entity_label(corpus: str, label: str) -> str:
     mappings = {
         N2C2_2018: N2C2_2018_ENTITY_TO_CANONICAL,
@@ -1210,6 +1241,15 @@ def _relative_source_path(source: Path, root: Path) -> str:
         return source.relative_to(base).as_posix()
     except ValueError:
         return source.name
+
+
+def _refuse_relation_source(source: Path, corpus: str) -> None:
+    resolved = source.resolve(strict=False)
+    if _is_relative_to(resolved, _REPO_ROOT):
+        raise DUACredentialRequired(
+            f"{DUA_RELATION_NAMES[corpus]} data must stay outside the repository "
+            f"tree; refusing to read {resolved}. No corpus rows were loaded."
+        )
 
 
 def _validate_unique_relation_fixture_ids(
