@@ -77,6 +77,19 @@ RADIOLOGY_UNCERTAINTY_CLASSES: tuple[str, ...] = (
     RADIOLOGY_UNCERTAINTY_ABSENT,
     RADIOLOGY_UNCERTAINTY_UNCERTAIN,
 )
+RISK_COVERAGE_ARTIFACT = "openmed.eval.risk_coverage"
+RISK_COVERAGE_SCHEMA_VERSION = 1
+RISK_COVERAGE_AURC_CONVENTION = (
+    "Trapezoidal integral of empirical retained-set risk over raw-count "
+    "coverage at each unique confidence threshold, ties grouped, with a "
+    "(coverage=0, risk=0) origin. Oracle AURC ranks all correct relations "
+    "before incorrect relations; excess AURC is observed minus oracle AURC."
+)
+RISK_COVERAGE_EMPIRICAL_NOTE = (
+    "Threshold rows are empirical point estimates, not finite-sample risk "
+    "bounds or conformal/RCPS guarantees. retained_count is the raw sample "
+    "size; retained_weight must not be substituted for it."
+)
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -2840,6 +2853,193 @@ def expected_calibration_error(
     return error
 
 
+def relation_reliability_report(
+    predictions_with_confidence: Iterable[Any],
+    *,
+    n_bins: int = 10,
+) -> dict[str, Any]:
+    """Return pooled and per-relation-type reliability curves and ECE.
+
+    Relation types are read from ``relation_type``, ``label``, or ``type``.
+    Inputs otherwise follow :func:`reliability_bins` confidence/correctness
+    semantics. The report contains no source text or endpoint identifiers.
+    """
+
+    records = list(predictions_with_confidence)
+    pooled = reliability_bins(records, n_bins=n_bins)
+    grouped: dict[str, list[Any]] = defaultdict(list)
+    for record in records:
+        grouped[_relation_type_for_confidence_record(record)].append(record)
+
+    return {
+        "n_bins": n_bins,
+        "sample_count": len(records),
+        "expected_calibration_error": expected_calibration_error(pooled),
+        "reliability": pooled,
+        "per_type": {
+            relation_type: {
+                "sample_count": len(group_records),
+                "expected_calibration_error": expected_calibration_error(type_bins),
+                "reliability": type_bins,
+            }
+            for relation_type, group_records in sorted(grouped.items())
+            for type_bins in [reliability_bins(group_records, n_bins=n_bins)]
+        },
+    }
+
+
+def risk_coverage_curve(
+    predictions_with_confidence: Iterable[Any],
+) -> tuple[dict[str, Any], ...]:
+    """Return empirical retained-set risk at each confidence threshold.
+
+    Coverage and ``retained_count`` use raw sample counts. Accuracy and risk
+    may use positive finite sample weights, which are reported separately as
+    ``retained_weight``. Tied confidences enter the retained set together.
+    """
+
+    records = [
+        _selective_prediction_record(item) for item in predictions_with_confidence
+    ]
+    if not records:
+        return ()
+
+    total_count = len(records)
+    relation_types = sorted({record[2] for record in records})
+    thresholds = sorted({record[0] for record in records}, reverse=True)
+    rows: list[dict[str, Any]] = []
+    for threshold in thresholds:
+        retained = [record for record in records if record[0] >= threshold]
+        retained_count = len(retained)
+        retained_weight = sum(record[3] for record in retained)
+        correct_weight = sum(record[3] for record in retained if record[1])
+        accuracy = correct_weight / retained_weight if retained_weight else 0.0
+        per_type: dict[str, dict[str, int | float]] = {}
+        for relation_type in relation_types:
+            type_records = [record for record in retained if record[2] == relation_type]
+            type_weight = sum(record[3] for record in type_records)
+            type_correct_weight = sum(record[3] for record in type_records if record[1])
+            type_accuracy = type_correct_weight / type_weight if type_weight else 0.0
+            per_type[relation_type] = {
+                "retained_count": len(type_records),
+                "retained_weight": type_weight,
+                "accuracy": type_accuracy,
+                "empirical_risk": 1.0 - type_accuracy if type_records else 0.0,
+            }
+        rows.append(
+            {
+                "confidence_threshold": threshold,
+                "coverage": retained_count / total_count,
+                "abstention_rate": 1.0 - (retained_count / total_count),
+                "accuracy": accuracy,
+                "empirical_risk": 1.0 - accuracy,
+                "retained_count": retained_count,
+                "retained_weight": retained_weight,
+                "correct_weight": correct_weight,
+                "total_count": total_count,
+                "per_type": per_type,
+            }
+        )
+    return tuple(rows)
+
+
+def area_under_risk_coverage(curve: Iterable[Mapping[str, Any]]) -> float:
+    """Integrate risk over coverage using the fixed trapezoidal convention."""
+
+    points = sorted(
+        ((float(row["coverage"]), float(row["empirical_risk"])) for row in curve),
+        key=lambda point: point[0],
+    )
+    area = 0.0
+    previous_coverage = 0.0
+    previous_risk = 0.0
+    for coverage, risk in points:
+        if coverage < previous_coverage:
+            raise ValueError("risk-coverage points must have non-decreasing coverage")
+        area += 0.5 * (previous_risk + risk) * (coverage - previous_coverage)
+        previous_coverage = coverage
+        previous_risk = risk
+    return area
+
+
+def selective_prediction_report(
+    predictions_with_confidence: Iterable[Any],
+) -> dict[str, Any]:
+    """Build a deterministic risk-coverage, AURC, and E-AURC report.
+
+    This is a report emitter only. It intentionally does not claim a certified
+    risk guarantee or select a threshold using finite-sample bounds.
+    """
+
+    materialized = list(predictions_with_confidence)
+    normalized = [_selective_prediction_record(item) for item in materialized]
+    curve = risk_coverage_curve(materialized)
+    oracle_curve = risk_coverage_curve(
+        {
+            "confidence": 1.0 if correct else 0.0,
+            "correct": correct,
+            "relation_type": relation_type,
+            "weight": weight,
+        }
+        for _, correct, relation_type, weight in normalized
+    )
+    aurc = area_under_risk_coverage(curve)
+    oracle_aurc = area_under_risk_coverage(oracle_curve)
+    total_weight = sum(record[3] for record in normalized)
+    full_coverage = curve[-1] if curve else None
+    return {
+        "artifact_type": RISK_COVERAGE_ARTIFACT,
+        "schema_version": RISK_COVERAGE_SCHEMA_VERSION,
+        "note": RISK_COVERAGE_EMPIRICAL_NOTE,
+        "aurc_convention": RISK_COVERAGE_AURC_CONVENTION,
+        "aurc": aurc,
+        "oracle_aurc": oracle_aurc,
+        "excess_aurc": aurc - oracle_aurc,
+        "full_coverage_accuracy": (
+            float(full_coverage["accuracy"]) if full_coverage is not None else 0.0
+        ),
+        "full_coverage_risk": (
+            float(full_coverage["empirical_risk"]) if full_coverage is not None else 0.0
+        ),
+        "total_count": len(normalized),
+        "total_weight": total_weight,
+        "risk_coverage_table": [dict(row) for row in curve],
+    }
+
+
+def _relation_type_for_confidence_record(record: Any) -> str:
+    if isinstance(record, tuple | list):
+        return "*"
+    data = record if isinstance(record, Mapping) else vars(record)
+    metadata = _read_mapping(data, "metadata") or {}
+    for key in ("relation_type", "label", "type"):
+        value = _read_value(data, key)
+        if value is None:
+            value = metadata.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return "*"
+
+
+def _selective_prediction_record(
+    record: Any,
+) -> tuple[float, bool, str, float]:
+    confidence, correct = _confidence_correctness(record)
+    relation_type = _relation_type_for_confidence_record(record)
+    if isinstance(record, tuple | list):
+        weight_value = 1.0
+    else:
+        data = record if isinstance(record, Mapping) else vars(record)
+        metadata = _read_mapping(data, "metadata") or {}
+        weight_value = _read_value(data, "weight")
+        if weight_value is None:
+            weight_value = metadata.get("weight", 1.0)
+    weight = float(weight_value)
+    if not isfinite(weight) or weight <= 0.0:
+        raise ValueError("selective-prediction weight must be positive and finite")
+    return confidence, correct, relation_type, weight
+
+
 def weighted_coverage(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -4937,6 +5137,10 @@ __all__ = [
     "RADIOLOGY_UNCERTAINTY_CLASSES",
     "RADIOLOGY_UNCERTAINTY_PRESENT",
     "RADIOLOGY_UNCERTAINTY_UNCERTAIN",
+    "RISK_COVERAGE_ARTIFACT",
+    "RISK_COVERAGE_SCHEMA_VERSION",
+    "RISK_COVERAGE_AURC_CONVENTION",
+    "RISK_COVERAGE_EMPIRICAL_NOTE",
     "AbstentionDecision",
     "AbstentionMetrics",
     "CriticalFindingMiss",
@@ -5013,6 +5217,10 @@ __all__ = [
     "coverage_gaps_by_language",
     "reliability_bins",
     "expected_calibration_error",
+    "relation_reliability_report",
+    "risk_coverage_curve",
+    "area_under_risk_coverage",
+    "selective_prediction_report",
     "weighted_coverage",
     "compute_metrics_bundle",
     "bootstrap_ci",

@@ -122,6 +122,15 @@ from .streaming import (
     StreamingKanonDecision,
     stream_deidentify_table,
 )
+from .synth import (
+    DEFAULT_DP_SYNTH_SCOPE,
+    DEFAULT_EVALUATION_HOLDOUT_FRACTION,
+    SUPPORTED_SYNTHETIC_OUTPUT_SUFFIXES,
+    SYNTHETIC_PRIVACY_REPORT_SCHEMA_VERSION,
+    SyntheticDataGateError,
+    SyntheticGenerationResult,
+    generate_synthetic,
+)
 from .table_io import SUPPORTED_TABLE_SUFFIXES, read_table, write_table
 from .tables import (
     TABLE_ADVISORY,
@@ -171,6 +180,8 @@ __all__ = [
     "DateColumn",
     "DischargeSlotName",
     "DEFAULT_CHUNK_SIZE",
+    "DEFAULT_DP_SYNTH_SCOPE",
+    "DEFAULT_EVALUATION_HOLDOUT_FRACTION",
     "DEFAULT_MEMORY_CEILING",
     "DischargeSummary",
     "DischargeSummarySection",
@@ -199,11 +210,15 @@ __all__ = [
     "RelationalSchemaError",
     "RoleOverrideError",
     "SUPPORTED_STREAMING_SUFFIXES",
+    "SUPPORTED_SYNTHETIC_OUTPUT_SUFFIXES",
     "SUPPORTED_TABLE_SUFFIXES",
+    "SYNTHETIC_PRIVACY_REPORT_SCHEMA_VERSION",
     "StreamingKanonDecision",
     "SubjectConsistencyManifest",
     "SubjectTableDeidentificationResult",
     "SurrogateManifest",
+    "SyntheticDataGateError",
+    "SyntheticGenerationResult",
     "TABLE_ADVISORY",
     "Table",
     "TableCell",
@@ -222,6 +237,7 @@ __all__ = [
     "deidentify_subject_column",
     "describe_level",
     "generalize_value",
+    "generate_synthetic",
     "get_hierarchy",
     "max_level",
     "parse_lab_report",

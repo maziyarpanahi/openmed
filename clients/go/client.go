@@ -84,10 +84,12 @@ const (
 	LangKN PIILanguage = "kn"
 	LangML PIILanguage = "ml"
 	LangMR PIILanguage = "mr"
+	LangNE PIILanguage = "ne"
 	LangOR PIILanguage = "or"
 	LangPA PIILanguage = "pa"
 	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
+	LangUR PIILanguage = "ur"
 	LangPT PIILanguage = "pt"
 	LangAR PIILanguage = "ar"
 	LangHE PIILanguage = "he"
@@ -108,6 +110,7 @@ const (
 	LangUK PIILanguage = "uk"
 	LangCS PIILanguage = "cs"
 	LangEL PIILanguage = "el"
+	LangVI PIILanguage = "vi"
 )
 
 // DeidentificationMethod selects how detected PII spans are transformed by the

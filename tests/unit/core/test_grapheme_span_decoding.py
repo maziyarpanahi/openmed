@@ -11,6 +11,7 @@ from openmed.core.decoding import (
     trim_span_whitespace,
 )
 from openmed.core.decoding import spans as grapheme_spans
+from openmed.core.decoding.spans import grapheme_break_checker
 
 _SYNTHETIC_CLUSTERS = (
     "क्षि",  # Devanagari consonant + virama + consonant + dependent vowel
@@ -208,3 +209,33 @@ def _legacy_codepoint_whitespace_trim(
     while end > start and text[end - 1].isspace():
         end -= 1
     return start, end
+
+
+def test_grapheme_break_checker_agrees_with_full_segmentation():
+    """The per-offset predicate must match whole-string cluster segmentation.
+
+    ``segment_by_script`` tests only the offsets where a script changes, so the
+    predicate has to stay exactly consistent with the canonical iterator that
+    other callers rely on.
+    """
+
+    samples = (
+        "",
+        "abc",
+        "a\u0951b",
+        "R\u0061\u093ci",
+        "\u0995\u0951",
+        "Dr \U0001f468\u200d\u2695\ufe0f ok",
+        "\U0001f1ee\U0001f1f3\U0001f1fa\U0001f1f8",
+        "\u0915\u094d\u0937",
+        "\u2ff0\u4e00\u53e3",
+        "line\r\nnext",
+        "\u1100\u1161\u11a8",
+    )
+    for text in samples:
+        starts_cluster = grapheme_break_checker(text)
+        expected = {start for start, _ in iter_grapheme_cluster_spans(text)}
+        expected.add(len(text))
+        expected.add(0)
+        for index in range(len(text) + 1):
+            assert starts_cluster(index) == (index in expected), (text, index)

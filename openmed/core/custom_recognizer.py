@@ -326,6 +326,7 @@ class CustomRecognizer:
         for match in self.deny_matches(text):
             surface = text[match.start : match.end]
             canonical = normalize_label(match.label, lang=lang)
+            hipaa_class = hipaa_class_for(canonical, lang=lang)
             spans.append(
                 OpenMedSpan(
                     doc_id=doc_id,
@@ -335,7 +336,7 @@ class CustomRecognizer:
                     entity_type=match.label,
                     canonical_label=canonical,
                     policy_label=policy_label_for(canonical, lang=lang),
-                    regulatory_tags=(hipaa_class_for(canonical, lang=lang),),
+                    regulatory_tags=(hipaa_class,) if hipaa_class is not None else (),
                     score=match.confidence,
                     detector=CUSTOM_DENY_DETECTOR,
                     evidence={},
