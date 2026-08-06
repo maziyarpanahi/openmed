@@ -15,6 +15,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackRegistry
+from .language_packs import (
+    CHINESE_LANGUAGE_PACK,
+    HINDI_LANGUAGE_PACK,
+    TELUGU_LANGUAGE_PACK,
+)
 
 UNKNOWN_SCRIPT = "Unknown"
 UNROUTED_SCRIPT = "Unrouted"
@@ -103,13 +108,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("nl_NL", "ssn"),
     ),
-    _pack(
-        "hi",
-        "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
-        "hi_IN",
-        ("Devanagari",),
-        national_id_provider=("hi_IN", "aadhaar"),
-    ),
+    HINDI_LANGUAGE_PACK,
     _pack(
         "mr",
         "OpenMed/privacy-filter-multilingual",
@@ -146,13 +145,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "bn_BD",
         ("Bengali",),
     ),
-    _pack(
-        "te",
-        "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
-        "en_IN",
-        ("Telugu",),
-        national_id_provider=("en_IN", "aadhaar"),
-    ),
+    TELUGU_LANGUAGE_PACK,
     _pack(
         "ta",
         "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
@@ -194,15 +187,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Han", "Hiragana/Katakana"),
         context_scripts=("Hiragana/Katakana",),
     ),
-    LanguagePack(
-        code="zh",
-        scripts=("Han",),
-        default_model="OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
-        segmenter_id="jieba",
-        recognizers=("builtin-patterns", "model"),
-        surrogate_locale="zh_CN",
-        national_id_providers={"chinese_resident_id": "zh_CN"},
-    ),
+    CHINESE_LANGUAGE_PACK,
     _pack(
         "tr",
         "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",

@@ -109,6 +109,8 @@ class LanguagePack:
         segmenter_id: Registered sentence or token segmenter identifier.
         recognizers: Registered recognizer identifiers enabled for the pack.
         surrogate_locale: Conceptual Faker/surrogate locale for replacements.
+        surrogate_locale_approximation: Explanation recorded when the locale
+            is an explicit approximation rather than a native locale.
         national_id_providers: Mapping of national-ID provider method names to
             the locales that supply them.
         policy_overrides: Mapping of policy keys to pack-specific values.
@@ -135,6 +137,7 @@ class LanguagePack:
     candidate_priority: Mapping[str, int] = field(default_factory=dict)
     context_scripts: tuple[str, ...] = ()
     routing_markers: tuple[str, ...] = ()
+    surrogate_locale_approximation: str | None = None
 
     def __post_init__(self) -> None:
         """Validate and freeze the complete pack declaration."""
@@ -164,6 +167,15 @@ class LanguagePack:
             "surrogate_locale",
             _require_text(self.surrogate_locale, "surrogate_locale"),
         )
+        if self.surrogate_locale_approximation is not None:
+            object.__setattr__(
+                self,
+                "surrogate_locale_approximation",
+                _require_text(
+                    self.surrogate_locale_approximation,
+                    "surrogate_locale_approximation",
+                ),
+            )
         object.__setattr__(
             self,
             "national_id_providers",

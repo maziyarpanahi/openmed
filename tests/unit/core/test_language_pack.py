@@ -124,6 +124,11 @@ def test_pack_copies_collection_inputs_into_immutable_values() -> None:
             "national_id_providers value",
         ),
         (
+            {"surrogate_locale_approximation": ""},
+            ValueError,
+            "surrogate_locale_approximation",
+        ),
+        (
             {"recall_floor_overrides": {"person": 1.1}},
             ValueError,
             "finite probabilities",
