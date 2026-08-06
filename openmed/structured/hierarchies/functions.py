@@ -127,7 +127,7 @@ def _coerce_date(value: object) -> date:
     if isinstance(value, date):
         return value
     if isinstance(value, str):
-        text = value.strip()
+        text = value
         try:
             parsed = datetime.strptime(text, _ISO_DATE_FORMAT).date()
         except ValueError as exc:

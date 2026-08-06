@@ -339,7 +339,17 @@ def test_date_shift_range_overflow_raises_typed_error():
         )
 
 
-@pytest.mark.parametrize("value", ["2024-2-9", "2024-02-9", "20240209"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2024-2-9",
+        "2024-02-9",
+        "20240209",
+        " 2024-02-09 ",
+        "\t2024-02-09",
+        "2024-02-09\n",
+    ],
+)
 def test_date_requires_canonical_iso_string(value):
     with pytest.raises(HierarchyError, match="ISO YYYY-MM-DD"):
         generalize_value(COLUMN_TYPE_DATE, value, 1)
