@@ -170,6 +170,14 @@ from .document_linking import (
     EntityOccurrence,
     link_documents,
 )
+from .dosing_check import (
+    DOSE_RANGE_ADVISORY,
+    DOSE_RANGE_DATA_NOTICE,
+    DoseRange,
+    DoseRangeTableError,
+    DoseRangeTableSource,
+    check_dose_ranges,
+)
 from .drug_interactions import find_interactions
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
@@ -245,8 +253,10 @@ from .lexicons import (
     split_measurement_text,
 )
 from .medication_sig import (
+    DOSE_NORMALIZATION_ADVISORY,
     MEDICATION_CANDIDATES,
     MEDICATION_SIG_ADVISORY,
+    DoseNormalization,
     DurationNormalization,
     FrequencyNormalization,
     MedicationCandidate,
@@ -254,6 +264,7 @@ from .medication_sig import (
     MedicationGrounder,
     MedicationSigAttributeType,
     filter_medication_candidates,
+    normalize_dose,
     normalize_duration,
     normalize_frequency,
     normalize_medication_attribute,
@@ -631,6 +642,12 @@ __all__ = [
     "build_guarded_suggestion",
     "guarded_suggestion",
     "validate_guarded_suggestion",
+    "DOSE_RANGE_ADVISORY",
+    "DOSE_RANGE_DATA_NOTICE",
+    "DoseRange",
+    "DoseRangeTableError",
+    "DoseRangeTableSource",
+    "check_dose_ranges",
     "find_interactions",
     "COREFERENCE_FEATURES",
     "COREFERENCE_RESOLUTION_ADVISORY",
@@ -757,6 +774,8 @@ __all__ = [
     "problem_mentions_from_grounded_terms",
     "FrequencyNormalization",
     "DurationNormalization",
+    "DoseNormalization",
+    "DOSE_NORMALIZATION_ADVISORY",
     "MEDICATION_CANDIDATES",
     "MEDICATION_SIG_ADVISORY",
     "MedicationCandidate",
@@ -764,6 +783,7 @@ __all__ = [
     "MedicationGrounder",
     "MedicationSigAttributeType",
     "filter_medication_candidates",
+    "normalize_dose",
     "normalize_frequency",
     "normalize_duration",
     "normalize_medication_attribute",
