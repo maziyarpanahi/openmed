@@ -147,6 +147,10 @@ quickumls = [
   "quickumls>=1.4,<2",
 ]
 
+# sdcMicro and R are installed separately under GPL-2.0. This explicit extra
+# opts into the subprocess-only bridge without adding GPL code or dependencies.
+interop-gpl = []
+
 multimodal = [
   "numpy>=1.26",
   "onnx>=1.21",
