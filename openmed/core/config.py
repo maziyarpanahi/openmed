@@ -561,6 +561,12 @@ def _parse_value(value: str) -> Any:
     except ValueError:
         pass
 
+    # Float
+    try:
+        return float(value)
+    except ValueError:
+        pass
+
     # Fallback to raw string
     return value
 
@@ -572,6 +578,8 @@ def _format_value(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, float):
+        return repr(value)
     return f'"{value}"'
 
 

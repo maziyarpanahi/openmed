@@ -10,6 +10,7 @@ from openmed.core.config import (
     OpenMedConfig,
     config_schema_path,
     load_config_from_file,
+    save_config_to_file,
 )
 
 
@@ -68,3 +69,18 @@ def test_load_config_from_file_validates_unknown_and_wrong_typed_keys(tmp_path) 
     message = str(exc_info.value)
     assert "timeout" in message
     assert "unknown_option" in message
+
+
+def test_load_and_save_config_preserve_numeric_float_values(tmp_path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "indic_name_similarity_threshold = 0.80\n",
+        encoding="utf-8",
+    )
+
+    config = load_config_from_file(config_path)
+    assert config.indic_name_similarity_threshold == 0.8
+
+    saved_path = save_config_to_file(config, tmp_path / "saved.toml")
+    restored = load_config_from_file(saved_path)
+    assert restored.indic_name_similarity_threshold == 0.8
