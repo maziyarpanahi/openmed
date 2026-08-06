@@ -51,7 +51,7 @@ class PolicyActionExpectation:
 
     label: str
     policy_label: str
-    hipaa_safe_harbor_class: str
+    hipaa_safe_harbor_class: str | None
     action: str
     source: str = EXPECTATION_SOURCE
 
@@ -202,7 +202,7 @@ def derive_profile_expectations(
         expectations[label] = PolicyActionExpectation(
             label=label,
             policy_label=policy_label_for(label),
-            hipaa_safe_harbor_class=str(LABEL_TO_HIPAA[label]),
+            hipaa_safe_harbor_class=LABEL_TO_HIPAA.get(label),
             action=action,
         )
     return expectations
