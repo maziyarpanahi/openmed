@@ -21,6 +21,14 @@ from .log_redactor import (
     redact_ndjson_lines,
     redact_ndjson_stream,
 )
+from .ray_map_batches import (
+    DEFAULT_RAY_PII_MODEL,
+    ActorPoolConcurrency,
+    BatchFormat,
+    RayDeidentifyBatch,
+    RayMapBatchesDeidentifier,
+    map_batches_deidentify,
+)
 from .spark_streaming import (
     DEFAULT_BATCH_ID_COLUMN,
     DEFAULT_SPARK_POLICY,
@@ -37,7 +45,10 @@ __all__ = [
     "DEFAULT_LOG_MESSAGE_FIELDS",
     "DEFAULT_LOG_REDACTION_MODEL",
     "DEFAULT_BATCH_ID_COLUMN",
+    "DEFAULT_RAY_PII_MODEL",
     "DEFAULT_SPARK_POLICY",
+    "ActorPoolConcurrency",
+    "BatchFormat",
     "LakehouseRedactionProgress",
     "LakehouseRedactionResult",
     "LogRedactorConfig",
@@ -46,6 +57,9 @@ __all__ = [
     "SparkDeidentifySink",
     "SparkDeidentifyStreamBuilder",
     "deidentify_write_stream",
+    "RayDeidentifyBatch",
+    "RayMapBatchesDeidentifier",
+    "map_batches_deidentify",
     "redact_columnar",
     "redact_columnar_dataset",
     "redact_lakehouse",
