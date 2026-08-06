@@ -100,6 +100,7 @@ nav:
       - Columnar Redactor: integrations/columnar-redactor.md
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
+      - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
