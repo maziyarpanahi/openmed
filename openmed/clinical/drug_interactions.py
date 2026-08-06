@@ -55,6 +55,21 @@ InteractionTableSource: TypeAlias = (
 )
 RxNormLookup: TypeAlias = Callable[[str], Any]
 
+_RXNORM_SYSTEMS = frozenset(
+    {
+        "rxnorm",
+        "rxnorm/rxcui",
+        "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "https://www.nlm.nih.gov/research/umls/rxnorm",
+        "http://purl.bioontology.org/ontology/rxn",
+        "https://purl.bioontology.org/ontology/rxn",
+        "http://purl.bioontology.org/ontology/rxnorm",
+        "https://purl.bioontology.org/ontology/rxnorm",
+        "http://rxnav.nlm.nih.gov/rest/rxcui",
+        "https://rxnav.nlm.nih.gov/rest/rxcui",
+    }
+)
+
 
 class InteractionTableError(ValueError):
     """Raised when a caller-supplied interaction table is malformed."""
@@ -109,7 +124,8 @@ def find_interactions(
             callback. It is eligible only when ``offline`` is ``False``.
 
     Returns:
-        Guarded clinician-review suggestions in deterministic input-pair order.
+        Guarded clinician-review suggestions in deterministic canonical RxCUI-pair
+        order.
         Interaction matches have ``kind == "drug_drug_interaction"``;
         unnormalized inputs have ``kind == "normalization_note"``.
 
@@ -152,6 +168,9 @@ def find_interactions(
             continue
         seen_rxcuis.add(medication.rxcui)
         unique_medications.append(medication)
+    unique_medications.sort(
+        key=lambda medication: (medication.rxcui or "", medication.index)
+    )
 
     for first_index, first in enumerate(unique_medications):
         for second in unique_medications[first_index + 1 :]:
@@ -245,23 +264,47 @@ def _as_rxcui(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     candidate = value.strip()
-    if not candidate.isdecimal() or int(candidate) <= 0:
+    if not candidate.isascii() or not candidate.isdecimal():
         return None
-    return candidate
+    canonical = candidate.lstrip("0")
+    return canonical or None
+
+
+def _is_rxnorm_system(system: Any) -> bool:
+    if not isinstance(system, str):
+        return False
+    return system.strip().casefold().rstrip("/") in _RXNORM_SYSTEMS
 
 
 def _code_for_system(system: Any, code: Any) -> str | None:
-    if isinstance(system, str) and system.casefold() in {"rxnorm", "rxnorm/rxcui"}:
+    if _is_rxnorm_system(system):
         return _as_rxcui(code)
     return None
 
 
 def _rxcui_from_codes(codes: Any) -> str | None:
-    if not isinstance(codes, Mapping):
+    if isinstance(codes, Mapping):
+        direct = _as_rxcui(codes.get("rxcui"))
+        if direct is not None:
+            return direct
+        direct = _as_rxcui(codes.get("rxnorm_code"))
+        if direct is not None:
+            return direct
+        direct = _code_for_system(codes.get("system"), codes.get("code"))
+        if direct is not None:
+            return direct
+        for system, code in codes.items():
+            if _is_rxnorm_system(system):
+                direct = _as_rxcui(code)
+                if direct is not None:
+                    return direct
         return None
-    for system, code in codes.items():
-        if isinstance(system, str) and system.casefold() == "rxnorm":
-            return _as_rxcui(code)
+
+    if isinstance(codes, Iterable) and not isinstance(codes, (str, bytes)):
+        for coding in codes:
+            direct = _extract_rxcui(coding)
+            if direct is not None:
+                return direct
     return None
 
 
@@ -532,7 +575,14 @@ def _parse_interaction(
         raise InteractionTableError(
             f"interaction record {index} requires a source citation"
         )
-    return _Interaction(first, second, severity, description, citation)
+    canonical_first, canonical_second = _pair_key(first, second)
+    return _Interaction(
+        canonical_first,
+        canonical_second,
+        severity,
+        description,
+        citation,
+    )
 
 
 def _record_pair(row: Mapping[str, Any], index: int) -> tuple[str, str]:

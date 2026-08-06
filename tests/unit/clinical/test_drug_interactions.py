@@ -188,6 +188,34 @@ def test_existing_grounded_span_rxnorm_output_is_accepted() -> None:
     assert len(find_interactions(grounded, FIXTURE)) == 1
 
 
+@pytest.mark.parametrize(
+    "system",
+    [
+        "RXNORM",
+        "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "http://purl.bioontology.org/ontology/RXNORM",
+    ],
+)
+def test_rxnorm_system_code_records_are_accepted(system: str) -> None:
+    medications = [
+        {
+            "name": "Synthetic Drug Alpha",
+            "codes": [{"system": system, "code": "900000000001"}],
+            "start": 0,
+            "end": 20,
+        },
+        {
+            "name": "Synthetic Drug Beta",
+            "system": system,
+            "code": "900000000002",
+            "start": 25,
+            "end": 44,
+        },
+    ]
+
+    assert len(find_interactions(medications, FIXTURE)) == 1
+
+
 def test_bare_rxcuis_are_order_independent_and_duplicate_safe() -> None:
     forward = find_interactions(["900000000001", "900000000002"], FIXTURE)
     reverse = find_interactions(["900000000002", "900000000001"], FIXTURE)
@@ -197,6 +225,25 @@ def test_bare_rxcuis_are_order_independent_and_duplicate_safe() -> None:
 
     assert len(forward) == len(reverse) == len(duplicated) == 1
     assert forward[0].suggestion["severity"] == reverse[0].suggestion["severity"]
+    assert [
+        medication["rxcui"] for medication in reverse[0].suggestion["medications"]
+    ] == ["900000000001", "900000000002"]
+
+
+def test_reversed_duplicate_table_rows_are_one_unordered_interaction() -> None:
+    row = {
+        "severity": "synthetic-review-priority",
+        "description": "Synthetic pair Alpha-Beta is listed for test-only review.",
+        "source_citation": "Synthetic source, schema version 1",
+    }
+    table = {
+        "interactions": [
+            {**row, "rxcui_1": "900000000001", "rxcui_2": "900000000002"},
+            {**row, "rxcui_1": "900000000002", "rxcui_2": "900000000001"},
+        ]
+    }
+
+    assert len(find_interactions(_normalized_medications(), table)) == 1
 
 
 def test_flags_are_review_advisories_and_never_auto_action_verdicts() -> None:
