@@ -111,6 +111,7 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - model-registry.md
+    - ner-families.md
     - model-manifest.md
     - indic-encoders.md
     - indic-ner-checkpoints.md
@@ -122,6 +123,7 @@ classification:
     - clinical/coreference.md
     - clinical/temporal-normalization.md
     - clinical/chinese-terminology-grounding.md
+    - chinese-segmentation-operations.md
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - medical-tokenizer.md
@@ -139,6 +141,7 @@ classification:
     - examples.md
     - document-adapter-provenance.md
     - multimodal/epub-extraction.md
+    - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
     - clinical-validation-protocol.md
@@ -212,6 +215,7 @@ classification:
     - onboarding.md
     - migration.md
     - contributing.md
+    - model-release-queue.md
     - development.md
     - contributing/reproducible-dependencies.md
     - security/disclosure-policy.md
@@ -248,6 +252,8 @@ classification:
     - compliance/za-popia-identifier-checklist.md
     - i18n/glossary.md
     - leaderboard/index.md
+    - model-cards/registry/pii-last-green.md
+    - model-cards/registry/pii-latest.md
     - security/dependency-policy.md
     - security/secret-handling.md
     - security/secret-scanning.md

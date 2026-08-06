@@ -351,7 +351,7 @@ def test_website_preserves_every_approved_landing_view_and_interaction() -> None
         "shipped this week",
         "Your data. Your model. Your",
         "pii.detect() · on-device",
-        "Live PHI detection · 33 model-backed languages",
+        "Live PHI detection · 34 model-backed languages",
         "Model downloads · all-time",
         "340<span>M</span>",
         "30<span>M</span>",

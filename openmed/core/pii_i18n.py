@@ -56,10 +56,28 @@ from .language_pack_catalog import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
+from .registry_service import manifest_pii_languages
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+# Model-backed routes are generated from the committed manifest. Explicit
+# placeholder routes remain catalog-owned because their weights are supplied by
+# the user rather than represented by a manifest checkpoint.
+_MANIFEST_PII_LANGUAGES = manifest_pii_languages()
+_UNREGISTERED_MANIFEST_LANGUAGES = _MANIFEST_PII_LANGUAGES - set(SUPPORTED_LANGUAGES)
+if _UNREGISTERED_MANIFEST_LANGUAGES:
+    raise RuntimeError(
+        "manifest advertises PII languages without registered language packs: "
+        + ", ".join(sorted(_UNREGISTERED_MANIFEST_LANGUAGES))
+    )
+_EXPECTED_SUPPORTED_LANGUAGES = _MANIFEST_PII_LANGUAGES | set(
+    DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+)
+if SUPPORTED_LANGUAGES != _EXPECTED_SUPPORTED_LANGUAGES:
+    SUPPORTED_LANGUAGES.clear()
+    SUPPORTED_LANGUAGES.update(_EXPECTED_SUPPORTED_LANGUAGES)
 
 # Naamapadam languages supported by the optional Indic NER adapter. Existing
 # Bengali, Hindi, Tamil, and Telugu defaults remain available; the shared CoNLL
@@ -71,6 +89,13 @@ INDIC_NER_MODEL_ENV = "OPENMED_INDIC_NER_MODEL"
 OPTIONAL_PII_MODEL = f"env:{INDIC_NER_MODEL_ENV}"
 OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 
+# Sentinel default for languages that are routable and publicly registered but
+# ship no bundled weights at all. Callers must pass ``model_name`` explicitly;
+# :func:`openmed.core.model_registry.get_default_pii_model` maps this sentinel
+# back to ``None`` so the resolver raises an actionable error instead of
+# treating it as a repository identifier.
+USER_SUPPLIED_PII_MODEL = "user-supplied"
+
 # The central catalog keeps user-supplied model routes separate from bundled
 # language packs. This compatibility map lets the 11 optional Indic routes
 # resolve explicitly configured weights without advertising them as built-in
@@ -78,7 +103,16 @@ OPTIONAL_PII_MODEL_LANGUAGES = INDIC_NER_LANGUAGES
 DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
 for _language in INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}:
     DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
+# Remaining user-supplied routes (Nepali and Urdu) have neither bundled weights
+# nor an optional Indic NER adapter, so they take the explicit sentinel. This
+# only touches the compatibility copy; the language-pack catalog keeps claiming
+# no default model for them.
+for _language in USER_SUPPLIED_MODEL_LANGUAGES:
+    DEFAULT_PII_MODELS.setdefault(_language, USER_SUPPLIED_PII_MODEL)
 
+# ``ne`` here is the ISO 639-1 code for Nepali. It is unrelated to the ``"ne"``
+# token-language label used for named entities in
+# :mod:`openmed.core.lang_id_codemix`; the two namespaces never meet.
 LANGUAGE_NAMES: Dict[str, str] = {
     "as": "Assamese",
     "bn": "Bengali",
@@ -93,10 +127,12 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "kn": "Kannada",
     "ml": "Malayalam",
     "mr": "Marathi",
+    "ne": "Nepali",
     "or": "Odia",
     "pa": "Punjabi",
     "ta": "Tamil",
     "te": "Telugu",
+    "ur": "Urdu",
     "am": "Amharic",
     "pt": "Portuguese",
     "ar": "Arabic",
@@ -118,6 +154,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "uk": "Ukrainian",
     "cs": "Czech",
     "el": "Greek",
+    "vi": "Vietnamese",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -134,10 +171,12 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "kn": "Kannada-",
     "ml": "Malayalam-",
     "mr": "Marathi-",
+    "ne": "Nepali-",
     "or": "Odia-",
     "pa": "Punjabi-",
     "ta": "Tamil-",
     "te": "Telugu-",
+    "ur": "Urdu-",
     "am": "Amharic-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
@@ -159,6 +198,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "uk": "Ukrainian-",
     "cs": "Czech-",
     "el": "Greek-",
+    "vi": "Vietnamese-",
 }
 
 # ---------------------------------------------------------------------------
@@ -742,6 +782,84 @@ def validate_mpesa_transaction_code(text: str) -> bool:
 # ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
+
+
+def validate_belgian_rrn(text: str) -> bool:
+    """Validate a Belgian Rijksregister / national-register number.
+
+    Belgian RRN values contain ``YYMMDD`` birth-date digits, a three-digit
+    sequence number, and a two-digit modulo-97 control number. For births from
+    2000 onward, the control number is calculated after prefixing the first
+    nine digits with ``2``.
+
+    Args:
+        text: Candidate RRN, either as 11 digits or with common separators.
+
+    Returns:
+        True when the shape, embedded date, sequence, and checksum are valid.
+    """
+    if not isinstance(text, str):
+        return False
+
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9][0-9./\s-]*[0-9]", candidate) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", candidate)
+    if len(digits) != 11:
+        return False
+
+    body = digits[:9]
+    sequence = int(body[6:9])
+    if not 1 <= sequence <= 998:
+        return False
+
+    control = int(digits[9:11])
+    checksum_paths = (
+        (1900 + int(body[:2]), 97 - (int(body) % 97)),
+        (2000 + int(body[:2]), 97 - (int(f"2{body}") % 97)),
+    )
+    for year, expected_control in checksum_paths:
+        if control != expected_control:
+            continue
+        try:
+            birth_date = date(year, int(body[2:4]), int(body[4:6]))
+        except ValueError:
+            continue
+        if birth_date <= date.today():
+            return True
+
+    return False
+
+
+def validate_swiss_ahv(text: str) -> bool:
+    """Validate a Swiss AHV/AVS number with its EAN-13 check digit.
+
+    Args:
+        text: Candidate 13-digit AHV number, optionally separated by dots,
+            spaces, or hyphens.
+
+    Returns:
+        True when the value starts with Switzerland's ``756`` prefix and its
+        final digit passes the EAN-13 modulo-10 checksum.
+    """
+    if not isinstance(text, str):
+        return False
+
+    candidate = text.strip()
+    if re.fullmatch(r"[0-9][0-9.\s-]*[0-9]", candidate) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", candidate)
+    if len(digits) != 13 or not digits.startswith("756"):
+        return False
+
+    weighted_sum = sum(
+        int(digit) * (1 if index % 2 == 0 else 3)
+        for index, digit in enumerate(digits[:12])
+    )
+    expected_check = (10 - weighted_sum % 10) % 10
+    return int(digits[-1]) == expected_check
 
 
 def _is_nigeria_sequential_run(digits: str) -> bool:
@@ -3447,6 +3565,23 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Νοέμβριος",
         "Δεκέμβριος",
     ],
+    # Vietnamese spells months out as "Tháng" plus the cardinal number, with
+    # "Tháng Tư" (not "Tháng Bốn") for April. The numeric "tháng M" form used by
+    # the "ngày D tháng M năm YYYY" detector stays handled by that pattern.
+    "vi": [
+        "Tháng Một",
+        "Tháng Hai",
+        "Tháng Ba",
+        "Tháng Tư",
+        "Tháng Năm",
+        "Tháng Sáu",
+        "Tháng Bảy",
+        "Tháng Tám",
+        "Tháng Chín",
+        "Tháng Mười",
+        "Tháng Mười Một",
+        "Tháng Mười Hai",
+    ],
 }
 
 
@@ -3604,6 +3739,33 @@ def generate_mrz_td1(rng=None) -> str:
 # ---------------------------------------------------------------------------
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
+
+_BELGIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{2}(?:[.\s/-]?\d{2}){2}[.\s/-]?\d{3}[.\s/-]?\d{2}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "rrn",
+            "niss",
+            "insz",
+            "registre national",
+            "numéro de registre national",
+            "numero de registre national",
+            "numéro national",
+            "numero national",
+            "rijksregister",
+            "rijksregisternummer",
+            "nationaal nummer",
+            "nationalregister",
+            "nationalregisternummer",
+        ],
+        context_boost=0.45,
+        validator=validate_belgian_rrn,
+        safety_sweep_requires_context=True,
+    ),
+]
 
 _LOCALE_FORMAT_VALIDATORS = {
     "egyptian_national_id": validate_egyptian_national_id,
@@ -4408,6 +4570,30 @@ _GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_SWISS_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)756(?:[.\s-]?\d{4}){2}[.\s-]?\d{2}(?!\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "ahv",
+            "ahv-nummer",
+            "avs",
+            "numéro avs",
+            "numero avs",
+            "numero avs/ai",
+            "versichertennummer",
+            "sozialversicherungsnummer",
+            "numéro d'assuré",
+            "numero d'assure",
+            "numero d'assicurato",
+        ],
+        context_boost=0.45,
+        validator=validate_swiss_ahv,
+        safety_sweep_requires_context=True,
+    ),
+]
 
 _KENYA_ID_PII_PATTERNS: List[PIIPattern] = [
     # KE_MAISHA_NAMBA: structural UPI with mandatory nearby identifier context.
@@ -9990,6 +10176,12 @@ LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_be": _BELGIAN_PII_PATTERNS,
+    "nl_be": _BELGIAN_PII_PATTERNS,
+    "de_be": _BELGIAN_PII_PATTERNS,
+    "fr_ch": _SWISS_PII_PATTERNS,
+    "de_ch": _SWISS_PII_PATTERNS,
+    "it_ch": _SWISS_PII_PATTERNS,
     "fr_sn": [
         _AFRICAN_FR_PT_PHONE_PII_PATTERNS["fr_sn"],
         _SENEGAL_CNI_PII_PATTERN,
@@ -11227,6 +11419,7 @@ def get_patterns_for_language(
         SUPPORTED_LANGUAGES
         | NATIONAL_ID_ONLY_LANGUAGES
         | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
         | locale_overlay_languages
     )
     base_lang = _normalize_pattern_language(lang)
