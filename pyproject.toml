@@ -92,6 +92,10 @@ openmrs = [
   "httpx>=0.27",
 ]
 
+fhir = [
+  "httpx>=0.27",
+]
+
 presidio = [
   "presidio-analyzer>=2.2.354,<3",
 ]
