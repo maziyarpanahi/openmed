@@ -212,10 +212,8 @@ _HAN_CHARACTER_CLASS = "\u3400-\u4dbf\u4e00-\u9fff"
 def _load_chinese_surnames() -> frozenset[str]:
     """Load the packaged public-domain/CC0 Chinese surname gazetteer."""
 
-    # Resolve from the already-loaded top-level package. Asking
-    # ``importlib.resources`` for ``openmed.clinical`` imports that package's
-    # public API, which can loop back through FHIR privacy helpers while this
-    # module is still initializing.
+    # Resolve through the top-level package so importing core PII helpers does
+    # not execute the clinical package's eager public-export imports.
     resource = resources.files("openmed").joinpath(
         "clinical", _CHINESE_SURNAME_RESOURCE
     )
