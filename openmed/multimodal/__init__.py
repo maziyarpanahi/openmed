@@ -24,6 +24,7 @@ from . import dicom_sr as _dicom_sr
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_docx as _documents_docx
+from . import documents_html as _documents_html
 from . import documents_markdown as _documents_markdown
 from .base import (
     ExtractedDocument,
@@ -75,6 +76,7 @@ from .documents_docx import (
     map_text_spans_to_docx_runs,
     write_redacted_docx,
 )
+from .documents_html import extract_html, write_redacted_html
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .epub import extract_epub
@@ -203,6 +205,8 @@ __all__ = [
     "extract_docx",
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
+    "extract_html",
+    "write_redacted_html",
     "extract_epub",
     "extract_rtf",
     "MetadataFinding",

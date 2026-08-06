@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added standard-library HTML/HTM visible-text extraction with source character
+  offsets and markup-preserving redaction write-back (#278).
 - Added a weekday-themed model release orchestrator that chains conversion,
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
