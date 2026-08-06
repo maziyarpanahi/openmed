@@ -29,6 +29,7 @@ from .base import (
     ExtractedDocument,
     SourceSpan,
     ensure_multimodal_available,
+    is_multimodal_available,
     redact_document,
     register_handler,
 )
@@ -89,6 +90,17 @@ from .image import (
     verify_image_metadata,
     verify_image_redaction,
 )
+from .layout import (
+    FakeLayoutEngine,
+    FakeLayoutInput,
+    LayoutBlock,
+    LayoutColumn,
+    LayoutDocument,
+    LayoutMapEntry,
+    LayoutSpan,
+    LayoutWordSpan,
+    parse_layout,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -114,6 +126,7 @@ from .ocr import (
     register_ocr_engine,
     run_doctr_ocr,
 )
+from .rtf import extract_rtf
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -152,6 +165,7 @@ __all__ = [
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
+    "is_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "ChatLogRedactionSummary",
@@ -190,6 +204,7 @@ __all__ = [
     "map_text_spans_to_docx_runs",
     "write_redacted_docx",
     "extract_epub",
+    "extract_rtf",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
@@ -214,6 +229,15 @@ __all__ = [
     "register_ocr_engine",
     "available_ocr_engines",
     "run_doctr_ocr",
+    "FakeLayoutEngine",
+    "FakeLayoutInput",
+    "LayoutBlock",
+    "LayoutColumn",
+    "LayoutDocument",
+    "LayoutMapEntry",
+    "LayoutSpan",
+    "LayoutWordSpan",
+    "parse_layout",
     "DEFAULT_SMS_MODEL",
     "SHORT_TEXT",
     "SHORT_TEXT_PRESET",

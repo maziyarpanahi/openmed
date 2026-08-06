@@ -18,7 +18,7 @@ from ..exceptions import MissingDependencyError
 _PRIMARY_IMPORT = "gliner"
 _ANCILLARY_IMPORTS = ("torch", "transformers")
 _GLINER2_HINT = (
-    "Run `pip install .[gliner]` to enable GLiNER v2 support "
+    "Install with `pip install openmed[gliner]` to enable GLiNER v2 support "
     "(requires gliner>=0.3.0 with Fastino/GLiNER2 checkpoints)."
 )
 
