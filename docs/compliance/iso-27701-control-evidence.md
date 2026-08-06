@@ -64,8 +64,8 @@ schema = load_control_evidence_schema()
 Draft202012Validator(schema).validate(result.manifest)
 ```
 
-`jsonschema` is a development dependency rather than a runtime dependency. The
-generator itself remains stdlib-only.
+`jsonschema` is installed as a runtime dependency because OpenMedConfig uses
+it for configuration validation. The generator itself remains stdlib-only.
 
 ## Auditor handoff
 
