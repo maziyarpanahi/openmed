@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   synthetic evaluation, signed release gates, model-card generation,
   publication, fresh-environment smoke checks, last-green rollback, quarantine
   reporting, and an append-only offline audit ledger (#1243).
+- Completed longitudinal document linking with exact caller-supplied patient
+  boundaries, conservative cross-document entity de-duplication with complete
+  hashed occurrence provenance, and summary-card/timeline adapters (#1284).
 - Added offline family-transfer adapter routing that prefers installed target
   adapters, falls back to compatible donor adapters with scored provenance,
   and returns explicit unsupported or unavailable routing failures (#1331).
