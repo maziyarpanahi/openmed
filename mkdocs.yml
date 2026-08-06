@@ -48,6 +48,7 @@ nav:
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+      - Clinical NLI Verification: clinical/nli-verification.md
       - Clinical Coreference Resolution: clinical/coreference.md
       - Temporal Normalization: clinical/temporal-normalization.md
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
