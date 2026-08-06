@@ -340,7 +340,7 @@ def test_date_shift_range_overflow_raises_typed_error():
 
 
 def test_date_shift_preserves_canonical_iso_format_at_year_boundary():
-    patient_key = "k"
+    patient_key = "boundary-patient"
     max_days = 1
     offset = stable_offset_for(patient_key, max_days=max_days, secret=SECRET)
     assert offset > 0
