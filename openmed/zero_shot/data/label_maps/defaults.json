@@ -185,6 +185,14 @@
     "IntraocularPressure",
     "Anatomy"
   ],
+  "radiology": [
+    "Finding",
+    "ImagingModality",
+    "Anatomy",
+    "Laterality",
+    "Measurement",
+    "Impression"
+  ],
   "generic": [
     "Person",
     "Organization",
