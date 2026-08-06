@@ -101,6 +101,7 @@ nav:
       - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
+      - Distributed SQL De-identification UDF: integrations/distributed-sql-udf.md
       - PySpark De-identification UDFs: spark-deidentification.md
       - Prefect Batch De-identification: prefect-integration.md
       - spaCy Pipeline Component: spacy-component.md
